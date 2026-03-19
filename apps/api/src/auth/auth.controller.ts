@@ -1,5 +1,10 @@
-import { Body, Controller, Get, Post } from "@nestjs/common";
-import { authGoogleCallbackBodySchema } from "@opensocial/types";
+import { Body, Controller, Get, Param, Post } from "@nestjs/common";
+import {
+  authGoogleCallbackBodySchema,
+  authRefreshBodySchema,
+  authRevokeSessionBodySchema,
+  uuidSchema,
+} from "@opensocial/types";
 import { ok } from "../common/api-response.js";
 import { parseRequestPayload } from "../common/validation.js";
 import { AuthService } from "./auth.service.js";
@@ -14,9 +19,41 @@ export class AuthController {
   }
 
   @Post("google/callback")
-  googleCallback(@Body() body: unknown) {
+  async googleCallback(@Body() body: unknown) {
     const parsed = parseRequestPayload(authGoogleCallbackBodySchema, body);
-    const userId = `google-${parsed.code.slice(0, 8)}`;
-    return ok(this.authService.issueSessionTokens(userId));
+    const user = await this.authService.bootstrapGoogleUser(parsed.code);
+    return ok({
+      user,
+      ...(await this.authService.issueSessionTokens(user.id)),
+    });
+  }
+
+  @Post("refresh")
+  async refresh(@Body() body: unknown) {
+    const payload = parseRequestPayload(authRefreshBodySchema, body);
+    return ok(
+      await this.authService.refreshSession(payload.refreshToken, {
+        deviceId: payload.deviceId,
+        deviceName: payload.deviceName,
+        userAgent: payload.userAgent,
+        ipAddress: payload.ipAddress,
+      }),
+    );
+  }
+
+  @Get("sessions/:userId")
+  async listSessions(@Param("userId") userIdParam: string) {
+    const userId = parseRequestPayload(uuidSchema, userIdParam);
+    return ok(await this.authService.listUserSessions(userId));
+  }
+
+  @Post("sessions/:sessionId/revoke")
+  async revokeSession(
+    @Param("sessionId") sessionIdParam: string,
+    @Body() body: unknown,
+  ) {
+    const sessionId = parseRequestPayload(uuidSchema, sessionIdParam);
+    const payload = parseRequestPayload(authRevokeSessionBodySchema, body);
+    return ok(await this.authService.revokeSession(payload.userId, sessionId));
   }
 }

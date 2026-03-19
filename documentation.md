@@ -76,6 +76,13 @@ pnpm db:drift-check
 - Production rollback workflow: `.github/workflows/rollback-production.yml`
 - Supporting scripts: `scripts/deploy-staging.sh`, `scripts/deploy-production.sh`, `scripts/deploy-rollback.sh`
 
+## Auth/session endpoints
+- `GET /api/auth/google`
+- `POST /api/auth/google/callback`
+- `POST /api/auth/refresh`
+- `GET /api/auth/sessions/:userId`
+- `POST /api/auth/sessions/:sessionId/revoke`
+
 ## Export CLI
 Status: not implemented yet.
 

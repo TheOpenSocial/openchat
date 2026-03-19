@@ -167,10 +167,23 @@ export const authGoogleCallbackBodySchema = z.object({
   code: z.string().min(1),
 });
 
+export const authRefreshBodySchema = z.object({
+  refreshToken: z.string().min(1),
+  deviceId: z.string().max(255).optional(),
+  deviceName: z.string().max(255).optional(),
+  userAgent: z.string().max(1024).optional(),
+  ipAddress: z.string().max(128).optional(),
+});
+
+export const authRevokeSessionBodySchema = z.object({
+  userId: uuidSchema,
+});
+
 export const profileUpdateBodySchema = z.object({
   bio: z.string().max(500).optional(),
   city: z.string().max(120).optional(),
   country: z.string().max(120).optional(),
+  visibility: z.enum(["public", "limited", "private"]).optional(),
 });
 
 export const postAgentThreadMessageBodySchema = z.object({

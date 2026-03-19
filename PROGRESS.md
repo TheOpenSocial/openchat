@@ -30,6 +30,7 @@ Last verified: 2026-03-19
 - 2026-03-19: Completed milestone `3.1 Add DB lint / drift checks in CI` by adding `pnpm db:drift-check` to `.github/workflows/ci.yml` so schema validation runs on every push/PR.
 - 2026-03-19: Completed milestones `3.2`, `3.3`, and `3.4` database gaps by adding new Prisma models/migration tables for `user_topics`, `user_availability_windows`, `inferred_preferences`, `explicit_preferences`, `preference_feedback_events`, archive tables for chat/audit retention, and new ANN + partial hot-path indexes (HNSW with IVFFlat fallback). Added migration contract tests and retention strategy documentation.
 - 2026-03-19: Completed infrastructure/deployment milestones `1.2` and `1.3` by defining staging/production topology and durability policies in `docs/infrastructure-topology.md`, adding staging/production deploy workflows, embedding `pnpm db:migrate` in deploy scripts, and adding an explicit rollback workflow/script path.
+- 2026-03-19: Completed auth/onboarding milestones for `4.1` and `4.2` by adding persisted `user_sessions` with refresh-token rotation, session listing/revocation endpoints, deterministic bootstrap creation of user/profile/agent-thread on Google callback, onboarding state transitions tied to profile completion, and username + visibility support.
 
 ---
 
@@ -204,16 +205,16 @@ Last verified: 2026-03-19
 ### 4.1 Authentication
 - [~] Implement Google OAuth login
 - [x] Add email/password fallback decision doc or explicitly exclude
-- [~] Add JWT/session strategy
-- [~] Add refresh token flow
-- [ ] Add device/session management
+- [x] Add JWT/session strategy
+- [x] Add refresh token flow
+- [x] Add device/session management
 
 ### 4.2 Identity and onboarding
-- [ ] Create user bootstrap flow
-- [~] Create onboarding status state machine
-- [ ] Add profile completion checks
-- [ ] Add username/handle strategy if needed
-- [ ] Add profile visibility settings
+- [x] Create user bootstrap flow
+- [x] Create onboarding status state machine
+- [x] Add profile completion checks
+- [x] Add username/handle strategy if needed
+- [x] Add profile visibility settings
 
 ### 4.3 Security hardening
 - [ ] Add CSRF protection if cookie-based

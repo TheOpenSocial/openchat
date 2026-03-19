@@ -8,6 +8,12 @@ import { ProfilesService } from "./profiles.service.js";
 export class ProfilesController {
   constructor(private readonly profilesService: ProfilesService) {}
 
+  @Get(":userId/completion")
+  async getProfileCompletion(@Param("userId") userIdParam: string) {
+    const userId = parseRequestPayload(uuidSchema, userIdParam);
+    return ok(await this.profilesService.getProfileCompletion(userId));
+  }
+
   @Get(":userId")
   async getProfile(@Param("userId") userIdParam: string) {
     const userId = parseRequestPayload(uuidSchema, userIdParam);

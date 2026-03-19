@@ -64,6 +64,7 @@ model User {
   email           String?     @unique
   googleSubjectId String?     @unique @map("google_subject_id")
   displayName     String      @map("display_name")
+  username        String?     @unique
   locale          String      @default("en")
   timezone        String      @default("UTC")
   status          UserStatus  @default(active)
@@ -73,6 +74,7 @@ model User {
   inferredPreferences InferredPreference[]
   explicitPreferences ExplicitPreference[]
   preferenceFeedbackEvents PreferenceFeedbackEvent[]
+  sessions        UserSession[]
 
   @@map("users")
 }
@@ -83,6 +85,7 @@ model UserProfile {
   city              String?
   country           String?
   visibility        String           @default("public")
+  onboardingState   String           @default("not_started") @map("onboarding_state")
   availabilityMode  AvailabilityMode @default(flexible) @map("availability_mode")
   trustScore        Decimal          @default(0.0) @db.Decimal(5, 2) @map("trust_score")
   moderationState   ModerationState  @default(clean) @map("moderation_state")
@@ -95,6 +98,27 @@ model UserProfile {
   availabilityWindows UserAvailabilityWindow[]
 
   @@map("user_profiles")
+}
+
+model UserSession {
+  id               String   @id @default(uuid()) @db.Uuid
+  userId           String   @db.Uuid @map("user_id")
+  deviceId         String?  @map("device_id")
+  deviceName       String?  @map("device_name")
+  userAgent        String?  @map("user_agent")
+  ipAddress        String?  @map("ip_address")
+  refreshTokenHash String   @map("refresh_token_hash")
+  status           String   @default("active")
+  expiresAt        DateTime @map("expires_at")
+  lastUsedAt       DateTime @default(now()) @map("last_used_at")
+  revokedAt        DateTime? @map("revoked_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+  user             User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status, lastUsedAt])
+  @@index([expiresAt, status])
+  @@map("user_sessions")
 }
 
 model UserProfileImage {
