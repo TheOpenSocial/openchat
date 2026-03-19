@@ -70,6 +70,12 @@ Run schema validation/drift baseline check:
 pnpm db:drift-check
 ```
 
+## Deployment pipelines
+- Staging deploy workflow: `.github/workflows/deploy-staging.yml`
+- Production deploy workflow: `.github/workflows/deploy-production.yml`
+- Production rollback workflow: `.github/workflows/rollback-production.yml`
+- Supporting scripts: `scripts/deploy-staging.sh`, `scripts/deploy-production.sh`, `scripts/deploy-rollback.sh`
+
 ## Export CLI
 Status: not implemented yet.
 

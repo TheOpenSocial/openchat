@@ -29,6 +29,7 @@ Last verified: 2026-03-19
 - 2026-03-19: Completed milestones `2.1 Define websocket event payload types` and `2.2 Add zod or valibot schemas for all externally visible payloads` by centralizing HTTP/WebSocket contract schemas in `@opensocial/types`, wiring all API controllers through shared runtime validation with consistent 400 responses, and enforcing typed socket payload validation in `RealtimeGateway` with new contract coverage tests.
 - 2026-03-19: Completed milestone `3.1 Add DB lint / drift checks in CI` by adding `pnpm db:drift-check` to `.github/workflows/ci.yml` so schema validation runs on every push/PR.
 - 2026-03-19: Completed milestones `3.2`, `3.3`, and `3.4` database gaps by adding new Prisma models/migration tables for `user_topics`, `user_availability_windows`, `inferred_preferences`, `explicit_preferences`, `preference_feedback_events`, archive tables for chat/audit retention, and new ANN + partial hot-path indexes (HNSW with IVFFlat fallback). Added migration contract tests and retention strategy documentation.
+- 2026-03-19: Completed infrastructure/deployment milestones `1.2` and `1.3` by defining staging/production topology and durability policies in `docs/infrastructure-topology.md`, adding staging/production deploy workflows, embedding `pnpm db:migrate` in deploy scripts, and adding an explicit rollback workflow/script path.
 
 ---
 
@@ -86,22 +87,22 @@ Last verified: 2026-03-19
 - [x] Add local OpenTelemetry collector optional setup
 
 ### 1.2 Cloud environments
-- [ ] Define staging environment topology
-- [ ] Define production environment topology
+- [x] Define staging environment topology
+- [x] Define production environment topology
 - [x] Define secrets management approach
 - [x] Define object storage provider
 - [x] Define CDN strategy for media
-- [ ] Define websocket ingress / sticky session strategy
-- [ ] Define database backup and restore policy
-- [ ] Define Redis persistence/failover strategy
+- [x] Define websocket ingress / sticky session strategy
+- [x] Define database backup and restore policy
+- [x] Define Redis persistence/failover strategy
 
 ### 1.3 Deployment
 - [x] Create Dockerfiles for api/web/admin
 - [x] Add CI build pipelines
-- [ ] Add staging deploy pipeline
-- [ ] Add production deploy pipeline
-- [ ] Add migration step to deployment flow
-- [ ] Add rollback strategy
+- [x] Add staging deploy pipeline
+- [x] Add production deploy pipeline
+- [x] Add migration step to deployment flow
+- [x] Add rollback strategy
 
 **Acceptance criteria**
 - Fresh environment can be provisioned and deployed end-to-end

@@ -1,0 +1,40 @@
+name: Rollback Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      rollback_image_tag:
+        description: "Container image tag to rollback to"
+        required: true
+        type: string
+
+jobs:
+  rollback-production:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare SSH key
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          echo "${PRODUCTION_SSH_KEY}" > ~/.ssh/production_key
+          chmod 600 ~/.ssh/production_key
+        env:
+          PRODUCTION_SSH_KEY: ${{ secrets.PRODUCTION_SSH_KEY }}
+
+      - name: Rollback production
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.PRODUCTION_HOST }}
+          DEPLOY_USER: ${{ secrets.PRODUCTION_USER }}
+          DEPLOY_PATH: ${{ secrets.PRODUCTION_DEPLOY_PATH }}
+          SSH_KEY_PATH: ~/.ssh/production_key
+          ROLLBACK_IMAGE_TAG: ${{ inputs.rollback_image_tag }}
+        run: |
+          set -euo pipefail
+          chmod +x scripts/deploy-rollback.sh
+          ./scripts/deploy-rollback.sh

@@ -1,0 +1,42 @@
+name: Deploy Staging
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Container image tag to deploy"
+        required: false
+        type: string
+
+jobs:
+  deploy-staging:
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare SSH key
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          echo "${STAGING_SSH_KEY}" > ~/.ssh/staging_key
+          chmod 600 ~/.ssh/staging_key
+        env:
+          STAGING_SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+
+      - name: Deploy to staging
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.STAGING_HOST }}
+          DEPLOY_USER: ${{ secrets.STAGING_USER }}
+          DEPLOY_PATH: ${{ secrets.STAGING_DEPLOY_PATH }}
+          SSH_KEY_PATH: ~/.ssh/staging_key
+          IMAGE_TAG: ${{ inputs.image_tag != '' && inputs.image_tag || github.sha }}
+        run: |
+          set -euo pipefail
+          chmod +x scripts/deploy-staging.sh
+          ./scripts/deploy-staging.sh
