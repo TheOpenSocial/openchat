@@ -28,6 +28,7 @@ Last verified: 2026-03-19
 - 2026-03-19: Completed migration foundation updates for `1.1 Add migration and seeding scripts` and `3.1 Add migration pipeline` by adding `prisma/migrations/20260319_init/migration.sql`, committing `migration_lock.toml`, and introducing deterministic migrate/status/validation scripts at root and API package levels.
 - 2026-03-19: Completed milestones `2.1 Define websocket event payload types` and `2.2 Add zod or valibot schemas for all externally visible payloads` by centralizing HTTP/WebSocket contract schemas in `@opensocial/types`, wiring all API controllers through shared runtime validation with consistent 400 responses, and enforcing typed socket payload validation in `RealtimeGateway` with new contract coverage tests.
 - 2026-03-19: Completed milestone `3.1 Add DB lint / drift checks in CI` by adding `pnpm db:drift-check` to `.github/workflows/ci.yml` so schema validation runs on every push/PR.
+- 2026-03-19: Completed milestones `3.2`, `3.3`, and `3.4` database gaps by adding new Prisma models/migration tables for `user_topics`, `user_availability_windows`, `inferred_preferences`, `explicit_preferences`, `preference_feedback_events`, archive tables for chat/audit retention, and new ANN + partial hot-path indexes (HNSW with IVFFlat fallback). Added migration contract tests and retention strategy documentation.
 
 ---
 
@@ -149,10 +150,10 @@ Last verified: 2026-03-19
 - [x] user_profiles
 - [x] user_profile_images
 - [x] user_interests
-- [ ] user_topics
+- [x] user_topics
 - [x] user_preferences
 - [x] user_rules
-- [ ] user_availability_windows
+- [x] user_availability_windows
 - [x] agent_threads
 - [x] agent_messages
 - [x] intents
@@ -176,9 +177,9 @@ Last verified: 2026-03-19
 ### 3.3 Personalization / life graph schema
 - [x] life_graph_nodes
 - [x] life_graph_edges
-- [ ] inferred_preferences
-- [ ] explicit_preferences
-- [ ] preference_feedback_events
+- [x] inferred_preferences
+- [x] explicit_preferences
+- [x] preference_feedback_events
 - [x] retrieval_documents
 - [x] retrieval_chunks
 - [x] embeddings table(s)
@@ -186,9 +187,9 @@ Last verified: 2026-03-19
 ### 3.4 Indexing and performance
 - [x] Add transactional indexes for hot paths
 - [x] Add pgvector extension
-- [ ] Add HNSW/IVFFlat indexes where appropriate
-- [ ] Add partial indexes for active intents and pending requests
-- [ ] Add retention/archive strategy for chat and logs
+- [x] Add HNSW/IVFFlat indexes where appropriate
+- [x] Add partial indexes for active intents and pending requests
+- [x] Add retention/archive strategy for chat and logs
 
 **Acceptance criteria**
 - Schema covers all product surfaces
