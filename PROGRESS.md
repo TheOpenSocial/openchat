@@ -27,6 +27,7 @@ Last verified: 2026-03-19
 - 2026-03-19: Completed milestone `0.1 Configure shared linting and formatting` by replacing placeholder lint scripts with real ESLint runs across apps/packages, adding a shared flat ESLint config (`@eslint/js` + `typescript-eslint`), and normalizing source formatting with Prettier.
 - 2026-03-19: Completed migration foundation updates for `1.1 Add migration and seeding scripts` and `3.1 Add migration pipeline` by adding `prisma/migrations/20260319_init/migration.sql`, committing `migration_lock.toml`, and introducing deterministic migrate/status/validation scripts at root and API package levels.
 - 2026-03-19: Completed milestones `2.1 Define websocket event payload types` and `2.2 Add zod or valibot schemas for all externally visible payloads` by centralizing HTTP/WebSocket contract schemas in `@opensocial/types`, wiring all API controllers through shared runtime validation with consistent 400 responses, and enforcing typed socket payload validation in `RealtimeGateway` with new contract coverage tests.
+- 2026-03-19: Completed milestone `3.1 Add DB lint / drift checks in CI` by adding `pnpm db:drift-check` to `.github/workflows/ci.yml` so schema validation runs on every push/PR.
 
 ---
 
@@ -141,7 +142,7 @@ Last verified: 2026-03-19
 - [x] Choose and configure ORM/query layer (Prisma, Drizzle, or TypeORM)
 - [x] Add migration pipeline
 - [x] Add seed pipeline
-- [ ] Add DB lint / drift checks in CI
+- [x] Add DB lint / drift checks in CI
 
 ### 3.2 Core schema
 - [x] users
