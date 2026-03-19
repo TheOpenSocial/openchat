@@ -31,6 +31,7 @@ Last verified: 2026-03-19
 - 2026-03-19: Completed milestones `3.2`, `3.3`, and `3.4` database gaps by adding new Prisma models/migration tables for `user_topics`, `user_availability_windows`, `inferred_preferences`, `explicit_preferences`, `preference_feedback_events`, archive tables for chat/audit retention, and new ANN + partial hot-path indexes (HNSW with IVFFlat fallback). Added migration contract tests and retention strategy documentation.
 - 2026-03-19: Completed infrastructure/deployment milestones `1.2` and `1.3` by defining staging/production topology and durability policies in `docs/infrastructure-topology.md`, adding staging/production deploy workflows, embedding `pnpm db:migrate` in deploy scripts, and adding an explicit rollback workflow/script path.
 - 2026-03-19: Completed auth/onboarding milestones for `4.1` and `4.2` by adding persisted `user_sessions` with refresh-token rotation, session listing/revocation endpoints, deterministic bootstrap creation of user/profile/agent-thread on Google callback, onboarding state transitions tied to profile completion, and username + visibility support.
+- 2026-03-19: Completed milestone `5.1 Profiles` by extending profile APIs to manage interests/topics, availability windows, social mode settings, and intent-type preference overrides with shared schema validation and service-level tests.
 
 ---
 
@@ -230,11 +231,11 @@ Last verified: 2026-03-19
 ## 5. Profile and Media System
 
 ### 5.1 Profiles
-- [~] Profile CRUD API
-- [ ] Interests/topics management
-- [ ] Availability preferences editing
-- [ ] Social mode settings
-- [ ] Intent-type-specific preferences
+- [x] Profile CRUD API
+- [x] Interests/topics management
+- [x] Availability preferences editing
+- [x] Social mode settings
+- [x] Intent-type-specific preferences
 
 ### 5.2 Profile photos
 - [ ] Direct upload flow

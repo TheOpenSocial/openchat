@@ -83,6 +83,16 @@ pnpm db:drift-check
 - `GET /api/auth/sessions/:userId`
 - `POST /api/auth/sessions/:sessionId/revoke`
 
+## Profile/personality endpoints
+- `GET /api/profiles/:userId`
+- `PUT /api/profiles/:userId`
+- `GET /api/profiles/:userId/completion`
+- `GET|PUT /api/profiles/:userId/interests`
+- `GET|PUT /api/profiles/:userId/topics`
+- `GET|PUT /api/profiles/:userId/availability-windows`
+- `PUT /api/profiles/:userId/social-mode`
+- `GET|PUT /api/profiles/:userId/intent-preferences`
+
 ## Export CLI
 Status: not implemented yet.
 

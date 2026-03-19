@@ -55,4 +55,57 @@ describe("ProfilesService", () => {
       }),
     );
   });
+
+  it("replaces interests with normalized labels", async () => {
+    const prisma: any = {
+      userInterest: {
+        deleteMany: vi.fn().mockResolvedValue({}),
+        createMany: vi.fn().mockResolvedValue({}),
+        findMany: vi
+          .fn()
+          .mockResolvedValue([{ label: "AI  ", normalizedLabel: "ai" }]),
+      },
+    };
+
+    const service = new ProfilesService(prisma);
+    await service.replaceInterests("11111111-1111-4111-8111-111111111111", [
+      { kind: "topic", label: "AI  " },
+    ]);
+
+    expect(prisma.userInterest.createMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.arrayContaining([
+          expect.objectContaining({
+            normalizedLabel: "ai",
+          }),
+        ]),
+      }),
+    );
+  });
+
+  it("stores intent-type preference rules", async () => {
+    const prisma: any = {
+      userRule: {
+        findFirst: vi.fn().mockResolvedValue(null),
+        create: vi.fn().mockResolvedValue({ id: "rule-1" }),
+      },
+    };
+
+    const service = new ProfilesService(prisma);
+    const result = await service.setIntentTypePreference(
+      "11111111-1111-4111-8111-111111111111",
+      "chat" as any,
+      { autoSend: false },
+    );
+
+    expect(result.id).toBe("rule-1");
+    expect(prisma.userRule.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          scope: "intent_type",
+          ruleType: "chat",
+        }),
+      }),
+    );
+  });
 });

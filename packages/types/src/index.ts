@@ -186,6 +186,55 @@ export const profileUpdateBodySchema = z.object({
   visibility: z.enum(["public", "limited", "private"]).optional(),
 });
 
+const profileInterestInputSchema = z.object({
+  kind: z.string().min(1).max(64),
+  label: z.string().min(1).max(120),
+  weight: z.number().min(0).max(10).optional(),
+  source: z.string().min(1).max(64).optional(),
+});
+
+export const profileInterestsBodySchema = z.object({
+  interests: z.array(profileInterestInputSchema).max(100),
+});
+
+const profileTopicInputSchema = z.object({
+  label: z.string().min(1).max(120),
+  weight: z.number().min(0).max(10).optional(),
+  source: z.string().min(1).max(64).optional(),
+});
+
+export const profileTopicsBodySchema = z.object({
+  topics: z.array(profileTopicInputSchema).max(100),
+});
+
+const profileAvailabilityWindowInputSchema = z
+  .object({
+    dayOfWeek: z.number().int().min(0).max(6),
+    startMinute: z.number().int().min(0).max(1439),
+    endMinute: z.number().int().min(1).max(1440),
+    mode: z.string().min(1).max(64).optional(),
+    timezone: z.string().min(1).max(128).optional(),
+  })
+  .refine((value) => value.startMinute < value.endMinute, {
+    message: "startMinute must be less than endMinute",
+    path: ["endMinute"],
+  });
+
+export const profileAvailabilityWindowsBodySchema = z.object({
+  windows: z.array(profileAvailabilityWindowInputSchema).max(84),
+});
+
+export const profileSocialModeBodySchema = z.object({
+  socialMode: z.enum(["chill", "balanced", "high_energy"]),
+  preferOneToOne: z.boolean(),
+  allowGroupInvites: z.boolean(),
+});
+
+export const profileIntentTypePreferenceBodySchema = z.object({
+  intentType: z.nativeEnum(IntentType),
+  payload: z.record(z.string(), z.unknown()),
+});
+
 export const postAgentThreadMessageBodySchema = z.object({
   userId: uuidSchema,
   content: z.string().min(1),
