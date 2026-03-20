@@ -97,7 +97,8 @@ const tabConfig: Array<{ id: AdminTab; label: string; subtitle: string }> = [
   {
     id: "moderation",
     label: "Moderation",
-    subtitle: "Create reports and blocks from one control surface",
+    subtitle:
+      "Reports, blocks, queue, agent-thread risk flags (triage / assign)",
   },
   {
     id: "personalization",
@@ -283,6 +284,21 @@ export default function AdminHome() {
   const [auditLogSnapshot, setAuditLogSnapshot] = useState<unknown>(null);
   const [moderationQueueLimit, setModerationQueueLimit] = useState(100);
   const [auditLogLimit, setAuditLogLimit] = useState(100);
+  const [agentRiskSnapshot, setAgentRiskSnapshot] = useState<unknown>(null);
+  const [agentRiskLimit, setAgentRiskLimit] = useState(50);
+  const [agentRiskStatusQuery, setAgentRiskStatusQuery] = useState<
+    "open" | "resolved" | "dismissed"
+  >("open");
+  const [agentRiskDecisionQuery, setAgentRiskDecisionQuery] = useState("");
+  const [triageFlagId, setTriageFlagId] = useState("");
+  const [triageAction, setTriageAction] = useState<
+    "resolve" | "reopen" | "escalate_strike" | "restrict_user"
+  >("resolve");
+  const [triageTargetUserId, setTriageTargetUserId] = useState("");
+  const [triageReason, setTriageReason] = useState("");
+  const [assignFlagId, setAssignFlagId] = useState("");
+  const [assigneeUserId, setAssigneeUserId] = useState("");
+  const [assignReason, setAssignReason] = useState("");
   const [deactivateReason, setDeactivateReason] =
     useState("support escalation");
   const [restrictReason, setRestrictReason] = useState("safety restriction");
@@ -937,6 +953,83 @@ export default function AdminHome() {
       "Audit log snapshot loaded.",
       (payload) => setAuditLogSnapshot(payload),
     );
+
+  const loadAgentRiskFlags = () =>
+    runAction(
+      "Load agent risk flags",
+      () =>
+        requestApi("GET", "/admin/moderation/agent-risk-flags", {
+          query: {
+            limit: agentRiskLimit,
+            status: agentRiskStatusQuery,
+            ...(agentRiskDecisionQuery.trim() === "review" ||
+            agentRiskDecisionQuery.trim() === "blocked"
+              ? {
+                  decision: agentRiskDecisionQuery.trim() as
+                    | "review"
+                    | "blocked",
+                }
+              : {}),
+          },
+        }),
+      "Agent risk flags loaded.",
+      (payload) => setAgentRiskSnapshot(payload),
+    );
+
+  const triageAgentRiskFlag = () => {
+    if (!triageFlagId.trim()) {
+      setBanner({ tone: "error", text: "Provide a moderation flag id." });
+      return Promise.resolve(null);
+    }
+    const body: Record<string, unknown> = { action: triageAction };
+    if (triageReason.trim()) {
+      body.reason = triageReason.trim();
+    }
+    if (triageTargetUserId.trim()) {
+      body.targetUserId = triageTargetUserId.trim();
+    }
+    return runAction(
+      "Triage moderation flag",
+      () =>
+        requestApi(
+          "POST",
+          `/admin/moderation/flags/${triageFlagId.trim()}/triage`,
+          { body },
+        ),
+      "Flag triage applied.",
+      () => {
+        void loadAgentRiskFlags();
+      },
+    );
+  };
+
+  const assignAgentRiskFlag = () => {
+    if (!assignFlagId.trim() || !assigneeUserId.trim()) {
+      setBanner({
+        tone: "error",
+        text: "Provide flag id and assignee user id.",
+      });
+      return Promise.resolve(null);
+    }
+    return runAction(
+      "Assign moderation flag",
+      () =>
+        requestApi(
+          "POST",
+          `/admin/moderation/flags/${assignFlagId.trim()}/assign`,
+          {
+            body: {
+              assigneeUserId: assigneeUserId.trim(),
+              ...(assignReason.trim() ? { reason: assignReason.trim() } : {}),
+            },
+          },
+        ),
+      "Assignment recorded.",
+      () => {
+        void loadAgentRiskFlags();
+      },
+    );
+  };
 
   const deactivateUser = () => {
     if (!userId.trim()) {
@@ -2020,6 +2113,179 @@ export default function AdminHome() {
               </div>
             </Panel>
           </div>
+
+          <Panel
+            subtitle="Flags from conversational risk checks on agent threads; pair with audit action moderation.agent_risk_assessed."
+            title="Agent thread risk flags"
+          >
+            <div className="grid gap-3 md:grid-cols-3">
+              <label className={adminLabelClass}>
+                limit
+                <input
+                  className={adminInputClass}
+                  max={250}
+                  min={1}
+                  onChange={(event) =>
+                    setAgentRiskLimit(Number(event.currentTarget.value) || 50)
+                  }
+                  type="number"
+                  value={agentRiskLimit}
+                />
+              </label>
+              <label className={adminLabelClass}>
+                status
+                <select
+                  className={adminInputClass}
+                  onChange={(event) =>
+                    setAgentRiskStatusQuery(
+                      event.currentTarget.value as
+                        | "open"
+                        | "resolved"
+                        | "dismissed",
+                    )
+                  }
+                  value={agentRiskStatusQuery}
+                >
+                  <option value="open">open</option>
+                  <option value="resolved">resolved</option>
+                  <option value="dismissed">dismissed</option>
+                </select>
+              </label>
+              <label className={adminLabelClass}>
+                decision filter (optional)
+                <select
+                  className={adminInputClass}
+                  onChange={(event) =>
+                    setAgentRiskDecisionQuery(event.currentTarget.value)
+                  }
+                  value={agentRiskDecisionQuery}
+                >
+                  <option value="">any</option>
+                  <option value="blocked">blocked</option>
+                  <option value="review">review</option>
+                </select>
+              </label>
+            </div>
+            <button
+              className={`${adminButtonClass} mt-3`}
+              onClick={() => {
+                loadAgentRiskFlags().catch(() => {});
+              }}
+              type="button"
+            >
+              Load agent risk flags
+            </button>
+            <div className="mt-3 max-h-64 overflow-y-auto">
+              <JsonView value={agentRiskSnapshot} />
+            </div>
+            <div className="mt-4 grid gap-3 border-t border-slate-800 pt-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-slate-300">
+                  Triage flag
+                </p>
+                <label className={adminLabelClass}>
+                  flag id
+                  <input
+                    className={adminInputClass}
+                    onChange={(event) =>
+                      setTriageFlagId(event.currentTarget.value)
+                    }
+                    value={triageFlagId}
+                  />
+                </label>
+                <label className={adminLabelClass}>
+                  action
+                  <select
+                    className={adminInputClass}
+                    onChange={(event) =>
+                      setTriageAction(
+                        event.currentTarget.value as typeof triageAction,
+                      )
+                    }
+                    value={triageAction}
+                  >
+                    <option value="resolve">resolve</option>
+                    <option value="reopen">reopen</option>
+                    <option value="escalate_strike">escalate_strike</option>
+                    <option value="restrict_user">restrict_user</option>
+                  </select>
+                </label>
+                <label className={adminLabelClass}>
+                  target user id (strike / restrict)
+                  <input
+                    className={adminInputClass}
+                    onChange={(event) =>
+                      setTriageTargetUserId(event.currentTarget.value)
+                    }
+                    value={triageTargetUserId}
+                  />
+                </label>
+                <label className={adminLabelClass}>
+                  reason (optional)
+                  <input
+                    className={adminInputClass}
+                    onChange={(event) =>
+                      setTriageReason(event.currentTarget.value)
+                    }
+                    value={triageReason}
+                  />
+                </label>
+                <button
+                  className={adminButtonClass}
+                  onClick={() => {
+                    triageAgentRiskFlag().catch(() => {});
+                  }}
+                  type="button"
+                >
+                  Apply triage
+                </button>
+              </div>
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-slate-300">
+                  Assign flag
+                </p>
+                <label className={adminLabelClass}>
+                  flag id
+                  <input
+                    className={adminInputClass}
+                    onChange={(event) =>
+                      setAssignFlagId(event.currentTarget.value)
+                    }
+                    value={assignFlagId}
+                  />
+                </label>
+                <label className={adminLabelClass}>
+                  assignee user id
+                  <input
+                    className={adminInputClass}
+                    onChange={(event) =>
+                      setAssigneeUserId(event.currentTarget.value)
+                    }
+                    value={assigneeUserId}
+                  />
+                </label>
+                <label className={adminLabelClass}>
+                  reason (optional)
+                  <input
+                    className={adminInputClass}
+                    onChange={(event) =>
+                      setAssignReason(event.currentTarget.value)
+                    }
+                    value={assignReason}
+                  />
+                </label>
+                <button
+                  className={adminButtonClass}
+                  onClick={() => {
+                    assignAgentRiskFlag().catch(() => {});
+                  }}
+                  type="button"
+                >
+                  Record assignment
+                </button>
+              </div>
+            </div>
+          </Panel>
         </section>
       ) : null}
 

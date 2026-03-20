@@ -48,7 +48,7 @@ export function openAgentThreadSse(
 
   xhr.open("GET", streamUrl);
   xhr.setRequestHeader("Accept", "text/event-stream");
-  xhr.onprogress = () => {
+  const flush = () => {
     const full = xhr.responseText;
     const newPart = full.slice(parsedUpTo);
     parsedUpTo = full.length;
@@ -64,6 +64,8 @@ export function openAgentThreadSse(
       }
     });
   };
+  xhr.onprogress = flush;
+  xhr.onload = flush;
   xhr.send();
 
   return {

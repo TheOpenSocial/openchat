@@ -63,8 +63,16 @@ interface ApiEnvelope<T> {
   };
 }
 
-const API_BASE_URL =
+export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3000/api";
+
+export function buildAgentThreadStreamUrl(
+  threadId: string,
+  accessToken: string,
+) {
+  const params = new URLSearchParams({ access_token: accessToken });
+  return `${API_BASE_URL}/agent/threads/${threadId}/stream?${params.toString()}`;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -145,6 +153,7 @@ export interface AgentThreadMessage {
   content: string;
   createdByUserId: string | null;
   createdAt: string;
+  metadata?: unknown;
 }
 
 export interface AgenticTurnResult {
@@ -154,6 +163,10 @@ export interface AgenticTurnResult {
   plan: Record<string, unknown>;
   toolResults: unknown[];
   specialistNotes: unknown[];
+  streaming?: {
+    responseTokenStreamed: boolean;
+    chunkCount: number;
+  };
 }
 
 export type ModerationRiskDecision = "blocked" | "review" | "clean";
@@ -365,6 +378,39 @@ export const api = {
       },
       accessToken,
       fetchOpts,
+    );
+  },
+  agentThreadRespondStream(
+    threadId: string,
+    userId: string,
+    content: string,
+    accessToken?: string,
+    options?: {
+      signal?: AbortSignal;
+      traceId?: string;
+      voiceTranscript?: string;
+      attachments?: Array<
+        | { kind: "image_url"; url: string; caption?: string }
+        | { kind: "file_ref"; fileId: string; caption?: string }
+      >;
+    },
+  ) {
+    return request<AgenticTurnResult>(
+      "POST",
+      `/agent/threads/${threadId}/respond/stream`,
+      {
+        userId,
+        content,
+        ...(options?.traceId ? { traceId: options.traceId } : {}),
+        ...(options?.voiceTranscript
+          ? { voiceTranscript: options.voiceTranscript }
+          : {}),
+        ...(options?.attachments?.length
+          ? { attachments: options.attachments }
+          : {}),
+      },
+      accessToken,
+      { signal: options?.signal },
     );
   },
   moderationAssess(

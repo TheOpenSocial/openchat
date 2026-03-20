@@ -2,6 +2,7 @@
 
 import {
   agentThreadMessagesToTranscript,
+  extractResponseTokenDelta,
   type AgentTranscriptRow,
 } from "@opensocial/types";
 import { useEffect, useMemo, useState } from "react";
@@ -13,7 +14,12 @@ import { SurfaceCard } from "../src/components/SurfaceCard";
 import { useBrowserOnline } from "../src/hooks/use-browser-online";
 import { usePrimaryAgentThread } from "../src/hooks/use-primary-agent-thread";
 import { t } from "../src/i18n/strings";
-import { api, ChatMessageRecord } from "../src/lib/api";
+import {
+  api,
+  buildAgentThreadStreamUrl,
+  ChatMessageRecord,
+} from "../src/lib/api";
+import { openAgentThreadSse } from "../src/lib/agent-thread-sse";
 import {
   clearStoredSession,
   loadStoredSession,
@@ -31,6 +37,22 @@ import {
 const webDesignMock =
   process.env.NEXT_PUBLIC_DESIGN_MOCK === "1" ||
   process.env.NEXT_PUBLIC_DESIGN_MOCK === "true";
+
+function parseOptionalImageAttachmentUrl(raw: string) {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return undefined;
+    }
+    return [{ kind: "image_url" as const, url: trimmed }];
+  } catch {
+    return undefined;
+  }
+}
 
 interface ChatThread {
   id: string;
@@ -84,6 +106,7 @@ function ProductionWebPage() {
   const [activeTab, setActiveTab] = useState<HomeTab>("home");
   const [intentDraft, setIntentDraft] = useState("");
   const [agentVoiceDraft, setAgentVoiceDraft] = useState("");
+  const [agentImageDraft, setAgentImageDraft] = useState("");
   const [agentTimeline, setAgentTimeline] = useState<AgentTranscriptRow[]>([
     {
       id: "seed_1",
@@ -351,6 +374,10 @@ function ProductionWebPage() {
     const text = intentDraft.trim();
     const voiceForAgent =
       agentComposerMode === "chat" ? agentVoiceDraft.trim() : "";
+    const imageExtras =
+      agentComposerMode === "chat"
+        ? parseOptionalImageAttachmentUrl(agentImageDraft)
+        : undefined;
     const marker = Date.now().toString(36);
     const useAgentChat = agentComposerMode === "chat" && Boolean(agentThreadId);
     const workflowBody = useAgentChat
@@ -360,6 +387,7 @@ function ProductionWebPage() {
     setIntentSending(true);
     setIntentDraft("");
     setAgentVoiceDraft("");
+    setAgentImageDraft("");
     setAgentTimeline((current) => [
       ...current,
       {
@@ -376,14 +404,51 @@ function ProductionWebPage() {
 
     try {
       if (useAgentChat && agentThreadId) {
-        await api.agentThreadRespond(
-          agentThreadId,
-          session.userId,
-          text,
-          session.accessToken,
-          undefined,
-          voiceForAgent ? { voiceTranscript: voiceForAgent } : undefined,
+        const traceId = crypto.randomUUID();
+        const streamingId = `agent_stream_${marker}`;
+
+        setAgentTimeline((current) => [
+          ...current,
+          {
+            id: streamingId,
+            role: "agent",
+            body: "",
+          },
+        ]);
+
+        const sse = openAgentThreadSse(
+          buildAgentThreadStreamUrl(agentThreadId, session.accessToken),
+          (msg) => {
+            const delta = extractResponseTokenDelta(msg, traceId);
+            if (delta === null) {
+              return;
+            }
+            setAgentTimeline((current) =>
+              current.map((row) =>
+                row.id === streamingId
+                  ? { ...row, body: row.body + delta }
+                  : row,
+              ),
+            );
+          },
         );
+
+        try {
+          await api.agentThreadRespondStream(
+            agentThreadId,
+            session.userId,
+            text,
+            session.accessToken,
+            {
+              traceId,
+              ...(voiceForAgent ? { voiceTranscript: voiceForAgent } : {}),
+              ...(imageExtras?.length ? { attachments: imageExtras } : {}),
+            },
+          );
+        } finally {
+          sse.close();
+        }
+
         const messages = await api.listAgentThreadMessages(
           agentThreadId,
           session.accessToken,
@@ -955,6 +1020,23 @@ function ProductionWebPage() {
                         }
                         placeholder="Paste dictation or ASR output…"
                         value={agentVoiceDraft}
+                      />
+                      <label
+                        className="mt-3 block text-xs font-medium text-ash"
+                        htmlFor="agent-image-url"
+                      >
+                        {t("agentImageUrlOptional")}
+                      </label>
+                      <input
+                        className="mt-1 w-full rounded-xl border border-slate-700 bg-night px-3 py-2 text-sm text-ink outline-none transition-colors duration-200 focus:border-ember disabled:opacity-50"
+                        disabled={intentSending}
+                        id="agent-image-url"
+                        onChange={(event) =>
+                          setAgentImageDraft(event.currentTarget.value)
+                        }
+                        placeholder="https://…"
+                        type="url"
+                        value={agentImageDraft}
                       />
                     </>
                   ) : null}

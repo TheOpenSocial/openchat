@@ -24,6 +24,7 @@ It is organized as a production-grade build checklist with:
 Last verified: 2026-03-20
 
 ## Implementation Notes
+- 2026-03-20: Client **agent streaming**: web (`EventSource`) + mobile (XHR SSE parser) on `GET /api/agent/threads/:id/stream?access_token=`, combined with `POST .../respond/stream` and client `traceId` to append `response_token` workflow chunks live; `extractResponseTokenDelta` in `@opensocial/types`. Optional **https image URL** attachments on web/mobile agent chat. Admin **Moderation** tab UI for agent-risk flag list / triage / assign.
 - 2026-03-20: Added backend staging-smoke automation for rollout readiness with `scripts/staging-smoke-api.mjs` + root command `pnpm staging:smoke:api`, covering health/admin ops, queue/dead-letter, and moderation agent-risk queue checks with admin headers/auth env wiring. Updated `docs/staging-smoke-checklist.md` to include runnable automation inputs.
 - 2026-03-20: Implemented backend moderation operations triage workflow for conversational agent risk flags: new admin endpoints for filtered queue listing (`GET /api/admin/moderation/agent-risk-flags`), assignment (`POST /api/admin/moderation/flags/:flagId/assign`), and triage actions (`POST /api/admin/moderation/flags/:flagId/triage`) supporting resolve/reopen, strike escalation, and direct user restriction. Added admin controller coverage for queue filters, assignment audit writes, and triage/strike behavior.
 - 2026-03-20: Strengthened conversational moderation durability by persisting non-clean agent risk checks (`pre_tools`, `pre_send`) into `moderation_flags` (`entityType: agent_thread`) and `audit_logs` (`moderation.agent_risk_assessed`) with trace metadata + reason tokens + content excerpt. Expanded `agent-conversation.service.spec.ts` to assert this write path for blocked turns. Added unified objective/task board section and a visual tracker at `docs/tasks-dashboard.html`.
@@ -1315,9 +1316,9 @@ Production rollout is approved only when:
 - [ ] Staging launch parity: validate incident/alerts/runbooks and rollout controls end-to-end in staging before prod approval.
 
 ### 34.3 Frontend parallel lane (tracked, not blocking backend closure)
-- [~] Web app: consume `/api/agent/threads/:threadId/respond/stream` for live token rendering and partial-response UX.
-- [~] Mobile app: consume streaming respond path and add composer support for `voiceTranscript` + `attachments` payloads.
-- [~] Admin app: moderation triage panel for `moderation_flags` + `moderation.agent_risk_assessed` audit trail.
+- [x] Web app: consume `/api/agent/threads/:threadId/respond/stream` for live token rendering and partial-response UX (SSE `.../stream?access_token=` + `traceId`-correlated `response_token` chunks).
+- [x] Mobile app: consume streaming respond path and composer support for `voiceTranscript` + `attachments` (image URL) payloads.
+- [x] Admin app: moderation triage panel for agent-thread `moderation_flags` + triage/assign actions (pairs with `moderation.agent_risk_assessed` audits).
 - [~] Shared frontend: i18n catalog wiring and locale switching across web/mobile/admin.
 - [~] Frontend critical path and capability matrix maintained in `PROGRESS_FRONTEND.md`.
 
@@ -1332,8 +1333,8 @@ Production rollout is approved only when:
 - [x] `B-08` Keep backend quality gates passing (`@opensocial/api` lint/typecheck/tests).
 - [x] `B-09` Build moderation triage workflow for agent-thread flags (resolve/escalate/strike linkage).
 - [~] `B-10` Run staging smoke + incident/alerts verification for final go/no-go.
-- [~] `F-01` Web streaming UI and token-by-token transcript rendering.
-- [~] `F-02` Mobile multimodal composer + streaming UX.
-- [~] `F-03` Admin moderation operations UI over risk flags + audit logs.
+- [x] `F-01` Web streaming UI and token-by-token transcript rendering.
+- [x] `F-02` Mobile multimodal composer + streaming UX.
+- [x] `F-03` Admin moderation operations UI over risk flags + audit logs.
 - [~] `F-04` Shared i18n productionization across all clients.
 - [~] `D-01` Keep dependency currency cadence (`pnpm deps:outdated`) and upgrade latest runtime/security-safe versions by lane.

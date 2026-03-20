@@ -14,6 +14,8 @@ const catalogs = {
     agentWorkflowRouting: "Routing your request now...",
     agentComposerHintChat: "Chat runs a full agent turn on your thread.",
     agentComposerHintIntent: "Queue an intent for matching and inbox flows.",
+    agentImageUrlOptional:
+      "Image URL (optional) — sent as an attachment with agent chat.",
   },
 } as const;
 

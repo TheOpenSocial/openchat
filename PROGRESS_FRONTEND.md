@@ -9,7 +9,8 @@ This file tracks **client-facing** behavior across **web** (`apps/web`), **mobil
 | Load primary thread | Yes | Yes | `GET /api/agent/threads/me/summary`, then `GET .../messages` to hydrate transcript |
 | **Agent chat** mode (`POST .../respond`) | Yes | Yes | Default mode; refreshes transcript from server after turn; API accepts optional `voiceTranscript` + `attachments` (clients can pass via `api.agentThreadRespond` `extras`) |
 | **Intent queue** mode (`POST /intents`) | Yes | Yes | Optional; sends `agentThreadId` when a primary thread exists |
-| Token streaming UI | No | No | API supports `respond/stream`; clients use non-streaming respond only |
+| Token streaming UI | Yes | Yes | `POST .../respond/stream` + correlated `traceId` + `GET .../stream?access_token=` SSE (`agent.message`); `extractResponseTokenDelta` in `@opensocial/types` filters `response_token` workflow rows |
+| Optional `image_url` attachment (composer URL field) | Yes | Yes | Valid http(s) URL → `attachments` on stream/respond |
 | Admin: debug respond | Yes | — | Admin → Agent → **Run agentic respond** |
 
 ## Internationalization (i18n)
@@ -74,6 +75,8 @@ This file tracks **client-facing** behavior across **web** (`apps/web`), **mobil
 
 ## Changelog (recent)
 
+- Agent chat: **live token rendering** via thread SSE + `respond/stream` with client `traceId` correlation; web uses `EventSource`, mobile uses XHR incremental parse.
+- Admin **Moderation** tab: **Agent thread risk flags** panel (`GET /admin/moderation/agent-risk-flags`, triage + assign actions).
 - Added `GET /api/agent/threads/me/summary` and wired web + mobile agent home to **chat** vs **intent** modes.
 - Added offline gating + NetInfo (mobile) / `online` events (web).
 - Introduced minimal `src/i18n/strings.ts` stubs (English-only).

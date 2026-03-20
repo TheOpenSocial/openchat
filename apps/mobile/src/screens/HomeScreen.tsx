@@ -1,4 +1,7 @@
-import { agentThreadMessagesToTranscript } from "@opensocial/types";
+import {
+  agentThreadMessagesToTranscript,
+  extractResponseTokenDelta,
+} from "@opensocial/types";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -7,11 +10,13 @@ import {
   Pressable,
   ScrollView,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { api, ChatMessageRecord } from "../lib/api";
+import { api, buildAgentThreadStreamUrl, ChatMessageRecord } from "../lib/api";
+import { openAgentThreadSse } from "../lib/agent-thread-sse";
 import { t } from "../i18n/strings";
 import {
   clearStoredChats,
@@ -76,6 +81,22 @@ interface HomeScreenProps {
 
 type LocalChatThread = StoredChatThread;
 
+function parseOptionalImageAttachmentUrl(raw: string) {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return undefined;
+    }
+    return [{ kind: "image_url" as const, url: trimmed }];
+  } catch {
+    return undefined;
+  }
+}
+
 const tabLabels: Record<HomeTab, string> = {
   home: "Home",
   chats: "Chats",
@@ -103,6 +124,7 @@ export function HomeScreen({
   const intentAbortRef = useRef<AbortController | null>(null);
   const agentVoiceTranscriptRef = useRef<string | null>(null);
   const [draftIntentText, setDraftIntentText] = useState("");
+  const [agentImageUrlDraft, setAgentImageUrlDraft] = useState("");
   const [sendingIntent, setSendingIntent] = useState(false);
   const [agentTimeline, setAgentTimeline] = useState<AgentTimelineMessage[]>(
     () =>
@@ -821,8 +843,10 @@ export function HomeScreen({
       return;
     }
 
+    const imageExtras = parseOptionalImageAttachmentUrl(agentImageUrlDraft);
     setSendingIntent(true);
     setDraftIntentText("");
+    setAgentImageUrlDraft("");
     const timelineIdBase = Date.now().toString(36);
     const workflowMessageId = `workflow_${timelineIdBase}`;
     const useAgentChat =
@@ -846,6 +870,15 @@ export function HomeScreen({
         role: "workflow",
         body: workflowBody,
       },
+      ...(useAgentChat
+        ? [
+            {
+              id: `agent_stream_${timelineIdBase}`,
+              role: "agent" as const,
+              body: "",
+            },
+          ]
+        : []),
     ]);
 
     try {
@@ -876,15 +909,45 @@ export function HomeScreen({
       intentAbortRef.current = controller;
 
       if (useAgentChat && agentThreadId) {
+        const streamingId = `agent_stream_${timelineIdBase}`;
+        const traceId =
+          globalThis.crypto?.randomUUID?.() ??
+          `trace-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
         const voiceLine = agentVoiceTranscriptRef.current?.trim();
-        await api.agentThreadRespond(
-          agentThreadId,
-          session.userId,
-          rawText,
-          session.accessToken,
-          { signal: controller.signal },
-          voiceLine ? { voiceTranscript: voiceLine } : undefined,
+
+        const sse = openAgentThreadSse(
+          buildAgentThreadStreamUrl(agentThreadId, session.accessToken),
+          (msg) => {
+            const delta = extractResponseTokenDelta(msg, traceId);
+            if (delta === null) {
+              return;
+            }
+            setAgentTimeline((current) =>
+              current.map((row) =>
+                row.id === streamingId
+                  ? { ...row, body: row.body + delta }
+                  : row,
+              ),
+            );
+          },
         );
+
+        try {
+          await api.agentThreadRespondStream(
+            agentThreadId,
+            session.userId,
+            rawText,
+            session.accessToken,
+            {
+              signal: controller.signal,
+              traceId,
+              ...(voiceLine ? { voiceTranscript: voiceLine } : {}),
+              ...(imageExtras?.length ? { attachments: imageExtras } : {}),
+            },
+          );
+        } finally {
+          sse.close();
+        }
         agentVoiceTranscriptRef.current = null;
         const messages = await api.listAgentThreadMessages(
           agentThreadId,
@@ -1469,6 +1532,7 @@ export function HomeScreen({
         <AnimatedScreen screenKey={activeTab}>
           {activeTab === "home" ? (
             <AgentTab
+              agentImageUrl={agentImageUrlDraft}
               canRegenerate={agentTimeline.some(
                 (message) => message.role === "user",
               )}
@@ -1476,6 +1540,7 @@ export function HomeScreen({
               draftMessage={draftIntentText}
               loading={sendingIntent}
               messages={agentTimeline}
+              onAgentImageUrlChange={setAgentImageUrlDraft}
               onComposerModeChange={setAgentComposerMode}
               onRegenerate={regenerateLastIntent}
               onSend={sendIntent}
@@ -1580,14 +1645,18 @@ interface AgentTabProps {
   onComposerModeChange: (mode: "chat" | "intent") => void;
   threadLoading: boolean;
   onVoiceTranscript?: (line: string) => void;
+  agentImageUrl: string;
+  onAgentImageUrlChange: (value: string) => void;
 }
 
 function AgentTab({
+  agentImageUrl,
   canRegenerate,
   composerMode,
   draftMessage,
   loading,
   messages,
+  onAgentImageUrlChange,
   onComposerModeChange,
   onVoiceTranscript,
   onRegenerate,
@@ -1664,6 +1733,23 @@ function AgentTab({
           sending={loading}
           value={draftMessage}
         />
+        {composerMode === "chat" ? (
+          <>
+            <Text className="mb-1 mt-2 text-[11px] text-muted">
+              {t("agentImageUrlOptional")}
+            </Text>
+            <TextInput
+              autoCapitalize="none"
+              autoCorrect={false}
+              className="mb-1 min-h-[40px] rounded-2xl border border-hairline bg-surface px-3 py-2 text-[14px] text-ink"
+              editable={!loading}
+              keyboardType="url"
+              onChangeText={onAgentImageUrlChange}
+              placeholder="https://…"
+              value={agentImageUrl}
+            />
+          </>
+        ) : null}
         <Text className="mt-1.5 text-[11px] text-muted">
           {intentTextLength}/240
         </Text>

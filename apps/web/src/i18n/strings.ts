@@ -15,6 +15,8 @@ const catalogs = {
     agentComposerHintIntent: "Queues POST /intents (optional agentThreadId).",
     agentVoiceTranscriptOptional:
       "Voice transcript (optional) — sent as voiceTranscript metadata with agent chat.",
+    agentImageUrlOptional:
+      "Image URL (optional) — sent as an attachment with agent chat.",
   },
 } as const;
 

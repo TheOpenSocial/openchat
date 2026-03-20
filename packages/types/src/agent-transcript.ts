@@ -33,6 +33,7 @@ export interface AgentThreadWorkflowMetadata {
  * If this is a workflow `response_token` event for the given trace, returns the token chunk text.
  * Used when subscribing to `GET /api/agent/threads/:id/stream` during `respond/stream`.
  */
+/** @returns `null` when the message is not a matching response token; otherwise the chunk text (may be empty). */
 export function extractResponseTokenDelta(
   message: {
     role: string;
