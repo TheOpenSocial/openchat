@@ -18,6 +18,8 @@ import {
   api,
   buildAgentThreadStreamUrl,
   ChatMessageRecord,
+  configureApiAuthLifecycle,
+  getGoogleOAuthStartUrl,
 } from "../src/lib/api";
 import { openAgentThreadSse } from "../src/lib/agent-thread-sse";
 import {
@@ -82,11 +84,26 @@ const interestOptions = [
   "AI",
 ];
 
+const WELCOME_HIGHLIGHTS = [
+  {
+    title: "Plans, not endless feeds",
+    body: "Say what you want to do or who you’d like to meet—we surface people and paths that fit, instead of noise.",
+  },
+  {
+    title: "One thread, clear next steps",
+    body: "Plan, chat, and follow progress in one place so you always know what’s happening and what to do next.",
+  },
+  {
+    title: "Private when it matters",
+    body: "Chats, requests, and your profile stay between you and the people you choose to connect with.",
+  },
+] as const;
+
 function ProductionWebPage() {
   const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [stage, setStage] = useState<AppStage>("auth");
   const [session, setSession] = useState<WebSession | null>(null);
-  const [authCode, setAuthCode] = useState("demo-web");
+  const [authCode, setAuthCode] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
   const [onboardingLoading, setOnboardingLoading] = useState(false);
   const [displayName, setDisplayName] = useState("Explorer");
@@ -111,7 +128,7 @@ function ProductionWebPage() {
     {
       id: "seed_1",
       role: "agent",
-      body: "What would you like to do or talk about today?",
+      body: "What would you like to do today—or who would you like to meet?",
     },
   ]);
   const [agentComposerMode, setAgentComposerMode] = useState<"chat" | "intent">(
@@ -128,7 +145,7 @@ function ProductionWebPage() {
       onLoadError: () =>
         setBanner({
           tone: "error",
-          text: "Could not load your agent thread.",
+          text: "Could not load your conversation.",
         }),
     });
   const [chatThreads, setChatThreads] = useState<ChatThread[]>([]);
@@ -141,6 +158,35 @@ function ProductionWebPage() {
     () => chatThreads.find((thread) => thread.id === selectedChatId) ?? null,
     [chatThreads, selectedChatId],
   );
+
+  useEffect(() => {
+    configureApiAuthLifecycle({
+      onSessionRefreshed: (tokens) => {
+        setSession((current) => {
+          if (!current) {
+            return current;
+          }
+          const next = {
+            ...current,
+            ...tokens,
+          };
+          saveStoredSession(next);
+          return next;
+        });
+      },
+      onAuthFailure: () => {
+        setSession(null);
+        setStage("auth");
+        setBanner({
+          tone: "error",
+          text: "Session expired. Sign in again.",
+        });
+      },
+    });
+    return () => {
+      configureApiAuthLifecycle({});
+    };
+  }, []);
 
   useEffect(() => {
     const restore = async () => {
@@ -228,7 +274,28 @@ function ProductionWebPage() {
     };
   }, [session, stage]);
 
-  const authenticate = async () => {
+  const allowWebDemoAuth =
+    process.env.NODE_ENV === "development" ||
+    process.env.NEXT_PUBLIC_ALLOW_WEB_DEMO_AUTH === "1" ||
+    process.env.NEXT_PUBLIC_ALLOW_WEB_DEMO_AUTH === "true";
+
+  const startGoogleOAuth = async () => {
+    setAuthLoading(true);
+    setBanner(null);
+    try {
+      const callbackUrl = `${window.location.origin}/auth/callback`;
+      const url = await getGoogleOAuthStartUrl(callbackUrl);
+      window.location.assign(url);
+    } catch (error) {
+      setAuthLoading(false);
+      setBanner({
+        tone: "error",
+        text: `Could not start Google sign-in: ${String(error)}`,
+      });
+    }
+  };
+
+  const authenticateWithDemoCode = async () => {
     setAuthLoading(true);
     setBanner(null);
     try {
@@ -648,16 +715,141 @@ function ProductionWebPage() {
 
   if (isBootstrapping) {
     return (
-      <main className="mx-auto flex min-h-screen w-full max-w-6xl items-center justify-center px-4 py-8">
-        <SurfaceCard className="w-full max-w-md animate-rise text-center">
-          <p className="text-sm uppercase tracking-[0.24em] text-ash">
-            OpenSocial
-          </p>
-          <h1 className="mt-2 font-[var(--font-heading)] text-2xl text-ink">
-            Restoring session
-          </h1>
-          <div className="mx-auto mt-4 h-2 w-2 rounded-full bg-emerald-400 animate-pulseSoft" />
-        </SurfaceCard>
+      <main className="flex min-h-screen flex-col items-center justify-center bg-[#212121] px-6">
+        <img
+          alt=""
+          className="h-14 w-14 rounded-2xl ring-1 ring-white/10"
+          height={56}
+          src="/brand/logo.svg"
+          width={56}
+        />
+        <p className="mt-4 text-sm text-white/50">OpenSocial</p>
+        <h1 className="mt-2 font-[var(--font-heading)] text-xl text-white">
+          Restoring session…
+        </h1>
+      </main>
+    );
+  }
+
+  if (stage === "auth") {
+    return (
+      <main className="relative min-h-screen overflow-y-auto bg-[#212121]">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-48 bg-gradient-to-b from-emerald-500/[0.07] to-transparent"
+        />
+        <div className="relative mx-auto flex min-h-screen w-full max-w-[420px] flex-col justify-center px-6 py-14 pb-10">
+          <header className="mb-8 text-center">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/40">
+              OpenSocial
+            </p>
+            <div className="mx-auto mt-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/[0.07] ring-1 ring-white/10">
+              <img
+                alt=""
+                className="h-11 w-11"
+                height={44}
+                src="/brand/logo.svg"
+                width={44}
+              />
+            </div>
+            <h1 className="mt-6 font-[var(--font-heading)] text-[30px] font-semibold leading-[1.15] tracking-tight text-white md:text-[34px]">
+              Welcome
+            </h1>
+            <p className="mx-auto mt-3 max-w-[340px] text-[16px] leading-relaxed text-white/60">
+              Where your plans meet the right people—social that starts with
+              what you actually want to do.
+            </p>
+          </header>
+
+          <ul className="mb-10 space-y-4">
+            {WELCOME_HIGHLIGHTS.map((item) => (
+              <li
+                className="rounded-2xl border border-white/[0.08] bg-white/[0.03] px-4 py-3.5"
+                key={item.title}
+              >
+                <p className="font-[var(--font-heading)] text-[15px] font-semibold text-white/95">
+                  {item.title}
+                </p>
+                <p className="mt-1.5 text-[13px] leading-relaxed text-white/50">
+                  {item.body}
+                </p>
+              </li>
+            ))}
+          </ul>
+
+          {banner ? (
+            <div className="mb-4">
+              <InlineNotice text={banner.text} tone={banner.tone} />
+            </div>
+          ) : null}
+          {!netOnline ? (
+            <div className="mb-4">
+              <InlineNotice text={t("offlineNotice")} tone="info" />
+            </div>
+          ) : null}
+
+          <div className="mt-auto space-y-3">
+            <p className="text-center text-[13px] text-white/45">
+              Ready when you are—sign in to save your profile and pick up on any
+              device.
+            </p>
+            <button
+              className="flex h-12 w-full items-center justify-center rounded-full bg-white text-[15px] font-medium text-[#0d0d0d] transition hover:bg-white/90 disabled:opacity-60"
+              disabled={authLoading || !netOnline}
+              onClick={() => void startGoogleOAuth()}
+              type="button"
+            >
+              {authLoading ? "Redirecting…" : "Continue with Google"}
+            </button>
+            <p className="text-center text-xs leading-relaxed text-white/40">
+              By continuing, Google may share your name and email with
+              OpenSocial for account setup.
+            </p>
+          </div>
+
+          {allowWebDemoAuth ? (
+            <details className="mt-8 rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-left">
+              <summary className="cursor-pointer text-sm text-white/50">
+                Developer: sign in without Google
+              </summary>
+              <p className="mt-3 text-xs text-white/40">
+                Uses the API demo exchange when{" "}
+                <code className="text-white/60">demo-web</code> is enabled
+                server-side.
+              </p>
+              <label className="mt-3 block text-[11px] uppercase tracking-wider text-white/35">
+                Auth code
+              </label>
+              <input
+                className="mt-1.5 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/25 focus:border-white/20"
+                onChange={(event) => setAuthCode(event.currentTarget.value)}
+                placeholder="demo-web"
+                value={authCode}
+              />
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  className="rounded-lg bg-white/10 px-3 py-2 text-xs font-medium text-white/80 hover:bg-white/15 disabled:opacity-50"
+                  disabled={authLoading}
+                  onClick={() => void authenticateWithDemoCode()}
+                  type="button"
+                >
+                  {authLoading ? "Signing in…" : "Sign in with code"}
+                </button>
+                <button
+                  className="rounded-lg border border-white/10 px-3 py-2 text-xs text-white/55 hover:bg-white/5"
+                  disabled={authLoading}
+                  onClick={() => {
+                    setAuthCode("demo-web");
+                    void authenticateWithDemoCode();
+                  }}
+                  type="button"
+                >
+                  Use demo-web
+                </button>
+              </div>
+            </details>
+          ) : null}
+        </div>
       </main>
     );
   }
@@ -670,7 +862,7 @@ function ProductionWebPage() {
             OpenSocial Web
           </p>
           <h1 className="font-[var(--font-heading)] text-2xl text-ink md:text-3xl">
-            Intent-driven social routing
+            Where your plans meet the right people
           </h1>
         </div>
         <div
@@ -694,57 +886,14 @@ function ProductionWebPage() {
         </div>
       ) : null}
 
-      {stage === "auth" ? (
-        <section className="animate-rise">
-          <SurfaceCard className="mx-auto max-w-xl">
-            <h2 className="font-[var(--font-heading)] text-3xl text-ink">
-              Start with intent
-            </h2>
-            <p className="mt-2 text-sm leading-6 text-ash">
-              Authenticate using a Google callback code or a deterministic demo
-              code.
-            </p>
-            <label className="mt-5 block text-xs uppercase tracking-wider text-ash">
-              Auth code
-            </label>
-            <input
-              className="mt-2 w-full rounded-xl border border-slate-700 bg-night px-4 py-3 text-sm text-ink outline-none transition focus:border-ember"
-              onChange={(event) => setAuthCode(event.currentTarget.value)}
-              placeholder="demo-web"
-              value={authCode}
-            />
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              <button
-                className="rounded-xl bg-ember px-4 py-3 text-sm font-semibold text-slate-950 transition hover:brightness-105 disabled:opacity-70"
-                disabled={authLoading}
-                onClick={authenticate}
-                type="button"
-              >
-                {authLoading ? "Authenticating..." : "Continue with Google"}
-              </button>
-              <button
-                className="rounded-xl border border-slate-600 px-4 py-3 text-sm font-semibold text-ink transition hover:bg-slate-800"
-                onClick={() => {
-                  setAuthCode("demo-web");
-                  authenticate().catch(() => {});
-                }}
-                type="button"
-              >
-                Use Demo Code
-              </button>
-            </div>
-          </SurfaceCard>
-        </section>
-      ) : null}
-
       {stage === "onboarding" ? (
         <section className="animate-rise space-y-4">
           <SurfaceCard>
             <h2 className="font-[var(--font-heading)] text-2xl text-ink">
-              Tune your signal
+              Finish your profile
             </h2>
             <p className="mt-1 text-sm text-ash">
-              Configure baseline profile and matching preferences.
+              A few details help us suggest better people and plans for you.
             </p>
 
             <div className="mt-4 grid gap-3 md:grid-cols-3">
@@ -1055,8 +1204,8 @@ function ProductionWebPage() {
                     {intentSending
                       ? "Sending…"
                       : agentComposerMode === "chat"
-                        ? "Send to agent"
-                        : "Send intent"}
+                        ? "Send"
+                        : "Send plan"}
                   </button>
                 </SurfaceCard>
               ) : null}

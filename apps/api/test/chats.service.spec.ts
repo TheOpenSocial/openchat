@@ -374,4 +374,122 @@ describe("ChatsService", () => {
     expect(prisma.chatMessage.create).not.toHaveBeenCalled();
     expect(prisma.moderationFlag.create).toHaveBeenCalledTimes(1);
   });
+
+  it("blocks messages when OpenAI moderation assist returns blocked", async () => {
+    vi.stubEnv("OPENAI_MODERATION_ENABLED", "true");
+    vi.stubEnv("OPENAI_API_KEY", "test-openai-key");
+    try {
+      const prisma: any = {
+        moderationFlag: {
+          create: vi.fn().mockResolvedValue({}),
+        },
+        auditLog: {
+          create: vi.fn().mockResolvedValue({}),
+        },
+        chat: {
+          findUnique: vi.fn().mockResolvedValue({ connectionId: "conn-1" }),
+        },
+        connectionParticipant: {
+          findMany: vi
+            .fn()
+            .mockResolvedValue([{ userId: "user-1" }, { userId: "user-2" }]),
+        },
+        block: {
+          findMany: vi.fn().mockResolvedValue([]),
+        },
+        chatMessage: {
+          create: vi.fn(),
+        },
+        messageReceipt: {
+          create: vi.fn(),
+        },
+      };
+
+      const service = new ChatsService(prisma);
+      vi.spyOn(
+        (service as any).openAIClient,
+        "assistModeration",
+      ).mockResolvedValue({
+        decision: "blocked",
+        reason: "threat content",
+      });
+
+      await expect(
+        service.createMessage("chat-1", "user-1", "hello there"),
+      ).rejects.toThrow("moderation");
+
+      expect(prisma.chatMessage.create).not.toHaveBeenCalled();
+      expect(prisma.moderationFlag.create).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("hides messages when OpenAI moderation assist returns review", async () => {
+    vi.stubEnv("OPENAI_MODERATION_ENABLED", "true");
+    vi.stubEnv("OPENAI_API_KEY", "test-openai-key");
+    try {
+      const prisma: any = {
+        moderationFlag: {
+          create: vi.fn().mockResolvedValue({}),
+        },
+        auditLog: {
+          create: vi.fn().mockResolvedValue({}),
+        },
+        chat: {
+          findUnique: vi.fn().mockResolvedValue({ connectionId: "conn-1" }),
+        },
+        connectionParticipant: {
+          findMany: vi
+            .fn()
+            .mockResolvedValue([{ userId: "user-1" }, { userId: "user-2" }]),
+        },
+        block: {
+          findMany: vi.fn().mockResolvedValue([]),
+        },
+        chatMessage: {
+          create: vi
+            .fn()
+            .mockResolvedValueOnce({
+              id: "msg-1",
+              body: "[hidden by moderation]",
+            })
+            .mockResolvedValueOnce({
+              id: "msg-system",
+              body: "System: A message was hidden by moderation.",
+            }),
+        },
+        messageReceipt: {
+          create: vi.fn().mockResolvedValue({}),
+        },
+      };
+
+      const service = new ChatsService(prisma);
+      vi.spyOn(
+        (service as any).openAIClient,
+        "assistModeration",
+      ).mockResolvedValue({
+        decision: "review",
+        reason: "possible grooming language",
+      });
+
+      const message = (await service.createMessage(
+        "chat-1",
+        "user-1",
+        "let's play football",
+      )) as { body: string };
+
+      expect(message.body).toBe("[hidden by moderation]");
+      expect(prisma.chatMessage.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            moderationState: "review",
+          }),
+        }),
+      );
+      expect(prisma.moderationFlag.create).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
 });

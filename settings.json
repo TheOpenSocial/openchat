@@ -1,0 +1,41 @@
+{
+  "defaultEnvironment": "production",
+  "environments": {
+    "development": {
+      "domains": {
+        "apiOrigin": "http://localhost:3000",
+        "adminOrigin": "http://localhost:3001",
+        "appOrigin": "http://localhost:3002"
+      },
+      "apiBasePath": "/api",
+      "oauth": {
+        "google": {
+          "extraAuthorizedJavaScriptOrigins": [
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:3001",
+            "http://127.0.0.1:3002"
+          ],
+          "extraAuthorizedRedirectUris": [
+            "http://127.0.0.1:3000/api/auth/google/callback"
+          ],
+          "adminDashboardCallbackUri": "http://localhost:3001/auth/callback"
+        }
+      }
+    },
+    "production": {
+      "domains": {
+        "apiOrigin": "https://api.opensocial.so",
+        "adminOrigin": "https://admin.opensocial.so",
+        "appOrigin": "https://app.opensocial.so"
+      },
+      "apiBasePath": "/api",
+      "oauth": {
+        "google": {
+          "extraAuthorizedJavaScriptOrigins": [],
+          "extraAuthorizedRedirectUris": [],
+          "adminDashboardCallbackUri": "https://admin.opensocial.so/auth/callback"
+        }
+      }
+    }
+  }
+}

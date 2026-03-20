@@ -1,8 +1,6 @@
 name: Deploy Staging
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       image_tag:
@@ -14,6 +12,9 @@ jobs:
   deploy-staging:
     runs-on: ubuntu-latest
     environment: staging
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -36,6 +37,7 @@ jobs:
           DEPLOY_PATH: ${{ secrets.STAGING_DEPLOY_PATH }}
           SSH_KEY_PATH: ~/.ssh/staging_key
           IMAGE_TAG: ${{ inputs.image_tag != '' && inputs.image_tag || github.sha }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           set -euo pipefail
           chmod +x scripts/deploy-staging.sh

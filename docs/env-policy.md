@@ -1,6 +1,7 @@
 # Environment Variable Policy
 
 - Required: `DATABASE_URL`, `REDIS_URL`, `OPENAI_API_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.
+- In CI/CD, runtime secrets (including `OPENAI_API_KEY`) must come from GitHub Environment Secrets, not committed files.
 - Required for OAuth callback correctness: `GOOGLE_REDIRECT_URI`.
 - Optional local defaults can exist only in `.env.example`.
 - Optional media variables: `MEDIA_CDN_BASE_URL`, `MEDIA_UPLOAD_SIGNING_SECRET`.
@@ -15,5 +16,6 @@
   - `OPENAI_MODEL_RANKING_EXPLANATION`
   - `OPENAI_MODEL_NOTIFICATION_COPY`
   - `OPENAI_MODEL_MODERATION_ASSIST`
+  - `OPENAI_MODERATION_ENABLED`
 - The per-task routing policy is documented in `docs/openai-model-policy.md`.
 - Secret rotation is required every 90 days in production.

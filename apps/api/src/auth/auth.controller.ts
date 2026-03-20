@@ -30,6 +30,7 @@ export class AuthController {
     return ok(
       this.authService.getGoogleOAuthUrl({
         mobileRedirectUri: payload.mobileRedirectUri,
+        webRedirectUri: payload.webRedirectUri,
       }),
     );
   }
@@ -56,7 +57,9 @@ export class AuthController {
   @Post("google/callback")
   async googleCallbackTokenExchange(@Body() body: unknown) {
     const parsed = parseRequestPayload(authGoogleCallbackBodySchema, body);
-    const user = await this.authService.bootstrapGoogleUser(parsed.code);
+    const user = await this.authService.bootstrapGoogleUser(parsed.code, {
+      adminConsole: parsed.adminConsole === true,
+    });
     return ok({
       user,
       ...(await this.authService.issueSessionTokens(user.id)),

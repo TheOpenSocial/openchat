@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <rect width="1024" height="1024" fill="#000000"/>
+
+  <!-- center lens (intersection of the two circles) -->
+  <path d="
+    M 512 309
+    A 228 228 0 0 0 512 755
+    A 228 228 0 0 0 512 309
+    Z" fill="#f2f2f2"/>
+
+  <!-- outer rings -->
+  <circle cx="407" cy="532" r="228" fill="none" stroke="#f2f2f2" stroke-width="42"/>
+  <circle cx="617" cy="532" r="228" fill="none" stroke="#f2f2f2" stroke-width="42"/>
+</svg>

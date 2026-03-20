@@ -22,6 +22,10 @@ const SETTING_KEYS = {
   enableModerationStrictness: "launch.enable_moderation_strictness",
   enableAiParsing: "launch.enable_ai_parsing",
   enableRealtimeChat: "launch.enable_realtime_chat",
+  enableScheduledTasks: "launch.enable_scheduled_tasks",
+  enableSavedSearches: "launch.enable_saved_searches",
+  enableRecurringBriefings: "launch.enable_recurring_briefings",
+  enableRecurringCircles: "launch.enable_recurring_circles",
 } as const;
 
 export type LaunchAction =
@@ -33,7 +37,11 @@ export type LaunchAction =
   | "discovery"
   | "moderation_strictness"
   | "ai_parsing"
-  | "realtime_chat";
+  | "realtime_chat"
+  | "scheduled_tasks"
+  | "saved_searches"
+  | "recurring_briefings"
+  | "recurring_circles";
 
 export interface LaunchControlsSnapshot {
   globalKillSwitch: boolean;
@@ -48,6 +56,10 @@ export interface LaunchControlsSnapshot {
   enableModerationStrictness: boolean;
   enableAiParsing: boolean;
   enableRealtimeChat: boolean;
+  enableScheduledTasks: boolean;
+  enableSavedSearches: boolean;
+  enableRecurringBriefings: boolean;
+  enableRecurringCircles: boolean;
   generatedAt: string;
 }
 
@@ -91,6 +103,14 @@ export class LaunchControlsService {
       enableAiParsing: overrides.enableAiParsing ?? defaults.enableAiParsing,
       enableRealtimeChat:
         overrides.enableRealtimeChat ?? defaults.enableRealtimeChat,
+      enableScheduledTasks:
+        overrides.enableScheduledTasks ?? defaults.enableScheduledTasks,
+      enableSavedSearches:
+        overrides.enableSavedSearches ?? defaults.enableSavedSearches,
+      enableRecurringBriefings:
+        overrides.enableRecurringBriefings ?? defaults.enableRecurringBriefings,
+      enableRecurringCircles:
+        overrides.enableRecurringCircles ?? defaults.enableRecurringCircles,
       generatedAt: new Date().toISOString(),
     };
 
@@ -156,6 +176,10 @@ export class LaunchControlsService {
     enableModerationStrictness?: boolean;
     enableAiParsing?: boolean;
     enableRealtimeChat?: boolean;
+    enableScheduledTasks?: boolean;
+    enableSavedSearches?: boolean;
+    enableRecurringBriefings?: boolean;
+    enableRecurringCircles?: boolean;
   }) {
     const updates = [
       ["globalKillSwitch", input.globalKillSwitch],
@@ -170,6 +194,10 @@ export class LaunchControlsService {
       ["enableModerationStrictness", input.enableModerationStrictness],
       ["enableAiParsing", input.enableAiParsing],
       ["enableRealtimeChat", input.enableRealtimeChat],
+      ["enableScheduledTasks", input.enableScheduledTasks],
+      ["enableSavedSearches", input.enableSavedSearches],
+      ["enableRecurringBriefings", input.enableRecurringBriefings],
+      ["enableRecurringCircles", input.enableRecurringCircles],
     ] as const;
 
     const changed: Record<string, Prisma.InputJsonValue> = {};
@@ -226,7 +254,19 @@ export class LaunchControlsService {
     if (action === "ai_parsing") {
       return snapshot.enableAiParsing;
     }
-    return snapshot.enableRealtimeChat;
+    if (action === "realtime_chat") {
+      return snapshot.enableRealtimeChat;
+    }
+    if (action === "scheduled_tasks") {
+      return snapshot.enableScheduledTasks;
+    }
+    if (action === "saved_searches") {
+      return snapshot.enableSavedSearches;
+    }
+    if (action === "recurring_briefings") {
+      return snapshot.enableRecurringBriefings;
+    }
+    return snapshot.enableRecurringCircles;
   }
 
   private async readStoredOverrides() {
@@ -281,6 +321,18 @@ export class LaunchControlsService {
       enableRealtimeChat: this.readBoolean(
         byKey.get(SETTING_KEYS.enableRealtimeChat),
       ),
+      enableScheduledTasks: this.readBoolean(
+        byKey.get(SETTING_KEYS.enableScheduledTasks),
+      ),
+      enableSavedSearches: this.readBoolean(
+        byKey.get(SETTING_KEYS.enableSavedSearches),
+      ),
+      enableRecurringBriefings: this.readBoolean(
+        byKey.get(SETTING_KEYS.enableRecurringBriefings),
+      ),
+      enableRecurringCircles: this.readBoolean(
+        byKey.get(SETTING_KEYS.enableRecurringCircles),
+      ),
     };
   }
 
@@ -330,6 +382,22 @@ export class LaunchControlsService {
       enableRealtimeChat: this.readBooleanFromEnv(
         "FEATURE_ENABLE_REALTIME_CHAT",
         true,
+      ),
+      enableScheduledTasks: this.readBooleanFromEnv(
+        "FEATURE_ENABLE_SCHEDULED_TASKS",
+        false,
+      ),
+      enableSavedSearches: this.readBooleanFromEnv(
+        "FEATURE_ENABLE_SAVED_SEARCHES",
+        false,
+      ),
+      enableRecurringBriefings: this.readBooleanFromEnv(
+        "FEATURE_ENABLE_RECURRING_BRIEFINGS",
+        false,
+      ),
+      enableRecurringCircles: this.readBooleanFromEnv(
+        "FEATURE_ENABLE_RECURRING_CIRCLES",
+        false,
       ),
     };
   }

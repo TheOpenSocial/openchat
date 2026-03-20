@@ -88,7 +88,10 @@ export class AuthService {
     });
   }
 
-  getGoogleOAuthUrl(options?: { mobileRedirectUri?: string }): { url: string } {
+  getGoogleOAuthUrl(options?: {
+    mobileRedirectUri?: string;
+    webRedirectUri?: string;
+  }): { url: string } {
     const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
     if (!clientId) {
       throw new ServiceUnavailableException(
@@ -108,12 +111,20 @@ export class AuthService {
     const mobileRedirectUri = this.normalizeMobileRedirectUri(
       options?.mobileRedirectUri,
     );
+    const webRedirectUri = this.normalizeWebAppRedirectUri(
+      options?.webRedirectUri,
+    );
+    const statePayload: Record<string, string> = {};
     if (mobileRedirectUri) {
+      statePayload.mobileRedirectUri = mobileRedirectUri;
+    }
+    if (webRedirectUri) {
+      statePayload.webRedirectUri = webRedirectUri;
+    }
+    if (Object.keys(statePayload).length > 0) {
       params.set(
         "state",
-        Buffer.from(JSON.stringify({ mobileRedirectUri }), "utf8").toString(
-          "base64url",
-        ),
+        Buffer.from(JSON.stringify(statePayload), "utf8").toString("base64url"),
       );
     }
 
@@ -127,7 +138,8 @@ export class AuthService {
     error?: string;
     error_description?: string;
   }): GoogleOAuthCallbackResponse {
-    const mobileRedirectUri = this.readMobileRedirectUriFromState(input.state);
+    const { mobileRedirectUri, webRedirectUri } =
+      this.readOAuthClientRedirectsFromState(input.state);
     const oauthError = input.error?.trim();
     const oauthErrorDescription = input.error_description?.trim();
 
@@ -141,6 +153,16 @@ export class AuthService {
         return {
           statusCode: 302,
           redirectUrl: this.appendQueryParams(mobileRedirectUri, {
+            error: oauthError,
+            error_description: errorMessage,
+          }),
+        };
+      }
+
+      if (webRedirectUri) {
+        return {
+          statusCode: 302,
+          redirectUrl: this.appendQueryParams(webRedirectUri, {
             error: oauthError,
             error_description: errorMessage,
           }),
@@ -171,6 +193,13 @@ export class AuthService {
       };
     }
 
+    if (webRedirectUri) {
+      return {
+        statusCode: 302,
+        redirectUrl: this.appendQueryParams(webRedirectUri, { code }),
+      };
+    }
+
     return {
       statusCode: 200,
       html: this.renderOAuthStatusPage(
@@ -181,9 +210,16 @@ export class AuthService {
     };
   }
 
-  async bootstrapGoogleUser(code: string) {
+  async bootstrapGoogleUser(
+    code: string,
+    options?: { adminConsole?: boolean },
+  ) {
     const { googleSubjectId, email, displayName } =
       await this.resolveGoogleIdentity(code);
+
+    if (options?.adminConsole) {
+      this.assertAdminConsoleEmailAllowed(email);
+    }
 
     const existing = await this.prisma.user.findUnique({
       where: { googleSubjectId },
@@ -637,6 +673,25 @@ export class AuthService {
     );
   }
 
+  /**
+   * Comma-separated allowlist. If unset, defaults to the initial operator account.
+   */
+  private assertAdminConsoleEmailAllowed(email: string | null) {
+    const raw = process.env.ADMIN_CONSOLE_ALLOWED_EMAILS?.trim();
+    const fallback = "jeffersonlicet@gmail.com";
+    const list = (raw && raw.length > 0 ? raw : fallback)
+      .split(",")
+      .map((entry) => entry.trim().toLowerCase())
+      .filter((entry) => entry.length > 0);
+
+    const normalized = email?.trim().toLowerCase() ?? "";
+    if (!normalized || !list.includes(normalized)) {
+      throw new UnauthorizedException(
+        "This Google account is not authorized for the admin console.",
+      );
+    }
+  }
+
   private async resolveGoogleIdentity(code: string): Promise<GoogleIdentity> {
     const normalizedCode = code.trim();
     const clientId = process.env.GOOGLE_CLIENT_ID;
@@ -993,20 +1048,95 @@ export class AuthService {
     }
   }
 
-  private readMobileRedirectUriFromState(state?: string) {
-    if (!state) {
+  private parseWebAppRedirectAllowlist(): string[] | null {
+    const raw = process.env.WEB_APP_REDIRECT_URIS?.trim();
+    if (!raw) {
+      return null;
+    }
+    const entries = raw
+      .split(",")
+      .map((value) => value.trim())
+      .filter((value) => value.length > 0);
+    return entries.length > 0 ? entries : null;
+  }
+
+  /**
+   * Where the API sends the browser after Google OAuth when the web client
+   * started the flow with `webRedirectUri` (typically `/auth/callback`).
+   */
+  private normalizeWebAppRedirectUri(value?: string): string | null {
+    if (!value) {
+      return null;
+    }
+
+    const trimmed = value.trim();
+    if (trimmed.length === 0) {
       return null;
     }
 
     try {
-      const raw = Buffer.from(state, "base64url").toString("utf8");
-      const parsed = JSON.parse(raw) as { mobileRedirectUri?: unknown };
-      if (typeof parsed.mobileRedirectUri !== "string") {
+      const parsed = new URL(trimmed);
+      const protocol = parsed.protocol.toLowerCase();
+      if (protocol !== "http:" && protocol !== "https:") {
         return null;
       }
-      return this.normalizeMobileRedirectUri(parsed.mobileRedirectUri);
+
+      const allowlist = this.parseWebAppRedirectAllowlist();
+      if (allowlist) {
+        const candidate = this.normalizeOAuthRedirectPath(parsed);
+        for (const allowed of allowlist) {
+          try {
+            const allowedUrl = new URL(allowed);
+            if (this.normalizeOAuthRedirectPath(allowedUrl) === candidate) {
+              return parsed.toString();
+            }
+          } catch {
+            continue;
+          }
+        }
+        return null;
+      }
+
+      const host = parsed.hostname.toLowerCase();
+      const pathNorm = parsed.pathname.replace(/\/$/, "") || "/";
+      if (pathNorm !== "/auth/callback") {
+        return null;
+      }
+      if (host === "localhost" || host === "127.0.0.1") {
+        return parsed.toString();
+      }
+
+      return null;
     } catch {
       return null;
+    }
+  }
+
+  private readOAuthClientRedirectsFromState(state?: string): {
+    mobileRedirectUri: string | null;
+    webRedirectUri: string | null;
+  } {
+    if (!state) {
+      return { mobileRedirectUri: null, webRedirectUri: null };
+    }
+
+    try {
+      const raw = Buffer.from(state, "base64url").toString("utf8");
+      const parsed = JSON.parse(raw) as {
+        mobileRedirectUri?: unknown;
+        webRedirectUri?: unknown;
+      };
+      const mobileRedirectUri =
+        typeof parsed.mobileRedirectUri === "string"
+          ? this.normalizeMobileRedirectUri(parsed.mobileRedirectUri)
+          : null;
+      const webRedirectUri =
+        typeof parsed.webRedirectUri === "string"
+          ? this.normalizeWebAppRedirectUri(parsed.webRedirectUri)
+          : null;
+      return { mobileRedirectUri, webRedirectUri };
+    } catch {
+      return { mobileRedirectUri: null, webRedirectUri: null };
     }
   }
 

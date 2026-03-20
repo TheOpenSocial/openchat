@@ -39,6 +39,18 @@ describe("Deployment pipeline artifacts", () => {
     expect(productionWorkflow).toContain("name: Deploy Production");
   });
 
+  it("passes OpenAI secret from GitHub Actions into deploy/rollback jobs", () => {
+    expect(stagingWorkflow).toContain(
+      "OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}",
+    );
+    expect(productionWorkflow).toContain(
+      "OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}",
+    );
+    expect(rollbackWorkflow).toContain(
+      "OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}",
+    );
+  });
+
   it("runs database migrations during deploy", () => {
     expect(
       hasAny(stagingScript, ["pnpm db:migrate", "prisma:migrate:deploy"]),
@@ -53,5 +65,11 @@ describe("Deployment pipeline artifacts", () => {
     expect(hasAny(rollbackScript, ["ROLLBACK_IMAGE_TAG", "ROLLBACK_REF"])).toBe(
       true,
     );
+  });
+
+  it("syncs runtime OpenAI secret into remote env file before compose deploy", () => {
+    expect(stagingScript).toContain('sync_remote_env_var "OPENAI_API_KEY"');
+    expect(productionScript).toContain('sync_remote_env_var "OPENAI_API_KEY"');
+    expect(rollbackScript).toContain('sync_remote_env_var "OPENAI_API_KEY"');
   });
 });

@@ -10,9 +10,8 @@ import { Notice } from "./components/Notice";
 import { Panel } from "./components/Panel";
 import {
   clearAdminSession,
+  clearLegacyAdminApiKeyStorage,
   loadAdminSession,
-  loadStoredAdminApiKey,
-  saveStoredAdminApiKey,
   type AdminSession,
 } from "./lib/admin-session";
 import {
@@ -26,6 +25,7 @@ import {
   apiRequest,
   apiRequestNullable,
   buildApiUrl,
+  configureAdminApiAuthLifecycle,
   fetchGoogleOAuthStartUrl,
   type HttpMethod,
 } from "./lib/api";
@@ -193,7 +193,6 @@ export default function AdminHome() {
     null,
   );
   const [signInError, setSignInError] = useState<string | null>(null);
-  const [adminApiKey, setAdminApiKey] = useState("");
 
   const [activeTab, setActiveTab] = useState<AdminTab>("overview");
   const [busyKey, setBusyKey] = useState<string | null>(null);
@@ -350,11 +349,8 @@ export default function AdminHome() {
         : {}),
       "x-admin-user-id": adminUserId.trim(),
       "x-admin-role": adminRole,
-      ...(adminApiKey.trim().length > 0
-        ? { "x-admin-api-key": adminApiKey.trim() }
-        : {}),
     }),
-    [adminApiKey, adminRole, adminUserId, signedInSession?.accessToken],
+    [adminRole, adminUserId, signedInSession?.accessToken],
   );
 
   const requestApi = <T,>(
@@ -465,6 +461,33 @@ export default function AdminHome() {
     [],
   );
 
+  useEffect(() => {
+    configureAdminApiAuthLifecycle({
+      onSessionRefreshed: (tokens) => {
+        setSignedInSession((current) => {
+          if (!current) {
+            return current;
+          }
+          return {
+            ...current,
+            ...tokens,
+          };
+        });
+      },
+      onAuthFailure: () => {
+        stopAgentStream();
+        clearAdminSession();
+        setSignedInSession(null);
+        setAdminUserId(DEFAULT_UUID);
+        setSignInError("Session expired. Sign in again.");
+      },
+    });
+
+    return () => {
+      configureAdminApiAuthLifecycle({});
+    };
+  }, []);
+
   const refreshHealth = async () => {
     try {
       const payload = await requestApi<{ service: string; status: string }>(
@@ -478,9 +501,9 @@ export default function AdminHome() {
   };
 
   useEffect(() => {
+    clearLegacyAdminApiKeyStorage();
     const session = loadAdminSession();
     setSignedInSession(session);
-    setAdminApiKey(loadStoredAdminApiKey());
     if (session) {
       setAdminUserId(session.userId);
     }
@@ -1259,10 +1282,8 @@ export default function AdminHome() {
     return (
       <AdminSignIn
         errorText={signInError}
-        onGoogleSignIn={async (key) => {
+        onGoogleSignIn={async () => {
           setSignInError(null);
-          saveStoredAdminApiKey(key);
-          setAdminApiKey(key.trim());
           const url = await fetchGoogleOAuthStartUrl(
             `${window.location.origin}/auth/callback`,
           );
@@ -1295,7 +1316,7 @@ export default function AdminHome() {
         signedInSession.userId
       }
       activeDescription={tabSubtitle(activeTab)}
-      subtitle="OpenSocial admin console"
+      subtitle="OPENSOCIAL · operator console"
       summary={summary}
       title="Operations workbench"
     >
@@ -1353,21 +1374,6 @@ export default function AdminHome() {
                     setAdminUserId(event.currentTarget.value)
                   }
                   value={adminUserId}
-                />
-              </label>
-              <label className={`${adminLabelClass} mt-3 block`}>
-                admin API key (x-admin-api-key)
-                <input
-                  autoComplete="off"
-                  className={adminInputClass}
-                  onChange={(event) => {
-                    const next = event.currentTarget.value;
-                    setAdminApiKey(next);
-                    saveStoredAdminApiKey(next);
-                  }}
-                  placeholder="Optional; stored in this browser"
-                  type="password"
-                  value={adminApiKey}
                 />
               </label>
               <label className={adminLabelClass}>

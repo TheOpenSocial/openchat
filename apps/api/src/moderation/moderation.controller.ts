@@ -27,7 +27,7 @@ export class ModerationController {
       );
     }
     return ok(
-      this.moderationService.assessContentRisk({
+      await this.moderationService.assessContentRiskWithPolicy({
         content: payload.content,
         context: payload.context,
         surface: payload.surface,

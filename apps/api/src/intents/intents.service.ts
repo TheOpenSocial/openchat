@@ -69,6 +69,11 @@ interface TextModerationResult {
   matchedTerms: string[];
 }
 
+interface AgentIntentDecompositionOptions {
+  allowDecomposition?: boolean;
+  maxIntents?: number;
+}
+
 @Injectable()
 export class IntentsService {
   private readonly logger = new Logger(IntentsService.name);
@@ -181,6 +186,7 @@ export class IntentsService {
     threadId: string,
     userId: string,
     content: string,
+    options: AgentIntentDecompositionOptions = {},
   ) {
     const traceId = randomUUID();
     const message = await this.agentService.createUserMessage(
@@ -188,18 +194,45 @@ export class IntentsService {
       content,
       userId,
     );
-    const intent = await this.createIntent(userId, content, traceId, threadId);
+    const allowDecomposition = options.allowDecomposition ?? true;
+    const maxIntents = this.clampIntentCount(options.maxIntents ?? 3);
+    const intentTexts = allowDecomposition
+      ? this.decomposeAgentMessageToIntents(content, maxIntents)
+      : [content.trim()];
+
+    const intents = [];
+    for (const [index, intentText] of intentTexts.entries()) {
+      const scopedTraceId =
+        intentTexts.length > 1 ? `${traceId}:${index + 1}` : traceId;
+      const intent = await this.createIntent(
+        userId,
+        intentText,
+        scopedTraceId,
+        threadId,
+      );
+      intents.push(intent);
+    }
+    const primaryIntent = intents[0];
+    if (!primaryIntent) {
+      throw new ForbiddenException(
+        "could not create intent from empty content",
+      );
+    }
 
     await this.agentService.createAgentMessage(
       threadId,
-      "Got it. I captured your request and started matching now.",
+      intents.length === 1
+        ? "Got it. I captured your request and started matching now."
+        : `Got it. I split your request into ${intents.length} intents and started matching each one.`,
     );
 
     return {
       threadId,
       messageId: message.id,
-      intentId: intent.id,
-      status: intent.status,
+      intentId: primaryIntent.id,
+      status: primaryIntent.status,
+      intentCount: intents.length,
+      intentIds: intents.map((intent) => intent.id),
       traceId,
     };
   }
@@ -1101,6 +1134,30 @@ export class IntentsService {
     template: "pending_reminder" | "no_match_yet" | "progress_update",
   ) {
     return `async-followup:${intentId}:${template}`;
+  }
+
+  private clampIntentCount(value: number) {
+    return Math.max(1, Math.min(5, Math.floor(value)));
+  }
+
+  private decomposeAgentMessageToIntents(content: string, maxIntents: number) {
+    const normalized = content.trim();
+    if (!normalized) {
+      return [];
+    }
+
+    const explicitSplit = normalized
+      .split(/\n+|;+/)
+      .flatMap((segment) => segment.split(/(?<=[.!?])\s+(?=[A-Z0-9])/))
+      .flatMap((segment) => segment.split(/(?:^|\s)(?:\d+[.)]|[-*])\s+/))
+      .map((segment) => segment.trim())
+      .filter((segment) => segment.length >= 8);
+
+    const uniqueSegments = Array.from(new Set(explicitSplit)).slice(
+      0,
+      maxIntents,
+    );
+    return uniqueSegments.length > 0 ? uniqueSegments : [normalized];
   }
 
   private resolveTimeoutEscalation(input: {

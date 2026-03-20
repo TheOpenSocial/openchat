@@ -7,15 +7,17 @@ const catalogs = {
   en: {
     offlineNotice: "You're offline — reconnect to sync.",
     sendBlockedOffline: "Can't send while offline.",
-    agentComposerModeChat: "Agent chat",
-    agentComposerModeIntent: "Intent queue",
-    agentHistoryLoading: "Loading agent conversation…",
+    agentComposerModeChat: "Chat",
+    agentComposerModeIntent: "Plans & intents",
+    agentHistoryLoading: "Loading your conversation…",
     agentWorkflowThinking: "Thinking…",
-    agentWorkflowRouting: "Routing your request now...",
-    agentComposerHintChat: "Chat runs a full agent turn on your thread.",
-    agentComposerHintIntent: "Queue an intent for matching and inbox flows.",
+    agentWorkflowRouting: "Finding the right path…",
+    agentComposerHintChat:
+      "Message here for replies and next steps in this thread.",
+    agentComposerHintIntent:
+      "Describe what you want to do—we’ll route it to the right people.",
     agentImageUrlOptional:
-      "Image URL (optional) — sent as an attachment with agent chat.",
+      "Image link (optional) — attach a picture if it helps.",
   },
 } as const;
 

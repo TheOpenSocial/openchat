@@ -1,0 +1,11 @@
+api.opensocial.so {
+  reverse_proxy api:3000
+}
+
+admin.opensocial.so {
+  reverse_proxy admin:3001
+}
+
+app.opensocial.so {
+  reverse_proxy web:3002
+}

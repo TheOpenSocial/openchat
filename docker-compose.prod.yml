@@ -57,7 +57,7 @@ services:
       - valkey_data:/data
 
   nginx:
-    image: nginx:1.27-alpine
+    image: caddy:2.10-alpine
     depends_on:
       - api
       - admin
@@ -65,8 +65,15 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
+      - "443:443"
+    environment:
+      CADDY_EMAIL: ${CADDY_EMAIL:-}
     volumes:
-      - ./deploy/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
 
 volumes:
   valkey_data:
+  caddy_data:
+  caddy_config:

@@ -47,6 +47,7 @@ function CallbackContent() {
           displayName: result.user.displayName,
           accessToken: result.accessToken,
           refreshToken: result.refreshToken,
+          sessionId: result.sessionId,
         });
         router.replace("/");
       } catch (err) {

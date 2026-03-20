@@ -5,6 +5,7 @@ import { ConnectionsModule } from "../connections/connections.module.js";
 import { IntentsModule } from "../intents/intents.module.js";
 import { NotificationsModule } from "../notifications/notifications.module.js";
 import { ProfilesModule } from "../profiles/profiles.module.js";
+import { ScheduledTasksModule } from "../scheduled-tasks/scheduled-tasks.module.js";
 import { DeadLetterService } from "./dead-letter.service.js";
 import { OutboxRelayService } from "./outbox-relay.service.js";
 import { AdminMaintenanceConsumer } from "./processors/admin-maintenance.consumer.js";
@@ -12,6 +13,7 @@ import { AsyncAgentFollowupConsumer } from "./processors/async-agent-followup.co
 import { ConnectionSetupConsumer } from "./processors/connection-setup.consumer.js";
 import { IntentProcessingConsumer } from "./processors/intent-processing.consumer.js";
 import { MediaProcessingConsumer } from "./processors/media-processing.consumer.js";
+import { ScheduledTasksConsumer } from "./processors/scheduled-tasks.consumer.js";
 
 export const JOB_QUEUE_NAMES = [
   "intent-processing",
@@ -25,6 +27,7 @@ export const JOB_QUEUE_NAMES = [
   "cleanup",
   "digests",
   "admin-maintenance",
+  "scheduled-tasks",
 ];
 
 @Module({
@@ -35,6 +38,7 @@ export const JOB_QUEUE_NAMES = [
     ProfilesModule,
     AgentModule,
     NotificationsModule,
+    ScheduledTasksModule,
   ],
   providers: [
     DeadLetterService,
@@ -44,6 +48,7 @@ export const JOB_QUEUE_NAMES = [
     MediaProcessingConsumer,
     AsyncAgentFollowupConsumer,
     AdminMaintenanceConsumer,
+    ScheduledTasksConsumer,
   ],
   exports: [BullModule, DeadLetterService, OutboxRelayService],
 })

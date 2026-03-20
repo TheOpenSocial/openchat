@@ -56,7 +56,7 @@ export function WelcomeScreen({ onContinue }: WelcomeScreenProps) {
           OpenSocial
         </Text>
         <Text className="mb-8 max-w-[340px] text-[16px] leading-7 text-muted">
-          Explore the full mobile shell—agent, discover, inbox, chats, and
+          Explore the full mobile shell—home, discover, inbox, chats, and
           profile—with realistic mock data. No API or account required.
         </Text>
         <PrimaryButton

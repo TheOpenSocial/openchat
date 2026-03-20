@@ -5,7 +5,9 @@ import {
   NotFoundException,
   Optional,
 } from "@nestjs/common";
+import { OpenAIClient } from "@opensocial/openai";
 import { Prisma } from "@prisma/client";
+import { randomUUID } from "node:crypto";
 import { AnalyticsService } from "../analytics/analytics.service.js";
 import { PrismaService } from "../database/prisma.service.js";
 import { LaunchControlsService } from "../launch-controls/launch-controls.service.js";
@@ -41,6 +43,8 @@ interface TextModerationResult {
 @Injectable()
 export class ChatsService {
   private readonly logger = new Logger(ChatsService.name);
+  private readonly openAIClient: OpenAIClient;
+  private readonly openAIModerationEnabled: boolean;
   private readonly messageIdempotencyCache = new Map<
     string,
     { expiresAt: number; message: any }
@@ -52,7 +56,15 @@ export class ChatsService {
     private readonly analyticsService?: AnalyticsService,
     @Optional()
     private readonly launchControlsService?: LaunchControlsService,
-  ) {}
+  ) {
+    this.openAIClient = new OpenAIClient({
+      apiKey: process.env.OPENAI_API_KEY ?? "",
+    });
+    this.openAIModerationEnabled = this.readBooleanEnv(
+      process.env.OPENAI_MODERATION_ENABLED,
+      process.env.NODE_ENV !== "test",
+    );
+  }
 
   async createChat(
     connectionId: string,
@@ -112,7 +124,7 @@ export class ChatsService {
       await this.assertActiveParticipant(chatId, senderUserId);
       const strictModerationEnabled =
         await this.isModerationStrictnessEnabled();
-      const moderation = this.evaluateTextModeration(
+      const moderation = await this.evaluateMessageModeration(
         body,
         strictModerationEnabled,
       );
@@ -819,6 +831,120 @@ export class ChatsService {
       decision: "clean",
       matchedTerms: [],
     };
+  }
+
+  private async evaluateMessageModeration(
+    text: string,
+    strictModerationEnabled = false,
+  ): Promise<TextModerationResult> {
+    const deterministic = this.evaluateTextModeration(text, false);
+    if (!this.shouldUseOpenAIModeration()) {
+      if (strictModerationEnabled && deterministic.decision === "review") {
+        return {
+          decision: "blocked",
+          matchedTerms: deterministic.matchedTerms,
+        };
+      }
+      return deterministic;
+    }
+
+    try {
+      const assisted = await this.openAIClient.assistModeration(
+        {
+          content: text,
+          context: "chat_message",
+        },
+        randomUUID(),
+      );
+      const normalizedReason = this.normalizeReasonToken(assisted.reason);
+      const matchedTerms = Array.from(
+        new Set([
+          ...deterministic.matchedTerms,
+          ...(assisted.decision !== "clean"
+            ? [`openai_decision:${assisted.decision}`]
+            : []),
+          ...(normalizedReason ? [`openai_reason:${normalizedReason}`] : []),
+        ]),
+      );
+      const blocked =
+        deterministic.decision === "blocked" || assisted.decision === "blocked";
+      const review =
+        deterministic.decision === "review" || assisted.decision === "review";
+      if (blocked) {
+        return {
+          decision: "blocked",
+          matchedTerms:
+            matchedTerms.length > 0
+              ? matchedTerms
+              : ["risk_assessment_blocked"],
+        };
+      }
+      if (review) {
+        if (strictModerationEnabled) {
+          return {
+            decision: "blocked",
+            matchedTerms:
+              matchedTerms.length > 0
+                ? matchedTerms
+                : ["risk_assessment_review"],
+          };
+        }
+        return {
+          decision: "review",
+          matchedTerms:
+            matchedTerms.length > 0 ? matchedTerms : ["risk_assessment_review"],
+        };
+      }
+      return {
+        decision: "clean",
+        matchedTerms: [],
+      };
+    } catch (error) {
+      this.logger.warn(
+        `chat OpenAI moderation failed; using deterministic fallback: ${String(error)}`,
+      );
+      if (strictModerationEnabled && deterministic.decision === "review") {
+        return {
+          decision: "blocked",
+          matchedTerms: deterministic.matchedTerms,
+        };
+      }
+      return deterministic;
+    }
+  }
+
+  private shouldUseOpenAIModeration() {
+    if (!this.openAIModerationEnabled) {
+      return false;
+    }
+    return Boolean(process.env.OPENAI_API_KEY);
+  }
+
+  private normalizeReasonToken(value?: string) {
+    if (!value) {
+      return null;
+    }
+    const normalized = value
+      .toLowerCase()
+      .replace(/[^a-z0-9:_\-\s]/g, "")
+      .trim()
+      .replace(/\s+/g, "_")
+      .slice(0, 100);
+    return normalized.length > 0 ? normalized : null;
+  }
+
+  private readBooleanEnv(rawValue: string | undefined, fallback: boolean) {
+    if (!rawValue) {
+      return fallback;
+    }
+    const normalized = rawValue.toLowerCase().trim();
+    if (["1", "true", "yes", "on"].includes(normalized)) {
+      return true;
+    }
+    if (["0", "false", "no", "off"].includes(normalized)) {
+      return false;
+    }
+    return fallback;
   }
 
   private async isModerationStrictnessEnabled() {

@@ -17,7 +17,7 @@ const TAB_META: Record<
 > = {
   home: {
     label: "Home",
-    hint: "Agent chat",
+    hint: "Plans & chat",
     iconActive: "sparkles",
     iconIdle: "sparkles-outline",
   },

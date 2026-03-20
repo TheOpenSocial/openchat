@@ -92,7 +92,7 @@ export function AppDrawer({
               New conversation
             </Text>
             <Text className="mt-1 text-[12px] leading-[17px] text-muted">
-              Clear your agent thread and begin again on this device.
+              Clear this conversation and start fresh on this device.
             </Text>
           </Pressable>
 

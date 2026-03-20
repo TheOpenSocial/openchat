@@ -1,5 +1,7 @@
 import { Injectable, Logger, Optional } from "@nestjs/common";
+import { OpenAIClient } from "@opensocial/openai";
 import { Prisma } from "@prisma/client";
+import { randomUUID } from "node:crypto";
 import { AnalyticsService } from "../analytics/analytics.service.js";
 import { PrismaService } from "../database/prisma.service.js";
 import { RealtimeEventsService } from "../realtime/realtime-events.service.js";
@@ -64,6 +66,8 @@ export interface ContentRiskAssessment {
 @Injectable()
 export class ModerationService {
   private readonly logger = new Logger(ModerationService.name);
+  private readonly openAIClient: OpenAIClient;
+  private readonly openAIModerationEnabled: boolean;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -71,7 +75,19 @@ export class ModerationService {
     private readonly analyticsService?: AnalyticsService,
     @Optional()
     private readonly realtimeEventsService?: RealtimeEventsService,
-  ) {}
+    @Optional()
+    private readonly moderationOpenAIClient?: OpenAIClient,
+  ) {
+    this.openAIClient =
+      moderationOpenAIClient ??
+      new OpenAIClient({
+        apiKey: process.env.OPENAI_API_KEY ?? "",
+      });
+    this.openAIModerationEnabled = this.readBooleanEnv(
+      process.env.OPENAI_MODERATION_ENABLED,
+      process.env.NODE_ENV !== "test",
+    );
+  }
 
   async createReport(
     reporterUserId: string,
@@ -416,6 +432,41 @@ export class ModerationService {
     };
   }
 
+  async assessContentRiskWithPolicy(input: {
+    content: string;
+    context?: string;
+    surface?: string;
+    traceId?: string;
+  }): Promise<ContentRiskAssessment> {
+    const deterministicAssessment = this.assessContentRisk({
+      content: input.content,
+      context: input.context,
+      surface: input.surface,
+    });
+    if (!this.shouldUseOpenAIModeration()) {
+      return deterministicAssessment;
+    }
+
+    try {
+      const assistedAssessment = await this.openAIClient.assistModeration(
+        {
+          content: input.content,
+          context: input.context,
+        },
+        input.traceId?.trim() || randomUUID(),
+      );
+      return this.mergeAssessmentsWithOpenAIAssist(
+        deterministicAssessment,
+        assistedAssessment,
+      );
+    } catch (error) {
+      this.logger.warn(
+        `openai moderation assist failed; using deterministic fallback: ${String(error)}`,
+      );
+      return deterministicAssessment;
+    }
+  }
+
   private shouldAutoIssueStrike(reason: string, entityType?: string) {
     if (entityType === "chat_message") {
       return true;
@@ -455,6 +506,76 @@ export class ModerationService {
       return "review";
     }
     return "clean";
+  }
+
+  private shouldUseOpenAIModeration() {
+    if (!this.openAIModerationEnabled) {
+      return false;
+    }
+    return Boolean(process.env.OPENAI_API_KEY || this.moderationOpenAIClient);
+  }
+
+  private mergeAssessmentsWithOpenAIAssist(
+    deterministic: ContentRiskAssessment,
+    assisted: {
+      decision: "clean" | "review" | "blocked";
+      reason?: string;
+    },
+  ): ContentRiskAssessment {
+    const decision = this.pickMoreRestrictiveRiskDecision(
+      deterministic.decision,
+      assisted.decision,
+    );
+    const reasons = deterministic.reasons.filter(
+      (reason) => reason !== "no_risk_signal",
+    );
+    if (assisted.decision !== "clean") {
+      reasons.push(`openai_decision:${assisted.decision}`);
+    }
+    const normalizedReason = this.normalizeReasonToken(assisted.reason);
+    if (normalizedReason) {
+      reasons.push(`openai_reason:${normalizedReason}`);
+    }
+
+    let score = deterministic.score;
+    if (assisted.decision === "review") {
+      score = Math.max(score, 0.55);
+    }
+    if (assisted.decision === "blocked") {
+      score = Math.max(score, 0.9);
+    }
+
+    return {
+      ...deterministic,
+      decision,
+      score: Math.max(0, Math.min(1, score)),
+      reasons:
+        reasons.length > 0 ? Array.from(new Set(reasons)) : ["no_risk_signal"],
+    };
+  }
+
+  private pickMoreRestrictiveRiskDecision(
+    current: ModerationRiskDecision,
+    next: ModerationRiskDecision,
+  ): ModerationRiskDecision {
+    const rank: Record<ModerationRiskDecision, number> = {
+      clean: 0,
+      review: 1,
+      blocked: 2,
+    };
+    return rank[current] >= rank[next] ? current : next;
+  }
+
+  private normalizeReasonToken(value?: string) {
+    if (!value) {
+      return null;
+    }
+    return value
+      .toLowerCase()
+      .replace(/[^a-z0-9:_\-\s]/g, "")
+      .trim()
+      .replace(/\s+/g, "_")
+      .slice(0, 100);
   }
 
   private async loadStrikeState(userId: string) {
@@ -605,6 +726,20 @@ export class ModerationService {
       blocked: 3,
     };
     return rank[current] >= rank[next] ? current : next;
+  }
+
+  private readBooleanEnv(rawValue: string | undefined, fallback: boolean) {
+    if (!rawValue) {
+      return fallback;
+    }
+    const normalized = rawValue.toLowerCase().trim();
+    if (["1", "true", "yes", "on"].includes(normalized)) {
+      return true;
+    }
+    if (["0", "false", "no", "off"].includes(normalized)) {
+      return false;
+    }
+    return fallback;
   }
 
   private async trackAnalyticsEventSafe(input: {

@@ -16,3 +16,4 @@ coverage
 *.tsbuildinfo
 apps/web/test-results/
 apps/web/playwright-report/
+settings.generated/

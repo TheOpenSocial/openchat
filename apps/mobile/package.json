@@ -5,6 +5,10 @@
   "main": "index.js",
   "scripts": {
     "dev": "expo start",
+    "prebuild:ios": "expo prebuild --platform ios",
+    "run:ios": "expo run:ios",
+    "run:ios:device": "expo run:ios --device",
+    "jarvis:device": "expo run:ios --device \"Jarvis mobile\"",
     "build": "pnpm build:ios && pnpm build:android",
     "build:ios": "expo export --platform ios --output-dir dist-ios",
     "build:android": "expo export --platform android --output-dir dist-android",

@@ -27,7 +27,7 @@ const tabLabels: Record<Tab, string> = {
 };
 
 const tabDescriptions: Record<Tab, string> = {
-  home: "Chat with your agent and follow each step as it runs.",
+  home: "Plan, chat, and follow along as things move forward.",
   chats: "Private threads with people you’ve connected with.",
   profile: "Preferences, notifications, and account.",
 };
@@ -250,10 +250,10 @@ export function WebDesignMockApp() {
         <section className="animate-rise space-y-4">
           <SurfaceCard>
             <h2 className="font-[var(--font-heading)] text-2xl text-ink">
-              Tune your signal
+              Finish your profile
             </h2>
             <p className="mt-1 text-sm text-ash">
-              Adjust fields — nothing is sent to a server in preview mode.
+              Adjust fields—nothing is sent to a server in preview mode.
             </p>
 
             <div className="mt-4 grid gap-3 md:grid-cols-3">
@@ -450,7 +450,7 @@ export function WebDesignMockApp() {
                     className="mt-3 h-24 w-full rounded-xl border border-slate-700 bg-night px-3 py-2 text-sm text-ink outline-none transition-colors duration-200 focus:border-ember"
                     data-testid="web-agent-intent-input"
                     onChange={(e) => setIntentDraft(e.target.value)}
-                    placeholder="Ask your agent anything…"
+                    placeholder="Share what you’re looking for…"
                     value={intentDraft}
                   />
                   <button
@@ -459,7 +459,7 @@ export function WebDesignMockApp() {
                     onClick={sendIntent}
                     type="button"
                   >
-                    Send intent
+                    Send plan
                   </button>
                 </SurfaceCard>
               ) : null}

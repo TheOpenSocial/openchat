@@ -104,7 +104,7 @@ const tabLabels: Record<HomeTab, string> = {
 };
 
 const tabDescriptions: Record<HomeTab, string> = {
-  home: "Chat with your agent and follow each step as it runs.",
+  home: "Plan, chat, and follow along as things move forward.",
   chats: "Private threads with people you’ve connected with.",
   profile: "Preferences, notifications, and account.",
 };
@@ -134,7 +134,7 @@ export function HomeScreen({
             {
               id: "seed_1",
               role: "agent",
-              body: "What would you like to do or talk about today?",
+              body: "What would you like to do today—or who would you like to meet?",
             },
           ],
   );
@@ -201,7 +201,7 @@ export function HomeScreen({
       onLoadError: () =>
         setBanner({
           tone: "error",
-          text: "Could not load your agent thread.",
+          text: "Could not load your conversation.",
         }),
     });
 
@@ -744,7 +744,7 @@ export function HomeScreen({
             {
               id: "seed_1",
               role: "agent",
-              body: "What would you like to do or talk about today?",
+              body: "What would you like to do today—or who would you like to meet?",
             },
           ],
     );
@@ -1727,8 +1727,8 @@ function AgentTab({
           onChangeText={setDraftMessage}
           onSend={onSend}
           onVoiceTranscript={onVoiceTranscript}
-          placeholder="Ask your agent anything…"
-          sendAccessibilityLabel="Send message to agent"
+          placeholder="Share what you’re looking for…"
+          sendAccessibilityLabel="Send message"
           sendTestID="agent-send-intent-button"
           sending={loading}
           value={draftMessage}

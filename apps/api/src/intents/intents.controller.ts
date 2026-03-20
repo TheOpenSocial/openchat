@@ -85,6 +85,10 @@ export class IntentsController {
         payload.threadId,
         payload.userId,
         payload.content,
+        {
+          allowDecomposition: payload.allowDecomposition,
+          maxIntents: payload.maxIntents,
+        },
       ),
     );
   }

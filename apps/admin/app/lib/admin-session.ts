@@ -1,5 +1,4 @@
 export const ADMIN_SESSION_STORAGE_KEY = "opensocial-admin-session";
-export const ADMIN_API_KEY_STORAGE_KEY = "opensocial-admin-api-key";
 
 export type AdminSession = {
   userId: string;
@@ -7,6 +6,7 @@ export type AdminSession = {
   displayName: string | null;
   accessToken: string;
   refreshToken: string;
+  sessionId?: string;
 };
 
 export function loadAdminSession(): AdminSession | null {
@@ -33,6 +33,9 @@ export function loadAdminSession(): AdminSession | null {
         typeof parsed.displayName === "string" ? parsed.displayName : null,
       accessToken: parsed.accessToken,
       refreshToken: parsed.refreshToken,
+      ...(typeof parsed.sessionId === "string"
+        ? { sessionId: parsed.sessionId }
+        : {}),
     };
   } catch {
     return null;
@@ -56,21 +59,10 @@ export function clearAdminSession() {
   window.localStorage.removeItem(ADMIN_SESSION_STORAGE_KEY);
 }
 
-export function loadStoredAdminApiKey(): string {
-  if (typeof window === "undefined") {
-    return "";
-  }
-  return window.localStorage.getItem(ADMIN_API_KEY_STORAGE_KEY)?.trim() ?? "";
-}
-
-export function saveStoredAdminApiKey(value: string) {
+/** Earlier admin builds stored `ADMIN_API_KEY` in localStorage; strip it on load. */
+export function clearLegacyAdminApiKeyStorage() {
   if (typeof window === "undefined") {
     return;
   }
-  const trimmed = value.trim();
-  if (trimmed.length === 0) {
-    window.localStorage.removeItem(ADMIN_API_KEY_STORAGE_KEY);
-    return;
-  }
-  window.localStorage.setItem(ADMIN_API_KEY_STORAGE_KEY, trimmed);
+  window.localStorage.removeItem("opensocial-admin-api-key");
 }

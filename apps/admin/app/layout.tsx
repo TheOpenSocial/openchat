@@ -17,8 +17,13 @@ const bodyFont = Source_Sans_3({
 });
 
 export const metadata: Metadata = {
-  title: "OpenSocial Admin",
-  description: "Operational dashboard for OpenSocial",
+  title: "OPENSOCIAL · Admin",
+  description: "Operator console for OPENSOCIAL",
+  icons: {
+    icon: [{ url: "/brand/logo.svg", type: "image/svg+xml" }],
+    shortcut: "/brand/logo.svg",
+    apple: [{ url: "/brand/logo.svg", type: "image/svg+xml" }],
+  },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

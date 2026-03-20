@@ -260,4 +260,70 @@ describe("ModerationService", () => {
     expect(result.decision).toBe("clean");
     expect(result.score).toBeLessThan(0.45);
   });
+
+  it("upgrades moderation decision when OpenAI assist returns blocked", async () => {
+    vi.stubEnv("OPENAI_MODERATION_ENABLED", "true");
+    try {
+      const moderationOpenAIClient: any = {
+        assistModeration: vi.fn().mockResolvedValue({
+          decision: "blocked",
+          reason: "credible threat language",
+        }),
+      };
+      const service = new ModerationService(
+        {} as any,
+        undefined,
+        undefined,
+        moderationOpenAIClient,
+      );
+
+      const result = await service.assessContentRiskWithPolicy({
+        content: "Looking for people to play football tonight",
+        surface: "chat_message",
+        traceId: "trace-mod-openai-blocked",
+      });
+
+      expect(moderationOpenAIClient.assistModeration).toHaveBeenCalledTimes(1);
+      expect(result.decision).toBe("blocked");
+      expect(result.score).toBeGreaterThanOrEqual(0.9);
+      expect(result.reasons).toEqual(
+        expect.arrayContaining([
+          "openai_decision:blocked",
+          expect.stringContaining("openai_reason:"),
+        ]),
+      );
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("falls back to deterministic moderation when OpenAI assist throws", async () => {
+    vi.stubEnv("OPENAI_MODERATION_ENABLED", "true");
+    try {
+      const moderationOpenAIClient: any = {
+        assistModeration: vi
+          .fn()
+          .mockRejectedValue(new Error("upstream_timeout")),
+      };
+      const service = new ModerationService(
+        {} as any,
+        undefined,
+        undefined,
+        moderationOpenAIClient,
+      );
+
+      const result = await service.assessContentRiskWithPolicy({
+        content: "This is a bomb threat",
+        surface: "chat_message",
+        traceId: "trace-mod-openai-fallback",
+      });
+
+      expect(result.decision).toBe("blocked");
+      expect(result.reasons).toEqual(
+        expect.arrayContaining([expect.stringContaining("blocked_term:")]),
+      );
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
 });

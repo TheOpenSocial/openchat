@@ -45,6 +45,7 @@ pnpm db:up && pnpm db:generate && pnpm dev
 ```
 
 ## Operational docs index
+- `USE_CASES.md`
 - `docs/local-setup-guide.md`
 - `docs/frontend-critical-path.md` (Maestro + Playwright)
 - `docs/debugging-guide.md`
@@ -60,6 +61,7 @@ pnpm db:up && pnpm db:generate && pnpm dev
 - `docs/release-process.md`
 - `docs/openai-model-policy.md`
 - `docs/aws-free-tier-deploy.md`
+- `docs/recurring-tasks-v1.md`
 
 ## Dependency currency
 Use these commands from repo root:
@@ -73,6 +75,22 @@ pnpm deps:update:latest
 Rule:
 - keep backend/security-critical libraries on latest stable unless blocked by a verified compatibility constraint.
 - for frontend/tooling lanes, track major upgrades in `PROGRESS.md` with explicit blockers and migration owners.
+
+## Central settings sync
+Repo-level environment URLs and OAuth helper values are centralized in `settings.json`.
+
+Sync generated app/env files:
+```bash
+pnpm settings:sync        # uses settings.json defaultEnvironment
+pnpm settings:sync:dev
+pnpm settings:sync:prod
+```
+
+Generated outputs:
+- `apps/web/.env.local`
+- `apps/admin/.env.local`
+- `settings.generated/<env>.google-oauth.json`
+- `settings.generated/<env>.server.env`
 
 ## Mobile app status
 `apps/mobile` now includes a Tailwind/NativeWind-driven app foundation with:
@@ -107,10 +125,23 @@ Run mobile app:
 pnpm --filter @opensocial/mobile dev
 ```
 
-Optional mobile env override:
+Generate iOS native project (creates `apps/mobile/ios` on demand):
+```bash
+pnpm --filter @opensocial/mobile prebuild:ios
+```
+
+Run on iOS device:
+```bash
+pnpm --filter @opensocial/mobile run:ios:device
+```
+Use Xcode (`apps/mobile/ios/*.xcworkspace`) to set your Apple Team under Signing & Capabilities before first device deploy.
+
+Mobile API target (defaults to `https://api.opensocial.so/api`; override for local API):
 ```bash
 EXPO_PUBLIC_API_BASE_URL=http://localhost:3000/api pnpm --filter @opensocial/mobile dev
+# or: EXPO_PUBLIC_USE_LOCAL_API=1 pnpm --filter @opensocial/mobile dev
 ```
+See `docs/mobile-google-signin.md` for the OAuth redirect chain (Google → API → app deep link).
 
 Build mobile JS bundles (CI smoke build):
 ```bash
@@ -150,8 +181,8 @@ NEXT_PUBLIC_API_BASE_URL=http://localhost:3000/api pnpm --filter @opensocial/web
 
 ## Admin app status
 `apps/admin` is **Next.js 16** (default **Turbopack**; no webpack unless `--webpack`) + **Tailwind CSS v4** with a responsive admin console (**shadcn-style Radix/CVA primitives**, sidebar shell, cards/alerts) for debugging and operations workflows:
-- **Google sign-in** via the same OAuth flow as clients: start from the admin app, Google redirects to `GET /api/auth/google/callback`, then the API redirects back to `{admin origin}/auth/callback?code=…` and the dashboard exchanges the code for a session. Local dev allows `http://localhost:3001/auth/callback` and `http://127.0.0.1:3001/auth/callback` without extra config; production must set **`ADMIN_DASHBOARD_REDIRECT_URIS`** to the full callback URL(s). The signed-in user id is used as **`x-admin-user-id`**; allowlist **`ADMIN_ALLOWED_USER_IDS`** / **`ADMIN_ROLE_BINDINGS`** on the API still apply.
-- optional **`x-admin-api-key`** when **`ADMIN_API_KEY`** is set (stored in the browser from the sign-in screen or Context panel)
+- **Google sign-in** via the same OAuth flow as clients: start from the admin app, Google redirects to `GET /api/auth/google/callback`, then the API redirects back to `{admin origin}/auth/callback?code=…` and the dashboard exchanges the code with **`adminConsole: true`**, which enforces **`ADMIN_CONSOLE_ALLOWED_EMAILS`** (comma-separated; defaults to `jeffersonlicet@gmail.com` when unset). Local dev allows `http://localhost:3001/auth/callback` and `http://127.0.0.1:3001/auth/callback` without extra config; production must set **`ADMIN_DASHBOARD_REDIRECT_URIS`** to the full callback URL(s). The signed-in user id is used as **`x-admin-user-id`**; allowlist **`ADMIN_ALLOWED_USER_IDS`** / **`ADMIN_ROLE_BINDINGS`** on the API still apply.
+- **`ADMIN_API_KEY`**: leave empty for the hosted admin app (it does not send **`x-admin-api-key`**). Set only if you call `/api/admin` from tools that inject the header.
 - **`Authorization: Bearer`** from the Google session for user-scoped routes; agent **SSE** uses query **`access_token`** on `GET /api/agent/threads/:threadId/stream` only (browser `EventSource` cannot set headers)
 - tabbed operations workbench: overview, users, intents, chats, moderation, personalization, and agent traces
 - admin context controls for RBAC headers (`x-admin-user-id`, `x-admin-role`)

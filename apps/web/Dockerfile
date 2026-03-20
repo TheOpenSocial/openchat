@@ -16,4 +16,4 @@ WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build /app /app
 EXPOSE 3002
-CMD ["sh", "-lc", "cd apps/web && node ../../node_modules/next/dist/bin/next start -p 3002"]
+CMD ["sh", "-lc", "cd apps/web && node_modules/.bin/next start -p 3002 -H 0.0.0.0"]

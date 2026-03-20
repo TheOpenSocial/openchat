@@ -1,6 +1,6 @@
 "use client";
 
-import { LayoutDashboard, LogOut, PanelLeft } from "lucide-react";
+import { LogOut, PanelLeft } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
 import { Badge } from "@/app/components/ui/badge";
@@ -58,8 +58,14 @@ export function AdminShell({
         )}
       >
         <div className="flex items-center gap-2 border-b border-border px-4 py-4">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/15 text-primary">
-            <LayoutDashboard aria-hidden className="h-5 w-5" />
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl ring-1 ring-border">
+            <img
+              alt=""
+              className="h-9 w-9"
+              height={36}
+              src="/brand/logo.svg"
+              width={36}
+            />
           </div>
           <div className="min-w-0">
             <p className="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">

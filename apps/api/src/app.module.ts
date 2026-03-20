@@ -23,6 +23,8 @@ import { AnalyticsModule } from "./analytics/analytics.module.js";
 import { PrivacyModule } from "./privacy/privacy.module.js";
 import { ComplianceModule } from "./compliance/compliance.module.js";
 import { LaunchControlsModule } from "./launch-controls/launch-controls.module.js";
+import { ScheduledTasksModule } from "./scheduled-tasks/scheduled-tasks.module.js";
+import { RecurringCirclesModule } from "./recurring-circles/recurring-circles.module.js";
 import { HealthController } from "./health/health.controller.js";
 
 @Module({
@@ -55,6 +57,8 @@ import { HealthController } from "./health/health.controller.js";
     PrivacyModule,
     ComplianceModule,
     LaunchControlsModule,
+    ScheduledTasksModule,
+    RecurringCirclesModule,
   ],
   providers: [
     {

@@ -1,5 +1,10 @@
 import Constants from "expo-constants";
 import { Platform } from "react-native";
+import {
+  clearStoredSession,
+  loadStoredSession,
+  saveStoredSession,
+} from "./session-storage";
 
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH";
 type RequestQueryValue = string | number | boolean | null | undefined;
@@ -12,6 +17,11 @@ interface ApiEnvelope<T> {
     message: string;
     details?: unknown;
   };
+}
+
+interface AuthLifecycleHandlers {
+  onSessionRefreshed?: (tokens: SessionTokens) => void;
+  onAuthFailure?: () => void;
 }
 
 export interface SessionTokens {
@@ -177,6 +187,8 @@ export interface DiscoveryAgentRecommendationsResponse {
   discovery: PassiveDiscoveryResponse;
 }
 
+const REMOTE_API_BASE_URL = "https://api.opensocial.so/api";
+
 const LOCAL_API_BASE = Platform.select({
   android: "http://10.0.2.2:3000/api",
   default: "http://localhost:3000/api",
@@ -192,8 +204,28 @@ const expoLanBase = expoHostUri
   ? `http://${expoHostUri.split(":")[0]}:3000/api`
   : null;
 
+const devApiBase = expoLanBase ?? LOCAL_API_BASE;
+
+const useLocalApiInDev =
+  process.env.EXPO_PUBLIC_USE_LOCAL_API === "1" ||
+  process.env.EXPO_PUBLIC_USE_LOCAL_API === "true";
+
+/**
+ * Default: production API (`https://api.opensocial.so/api`) so dev builds and
+ * store builds behave the same unless you override.
+ * - Local API: `EXPO_PUBLIC_API_BASE_URL=http://<host>:3000/api` or
+ *   `EXPO_PUBLIC_USE_LOCAL_API=1` (LAN / emulator defaults).
+ */
 export const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_BASE_URL ?? expoLanBase ?? LOCAL_API_BASE;
+  process.env.EXPO_PUBLIC_API_BASE_URL ??
+  (__DEV__ && useLocalApiInDev ? devApiBase : REMOTE_API_BASE_URL);
+
+let refreshInFlight: Promise<SessionTokens> | null = null;
+let authLifecycleHandlers: AuthLifecycleHandlers = {};
+
+export function configureApiAuthLifecycle(handlers: AuthLifecycleHandlers) {
+  authLifecycleHandlers = handlers;
+}
 
 export function buildAgentThreadStreamUrl(
   threadId: string,
@@ -213,6 +245,78 @@ function parseEnvelope<T>(payload: unknown): ApiEnvelope<T> {
   }
 
   return payload as unknown as ApiEnvelope<T>;
+}
+
+async function readEnvelope<T>(response: Response): Promise<ApiEnvelope<T>> {
+  const raw = (await response.json().catch(() => null)) as unknown;
+  if (!raw) {
+    return {
+      success: false,
+      error: {
+        code: "invalid_response",
+        message: "Invalid API response payload",
+      },
+    };
+  }
+  try {
+    return parseEnvelope<T>(raw);
+  } catch {
+    return {
+      success: false,
+      error: {
+        code: "invalid_response",
+        message: "Invalid API response envelope",
+      },
+    };
+  }
+}
+
+async function refreshSessionTokens(): Promise<SessionTokens> {
+  if (refreshInFlight) {
+    return refreshInFlight;
+  }
+
+  refreshInFlight = (async () => {
+    const currentSession = await loadStoredSession();
+    if (!currentSession?.refreshToken) {
+      throw new Error("Missing refresh token");
+    }
+
+    const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        refreshToken: currentSession.refreshToken,
+      }),
+    });
+
+    const envelope = await readEnvelope<SessionTokens>(response);
+    if (!response.ok || !envelope.success || envelope.data == null) {
+      throw new Error(
+        envelope.error?.message ?? "Could not refresh authenticated session.",
+      );
+    }
+
+    const refreshed = envelope.data;
+    await saveStoredSession({
+      ...currentSession,
+      ...refreshed,
+    });
+    authLifecycleHandlers.onSessionRefreshed?.(refreshed);
+    return refreshed;
+  })()
+    .catch(async (error) => {
+      await clearStoredSession();
+      authLifecycleHandlers.onAuthFailure?.();
+      throw error;
+    })
+    .finally(() => {
+      refreshInFlight = null;
+    });
+
+  return refreshInFlight;
 }
 
 function buildPathWithQuery(
@@ -246,18 +350,28 @@ async function request<T>(
   fetchOptions?: { signal?: AbortSignal },
 ): Promise<T> {
   const pathWithQuery = buildPathWithQuery(path, query);
-  const response = await fetch(`${API_BASE_URL}${pathWithQuery}`, {
-    method,
-    headers: {
-      "content-type": "application/json",
-      ...(accessToken ? { authorization: `Bearer ${accessToken}` } : {}),
-    },
-    body: body ? JSON.stringify(body) : undefined,
-    signal: fetchOptions?.signal,
-  });
+  const doRequest = (token?: string) =>
+    fetch(`${API_BASE_URL}${pathWithQuery}`, {
+      method,
+      headers: {
+        "content-type": "application/json",
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
+      body: body ? JSON.stringify(body) : undefined,
+      signal: fetchOptions?.signal,
+    });
 
-  const raw = (await response.json()) as unknown;
-  const envelope = parseEnvelope<T>(raw);
+  let response = await doRequest(accessToken);
+  if (response.status === 401 && accessToken) {
+    try {
+      const refreshed = await refreshSessionTokens();
+      response = await doRequest(refreshed.accessToken);
+    } catch {
+      throw new Error("Session expired. Sign in again.");
+    }
+  }
+
+  const envelope = await readEnvelope<T>(response);
   if (!response.ok || !envelope.success || envelope.data == null) {
     throw new Error(
       envelope.error?.message ??
@@ -275,16 +389,26 @@ async function requestNullable<T>(
   query?: Record<string, RequestQueryValue>,
 ): Promise<T | null> {
   const pathWithQuery = buildPathWithQuery(path, query);
-  const response = await fetch(`${API_BASE_URL}${pathWithQuery}`, {
-    method,
-    headers: {
-      "content-type": "application/json",
-      ...(accessToken ? { authorization: `Bearer ${accessToken}` } : {}),
-    },
-  });
+  const doRequest = (token?: string) =>
+    fetch(`${API_BASE_URL}${pathWithQuery}`, {
+      method,
+      headers: {
+        "content-type": "application/json",
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
+    });
 
-  const raw = (await response.json()) as unknown;
-  const envelope = parseEnvelope<T | null>(raw);
+  let response = await doRequest(accessToken);
+  if (response.status === 401 && accessToken) {
+    try {
+      const refreshed = await refreshSessionTokens();
+      response = await doRequest(refreshed.accessToken);
+    } catch {
+      throw new Error("Session expired. Sign in again.");
+    }
+  }
+
+  const envelope = await readEnvelope<T | null>(response);
   if (!response.ok || !envelope.success) {
     throw new Error(
       envelope.error?.message ??

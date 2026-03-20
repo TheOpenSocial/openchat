@@ -17,8 +17,13 @@ const bodyFont = Source_Sans_3({
 });
 
 export const metadata: Metadata = {
-  title: "OpenSocial Web",
-  description: "Intent-driven social routing web client",
+  title: "OPENSOCIAL",
+  description: "Intent-driven social — meet through what you want to do",
+  icons: {
+    icon: [{ url: "/brand/logo.svg", type: "image/svg+xml" }],
+    shortcut: "/brand/logo.svg",
+    apple: [{ url: "/brand/logo.svg", type: "image/svg+xml" }],
+  },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

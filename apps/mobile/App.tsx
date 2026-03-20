@@ -6,7 +6,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { AnimatedScreen } from "./src/components/AnimatedScreen";
 import { LoadingState } from "./src/components/LoadingState";
-import { api } from "./src/lib/api";
+import { api, configureApiAuthLifecycle } from "./src/lib/api";
 import {
   clearStoredSession,
   loadStoredSession,
@@ -45,6 +45,40 @@ function ProductionApp() {
     notificationMode: "live",
   });
   const appOpenedTrackedRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    configureApiAuthLifecycle({
+      onSessionRefreshed: (tokens) => {
+        setSession((current) => {
+          if (!current) {
+            return current;
+          }
+          const next = {
+            ...current,
+            ...tokens,
+          };
+          void saveStoredSession({
+            userId: next.userId,
+            displayName: next.displayName,
+            email: next.email,
+            accessToken: next.accessToken,
+            refreshToken: next.refreshToken,
+            sessionId: next.sessionId,
+          }).catch(() => {});
+          return next;
+        });
+      },
+      onAuthFailure: () => {
+        setSession(null);
+        setStage("auth");
+        setAuthError("Session expired. Sign in again.");
+      },
+    });
+
+    return () => {
+      configureApiAuthLifecycle({});
+    };
+  }, []);
 
   useEffect(() => {
     let mounted = true;

@@ -1,3 +1,9 @@
+import {
+  clearStoredSession,
+  loadStoredSession,
+  saveStoredSession,
+} from "./session";
+
 export interface SessionTokens {
   accessToken: string;
   refreshToken: string;
@@ -63,8 +69,25 @@ interface ApiEnvelope<T> {
   };
 }
 
+interface AuthLifecycleHandlers {
+  onSessionRefreshed?: (tokens: SessionTokens) => void;
+  onAuthFailure?: () => void;
+}
+
+const REMOTE_API_BASE_URL = "https://api.opensocial.so/api";
+
 export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3000/api";
+  process.env.NEXT_PUBLIC_API_BASE_URL ??
+  (process.env.NODE_ENV === "production"
+    ? REMOTE_API_BASE_URL
+    : "http://localhost:3000/api");
+
+let refreshInFlight: Promise<SessionTokens> | null = null;
+let authLifecycleHandlers: AuthLifecycleHandlers = {};
+
+export function configureApiAuthLifecycle(handlers: AuthLifecycleHandlers) {
+  authLifecycleHandlers = handlers;
+}
 
 export function buildAgentThreadStreamUrl(
   threadId: string,
@@ -86,6 +109,78 @@ function parseEnvelope<T>(payload: unknown): ApiEnvelope<T> {
   return payload as unknown as ApiEnvelope<T>;
 }
 
+async function readEnvelope<T>(response: Response): Promise<ApiEnvelope<T>> {
+  const raw = (await response.json().catch(() => null)) as unknown;
+  if (!raw) {
+    return {
+      success: false,
+      error: {
+        code: "invalid_response",
+        message: "Invalid API response payload",
+      },
+    };
+  }
+  try {
+    return parseEnvelope<T>(raw);
+  } catch {
+    return {
+      success: false,
+      error: {
+        code: "invalid_response",
+        message: "Invalid API response envelope",
+      },
+    };
+  }
+}
+
+async function refreshSessionTokens(): Promise<SessionTokens> {
+  if (refreshInFlight) {
+    return refreshInFlight;
+  }
+
+  refreshInFlight = (async () => {
+    const currentSession = loadStoredSession();
+    if (!currentSession?.refreshToken) {
+      throw new Error("Missing refresh token");
+    }
+
+    const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        refreshToken: currentSession.refreshToken,
+      }),
+    });
+
+    const envelope = await readEnvelope<SessionTokens>(response);
+    if (!response.ok || !envelope.success || envelope.data == null) {
+      throw new Error(
+        envelope.error?.message ?? "Could not refresh authenticated session.",
+      );
+    }
+
+    const refreshed = envelope.data;
+    saveStoredSession({
+      ...currentSession,
+      ...refreshed,
+    });
+    authLifecycleHandlers.onSessionRefreshed?.(refreshed);
+    return refreshed;
+  })()
+    .catch((error) => {
+      clearStoredSession();
+      authLifecycleHandlers.onAuthFailure?.();
+      throw error;
+    })
+    .finally(() => {
+      refreshInFlight = null;
+    });
+
+  return refreshInFlight;
+}
+
 async function request<T>(
   method: HttpMethod,
   path: string,
@@ -93,18 +188,28 @@ async function request<T>(
   accessToken?: string,
   fetchOpts?: { signal?: AbortSignal },
 ): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    method,
-    headers: {
-      "content-type": "application/json",
-      ...(accessToken ? { authorization: `Bearer ${accessToken}` } : {}),
-    },
-    body: body ? JSON.stringify(body) : undefined,
-    signal: fetchOpts?.signal,
-  });
+  const doRequest = (token?: string) =>
+    fetch(`${API_BASE_URL}${path}`, {
+      method,
+      headers: {
+        "content-type": "application/json",
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
+      body: body ? JSON.stringify(body) : undefined,
+      signal: fetchOpts?.signal,
+    });
 
-  const raw = (await response.json()) as unknown;
-  const envelope = parseEnvelope<T>(raw);
+  let response = await doRequest(accessToken);
+  if (response.status === 401 && accessToken) {
+    try {
+      const refreshed = await refreshSessionTokens();
+      response = await doRequest(refreshed.accessToken);
+    } catch {
+      throw new Error("Session expired. Sign in again.");
+    }
+  }
+
+  const envelope = await readEnvelope<T>(response);
   if (!response.ok || !envelope.success || envelope.data == null) {
     throw new Error(
       envelope.error?.message ?? `API request failed: ${method} ${path}`,
@@ -120,17 +225,27 @@ async function requestNullable<T>(
   accessToken?: string,
   fetchOpts?: { signal?: AbortSignal },
 ): Promise<T | null> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    method,
-    headers: {
-      "content-type": "application/json",
-      ...(accessToken ? { authorization: `Bearer ${accessToken}` } : {}),
-    },
-    signal: fetchOpts?.signal,
-  });
+  const doRequest = (token?: string) =>
+    fetch(`${API_BASE_URL}${path}`, {
+      method,
+      headers: {
+        "content-type": "application/json",
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
+      signal: fetchOpts?.signal,
+    });
 
-  const raw = (await response.json()) as unknown;
-  const envelope = parseEnvelope<T | null>(raw);
+  let response = await doRequest(accessToken);
+  if (response.status === 401 && accessToken) {
+    try {
+      const refreshed = await refreshSessionTokens();
+      response = await doRequest(refreshed.accessToken);
+    } catch {
+      throw new Error("Session expired. Sign in again.");
+    }
+  }
+
+  const envelope = await readEnvelope<T | null>(response);
   if (!response.ok || !envelope.success) {
     throw new Error(
       envelope.error?.message ?? `API request failed: ${method} ${path}`,
@@ -182,6 +297,22 @@ export interface ContentRiskAssessment {
     repeatedWordRatio: number;
     repeatedCharacterRun: boolean;
   };
+}
+
+export async function getGoogleOAuthStartUrl(
+  webRedirectUri: string,
+): Promise<string> {
+  const params = new URLSearchParams({ webRedirectUri });
+  const response = await fetch(
+    `${API_BASE_URL}/auth/google?${params.toString()}`,
+  );
+  const envelope = await readEnvelope<{ url: string }>(response);
+  if (!response.ok || !envelope.success || envelope.data?.url == null) {
+    throw new Error(
+      envelope.error?.message ?? "Could not start Google sign-in.",
+    );
+  }
+  return envelope.data.url;
 }
 
 export const api = {

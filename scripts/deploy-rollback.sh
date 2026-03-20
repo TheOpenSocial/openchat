@@ -12,16 +12,64 @@ ROLLBACK_REF="${ROLLBACK_REF:-${ROLLBACK_IMAGE_TAG:-}}"
 : "${ROLLBACK_REF:?ROLLBACK_REF (or ROLLBACK_IMAGE_TAG) is required}"
 
 DEPLOY_PATH="${DEPLOY_PATH:-/opt/opensocial}"
+REMOTE_ENV_FILE="${REMOTE_ENV_FILE:-.env.production}"
+REMOTE_TARGET="$DEPLOY_USER@$DEPLOY_HOST"
 
-ssh -i "$SSH_KEY_PATH" \
-  -o BatchMode=yes \
-  -o StrictHostKeyChecking=accept-new \
-  "$DEPLOY_USER@$DEPLOY_HOST" \
+ssh_opts=(
+  -i "$SSH_KEY_PATH"
+  -o BatchMode=yes
+  -o StrictHostKeyChecking=accept-new
+)
+
+sync_remote_env_var() {
+  local key="$1"
+  local value="${2-}"
+  if [[ -z "$value" ]]; then
+    return 0
+  fi
+
+  local value_b64
+  value_b64="$(printf "%s" "$value" | base64 | tr -d "\n")"
+
+  ssh "${ssh_opts[@]}" "$REMOTE_TARGET" \
+    "DEPLOY_PATH='$DEPLOY_PATH' REMOTE_ENV_FILE='$REMOTE_ENV_FILE' ENV_KEY='$key' ENV_VALUE_B64='$value_b64' bash -s" <<'REMOTE_SCRIPT'
+set -euo pipefail
+cd "$DEPLOY_PATH"
+python3 - <<'PY'
+import base64
+import os
+from pathlib import Path
+
+env_file = Path(os.environ["REMOTE_ENV_FILE"])
+key = os.environ["ENV_KEY"]
+value = base64.b64decode(os.environ["ENV_VALUE_B64"]).decode("utf-8")
+
+lines = env_file.read_text().splitlines() if env_file.exists() else []
+prefix = f"{key}="
+updated = False
+for index, line in enumerate(lines):
+    if line.startswith(prefix):
+        lines[index] = f"{key}={value}"
+        updated = True
+        break
+
+if not updated:
+    lines.append(f"{key}={value}")
+
+env_file.write_text("\n".join(lines) + "\n")
+PY
+REMOTE_SCRIPT
+}
+
+sync_remote_env_var "OPENAI_API_KEY" "${OPENAI_API_KEY:-}"
+
+ssh "${ssh_opts[@]}" \
+  "$REMOTE_TARGET" \
   "set -euo pipefail; \
     cd '$DEPLOY_PATH'; \
     git fetch --all --tags; \
     git checkout '$ROLLBACK_REF'; \
-    docker compose -f docker-compose.prod.yml --env-file .env.production build api admin web; \
-    docker compose -f docker-compose.prod.yml --env-file .env.production run --rm api pnpm --filter @opensocial/api prisma:migrate:deploy; \
-    docker compose -f docker-compose.prod.yml --env-file .env.production up -d nginx api admin web valkey; \
-    docker compose -f docker-compose.prod.yml --env-file .env.production ps"
+    docker compose -f docker-compose.prod.yml --env-file '$REMOTE_ENV_FILE' build api admin web; \
+    docker compose -f docker-compose.prod.yml --env-file '$REMOTE_ENV_FILE' run --rm api pnpm --filter @opensocial/api prisma:migrate:deploy; \
+    docker compose -f docker-compose.prod.yml --env-file '$REMOTE_ENV_FILE' up -d nginx api admin web valkey; \
+    docker compose -f docker-compose.prod.yml --env-file '$REMOTE_ENV_FILE' ps"

@@ -98,11 +98,11 @@ export function OnboardingScreen({
           Onboarding
         </Text>
         <Text className="text-[28px] font-semibold tracking-tight text-ink">
-          Tune your signal
+          Finish your profile
         </Text>
         <Text className="text-[15px] leading-[23px] text-muted">
-          Set how you like to meet people. You can fine-tune everything later in
-          Profile.
+          A few details help us suggest better people and plans. You can change
+          everything later in Profile.
         </Text>
 
         {errorMessage ? (

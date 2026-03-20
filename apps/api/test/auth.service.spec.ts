@@ -229,6 +229,66 @@ describe("AuthService", () => {
     }
   });
 
+  it("rejects admin console bootstrap when email is not allowlisted", async () => {
+    const previousClientId = process.env.GOOGLE_CLIENT_ID;
+    const previousClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    const previousRedirectUri = process.env.GOOGLE_REDIRECT_URI;
+    const previousAdminEmails = process.env.ADMIN_CONSOLE_ALLOWED_EMAILS;
+    process.env.GOOGLE_CLIENT_ID = "google-client-id";
+    process.env.GOOGLE_CLIENT_SECRET = "google-client-secret";
+    process.env.GOOGLE_REDIRECT_URI =
+      "http://localhost:3000/api/auth/google/callback";
+    process.env.ADMIN_CONSOLE_ALLOWED_EMAILS = "other@example.com";
+
+    try {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: vi.fn().mockResolvedValue({
+            access_token: "google-access-token",
+            token_type: "Bearer",
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: vi.fn().mockResolvedValue({
+            sub: "google-subject-xyz",
+            email: "user@example.com",
+            name: "Google User",
+          }),
+        });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const prisma: any = {
+        user: { findUnique: vi.fn() },
+      };
+      const jwtService: any = {
+        sign: vi.fn(),
+        verify: vi.fn(),
+      };
+
+      const service = new AuthService(jwtService, prisma);
+      await expect(
+        service.bootstrapGoogleUser("google-oauth-code", {
+          adminConsole: true,
+        }),
+      ).rejects.toThrow("not authorized");
+
+      expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    } finally {
+      process.env.GOOGLE_CLIENT_ID = previousClientId;
+      process.env.GOOGLE_CLIENT_SECRET = previousClientSecret;
+      process.env.GOOGLE_REDIRECT_URI = previousRedirectUri;
+      if (previousAdminEmails === undefined) {
+        delete process.env.ADMIN_CONSOLE_ALLOWED_EMAILS;
+      } else {
+        process.env.ADMIN_CONSOLE_ALLOWED_EMAILS = previousAdminEmails;
+      }
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("builds OAuth start URL with mobile redirect state when provided", () => {
     const prisma: any = {};
     const jwtService: any = {
@@ -327,6 +387,80 @@ describe("AuthService", () => {
     expect(response.redirectUrl).toBe(
       "http://localhost:3001/auth/callback?code=google-code-123",
     );
+  });
+
+  it("builds OAuth start URL with web redirect state when provided", () => {
+    const prisma: any = {};
+    const jwtService: any = {
+      sign: vi.fn(),
+      verify: vi.fn(),
+    };
+
+    const service = new AuthService(jwtService, prisma);
+    const { url } = service.getGoogleOAuthUrl({
+      webRedirectUri: "http://localhost:3002/auth/callback",
+    });
+
+    const parsed = new URL(url);
+    const state = parsed.searchParams.get("state");
+    expect(state).toBeTruthy();
+
+    const decoded = JSON.parse(
+      Buffer.from(state ?? "", "base64url").toString("utf8"),
+    ) as { webRedirectUri?: string };
+    expect(decoded.webRedirectUri).toBe("http://localhost:3002/auth/callback");
+  });
+
+  it("redirects browser callback to web app when state uses webRedirectUri", () => {
+    const prisma: any = {};
+    const jwtService: any = {
+      sign: vi.fn(),
+      verify: vi.fn(),
+    };
+
+    const service = new AuthService(jwtService, prisma);
+    const state = Buffer.from(
+      JSON.stringify({
+        webRedirectUri: "http://127.0.0.1:3002/auth/callback",
+      }),
+      "utf8",
+    ).toString("base64url");
+
+    const response = service.buildGoogleOAuthCallbackResponse({
+      code: "google-code-xyz",
+      state,
+    });
+
+    expect(response.statusCode).toBe(302);
+    expect(response.redirectUrl).toBe(
+      "http://127.0.0.1:3002/auth/callback?code=google-code-xyz",
+    );
+  });
+
+  it("redirects OAuth errors to web app when webRedirectUri is in state", () => {
+    const prisma: any = {};
+    const jwtService: any = {
+      sign: vi.fn(),
+      verify: vi.fn(),
+    };
+
+    const service = new AuthService(jwtService, prisma);
+    const state = Buffer.from(
+      JSON.stringify({
+        webRedirectUri: "http://localhost:3002/auth/callback",
+      }),
+      "utf8",
+    ).toString("base64url");
+
+    const response = service.buildGoogleOAuthCallbackResponse({
+      state,
+      error: "access_denied",
+      error_description: "User cancelled",
+    });
+
+    expect(response.statusCode).toBe(302);
+    expect(response.redirectUrl).toContain("error=access_denied");
+    expect(response.redirectUrl).toContain("error_description=");
   });
 
   it("creates persisted session when issuing tokens", async () => {

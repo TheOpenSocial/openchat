@@ -2,11 +2,119 @@ name: CI
 
 on:
   pull_request:
+    paths:
+      - "apps/**"
+      - "packages/**"
+      - "prisma/**"
+      - "scripts/**"
+      - "deploy/**"
+      - "docker-compose.yml"
+      - "docker-compose.prod.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "turbo.json"
+      - "tsconfig.base.json"
+      - "eslint.config.mjs"
+      - ".github/workflows/ci.yml"
   push:
     branches: [main]
+    paths:
+      - "apps/**"
+      - "packages/**"
+      - "prisma/**"
+      - "scripts/**"
+      - "deploy/**"
+      - "docker-compose.yml"
+      - "docker-compose.prod.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "turbo.json"
+      - "tsconfig.base.json"
+      - "eslint.config.mjs"
+      - ".github/workflows/ci.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  validate:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      web: ${{ steps.filter.outputs.web }}
+      web_e2e: ${{ steps.filter.outputs.web_e2e }}
+      format: ${{ steps.filter.outputs.format }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect changed areas
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            backend:
+              - 'apps/api/**'
+              - 'prisma/**'
+              - 'packages/**'
+              - 'scripts/**'
+              - 'deploy/**'
+              - 'docker-compose.yml'
+              - 'docker-compose.prod.yml'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'turbo.json'
+              - 'tsconfig.base.json'
+              - 'eslint.config.mjs'
+              - '.github/workflows/ci.yml'
+            web:
+              - 'apps/web/**'
+              - 'apps/admin/**'
+              - 'packages/**'
+              - 'scripts/**'
+              - 'deploy/**'
+              - 'docker-compose.yml'
+              - 'docker-compose.prod.yml'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'turbo.json'
+              - 'tsconfig.base.json'
+              - 'eslint.config.mjs'
+              - '.github/workflows/ci.yml'
+            web_e2e:
+              - 'apps/web/**'
+              - 'packages/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'turbo.json'
+              - 'tsconfig.base.json'
+              - '.github/workflows/ci.yml'
+            format:
+              - 'apps/**'
+              - 'packages/**'
+              - 'prisma/**'
+              - 'scripts/**'
+              - 'deploy/**'
+              - '*.json'
+              - '*.yml'
+              - '*.yaml'
+              - '*.md'
+              - '*.ts'
+              - '*.tsx'
+              - '*.js'
+              - '*.mjs'
+              - '.github/**'
+
+  backend:
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -16,6 +124,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -25,23 +135,102 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile=false
 
-      - name: Lint
-        run: pnpm lint
+      - name: Lint (API lane)
+        run: pnpm turbo run lint --filter=@opensocial/api...
 
-      - name: Typecheck
-        run: pnpm typecheck
+      - name: Typecheck (API lane)
+        run: pnpm turbo run typecheck --filter=@opensocial/api...
 
       - name: DB Drift Check
         run: pnpm db:drift-check
 
-      - name: Test
-        run: pnpm test
+      - name: Test (API lane)
+        run: pnpm turbo run test --filter=@opensocial/api...
+
+  web:
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.7.1
+
+      - name: Install
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Lint (Web/Admin lane)
+        run: pnpm turbo run lint --filter=@opensocial/web... --filter=@opensocial/admin...
+
+      - name: Typecheck (Web/Admin lane)
+        run: pnpm turbo run typecheck --filter=@opensocial/web... --filter=@opensocial/admin...
+
+      - name: Test (Web/Admin lane)
+        run: pnpm turbo run test --filter=@opensocial/web... --filter=@opensocial/admin...
+
+      - name: Install Playwright (Chromium)
+        if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.web_e2e == 'true'
+        run: pnpm --filter @opensocial/web exec playwright install chromium --with-deps
+
+      - name: Web E2E (design mock)
+        if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.web_e2e == 'true'
+        run: pnpm --filter @opensocial/web test:e2e
+
+  format:
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.format == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.7.1
+
+      - name: Install
+        run: pnpm install --frozen-lockfile=false
 
       - name: Format check
         run: pnpm format:check
 
-      - name: Install Playwright (Chromium)
-        run: pnpm --filter @opensocial/web exec playwright install chromium --with-deps
-
-      - name: Web E2E (design mock)
-        run: pnpm --filter @opensocial/web test:e2e
+  validate:
+    needs: [backend, web, format]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate CI job results
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "backend=${{ needs.backend.result }}"
+          echo "web=${{ needs.web.result }}"
+          echo "format=${{ needs.format.result }}"
+          if [[ "${{ needs.backend.result }}" == "failure" || "${{ needs.backend.result }}" == "cancelled" ]]; then
+            exit 1
+          fi
+          if [[ "${{ needs.web.result }}" == "failure" || "${{ needs.web.result }}" == "cancelled" ]]; then
+            exit 1
+          fi
+          if [[ "${{ needs.format.result }}" == "failure" || "${{ needs.format.result }}" == "cancelled" ]]; then
+            exit 1
+          fi

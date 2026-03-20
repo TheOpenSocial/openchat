@@ -1,3 +1,9 @@
+import {
+  clearAdminSession,
+  loadAdminSession,
+  saveAdminSession,
+} from "./admin-session";
+
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH";
 
 interface ApiEnvelope<T> {
@@ -10,8 +16,33 @@ interface ApiEnvelope<T> {
   };
 }
 
+interface SessionTokens {
+  accessToken: string;
+  refreshToken: string;
+  sessionId: string;
+}
+
+interface AuthLifecycleHandlers {
+  onSessionRefreshed?: (tokens: SessionTokens) => void;
+  onAuthFailure?: () => void;
+}
+
+const REMOTE_API_BASE_URL = "https://api.opensocial.so/api";
+
 export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3000/api";
+  process.env.NEXT_PUBLIC_API_BASE_URL ??
+  (process.env.NODE_ENV === "production"
+    ? REMOTE_API_BASE_URL
+    : "http://localhost:3000/api");
+
+let refreshInFlight: Promise<SessionTokens> | null = null;
+let authLifecycleHandlers: AuthLifecycleHandlers = {};
+
+export function configureAdminApiAuthLifecycle(
+  handlers: AuthLifecycleHandlers,
+) {
+  authLifecycleHandlers = handlers;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -23,6 +54,78 @@ function parseEnvelope<T>(payload: unknown): ApiEnvelope<T> {
   }
 
   return payload as unknown as ApiEnvelope<T>;
+}
+
+async function readEnvelope<T>(response: Response): Promise<ApiEnvelope<T>> {
+  const raw = (await response.json().catch(() => null)) as unknown;
+  if (!raw) {
+    return {
+      success: false,
+      error: {
+        code: "invalid_response",
+        message: "Invalid API response payload",
+      },
+    };
+  }
+  try {
+    return parseEnvelope<T>(raw);
+  } catch {
+    return {
+      success: false,
+      error: {
+        code: "invalid_response",
+        message: "Invalid API response envelope",
+      },
+    };
+  }
+}
+
+async function refreshSessionTokens(): Promise<SessionTokens> {
+  if (refreshInFlight) {
+    return refreshInFlight;
+  }
+
+  refreshInFlight = (async () => {
+    const currentSession = loadAdminSession();
+    if (!currentSession?.refreshToken) {
+      throw new Error("Missing refresh token");
+    }
+
+    const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        refreshToken: currentSession.refreshToken,
+      }),
+    });
+
+    const envelope = await readEnvelope<SessionTokens>(response);
+    if (!response.ok || !envelope.success || envelope.data == null) {
+      throw new Error(
+        envelope.error?.message ?? "Could not refresh authenticated session.",
+      );
+    }
+
+    const refreshed = envelope.data;
+    saveAdminSession({
+      ...currentSession,
+      ...refreshed,
+    });
+    authLifecycleHandlers.onSessionRefreshed?.(refreshed);
+    return refreshed;
+  })()
+    .catch((error) => {
+      clearAdminSession();
+      authLifecycleHandlers.onAuthFailure?.();
+      throw error;
+    })
+    .finally(() => {
+      refreshInFlight = null;
+    });
+
+  return refreshInFlight;
 }
 
 function toQueryString(
@@ -53,20 +156,31 @@ export async function apiRequest<T>(
     headers?: Record<string, string>;
   },
 ): Promise<T> {
-  const response = await fetch(
-    `${API_BASE_URL}${path}${toQueryString(options?.query)}`,
-    {
+  const pathWithQuery = `${API_BASE_URL}${path}${toQueryString(options?.query)}`;
+  const rawHeaders = options?.headers ?? {};
+  const doRequest = (authHeader?: string) =>
+    fetch(pathWithQuery, {
       method,
       headers: {
         "content-type": "application/json",
-        ...(options?.headers ?? {}),
+        ...rawHeaders,
+        ...(authHeader ? { authorization: authHeader } : {}),
       },
       body: options?.body ? JSON.stringify(options.body) : undefined,
-    },
-  );
+    });
 
-  const raw = (await response.json()) as unknown;
-  const envelope = parseEnvelope<T>(raw);
+  const startingAuthHeader = rawHeaders.authorization;
+  let response = await doRequest(startingAuthHeader);
+  if (response.status === 401 && startingAuthHeader?.startsWith("Bearer ")) {
+    try {
+      const refreshed = await refreshSessionTokens();
+      response = await doRequest(`Bearer ${refreshed.accessToken}`);
+    } catch {
+      throw new Error("Session expired. Sign in again.");
+    }
+  }
+
+  const envelope = await readEnvelope<T>(response);
 
   if (!response.ok || !envelope.success || envelope.data == null) {
     throw new Error(
@@ -87,20 +201,31 @@ export async function apiRequestNullable<T>(
     headers?: Record<string, string>;
   },
 ): Promise<T | null> {
-  const response = await fetch(
-    `${API_BASE_URL}${path}${toQueryString(options?.query)}`,
-    {
+  const pathWithQuery = `${API_BASE_URL}${path}${toQueryString(options?.query)}`;
+  const rawHeaders = options?.headers ?? {};
+  const doRequest = (authHeader?: string) =>
+    fetch(pathWithQuery, {
       method,
       headers: {
         "content-type": "application/json",
-        ...(options?.headers ?? {}),
+        ...rawHeaders,
+        ...(authHeader ? { authorization: authHeader } : {}),
       },
       body: options?.body ? JSON.stringify(options.body) : undefined,
-    },
-  );
+    });
 
-  const raw = (await response.json()) as unknown;
-  const envelope = parseEnvelope<T | null>(raw);
+  const startingAuthHeader = rawHeaders.authorization;
+  let response = await doRequest(startingAuthHeader);
+  if (response.status === 401 && startingAuthHeader?.startsWith("Bearer ")) {
+    try {
+      const refreshed = await refreshSessionTokens();
+      response = await doRequest(`Bearer ${refreshed.accessToken}`);
+    } catch {
+      throw new Error("Session expired. Sign in again.");
+    }
+  }
+
+  const envelope = await readEnvelope<T | null>(response);
 
   if (!response.ok || !envelope.success) {
     throw new Error(
@@ -138,6 +263,6 @@ export async function fetchGoogleOAuthStartUrl(mobileRedirectUri: string) {
 
 export async function exchangeGoogleAuthCode(code: string) {
   return apiRequest<GoogleAuthExchangeResult>("POST", "/auth/google/callback", {
-    body: { code },
+    body: { code, adminConsole: true },
   });
 }

@@ -192,10 +192,13 @@ export const asyncAgentFollowupJobSchema = queueEnvelopeSchema.extend({
 
 export const authGoogleCallbackBodySchema = z.object({
   code: z.string().min(1),
+  /** When true, email must match `ADMIN_CONSOLE_ALLOWED_EMAILS` on the API. */
+  adminConsole: z.literal(true).optional(),
 });
 
 export const authGoogleStartQuerySchema = z.object({
   mobileRedirectUri: z.string().url().max(2048).optional(),
+  webRedirectUri: z.string().url().max(2048).optional(),
 });
 
 export const authGoogleBrowserCallbackQuerySchema = z.object({
@@ -438,6 +441,8 @@ export const createIntentFromAgentMessageBodySchema = z.object({
   threadId: uuidSchema,
   userId: uuidSchema,
   content: z.string().min(1),
+  allowDecomposition: z.boolean().optional(),
+  maxIntents: z.number().int().min(1).max(5).optional(),
 });
 
 export const intentFollowupActionBodySchema = z
@@ -704,8 +709,218 @@ export const launchControlsUpdateBodySchema = z
     enableModerationStrictness: z.boolean().optional(),
     enableAiParsing: z.boolean().optional(),
     enableRealtimeChat: z.boolean().optional(),
+    enableScheduledTasks: z.boolean().optional(),
+    enableSavedSearches: z.boolean().optional(),
+    enableRecurringBriefings: z.boolean().optional(),
+    enableRecurringCircles: z.boolean().optional(),
   })
   .default({});
+
+export const scheduledTaskTypeSchema = z.enum([
+  "saved_search",
+  "discovery_briefing",
+  "reconnect_briefing",
+  "social_reminder",
+]);
+
+export const scheduledTaskStatusSchema = z.enum([
+  "active",
+  "paused",
+  "disabled",
+  "archived",
+]);
+
+export const scheduledTaskDeliveryModeSchema = z.enum([
+  "notification",
+  "agent_thread",
+  "notification_and_agent_thread",
+]);
+
+export const scheduledTaskScheduleSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("hourly"),
+    intervalHours: z.number().int().min(1).max(24),
+    timezone: z.string().min(1).max(128),
+  }),
+  z.object({
+    kind: z.literal("weekly"),
+    days: z
+      .array(z.enum(["sun", "mon", "tue", "wed", "thu", "fri", "sat"]))
+      .min(1)
+      .max(7),
+    hour: z.number().int().min(0).max(23),
+    minute: z.number().int().min(0).max(59),
+    timezone: z.string().min(1).max(128),
+  }),
+]);
+
+const scheduledTaskSavedSearchConfigSchema = z.object({
+  savedSearchId: uuidSchema,
+  deliveryMode: scheduledTaskDeliveryModeSchema,
+  minResults: z.number().int().min(0).max(50).default(1),
+  maxResults: z.number().int().min(1).max(50).default(5),
+});
+
+const scheduledTaskDiscoveryBriefingConfigSchema = z.object({
+  briefingType: z.enum(["tonight", "passive", "inbox"]),
+  deliveryMode: scheduledTaskDeliveryModeSchema,
+  maxResults: z.number().int().min(1).max(10).default(5),
+});
+
+const scheduledTaskReconnectBriefingConfigSchema = z.object({
+  deliveryMode: scheduledTaskDeliveryModeSchema,
+  lookbackDays: z.number().int().min(1).max(180).default(30),
+  minConfidence: z.number().min(0).max(1).default(0.6),
+});
+
+const scheduledTaskSocialReminderConfigSchema = z.object({
+  template: z.enum([
+    "open_passive_mode",
+    "revisit_unanswered_intents",
+    "resume_dormant_chats",
+  ]),
+  deliveryMode: scheduledTaskDeliveryModeSchema,
+  context: z.record(z.string(), z.unknown()).optional(),
+});
+
+export const scheduledTaskConfigSchema = z.discriminatedUnion("taskType", [
+  z.object({
+    taskType: z.literal("saved_search"),
+    config: scheduledTaskSavedSearchConfigSchema,
+  }),
+  z.object({
+    taskType: z.literal("discovery_briefing"),
+    config: scheduledTaskDiscoveryBriefingConfigSchema,
+  }),
+  z.object({
+    taskType: z.literal("reconnect_briefing"),
+    config: scheduledTaskReconnectBriefingConfigSchema,
+  }),
+  z.object({
+    taskType: z.literal("social_reminder"),
+    config: scheduledTaskSocialReminderConfigSchema,
+  }),
+]);
+
+export const scheduledTaskCreateBodySchema = z.object({
+  title: z.string().min(1).max(120),
+  description: z.string().min(1).max(500).optional(),
+  schedule: scheduledTaskScheduleSchema,
+  task: scheduledTaskConfigSchema,
+});
+
+export const scheduledTaskUpdateBodySchema = z.object({
+  title: z.string().min(1).max(120).optional(),
+  description: z.string().min(1).max(500).nullable().optional(),
+  status: scheduledTaskStatusSchema.optional(),
+  schedule: scheduledTaskScheduleSchema.optional(),
+  task: scheduledTaskConfigSchema.optional(),
+});
+
+export const scheduledTaskListQuerySchema = z.object({
+  status: scheduledTaskStatusSchema.optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+});
+
+export const scheduledTaskListRunsQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+});
+
+export const recurringCircleStatusSchema = z.enum([
+  "active",
+  "paused",
+  "archived",
+]);
+
+export const recurringCircleVisibilitySchema = z.enum([
+  "private",
+  "invite_only",
+  "discoverable",
+]);
+
+export const recurringCircleCadenceSchema = z.object({
+  kind: z.literal("weekly"),
+  days: z
+    .array(z.enum(["sun", "mon", "tue", "wed", "thu", "fri", "sat"]))
+    .min(1)
+    .max(7),
+  hour: z.number().int().min(0).max(23),
+  minute: z.number().int().min(0).max(59),
+  timezone: z.string().min(1).max(128),
+  intervalWeeks: z.number().int().min(1).max(8).default(1),
+});
+
+export const recurringCircleCreateBodySchema = z.object({
+  title: z.string().min(1).max(120),
+  description: z.string().max(500).optional(),
+  visibility: recurringCircleVisibilitySchema.default("invite_only"),
+  topicTags: z.array(z.string().min(1).max(60)).max(12).default([]),
+  targetSize: z.number().int().min(2).max(12).optional(),
+  kickoffPrompt: z.string().max(500).optional(),
+  cadence: recurringCircleCadenceSchema,
+});
+
+export const recurringCircleUpdateBodySchema = z.object({
+  title: z.string().min(1).max(120).optional(),
+  description: z.string().max(500).optional(),
+  visibility: recurringCircleVisibilitySchema.optional(),
+  topicTags: z.array(z.string().min(1).max(60)).max(12).optional(),
+  targetSize: z.number().int().min(2).max(12).optional(),
+  kickoffPrompt: z.string().max(500).optional(),
+  cadence: recurringCircleCadenceSchema.optional(),
+  status: recurringCircleStatusSchema.optional(),
+});
+
+export const recurringCircleListQuerySchema = z.object({
+  status: recurringCircleStatusSchema.optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+});
+
+export const recurringCircleAddMemberBodySchema = z.object({
+  userId: uuidSchema,
+  role: z.enum(["owner", "admin", "member"]).default("member"),
+});
+
+export const recurringCircleSessionListQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+});
+
+export const savedSearchTypeSchema = z.enum([
+  "discovery_people",
+  "discovery_groups",
+  "reconnects",
+  "topic_search",
+  "activity_search",
+]);
+
+export const savedSearchCreateBodySchema = z.object({
+  title: z.string().min(1).max(120),
+  searchType: savedSearchTypeSchema,
+  queryConfig: z.record(z.string(), z.unknown()),
+});
+
+export const savedSearchUpdateBodySchema = z.object({
+  title: z.string().min(1).max(120).optional(),
+  searchType: savedSearchTypeSchema.optional(),
+  queryConfig: z.record(z.string(), z.unknown()).optional(),
+});
+
+export const scheduledTaskDispatchJobSchema = queueEnvelopeSchema.extend({
+  type: z.literal("ScheduledTaskDispatch"),
+  payload: z.object({
+    requestedAt: isoDateTimeSchema,
+    source: z.enum(["cron", "manual"]).default("cron"),
+  }),
+});
+
+export const scheduledTaskRunJobSchema = queueEnvelopeSchema.extend({
+  type: z.literal("ScheduledTaskRun"),
+  payload: z.object({
+    scheduledTaskId: uuidSchema,
+    scheduledTaskRunId: uuidSchema,
+    trigger: z.enum(["scheduled", "manual"]).default("scheduled"),
+  }),
+});
 
 export const realtimePresenceStateSchema = z.enum([
   "online",
@@ -833,6 +1048,8 @@ export const supportedQueueSchemas = {
   NotificationDispatch: notificationDispatchJobSchema,
   ProfilePhotoUploaded: profilePhotoUploadedJobSchema,
   AsyncAgentFollowup: asyncAgentFollowupJobSchema,
+  ScheduledTaskDispatch: scheduledTaskDispatchJobSchema,
+  ScheduledTaskRun: scheduledTaskRunJobSchema,
 } as const;
 
 export type RealtimeClientEventName =

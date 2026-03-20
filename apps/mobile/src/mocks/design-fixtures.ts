@@ -165,7 +165,7 @@ export const DESIGN_MOCK_AGENT_TIMELINE: AgentTimelineMessage[] = [
   {
     id: "mock_agent_1",
     role: "agent",
-    body: "Good afternoon, Alex. I’m synced with your rules — what do you want to do or talk about?",
+    body: "Good afternoon, Alex. Your preferences are saved—what would you like to do, or who would you like to meet?",
   },
   {
     id: "mock_user_1",
@@ -180,12 +180,12 @@ export const DESIGN_MOCK_AGENT_TIMELINE: AgentTimelineMessage[] = [
   {
     id: "mock_agent_2",
     role: "agent",
-    body: "I’m surfacing 3 people with strong taste overlap and open Thursday or Friday evenings. I’ll keep you posted here as matches firm up.",
+    body: "Here are 3 people with strong taste overlap who are free Thursday or Friday evening. We’ll update this thread as things firm up.",
   },
   {
     id: "mock_sys_1",
     role: "system",
-    body: "Tip: Ask follow-ups anytime — I’ll refine routing and summarize next steps here.",
+    body: "Tip: Ask follow-ups anytime—we’ll refine matches and summarize next steps here.",
   },
 ];
 

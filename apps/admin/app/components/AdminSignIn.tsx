@@ -3,93 +3,76 @@
 import { useState } from "react";
 
 import { Button } from "@/app/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/app/components/ui/card";
-import { Input } from "@/app/components/ui/input";
-import { Label } from "@/app/components/ui/label";
 
 export function AdminSignIn({
   onGoogleSignIn,
   errorText,
 }: {
-  onGoogleSignIn: (adminApiKey: string) => Promise<void>;
+  onGoogleSignIn: () => Promise<void>;
   errorText?: string | null;
 }) {
   const [busy, setBusy] = useState(false);
-  const [apiKey, setApiKey] = useState("");
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-lg flex-col justify-center px-4 py-12 md:px-8">
-      <div className="mb-8 text-center">
-        <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">
-          OpenSocial
-        </p>
-        <h1 className="mt-2 font-[var(--font-heading)] text-3xl font-semibold tracking-tight text-foreground">
-          Admin console
+    <main className="relative mx-auto flex min-h-screen w-full max-w-md flex-col justify-center px-6 py-16 sm:px-8">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 -z-10 opacity-[0.35]"
+        style={{
+          background:
+            "radial-gradient(ellipse 80% 50% at 50% -20%, hsl(var(--primary) / 0.22), transparent 55%)",
+        }}
+      />
+
+      <div className="text-center">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl border border-border/80 bg-card/40 shadow-lg backdrop-blur-sm">
+          <img
+            alt=""
+            className="h-10 w-10"
+            height={40}
+            src="/brand/logo.svg"
+            width={40}
+          />
+        </div>
+        <h1 className="mt-10 font-[var(--font-heading)] text-[clamp(2rem,8vw,2.75rem)] font-semibold leading-[1.05] tracking-[0.08em] text-foreground">
+          OPENSOCIAL
         </h1>
-        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-          Sign in with the Google account that is allowlisted for admin access.
+        <p className="mt-3 text-sm font-medium tracking-wide text-muted-foreground">
+          Operator access
+        </p>
+        <p className="mx-auto mt-6 max-w-sm text-sm leading-relaxed text-muted-foreground/90">
+          Sign in with Google. Only approved accounts can open the console.
         </p>
       </div>
 
-      <Card className="animate-rise shadow-[0_18px_44px_rgba(2,6,23,0.35)]">
-        <CardHeader>
-          <CardTitle>Sign in</CardTitle>
-          <CardDescription>
-            The API redirects here with an authorization code after Google. Your
-            user id is sent on admin requests automatically.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {errorText ? (
-            <p
-              className="rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground"
-              role="alert"
-            >
-              {errorText}
-            </p>
-          ) : null}
-
-          <div className="space-y-2">
-            <Label htmlFor="admin-api-key">Admin API key (optional)</Label>
-            <Input
-              autoComplete="off"
-              id="admin-api-key"
-              onChange={(event) => setApiKey(event.currentTarget.value)}
-              placeholder="Only if ADMIN_API_KEY is set on the API"
-              type="password"
-              value={apiKey}
-            />
-            <p className="text-xs leading-relaxed text-muted-foreground">
-              Stored in this browser only. Leave blank when admin routes do not
-              require a shared key.
-            </p>
-          </div>
-
-          <Button
-            className="w-full gap-3 bg-white text-slate-900 shadow-sm hover:bg-slate-50"
-            disabled={busy}
-            onClick={async () => {
-              setBusy(true);
-              try {
-                await onGoogleSignIn(apiKey);
-              } catch {
-                setBusy(false);
-              }
-            }}
-            type="button"
-            variant="outline"
+      <div className="mt-12 space-y-4">
+        {errorText ? (
+          <p
+            className="rounded-xl border border-destructive/35 bg-destructive/10 px-4 py-3 text-center text-sm text-destructive-foreground"
+            role="alert"
           >
-            <GoogleMark />
-            Continue with Google
-          </Button>
-        </CardContent>
-      </Card>
+            {errorText}
+          </p>
+        ) : null}
+
+        <Button
+          className="h-12 w-full gap-3 rounded-xl border border-border/60 bg-white text-base font-medium text-slate-900 shadow-md transition-[transform,box-shadow] hover:bg-slate-50 hover:shadow-lg active:scale-[0.99]"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              await onGoogleSignIn();
+            } catch {
+              setBusy(false);
+            }
+          }}
+          type="button"
+          variant="outline"
+        >
+          <GoogleMark />
+          Continue with Google
+        </Button>
+      </div>
     </main>
   );
 }

@@ -1001,6 +1001,73 @@ describe("IntentsService", () => {
     expect(agentService.createAgentMessage).toHaveBeenCalledTimes(1);
   });
 
+  it("decomposes explicit multi-intent agent message into multiple intents", async () => {
+    const { service, agentService } = createIntentsService();
+
+    vi.spyOn(service, "createIntent")
+      .mockResolvedValueOnce({
+        id: "intent-1",
+        status: "parsed",
+      } as any)
+      .mockResolvedValueOnce({
+        id: "intent-2",
+        status: "parsed",
+      } as any);
+
+    const result = await service.createIntentFromAgentMessage(
+      "thread-1",
+      "11111111-1111-4111-8111-111111111111",
+      "Find tennis partners tonight; Also find a study buddy tomorrow.",
+      { maxIntents: 3 },
+    );
+
+    expect(service.createIntent).toHaveBeenNthCalledWith(
+      1,
+      "11111111-1111-4111-8111-111111111111",
+      "Find tennis partners tonight",
+      expect.any(String),
+      "thread-1",
+    );
+    expect(service.createIntent).toHaveBeenNthCalledWith(
+      2,
+      "11111111-1111-4111-8111-111111111111",
+      "Also find a study buddy tomorrow.",
+      expect.any(String),
+      "thread-1",
+    );
+    expect(result.intentCount).toBe(2);
+    expect(result.intentIds).toEqual(["intent-1", "intent-2"]);
+    expect(agentService.createAgentMessage).toHaveBeenCalledWith(
+      "thread-1",
+      expect.stringContaining("split your request into 2 intents"),
+    );
+  });
+
+  it("can disable decomposition for agent message intent creation", async () => {
+    const { service } = createIntentsService();
+
+    vi.spyOn(service, "createIntent").mockResolvedValue({
+      id: "intent-1",
+      status: "parsed",
+    } as any);
+
+    const result = await service.createIntentFromAgentMessage(
+      "thread-1",
+      "11111111-1111-4111-8111-111111111111",
+      "Find tennis partners tonight; Also find a study buddy tomorrow.",
+      { allowDecomposition: false },
+    );
+
+    expect(service.createIntent).toHaveBeenCalledTimes(1);
+    expect(service.createIntent).toHaveBeenCalledWith(
+      "11111111-1111-4111-8111-111111111111",
+      "Find tennis partners tonight; Also find a study buddy tomorrow.",
+      expect.any(String),
+      "thread-1",
+    );
+    expect(result.intentCount).toBe(1);
+  });
+
   it("summarizes pending intents and writes summary to thread", async () => {
     const { service, prisma, agentService } = createIntentsService({
       prisma: {

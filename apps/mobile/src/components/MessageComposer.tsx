@@ -27,7 +27,7 @@ interface MessageComposerProps {
    * on iOS (multiline fields often skip `onChangeText` for automated typing).
    */
   e2eSubmitOnReturn?: boolean;
-  /** Raw STT line for API metadata (e.g. agent `voiceTranscript`); composer text may merge the same line. */
+  /** Raw STT line for API metadata (e.g. `voiceTranscript`); composer text may merge the same line. */
   onVoiceTranscript?: (line: string) => void;
 }
 

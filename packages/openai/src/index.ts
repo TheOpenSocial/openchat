@@ -1423,7 +1423,8 @@ export class OpenAIClient {
     };
   }
 
-  private syncBudgetRegistry(_reason: string) {
+  private syncBudgetRegistry(reason: string) {
+    void reason;
     openAIBudgetRegistry.set(this.instanceId, this.toBudgetSnapshot());
   }
 

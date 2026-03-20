@@ -74,6 +74,11 @@ model User {
   explicitPreferences ExplicitPreference[]
   preferenceFeedbackEvents PreferenceFeedbackEvent[]
   sessions        UserSession[]
+  scheduledTasks  ScheduledTask[]
+  scheduledTaskRuns ScheduledTaskRun[]
+  savedSearches   SavedSearch[]
+  ownedRecurringCircles RecurringCircle[] @relation("RecurringCircleOwner")
+  recurringCircleMemberships RecurringCircleMember[]
 
   @@map("users")
 }
@@ -583,4 +588,132 @@ model Embedding {
 
   @@index([ownerType, ownerId])
   @@map("embeddings")
+}
+
+model ScheduledTask {
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String   @db.Uuid @map("user_id")
+  title             String
+  description       String?
+  taskType          String   @map("task_type")
+  status            String   @default("active")
+  scheduleType      String   @map("schedule_type")
+  scheduleConfig    Json     @map("schedule_config")
+  taskConfig        Json     @map("task_config")
+  lastRunAt         DateTime? @map("last_run_at")
+  nextRunAt         DateTime? @map("next_run_at")
+  lastSuccessAt     DateTime? @map("last_success_at")
+  lastFailureAt     DateTime? @map("last_failure_at")
+  lastFailureReason String?   @map("last_failure_reason")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  runs              ScheduledTaskRun[]
+
+  @@index([userId, status])
+  @@index([status, nextRunAt])
+  @@map("scheduled_tasks")
+}
+
+model ScheduledTaskRun {
+  id                   String   @id @default(uuid()) @db.Uuid
+  scheduledTaskId      String   @db.Uuid @map("scheduled_task_id")
+  userId               String   @db.Uuid @map("user_id")
+  status               String
+  triggeredAt          DateTime @default(now()) @map("triggered_at")
+  startedAt            DateTime? @map("started_at")
+  finishedAt           DateTime? @map("finished_at")
+  traceId              String?  @db.Uuid @map("trace_id")
+  resultSummary        String?  @map("result_summary")
+  resultPayload        Json?    @map("result_payload")
+  skipReason           String?  @map("skip_reason")
+  failureReason        String?  @map("failure_reason")
+  createdNotificationId String? @db.Uuid @map("created_notification_id")
+  createdAgentMessageId String? @db.Uuid @map("created_agent_message_id")
+  createdAt            DateTime @default(now()) @map("created_at")
+  task                 ScheduledTask @relation(fields: [scheduledTaskId], references: [id], onDelete: Cascade)
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([scheduledTaskId, triggeredAt])
+  @@index([userId, triggeredAt])
+  @@map("scheduled_task_runs")
+}
+
+model SavedSearch {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @db.Uuid @map("user_id")
+  title       String
+  searchType  String   @map("search_type")
+  queryConfig Json     @map("query_config")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, searchType])
+  @@map("saved_searches")
+}
+
+model RecurringCircle {
+  id                String   @id @default(uuid()) @db.Uuid
+  ownerUserId       String   @db.Uuid @map("owner_user_id")
+  title             String
+  description       String?
+  status            String   @default("active")
+  visibility        String   @default("invite_only")
+  topicTags         Json?    @map("topic_tags")
+  targetSize        Int?     @map("target_size")
+  cadenceType       String   @map("cadence_type")
+  cadenceConfig     Json     @map("cadence_config")
+  kickoffPrompt     String?  @map("kickoff_prompt")
+  lastSessionAt     DateTime? @map("last_session_at")
+  nextSessionAt     DateTime? @map("next_session_at")
+  lastFailureAt     DateTime? @map("last_failure_at")
+  lastFailureReason String?   @map("last_failure_reason")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  owner             User      @relation("RecurringCircleOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  members           RecurringCircleMember[]
+  sessions          RecurringCircleSession[]
+
+  @@index([ownerUserId, status])
+  @@index([status, nextSessionAt])
+  @@map("recurring_circles")
+}
+
+model RecurringCircleMember {
+  id            String   @id @default(uuid()) @db.Uuid
+  circleId      String   @db.Uuid @map("circle_id")
+  userId        String   @db.Uuid @map("user_id")
+  role          String   @default("member")
+  status        String   @default("active")
+  invitedByUserId String? @db.Uuid @map("invited_by_user_id")
+  joinedAt      DateTime? @map("joined_at")
+  leftAt        DateTime? @map("left_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  circle        RecurringCircle @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([circleId, userId])
+  @@index([userId, status])
+  @@index([circleId, status])
+  @@map("recurring_circle_members")
+}
+
+model RecurringCircleSession {
+  id                String   @id @default(uuid()) @db.Uuid
+  circleId          String   @db.Uuid @map("circle_id")
+  scheduledFor      DateTime @map("scheduled_for")
+  status            String   @default("scheduled")
+  generatedIntentId String?  @db.Uuid @map("generated_intent_id")
+  summary           String?
+  startedAt         DateTime? @map("started_at")
+  endedAt           DateTime? @map("ended_at")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  circle            RecurringCircle @relation(fields: [circleId], references: [id], onDelete: Cascade)
+
+  @@index([circleId, scheduledFor])
+  @@index([status, scheduledFor])
+  @@map("recurring_circle_sessions")
 }

@@ -12,6 +12,9 @@ jobs:
   rollback-production:
     runs-on: ubuntu-latest
     environment: production
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,6 +37,7 @@ jobs:
           DEPLOY_PATH: ${{ secrets.PRODUCTION_DEPLOY_PATH }}
           SSH_KEY_PATH: ~/.ssh/production_key
           ROLLBACK_IMAGE_TAG: ${{ inputs.rollback_image_tag }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           set -euo pipefail
           chmod +x scripts/deploy-rollback.sh
