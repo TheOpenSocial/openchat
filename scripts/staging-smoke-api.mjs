@@ -10,6 +10,10 @@ const adminRole = process.env.SMOKE_ADMIN_ROLE || "support";
 const adminApiKey = process.env.SMOKE_ADMIN_API_KEY;
 const accessToken = process.env.SMOKE_ACCESS_TOKEN;
 const timeoutMs = Number(process.env.SMOKE_TIMEOUT_MS || 12000);
+const useUniqueForwardedIp =
+  process.env.SMOKE_USE_UNIQUE_IP === "false"
+    ? false
+    : /^(http:\/\/localhost|http:\/\/127\.0\.0\.1)/.test(baseUrl);
 
 const checks = [
   {
@@ -62,7 +66,7 @@ const checks = [
   },
 ];
 
-function buildHeaders(useAdminHeaders) {
+function buildHeaders(useAdminHeaders, checkIndex) {
   const headers = {
     Accept: "application/json",
   };
@@ -78,11 +82,14 @@ function buildHeaders(useAdminHeaders) {
   if (accessToken) {
     headers.Authorization = `Bearer ${accessToken}`;
   }
+  if (useUniqueForwardedIp) {
+    headers["x-forwarded-for"] = `198.51.100.${10 + checkIndex}`;
+  }
 
   return headers;
 }
 
-async function runCheck(check) {
+async function runCheck(check, checkIndex) {
   const url = `${baseUrl}${check.path}`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -91,7 +98,7 @@ async function runCheck(check) {
   try {
     const response = await fetch(url, {
       method: check.method,
-      headers: buildHeaders(check.admin),
+      headers: buildHeaders(check.admin, checkIndex),
       signal: controller.signal,
     });
     clearTimeout(timeout);
@@ -138,6 +145,7 @@ function printConfig() {
   console.log(`- timeoutMs: ${timeoutMs}`);
   console.log(`- adminApiKey: ${adminApiKey ? "set" : "unset"}`);
   console.log(`- accessToken: ${accessToken ? "set" : "unset"}`);
+  console.log(`- useUniqueForwardedIp: ${useUniqueForwardedIp}`);
   console.log("");
 }
 
@@ -160,9 +168,9 @@ async function main() {
   printConfig();
 
   const results = [];
-  for (const check of checks) {
+  for (const [index, check] of checks.entries()) {
     // Keep requests serialized to simplify service-side tracing while on-call triages failures.
-    const result = await runCheck(check);
+    const result = await runCheck(check, index);
     results.push(result);
   }
 

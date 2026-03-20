@@ -9,11 +9,11 @@ FROM node:22-alpine AS build
 WORKDIR /app
 COPY --from=deps /app /app
 COPY . .
-RUN corepack enable && pnpm --filter @opensocial/api build
+RUN corepack enable && pnpm db:generate && pnpm --filter @opensocial/api build
 
 FROM node:22-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
-COPY --from=build /app/apps/api/dist ./dist
-COPY --from=build /app/apps/api/package.json ./package.json
-CMD ["node", "dist/main.js"]
+COPY --from=build /app /app
+EXPOSE 3000
+CMD ["node", "apps/api/dist/main.js"]

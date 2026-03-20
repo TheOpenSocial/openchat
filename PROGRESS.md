@@ -24,6 +24,8 @@ It is organized as a production-grade build checklist with:
 Last verified: 2026-03-20
 
 ## Implementation Notes
+- 2026-03-20: Ran a focused security audit pass while deployment work progressed in parallel. `pnpm audit --prod --json` surfaced one moderate advisory (`markdown-it` CVE-2022-21670) via mobile transitive dependency `react-native-markdown-display`; patched by adding root override `markdown-it@12.3.2`, then re-verified: `pnpm audit --prod` (0 vulns), `pnpm --filter @opensocial/api test`, and mobile `lint`, `typecheck`, `build`.
+- 2026-03-20: Closed backend runtime bootstrap blocker that prevented local/staging smoke execution. Added API health endpoint (`GET /api/health`) and fixed Nest runtime startup path by loading decorator metadata at bootstrap (`import "reflect-metadata"` in API entrypoint), introducing deterministic API build output (`apps/api/tsconfig.build.json`), and aligning workspace runtime package entrypoints (`@opensocial/types`, `@opensocial/openai`) to built JS (`dist`). Updated smoke runner to avoid localhost false negatives from abuse-throttle coupling via per-check forwarded IPs (`SMOKE_USE_UNIQUE_IP`), then re-ran `pnpm staging:smoke:api` with 8/8 checks passing.
 - 2026-03-20: Client **agent streaming**: web (`EventSource`) + mobile (XHR SSE parser) on `GET /api/agent/threads/:id/stream?access_token=`, combined with `POST .../respond/stream` and client `traceId` to append `response_token` workflow chunks live; `extractResponseTokenDelta` in `@opensocial/types`. Optional **https image URL** attachments on web/mobile agent chat. Admin **Moderation** tab UI for agent-risk flag list / triage / assign.
 - 2026-03-20: Added backend staging-smoke automation for rollout readiness with `scripts/staging-smoke-api.mjs` + root command `pnpm staging:smoke:api`, covering health/admin ops, queue/dead-letter, and moderation agent-risk queue checks with admin headers/auth env wiring. Updated `docs/staging-smoke-checklist.md` to include runnable automation inputs.
 - 2026-03-20: Implemented backend moderation operations triage workflow for conversational agent risk flags: new admin endpoints for filtered queue listing (`GET /api/admin/moderation/agent-risk-flags`), assignment (`POST /api/admin/moderation/flags/:flagId/assign`), and triage actions (`POST /api/admin/moderation/flags/:flagId/triage`) supporting resolve/reopen, strike escalation, and direct user restriction. Added admin controller coverage for queue filters, assignment audit writes, and triage/strike behavior.
@@ -1006,6 +1008,7 @@ All items from the former “exact ChatGPT” delta list are now implemented or 
   - [x] Backend lane: major dependency migration completed (`prisma@7.5.0`, `@prisma/client@7.5.0`, `zod@4.3.6`, `openai@6.32.0`, `vitest@4.1.0`, `class-validator@0.15.1`, `ioredis@5.10.1`, Prisma adapter runtime path with `@prisma/adapter-pg` + `pg`)
   - [x] Backend lane: Prisma dev-chain transitive advisories patched via root `pnpm.overrides` (`hono`, `@hono/node-server`, `lodash`)
   - [x] Mobile lane: Expo SDK 55 upgrade + mobile runtime dependency refresh completed and build-verified (with compatibility pin `@react-native-async-storage/async-storage@2.2.0`)
+  - [x] Security audit patch: resolved transitive `markdown-it` advisory (CVE-2022-21670) via root override `markdown-it@12.3.2`; verified with `pnpm audit --prod` (0 vulnerabilities)
   - [x] Web/admin lane (parallel): `apps/web` + `apps/admin` on `next@16.2.x`, `tailwindcss@4.2.x`, `@tailwindcss/postcss`; `postcss.config.mjs`; `globals.css` uses `@import "tailwindcss"` + `@config` for legacy theme; removed `autoprefixer` (handled by Tailwind v4 pipeline); `next build --no-lint` dropped (Next 16). Verified `pnpm --filter @opensocial/web|admin` `lint`, `typecheck`, `build`.
   - [~] Workspace tooling lane (parallel): pending major upgrades (`eslint@10.1.0`, `@eslint/js@10.0.1`, `@types/node@25.5.0`, `globals@17.4.0`, `lint-staged@16.4.0`, `turbo@2.8.20`)
   - [x] Drift snapshot refreshed via `pnpm outdated -r` (2026-03-20)
@@ -1332,9 +1335,10 @@ Production rollout is approved only when:
 - [x] `B-07` Add OpenAI budget + circuit-breaker guardrails with admin metrics exposure.
 - [x] `B-08` Keep backend quality gates passing (`@opensocial/api` lint/typecheck/tests).
 - [x] `B-09` Build moderation triage workflow for agent-thread flags (resolve/escalate/strike linkage).
-- [~] `B-10` Run staging smoke + incident/alerts verification for final go/no-go.
+- [~] `B-10` Run staging smoke + incident/alerts verification for final go/no-go (local smoke runner now green `8/8`; staging env execution pending final credentials/window).
 - [x] `F-01` Web streaming UI and token-by-token transcript rendering.
 - [x] `F-02` Mobile multimodal composer + streaming UX.
 - [x] `F-03` Admin moderation operations UI over risk flags + audit logs.
 - [~] `F-04` Shared i18n productionization across all clients.
+- [ ] `F-05` Client JWT refresh/session continuity: implement automatic `POST /auth/refresh` handling on access-token expiry (401), retry original request once, rotate stored session tokens, and force sign-out on refresh failure across mobile/web/admin clients.
 - [~] `D-01` Keep dependency currency cadence (`pnpm deps:outdated`) and upgrade latest runtime/security-safe versions by lane.

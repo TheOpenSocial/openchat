@@ -23,8 +23,10 @@ import { AnalyticsModule } from "./analytics/analytics.module.js";
 import { PrivacyModule } from "./privacy/privacy.module.js";
 import { ComplianceModule } from "./compliance/compliance.module.js";
 import { LaunchControlsModule } from "./launch-controls/launch-controls.module.js";
+import { HealthController } from "./health/health.controller.js";
 
 @Module({
+  controllers: [HealthController],
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     BullModule.forRoot({

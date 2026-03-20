@@ -31,18 +31,27 @@ describe("Deployment pipeline artifacts", () => {
     "utf8",
   );
 
+  const hasAny = (value: string, candidates: string[]) =>
+    candidates.some((candidate) => value.includes(candidate));
+
   it("defines staging and production deploy workflows", () => {
     expect(stagingWorkflow).toContain("name: Deploy Staging");
     expect(productionWorkflow).toContain("name: Deploy Production");
   });
 
   it("runs database migrations during deploy", () => {
-    expect(stagingScript).toContain("pnpm db:migrate");
-    expect(productionScript).toContain("pnpm db:migrate");
+    expect(
+      hasAny(stagingScript, ["pnpm db:migrate", "prisma:migrate:deploy"]),
+    ).toBe(true);
+    expect(
+      hasAny(productionScript, ["pnpm db:migrate", "prisma:migrate:deploy"]),
+    ).toBe(true);
   });
 
   it("provides explicit rollback workflow and script", () => {
     expect(rollbackWorkflow).toContain("name: Rollback Production");
-    expect(rollbackScript).toContain("ROLLBACK_IMAGE_TAG");
+    expect(hasAny(rollbackScript, ["ROLLBACK_IMAGE_TAG", "ROLLBACK_REF"])).toBe(
+      true,
+    );
   });
 });

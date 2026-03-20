@@ -14,6 +14,7 @@ Optional automation (backend smoke runner):
   - `SMOKE_ADMIN_ROLE` (`admin`, `support`, or `moderator`; default `support`)
   - `SMOKE_ADMIN_API_KEY` (when admin middleware requires key)
   - `SMOKE_ACCESS_TOKEN` (optional bearer when access-token auth is enforced)
+  - `SMOKE_USE_UNIQUE_IP` (`true` by default for localhost; set `false` to test strict per-IP abuse throttling behavior)
 - The script verifies key read-only backend endpoints (`health`, admin `ops`, queue, dead-letter, and moderation agent-risk queue) and exits non-zero on any failing check.
 
 ## 1) Environment and Health

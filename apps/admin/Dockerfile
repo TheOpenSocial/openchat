@@ -9,12 +9,11 @@ FROM node:22-alpine AS build
 WORKDIR /app
 COPY --from=deps /app /app
 COPY . .
-RUN corepack enable && pnpm --filter @opensocial/admin build
+RUN corepack enable && pnpm --filter @opensocial/admin exec next build --webpack
 
 FROM node:22-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
-COPY --from=build /app/apps/admin/.next ./.next
-COPY --from=build /app/apps/admin/public ./public
-COPY --from=build /app/apps/admin/package.json ./package.json
-CMD ["node_modules/.bin/next", "start", "-p", "3001"]
+COPY --from=build /app /app
+EXPOSE 3001
+CMD ["sh", "-lc", "cd apps/admin && node ../../node_modules/next/dist/bin/next start -p 3001"]

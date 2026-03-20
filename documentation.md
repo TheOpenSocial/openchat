@@ -59,6 +59,7 @@ pnpm db:up && pnpm db:generate && pnpm dev
 - `docs/manual-qa-script.md`
 - `docs/release-process.md`
 - `docs/openai-model-policy.md`
+- `docs/aws-free-tier-deploy.md`
 
 ## Dependency currency
 Use these commands from repo root:
@@ -97,7 +98,8 @@ Rule:
 - notification scaffolding with Expo permissions/token registration and local notification triggers
 - shadcn-style reusable mobile UI primitives (`ui/button`, `ui/card`, `ui/chip`, `ui/alert`) powered by `class-variance-authority`, `clsx`, and `tailwind-merge`, with app-level components standardized on those variants
 - mobile E2E local-mode support (`EXPO_PUBLIC_ENABLE_E2E_LOCAL_MODE=1`) for deterministic simulator automation even when backend services are unavailable
-- mobile dependency baseline updated to latest stable Expo lane (`expo@55.0.8`) with refreshed runtime libs (`react@19.2.4`, `react-native-reanimated@4.2.2`, `react-native-safe-area-context@5.7.0`), deprecated `@types/react-native` removed, and `@react-native-async-storage/async-storage` pinned to `2.2.0` for Expo Go runtime compatibility
+- mobile dependency baseline updated to latest stable Expo lane (`expo@55.0.8`) with refreshed runtime libs (`react@19.2.4`, `react-native-reanimated@4.2.3`, `react-native-safe-area-context@5.7.0`), deprecated `@types/react-native` removed, and `@react-native-async-storage/async-storage` pinned to `2.2.0` for Expo Go runtime compatibility
+- security hardening patch applied at workspace level: root `pnpm.overrides` pins `markdown-it@12.3.2` to address CVE-2022-21670 (`react-native-markdown-display` transitive dependency); `pnpm audit --prod` currently reports zero production vulnerabilities
 - known upgrade constraints tracked: `react-native@0.84.x` remains blocked by Expo managed compatibility for SDK 55, and `tailwindcss@4` remains blocked by NativeWind/`react-native-css-interop` peer constraint (`tailwindcss ~3`)
 
 Run mobile app:
@@ -306,8 +308,11 @@ Matching retrieval behavior:
 - `GET /api/agent/threads/me/summary` (primary thread for the authenticated user; `data` may be `null`)
 - `GET /api/agent/threads/:threadId/messages`
 - `POST /api/agent/threads/:threadId/messages`
-- `POST /api/agent/threads/:threadId/respond` (full agentic turn; optional `voiceTranscript`, `attachments[]` with `image_url` or `file_ref`)
-- `GET /api/agent/threads/:threadId/stream` (SSE stream)
+- `POST /api/agent/threads/:threadId/respond` (full agentic turn; optional `voiceTranscript`, `attachments[]` with `image_url` or `file_ref`, optional `traceId` string ≤256 chars, optional `streamResponseTokens`)
+- `POST /api/agent/threads/:threadId/respond/stream` (same body shape; server runs the turn with response-token workflow streaming enabled)
+- `GET /api/agent/threads/:threadId/stream` (SSE stream of new thread messages as `event: agent.message` with JSON payload: `id`, `threadId`, `role`, `content`, `createdByUserId`, `createdAt`, optional `metadata`)
+
+**Client streaming pattern (web / mobile):** Subscribe to `GET .../stream?access_token=<jwt>` (query token is accepted **only** on this path so browsers can use `EventSource`). Send `POST .../respond/stream` with a client-chosen `traceId` and `Authorization: Bearer`. Workflow rows with `metadata.stage === "response_token"` and matching `metadata.traceId` carry partial assistant text (`model_stream` or `chunked_fallback` in `metadata.details.source`). After the POST completes, reload `GET .../messages` for the canonical transcript. Shared helper: `extractResponseTokenDelta` in `@opensocial/types` (`agent-transcript.ts`).
 
 ## Intent orchestration endpoints
 - `POST /api/intents`
@@ -397,6 +402,9 @@ Analytics behavior notes:
 - `GET /api/admin/jobs/queues` (queue monitor snapshot with per-queue counts + paused state; bull-board equivalent)
 - `POST /api/admin/outbox/relay` (publish pending `outbox_events` and mark `published_at`)
 - `GET /api/admin/moderation/queue` (open moderation flags queue)
+- `GET /api/admin/moderation/agent-risk-flags` (filtered list of `agent_thread` flags from conversational risk checks; query: `limit`, optional `status`, optional `decision` `review`|`blocked`; joins latest `moderation.agent_risk_assessed` audit + latest assignment audit per flag)
+- `POST /api/admin/moderation/flags/:flagId/assign` (record reviewer assignment; body: `assigneeUserId`, optional `reason`)
+- `POST /api/admin/moderation/flags/:flagId/triage` (body: `action` `resolve` | `reopen` | `escalate_strike` | `restrict_user`, optional `reason`, optional `targetUserId` for strike/restrict, optional `strikeSeverity` / `strikeReason`)
 - `GET /api/admin/audit-logs` (latest audit log stream)
 - `POST /api/admin/users/:userId/deactivate` (suspend account + revoke active sessions)
 - `POST /api/admin/users/:userId/restrict` (set profile moderation state to blocked)

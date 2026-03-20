@@ -6,7 +6,6 @@ set -euo pipefail
 : "${SSH_KEY_PATH:?SSH_KEY_PATH is required}"
 
 DEPLOY_PATH="${DEPLOY_PATH:-/opt/opensocial}"
-IMAGE_TAG="${IMAGE_TAG:-latest}"
 
 ssh -i "$SSH_KEY_PATH" \
   -o BatchMode=yes \
@@ -14,8 +13,7 @@ ssh -i "$SSH_KEY_PATH" \
   "$DEPLOY_USER@$DEPLOY_HOST" \
   "set -euo pipefail; \
     cd '$DEPLOY_PATH'; \
-    export IMAGE_TAG='$IMAGE_TAG'; \
-    docker compose -f docker-compose.prod.yml pull api admin web; \
-    docker compose -f docker-compose.prod.yml run --rm api pnpm db:migrate; \
-    docker compose -f docker-compose.prod.yml up -d api admin web workers; \
-    docker compose -f docker-compose.prod.yml ps"
+    docker compose -f docker-compose.prod.yml --env-file .env.production build api admin web; \
+    docker compose -f docker-compose.prod.yml --env-file .env.production run --rm api pnpm --filter @opensocial/api prisma:migrate:deploy; \
+    docker compose -f docker-compose.prod.yml --env-file .env.production up -d nginx api admin web valkey; \
+    docker compose -f docker-compose.prod.yml --env-file .env.production ps"
