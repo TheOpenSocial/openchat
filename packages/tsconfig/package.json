@@ -1,0 +1,12 @@
+{
+  "name": "@opensocial/tsconfig",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./base": "./base.json",
+    "./nest": "./nest.json",
+    "./next": "./next.json",
+    "./react-native": "./react-native.json"
+  }
+}

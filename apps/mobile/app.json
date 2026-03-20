@@ -1,0 +1,24 @@
+{
+  "expo": {
+    "name": "OpenSocial",
+    "slug": "opensocial",
+    "version": "0.1.0",
+    "scheme": "opensocial",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "assetBundlePatterns": ["**/*"],
+    "plugins": ["expo-notifications"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.opensocial.app",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "OpenSocial uses the microphone for voice input when composing intents and messages.",
+        "NSSpeechRecognitionUsageDescription": "OpenSocial uses speech recognition to turn your voice into text."
+      }
+    },
+    "android": {
+      "package": "com.opensocial.app",
+      "permissions": ["android.permission.RECORD_AUDIO"]
+    }
+  }
+}

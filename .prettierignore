@@ -1,0 +1,11 @@
+dist
+dist-*
+apps/mobile/dist-*
+node_modules
+.codex-pipeline
+coverage
+*.tsbuildinfo
+**/test-results/**
+**/playwright-report/**
+*.md
+pnpm-lock.yaml

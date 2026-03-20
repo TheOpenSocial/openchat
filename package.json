@@ -1,0 +1,61 @@
+{
+  "name": "opensocial",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.7.1",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepare": "husky",
+    "db:up": "docker compose up -d postgres redis minio mailhog",
+    "db:down": "docker compose down",
+    "db:migrate": "pnpm --filter @opensocial/api prisma:migrate:deploy",
+    "db:migrate:dev": "pnpm --filter @opensocial/api prisma:migrate:dev",
+    "db:migrate:status": "pnpm --filter @opensocial/api prisma:migrate:status",
+    "db:drift-check": "pnpm --filter @opensocial/api prisma:migrate:drift-check",
+    "db:generate": "pnpm --filter @opensocial/api prisma:generate",
+    "db:seed": "node prisma/seed.mjs",
+    "staging:smoke:api": "node scripts/staging-smoke-api.mjs",
+    "deps:outdated": "pnpm outdated -r",
+    "deps:outdated:latest": "pnpm outdated -r --long",
+    "deps:update:latest": "pnpm -r up --latest"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@prisma/client": "^7.5.0",
+    "@types/node": "^22.13.13",
+    "eslint": "^9.39.1",
+    "globals": "^16.5.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.5.0",
+    "prettier": "^3.5.3",
+    "prisma": "^7.5.0",
+    "turbo": "^2.5.0",
+    "typescript": "^5.8.2",
+    "typescript-eslint": "^8.46.2"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx,json,md,yml,yaml}": [
+      "prettier --write"
+    ]
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.5.0",
+    "pg": "^8.20.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "@hono/node-server": "1.19.10",
+      "hono": "4.12.7",
+      "lodash": "4.17.23"
+    }
+  }
+}

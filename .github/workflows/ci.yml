@@ -36,3 +36,12 @@ jobs:
 
       - name: Test
         run: pnpm test
+
+      - name: Format check
+        run: pnpm format:check
+
+      - name: Install Playwright (Chromium)
+        run: pnpm --filter @opensocial/web exec playwright install chromium --with-deps
+
+      - name: Web E2E (design mock)
+        run: pnpm --filter @opensocial/web test:e2e

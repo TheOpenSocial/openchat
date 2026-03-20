@@ -1,0 +1,43 @@
+# Design preview flow (requires Expo started with EXPO_PUBLIC_DESIGN_MOCK=1).
+# Example: EXPO_PUBLIC_DESIGN_MOCK=1 pnpm --filter @opensocial/mobile dev
+appId: ${MAESTRO_APP_ID}
+---
+- launchApp
+- tapOn:
+    text: "OpenSocial"
+    optional: true
+- openLink: ${MAESTRO_EXPO_URL}
+- tapOn:
+    text: "OpenSocial"
+    optional: true
+- tapOn:
+    text: "Reload"
+    optional: true
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      id: "design-welcome-screen"
+    timeout: 20000
+- tapOn:
+    id: "design-welcome-continue"
+- extendedWaitUntil:
+    visible:
+      id: "auth-screen"
+    timeout: 15000
+- tapOn:
+    id: "auth-design-preview-button"
+- extendedWaitUntil:
+    visible:
+      id: "onboarding-screen"
+    timeout: 15000
+- tapOn:
+    id: "onboarding-continue-button"
+- extendedWaitUntil:
+    visible:
+      id: "home-screen"
+    timeout: 20000
+- assertVisible:
+    id: "home-screen"

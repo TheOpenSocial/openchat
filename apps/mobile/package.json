@@ -1,0 +1,48 @@
+{
+  "name": "@opensocial/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "dev": "expo start",
+    "build": "pnpm build:ios && pnpm build:android",
+    "build:ios": "expo export --platform ios --output-dir dist-ios",
+    "build:android": "expo export --platform android --output-dir dist-android",
+    "lint": "eslint App.tsx \"src/**/*.{ts,tsx}\" --max-warnings=0",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "echo 'no tests yet for mobile app'",
+    "test:e2e:maestro": "MAESTRO_APP_ID=${MAESTRO_APP_ID:-host.exp.Exponent} MAESTRO_EXPO_URL=${MAESTRO_EXPO_URL:-exp://localhost:8089} maestro test .maestro/mobile-critical-path.yaml",
+    "test:e2e:maestro:design": "MAESTRO_APP_ID=${MAESTRO_APP_ID:-host.exp.Exponent} MAESTRO_EXPO_URL=${MAESTRO_EXPO_URL:-exp://localhost:8089} maestro test .maestro/mobile-design-mock.yaml"
+  },
+  "dependencies": {
+    "@opensocial/types": "workspace:*",
+    "@expo/vector-icons": "^15.1.1",
+    "@react-native-async-storage/async-storage": "^2.2.0",
+    "@react-native-community/netinfo": "^11.4.1",
+    "@shopify/flash-list": "^2.3.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "expo": "^55.0.8",
+    "expo-constants": "^55.0.9",
+    "expo-device": "^55.0.10",
+    "expo-haptics": "^55.0.9",
+    "expo-linking": "^55.0.8",
+    "expo-notifications": "^55.0.13",
+    "expo-speech-recognition": "^3.1.2",
+    "expo-status-bar": "~55.0.4",
+    "expo-web-browser": "^55.0.10",
+    "nativewind": "^4.2.3",
+    "react": "19.2.4",
+    "react-native": "0.83.2",
+    "react-native-css-interop": "^0.2.3",
+    "react-native-markdown-display": "^7.0.2",
+    "react-native-reanimated": "^4.2.3",
+    "react-native-safe-area-context": "^5.7.0",
+    "socket.io-client": "^4.8.3",
+    "tailwind-merge": "^3.5.0",
+    "tailwindcss": "^3.4.17"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.11"
+  }
+}

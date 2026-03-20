@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OpenSocial Delivery Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Manrope", "system-ui", "sans-serif"],
+            },
+            colors: {
+              brand: {
+                50: "#f4fbff",
+                100: "#e6f6ff",
+                500: "#0ea5e9",
+                700: "#0369a1",
+                900: "#0c4a6e",
+              },
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      body {
+        background:
+          radial-gradient(
+            circle at 10% 10%,
+            rgba(14, 165, 233, 0.12),
+            transparent 35%
+          ),
+          radial-gradient(
+            circle at 90% 20%,
+            rgba(34, 197, 94, 0.12),
+            transparent 30%
+          ),
+          linear-gradient(180deg, #f8fafc 0%, #eff6ff 55%, #f8fafc 100%);
+      }
+    </style>
+  </head>
+  <body class="min-h-screen text-slate-800">
+    <main class="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+      <header
+        class="mb-8 rounded-2xl border border-brand-100 bg-white/90 p-6 shadow-sm backdrop-blur"
+      >
+        <div class="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p
+              class="text-xs font-semibold uppercase tracking-[0.2em] text-brand-700"
+            >
+              OpenSocial
+            </p>
+            <h1
+              class="mt-1 text-3xl font-extrabold tracking-tight text-slate-900"
+            >
+              Delivery Dashboard
+            </h1>
+            <p class="mt-2 text-sm text-slate-600">
+              General objectives, main objectives, and one-by-one task status.
+            </p>
+          </div>
+          <div
+            class="rounded-xl bg-slate-900 px-4 py-3 text-right text-slate-100"
+          >
+            <p class="text-xs uppercase tracking-[0.18em] text-slate-400">
+              Last update
+            </p>
+            <p class="text-sm font-semibold">2026-03-20</p>
+            <p class="mt-1 text-xs text-slate-400">Backend lane active</p>
+          </div>
+        </div>
+      </header>
+
+      <section
+        class="mb-8 grid gap-4 md:grid-cols-3"
+        id="summary-cards"
+      ></section>
+
+      <section class="mb-8 grid gap-6 lg:grid-cols-2">
+        <article
+          class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+        >
+          <h2 class="text-lg font-bold text-slate-900">General Objectives</h2>
+          <ul class="mt-4 space-y-3" id="general-objectives"></ul>
+        </article>
+        <article
+          class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+        >
+          <h2 class="text-lg font-bold text-slate-900">Main Objectives</h2>
+          <ul class="mt-4 space-y-3" id="main-objectives"></ul>
+        </article>
+      </section>
+
+      <section
+        class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+      >
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h2 class="text-lg font-bold text-slate-900">Task Board</h2>
+          <div class="flex flex-wrap gap-2" id="status-filters"></div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="min-w-full border-separate border-spacing-y-2 text-sm">
+            <thead>
+              <tr
+                class="text-left text-xs uppercase tracking-[0.14em] text-slate-500"
+              >
+                <th class="px-3 py-2">Task</th>
+                <th class="px-3 py-2">Lane</th>
+                <th class="px-3 py-2">Priority</th>
+                <th class="px-3 py-2">Status</th>
+                <th class="px-3 py-2">Details</th>
+              </tr>
+            </thead>
+            <tbody id="task-body"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const objectives = {
+        general: [
+          {
+            status: "in_progress",
+            text: "Deliver ChatGPT-social quality on backend first with reliable agentic and human chat behavior.",
+          },
+          {
+            status: "in_progress",
+            text: "Run frontend in parallel while preserving strict contract compatibility with backend APIs.",
+          },
+          {
+            status: "in_progress",
+            text: "Keep release confidence high through deterministic tests, audit logs, and staging gates.",
+          },
+        ],
+        main: [
+          {
+            status: "complete",
+            text: "Agentic runtime parity: plan, bounded tools, specialists, streaming, and fallback paths.",
+          },
+          {
+            status: "complete",
+            text: "Chat reliability parity: request acceptance, connection setup, memberships, fanout, receipts, and presence.",
+          },
+          {
+            status: "complete",
+            text: "Moderation baseline: assess API plus pre-tool and pre-send risk gates.",
+          },
+          {
+            status: "complete",
+            text: "Moderation durability: write non-clean conversational risk checks to moderation_flags and audit_logs.",
+          },
+          {
+            status: "complete",
+            text: "Moderation operations parity: triage queue with assignment and resolve/escalate actions.",
+          },
+          {
+            status: "not_started",
+            text: "Staging launch parity: exercise runbooks, alerts, and kill switches in staging.",
+          },
+        ],
+      };
+
+      const tasks = [
+        {
+          id: "B-01",
+          lane: "backend",
+          priority: "P0",
+          status: "complete",
+          details:
+            "True OpenAI Responses delta streaming in agent workflow updates.",
+        },
+        {
+          id: "B-02",
+          lane: "backend",
+          priority: "P0",
+          status: "complete",
+          details:
+            "Multimodal turn contract with voiceTranscript and attachments persisted.",
+        },
+        {
+          id: "B-03",
+          lane: "backend",
+          priority: "P0",
+          status: "complete",
+          details:
+            "POST /api/moderation/assess with deterministic risk scoring.",
+        },
+        {
+          id: "B-04",
+          lane: "backend",
+          priority: "P0",
+          status: "complete",
+          details: "Runtime risk gates before tools and before response send.",
+        },
+        {
+          id: "B-05",
+          lane: "backend",
+          priority: "P0",
+          status: "complete",
+          details:
+            "Persist non-clean conversational risk checks to moderation_flags and audit_logs.",
+        },
+        {
+          id: "B-06",
+          lane: "backend",
+          priority: "P1",
+          status: "complete",
+          details: "Admin deterministic eval endpoint for agentic safeguards.",
+        },
+        {
+          id: "B-07",
+          lane: "backend",
+          priority: "P1",
+          status: "complete",
+          details:
+            "OpenAI budget and circuit-breaker guardrails exposed in ops metrics.",
+        },
+        {
+          id: "B-08",
+          lane: "backend",
+          priority: "P1",
+          status: "complete",
+          details: "Backend quality gates passing (lint, typecheck, test).",
+        },
+        {
+          id: "B-09",
+          lane: "backend",
+          priority: "P1",
+          status: "complete",
+          details: "Moderation triage workflow for agent_thread risk flags.",
+        },
+        {
+          id: "B-10",
+          lane: "backend",
+          priority: "P1",
+          status: "in_progress",
+          details:
+            "Staging smoke and incident/alert validation for go-no-go (automation shipped, staging execution pending).",
+        },
+        {
+          id: "F-01",
+          lane: "frontend-web",
+          priority: "P2",
+          status: "in_progress",
+          details: "Web consume respond/stream and render token deltas live.",
+        },
+        {
+          id: "F-02",
+          lane: "frontend-mobile",
+          priority: "P2",
+          status: "in_progress",
+          details: "Mobile streaming UX plus multimodal composer support.",
+        },
+        {
+          id: "F-03",
+          lane: "frontend-admin",
+          priority: "P2",
+          status: "in_progress",
+          details: "Admin moderation triage UI over flags and audit trail.",
+        },
+        {
+          id: "F-04",
+          lane: "frontend-shared",
+          priority: "P3",
+          status: "in_progress",
+          details: "I18n productionization across web/mobile/admin.",
+        },
+        {
+          id: "D-01",
+          lane: "dependency",
+          priority: "P2",
+          status: "in_progress",
+          details:
+            "Run periodic deps audit and update latest secure versions by lane.",
+        },
+      ];
+
+      const statusMeta = {
+        complete: {
+          label: "Complete",
+          pill: "bg-emerald-100 text-emerald-800 border-emerald-200",
+        },
+        in_progress: {
+          label: "In Progress",
+          pill: "bg-amber-100 text-amber-800 border-amber-200",
+        },
+        not_started: {
+          label: "Not Started",
+          pill: "bg-slate-100 text-slate-700 border-slate-200",
+        },
+        blocked: {
+          label: "Blocked",
+          pill: "bg-rose-100 text-rose-800 border-rose-200",
+        },
+      };
+
+      const taskBody = document.getElementById("task-body");
+      const statusFilters = document.getElementById("status-filters");
+
+      let currentFilter = "all";
+
+      function renderSummary() {
+        const total = tasks.length;
+        const complete = tasks.filter(
+          (task) => task.status === "complete",
+        ).length;
+        const inProgress = tasks.filter(
+          (task) => task.status === "in_progress",
+        ).length;
+        const remaining = total - complete;
+
+        const cards = [
+          { title: "Total Tasks", value: total, accent: "text-slate-900" },
+          { title: "Complete", value: complete, accent: "text-emerald-700" },
+          { title: "In Progress", value: inProgress, accent: "text-amber-700" },
+          { title: "Remaining", value: remaining, accent: "text-sky-700" },
+        ];
+
+        document.getElementById("summary-cards").innerHTML = cards
+          .map(
+            (card) =>
+              `<article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <p class="text-xs uppercase tracking-[0.15em] text-slate-500">${card.title}</p>
+                <p class="mt-2 text-3xl font-extrabold ${card.accent}">${card.value}</p>
+              </article>`,
+          )
+          .join("");
+      }
+
+      function objectiveItem(item) {
+        const meta = statusMeta[item.status] || statusMeta.not_started;
+        return `<li class="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <span class="mt-0.5 inline-flex rounded-full border px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] ${meta.pill}">${meta.label}</span>
+          <span>${item.text}</span>
+        </li>`;
+      }
+
+      function renderObjectives() {
+        document.getElementById("general-objectives").innerHTML =
+          objectives.general.map(objectiveItem).join("");
+        document.getElementById("main-objectives").innerHTML = objectives.main
+          .map(objectiveItem)
+          .join("");
+      }
+
+      function renderFilters() {
+        const filterList = [
+          "all",
+          "complete",
+          "in_progress",
+          "not_started",
+          "blocked",
+        ];
+        statusFilters.innerHTML = filterList
+          .map((status) => {
+            const active = currentFilter === status;
+            const label = status === "all" ? "All" : statusMeta[status].label;
+            const base =
+              "rounded-full border px-3 py-1.5 text-xs font-semibold";
+            const activeClass = active
+              ? "border-slate-900 bg-slate-900 text-white"
+              : "border-slate-300 bg-white text-slate-700 hover:border-slate-900 hover:text-slate-900";
+            return `<button type="button" data-status="${status}" class="${base} ${activeClass}">${label}</button>`;
+          })
+          .join("");
+
+        [...statusFilters.querySelectorAll("button")].forEach((button) => {
+          button.addEventListener("click", () => {
+            currentFilter = button.dataset.status;
+            renderFilters();
+            renderTasks();
+          });
+        });
+      }
+
+      function renderTasks() {
+        const filtered =
+          currentFilter === "all"
+            ? tasks
+            : tasks.filter((task) => task.status === currentFilter);
+
+        taskBody.innerHTML = filtered
+          .map((task) => {
+            const meta = statusMeta[task.status] || statusMeta.not_started;
+            return `<tr>
+              <td class="rounded-l-xl bg-slate-50 px-3 py-3 font-semibold text-slate-900">${task.id}</td>
+              <td class="bg-slate-50 px-3 py-3 capitalize">${task.lane.replace(/-/g, " ")}</td>
+              <td class="bg-slate-50 px-3 py-3">${task.priority}</td>
+              <td class="bg-slate-50 px-3 py-3">
+                <span class="inline-flex rounded-full border px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] ${meta.pill}">${meta.label}</span>
+              </td>
+              <td class="rounded-r-xl bg-slate-50 px-3 py-3 text-slate-600">${task.details}</td>
+            </tr>`;
+          })
+          .join("");
+      }
+
+      renderSummary();
+      renderObjectives();
+      renderFilters();
+      renderTasks();
+    </script>
+  </body>
+</html>

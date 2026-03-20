@@ -1,0 +1,88 @@
+appId: ${MAESTRO_APP_ID}
+---
+- launchApp
+- tapOn:
+    text: "OpenSocial"
+    optional: true
+- openLink: ${MAESTRO_EXPO_URL}
+- tapOn:
+    text: "OpenSocial"
+    optional: true
+- tapOn:
+    text: "Reload"
+    optional: true
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible:
+        id: "auth-screen"
+    commands:
+      - tapOn:
+          id: "auth-e2e-bypass-button"
+- runFlow:
+    when:
+      visible:
+        id: "onboarding-screen"
+    commands:
+      - tapOn:
+          id: "onboarding-bio-input"
+      - eraseText
+      - inputText: "I like quick chats and short plans."
+      - tapOn:
+          id: "onboarding-city-input"
+      - eraseText
+      - inputText: "Buenos Aires"
+      - tapOn:
+          id: "onboarding-country-input"
+      - eraseText
+      - inputText: "Argentina"
+      - tapOn:
+          id: "onboarding-continue-button"
+- extendedWaitUntil:
+    visible:
+      id: "home-screen"
+    timeout: 20000
+- assertVisible:
+    id: "home-screen"
+- assertVisible:
+    id: "home-drawer-open-button"
+- tapOn:
+    id: "home-drawer-open-button"
+- assertVisible:
+    id: "home-drawer-sheet"
+- tapOn:
+    id: "home-drawer-close"
+- waitForAnimationToEnd
+# After the drawer, XCUITest intermittently omits tab `testID`s; first tab is Home (agent chat).
+- tapOn:
+    point: "12%,96%"
+- tapOn:
+    point: "50%,87%"
+- inputText: "Looking for a football conversation now."
+- tapOn:
+    point: "91%,87%"
+- tapOn:
+    id: "home-tab-chats"
+- tapOn:
+    id: "chat-create-button"
+- extendedWaitUntil:
+    visible:
+      id: "chat-thread-latest"
+    timeout: 15000
+- tapOn:
+    id: "chat-thread-latest"
+- waitForAnimationToEnd
+- tapOn:
+    point: "48%,70%"
+- inputText: "Hello from maestro"
+- pressKey: Enter
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      id: "chat-user-message"
+    timeout: 20000
+- assertVisible:
+    id: "chat-user-message"

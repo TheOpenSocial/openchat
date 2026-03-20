@@ -1,0 +1,7 @@
+{
+  "extends": "../../packages/tsconfig/react-native.json",
+  "compilerOptions": {
+    "allowSyntheticDefaultImports": true
+  },
+  "include": ["nativewind-env.d.ts", "**/*.ts", "**/*.tsx"]
+}

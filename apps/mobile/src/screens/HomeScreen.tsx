@@ -1,0 +1,2197 @@
+import { agentThreadMessagesToTranscript } from "@opensocial/types";
+import Ionicons from "@expo/vector-icons/Ionicons";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+
+import { api, ChatMessageRecord } from "../lib/api";
+import { t } from "../i18n/strings";
+import {
+  clearStoredChats,
+  loadStoredChats,
+  saveStoredChats,
+  type StoredChatThread,
+} from "../lib/chat-storage";
+import {
+  clearTelemetryEvents,
+  getTelemetrySummary,
+  trackTelemetryEvent,
+  type TelemetryEventName,
+  type TelemetrySummary,
+} from "../lib/telemetry";
+import {
+  fireLocalNotification,
+  registerForPushNotificationsAsync,
+} from "../lib/notifications";
+import {
+  createRealtimeSession,
+  type RealtimeConnectionState,
+  type RealtimeSession,
+} from "../lib/realtime";
+import { AgentIntentToolbar } from "../components/AgentIntentToolbar";
+import { AgentSuggestionChips } from "../components/AgentSuggestionChips";
+import { AnimatedScreen } from "../components/AnimatedScreen";
+import { AppDrawer } from "../components/AppDrawer";
+import { AppTopBar } from "../components/AppTopBar";
+import { ChatBubble } from "../components/ChatBubble";
+import { ChatTranscriptList } from "../components/ChatTranscriptList";
+import { ChoiceChip } from "../components/ChoiceChip";
+import { EmptyState } from "../components/EmptyState";
+import { HomeTabBar } from "../components/HomeTabBar";
+import { InlineNotice } from "../components/InlineNotice";
+import { MessageComposer } from "../components/MessageComposer";
+import { PrimaryButton } from "../components/PrimaryButton";
+import { SurfaceCard } from "../components/SurfaceCard";
+import { hapticImpact, hapticSelection } from "../lib/haptics";
+import { useNetworkOnline } from "../lib/use-network-online";
+import { usePrimaryAgentThread } from "../lib/use-primary-agent-thread";
+import {
+  DESIGN_MOCK_AGENT_TIMELINE,
+  DESIGN_MOCK_CHATS,
+  DESIGN_MOCK_TELEMETRY_SUMMARY,
+} from "../mocks/design-fixtures";
+import { appTheme } from "../theme";
+import {
+  type AgentTimelineMessage,
+  HomeTab,
+  MobileSession,
+  UserProfileDraft,
+} from "../types";
+
+interface HomeScreenProps {
+  session: MobileSession;
+  initialProfile: UserProfileDraft;
+  onProfileUpdated: (profile: UserProfileDraft) => void;
+  onResetSession: () => Promise<void>;
+  /** Full UI on local fixtures; skips API, realtime, and chat persistence. */
+  designMock?: boolean;
+}
+
+type LocalChatThread = StoredChatThread;
+
+const tabLabels: Record<HomeTab, string> = {
+  home: "Home",
+  chats: "Chats",
+  profile: "Profile",
+};
+
+const tabDescriptions: Record<HomeTab, string> = {
+  home: "Chat with your agent and follow each step as it runs.",
+  chats: "Private threads with people you’ve connected with.",
+  profile: "Preferences, notifications, and account.",
+};
+
+export function HomeScreen({
+  designMock = false,
+  initialProfile,
+  onProfileUpdated,
+  onResetSession,
+  session,
+}: HomeScreenProps) {
+  const enableE2ELocalMode =
+    process.env.EXPO_PUBLIC_ENABLE_E2E_LOCAL_MODE === "1";
+  const skipNetwork = designMock;
+  const [activeTab, setActiveTab] = useState<HomeTab>("home");
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const intentAbortRef = useRef<AbortController | null>(null);
+  const agentVoiceTranscriptRef = useRef<string | null>(null);
+  const [draftIntentText, setDraftIntentText] = useState("");
+  const [sendingIntent, setSendingIntent] = useState(false);
+  const [agentTimeline, setAgentTimeline] = useState<AgentTimelineMessage[]>(
+    () =>
+      designMock
+        ? [...DESIGN_MOCK_AGENT_TIMELINE]
+        : [
+            {
+              id: "seed_1",
+              role: "agent",
+              body: "What would you like to do or talk about today?",
+            },
+          ],
+  );
+  const [banner, setBanner] = useState<{
+    tone: "info" | "error" | "success";
+    text: string;
+  } | null>(null);
+  const [chats, setChats] = useState<LocalChatThread[]>(() =>
+    designMock ? [...DESIGN_MOCK_CHATS] : [],
+  );
+  const [selectedChatId, setSelectedChatId] = useState<string | null>(() =>
+    designMock && DESIGN_MOCK_CHATS[0] ? DESIGN_MOCK_CHATS[0].id : null,
+  );
+  const [draftChatMessage, setDraftChatMessage] = useState("");
+  const [sendingChatMessage, setSendingChatMessage] = useState(false);
+  const [newChatType, setNewChatType] = useState<"dm" | "group">("dm");
+  const [creatingChat, setCreatingChat] = useState(false);
+  const [syncingChats, setSyncingChats] = useState<Record<string, boolean>>({});
+  const [syncingAllChats, setSyncingAllChats] = useState(false);
+  const [chatStorageReady, setChatStorageReady] = useState(() => designMock);
+  const [realtimeState, setRealtimeState] = useState<RealtimeConnectionState>(
+    () => (designMock ? "connected" : "offline"),
+  );
+  const [typingUsersByChat, setTypingUsersByChat] = useState<
+    Record<string, string[]>
+  >({});
+  const [profileDraft, setProfileDraft] =
+    useState<UserProfileDraft>(initialProfile);
+  const [pushToken, setPushToken] = useState<string | null>(null);
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [trustSummary, setTrustSummary] = useState(() =>
+    designMock
+      ? "badge: verified · reputation: strong"
+      : "trust baseline not loaded",
+  );
+  const [telemetrySummary, setTelemetrySummary] =
+    useState<TelemetrySummary | null>(() =>
+      designMock ? DESIGN_MOCK_TELEMETRY_SUMMARY : null,
+    );
+  const chatsRef = useRef<LocalChatThread[]>([]);
+  const selectedChatIdRef = useRef<string | null>(null);
+  const realtimeSessionRef = useRef<RealtimeSession | null>(null);
+  const localTypingActiveRef = useRef(false);
+  const localTypingChatIdRef = useRef<string | null>(null);
+  const localTypingStopTimeoutRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
+  const typingClearTimersRef = useRef<
+    Map<string, ReturnType<typeof setTimeout>>
+  >(new Map());
+  const trackedRequestSentIntentsRef = useRef<Set<string>>(new Set());
+  const [agentComposerMode, setAgentComposerMode] = useState<"chat" | "intent">(
+    "chat",
+  );
+  const netOnline = useNetworkOnline(skipNetwork);
+  const agentThreadSyncEnabled =
+    !skipNetwork && !enableE2ELocalMode && !designMock;
+  const { loading: agentThreadLoading, threadId: agentThreadId } =
+    usePrimaryAgentThread({
+      accessToken: session.accessToken,
+      enabled: agentThreadSyncEnabled,
+      onHydrated: setAgentTimeline,
+      onLoadError: () =>
+        setBanner({
+          tone: "error",
+          text: "Could not load your agent thread.",
+        }),
+    });
+
+  const selectedChat = useMemo(
+    () => chats.find((chat) => chat.id === selectedChatId) ?? null,
+    [chats, selectedChatId],
+  );
+  const typingUsers = useMemo(
+    () => (selectedChatId ? (typingUsersByChat[selectedChatId] ?? []) : []),
+    [selectedChatId, typingUsersByChat],
+  );
+
+  const clearTypingUser = useCallback((chatId: string, userId: string) => {
+    setTypingUsersByChat((current) => {
+      const users = current[chatId];
+      if (!users || users.length === 0) {
+        return current;
+      }
+      const nextUsers = users.filter((candidate) => candidate !== userId);
+      if (nextUsers.length === users.length) {
+        return current;
+      }
+      if (nextUsers.length === 0) {
+        const next = { ...current };
+        delete next[chatId];
+        return next;
+      }
+      return {
+        ...current,
+        [chatId]: nextUsers,
+      };
+    });
+  }, []);
+
+  const applyRealtimeChatMessage = useCallback(
+    (chatId: string, message: ChatMessageRecord) => {
+      setChats((current) =>
+        current.map((thread) => {
+          if (thread.id !== chatId) {
+            return thread;
+          }
+
+          const mergedMessages = mergeChatMessages(thread.messages, [message]);
+          const selected = selectedChatIdRef.current === chatId;
+          const incrementUnread =
+            !selected && message.senderUserId !== session.userId;
+
+          return {
+            ...thread,
+            messages: mergedMessages,
+            highWatermark: message.createdAt,
+            unreadCount: incrementUnread
+              ? thread.unreadCount + 1
+              : thread.unreadCount,
+          };
+        }),
+      );
+    },
+    [session.userId],
+  );
+
+  const refreshTelemetry = useCallback(async () => {
+    if (skipNetwork) {
+      setTelemetrySummary(DESIGN_MOCK_TELEMETRY_SUMMARY);
+      return;
+    }
+    try {
+      const summary = await getTelemetrySummary(session.userId);
+      setTelemetrySummary(summary);
+    } catch {
+      // Ignore telemetry refresh failures to avoid interrupting core UX flows.
+    }
+  }, [session.userId, skipNetwork]);
+
+  const recordTelemetry = useCallback(
+    (name: TelemetryEventName, properties?: Record<string, unknown>) => {
+      void trackTelemetryEvent(session.userId, name, properties)
+        .then(() => refreshTelemetry())
+        .catch(() => {});
+    },
+    [refreshTelemetry, session.userId],
+  );
+
+  useEffect(() => {
+    chatsRef.current = chats;
+  }, [chats]);
+
+  useEffect(() => {
+    selectedChatIdRef.current = selectedChatId;
+  }, [selectedChatId]);
+
+  useEffect(() => {
+    refreshTelemetry().catch(() => {});
+  }, [refreshTelemetry]);
+
+  useEffect(() => {
+    if (skipNetwork) {
+      return;
+    }
+    let mounted = true;
+
+    const bootstrap = async () => {
+      setProfileLoading(true);
+      try {
+        const [globalRules, trust] = await Promise.all([
+          api.getGlobalRules(session.userId, session.accessToken),
+          api.getTrustProfile(session.userId, session.accessToken),
+        ]);
+
+        const notificationMode =
+          globalRules.notificationMode === "digest" ? "digest" : "live";
+        const nextProfile: UserProfileDraft = {
+          ...profileDraft,
+          notificationMode,
+        };
+
+        if (mounted) {
+          setProfileDraft(nextProfile);
+          setTrustSummary(
+            `badge: ${String(trust.verificationBadge ?? "unknown")} · reputation: ${String(
+              trust.reputationScore ?? "n/a",
+            )}`,
+          );
+        }
+      } catch (error) {
+        if (mounted) {
+          setBanner({
+            tone: "error",
+            text: `Failed to bootstrap profile data: ${String(error)}`,
+          });
+        }
+      } finally {
+        if (mounted) {
+          setProfileLoading(false);
+        }
+      }
+    };
+
+    bootstrap().catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, [session.accessToken, session.userId, skipNetwork]);
+
+  useEffect(() => {
+    if (skipNetwork) {
+      return;
+    }
+    let mounted = true;
+    registerForPushNotificationsAsync()
+      .then((result) => {
+        if (!mounted) {
+          return;
+        }
+        setPushEnabled(result.enabled);
+        setPushToken(result.token);
+      })
+      .catch(() => {
+        if (!mounted) {
+          return;
+        }
+        setPushEnabled(false);
+        setPushToken(null);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [skipNetwork]);
+
+  useEffect(() => {
+    if (skipNetwork) {
+      return;
+    }
+    let mounted = true;
+    setChatStorageReady(false);
+    setChats([]);
+    setSelectedChatId(null);
+    trackedRequestSentIntentsRef.current.clear();
+
+    loadStoredChats(session.userId)
+      .then((storedThreads) => {
+        if (!mounted) {
+          return;
+        }
+        setChats(storedThreads);
+        if (storedThreads.length > 0) {
+          setSelectedChatId(storedThreads[0].id);
+        }
+      })
+      .catch((error) => {
+        if (!mounted) {
+          return;
+        }
+        setBanner({
+          tone: "error",
+          text: `Failed to restore chats: ${String(error)}`,
+        });
+      })
+      .finally(() => {
+        if (mounted) {
+          setChatStorageReady(true);
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [session.userId, skipNetwork]);
+
+  useEffect(() => {
+    if (skipNetwork) {
+      return;
+    }
+    if (!chatStorageReady) {
+      return;
+    }
+
+    const replaySince = new Date(Date.now() - 5 * 60_000).toISOString();
+    const realtimeSession = createRealtimeSession({
+      userId: session.userId,
+      accessToken: session.accessToken,
+      roomIds: chatsRef.current.map((thread) => thread.id),
+      replaySince,
+      callbacks: {
+        onConnectionStateChange: setRealtimeState,
+        onChatMessageCreated: (chatId, message) => {
+          applyRealtimeChatMessage(chatId, message);
+        },
+        onChatReplay: (chatId, messages) => {
+          if (messages.length === 0) {
+            return;
+          }
+          setChats((current) =>
+            current.map((thread) => {
+              if (thread.id !== chatId) {
+                return thread;
+              }
+              const mergedMessages = mergeChatMessages(
+                thread.messages,
+                messages,
+              );
+              return {
+                ...thread,
+                messages: mergedMessages,
+                highWatermark:
+                  mergedMessages.at(-1)?.createdAt ?? thread.highWatermark,
+              };
+            }),
+          );
+        },
+        onTyping: ({ roomId, userId, isTyping }) => {
+          if (userId === session.userId) {
+            return;
+          }
+
+          const timerKey = `${roomId}:${userId}`;
+          const currentTimer = typingClearTimersRef.current.get(timerKey);
+          if (currentTimer) {
+            clearTimeout(currentTimer);
+            typingClearTimersRef.current.delete(timerKey);
+          }
+
+          if (!isTyping) {
+            clearTypingUser(roomId, userId);
+            return;
+          }
+
+          setTypingUsersByChat((current) => {
+            const currentUsers = current[roomId] ?? [];
+            if (currentUsers.includes(userId)) {
+              return current;
+            }
+            return {
+              ...current,
+              [roomId]: [...currentUsers, userId],
+            };
+          });
+
+          const clearTimer = setTimeout(() => {
+            clearTypingUser(roomId, userId);
+            typingClearTimersRef.current.delete(timerKey);
+          }, 3_000);
+          typingClearTimersRef.current.set(timerKey, clearTimer);
+        },
+      },
+    });
+
+    realtimeSessionRef.current = realtimeSession;
+
+    return () => {
+      for (const timer of typingClearTimersRef.current.values()) {
+        clearTimeout(timer);
+      }
+      typingClearTimersRef.current.clear();
+      if (localTypingStopTimeoutRef.current) {
+        clearTimeout(localTypingStopTimeoutRef.current);
+        localTypingStopTimeoutRef.current = null;
+      }
+      localTypingActiveRef.current = false;
+      localTypingChatIdRef.current = null;
+      setTypingUsersByChat({});
+      realtimeSession.disconnect();
+      realtimeSessionRef.current = null;
+    };
+  }, [
+    applyRealtimeChatMessage,
+    chatStorageReady,
+    clearTypingUser,
+    session.userId,
+    skipNetwork,
+  ]);
+
+  useEffect(() => {
+    if (skipNetwork) {
+      return;
+    }
+    realtimeSessionRef.current?.updateRooms(chats.map((thread) => thread.id));
+  }, [chats, skipNetwork]);
+
+  useEffect(() => {
+    const previousChatId = localTypingChatIdRef.current;
+    if (
+      previousChatId &&
+      previousChatId !== selectedChatId &&
+      localTypingActiveRef.current
+    ) {
+      realtimeSessionRef.current?.publishTyping(
+        previousChatId,
+        session.userId,
+        false,
+      );
+      localTypingActiveRef.current = false;
+    }
+    localTypingChatIdRef.current = selectedChatId;
+  }, [selectedChatId, session.userId]);
+
+  useEffect(() => {
+    if (skipNetwork) {
+      return;
+    }
+    if (!chatStorageReady) {
+      return;
+    }
+
+    saveStoredChats(session.userId, chats).catch((error) => {
+      setBanner({
+        tone: "error",
+        text: `Failed to persist chats: ${String(error)}`,
+      });
+    });
+  }, [chatStorageReady, chats, session.userId, skipNetwork]);
+
+  const setChatSyncingState = useCallback(
+    (chatId: string, syncing: boolean) => {
+      setSyncingChats((current) => {
+        if (syncing) {
+          if (current[chatId]) {
+            return current;
+          }
+          return { ...current, [chatId]: true };
+        }
+
+        if (!current[chatId]) {
+          return current;
+        }
+
+        const next = { ...current };
+        delete next[chatId];
+        return next;
+      });
+    },
+    [],
+  );
+
+  const syncChatThread = useCallback(
+    async (
+      chatId: string,
+      options?: {
+        force?: boolean;
+        quiet?: boolean;
+      },
+    ) => {
+      if (enableE2ELocalMode || designMock) {
+        return true;
+      }
+
+      const currentThread = chatsRef.current.find(
+        (thread) => thread.id === chatId,
+      );
+      const after = options?.force
+        ? undefined
+        : (currentThread?.highWatermark ?? undefined);
+
+      setChatSyncingState(chatId, true);
+      try {
+        const [syncResult, metadata] = await Promise.all([
+          api.syncChatMessages(
+            chatId,
+            session.userId,
+            { after, limit: 100 },
+            session.accessToken,
+          ),
+          api.getChatMetadata(chatId, session.accessToken).catch(() => null),
+        ]);
+
+        setChats((current) =>
+          current.map((thread) => {
+            if (thread.id !== chatId) {
+              return thread;
+            }
+
+            const mergedMessages = mergeChatMessages(
+              thread.messages,
+              syncResult.messages,
+            );
+            const selected = selectedChatIdRef.current === chatId;
+
+            return {
+              ...thread,
+              messages: mergedMessages,
+              highWatermark:
+                syncResult.highWatermark ??
+                mergedMessages.at(-1)?.createdAt ??
+                thread.highWatermark,
+              unreadCount: selected ? 0 : Math.max(syncResult.unreadCount, 0),
+              participantCount:
+                typeof metadata?.participantCount === "number"
+                  ? metadata.participantCount
+                  : thread.participantCount,
+              connectionStatus:
+                typeof metadata?.connectionStatus === "string"
+                  ? metadata.connectionStatus
+                  : thread.connectionStatus,
+            };
+          }),
+        );
+        return true;
+      } catch (error) {
+        if (!options?.quiet) {
+          setBanner({
+            tone: "error",
+            text: `Failed to sync chat: ${String(error)}`,
+          });
+        }
+        return false;
+      } finally {
+        setChatSyncingState(chatId, false);
+      }
+    },
+    [
+      designMock,
+      enableE2ELocalMode,
+      session.accessToken,
+      session.userId,
+      setChatSyncingState,
+    ],
+  );
+
+  useEffect(() => {
+    if (skipNetwork) {
+      return;
+    }
+    if (!chatStorageReady || chats.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+    const syncAll = async () => {
+      const chatIds = chatsRef.current.map((thread) => thread.id);
+      for (const chatId of chatIds) {
+        if (cancelled) {
+          return;
+        }
+        await syncChatThread(chatId, { quiet: true });
+      }
+    };
+
+    syncAll().catch(() => {});
+    const interval = setInterval(() => {
+      syncAll().catch(() => {});
+    }, 30_000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [chatStorageReady, chats.length, skipNetwork, syncChatThread]);
+
+  const syncChatsNow = async () => {
+    const chatIds = chatsRef.current.map((thread) => thread.id);
+    if (chatIds.length === 0) {
+      return;
+    }
+
+    if (designMock) {
+      setBanner({
+        tone: "success",
+        text: "Chats up to date (preview).",
+      });
+      return;
+    }
+
+    recordTelemetry("chat_sync_manual", {
+      threads: chatIds.length,
+    });
+    setSyncingAllChats(true);
+    let failures = 0;
+    for (const chatId of chatIds) {
+      const ok = await syncChatThread(chatId, { quiet: true });
+      if (!ok) {
+        failures += 1;
+      }
+    }
+    setSyncingAllChats(false);
+
+    if (failures === 0) {
+      setBanner({
+        tone: "success",
+        text: "Chats synced.",
+      });
+      return;
+    }
+
+    setBanner({
+      tone: "error",
+      text: `Chat sync completed with ${failures} failure${failures === 1 ? "" : "s"}.`,
+    });
+    recordTelemetry("chat_sync_failed", {
+      failures,
+      total: chatIds.length,
+    });
+  };
+
+  const resetAgentConversation = useCallback(() => {
+    setAgentTimeline(
+      designMock
+        ? [...DESIGN_MOCK_AGENT_TIMELINE]
+        : [
+            {
+              id: "seed_1",
+              role: "agent",
+              body: "What would you like to do or talk about today?",
+            },
+          ],
+    );
+    setDraftIntentText("");
+  }, [designMock]);
+
+  const regenerateLastIntent = useCallback(() => {
+    setAgentTimeline((current) => {
+      let lastUserIndex = -1;
+      for (let index = current.length - 1; index >= 0; index -= 1) {
+        if (current[index].role === "user") {
+          lastUserIndex = index;
+          break;
+        }
+      }
+      if (lastUserIndex < 0) {
+        return current;
+      }
+      const text = current[lastUserIndex].body;
+      requestAnimationFrame(() => {
+        setDraftIntentText(text);
+      });
+      return current.slice(0, lastUserIndex);
+    });
+  }, []);
+
+  const cancelIntentSend = useCallback(() => {
+    intentAbortRef.current?.abort();
+  }, []);
+
+  const trackRequestSentForIntent = useCallback(
+    async (intentId: string) => {
+      if (trackedRequestSentIntentsRef.current.has(intentId)) {
+        return;
+      }
+      if (designMock) {
+        return;
+      }
+
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        try {
+          const summary = await api.summarizePendingIntents(
+            session.userId,
+            8,
+            session.accessToken,
+          );
+          const matchedIntent = summary.intents.find(
+            (intent) => intent.intentId === intentId,
+          );
+          if (!matchedIntent) {
+            return;
+          }
+
+          const requestCount =
+            matchedIntent.requests.pending +
+            matchedIntent.requests.accepted +
+            matchedIntent.requests.rejected +
+            matchedIntent.requests.expired +
+            matchedIntent.requests.cancelled;
+
+          if (requestCount > 0) {
+            trackedRequestSentIntentsRef.current.add(intentId);
+            recordTelemetry("request_sent", {
+              intentId,
+              requestCount,
+              pending: matchedIntent.requests.pending,
+              accepted: matchedIntent.requests.accepted,
+              rejected: matchedIntent.requests.rejected,
+              expired: matchedIntent.requests.expired,
+              cancelled: matchedIntent.requests.cancelled,
+              attempt: attempt + 1,
+            });
+            return;
+          }
+        } catch {
+          // Ignore transient summary polling errors; this is best-effort telemetry.
+        }
+
+        await sleep(2_000 * (attempt + 1));
+      }
+    },
+    [designMock, recordTelemetry, session.accessToken, session.userId],
+  );
+
+  const sendIntent = async () => {
+    const rawText = draftIntentText.trim();
+    if (!rawText || sendingIntent) {
+      return;
+    }
+
+    if (!skipNetwork && !designMock && !enableE2ELocalMode && !netOnline) {
+      setBanner({
+        tone: "error",
+        text: t("sendBlockedOffline"),
+      });
+      return;
+    }
+
+    setSendingIntent(true);
+    setDraftIntentText("");
+    const timelineIdBase = Date.now().toString(36);
+    const workflowMessageId = `workflow_${timelineIdBase}`;
+    const useAgentChat =
+      agentComposerMode === "chat" &&
+      Boolean(agentThreadId) &&
+      !enableE2ELocalMode &&
+      !designMock;
+    const workflowBody = useAgentChat
+      ? t("agentWorkflowThinking")
+      : t("agentWorkflowRouting");
+
+    setAgentTimeline((current) => [
+      ...current,
+      {
+        id: `user_${timelineIdBase}`,
+        role: "user",
+        body: rawText,
+      },
+      {
+        id: workflowMessageId,
+        role: "workflow",
+        body: workflowBody,
+      },
+    ]);
+
+    try {
+      if (enableE2ELocalMode || designMock) {
+        const localIntentId = enableE2ELocalMode
+          ? `intent_local_${timelineIdBase}`
+          : `intent_preview_${timelineIdBase}`;
+        const agentBody = designMock
+          ? `Intent queued (${localIntentId}). In production this fans out to matching, inbox, and chats.`
+          : `Intent captured (${localIntentId}) in local E2E mode.`;
+        setAgentTimeline((current) => [
+          ...current,
+          {
+            id: `agent_${timelineIdBase}`,
+            role: "agent",
+            body: agentBody,
+          },
+        ]);
+        recordTelemetry("intent_created", {
+          intentId: localIntentId,
+          textLength: rawText.length,
+        });
+        hapticImpact();
+        return;
+      }
+
+      const controller = new AbortController();
+      intentAbortRef.current = controller;
+
+      if (useAgentChat && agentThreadId) {
+        const voiceLine = agentVoiceTranscriptRef.current?.trim();
+        await api.agentThreadRespond(
+          agentThreadId,
+          session.userId,
+          rawText,
+          session.accessToken,
+          { signal: controller.signal },
+          voiceLine ? { voiceTranscript: voiceLine } : undefined,
+        );
+        agentVoiceTranscriptRef.current = null;
+        const messages = await api.listAgentThreadMessages(
+          agentThreadId,
+          session.accessToken,
+        );
+        setAgentTimeline(agentThreadMessagesToTranscript(messages));
+        intentAbortRef.current = null;
+        hapticImpact();
+        recordTelemetry("agent_turn_completed", {
+          textLength: rawText.length,
+        });
+        return;
+      }
+
+      const intent = await api.createIntent(
+        session.userId,
+        rawText,
+        session.accessToken,
+        { signal: controller.signal },
+        agentThreadId ?? undefined,
+      );
+
+      intentAbortRef.current = null;
+      hapticImpact();
+
+      setAgentTimeline((current) => [
+        ...current,
+        {
+          id: `agent_${timelineIdBase}`,
+          role: "agent",
+          body: `Intent captured (${String(intent.id ?? "new")}) and sent to matching.`,
+        },
+      ]);
+      const intentId = typeof intent.id === "string" ? intent.id : null;
+      recordTelemetry("intent_created", {
+        intentId: intentId ?? "",
+        textLength: rawText.length,
+      });
+      if (intentId) {
+        void trackRequestSentForIntent(intentId);
+      }
+    } catch (error) {
+      const aborted = error instanceof Error && error.name === "AbortError";
+      if (aborted) {
+        setAgentTimeline((current) =>
+          current
+            .filter((message) => message.id !== workflowMessageId)
+            .concat({
+              id: `workflow_stop_${timelineIdBase}`,
+              role: "workflow",
+              body: "Stopped.",
+            }),
+        );
+        return;
+      }
+
+      setAgentTimeline((current) => [
+        ...current,
+        {
+          id: `agent_error_${timelineIdBase}`,
+          role: "error",
+          body: `I could not submit that intent right now. ${String(error)}`,
+        },
+      ]);
+    } finally {
+      intentAbortRef.current = null;
+      setSendingIntent(false);
+    }
+  };
+
+  const reportUser = async (
+    targetUserId: string,
+    context: { chatId: string },
+  ) => {
+    try {
+      if (designMock) {
+        setBanner({
+          tone: "success",
+          text: "Report recorded (preview — no server).",
+        });
+        recordTelemetry("report_submitted", {
+          source: "chat",
+          targetUserId,
+          chatId: context.chatId,
+        });
+        return;
+      }
+      await api.createReport(
+        {
+          reporterUserId: session.userId,
+          targetUserId,
+          reason: "chat_message_safety_concern",
+          details: `Reported from chat ${context.chatId}.`,
+        },
+        session.accessToken,
+      );
+      setBanner({
+        tone: "success",
+        text: "Report submitted. Our moderation pipeline will review it.",
+      });
+      recordTelemetry("report_submitted", {
+        source: "chat",
+        targetUserId,
+        chatId: context.chatId,
+      });
+    } catch (error) {
+      setBanner({
+        tone: "error",
+        text: `Could not submit report: ${String(error)}`,
+      });
+    }
+  };
+
+  const blockUser = async (
+    blockedUserId: string,
+    context: { chatId: string },
+  ) => {
+    try {
+      if (designMock) {
+        setBanner({
+          tone: "success",
+          text: "User blocked (preview — local UI only).",
+        });
+        recordTelemetry("user_blocked", {
+          source: "chat",
+          blockedUserId,
+          chatId: context.chatId,
+        });
+        return;
+      }
+      await api.blockUser(
+        {
+          blockerUserId: session.userId,
+          blockedUserId,
+        },
+        session.accessToken,
+      );
+      setBanner({
+        tone: "success",
+        text: "User blocked. You should no longer receive future contact from this account.",
+      });
+      recordTelemetry("user_blocked", {
+        source: "chat",
+        blockedUserId,
+        chatId: context.chatId,
+      });
+    } catch (error) {
+      setBanner({
+        tone: "error",
+        text: `Could not block user: ${String(error)}`,
+      });
+    }
+  };
+
+  const createDemoChat = async () => {
+    setCreatingChat(true);
+    try {
+      if (enableE2ELocalMode || designMock) {
+        const now = Date.now().toString(36);
+        const localChatId = `chat_local_${now}`;
+        const localConnectionId = `connection_local_${now}`;
+        const nextThread: LocalChatThread = {
+          id: localChatId,
+          connectionId: localConnectionId,
+          title: formatChatTitle(localChatId, newChatType),
+          type: newChatType,
+          messages: [],
+          highWatermark: null,
+          unreadCount: 0,
+          participantCount: newChatType === "group" ? 3 : 2,
+          connectionStatus: "active",
+        };
+        setChats((current) => [nextThread, ...current]);
+        setSelectedChatId(nextThread.id);
+        setBanner({
+          tone: "success",
+          text:
+            newChatType === "group"
+              ? designMock
+                ? "Group thread added to your preview."
+                : "Group chat sandbox created in local E2E mode."
+              : designMock
+                ? "Direct thread added to your preview."
+                : "Chat sandbox created in local E2E mode.",
+        });
+        recordTelemetry("connection_created", {
+          connectionId: localConnectionId,
+          chatId: localChatId,
+          type: newChatType,
+        });
+        recordTelemetry("chat_started", {
+          chatId: localChatId,
+          type: newChatType,
+          participantCount: nextThread.participantCount,
+        });
+        return;
+      }
+
+      const connection = await api.createConnection(
+        session.userId,
+        newChatType,
+        session.accessToken,
+      );
+      const connectionId = String(connection.id);
+      const chat = await api.createChat(
+        connectionId,
+        newChatType,
+        session.accessToken,
+      );
+      const metadata = await api
+        .getChatMetadata(chat.id, session.accessToken)
+        .catch(() => null);
+      const nextThread: LocalChatThread = {
+        id: chat.id,
+        connectionId,
+        title: formatChatTitle(chat.id, newChatType),
+        type: newChatType,
+        messages: [],
+        highWatermark: null,
+        unreadCount: 0,
+        participantCount:
+          typeof metadata?.participantCount === "number"
+            ? metadata.participantCount
+            : null,
+        connectionStatus:
+          typeof metadata?.connectionStatus === "string"
+            ? metadata.connectionStatus
+            : null,
+      };
+      setChats((current) => [nextThread, ...current]);
+      setSelectedChatId(nextThread.id);
+      setBanner({
+        tone: "success",
+        text:
+          newChatType === "group"
+            ? "Group chat sandbox created via live API endpoints."
+            : "Chat sandbox created via live API endpoints.",
+      });
+      recordTelemetry("connection_created", {
+        connectionId,
+        chatId: chat.id,
+        type: newChatType,
+      });
+      recordTelemetry("chat_started", {
+        chatId: chat.id,
+        type: newChatType,
+        participantCount:
+          typeof metadata?.participantCount === "number"
+            ? metadata.participantCount
+            : null,
+      });
+      await syncChatThread(nextThread.id, { quiet: true });
+    } catch (error) {
+      setBanner({
+        tone: "error",
+        text: `Failed to create chat sandbox: ${String(error)}`,
+      });
+    } finally {
+      setCreatingChat(false);
+    }
+  };
+
+  const openChat = async (chatId: string) => {
+    setSelectedChatId(chatId);
+    setChats((current) =>
+      current.map((thread) =>
+        thread.id === chatId ? { ...thread, unreadCount: 0 } : thread,
+      ),
+    );
+    await syncChatThread(chatId);
+  };
+
+  const handleDraftChatMessageChange = (value: string) => {
+    setDraftChatMessage(value);
+    const chatId = selectedChatIdRef.current;
+    if (!chatId || !realtimeSessionRef.current) {
+      return;
+    }
+
+    const hasText = value.trim().length > 0;
+    if (hasText && !localTypingActiveRef.current) {
+      realtimeSessionRef.current.publishTyping(chatId, session.userId, true);
+      localTypingActiveRef.current = true;
+    }
+
+    if (!hasText && localTypingActiveRef.current) {
+      realtimeSessionRef.current.publishTyping(chatId, session.userId, false);
+      localTypingActiveRef.current = false;
+    }
+
+    if (localTypingStopTimeoutRef.current) {
+      clearTimeout(localTypingStopTimeoutRef.current);
+      localTypingStopTimeoutRef.current = null;
+    }
+
+    if (hasText) {
+      localTypingStopTimeoutRef.current = setTimeout(() => {
+        if (!localTypingActiveRef.current) {
+          return;
+        }
+        const activeChatId = selectedChatIdRef.current;
+        if (!activeChatId) {
+          return;
+        }
+        realtimeSessionRef.current?.publishTyping(
+          activeChatId,
+          session.userId,
+          false,
+        );
+        localTypingActiveRef.current = false;
+      }, 1_500);
+    }
+  };
+
+  const sendChatMessage = async () => {
+    const messageBody = draftChatMessage.trim();
+    if (!selectedChat || messageBody.length === 0 || sendingChatMessage) {
+      return;
+    }
+    const hadMessages = selectedChat.messages.length > 0;
+    const hasCounterpartyMessage = selectedChat.messages.some(
+      (message) => message.senderUserId !== session.userId,
+    );
+
+    setSendingChatMessage(true);
+    try {
+      if (enableE2ELocalMode || designMock) {
+        const localMessage: ChatMessageRecord = {
+          id: `message_local_${Date.now().toString(36)}`,
+          chatId: selectedChat.id,
+          senderUserId: session.userId,
+          body: messageBody,
+          createdAt: new Date().toISOString(),
+        };
+        setDraftChatMessage("");
+        setChats((current) =>
+          current.map((thread) =>
+            thread.id === selectedChat.id
+              ? {
+                  ...thread,
+                  messages: mergeChatMessages(thread.messages, [localMessage]),
+                  highWatermark: localMessage.createdAt,
+                  unreadCount: 0,
+                }
+              : thread,
+          ),
+        );
+        if (!hadMessages) {
+          recordTelemetry("first_message_sent", {
+            chatId: selectedChat.id,
+            bodyLength: messageBody.length,
+          });
+        } else if (hasCounterpartyMessage) {
+          recordTelemetry("message_replied", {
+            chatId: selectedChat.id,
+            bodyLength: messageBody.length,
+          });
+        }
+        hapticImpact();
+        return;
+      }
+
+      const message = await api.createChatMessage(
+        selectedChat.id,
+        session.userId,
+        messageBody,
+        session.accessToken,
+        {
+          clientMessageId: createClientMessageId(),
+        },
+      );
+      setDraftChatMessage("");
+      if (localTypingStopTimeoutRef.current) {
+        clearTimeout(localTypingStopTimeoutRef.current);
+        localTypingStopTimeoutRef.current = null;
+      }
+      if (localTypingActiveRef.current) {
+        realtimeSessionRef.current?.publishTyping(
+          selectedChat.id,
+          session.userId,
+          false,
+        );
+        localTypingActiveRef.current = false;
+      }
+      setChats((current) =>
+        current.map((thread) =>
+          thread.id === selectedChat.id
+            ? {
+                ...thread,
+                messages: mergeChatMessages(thread.messages, [message]),
+                highWatermark: message.createdAt,
+                unreadCount: 0,
+              }
+            : thread,
+        ),
+      );
+      realtimeSessionRef.current?.publishChatMessage(selectedChat.id, message);
+      if (!hadMessages) {
+        recordTelemetry("first_message_sent", {
+          chatId: selectedChat.id,
+          bodyLength: messageBody.length,
+        });
+      } else if (hasCounterpartyMessage) {
+        recordTelemetry("message_replied", {
+          chatId: selectedChat.id,
+          bodyLength: messageBody.length,
+        });
+      }
+      hapticImpact();
+    } catch (error) {
+      setBanner({
+        tone: "error",
+        text: `Failed to send message: ${String(error)}`,
+      });
+    } finally {
+      setSendingChatMessage(false);
+    }
+  };
+
+  const signOut = async () => {
+    if (!designMock) {
+      await clearStoredChats(session.userId).catch(() => {});
+      await clearTelemetryEvents(session.userId).catch(() => {});
+    }
+    setTelemetrySummary(null);
+    await onResetSession();
+  };
+
+  const saveSettings = async () => {
+    try {
+      if (designMock) {
+        onProfileUpdated(profileDraft);
+        setBanner({
+          tone: "success",
+          text: "Saved for this preview session.",
+        });
+        recordTelemetry("personalization_changed", {
+          socialMode: profileDraft.socialMode,
+          notificationMode: profileDraft.notificationMode,
+        });
+        return;
+      }
+      await Promise.all([
+        api.setSocialMode(
+          session.userId,
+          profileDraft.socialMode === "one_to_one"
+            ? {
+                socialMode: "balanced",
+                preferOneToOne: true,
+                allowGroupInvites: false,
+              }
+            : profileDraft.socialMode === "group"
+              ? {
+                  socialMode: "high_energy",
+                  preferOneToOne: false,
+                  allowGroupInvites: true,
+                }
+              : {
+                  socialMode: "balanced",
+                  preferOneToOne: false,
+                  allowGroupInvites: true,
+                },
+          session.accessToken,
+        ),
+        api.setGlobalRules(
+          session.userId,
+          {
+            whoCanContact: "anyone",
+            reachable: "always",
+            intentMode:
+              profileDraft.socialMode === "one_to_one"
+                ? "one_to_one"
+                : profileDraft.socialMode === "group"
+                  ? "group"
+                  : "balanced",
+            modality: "either",
+            languagePreferences: ["en", "es"],
+            requireVerifiedUsers: false,
+            notificationMode:
+              profileDraft.notificationMode === "digest"
+                ? "digest"
+                : "immediate",
+            agentAutonomy: "suggest_only",
+            memoryMode: "standard",
+          },
+          session.accessToken,
+        ),
+      ]);
+
+      onProfileUpdated(profileDraft);
+      setBanner({
+        tone: "success",
+        text: "Profile and rule settings saved.",
+      });
+      recordTelemetry("personalization_changed", {
+        socialMode: profileDraft.socialMode,
+        notificationMode: profileDraft.notificationMode,
+      });
+    } catch (error) {
+      setBanner({
+        tone: "error",
+        text: `Could not save settings: ${String(error)}`,
+      });
+    }
+  };
+
+  const sendDigestNow = async () => {
+    try {
+      if (designMock) {
+        setBanner({
+          tone: "success",
+          text: "Digest queued (preview — no push).",
+        });
+        recordTelemetry("digest_requested");
+        return;
+      }
+      await api.sendDigest(session.userId, session.accessToken);
+      await fireLocalNotification(
+        "Digest queued",
+        "A digest notification was created for your account.",
+      );
+      recordTelemetry("digest_requested");
+      recordTelemetry("notification_local_fired", {
+        type: "digest_requested",
+      });
+      setBanner({
+        tone: "success",
+        text: "Digest request sent.",
+      });
+    } catch (error) {
+      setBanner({
+        tone: "error",
+        text: `Digest request failed: ${String(error)}`,
+      });
+    }
+  };
+
+  return (
+    <SafeAreaView className="flex-1 bg-canvas" testID="home-screen">
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        className="flex-1"
+      >
+        <AppTopBar
+          compact={activeTab === "home"}
+          leading={
+            <Pressable
+              accessibilityLabel="Open menu"
+              accessibilityRole="button"
+              className="-ml-0.5 rounded-xl p-1.5"
+              hitSlop={10}
+              onPress={() => setDrawerOpen(true)}
+              style={({ pressed }) => ({
+                opacity: pressed ? appTheme.motion.pressOpacity : 1,
+              })}
+              testID="home-drawer-open-button"
+            >
+              <Ionicons
+                color={appTheme.colors.ink}
+                name="menu-outline"
+                size={26}
+              />
+            </Pressable>
+          }
+          subtitle={
+            activeTab === "home" ? undefined : tabDescriptions[activeTab]
+          }
+          title={activeTab === "home" ? "OpenSocial" : tabLabels[activeTab]}
+        />
+
+        {banner ? (
+          <View className="px-5 pt-3">
+            <InlineNotice text={banner.text} tone={banner.tone} />
+          </View>
+        ) : null}
+        {!skipNetwork && !netOnline ? (
+          <View className="px-5 pt-3">
+            <InlineNotice text={t("offlineNotice")} tone="info" />
+          </View>
+        ) : null}
+
+        <AnimatedScreen screenKey={activeTab}>
+          {activeTab === "home" ? (
+            <AgentTab
+              canRegenerate={agentTimeline.some(
+                (message) => message.role === "user",
+              )}
+              composerMode={agentComposerMode}
+              draftMessage={draftIntentText}
+              loading={sendingIntent}
+              messages={agentTimeline}
+              onComposerModeChange={setAgentComposerMode}
+              onRegenerate={regenerateLastIntent}
+              onSend={sendIntent}
+              onStop={cancelIntentSend}
+              onVoiceTranscript={(line) => {
+                agentVoiceTranscriptRef.current = line.trim() || null;
+              }}
+              setDraftMessage={setDraftIntentText}
+              threadLoading={agentThreadLoading}
+            />
+          ) : null}
+          {activeTab === "chats" ? (
+            <ChatsTab
+              chatCreationType={newChatType}
+              creatingChat={creatingChat}
+              currentUserId={session.userId}
+              e2eSubmitOnReturn={enableE2ELocalMode}
+              draftChatMessage={draftChatMessage}
+              loadingMessages={
+                selectedChatId != null && Boolean(syncingChats[selectedChatId])
+              }
+              onChatTypeChange={setNewChatType}
+              onCreateChat={createDemoChat}
+              onModerationBlock={async (targetUserId, chatId) => {
+                await blockUser(targetUserId, { chatId });
+              }}
+              onModerationReport={async (targetUserId, chatId) => {
+                await reportUser(targetUserId, { chatId });
+              }}
+              onOpenChat={openChat}
+              onSendMessage={sendChatMessage}
+              onSyncNow={syncChatsNow}
+              selectedChat={selectedChat}
+              sendingMessage={sendingChatMessage}
+              setDraftChatMessage={handleDraftChatMessageChange}
+              syncingNow={syncingAllChats}
+              realtimeState={realtimeState}
+              threads={chats}
+              typingUsers={typingUsers}
+            />
+          ) : null}
+          {activeTab === "profile" ? (
+            <ProfileTab
+              loading={profileLoading}
+              profile={profileDraft}
+              pushEnabled={pushEnabled}
+              pushToken={pushToken}
+              telemetrySummary={telemetrySummary}
+              trustSummary={trustSummary}
+              onNotificationModeChange={(value) =>
+                setProfileDraft((current) => ({
+                  ...current,
+                  notificationMode: value,
+                }))
+              }
+              onSendDigestNow={sendDigestNow}
+              onSignOut={signOut}
+              onSocialModeChange={(value) =>
+                setProfileDraft((current) => ({
+                  ...current,
+                  socialMode: value,
+                }))
+              }
+              onSaveSettings={saveSettings}
+            />
+          ) : null}
+        </AnimatedScreen>
+
+        <HomeTabBar
+          activeTab={activeTab}
+          onChange={(tab) => {
+            hapticSelection();
+            setActiveTab(tab);
+          }}
+        />
+      </KeyboardAvoidingView>
+
+      <AppDrawer
+        displayName={session.displayName}
+        onClose={() => setDrawerOpen(false)}
+        onNavigate={setActiveTab}
+        onNewAgentConversation={() => {
+          resetAgentConversation();
+          setActiveTab("home");
+        }}
+        visible={drawerOpen}
+      />
+    </SafeAreaView>
+  );
+}
+
+interface AgentTabProps {
+  draftMessage: string;
+  setDraftMessage: (value: string) => void;
+  onSend: () => Promise<void>;
+  onStop: () => void;
+  onRegenerate: () => void;
+  canRegenerate: boolean;
+  messages: AgentTimelineMessage[];
+  loading: boolean;
+  composerMode: "chat" | "intent";
+  onComposerModeChange: (mode: "chat" | "intent") => void;
+  threadLoading: boolean;
+  onVoiceTranscript?: (line: string) => void;
+}
+
+function AgentTab({
+  canRegenerate,
+  composerMode,
+  draftMessage,
+  loading,
+  messages,
+  onComposerModeChange,
+  onVoiceTranscript,
+  onRegenerate,
+  onSend,
+  onStop,
+  setDraftMessage,
+  threadLoading,
+}: AgentTabProps) {
+  const intentTextLength = draftMessage.trim().length;
+  const canSend = intentTextLength > 0 && !loading;
+
+  return (
+    <View className="min-h-0 flex-1 px-4 pb-1 pt-2">
+      <View className="min-h-0 flex-1">
+        <ChatTranscriptList
+          messages={messages}
+          renderBubble={(message) => (
+            <ChatBubble body={message.body} role={message.role} />
+          )}
+        />
+      </View>
+
+      <AgentSuggestionChips
+        onSelect={setDraftMessage}
+        visible={messages.length <= 1}
+      />
+
+      <View className="flex-shrink-0 border-t border-hairline/50 pt-3">
+        <AgentIntentToolbar
+          canRegenerate={canRegenerate}
+          loading={loading}
+          onRegenerate={onRegenerate}
+          onStop={onStop}
+        />
+        <View className="mb-2 flex-row flex-wrap gap-2">
+          <ChoiceChip
+            label={t("agentComposerModeChat")}
+            onPress={() => {
+              onComposerModeChange("chat");
+            }}
+            selected={composerMode === "chat"}
+            testID="agent-mode-chat"
+          />
+          <ChoiceChip
+            label={t("agentComposerModeIntent")}
+            onPress={() => {
+              onComposerModeChange("intent");
+            }}
+            selected={composerMode === "intent"}
+            testID="agent-mode-intent"
+          />
+        </View>
+        {threadLoading ? (
+          <Text className="mb-2 text-[12px] text-muted">
+            {t("agentHistoryLoading")}
+          </Text>
+        ) : null}
+        <Text className="mb-2 text-[12px] font-medium text-muted">
+          {composerMode === "chat"
+            ? t("agentComposerHintChat")
+            : t("agentComposerHintIntent")}
+        </Text>
+        <MessageComposer
+          canSend={canSend}
+          inputTestID="agent-intent-input"
+          maxLength={240}
+          multiline
+          onChangeText={setDraftMessage}
+          onSend={onSend}
+          onVoiceTranscript={onVoiceTranscript}
+          placeholder="Ask your agent anything…"
+          sendAccessibilityLabel="Send message to agent"
+          sendTestID="agent-send-intent-button"
+          sending={loading}
+          value={draftMessage}
+        />
+        <Text className="mt-1.5 text-[11px] text-muted">
+          {intentTextLength}/240
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+interface ChatsTabProps {
+  e2eSubmitOnReturn?: boolean;
+  currentUserId: string;
+  chatCreationType: "dm" | "group";
+  threads: LocalChatThread[];
+  selectedChat: LocalChatThread | null;
+  typingUsers: string[];
+  realtimeState: RealtimeConnectionState;
+  draftChatMessage: string;
+  setDraftChatMessage: (value: string) => void;
+  onChatTypeChange: (value: "dm" | "group") => void;
+  onCreateChat: () => Promise<void>;
+  onOpenChat: (chatId: string) => Promise<void>;
+  onSendMessage: () => Promise<void>;
+  onSyncNow: () => Promise<void>;
+  onModerationReport: (targetUserId: string, chatId: string) => Promise<void>;
+  onModerationBlock: (targetUserId: string, chatId: string) => Promise<void>;
+  creatingChat: boolean;
+  sendingMessage: boolean;
+  syncingNow: boolean;
+  loadingMessages: boolean;
+}
+
+function ChatsTab({
+  chatCreationType,
+  creatingChat,
+  currentUserId,
+  draftChatMessage,
+  e2eSubmitOnReturn = false,
+  loadingMessages,
+  onChatTypeChange,
+  onCreateChat,
+  onModerationBlock,
+  onModerationReport,
+  onOpenChat,
+  onSendMessage,
+  onSyncNow,
+  realtimeState,
+  selectedChat,
+  sendingMessage,
+  setDraftChatMessage,
+  syncingNow,
+  threads,
+  typingUsers,
+}: ChatsTabProps) {
+  const moderationTargetUserId =
+    selectedChat?.messages.find(
+      (message) => message.senderUserId !== currentUserId,
+    )?.senderUserId ?? null;
+  const chatMessageLength = draftChatMessage.trim().length;
+  const canSendMessage = chatMessageLength > 0 && !sendingMessage;
+
+  return (
+    <View className="min-h-0 flex-1 px-5 py-4">
+      <View className="mb-2 rounded-2xl border border-hairline/80 bg-surfaceMuted/70 px-3 py-2">
+        <Text
+          className={`text-[12px] font-medium ${
+            realtimeState === "connected"
+              ? "text-accent"
+              : realtimeState === "connecting"
+                ? "text-ink"
+                : "text-muted"
+          }`}
+        >
+          Realtime:{" "}
+          {realtimeState === "connected"
+            ? "live"
+            : realtimeState === "connecting"
+              ? "connecting"
+              : "offline (polling fallback active)"}
+        </Text>
+      </View>
+      <View className="mb-3 flex-row gap-2">
+        <ChoiceChip
+          label="DM"
+          onPress={() => onChatTypeChange("dm")}
+          selected={chatCreationType === "dm"}
+          testID="chat-type-dm-chip"
+        />
+        <ChoiceChip
+          label="Group"
+          onPress={() => onChatTypeChange("group")}
+          selected={chatCreationType === "group"}
+          testID="chat-type-group-chip"
+        />
+      </View>
+      <View className="mb-3 flex-row gap-2">
+        <View className="flex-1">
+          <PrimaryButton
+            label={
+              chatCreationType === "group"
+                ? "Create Group Sandbox"
+                : "Create Chat Sandbox"
+            }
+            loading={creatingChat}
+            onPress={onCreateChat}
+            testID="chat-create-button"
+            variant="secondary"
+          />
+        </View>
+        <View className="flex-1">
+          <PrimaryButton
+            label={syncingNow ? "Syncing..." : "Sync Now"}
+            loading={syncingNow}
+            onPress={onSyncNow}
+            testID="chat-sync-button"
+            variant="ghost"
+          />
+        </View>
+      </View>
+
+      {threads.length === 0 ? (
+        <EmptyState
+          title="No chats yet"
+          description="Create a chat sandbox to test message persistence using the live API."
+        />
+      ) : (
+        <ScrollView className="mb-3 max-h-44">
+          {threads.map((thread, index) => (
+            <Pressable
+              className={`mb-2 rounded-2xl border px-3 py-3 ${
+                selectedChat?.id === thread.id
+                  ? "border-accent/45 bg-accentMuted"
+                  : "border-hairline bg-surfaceMuted/80"
+              }`}
+              key={thread.id}
+              onPress={() => onOpenChat(thread.id)}
+              testID={
+                index === 0 ? "chat-thread-latest" : `chat-thread-${thread.id}`
+              }
+            >
+              <Text className="text-[14px] font-semibold text-ink">
+                {thread.title}
+              </Text>
+              <View className="mt-1 flex-row items-center justify-between">
+                <Text className="text-[11px] text-muted">
+                  {thread.messages.length} message
+                  {thread.messages.length === 1 ? "" : "s"} ·{" "}
+                  {formatThreadSummary(thread)}
+                </Text>
+                {thread.unreadCount > 0 ? (
+                  <View className="rounded-full bg-accentMuted px-2 py-1">
+                    <Text className="text-[10px] font-semibold text-accent">
+                      {thread.unreadCount} unread
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+            </Pressable>
+          ))}
+        </ScrollView>
+      )}
+
+      {selectedChat ? (
+        <SurfaceCard className="min-h-0 flex-1 p-3">
+          <Text className="mb-2 flex-shrink-0 text-[15px] font-semibold text-ink">
+            {selectedChat.title}
+          </Text>
+          <Text className="mb-2 text-[11px] text-muted">
+            {formatThreadSummary(selectedChat)}
+          </Text>
+          {moderationTargetUserId ? (
+            <View className="mb-2 flex-row gap-2">
+              <View className="flex-1">
+                <PrimaryButton
+                  label="Report User"
+                  onPress={() =>
+                    onModerationReport(moderationTargetUserId, selectedChat.id)
+                  }
+                  variant="ghost"
+                />
+              </View>
+              <View className="flex-1">
+                <PrimaryButton
+                  label="Block User"
+                  onPress={() =>
+                    onModerationBlock(moderationTargetUserId, selectedChat.id)
+                  }
+                  variant="ghost"
+                />
+              </View>
+            </View>
+          ) : null}
+          {selectedChat.messages.length === 0 && !loadingMessages ? (
+            <Text className="mb-3 text-[13px] text-muted">
+              No messages yet in this thread.
+            </Text>
+          ) : null}
+          {selectedChat.messages.length > 0 ? (
+            <View className="min-h-0 flex-1">
+              <ChatTranscriptList
+                messages={selectedChat.messages}
+                renderBubble={(message) => (
+                  <ChatBubble
+                    body={message.body}
+                    role={
+                      message.senderUserId === currentUserId ? "user" : "agent"
+                    }
+                    testID={
+                      message.senderUserId === currentUserId
+                        ? "chat-user-message"
+                        : "chat-peer-message"
+                    }
+                  />
+                )}
+              />
+            </View>
+          ) : null}
+          {loadingMessages ? (
+            <Text className="mb-2 text-[11px] text-accent">
+              Syncing latest messages...
+            </Text>
+          ) : null}
+          {typingUsers.length > 0 ? (
+            <Text className="mb-2 text-[11px] text-muted">
+              {typingUsers.length === 1
+                ? "Someone is typing..."
+                : `${typingUsers.length} people are typing...`}
+            </Text>
+          ) : null}
+          <View className="flex-shrink-0">
+            <MessageComposer
+              canSend={canSendMessage}
+              e2eSubmitOnReturn={e2eSubmitOnReturn}
+              inputTestID="chat-message-input"
+              maxLength={1000}
+              multiline
+              onChangeText={setDraftChatMessage}
+              onSend={onSendMessage}
+              placeholder="Message…"
+              sendAccessibilityLabel="Send chat message"
+              sendTestID="chat-send-button"
+              sending={sendingMessage}
+              value={draftChatMessage}
+            />
+            <Text className="mt-1.5 text-[11px] text-muted">
+              {chatMessageLength}/1000
+            </Text>
+          </View>
+        </SurfaceCard>
+      ) : null}
+    </View>
+  );
+}
+
+interface ProfileTabProps {
+  profile: UserProfileDraft;
+  trustSummary: string;
+  telemetrySummary: TelemetrySummary | null;
+  pushEnabled: boolean;
+  pushToken: string | null;
+  onSocialModeChange: (value: UserProfileDraft["socialMode"]) => void;
+  onNotificationModeChange: (
+    value: UserProfileDraft["notificationMode"],
+  ) => void;
+  onSaveSettings: () => Promise<void>;
+  onSendDigestNow: () => Promise<void>;
+  onSignOut: () => Promise<void>;
+  loading: boolean;
+}
+
+function ProfileTab({
+  loading,
+  onNotificationModeChange,
+  onSaveSettings,
+  onSendDigestNow,
+  onSignOut,
+  onSocialModeChange,
+  profile,
+  pushEnabled,
+  pushToken,
+  telemetrySummary,
+  trustSummary,
+}: ProfileTabProps) {
+  return (
+    <ScrollView
+      contentContainerStyle={{
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        gap: 12,
+      }}
+    >
+      <SurfaceCard>
+        <Text className="mb-2 text-base font-semibold text-ink">Interests</Text>
+        <View className="flex-row flex-wrap gap-2">
+          {profile.interests.map((interest) => (
+            <View className="rounded-full bg-surface px-3 py-2" key={interest}>
+              <Text className="text-xs text-ink">{interest}</Text>
+            </View>
+          ))}
+        </View>
+      </SurfaceCard>
+
+      <SurfaceCard>
+        <Text className="mb-2 text-base font-semibold text-ink">
+          Default social mode
+        </Text>
+        <View className="flex-row flex-wrap gap-2">
+          <ChoiceChip
+            label="1:1"
+            onPress={() => onSocialModeChange("one_to_one")}
+            selected={profile.socialMode === "one_to_one"}
+          />
+          <ChoiceChip
+            label="Group"
+            onPress={() => onSocialModeChange("group")}
+            selected={profile.socialMode === "group"}
+          />
+          <ChoiceChip
+            label="Flexible"
+            onPress={() => onSocialModeChange("either")}
+            selected={profile.socialMode === "either"}
+          />
+        </View>
+      </SurfaceCard>
+
+      <SurfaceCard>
+        <Text className="mb-2 text-base font-semibold text-ink">
+          Notifications
+        </Text>
+        <View className="mb-3 flex-row flex-wrap gap-2">
+          <ChoiceChip
+            label="Live alerts"
+            onPress={() => onNotificationModeChange("live")}
+            selected={profile.notificationMode === "live"}
+          />
+          <ChoiceChip
+            label="Digest mode"
+            onPress={() => onNotificationModeChange("digest")}
+            selected={profile.notificationMode === "digest"}
+          />
+        </View>
+        <Text className="text-xs text-muted">
+          push: {pushEnabled ? "enabled" : "disabled"}
+        </Text>
+        <Text className="mt-1 text-xs text-muted">
+          token: {pushToken ? `${pushToken.slice(0, 18)}...` : "not registered"}
+        </Text>
+      </SurfaceCard>
+
+      <SurfaceCard>
+        <Text className="text-sm text-muted">Trust summary</Text>
+        <Text className="mt-1 text-sm text-ink">{trustSummary}</Text>
+      </SurfaceCard>
+
+      <SurfaceCard>
+        <Text className="mb-2 text-base font-semibold text-ink">
+          Local telemetry
+        </Text>
+        <Text className="text-xs text-muted">
+          events: {telemetrySummary?.totalEvents ?? 0}
+        </Text>
+        <Text className="text-xs text-muted">
+          last:{" "}
+          {telemetrySummary?.lastEventAt
+            ? formatRelativeTime(telemetrySummary.lastEventAt)
+            : "n/a"}
+        </Text>
+        <Text className="mt-2 text-xs text-muted">
+          intents: {telemetrySummary?.counters.intentsCreated ?? 0} · requests
+          sent: {telemetrySummary?.counters.requestsSent ?? 0} · responded:{" "}
+          {telemetrySummary?.counters.requestsResponded ?? 0}
+        </Text>
+        <Text className="text-xs text-muted">
+          chats started: {telemetrySummary?.counters.chatsStarted ?? 0} · first
+          messages: {telemetrySummary?.counters.firstMessagesSent ?? 0}
+        </Text>
+        <Text className="text-xs text-muted">
+          reports: {telemetrySummary?.counters.reportsSubmitted ?? 0} · blocked
+          users: {telemetrySummary?.counters.usersBlocked ?? 0}
+        </Text>
+        <Text className="text-xs text-muted">
+          intent→accept:{" "}
+          {formatMetricSeconds(
+            telemetrySummary?.metrics.avgIntentToFirstAcceptanceSeconds ?? null,
+          )}{" "}
+          · intent→first msg:{" "}
+          {formatMetricSeconds(
+            telemetrySummary?.metrics.avgIntentToFirstMessageSeconds ?? null,
+          )}
+        </Text>
+        <Text className="text-xs text-muted">
+          connection success:{" "}
+          {formatMetricRate(
+            telemetrySummary?.metrics.connectionSuccessRate ?? null,
+          )}{" "}
+          · group completion:{" "}
+          {formatMetricRate(
+            telemetrySummary?.metrics.groupFormationCompletionRate ?? null,
+          )}
+        </Text>
+        <Text className="text-xs text-muted">
+          notification→open:{" "}
+          {formatMetricRate(
+            telemetrySummary?.metrics.notificationToOpenRate ?? null,
+          )}{" "}
+          · moderation incidence:{" "}
+          {formatMetricRate(
+            telemetrySummary?.metrics.moderationIncidentRate ?? null,
+          )}
+        </Text>
+        <Text className="text-xs text-muted">
+          sync failure:{" "}
+          {formatMetricRate(telemetrySummary?.metrics.syncFailureRate ?? null)}{" "}
+          · repeat:{" "}
+          {formatMetricRate(
+            telemetrySummary?.metrics.repeatConnectionRate ?? null,
+          )}
+        </Text>
+      </SurfaceCard>
+
+      <PrimaryButton
+        label={loading ? "Loading..." : "Save Settings"}
+        loading={loading}
+        onPress={onSaveSettings}
+        variant="secondary"
+      />
+      <PrimaryButton
+        label="Request Digest Now"
+        onPress={onSendDigestNow}
+        variant="ghost"
+      />
+      <PrimaryButton label="Sign out" onPress={onSignOut} variant="ghost" />
+    </ScrollView>
+  );
+}
+
+function mergeChatMessages(
+  existing: ChatMessageRecord[],
+  incoming: ChatMessageRecord[],
+) {
+  const dedupedById = new Map<string, ChatMessageRecord>();
+  for (const message of [...existing, ...incoming]) {
+    dedupedById.set(message.id, message);
+  }
+
+  return Array.from(dedupedById.values()).sort((left, right) => {
+    const leftTimestamp = Date.parse(left.createdAt);
+    const rightTimestamp = Date.parse(right.createdAt);
+    const leftTime = Number.isFinite(leftTimestamp) ? leftTimestamp : 0;
+    const rightTime = Number.isFinite(rightTimestamp) ? rightTimestamp : 0;
+    if (leftTime !== rightTime) {
+      return leftTime - rightTime;
+    }
+    return left.id.localeCompare(right.id);
+  });
+}
+
+function formatThreadSummary(thread: LocalChatThread) {
+  const typeLabel = thread.type === "group" ? "group" : "dm";
+  const participants =
+    thread.participantCount == null
+      ? "participants n/a"
+      : `${thread.participantCount} participant${thread.participantCount === 1 ? "" : "s"}`;
+  const status = thread.connectionStatus ?? "status n/a";
+  const syncedAt = thread.highWatermark
+    ? `synced ${formatRelativeTime(thread.highWatermark)}`
+    : "not synced";
+  return `${typeLabel} · ${participants} · ${status} · ${syncedAt}`;
+}
+
+function formatChatTitle(chatId: string, type: "dm" | "group") {
+  const prefix = type === "group" ? "Group" : "Thread";
+  return `${prefix} ${chatId.slice(0, 6)}`;
+}
+
+function createClientMessageId() {
+  return `${randomHex(8)}-${randomHex(4)}-4${randomHex(3)}-${randomVariantHex()}${randomHex(3)}-${randomHex(12)}`;
+}
+
+function randomHex(length: number) {
+  let output = "";
+  for (let index = 0; index < length; index += 1) {
+    output += Math.floor(Math.random() * 16).toString(16);
+  }
+  return output;
+}
+
+function randomVariantHex() {
+  const variants = ["8", "9", "a", "b"];
+  return variants[Math.floor(Math.random() * variants.length)] ?? "8";
+}
+
+function sleep(milliseconds: number) {
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
+}
+
+function formatMetricSeconds(seconds: number | null) {
+  if (seconds == null) {
+    return "n/a";
+  }
+  if (seconds < 60) {
+    return `${seconds}s`;
+  }
+  if (seconds < 3600) {
+    return `${Math.round(seconds / 60)}m`;
+  }
+  return `${Math.round(seconds / 3600)}h`;
+}
+
+function formatMetricRate(value: number | null) {
+  if (value == null) {
+    return "n/a";
+  }
+  return `${Math.round(value * 100)}%`;
+}
+
+function formatRelativeTime(input: string) {
+  const createdAt = new Date(input);
+  const deltaSeconds = Math.max(
+    Math.floor((Date.now() - createdAt.getTime()) / 1000),
+    0,
+  );
+  if (deltaSeconds < 60) {
+    return `${deltaSeconds}s ago`;
+  }
+  if (deltaSeconds < 3600) {
+    return `${Math.floor(deltaSeconds / 60)}m ago`;
+  }
+  return `${Math.floor(deltaSeconds / 3600)}h ago`;
+}

@@ -1,0 +1,64 @@
+@import "tailwindcss";
+@config "../tailwind.config.js";
+
+:root {
+  color-scheme: dark;
+  /* shadcn-style tokens (HSL components) — aligned with admin ink/ember palette */
+  --background: 222 47% 5%;
+  --foreground: 214 32% 93%;
+  --card: 222 40% 8%;
+  --card-foreground: 214 32% 93%;
+  --popover: 222 40% 8%;
+  --popover-foreground: 214 32% 93%;
+  --primary: 38 92% 69%;
+  --primary-foreground: 224 71% 4%;
+  --secondary: 217 33% 14%;
+  --secondary-foreground: 214 32% 93%;
+  --muted: 217 28% 12%;
+  --muted-foreground: 215 20% 55%;
+  --accent: 217 33% 16%;
+  --accent-foreground: 214 32% 93%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 217 33% 18%;
+  --input: 217 33% 18%;
+  --ring: 38 92% 69%;
+  --radius: 0.75rem;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  position: relative;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 12% 6%, #2563eb3b 0%, transparent 38%),
+    radial-gradient(circle at 88% 14%, #f59e0b2b 0%, transparent 45%),
+    radial-gradient(circle at 50% 100%, #0f172a 0%, #05070f 68%);
+  background-attachment: fixed;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(
+    130deg,
+    transparent 0%,
+    rgba(148, 163, 184, 0.04) 48%,
+    transparent 100%
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
