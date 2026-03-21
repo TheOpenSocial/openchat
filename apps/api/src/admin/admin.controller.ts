@@ -699,6 +699,13 @@ export class AdminController {
           entityId: true,
           reason: true,
           status: true,
+          assigneeUserId: true,
+          assignmentNote: true,
+          assignedAt: true,
+          lastDecision: true,
+          triageNote: true,
+          triagedByAdminUserId: true,
+          triagedAt: true,
           createdAt: true,
         },
       }),
@@ -838,6 +845,13 @@ export class AdminController {
         entityId: true,
         reason: true,
         status: true,
+        assigneeUserId: true,
+        assignmentNote: true,
+        assignedAt: true,
+        lastDecision: true,
+        triageNote: true,
+        triagedByAdminUserId: true,
+        triagedAt: true,
         createdAt: true,
       },
     });
@@ -846,6 +860,16 @@ export class AdminController {
     }
 
     const assignedAt = new Date();
+    if (this.prisma.moderationFlag?.update) {
+      await this.prisma.moderationFlag.update({
+        where: { id: flag.id },
+        data: {
+          assigneeUserId: payload.assigneeUserId,
+          assignmentNote: payload.reason ?? null,
+          assignedAt,
+        },
+      });
+    }
     if (this.prisma.auditLog?.create) {
       await this.prisma.auditLog.create({
         data: {
@@ -879,6 +903,7 @@ export class AdminController {
     return ok({
       flag,
       assigneeUserId: payload.assigneeUserId,
+      assignmentNote: payload.reason ?? null,
       assignedAt: assignedAt.toISOString(),
     });
   }
@@ -915,6 +940,13 @@ export class AdminController {
         entityId: true,
         reason: true,
         status: true,
+        assigneeUserId: true,
+        assignmentNote: true,
+        assignedAt: true,
+        lastDecision: true,
+        triageNote: true,
+        triagedByAdminUserId: true,
+        triagedAt: true,
         createdAt: true,
       },
     });
@@ -989,6 +1021,10 @@ export class AdminController {
       where: { id: flag.id },
       data: {
         status: nextStatus,
+        lastDecision: payload.action,
+        triageNote: payload.reason ?? null,
+        triagedByAdminUserId: admin.adminUserId,
+        triagedAt: new Date(),
       },
       select: {
         id: true,
@@ -996,6 +1032,13 @@ export class AdminController {
         entityId: true,
         reason: true,
         status: true,
+        assigneeUserId: true,
+        assignmentNote: true,
+        assignedAt: true,
+        lastDecision: true,
+        triageNote: true,
+        triagedByAdminUserId: true,
+        triagedAt: true,
         createdAt: true,
       },
     });

@@ -1028,6 +1028,7 @@ export class AuthService {
       const protocol = parsed.protocol.toLowerCase();
       const isAllowedScheme =
         protocol === "exp:" ||
+        protocol === "exp+opensocial:" ||
         protocol === "opensocial:" ||
         protocol === "com.opensocial.app:";
       const isAllowedExpoProxy =
