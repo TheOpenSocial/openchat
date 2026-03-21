@@ -79,7 +79,7 @@ PY
 }
 
 run_deploy_commands() {
-  docker compose -f docker-compose.prod.yml --env-file "$REMOTE_ENV_FILE" build api admin web
+  COMPOSE_BAKE=true docker compose -f docker-compose.prod.yml --env-file "$REMOTE_ENV_FILE" build api admin web
   docker compose -f docker-compose.prod.yml --env-file "$REMOTE_ENV_FILE" run --rm --entrypoint sh api -lc "corepack enable && pnpm --filter @opensocial/api prisma:migrate:deploy"
   docker compose -f docker-compose.prod.yml --env-file "$REMOTE_ENV_FILE" up -d nginx api admin web valkey
   docker compose -f docker-compose.prod.yml --env-file "$REMOTE_ENV_FILE" ps
@@ -117,7 +117,7 @@ ssh "${ssh_opts[@]}" \
   "$REMOTE_TARGET" \
   "set -euo pipefail; \
     cd '$DEPLOY_PATH'; \
-    docker compose -f docker-compose.prod.yml --env-file '$REMOTE_ENV_FILE' build api admin web; \
+    COMPOSE_BAKE=true docker compose -f docker-compose.prod.yml --env-file '$REMOTE_ENV_FILE' build api admin web; \
     docker compose -f docker-compose.prod.yml --env-file '$REMOTE_ENV_FILE' run --rm --entrypoint sh api -lc 'corepack enable && pnpm --filter @opensocial/api prisma:migrate:deploy'; \
     docker compose -f docker-compose.prod.yml --env-file '$REMOTE_ENV_FILE' up -d nginx api admin web valkey; \
     docker compose -f docker-compose.prod.yml --env-file '$REMOTE_ENV_FILE' ps"
