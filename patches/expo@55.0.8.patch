@@ -1,0 +1,115 @@
+diff --git a/ios/AppDelegates/EXReactRootViewFactory.h b/ios/AppDelegates/EXReactRootViewFactory.h
+index 2daec5d4629ba0db42b2fff9da28d78e5f71cf7c..128aca4f4c27fc900a0cccdf7bd7ea72276fd20a 100644
+--- a/ios/AppDelegates/EXReactRootViewFactory.h
++++ b/ios/AppDelegates/EXReactRootViewFactory.h
+@@ -24,16 +24,9 @@ NS_SWIFT_NAME(ExpoReactRootViewFactory)
+ /**
+  Calls super `viewWithModuleName:initialProperties:launchOptions:` from `RCTRootViewFactory`.
+  */
+-#if TARGET_OS_IOS || TARGET_OS_TV
+-- (UIView *)superViewWithModuleName:(NSString *)moduleName
+-                  initialProperties:(nullable NSDictionary *)initialProperties
+-                      launchOptions:(nullable NSDictionary *)launchOptions
+-               devMenuConfiguration:(nullable RCTDevMenuConfiguration *)devMenuConfiguration;
+-#else
+ - (UIView *)superViewWithModuleName:(NSString *)moduleName
+                   initialProperties:(nullable NSDictionary *)initialProperties
+                       launchOptions:(nullable NSDictionary *)launchOptions;
+-#endif
+ 
+ @end
+ 
+diff --git a/ios/AppDelegates/EXReactRootViewFactory.mm b/ios/AppDelegates/EXReactRootViewFactory.mm
+index 6fecc8df0a98a85c3a28bfa740af2eeab7ba11b9..e29895ec35ff814974e913ceba0faf606f1b6611 100644
+--- a/ios/AppDelegates/EXReactRootViewFactory.mm
++++ b/ios/AppDelegates/EXReactRootViewFactory.mm
+@@ -3,7 +3,6 @@
+ #import <Expo/EXReactRootViewFactory.h>
+ #import <Expo/RCTAppDelegateUmbrella.h>
+ #import <Expo/Swift.h>
+-#import <React/RCTDevMenu.h>
+ 
+ // When `use_frameworks!` is used, the generated Swift header is inside ExpoModulesCore module.
+ // Otherwise, it's available only locally with double-quoted imports.
+@@ -31,30 +30,6 @@ - (instancetype)initWithReactDelegate:(nullable EXReactDelegate *)reactDelegate
+   return self;
+ }
+ 
+-#if TARGET_OS_IOS || TARGET_OS_TV
+-- (UIView *)viewWithModuleName:(NSString *)moduleName
+-             initialProperties:(nullable NSDictionary *)initialProperties
+-                 launchOptions:(nullable NSDictionary *)launchOptions
+-          devMenuConfiguration:(RCTDevMenuConfiguration *)devMenuConfiguration
+-{
+-  if (self.reactDelegate != nil) {
+-    return [self.reactDelegate createReactRootViewWithModuleName:moduleName initialProperties:initialProperties launchOptions:launchOptions];
+-  }
+-  return [super viewWithModuleName:moduleName initialProperties:initialProperties launchOptions:launchOptions devMenuConfiguration:devMenuConfiguration];
+-}
+-
+-- (UIView *)superViewWithModuleName:(NSString *)moduleName
+-                  initialProperties:(nullable NSDictionary *)initialProperties
+-                      launchOptions:(nullable NSDictionary *)launchOptions
+-               devMenuConfiguration:(nullable RCTDevMenuConfiguration *)devMenuConfiguration
+-{
+-  if (devMenuConfiguration == nil) {
+-    devMenuConfiguration = [RCTDevMenuConfiguration defaultConfiguration];
+-  }
+-
+-  return [super viewWithModuleName:moduleName initialProperties:initialProperties launchOptions:launchOptions devMenuConfiguration:devMenuConfiguration];
+-}
+-#else
+ - (UIView *)viewWithModuleName:(NSString *)moduleName
+              initialProperties:(nullable NSDictionary *)initialProperties
+                  launchOptions:(nullable NSDictionary *)launchOptions
+@@ -71,7 +46,6 @@ - (UIView *)superViewWithModuleName:(NSString *)moduleName
+ {
+   return [super viewWithModuleName:moduleName initialProperties:initialProperties launchOptions:launchOptions];
+ }
+-#endif
+ 
+ - (NSURL *)bundleURL
+ {
+diff --git a/ios/AppDelegates/ExpoReactNativeFactory.swift b/ios/AppDelegates/ExpoReactNativeFactory.swift
+index 925e0f9a44cf160543b76967a094b2cc3221da7c..f0c52c9c33ddfda03692231887a45dcb471a9103 100644
+--- a/ios/AppDelegates/ExpoReactNativeFactory.swift
++++ b/ios/AppDelegates/ExpoReactNativeFactory.swift
+@@ -110,38 +110,19 @@ public class ExpoReactNativeFactory: ExpoReactNativeFactoryObjC, ExpoReactNative
+ 
+     let rootView: UIView
+     if let factory = self.rootViewFactory as? ExpoReactRootViewFactory {
+-      // RCTDevMenuConfiguration is only available in react-native 0.83+
+-#if os(iOS) || os(tvOS)
+       // When calling `recreateRootViewWithBundleURL:` from `EXReactRootViewFactory`,
+       // we don't want to loop the ReactDelegate again. Otherwise, it will be an infinite loop.
+-      rootView = factory.superView(
+-        withModuleName: moduleName ?? defaultModuleName,
+-        initialProperties: initialProps,
+-        launchOptions: launchOptions ?? [:],
+-        devMenuConfiguration: self.devMenuConfiguration
+-      )
+-#else
+       rootView = factory.superView(
+         withModuleName: moduleName ?? defaultModuleName,
+         initialProperties: initialProps,
+         launchOptions: launchOptions ?? [:]
+       )
+-#endif
+     } else {
+-#if os(iOS) || os(tvOS)
+-      rootView = rootViewFactory.view(
+-        withModuleName: moduleName ?? defaultModuleName,
+-        initialProperties: initialProps,
+-        launchOptions: launchOptions,
+-        devMenuConfiguration: self.devMenuConfiguration
+-      )
+-#else
+       rootView = rootViewFactory.view(
+         withModuleName: moduleName ?? defaultModuleName,
+         initialProperties: initialProps,
+         launchOptions: launchOptions
+       )
+-#endif
+     }
+ 
+     return rootView

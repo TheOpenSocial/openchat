@@ -1,12 +1,20 @@
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
-import { useMemo, useState } from "react";
-import { ActivityIndicator, Image, ScrollView, Text, View } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Image,
+  Platform,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { WelcomeBackdrop } from "../components/WelcomeBackdrop";
 import { Button } from "../components/ui/button";
-import { InlineNotice } from "../components/InlineNotice";
 import { api } from "../lib/api";
+import { showErrorToast } from "../lib/app-toast";
 import logoImage from "../../assets/brand/logo.png";
 import { DESIGN_MOCK_AUTH_CODE } from "../mocks/design-fixtures";
 import { appTheme } from "../theme";
@@ -22,21 +30,6 @@ interface AuthScreenProps {
 
 WebBrowser.maybeCompleteAuthSession();
 
-const WELCOME_HIGHLIGHTS = [
-  {
-    title: "Plans, not endless feeds",
-    body: "Say what you want to do or who you’d like to meet—we surface people and paths that fit.",
-  },
-  {
-    title: "One thread, clear next steps",
-    body: "Plan, chat, and follow progress in one place so you always know what’s next.",
-  },
-  {
-    title: "Private when it matters",
-    body: "Chats and your profile stay between you and the people you choose.",
-  },
-] as const;
-
 export function AuthScreen({
   allowE2EBypass = false,
   designPreviewMode = false,
@@ -44,12 +37,17 @@ export function AuthScreen({
   loading,
   onAuthenticated,
 }: AuthScreenProps) {
-  const [oauthError, setOauthError] = useState<string | null>(null);
   const [oauthLoading, setOauthLoading] = useState(false);
   const mobileRedirectUri = useMemo(() => Linking.createURL("auth/google"), []);
 
+  useEffect(() => {
+    if (!errorMessage) {
+      return;
+    }
+    showErrorToast(errorMessage, { title: "Sign-in failed" });
+  }, [errorMessage]);
+
   const handleGoogleOAuth = async () => {
-    setOauthError(null);
     setOauthLoading(true);
 
     try {
@@ -84,142 +82,149 @@ export function AuthScreen({
 
       await onAuthenticated(code);
     } catch (error) {
-      setOauthError(String(error));
+      showErrorToast(String(error), { title: "Could not sign in" });
     } finally {
       setOauthLoading(false);
     }
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-canvas" testID="auth-screen">
-      <ScrollView
-        className="flex-1 px-6"
-        contentContainerStyle={{
-          flexGrow: 1,
-          paddingBottom: 32,
-          paddingTop: 8,
-        }}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        <Text className="text-center text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
-          OpenSocial
-        </Text>
-        <View className="mt-4 items-center">
-          <View className="mb-5 h-16 w-16 items-center justify-center overflow-hidden rounded-2xl ring-1 ring-hairline">
-            <Image
-              accessibilityIgnoresInvertColors
-              source={logoImage}
-              style={{ width: 64, height: 64 }}
-            />
-          </View>
-          <Text
-            className="text-center text-[30px] font-semibold leading-tight tracking-tight text-ink"
-            style={{ fontFamily: appTheme.fonts.heading }}
-          >
-            {designPreviewMode ? "Preview" : "Welcome"}
-          </Text>
-          <Text className="mt-3 max-w-[340px] text-center text-[15px] leading-[23px] text-muted">
-            {designPreviewMode
-              ? "Explore the full app with sample data—no account required."
-              : "Where your plans meet the right people—social that starts with what you actually want to do."}
-          </Text>
-        </View>
-
-        {!designPreviewMode ? (
-          <View className="mt-8 gap-3">
-            {WELCOME_HIGHLIGHTS.map((item) => (
-              <View
-                className="rounded-2xl border border-hairline bg-surfaceMuted/40 px-4 py-3.5"
-                key={item.title}
-              >
-                <Text
-                  className="text-[15px] font-semibold text-ink"
-                  style={{ fontFamily: appTheme.fonts.heading }}
-                >
-                  {item.title}
-                </Text>
-                <Text className="mt-1.5 text-[13px] leading-[20px] text-muted">
-                  {item.body}
-                </Text>
+    <View className="flex-1 bg-black" testID="auth-screen">
+      <WelcomeBackdrop style={StyleSheet.absoluteFillObject}>
+        <SafeAreaView
+          className="flex-1"
+          edges={["top", "bottom", "left", "right"]}
+          style={styles.authSafeArea}
+        >
+          <View className="flex-1 px-6 pb-8 pt-3">
+            <View className="items-center pt-1">
+              <View style={styles.logoHalo}>
+                <View style={styles.logoSquircle}>
+                  <Image
+                    accessibilityIgnoresInvertColors
+                    accessibilityLabel="OpenSocial"
+                    source={logoImage}
+                    style={styles.logoImage}
+                  />
+                </View>
               </View>
-            ))}
-          </View>
-        ) : null}
-
-        <View className="mt-10">
-          {oauthError ? (
-            <View className="mb-4">
-              <InlineNotice text={oauthError} tone="error" />
+              <Text className="mt-4 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/55">
+                OpenSocial
+              </Text>
             </View>
-          ) : null}
 
-          {errorMessage ? (
-            <View className="mb-4">
-              <InlineNotice text={errorMessage} tone="error" />
+            <View className="mt-6 flex-1 justify-end px-1 pb-2">
+              <Text
+                className="text-center text-[28px] font-semibold leading-[1.14] tracking-tight text-white"
+                style={{ fontFamily: appTheme.fonts.heading }}
+              >
+                {designPreviewMode
+                  ? "Stress-test the whole product"
+                  : "Agentic social."}
+              </Text>
+              <Text className="mt-2.5 max-w-[340px] self-center text-center text-[15px] leading-[22px] text-white/78">
+                {designPreviewMode
+                  ? "Sample people, the agent, every tab. Zero sync, zero account, this device only."
+                  : "Say what you want. We find the right people and help you make a plan."}
+              </Text>
             </View>
-          ) : null}
 
-          {!designPreviewMode ? (
-            <Text className="mb-3 text-center text-[13px] leading-[20px] text-muted">
-              Ready when you are—sign in to save your profile and pick up on any
-              device.
-            </Text>
-          ) : null}
-
-          {designPreviewMode ? (
-            <Button
-              className="h-12 min-h-[48px] rounded-full border-0 bg-white"
-              disabled={loading}
-              label="Continue with preview profile"
-              labelClassName="text-[15px] font-medium text-[#0d0d0d]"
-              onPress={() => void onAuthenticated(DESIGN_MOCK_AUTH_CODE)}
-              testID="auth-design-preview-button"
-            >
-              {loading ? <ActivityIndicator color="#0d0d0d" /> : null}
-            </Button>
-          ) : (
-            <Button
-              className="h-12 min-h-[48px] rounded-full border-0 bg-white"
-              disabled={loading || oauthLoading}
-              label="Continue with Google"
-              labelClassName="text-[15px] font-medium text-[#0d0d0d]"
-              onPress={handleGoogleOAuth}
-              testID="auth-google-button"
-            >
-              {loading || oauthLoading ? (
-                <ActivityIndicator color="#0d0d0d" />
-              ) : null}
-            </Button>
-          )}
-
-          {!designPreviewMode ? (
-            <Text className="mt-4 text-center text-xs leading-relaxed text-muted">
-              You’ll finish sign-in in your browser, then return here
-              automatically.
-            </Text>
-          ) : (
-            <Text className="mt-4 text-center text-xs leading-relaxed text-muted">
-              OAuth is off in this build. Run without design mock to sign in
-              with Google.
-            </Text>
-          )}
-
-          {!designPreviewMode && allowE2EBypass ? (
             <View className="mt-6">
-              <Button
-                label="E2E bypass sign-in"
-                onPress={() => onAuthenticated("maestro-e2e-auth-code")}
-                testID="auth-e2e-bypass-button"
-                variant="outline"
-              />
+              {designPreviewMode ? (
+                <Button
+                  className="h-12 min-h-[48px] rounded-full border-0 bg-white"
+                  disabled={loading}
+                  label="Continue with preview profile"
+                  labelClassName="text-[15px] font-medium text-[#0d0d0d]"
+                  onPress={() => void onAuthenticated(DESIGN_MOCK_AUTH_CODE)}
+                  testID="auth-design-preview-button"
+                >
+                  {loading ? <ActivityIndicator color="#0d0d0d" /> : null}
+                </Button>
+              ) : (
+                <Button
+                  className="h-12 min-h-[48px] rounded-full border-0 bg-white"
+                  disabled={loading || oauthLoading}
+                  label="Continue with Google"
+                  labelClassName="text-[15px] font-medium text-[#0d0d0d]"
+                  onPress={() => {
+                    void handleGoogleOAuth();
+                  }}
+                  testID="auth-google-button"
+                >
+                  {loading || oauthLoading ? (
+                    <ActivityIndicator color="#0d0d0d" />
+                  ) : null}
+                </Button>
+              )}
+
+              {!designPreviewMode ? (
+                <Text className="mt-3 text-center text-[11px] leading-relaxed text-white/55">
+                  Google opens in your browser, then you’re back here.
+                </Text>
+              ) : (
+                <Text className="mt-4 text-center text-xs leading-relaxed text-white/55">
+                  OAuth is off in this build. Run without design mock to sign in
+                  with Google.
+                </Text>
+              )}
+
+              {!designPreviewMode && allowE2EBypass ? (
+                <View className="mt-6">
+                  <Button
+                    label="E2E bypass sign-in"
+                    onPress={() => onAuthenticated("maestro-e2e-auth-code")}
+                    testID="auth-e2e-bypass-button"
+                    variant="outline"
+                  />
+                </View>
+              ) : null}
             </View>
-          ) : null}
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+          </View>
+        </SafeAreaView>
+      </WelcomeBackdrop>
+    </View>
   );
 }
+
+const LOGO_SIZE = 56;
+
+const styles = StyleSheet.create({
+  authSafeArea: {
+    flex: 1,
+  },
+  logoHalo: {
+    borderRadius: 26,
+    padding: 2,
+    backgroundColor: "rgba(255,255,255,0.14)",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.45,
+        shadowRadius: 18,
+      },
+      android: {
+        elevation: 12,
+      },
+      default: {},
+    }),
+  },
+  logoSquircle: {
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 24,
+    overflow: "hidden",
+    padding: 12,
+    backgroundColor: "rgba(14,14,16,0.78)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.28)",
+  },
+  logoImage: {
+    width: LOGO_SIZE,
+    height: LOGO_SIZE,
+  },
+});
 
 function readQueryStringParam(value: unknown) {
   return typeof value === "string" && value.trim().length > 0 ? value : null;

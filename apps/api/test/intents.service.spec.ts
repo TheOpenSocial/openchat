@@ -1068,6 +1068,36 @@ describe("IntentsService", () => {
     expect(result.intentCount).toBe(1);
   });
 
+  it("applies quota-based cap when decomposing multiple intents", async () => {
+    const { service, prisma, agentService } = createIntentsService({
+      prisma: {
+        intentRequest: {
+          count: vi.fn().mockResolvedValueOnce(11).mockResolvedValueOnce(29),
+        },
+      },
+    });
+
+    vi.spyOn(service, "createIntent").mockResolvedValue({
+      id: "intent-1",
+      status: "parsed",
+    } as any);
+
+    const result = await service.createIntentFromAgentMessage(
+      "thread-1",
+      "11111111-1111-4111-8111-111111111111",
+      "Find tennis partners tonight; Also find startup founders to chat with; Also find a study buddy.",
+      { maxIntents: 5 },
+    );
+
+    expect(prisma.intentRequest.count).toHaveBeenCalledTimes(2);
+    expect(service.createIntent).toHaveBeenCalledTimes(1);
+    expect(result.intentCount).toBe(1);
+    expect(agentService.createAgentMessage).toHaveBeenCalledWith(
+      "thread-1",
+      expect.stringContaining("safety cap"),
+    );
+  });
+
   it("summarizes pending intents and writes summary to thread", async () => {
     const { service, prisma, agentService } = createIntentsService({
       prisma: {

@@ -26,6 +26,7 @@ import { LaunchControlsModule } from "./launch-controls/launch-controls.module.j
 import { ScheduledTasksModule } from "./scheduled-tasks/scheduled-tasks.module.js";
 import { RecurringCirclesModule } from "./recurring-circles/recurring-circles.module.js";
 import { HealthController } from "./health/health.controller.js";
+import { SearchModule } from "./search/search.module.js";
 
 @Module({
   controllers: [HealthController],
@@ -59,6 +60,7 @@ import { HealthController } from "./health/health.controller.js";
     LaunchControlsModule,
     ScheduledTasksModule,
     RecurringCirclesModule,
+    SearchModule,
   ],
   providers: [
     {

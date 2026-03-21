@@ -1,5 +1,6 @@
-import NetInfo from "@react-native-community/netinfo";
 import { useEffect, useState } from "react";
+
+import { waitForNativeRuntimeReady } from "./native-runtime-ready";
 
 /**
  * Tracks device connectivity. When `skip` is true (e.g. design mock), always reports online.
@@ -12,27 +13,39 @@ export function useNetworkOnline(skip: boolean): boolean {
       return;
     }
 
-    const apply = (
-      connected: boolean | null,
-      reachable: boolean | null,
-    ): void => {
-      if (connected === false || reachable === false) {
-        setOnline(false);
+    let unsubscribe: (() => void) | undefined;
+    let cancelled = false;
+
+    void (async () => {
+      await waitForNativeRuntimeReady();
+      if (cancelled) {
         return;
       }
-      setOnline(true);
-    };
+      const NetInfo = (await import("@react-native-community/netinfo")).default;
 
-    const unsubscribe = NetInfo.addEventListener((state) => {
-      apply(state.isConnected, state.isInternetReachable);
-    });
+      const apply = (
+        connected: boolean | null,
+        reachable: boolean | null,
+      ): void => {
+        if (connected === false || reachable === false) {
+          setOnline(false);
+          return;
+        }
+        setOnline(true);
+      };
 
-    void NetInfo.fetch().then((state) => {
-      apply(state.isConnected, state.isInternetReachable);
-    });
+      unsubscribe = NetInfo.addEventListener((state) => {
+        apply(state.isConnected, state.isInternetReachable);
+      });
+
+      void NetInfo.fetch().then((state) => {
+        apply(state.isConnected, state.isInternetReachable);
+      });
+    })();
 
     return () => {
-      unsubscribe();
+      cancelled = true;
+      unsubscribe?.();
     };
   }, [skip]);
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { AdminShell } from "./components/AdminShell";
@@ -21,6 +22,7 @@ import {
   adminInputClass,
   adminLabelClass,
 } from "./lib/admin-ui";
+import { type AppLocale, supportedLocales, t } from "./lib/i18n";
 import {
   apiRequest,
   apiRequestNullable,
@@ -68,9 +70,90 @@ interface DebugHistoryRow {
   success: boolean;
 }
 
+interface ModerationFlagRow {
+  id: string;
+  entityType: string;
+  entityId: string;
+  reason: string;
+  status: string;
+  createdAt: string;
+  latestRiskAudit?: {
+    id: string;
+    metadata: unknown;
+    createdAt: string;
+  } | null;
+  latestAssignment?: {
+    id: string;
+    metadata: unknown;
+    createdAt: string;
+  } | null;
+}
+
+interface ModerationReportRow {
+  id: string;
+  reporterUserId: string;
+  targetUserId: string | null;
+  reason: string;
+  status: string;
+  createdAt: string;
+}
+
+interface ModerationSummarySnapshot {
+  generatedAt: string;
+  queue: {
+    openFlags: number;
+    agentRiskOpenFlags: number;
+    reportsOpen: number;
+  };
+  actions24h: {
+    reports24h: number;
+    resolvedFlags24h: number;
+    dismissedFlags24h: number;
+  };
+  enforcement: {
+    blockedProfiles: number;
+    suspendedUsers: number;
+  };
+  recent: {
+    flags: ModerationFlagRow[];
+    reports: ModerationReportRow[];
+  };
+}
+
+interface ModerationSettingsSnapshot {
+  provider: string;
+  keys: {
+    moderationProviderConfigured: boolean;
+    openaiConfigured: boolean;
+    customProviderConfigured: boolean;
+  };
+  toggles: {
+    agentRiskEnabled: boolean;
+    autoBlockTermsEnabled: boolean;
+    strictMediaReview: boolean;
+    userReportsEnabled: boolean;
+  };
+  thresholds: {
+    moderationBacklogAlert: number;
+    dbLatencyAlertMs: number;
+    openAiErrorRateAlert: number;
+  };
+  policyModes: {
+    agentBlockedDecisionLabel: string;
+    agentReviewDecisionLabel: string;
+  };
+  surfaces: {
+    profilePhotos: boolean;
+    chatMessages: boolean;
+    intents: boolean;
+    agentThreads: boolean;
+  };
+}
+
 const DEFAULT_UUID = "00000000-0000-0000-0000-000000000000";
 const STREAM_EVENT_LIMIT = 60;
 const DEBUG_HISTORY_LIMIT = 20;
+const ADMIN_LOCALE_STORAGE_KEY = "opensocial.admin.locale.v1";
 
 const tabConfig: Array<{ id: AdminTab; label: string; subtitle: string }> = [
   {
@@ -188,6 +271,10 @@ function createHistoryId() {
 }
 
 export default function AdminHome() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [locale, setLocale] = useState<AppLocale>("en");
   const [sessionHydrated, setSessionHydrated] = useState(false);
   const [signedInSession, setSignedInSession] = useState<AdminSession | null>(
     null,
@@ -263,6 +350,25 @@ export default function AdminHome() {
   const [photoSnapshot, setPhotoSnapshot] = useState<unknown>(null);
   const [sessionSnapshot, setSessionSnapshot] = useState<unknown>(null);
   const [inboxSnapshot, setInboxSnapshot] = useState<unknown>(null);
+  const [recurringCircleSnapshot, setRecurringCircleSnapshot] =
+    useState<unknown>(null);
+  const [recurringCircleSessionSnapshot, setRecurringCircleSessionSnapshot] =
+    useState<unknown>(null);
+  const [savedSearchSnapshot, setSavedSearchSnapshot] = useState<unknown>(null);
+  const [scheduledTaskSnapshot, setScheduledTaskSnapshot] =
+    useState<unknown>(null);
+  const [scheduledTaskRunsSnapshot, setScheduledTaskRunsSnapshot] =
+    useState<unknown>(null);
+  const [discoveryPassiveSnapshot, setDiscoveryPassiveSnapshot] =
+    useState<unknown>(null);
+  const [discoveryInboxSnapshot, setDiscoveryInboxSnapshot] =
+    useState<unknown>(null);
+  const [pendingIntentSummarySnapshot, setPendingIntentSummarySnapshot] =
+    useState<unknown>(null);
+  const [continuityIntentExplainSnapshot, setContinuityIntentExplainSnapshot] =
+    useState<unknown>(null);
+  const [searchQuery, setSearchQuery] = useState("tennis");
+  const [searchSnapshot, setSearchSnapshot] = useState<unknown>(null);
 
   const [intentExplainSnapshot, setIntentExplainSnapshot] =
     useState<unknown>(null);
@@ -278,10 +384,21 @@ export default function AdminHome() {
   const [chatSyncSnapshot, setChatSyncSnapshot] = useState<unknown>(null);
 
   const [moderationSnapshot, setModerationSnapshot] = useState<unknown>(null);
+  const [moderationSummarySnapshot, setModerationSummarySnapshot] =
+    useState<ModerationSummarySnapshot | null>(null);
+  const [moderationSettingsSnapshot, setModerationSettingsSnapshot] =
+    useState<ModerationSettingsSnapshot | null>(null);
   const [moderationQueueSnapshot, setModerationQueueSnapshot] =
     useState<unknown>(null);
   const [auditLogSnapshot, setAuditLogSnapshot] = useState<unknown>(null);
   const [moderationQueueLimit, setModerationQueueLimit] = useState(100);
+  const [moderationQueueStatusQuery, setModerationQueueStatusQuery] = useState<
+    "open" | "resolved" | "dismissed"
+  >("open");
+  const [moderationQueueEntityTypeQuery, setModerationQueueEntityTypeQuery] =
+    useState("");
+  const [moderationQueueReasonQuery, setModerationQueueReasonQuery] =
+    useState("");
   const [auditLogLimit, setAuditLogLimit] = useState(100);
   const [agentRiskSnapshot, setAgentRiskSnapshot] = useState<unknown>(null);
   const [agentRiskLimit, setAgentRiskLimit] = useState(50);
@@ -304,7 +421,35 @@ export default function AdminHome() {
   const [lifeGraphSnapshot, setLifeGraphSnapshot] = useState<unknown>(null);
   const [policyExplainSnapshot, setPolicyExplainSnapshot] =
     useState<unknown>(null);
+  const [memoryResetSnapshot, setMemoryResetSnapshot] = useState<unknown>(null);
   const [agentTraceSnapshot, setAgentTraceSnapshot] = useState<unknown>(null);
+
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (
+      tab === "overview" ||
+      tab === "users" ||
+      tab === "intents" ||
+      tab === "chats" ||
+      tab === "moderation" ||
+      tab === "personalization" ||
+      tab === "agent"
+    ) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (params.get("tab") === activeTab) {
+      return;
+    }
+    params.set("tab", activeTab);
+    const next = params.toString();
+    router.replace(next.length ? `${pathname}?${next}` : pathname, {
+      scroll: false,
+    });
+  }, [activeTab, pathname, router, searchParams]);
 
   const summary = useMemo(
     () =>
@@ -387,6 +532,25 @@ export default function AdminHome() {
       },
     });
 
+  const moderationQueueItems = useMemo(() => {
+    if (!Array.isArray(moderationQueueSnapshot)) {
+      return [];
+    }
+    return moderationQueueSnapshot as ModerationFlagRow[];
+  }, [moderationQueueSnapshot]);
+
+  const agentRiskItems = useMemo(() => {
+    if (
+      !agentRiskSnapshot ||
+      typeof agentRiskSnapshot !== "object" ||
+      !("items" in agentRiskSnapshot) ||
+      !Array.isArray((agentRiskSnapshot as { items?: unknown }).items)
+    ) {
+      return [];
+    }
+    return (agentRiskSnapshot as { items: ModerationFlagRow[] }).items;
+  }, [agentRiskSnapshot]);
+
   const pushStreamEvent = (kind: string, payload: unknown) => {
     setStreamEvents((current) =>
       [
@@ -460,6 +624,23 @@ export default function AdminHome() {
     },
     [],
   );
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const stored = window.localStorage.getItem(ADMIN_LOCALE_STORAGE_KEY);
+    if (stored && supportedLocales.includes(stored as AppLocale)) {
+      setLocale(stored as AppLocale);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem(ADMIN_LOCALE_STORAGE_KEY, locale);
+  }, [locale]);
 
   useEffect(() => {
     configureAdminApiAuthLifecycle({
@@ -574,6 +755,12 @@ export default function AdminHome() {
           photos,
           sessions,
           inbox,
+          circles,
+          savedSearches,
+          scheduledTasks,
+          discoveryPassive,
+          discoveryInbox,
+          pendingIntentSummary,
         ] = await Promise.all([
           requestApi("GET", `/profiles/${id}`),
           requestApi("GET", `/profiles/${id}/trust`),
@@ -584,7 +771,60 @@ export default function AdminHome() {
           requestApi("GET", `/profiles/${id}/photos`),
           requestApi("GET", `/auth/sessions/${id}`),
           requestApi("GET", `/inbox/requests/${id}`),
+          requestApi("GET", `/recurring-circles/${id}`),
+          requestApi("GET", `/saved-searches/${id}`),
+          requestApi("GET", `/scheduled-tasks/${id}`, {
+            query: { limit: 20 },
+          }),
+          requestApi("GET", `/discovery/${id}/passive`, {
+            query: { limit: 3 },
+          }),
+          requestApi("GET", `/discovery/${id}/inbox-suggestions`, {
+            query: { limit: 4 },
+          }),
+          requestApi("POST", "/intents/summarize-pending", {
+            body: {
+              userId: id,
+              maxIntents: 5,
+            },
+          }),
         ]);
+        const firstCircleId = Array.isArray(circles)
+          ? (circles[0] as { id?: string } | undefined)?.id
+          : undefined;
+        const circleSessions = firstCircleId
+          ? await requestApi(
+              "GET",
+              `/recurring-circles/${firstCircleId}/sessions`,
+            )
+          : [];
+        const firstTaskId = Array.isArray(scheduledTasks)
+          ? (scheduledTasks[0] as { id?: string } | undefined)?.id
+          : undefined;
+        const scheduledTaskRuns = firstTaskId
+          ? await requestApi("GET", `/scheduled-tasks/${firstTaskId}/runs`, {
+              query: { limit: 10 },
+            })
+          : [];
+        const firstIntentId =
+          typeof pendingIntentSummary === "object" &&
+          pendingIntentSummary !== null &&
+          "intents" in pendingIntentSummary &&
+          Array.isArray(
+            (pendingIntentSummary as { intents?: unknown[] }).intents,
+          )
+            ? ((
+                pendingIntentSummary as {
+                  intents?: Array<{ intentId?: string }>;
+                }
+              ).intents?.[0]?.intentId ?? null)
+            : null;
+        const continuityUserExplain = firstIntentId
+          ? await requestApi(
+              "GET",
+              `/intents/${firstIntentId}/explanations/user`,
+            ).catch(() => null)
+          : null;
 
         return {
           profile,
@@ -596,6 +836,15 @@ export default function AdminHome() {
           photos,
           sessions,
           inbox,
+          circles,
+          circleSessions,
+          savedSearches,
+          scheduledTasks,
+          scheduledTaskRuns,
+          discoveryPassive,
+          discoveryInbox,
+          pendingIntentSummary,
+          continuityUserExplain,
         };
       },
       "User snapshots loaded.",
@@ -609,6 +858,15 @@ export default function AdminHome() {
         setPhotoSnapshot(payload.photos);
         setSessionSnapshot(payload.sessions);
         setInboxSnapshot(payload.inbox);
+        setRecurringCircleSnapshot(payload.circles);
+        setRecurringCircleSessionSnapshot(payload.circleSessions);
+        setSavedSearchSnapshot(payload.savedSearches);
+        setScheduledTaskSnapshot(payload.scheduledTasks);
+        setScheduledTaskRunsSnapshot(payload.scheduledTaskRuns);
+        setDiscoveryPassiveSnapshot(payload.discoveryPassive);
+        setDiscoveryInboxSnapshot(payload.discoveryInbox);
+        setPendingIntentSummarySnapshot(payload.pendingIntentSummary);
+        setContinuityIntentExplainSnapshot(payload.continuityUserExplain);
       },
     );
 
@@ -633,6 +891,20 @@ export default function AdminHome() {
         }),
       "Pending intent summary generated.",
       (payload) => setIntentActionSnapshot(payload),
+    );
+
+  const runSearch = () =>
+    runAction(
+      "Run search",
+      () =>
+        requestApi("GET", `/search/${userId.trim()}`, {
+          query: {
+            q: searchQuery.trim(),
+            limit: 6,
+          },
+        }),
+      "Search snapshot loaded.",
+      (payload) => setSearchSnapshot(payload),
     );
 
   const revokeSession = () => {
@@ -951,6 +1223,30 @@ export default function AdminHome() {
       (payload) => setModerationSnapshot(payload),
     );
 
+  const loadModerationSummary = () =>
+    runAction(
+      "Load moderation summary",
+      () =>
+        requestApi<ModerationSummarySnapshot>(
+          "GET",
+          "/admin/moderation/summary",
+        ),
+      "Moderation summary loaded.",
+      (payload) => setModerationSummarySnapshot(payload),
+    );
+
+  const loadModerationSettings = () =>
+    runAction(
+      "Load moderation settings",
+      () =>
+        requestApi<ModerationSettingsSnapshot>(
+          "GET",
+          "/admin/moderation/settings",
+        ),
+      "Moderation settings loaded.",
+      (payload) => setModerationSettingsSnapshot(payload),
+    );
+
   const loadModerationQueue = () =>
     runAction(
       "Load moderation queue",
@@ -958,6 +1254,15 @@ export default function AdminHome() {
         requestApi("GET", "/admin/moderation/queue", {
           query: {
             limit: moderationQueueLimit,
+            status: moderationQueueStatusQuery,
+            entityType:
+              moderationQueueEntityTypeQuery.trim().length > 0
+                ? moderationQueueEntityTypeQuery.trim()
+                : undefined,
+            reasonContains:
+              moderationQueueReasonQuery.trim().length > 0
+                ? moderationQueueReasonQuery.trim()
+                : undefined,
           },
         }),
       "Moderation queue snapshot loaded.",
@@ -1024,6 +1329,12 @@ export default function AdminHome() {
         void loadAgentRiskFlags();
       },
     );
+  };
+
+  const primeTriageFromFlag = (flag: ModerationFlagRow) => {
+    setTriageFlagId(flag.id);
+    setAssignFlagId(flag.id);
+    setTriageReason(flag.reason);
   };
 
   const assignAgentRiskFlag = () => {
@@ -1118,6 +1429,21 @@ export default function AdminHome() {
       },
       "Policy explanation generated.",
       (payload) => setPolicyExplainSnapshot(payload),
+    );
+
+  const resetLearnedMemory = () =>
+    runAction(
+      "Reset learned memory",
+      () =>
+        requestApi("POST", `/privacy/${userId.trim()}/memory/reset`, {
+          body: {
+            actorUserId: userId.trim(),
+            mode: "learned_memory",
+            reason: "admin_panel_manual_reset",
+          },
+        }),
+      "Learned memory reset completed.",
+      (payload) => setMemoryResetSnapshot(payload),
     );
 
   const inspectAgentThread = () => {
@@ -1302,21 +1628,30 @@ export default function AdminHome() {
     <AdminShell
       activeId={activeTab}
       busyKey={busyKey}
+      busyPrefixLabel={t("busyPrefix", locale)}
       navItems={tabConfig.map((tab) => ({ id: tab.id, label: tab.label }))}
+      locale={locale}
+      localeEnglishLabel={t("english", locale)}
+      localeLabel={t("language", locale)}
+      localeSpanishLabel={t("spanish", locale)}
       onNavigate={(id) => setActiveTab(id as AdminTab)}
+      onLocaleChange={setLocale}
       onSignOut={() => {
         clearAdminSession();
         setSignedInSession(null);
         setAdminUserId(DEFAULT_UUID);
       }}
+      operatorContextNote={t("operatorContextNote", locale)}
+      readyLabel={t("ready", locale)}
       sessionLabel={sessionLabel}
       sessionTitle={
         signedInSession.email ??
         signedInSession.displayName ??
         signedInSession.userId
       }
+      signOutLabel={t("signOut", locale)}
       activeDescription={tabSubtitle(activeTab)}
-      subtitle="OPENSOCIAL · operator console"
+      subtitle="OpenSocial"
       summary={summary}
       title="Operations workbench"
     >
@@ -1612,6 +1947,17 @@ export default function AdminHome() {
                   value={revokeSessionId}
                 />
               </label>
+              <label className={adminLabelClass}>
+                search query
+                <input
+                  className={adminInputClass}
+                  onChange={(event) =>
+                    setSearchQuery(event.currentTarget.value)
+                  }
+                  placeholder="tennis"
+                  value={searchQuery}
+                />
+              </label>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               <button
@@ -1634,6 +1980,13 @@ export default function AdminHome() {
                 type="button"
               >
                 Summarize pending intents
+              </button>
+              <button
+                className={adminButtonGhostClass}
+                onClick={runSearch}
+                type="button"
+              >
+                Run search
               </button>
               <button
                 className={adminButtonGhostClass}
@@ -1729,6 +2082,51 @@ export default function AdminHome() {
             </Panel>
             <Panel title="Inbox Requests">
               <JsonView value={inboxSnapshot} />
+            </Panel>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Panel title="Recurring Circles">
+              <JsonView value={recurringCircleSnapshot} />
+            </Panel>
+            <Panel title="Circle Sessions (first circle)">
+              <JsonView value={recurringCircleSessionSnapshot} />
+            </Panel>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            <Panel title="Saved Searches">
+              <JsonView value={savedSearchSnapshot} />
+            </Panel>
+            <Panel title="Scheduled Tasks">
+              <JsonView value={scheduledTaskSnapshot} />
+            </Panel>
+            <Panel title="Scheduled Task Runs (first task)">
+              <JsonView value={scheduledTaskRunsSnapshot} />
+            </Panel>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Panel title="Passive Discovery">
+              <JsonView value={discoveryPassiveSnapshot} />
+            </Panel>
+            <Panel title="Inbox Suggestions">
+              <JsonView value={discoveryInboxSnapshot} />
+            </Panel>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Panel title="Pending Intent Summary">
+              <JsonView value={pendingIntentSummarySnapshot} />
+            </Panel>
+            <Panel title="User Routing Explanation (first pending intent)">
+              <JsonView value={continuityIntentExplainSnapshot} />
+            </Panel>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-1">
+            <Panel title="Search Snapshot">
+              <JsonView value={searchSnapshot} />
             </Panel>
           </div>
         </section>
@@ -1964,6 +2362,263 @@ export default function AdminHome() {
 
       {activeTab === "moderation" ? (
         <section className="mt-4 space-y-4">
+          <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]">
+            <Panel
+              subtitle="Backlog, enforcement, and recent safety activity."
+              title="Moderation Command Center"
+            >
+              <div className="flex flex-wrap gap-2">
+                <button
+                  className={adminButtonClass}
+                  onClick={() => {
+                    loadModerationSummary().catch(() => {});
+                  }}
+                  type="button"
+                >
+                  Refresh summary
+                </button>
+                <button
+                  className={adminButtonGhostClass}
+                  onClick={() => {
+                    loadModerationSettings().catch(() => {});
+                  }}
+                  type="button"
+                >
+                  Refresh settings
+                </button>
+              </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {[
+                  {
+                    label: "Open flags",
+                    value: moderationSummarySnapshot?.queue.openFlags ?? "—",
+                    tone: "text-rose-300",
+                  },
+                  {
+                    label: "Agent risk open",
+                    value:
+                      moderationSummarySnapshot?.queue.agentRiskOpenFlags ??
+                      "—",
+                    tone: "text-amber-300",
+                  },
+                  {
+                    label: "Open reports",
+                    value: moderationSummarySnapshot?.queue.reportsOpen ?? "—",
+                    tone: "text-sky-300",
+                  },
+                  {
+                    label: "Reports (24h)",
+                    value:
+                      moderationSummarySnapshot?.actions24h.reports24h ?? "—",
+                    tone: "text-violet-300",
+                  },
+                  {
+                    label: "Blocked profiles",
+                    value:
+                      moderationSummarySnapshot?.enforcement.blockedProfiles ??
+                      "—",
+                    tone: "text-fuchsia-300",
+                  },
+                  {
+                    label: "Suspended users",
+                    value:
+                      moderationSummarySnapshot?.enforcement.suspendedUsers ??
+                      "—",
+                    tone: "text-orange-300",
+                  },
+                ].map((item) => (
+                  <div
+                    className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
+                    key={item.label}
+                  >
+                    <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">
+                      {item.label}
+                    </p>
+                    <p className={`mt-2 text-3xl font-semibold ${item.tone}`}>
+                      {item.value}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                    Recent flags
+                  </p>
+                  <div className="mt-3 space-y-2">
+                    {(moderationSummarySnapshot?.recent.flags ?? []).length ===
+                    0 ? (
+                      <p className="text-sm text-slate-400">
+                        No recent flags loaded yet.
+                      </p>
+                    ) : (
+                      moderationSummarySnapshot?.recent.flags.map((flag) => (
+                        <button
+                          className="w-full rounded-xl border border-slate-800 bg-slate-900/80 px-3 py-3 text-left text-sm text-slate-100 transition hover:border-slate-600"
+                          key={flag.id}
+                          onClick={() => primeTriageFromFlag(flag)}
+                          type="button"
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="font-medium text-slate-100">
+                              {flag.entityType}
+                            </span>
+                            <span className="text-xs uppercase tracking-wide text-slate-400">
+                              {flag.status}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-xs text-slate-400">
+                            {flag.reason}
+                          </p>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                    Recent reports
+                  </p>
+                  <div className="mt-3 space-y-2">
+                    {(moderationSummarySnapshot?.recent.reports ?? [])
+                      .length === 0 ? (
+                      <p className="text-sm text-slate-400">
+                        No recent reports loaded yet.
+                      </p>
+                    ) : (
+                      moderationSummarySnapshot?.recent.reports.map(
+                        (report) => (
+                          <div
+                            className="rounded-xl border border-slate-800 bg-slate-900/80 px-3 py-3"
+                            key={report.id}
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="font-medium text-slate-100">
+                                {report.reason}
+                              </span>
+                              <span className="text-xs uppercase tracking-wide text-slate-400">
+                                {report.status}
+                              </span>
+                            </div>
+                            <p className="mt-1 text-xs text-slate-400">
+                              reporter {report.reporterUserId}
+                              {report.targetUserId
+                                ? ` -> target ${report.targetUserId}`
+                                : ""}
+                            </p>
+                          </div>
+                        ),
+                      )
+                    )}
+                  </div>
+                </div>
+              </div>
+            </Panel>
+
+            <Panel
+              subtitle="Configured provider, switches, and alert thresholds."
+              title="Policy Settings"
+            >
+              <div className="space-y-4 text-sm text-slate-200">
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                    Provider
+                  </p>
+                  <p className="mt-2 text-xl font-semibold text-slate-100">
+                    {moderationSettingsSnapshot?.provider ?? "Not loaded"}
+                  </p>
+                  <div className="mt-3 grid gap-2">
+                    {[
+                      [
+                        "Provider key configured",
+                        moderationSettingsSnapshot?.keys
+                          .moderationProviderConfigured,
+                      ],
+                      [
+                        "OpenAI configured",
+                        moderationSettingsSnapshot?.keys.openaiConfigured,
+                      ],
+                      [
+                        "Custom provider configured",
+                        moderationSettingsSnapshot?.keys
+                          .customProviderConfigured,
+                      ],
+                    ].map(([label, enabled]) => (
+                      <div
+                        className="flex items-center justify-between rounded-xl border border-slate-800 px-3 py-2"
+                        key={String(label)}
+                      >
+                        <span>{label}</span>
+                        <span
+                          className={
+                            enabled ? "text-emerald-300" : "text-amber-300"
+                          }
+                        >
+                          {enabled ? "yes" : "no"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                    Toggles
+                  </p>
+                  <div className="mt-3 grid gap-2">
+                    {Object.entries(
+                      moderationSettingsSnapshot?.toggles ?? {},
+                    ).map(([label, enabled]) => (
+                      <div
+                        className="flex items-center justify-between rounded-xl border border-slate-800 px-3 py-2"
+                        key={label}
+                      >
+                        <span>{label}</span>
+                        <span
+                          className={
+                            enabled ? "text-emerald-300" : "text-slate-400"
+                          }
+                        >
+                          {enabled ? "enabled" : "disabled"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                    Thresholds
+                  </p>
+                  <div className="mt-3 space-y-2">
+                    <div className="flex items-center justify-between rounded-xl border border-slate-800 px-3 py-2">
+                      <span>Moderation backlog alert</span>
+                      <span>
+                        {moderationSettingsSnapshot?.thresholds
+                          .moderationBacklogAlert ?? "—"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between rounded-xl border border-slate-800 px-3 py-2">
+                      <span>DB latency alert</span>
+                      <span>
+                        {moderationSettingsSnapshot?.thresholds
+                          .dbLatencyAlertMs ?? "—"}
+                        ms
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between rounded-xl border border-slate-800 px-3 py-2">
+                      <span>OpenAI error-rate alert</span>
+                      <span>
+                        {moderationSettingsSnapshot?.thresholds
+                          .openAiErrorRateAlert ?? "—"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Panel>
+          </div>
+
           <div className="grid gap-4 lg:grid-cols-2">
             <Panel
               subtitle="Create moderation report records."
@@ -2061,32 +2716,126 @@ export default function AdminHome() {
               <JsonView value={moderationSnapshot} />
             </Panel>
             <Panel
-              subtitle="Load from /api/admin/moderation/queue."
+              subtitle="Filter open or resolved items and drill into flagged content quickly."
               title="Moderation Queue"
             >
-              <label className={adminLabelClass}>
-                limit
-                <input
-                  className={adminInputClass}
-                  max={250}
-                  min={1}
-                  onChange={(event) =>
-                    setModerationQueueLimit(
-                      Number(event.currentTarget.value) || 100,
-                    )
-                  }
-                  type="number"
-                  value={moderationQueueLimit}
-                />
-              </label>
-              <button
-                className={`${adminButtonClass} mt-3`}
-                onClick={loadModerationQueue}
-                type="button"
-              >
-                Load moderation queue
-              </button>
-              <div className="mt-3">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <label className={adminLabelClass}>
+                  limit
+                  <input
+                    className={adminInputClass}
+                    max={250}
+                    min={1}
+                    onChange={(event) =>
+                      setModerationQueueLimit(
+                        Number(event.currentTarget.value) || 100,
+                      )
+                    }
+                    type="number"
+                    value={moderationQueueLimit}
+                  />
+                </label>
+                <label className={adminLabelClass}>
+                  status
+                  <select
+                    className={adminInputClass}
+                    onChange={(event) =>
+                      setModerationQueueStatusQuery(
+                        event.currentTarget.value as
+                          | "open"
+                          | "resolved"
+                          | "dismissed",
+                      )
+                    }
+                    value={moderationQueueStatusQuery}
+                  >
+                    <option value="open">open</option>
+                    <option value="resolved">resolved</option>
+                    <option value="dismissed">dismissed</option>
+                  </select>
+                </label>
+                <label className={adminLabelClass}>
+                  entity type (optional)
+                  <input
+                    className={adminInputClass}
+                    onChange={(event) =>
+                      setModerationQueueEntityTypeQuery(
+                        event.currentTarget.value,
+                      )
+                    }
+                    placeholder="agent_thread"
+                    value={moderationQueueEntityTypeQuery}
+                  />
+                </label>
+                <label className={adminLabelClass}>
+                  reason contains
+                  <input
+                    className={adminInputClass}
+                    onChange={(event) =>
+                      setModerationQueueReasonQuery(event.currentTarget.value)
+                    }
+                    placeholder="threat"
+                    value={moderationQueueReasonQuery}
+                  />
+                </label>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  className={adminButtonClass}
+                  onClick={loadModerationQueue}
+                  type="button"
+                >
+                  Load moderation queue
+                </button>
+                <button
+                  className={adminButtonGhostClass}
+                  onClick={() => setModerationQueueSnapshot(null)}
+                  type="button"
+                >
+                  Clear
+                </button>
+              </div>
+              <div className="mt-4 space-y-3">
+                {moderationQueueItems.length === 0 ? (
+                  <p className="text-sm text-slate-400">
+                    No moderation queue items loaded.
+                  </p>
+                ) : (
+                  moderationQueueItems.map((flag) => (
+                    <div
+                      className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
+                      key={flag.id}
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-100">
+                            {flag.entityType}
+                          </p>
+                          <p className="text-xs text-slate-400">
+                            {flag.id} · {flag.entityId}
+                          </p>
+                        </div>
+                        <span className="rounded-full border border-slate-700 px-3 py-1 text-xs uppercase tracking-wide text-slate-300">
+                          {flag.status}
+                        </span>
+                      </div>
+                      <p className="mt-3 text-sm text-slate-200">
+                        {flag.reason}
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button
+                          className={adminButtonGhostClass}
+                          onClick={() => primeTriageFromFlag(flag)}
+                          type="button"
+                        >
+                          Use in triage
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className="mt-4">
                 <JsonView value={moderationQueueSnapshot} />
               </div>
             </Panel>
@@ -2181,6 +2930,55 @@ export default function AdminHome() {
             >
               Load agent risk flags
             </button>
+            <div className="mt-4 space-y-3">
+              {agentRiskItems.length === 0 ? (
+                <p className="text-sm text-slate-400">
+                  No agent risk flags loaded.
+                </p>
+              ) : (
+                agentRiskItems.map((flag) => (
+                  <div
+                    className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
+                    key={flag.id}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-100">
+                          {flag.reason}
+                        </p>
+                        <p className="text-xs text-slate-400">
+                          {flag.id} · thread {flag.entityId}
+                        </p>
+                      </div>
+                      <span className="rounded-full border border-slate-700 px-3 py-1 text-xs uppercase tracking-wide text-slate-300">
+                        {flag.status}
+                      </span>
+                    </div>
+                    {flag.latestAssignment ? (
+                      <p className="mt-2 text-xs text-slate-400">
+                        Assigned:{" "}
+                        {JSON.stringify(flag.latestAssignment.metadata)}
+                      </p>
+                    ) : null}
+                    {flag.latestRiskAudit ? (
+                      <p className="mt-2 text-xs text-slate-400">
+                        Risk audit:{" "}
+                        {JSON.stringify(flag.latestRiskAudit.metadata)}
+                      </p>
+                    ) : null}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        className={adminButtonGhostClass}
+                        onClick={() => primeTriageFromFlag(flag)}
+                        type="button"
+                      >
+                        Use in triage
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
             <div className="mt-3 max-h-64 overflow-y-auto">
               <JsonView value={agentRiskSnapshot} />
             </div>
@@ -2357,15 +3155,25 @@ export default function AdminHome() {
               >
                 Explain policy
               </button>
+              <button
+                className={adminButtonGhostClass}
+                onClick={resetLearnedMemory}
+                type="button"
+              >
+                Reset learned memory
+              </button>
             </div>
           </Panel>
 
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-3">
             <Panel title="Life Graph Snapshot">
               <JsonView value={lifeGraphSnapshot} />
             </Panel>
             <Panel title="Policy Explanation">
               <JsonView value={policyExplainSnapshot} />
+            </Panel>
+            <Panel title="Memory Reset Result">
+              <JsonView value={memoryResetSnapshot} />
             </Panel>
           </div>
         </section>

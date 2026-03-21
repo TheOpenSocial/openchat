@@ -1,8 +1,13 @@
 "use client";
 
+import { ShieldCheck } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/app/components/ui/button";
+
+/** Same still as mobile `WelcomeBackdrop` fallback (Unsplash, app docs). */
+const SIGN_IN_BACKDROP_STILL =
+  "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&w=1800&q=85";
 
 export function AdminSignIn({
   onGoogleSignIn,
@@ -14,64 +19,81 @@ export function AdminSignIn({
   const [busy, setBusy] = useState(false);
 
   return (
-    <main className="relative mx-auto flex min-h-screen w-full max-w-md flex-col justify-center px-6 py-16 sm:px-8">
+    <main className="relative isolate min-h-screen overflow-hidden bg-black text-white">
+      {/* Backdrop layers — aligned with mobile auth: still + bottom-heavy scrim */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 -z-10 opacity-[0.35]"
-        style={{
-          background:
-            "radial-gradient(ellipse 80% 50% at 50% -20%, hsl(var(--primary) / 0.22), transparent 55%)",
-        }}
+        className="pointer-events-none absolute inset-0 bg-cover bg-center opacity-[0.22] saturate-[0.85]"
+        style={{ backgroundImage: `url('${SIGN_IN_BACKDROP_STILL}')` }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/35 via-black/55 to-black/95"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_90%_60%_at_50%_-10%,rgba(245,158,11,0.12),transparent_55%)]"
       />
 
-      <div className="text-center">
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl border border-border/80 bg-card/40 shadow-lg backdrop-blur-sm">
-          <img
-            alt=""
-            className="h-10 w-10"
-            height={40}
-            src="/brand/logo.svg"
-            width={40}
-          />
-        </div>
-        <h1 className="mt-10 font-[var(--font-heading)] text-[clamp(2rem,8vw,2.75rem)] font-semibold leading-[1.05] tracking-[0.08em] text-foreground">
-          OPENSOCIAL
-        </h1>
-        <p className="mt-3 text-sm font-medium tracking-wide text-muted-foreground">
-          Operator access
-        </p>
-        <p className="mx-auto mt-6 max-w-sm text-sm leading-relaxed text-muted-foreground/90">
-          Sign in with Google. Only approved accounts can open the console.
-        </p>
-      </div>
-
-      <div className="mt-12 space-y-4">
-        {errorText ? (
-          <p
-            className="rounded-xl border border-destructive/35 bg-destructive/10 px-4 py-3 text-center text-sm text-destructive-foreground"
-            role="alert"
-          >
-            {errorText}
+      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-md flex-col justify-end px-6 pb-14 pt-16 sm:justify-center sm:px-8 sm:pb-16">
+        <div className="text-center">
+          <div className="mx-auto flex w-fit rounded-3xl border border-white/25 bg-black p-3 shadow-lg shadow-black/40">
+            <img
+              alt="OpenSocial"
+              className="h-14 w-14"
+              height={56}
+              src="/brand/logo.svg"
+              width={56}
+            />
+          </div>
+          <p className="mt-4 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/55">
+            OpenSocial
           </p>
-        ) : null}
+          <h1 className="mt-6 font-[var(--font-heading)] text-[clamp(1.65rem,6vw,1.85rem)] font-semibold leading-[1.12] tracking-tight text-white">
+            Operator console
+          </h1>
+          <p className="mx-auto mt-2.5 flex max-w-sm items-center justify-center gap-2 text-[15px] leading-relaxed text-white/75">
+            <ShieldCheck
+              aria-hidden
+              className="h-4 w-4 shrink-0 text-primary/90"
+              strokeWidth={2}
+            />
+            <span>
+              Sign in with Google. Only approved accounts can continue.
+            </span>
+          </p>
+        </div>
 
-        <Button
-          className="h-12 w-full gap-3 rounded-xl border border-border/60 bg-white text-base font-medium text-slate-900 shadow-md transition-[transform,box-shadow] hover:bg-slate-50 hover:shadow-lg active:scale-[0.99]"
-          disabled={busy}
-          onClick={async () => {
-            setBusy(true);
-            try {
-              await onGoogleSignIn();
-            } catch {
-              setBusy(false);
-            }
-          }}
-          type="button"
-          variant="outline"
-        >
-          <GoogleMark />
-          Continue with Google
-        </Button>
+        <div className="mt-10 space-y-4">
+          {errorText ? (
+            <p
+              className="rounded-2xl border border-rose-500/35 bg-rose-950/40 px-4 py-3 text-center text-sm text-rose-100"
+              role="alert"
+            >
+              {errorText}
+            </p>
+          ) : null}
+
+          <Button
+            className="h-12 w-full gap-3 rounded-full border-0 bg-white text-[15px] font-medium text-[#0d0d0d] shadow-md transition-[transform,box-shadow] hover:bg-white hover:shadow-lg active:scale-[0.99]"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                await onGoogleSignIn();
+              } catch {
+                setBusy(false);
+              }
+            }}
+            type="button"
+          >
+            <GoogleMark />
+            Continue with Google
+          </Button>
+          <p className="text-center text-[11px] leading-relaxed text-white/55">
+            Google opens in this window, then you return to the console.
+          </p>
+        </div>
       </div>
     </main>
   );

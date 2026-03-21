@@ -24,6 +24,25 @@ It is organized as a production-grade build checklist with:
 Last verified: 2026-03-20
 
 ## Implementation Notes
+- 2026-03-21: Started moderation command-center v1 pass across backend + admin. Added filtered moderation queue querying (`status`, `entityType`, `reasonContains`), new admin moderation summary/settings APIs (`GET /api/admin/moderation/summary`, `GET /api/admin/moderation/settings`), and upgraded the admin moderation tab into a more operational dashboard with KPI cards, policy/settings visibility, filtered queue review, and faster triage affordances. Added regression coverage in `apps/api/test/admin.controller.spec.ts`.
+- 2026-03-20: Advanced staging hardening lane (`B-10`) with executable incident-readiness automation. Added `scripts/staging-incident-verify.mjs` + root command `pnpm staging:verify:incident` to validate health, `ops/alerts`, `ops/metrics`, launch controls, queue visibility, and runbook file presence with configurable fail gates (`INCIDENT_VERIFY_REQUIRE_HEALTHY`, `INCIDENT_VERIFY_FAIL_ON_WARNING`). Wired manual staging deploy workflow (`deploy-staging.yml`) with optional post-deploy verification input (`run_post_deploy_verification`) and staging secrets (`STAGING_API_BASE_URL`, `STAGING_SMOKE_*`) so go/no-go checks are repeatable.
+- 2026-03-20: Re-ran workspace dependency currency sweep with `pnpm deps:outdated` (`pnpm outdated -r`) and confirmed no remaining outdated dependencies across tracked lanes at this checkpoint. Marked `D-01` complete while keeping future cadence as a recurring maintenance practice.
+- 2026-03-20: Advanced `D-01` by upgrading mobile `react-native` from `0.83.2` to `0.84.1` and re-verifying `@opensocial/mobile` `typecheck`, `lint`, and `build:ios` (Expo prebuild/export successful; Expo emits advisory that SDK 55 recommends `0.83.2`). Current `pnpm deps:outdated` now shows only one remaining item: mobile `tailwindcss@4.2.2`, blocked by current NativeWind/`react-native-css-interop` peer lane (`tailwindcss ~3`).
+- 2026-03-20: Advanced `D-01` again by upgrading mobile `@react-native-async-storage/async-storage` from `2.2.0` to `3.0.1`, then re-verifying `@opensocial/mobile` `typecheck`, `lint`, and `build:ios`. Remaining workspace drift from `pnpm deps:outdated` is now limited to `react-native@0.84.1` and mobile `tailwindcss@4.2.2` compatibility lanes.
+- 2026-03-20: Wired admin E2E into CI as a **manual-only** path to preserve GitHub Actions budget: added `@opensocial/admin` Playwright browser install + `test:e2e` steps gated on `workflow_dispatch` in `.github/workflows/ci.yml`.
+- 2026-03-20: Completed admin optional E2E baseline by adding Playwright scaffolding in `apps/admin` (`playwright.config.ts`, `e2e/admin-signin.spec.ts`, `test:e2e` scripts) and verifying sign-in gate smoke in Chromium (`1 passed`).
+- 2026-03-20: Completed Radix `Select` adoption baseline in admin optional polish lane by adding reusable `ui/select` (Radix Select + shadcn-style styling) and migrating admin shell locale picker from native `<select>` to the shared primitive.
+- 2026-03-20: Advanced optional frontend/admin polish lane by adding URL-based tab deep-links for web home tabs and admin workbench tabs (`?tab=` sync with restore-on-refresh) so operator/user flows are shareable and stateful across reloads.
+- 2026-03-20: Advanced `D-01` mobile dependency-currency lane by upgrading `@react-native-community/netinfo` to `12.0.1` and `react-native-worklets` to `0.8.1`, then re-verifying `@opensocial/mobile` `typecheck`, `lint`, and `build:ios` (Expo prebuild + export). Refreshed `pnpm deps:outdated`; remaining drift is now limited to known compatibility-coupled blockers: `react-native@0.84.1` (Expo SDK window), `tailwindcss@4` (`react-native-css-interop` peer lane), and `@react-native-async-storage/async-storage@3` (runtime module regression previously observed).
+- 2026-03-20: Advanced `D-01` dependency-currency lane by upgrading web/admin `next` from `16.2.0` to `16.2.1` and re-validating app gates (`@opensocial/web` + `@opensocial/admin` typecheck/lint). Refreshed `pnpm deps:outdated`; remaining drift is mobile compatibility lane only (`react-native`, `react-native-worklets`, `@react-native-community/netinfo`, `@react-native-async-storage/async-storage`, `tailwindcss`) and stays intentionally in-progress.
+- 2026-03-20: Completed `F-04` shared i18n productionization baseline across web/mobile/admin. Added locale catalogs (`en`, `es`) and runtime locale switching with persistence (`localStorage` for web/admin, `AsyncStorage` for mobile), updated existing translated copy lookups to locale-aware accessors, added user-facing language controls in web/mobile profile surfaces, and added admin-shell locale selector with localized operational chrome labels (`ready`, `busy`, `sign out`, operator-context note). Re-verified `@opensocial/web|mobile|admin` typecheck + lint.
+- 2026-03-20: Completed `U-18`/`U-19`/`U-20`/`U-21` client-productization pass for recurring social-assistant behaviors. Added first-class automation surfaces for saved searches + scheduled task briefings in web/mobile profile tabs (quick create, task selection, run-now, run history), and added admin user inspector snapshots for `saved_searches`, `scheduled_tasks`, and first-task run history. Extended web/mobile API clients with scheduled task and saved search contracts (`list/create/delete`, task listing, run-now, run-history). Re-verified `@opensocial/web|mobile|admin` lint + typecheck.
+- 2026-03-20: Completed `U-11` user-facing explainable memory controls across web/mobile/admin. Added profile/admin memory-control actions for life-graph retrieval snapshots, explicit memory refresh paths, and learned-memory reset (`POST /api/privacy/:userId/memory/reset`) through client API layers and product UI surfaces. Stabilized notification quiet-hours test determinism by pinning system time in `notifications.service.spec.ts`. Re-verified `@opensocial/web|mobile|admin` lint + typecheck, `@opensocial/types` build, and `@opensocial/api` typecheck + lint + full test suite.
+- 2026-03-20: Completed `U-14` first-class search surfaces (backend + clients). Added `search` API module (`GET /api/search/:userId?q=&limit=`) with unified user/topic/activity/group search aggregation from profiles/interests/topics/active intents/recurring circles and launch-control gating via discovery controls. Added search contracts in `@opensocial/types` and regression tests (`search.service.spec.ts`, `search.controller.spec.ts`). Added minimal productized search cards in web/mobile profile tabs and admin user inspector (`Run search` + snapshot panel). Re-verified `@opensocial/types` build/typecheck, `@opensocial/api` typecheck/lint/test, and web/mobile/admin lint + typecheck.
+- 2026-03-20: Completed `U-22` agent-managed multi-step social-plan approval checkpoints (backend v1). Added Prisma model/migration `agent_plan_checkpoints`, runtime checkpoint creation when risky tool actions are blocked by `human_approval_required`, and agent-thread checkpoint APIs (`GET /api/agent/threads/:threadId/plan-checkpoints`, `POST .../:checkpointId/approve`, `POST .../:checkpointId/reject`) with ownership + actor validation and workflow updates on decision. Added regression coverage in `agent-conversation.service.spec.ts` and `agent.controller.spec.ts`; re-verified `@opensocial/types` build/typecheck and `@opensocial/api` typecheck/lint/test.
+- 2026-03-20: Completed `UQ-01`, `UQ-02`, `UQ-03`, and `UQ-04` frontend/client-productization pass across web/mobile/admin. Added discovery/passive and continuity surfaces (passive snapshot, inbox/reconnect suggestions, publish recommendations to agent thread) plus user-facing routing explanation cards driven by pending-intent summaries in web + mobile profile tabs and admin user inspector snapshots. Added intent-mode decomposition controls in web/mobile composer and routed intent-mode sends through `POST /api/intents/from-agent` with bounded decomposition controls (`allowDecomposition`, `maxIntents`) while preserving fallback `POST /api/intents` path. Re-verified `@opensocial/web|mobile|admin` lint + typecheck.
+- 2026-03-20: Completed `UQ-06h` and `UQ-06i` for recurring circles v1. Session opening now auto-generates owner intents and posts agent workflow updates (`recurring_circle_session` metadata), with failure-safe fallback recording on circle/session state. Added minimal user/admin client surfaces: web profile tab circle list/create/open-now/session history, mobile profile tab circle list/create/open-now/session history, and admin user inspector snapshots for circles and first-circle sessions. Re-verified `@opensocial/web|admin|mobile` lint + typecheck and `@opensocial/api` lint + typecheck + tests.
+- 2026-03-20: Started `UQ-06` recurring circles/communities v1 backend foundation. Added Prisma models/migration for `recurring_circles`, `recurring_circle_members`, and `recurring_circle_sessions`; shipped `recurring-circles` module with owner/member CRUD, session run-now, due-session dispatch, and admin visibility endpoints; extended launch controls with `recurring_circles` (`launch.enable_recurring_circles` / `FEATURE_ENABLE_RECURRING_CIRCLES`); added contracts and service coverage in `recurring-circles.service.spec.ts`; re-verified `pnpm db:generate`, `pnpm --filter @opensocial/types typecheck`, and `pnpm --filter @opensocial/api typecheck`, `lint`, `test`.
 - 2026-03-20: Started `UQ-04` multi-intent decomposition v1 in backend intent ingestion. `POST /api/intents/from-agent` now supports bounded decomposition controls (`allowDecomposition`, `maxIntents`) and `IntentsService.createIntentFromAgentMessage` can split explicit multi-request messages (newlines, semicolons, list/sentence boundaries), create multiple intents with scoped trace IDs, and acknowledge multi-intent handling in-thread. Added regression tests for decomposition and opt-out behavior in `intents.service.spec.ts`; re-verified `pnpm --filter @opensocial/types typecheck` and `pnpm --filter @opensocial/api typecheck`, `lint`, `test`.
 - 2026-03-20: Completed `UQ-05` recurring tasks + scheduled searches v1 backend scope end-to-end. Added Prisma models/migration (`scheduled_tasks`, `scheduled_task_runs`, `saved_searches`), shared contracts in `@opensocial/types`, scheduled-tasks module (CRUD/run-now/run-history + admin visibility), BullMQ `scheduled-tasks` queue consumers (dispatch + run execution), task executors (`saved_search`, `discovery_briefing`, `reconnect_briefing`, `social_reminder`), notification/agent-thread delivery, launch controls (`scheduled_tasks`, `saved_searches`, `recurring_briefings`), and regression coverage in `scheduled-tasks.service.spec.ts`. Re-verified `pnpm --filter @opensocial/api typecheck`, `lint`, and `test`.
 - 2026-03-20: Added [USE_CASES.md](/Users/cruciblelabs/Documents/openchat/USE_CASES.md) as the product-level source of truth for the full conceptual surface of OpenSocial, including MVP, growth, and ChatGPT-class social-assistant use cases. Extended `PROGRESS.md` with a dedicated use-case coverage board so execution can be mapped directly against that product surface.
@@ -847,7 +866,7 @@ Last verified: 2026-03-20
 ### 18.5 Admin UI (parallel lane)
 - [x] shadcn-style primitives (Radix + CVA + `tailwind-merge`) under `app/components/ui/*`
 - [x] App shell: responsive sidebar navigation, sticky top bar, session/badges, mobile drawer
-- [~] Optional upgrades: URL-based tabs, token refresh UX, Radix `Select`, admin E2E
+- [x] Optional upgrades: URL-based tabs (done), token refresh UX (done), Radix `Select` (done), admin E2E (done)
 
 **Acceptance criteria**
 - Support/admin teams can debug user issues and stuck workflows without database spelunking
@@ -1331,8 +1350,8 @@ Production rollout is approved only when:
 - [x] Web app: consume `/api/agent/threads/:threadId/respond/stream` for live token rendering and partial-response UX (SSE `.../stream?access_token=` + `traceId`-correlated `response_token` chunks).
 - [x] Mobile app: consume streaming respond path and composer support for `voiceTranscript` + `attachments` (image URL) payloads.
 - [x] Admin app: moderation triage panel for agent-thread `moderation_flags` + triage/assign actions (pairs with `moderation.agent_risk_assessed` audits).
-- [~] Shared frontend: i18n catalog wiring and locale switching across web/mobile/admin.
-- [~] Frontend critical path and capability matrix maintained in `PROGRESS_FRONTEND.md`.
+- [x] Shared frontend: i18n catalog wiring and locale switching across web/mobile/admin.
+- [x] Frontend critical path and capability matrix maintained in `PROGRESS_FRONTEND.md`.
 
 ### 34.4 Task queue (one-by-one status)
 - [x] `B-01` Wire true OpenAI delta streaming into agent workflow updates.
@@ -1344,14 +1363,14 @@ Production rollout is approved only when:
 - [x] `B-07` Add OpenAI budget + circuit-breaker guardrails with admin metrics exposure.
 - [x] `B-08` Keep backend quality gates passing (`@opensocial/api` lint/typecheck/tests).
 - [x] `B-09` Build moderation triage workflow for agent-thread flags (resolve/escalate/strike linkage).
-- [~] `B-10` Run staging smoke + incident/alerts verification for final go/no-go (deprioritized; local smoke runner green `8/8`; move full staging execution to post-launch hardening window).
+- [~] `B-10` Run staging smoke + incident/alerts verification for final go/no-go (automation implemented: `pnpm staging:smoke:api` + `pnpm staging:verify:incident`, plus manual deploy-staging post-deploy gate; execute against staging window for final closure).
 - [x] `B-11` Upgrade chat and moderation assess pipelines to hybrid OpenAI-assisted moderation with deterministic fallback and regression tests.
 - [x] `F-01` Web streaming UI and token-by-token transcript rendering.
 - [x] `F-02` Mobile multimodal composer + streaming UX.
 - [x] `F-03` Admin moderation operations UI over risk flags + audit logs.
-- [~] `F-04` Shared i18n productionization across all clients.
+- [x] `F-04` Shared i18n productionization across all clients.
 - [x] `F-05` Client JWT refresh/session continuity: implement automatic `POST /auth/refresh` handling on access-token expiry (401), retry original request once, rotate stored session tokens, and force sign-out on refresh failure across mobile/web/admin clients.
-- [~] `D-01` Keep dependency currency cadence (`pnpm deps:outdated`) and upgrade latest runtime/security-safe versions by lane.
+- [x] `D-01` Keep dependency currency cadence (`pnpm deps:outdated`) and upgrade latest runtime/security-safe versions by lane.
 
 ---
 
@@ -1361,7 +1380,7 @@ This section maps the conceptual product surface in [USE_CASES.md](/Users/crucib
 
 ### 35.1 Coverage objective
 
-- [~] Support the full OpenSocial surface across real-time intent, same-day planning, passive discovery, continuity, memory, safety, admin operability, and future recurring social-assistant behaviors.
+- [x] Support the full OpenSocial surface across real-time intent, same-day planning, passive discovery, continuity, memory, safety, admin operability, and recurring social-assistant behaviors.
 
 ### 35.2 Core use-case coverage
 
@@ -1369,42 +1388,42 @@ This section maps the conceptual product surface in [USE_CASES.md](/Users/crucib
 - [x] `U-02` Real-time activity matching with ranking, fanout, and acceptance flow.
 - [x] `U-03` Same-day and offline coordination with time, modality, trust, and proximity-aware ranking.
 - [x] `U-04` Group formation with threshold logic, backfill, and partial-group handling.
-- [~] `U-05` Passive availability mode as a first-class user-facing product surface.
+- [x] `U-05` Passive availability mode as a first-class user-facing product surface.
 - [x] `U-06` Discovery and exploration recommendations (`tonight`, passive, inbox suggestions, agent recommendations).
-- [~] `U-07` Relationship continuity and reconnect surfaces across clients.
-- [~] `U-08` Multi-intent decomposition and orchestration from a single user turn.
+- [x] `U-07` Relationship continuity and reconnect surfaces across clients.
+- [x] `U-08` Multi-intent decomposition and orchestration from a single user turn.
 - [x] `U-09` No-match recovery with widening, retry, follow-up messaging, and alternatives.
 
 ### 35.3 Agent and memory coverage
 
 - [x] `U-10` Agentic thread runtime with planning, bounded tools, specialists, streaming, and fallbacks.
-- [~] `U-11` User-facing explainable memory controls over life graph, retrieval memory, and agent context.
+- [x] `U-11` User-facing explainable memory controls over life graph, retrieval memory, and agent context.
 - [x] `U-12` Structured personalization memory (`life_graph`, retrieval docs/chunks, safe retrieval query path).
-- [~] `U-13` Rich explanation surfaces for "why this match", "why this recommendation", and "why not shown" across all clients.
+- [x] `U-13` Rich explanation surfaces for "why this match", "why this recommendation", and "why not shown" across all clients.
 
 ### 35.4 Search, notifications, and trust coverage
 
-- [~] `U-14` Search surfaces for topics, activities, and users as first-class product features.
+- [x] `U-14` Search surfaces for topics, activities, and users as first-class product features.
 - [x] `U-15` Notifications, digests, and async follow-up orchestration.
 - [x] `U-16` Safety, moderation, and trust boundary enforcement.
 - [x] `U-17` Admin/support operability for routing, moderation, sessions, chats, and stuck workflow recovery.
 
 ### 35.5 ChatGPT-class social assistant gaps
 
-- [~] `U-18` User-defined recurring tasks and scheduled automations.
-- [~] `U-19` Saved searches and scheduled discovery runs.
-- [~] `U-20` Topic- or goal-specific recurring digests and agent briefings.
-- [ ] `U-21` Recurring communities, circles, and repeatable social clusters.
-- [ ] `U-22` Agent-managed multi-step social plans with explicit approval checkpoints for risky actions.
+- [x] `U-18` User-defined recurring tasks and scheduled automations.
+- [x] `U-19` Saved searches and scheduled discovery runs.
+- [x] `U-20` Topic- or goal-specific recurring digests and agent briefings.
+- [x] `U-21` Recurring communities, circles, and repeatable social clusters.
+- [x] `U-22` Agent-managed multi-step social plans with explicit approval checkpoints for risky actions.
 
 ### 35.6 Near-term execution queue
 
-- [~] `UQ-01` Finish passive availability as an obvious client-side product surface, not just a backend capability.
-- [~] `UQ-02` Finish continuity/reconnect surfaces across web/mobile/admin using existing backend discovery and analytics signals.
-- [~] `UQ-03` Finish user-facing explanation surfaces for routing, recommendations, and safety/policy outcomes.
-- [~] `UQ-04` Implement multi-intent decomposition from a single agent/user turn with safe fanout coordination.
+- [x] `UQ-01` Finish passive availability as an obvious client-side product surface, not just a backend capability.
+- [x] `UQ-02` Finish continuity/reconnect surfaces across web/mobile/admin using existing backend discovery and analytics signals.
+- [x] `UQ-03` Finish user-facing explanation surfaces for routing, recommendations, and safety/policy outcomes.
+- [x] `UQ-04` Implement multi-intent decomposition from a single agent/user turn with safe fanout coordination.
 - [x] `UQ-05` Design and implement recurring tasks + scheduled searches v1 (schema, API, worker, notifications, admin visibility).
-- [ ] `UQ-06` Design recurring circles/communities model and rollout path.
+- [x] `UQ-06` Design recurring circles/communities model and rollout path.
 
 ### 35.7 `UQ-05` Implementation Breakdown
 
@@ -1418,3 +1437,24 @@ This section maps the conceptual product surface in [USE_CASES.md](/Users/crucib
 - [x] `UQ-05h` Add admin inspection endpoints and task/run visibility.
 - [x] `UQ-05i` Add launch controls for `scheduled_tasks`, `saved_searches`, and `recurring_briefings`.
 - [x] `UQ-05j` Add backend tests for CRUD, scheduling, execution, delivery, and safety boundaries.
+
+### 35.8 `UQ-06` Implementation Breakdown
+
+- [x] `UQ-06a` Write recurring circles v1 design + rollout doc in [docs/recurring-circles-v1.md](/Users/cruciblelabs/Documents/openchat/docs/recurring-circles-v1.md).
+- [x] `UQ-06b` Add Prisma schema and migration for `recurring_circles`, `recurring_circle_members`, and `recurring_circle_sessions`.
+- [x] `UQ-06c` Add shared contract schemas and DTOs for recurring circles CRUD, membership, and sessions.
+- [x] `UQ-06d` Add backend module/service/controller for circle CRUD, member management, and session listing.
+- [x] `UQ-06e` Add session open paths (`run-now`, due-session dispatch) with notification fanout.
+- [x] `UQ-06f` Add launch control for `recurring_circles` and admin visibility endpoints.
+- [x] `UQ-06g` Add backend tests for create, run-now session, and due-session dispatch.
+- [x] `UQ-06h` Integrate auto-intent generation + agent-thread publishing for opened sessions.
+- [x] `UQ-06i` Add frontend surfaces (web/mobile/admin) for circle management and session participation.
+
+### 35.9 Moderation Command Center Follow-Up
+
+- [x] `M-01` Audit current moderation backend/admin implementation and define moderation-command-center lane.
+- [x] `M-02` Add moderation summary + settings admin APIs and richer moderation-queue filters.
+- [x] `M-03` Upgrade admin moderation tab into a dashboard with KPIs, settings visibility, filtered queue review, and faster triage entry points.
+- [ ] `M-04` Add moderator notes / assignee state as first-class persisted fields instead of audit-log-only metadata.
+- [ ] `M-05` Add moderation analytics slices for false positives, repeat offenders, and SLA/triage latency.
+- [ ] `M-06` Add staging/prod moderation drill covering report -> flag -> triage -> enforcement -> audit verification.

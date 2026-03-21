@@ -16,6 +16,7 @@ import {
   adminModerationFlagAssignBodySchema,
   adminModerationAgentRiskQuerySchema,
   adminModerationFlagTriageBodySchema,
+  adminModerationQueueQuerySchema,
   adminRepairChatFlowBodySchema,
   adminResendNotificationBodySchema,
   adminUserActionBodySchema,
@@ -25,10 +26,12 @@ import type { Queue } from "bullmq";
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { ChatsService } from "../chats/chats.service.js";
+import { AppCacheService } from "../common/app-cache.service.js";
 import { ok } from "../common/api-response.js";
 import { getOpsRuntimeMetricsSnapshot } from "../common/ops-metrics.js";
 import { evaluateSecurityPosture } from "../common/security-posture.js";
 import { parseRequestPayload } from "../common/validation.js";
+import { DatabaseLatencyService } from "../database/database-latency.service.js";
 import { PrismaService } from "../database/prisma.service.js";
 import { IntentsService } from "../intents/intents.service.js";
 import { DeadLetterService } from "../jobs/dead-letter.service.js";
@@ -48,6 +51,8 @@ export class AdminController {
     private readonly deadLetterService: DeadLetterService,
     private readonly outboxRelayService: OutboxRelayService,
     private readonly adminAuditService: AdminAuditService,
+    private readonly appCacheService: AppCacheService,
+    private readonly databaseLatencyService: DatabaseLatencyService,
     private readonly prisma: PrismaService,
     private readonly intentsService: IntentsService,
     private readonly moderationService: ModerationService,
@@ -88,57 +93,16 @@ export class AdminController {
       "moderator",
     ]);
     const runtime = getOpsRuntimeMetricsSnapshot();
-    const windowStart = new Date(Date.now() - 24 * 60 * 60_000);
-    const [
-      dbLatencyMs,
-      totalUsers,
-      reports24h,
-      moderationFlags24h,
-      blockedProfiles,
-      pushSent24h,
-      pushRead24h,
-    ] = await Promise.all([
-      this.measureDbLatencyMs(),
-      this.prisma.user?.count ? this.prisma.user.count() : 0,
-      this.prisma.userReport?.count
-        ? this.prisma.userReport.count({
-            where: { createdAt: { gte: windowStart } },
-          })
-        : 0,
-      this.prisma.moderationFlag?.count
-        ? this.prisma.moderationFlag.count({
-            where: { createdAt: { gte: windowStart } },
-          })
-        : 0,
-      this.prisma.userProfile?.count
-        ? this.prisma.userProfile.count({
-            where: { moderationState: "blocked" },
-          })
-        : 0,
-      this.prisma.notification?.count
-        ? this.prisma.notification.count({
-            where: {
-              channel: "push",
-              createdAt: { gte: windowStart },
-            },
-          })
-        : 0,
-      this.prisma.notification?.count
-        ? this.prisma.notification.count({
-            where: {
-              channel: "push",
-              createdAt: { gte: windowStart },
-              isRead: true,
-            },
-          })
-        : 0,
-    ]);
+    const counts = await this.getCachedOpsMetricCounts();
 
     const moderationIncidentRatePer100Users =
-      totalUsers === 0
+      counts.totalUsers === 0
         ? 0
-        : ((reports24h + moderationFlags24h) / totalUsers) * 100;
-    const pushReadRate24h = pushSent24h === 0 ? 0 : pushRead24h / pushSent24h;
+        : ((counts.reports24h + counts.moderationFlags24h) /
+            counts.totalUsers) *
+          100;
+    const pushReadRate24h =
+      counts.pushSent24h === 0 ? 0 : counts.pushRead24h / counts.pushSent24h;
 
     await this.adminAuditService.recordAction({
       adminUserId: admin.adminUserId,
@@ -167,19 +131,19 @@ export class AdminController {
         failureRate: queue.failureRate,
       })),
       dbLatency: {
-        pingMs: dbLatencyMs,
+        pingMs: counts.dbLatencyMs,
       },
       openaiLatencyCost: runtime.openai,
       openaiBudget: getOpenAIBudgetGuardrailSnapshot(),
       moderationRates: {
-        reports24h,
-        moderationFlags24h,
-        blockedProfiles,
+        reports24h: counts.reports24h,
+        moderationFlags24h: counts.moderationFlags24h,
+        blockedProfiles: counts.blockedProfiles,
         incidentRatePer100Users: moderationIncidentRatePer100Users,
       },
       pushDeliverySuccess: {
-        pushSent24h,
-        pushRead24h,
+        pushSent24h: counts.pushSent24h,
+        pushRead24h: counts.pushRead24h,
         pushReadRate24h,
         runtimePushOpenRate: runtime.notifications.pushOpenRate,
       },
@@ -515,13 +479,22 @@ export class AdminController {
     @Headers("x-admin-user-id") adminUserIdHeader?: string,
     @Headers("x-admin-role") adminRoleHeader?: string,
     @Query("limit") limit?: string,
+    @Query("status") status?: string,
+    @Query("entityType") entityType?: string,
+    @Query("reasonContains") reasonContains?: string,
   ) {
     const admin = this.parseAdminContext(adminUserIdHeader, adminRoleHeader, [
       "admin",
       "support",
       "moderator",
     ]);
-    const parsedLimit = this.parseLimit(limit);
+    const payload = parseRequestPayload(adminModerationQueueQuerySchema, {
+      limit,
+      status,
+      entityType,
+      reasonContains,
+    });
+    const parsedLimit = payload.limit ?? 100;
     await this.adminAuditService.recordAction({
       adminUserId: admin.adminUserId,
       role: admin.role,
@@ -529,9 +502,160 @@ export class AdminController {
       entityType: "moderation_flag",
       metadata: {
         limit: parsedLimit,
+        status: payload.status ?? "open",
+        entityType: payload.entityType ?? null,
+        reasonContains: payload.reasonContains ?? null,
       },
     });
-    return ok(await this.adminAuditService.listModerationQueue(parsedLimit));
+    return ok(
+      await this.adminAuditService.listModerationQueue({
+        limit: parsedLimit,
+        status: payload.status,
+        entityType: payload.entityType,
+        reasonContains: payload.reasonContains,
+      }),
+    );
+  }
+
+  @Get("moderation/summary")
+  async moderationSummary(
+    @Headers("x-admin-user-id") adminUserIdHeader?: string,
+    @Headers("x-admin-role") adminRoleHeader?: string,
+  ) {
+    const admin = this.parseAdminContext(adminUserIdHeader, adminRoleHeader, [
+      "admin",
+      "support",
+      "moderator",
+    ]);
+    const windowStart = new Date(Date.now() - 24 * 60 * 60_000);
+
+    const [
+      openFlags,
+      resolvedFlags24h,
+      dismissedFlags24h,
+      agentRiskOpenFlags,
+      reportsOpen,
+      reports24h,
+      blockedProfiles,
+      suspendedUsers,
+      latestFlags,
+      latestReports,
+    ] = await Promise.all([
+      this.prisma.moderationFlag?.count
+        ? this.prisma.moderationFlag.count({ where: { status: "open" } })
+        : 0,
+      this.prisma.moderationFlag?.count
+        ? this.prisma.moderationFlag.count({
+            where: { status: "resolved", createdAt: { gte: windowStart } },
+          })
+        : 0,
+      this.prisma.moderationFlag?.count
+        ? this.prisma.moderationFlag.count({
+            where: { status: "dismissed", createdAt: { gte: windowStart } },
+          })
+        : 0,
+      this.prisma.moderationFlag?.count
+        ? this.prisma.moderationFlag.count({
+            where: { status: "open", entityType: "agent_thread" },
+          })
+        : 0,
+      this.prisma.userReport?.count
+        ? this.prisma.userReport.count({ where: { status: "open" } })
+        : 0,
+      this.prisma.userReport?.count
+        ? this.prisma.userReport.count({
+            where: { createdAt: { gte: windowStart } },
+          })
+        : 0,
+      this.prisma.userProfile?.count
+        ? this.prisma.userProfile.count({
+            where: { moderationState: "blocked" },
+          })
+        : 0,
+      this.prisma.user?.count
+        ? this.prisma.user.count({
+            where: { status: "suspended" },
+          })
+        : 0,
+      this.prisma.moderationFlag?.findMany
+        ? this.prisma.moderationFlag.findMany({
+            take: 5,
+            orderBy: { createdAt: "desc" },
+            select: {
+              id: true,
+              entityType: true,
+              entityId: true,
+              reason: true,
+              status: true,
+              createdAt: true,
+            },
+          })
+        : [],
+      this.prisma.userReport?.findMany
+        ? this.prisma.userReport.findMany({
+            take: 5,
+            orderBy: { createdAt: "desc" },
+            select: {
+              id: true,
+              reporterUserId: true,
+              targetUserId: true,
+              reason: true,
+              status: true,
+              createdAt: true,
+            },
+          })
+        : [],
+    ]);
+
+    await this.adminAuditService.recordAction({
+      adminUserId: admin.adminUserId,
+      role: admin.role,
+      action: "admin.moderation_summary_view",
+      entityType: "moderation_flag",
+    });
+
+    return ok({
+      generatedAt: new Date().toISOString(),
+      queue: {
+        openFlags,
+        agentRiskOpenFlags,
+        reportsOpen,
+      },
+      actions24h: {
+        reports24h,
+        resolvedFlags24h,
+        dismissedFlags24h,
+      },
+      enforcement: {
+        blockedProfiles,
+        suspendedUsers,
+      },
+      recent: {
+        flags: latestFlags,
+        reports: latestReports,
+      },
+    });
+  }
+
+  @Get("moderation/settings")
+  async moderationSettings(
+    @Headers("x-admin-user-id") adminUserIdHeader?: string,
+    @Headers("x-admin-role") adminRoleHeader?: string,
+  ) {
+    const admin = this.parseAdminContext(adminUserIdHeader, adminRoleHeader, [
+      "admin",
+      "support",
+      "moderator",
+    ]);
+
+    await this.adminAuditService.recordAction({
+      adminUserId: admin.adminUserId,
+      role: admin.role,
+      action: "admin.moderation_settings_view",
+      entityType: "moderation_policy",
+    });
+
+    return ok(this.getModerationSettingsSnapshot());
   }
 
   @Get("moderation/agent-risk-flags")
@@ -1514,17 +1638,165 @@ export class AdminController {
     return parsed;
   }
 
+  private parseBooleanEnv(
+    rawValue: string | undefined,
+    fallback: boolean,
+  ): boolean {
+    if (!rawValue) {
+      return fallback;
+    }
+    const normalized = rawValue.trim().toLowerCase();
+    if (["1", "true", "yes", "on"].includes(normalized)) {
+      return true;
+    }
+    if (["0", "false", "no", "off"].includes(normalized)) {
+      return false;
+    }
+    return fallback;
+  }
+
   private async measureDbLatencyMs() {
-    if (!this.prisma.$queryRawUnsafe) {
-      return null;
+    return this.databaseLatencyService.measureLatencyMs();
+  }
+
+  private getModerationSettingsSnapshot() {
+    const provider = process.env.MODERATION_PROVIDER?.trim() || "openai";
+    const agentRiskEnabled = this.parseBooleanEnv(
+      process.env.MODERATION_AGENT_RISK_ENABLED,
+      true,
+    );
+    const autoBlockTermsEnabled = this.parseBooleanEnv(
+      process.env.MODERATION_AUTO_BLOCK_TERMS_ENABLED,
+      true,
+    );
+    const strictMediaReview = this.parseBooleanEnv(
+      process.env.MODERATION_STRICT_MEDIA_REVIEW_ENABLED,
+      true,
+    );
+    const userReportsEnabled = this.parseBooleanEnv(
+      process.env.MODERATION_USER_REPORTS_ENABLED,
+      true,
+    );
+
+    return {
+      provider,
+      keys: {
+        moderationProviderConfigured:
+          Boolean(process.env.OPENAI_API_KEY) ||
+          Boolean(process.env.MODERATION_PROVIDER_API_KEY),
+        openaiConfigured: Boolean(process.env.OPENAI_API_KEY),
+        customProviderConfigured: Boolean(
+          process.env.MODERATION_PROVIDER_API_KEY,
+        ),
+      },
+      toggles: {
+        agentRiskEnabled,
+        autoBlockTermsEnabled,
+        strictMediaReview,
+        userReportsEnabled,
+      },
+      thresholds: {
+        moderationBacklogAlert: this.parseThreshold(
+          process.env.ALERT_MODERATION_BACKLOG_THRESHOLD,
+          150,
+        ),
+        dbLatencyAlertMs: this.parseThreshold(
+          process.env.ALERT_DB_LATENCY_THRESHOLD_MS,
+          500,
+        ),
+        openAiErrorRateAlert: this.parseThreshold(
+          process.env.ALERT_OPENAI_ERROR_RATE_THRESHOLD,
+          0.25,
+        ),
+      },
+      policyModes: {
+        agentBlockedDecisionLabel:
+          process.env.MODERATION_AGENT_BLOCKED_LABEL ?? "blocked",
+        agentReviewDecisionLabel:
+          process.env.MODERATION_AGENT_REVIEW_LABEL ?? "review",
+      },
+      surfaces: {
+        profilePhotos: strictMediaReview,
+        chatMessages: agentRiskEnabled,
+        intents: agentRiskEnabled,
+        agentThreads: agentRiskEnabled,
+      },
+    };
+  }
+
+  private async getCachedOpsMetricCounts() {
+    const cacheKey = "admin:ops:metrics:counts:v1";
+    const cached = await this.appCacheService.getJson<{
+      dbLatencyMs: number | null;
+      totalUsers: number;
+      reports24h: number;
+      moderationFlags24h: number;
+      blockedProfiles: number;
+      pushSent24h: number;
+      pushRead24h: number;
+    }>(cacheKey);
+    if (cached) {
+      return cached;
     }
-    const startedAt = Date.now();
-    try {
-      await this.prisma.$queryRawUnsafe("SELECT 1");
-      return Date.now() - startedAt;
-    } catch {
-      return null;
-    }
+
+    const windowStart = new Date(Date.now() - 24 * 60 * 60_000);
+    const [
+      dbLatencyMs,
+      totalUsers,
+      reports24h,
+      moderationFlags24h,
+      blockedProfiles,
+      pushSent24h,
+      pushRead24h,
+    ] = await Promise.all([
+      this.measureDbLatencyMs(),
+      this.prisma.user?.count ? this.prisma.user.count() : 0,
+      this.prisma.userReport?.count
+        ? this.prisma.userReport.count({
+            where: { createdAt: { gte: windowStart } },
+          })
+        : 0,
+      this.prisma.moderationFlag?.count
+        ? this.prisma.moderationFlag.count({
+            where: { createdAt: { gte: windowStart } },
+          })
+        : 0,
+      this.prisma.userProfile?.count
+        ? this.prisma.userProfile.count({
+            where: { moderationState: "blocked" },
+          })
+        : 0,
+      this.prisma.notification?.count
+        ? this.prisma.notification.count({
+            where: {
+              channel: "push",
+              createdAt: { gte: windowStart },
+            },
+          })
+        : 0,
+      this.prisma.notification?.count
+        ? this.prisma.notification.count({
+            where: {
+              channel: "push",
+              createdAt: { gte: windowStart },
+              isRead: true,
+            },
+          })
+        : 0,
+    ]);
+
+    const snapshot = {
+      dbLatencyMs,
+      totalUsers,
+      reports24h,
+      moderationFlags24h,
+      blockedProfiles,
+      pushSent24h,
+      pushRead24h,
+    };
+
+    await this.appCacheService.setJson(cacheKey, snapshot, 15);
+    return snapshot;
   }
 
   private async inspectQueue(queueName: string) {

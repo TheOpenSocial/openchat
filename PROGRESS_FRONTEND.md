@@ -17,9 +17,9 @@ This file tracks **client-facing** behavior across **web** (`apps/web`), **mobil
 
 | | Status |
 |--|--------|
-| **Libraries** | No `react-i18next` / `expo-localization` catalog wiring yet |
-| **Pattern** | `apps/*/src/i18n/strings.ts` — English copy + `t()` for future locale switching |
-| **UI coverage** | Partial (agent tab strings, offline copy on web/mobile) |
+| **Libraries** | Lightweight typed catalogs (`en`, `es`) with app-level locale persistence (`localStorage` web/admin, `AsyncStorage` mobile) |
+| **Pattern** | `apps/*/src/i18n/strings.ts` + locale-aware `t(key, locale)`; admin shell catalog in `apps/admin/app/lib/i18n.ts` |
+| **UI coverage** | Baseline complete for key shared strings (agent tab + offline copy + language selector controls in web/mobile profile and admin shell) |
 
 ## Online / offline
 
@@ -66,7 +66,7 @@ This file tracks **client-facing** behavior across **web** (`apps/web`), **mobil
 ## Related backend / ops
 
 - Agent contracts: `10_api_contracts.md`, `06_ai_agent_architecture.md`
-- Admin optional backlog (e.g. Playwright): see `18_testing_quality_and_release_gates.md` §18.5
+- Admin E2E baseline: `apps/admin/e2e/admin-signin.spec.ts` + `apps/admin/playwright.config.ts`
 
 ## Implementation notes
 
@@ -78,6 +78,8 @@ This file tracks **client-facing** behavior across **web** (`apps/web`), **mobil
 - Agent chat: **live token rendering** via thread SSE + `respond/stream` with client `traceId` correlation; web uses `EventSource`, mobile uses XHR incremental parse.
 - Admin **Moderation** tab: **Agent thread risk flags** panel (`GET /admin/moderation/agent-risk-flags`, triage + assign actions).
 - Added `GET /api/agent/threads/me/summary` and wired web + mobile agent home to **chat** vs **intent** modes.
+- Added locale switching baseline (`en`/`es`) with persistent client locale settings on web/mobile/admin.
+- Added URL-based tab deep-links (`?tab=`) on web home tabs and admin workbench tabs.
 - Added offline gating + NetInfo (mobile) / `online` events (web).
 - Introduced minimal `src/i18n/strings.ts` stubs (English-only).
 - Admin Agent panel: **Run agentic respond** for debugging full turns.

@@ -17,6 +17,22 @@ Optional automation (backend smoke runner):
   - `SMOKE_USE_UNIQUE_IP` (`true` by default for localhost; set `false` to test strict per-IP abuse throttling behavior)
 - The script verifies key read-only backend endpoints (`health`, admin `ops`, queue, dead-letter, and moderation agent-risk queue) and exits non-zero on any failing check.
 
+Optional automation (incident/readiness verification):
+- Command: `pnpm staging:verify:incident`
+- Required env for staging:
+  - `SMOKE_BASE_URL`
+  - `SMOKE_ADMIN_USER_ID`
+  - `SMOKE_ADMIN_ROLE` (`admin`, `support`, or `moderator`; default `support`)
+  - `SMOKE_ADMIN_API_KEY` (when admin middleware requires key)
+  - `SMOKE_ACCESS_TOKEN` (optional bearer when access-token auth is enforced)
+- Optional controls:
+  - `INCIDENT_VERIFY_REQUIRE_HEALTHY` (`true` by default; fail if `ops/alerts` summary is not `healthy`)
+  - `INCIDENT_VERIFY_FAIL_ON_WARNING` (`false` by default; when `true`, fail on warning alerts too)
+  - `INCIDENT_VERIFY_RUNBOOKS` (`true` by default; validates core runbook files exist)
+  - `INCIDENT_VERIFY_SKIP_HTTP` (`false` by default; when `true`, skips network checks and verifies runbook-path readiness only)
+  - `INCIDENT_VERIFY_RUNBOOK_FILES` (comma-separated file list override)
+- The script verifies health, `ops/alerts`, `ops/metrics`, launch controls, queue visibility, and runbook-path presence; exits non-zero on readiness failures.
+
 ## 1) Environment and Health
 - [ ] `GET /api/health` returns success.
 - [ ] `GET /api/admin/health` returns success with valid admin headers.

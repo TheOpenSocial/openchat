@@ -23,6 +23,9 @@ const logger = new Logger("RequestSecurity");
 const rateCounters = new Map<string, CounterWindow>();
 const abuseCounters = new Map<string, CounterWindow>();
 let requestCounter = 0;
+const ADMIN_ROLES = new Set(["admin", "support", "moderator"]);
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const DEFAULT_CONFIG: RequestSecurityConfig = {
   globalWindowMs: 60_000,
@@ -132,6 +135,41 @@ function isHighRiskPath(path: string) {
     path.startsWith("/api/inbox/requests/") ||
     path.startsWith("/api/admin/")
   );
+}
+
+function getSingleHeader(
+  header: string | string[] | undefined,
+): string | undefined {
+  if (Array.isArray(header)) {
+    return header[0];
+  }
+  return header;
+}
+
+function isTrustedAdminRequest(request: Request, path: string) {
+  if (!path.startsWith("/api/admin/")) {
+    return false;
+  }
+
+  const adminUserId = getSingleHeader(request.headers["x-admin-user-id"]);
+  const adminRole = getSingleHeader(request.headers["x-admin-role"]);
+
+  if (
+    typeof adminUserId !== "string" ||
+    !UUID_REGEX.test(adminUserId) ||
+    typeof adminRole !== "string" ||
+    !ADMIN_ROLES.has(adminRole)
+  ) {
+    return false;
+  }
+
+  const requiredApiKey = process.env.ADMIN_API_KEY?.trim();
+  if (!requiredApiKey) {
+    return true;
+  }
+
+  const adminApiKey = getSingleHeader(request.headers["x-admin-api-key"]);
+  return typeof adminApiKey === "string" && adminApiKey === requiredApiKey;
 }
 
 function getOrInitWindow(
@@ -321,7 +359,13 @@ export function requestSecurityMiddleware(
     return;
   }
 
-  const requestScore = isHighRiskPath(path) ? 8 : isWrite ? 3 : 1;
+  const requestScore = isTrustedAdminRequest(request, path)
+    ? 1
+    : isHighRiskPath(path)
+      ? 8
+      : isWrite
+        ? 3
+        : 1;
   abuseWindow.count += requestScore;
   if (abuseWindow.count > config.abuseMaxScore) {
     abuseWindow.blockedUntil = now + config.abuseBlockMs;

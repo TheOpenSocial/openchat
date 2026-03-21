@@ -260,4 +260,64 @@ describe("AgentController", () => {
       ],
     });
   });
+
+  it("lists and resolves plan checkpoints", async () => {
+    const threadId = "11111111-1111-4111-8111-111111111111";
+    const checkpointId = "44444444-4444-4444-8444-444444444444";
+    const userId = "22222222-2222-4222-8222-222222222222";
+
+    const agentService: any = {
+      assertThreadOwnership: vi.fn().mockResolvedValue(undefined),
+      subscribeToThread: vi.fn(),
+      unsubscribeFromThread: vi.fn(),
+      listThreadMessages: vi.fn(),
+      createUserMessage: vi.fn(),
+    };
+    const agentConversationService: any = {
+      runAgenticTurn: vi.fn(),
+      listPlanCheckpoints: vi
+        .fn()
+        .mockResolvedValue([{ id: checkpointId, threadId, status: "pending" }]),
+      resolvePlanCheckpoint: vi
+        .fn()
+        .mockResolvedValue({ id: checkpointId, status: "approved" }),
+    };
+
+    const controller = new AgentController(
+      agentService,
+      agentConversationService,
+    );
+
+    const listResult = await controller.listPlanCheckpoints(
+      threadId,
+      { status: "pending", limit: 10 },
+      userId,
+    );
+    expect(listResult.success).toBe(true);
+    expect(agentConversationService.listPlanCheckpoints).toHaveBeenCalledWith({
+      threadId,
+      status: "pending",
+      limit: 10,
+    });
+
+    const approveResult = await controller.approvePlanCheckpoint(
+      threadId,
+      checkpointId,
+      {
+        userId,
+        reason: "approved",
+      },
+      userId,
+    );
+    expect(approveResult.success).toBe(true);
+    expect(agentConversationService.resolvePlanCheckpoint).toHaveBeenCalledWith(
+      {
+        threadId,
+        checkpointId,
+        actorUserId: userId,
+        decision: "approved",
+        reason: "approved",
+      },
+    );
+  });
 });

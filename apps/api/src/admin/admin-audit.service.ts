@@ -67,17 +67,27 @@ export class AdminAuditService {
     });
   }
 
-  async listModerationQueue(limit = 100) {
+  async listModerationQueue(input?: {
+    limit?: number;
+    status?: "open" | "resolved" | "dismissed";
+    entityType?: string;
+    reasonContains?: string;
+  }) {
     if (!this.prisma.moderationFlag?.findMany) {
       return [];
     }
 
+    const limit = Math.min(Math.max(input?.limit ?? 100, 1), 250);
     return this.prisma.moderationFlag.findMany({
       where: {
-        status: "open",
+        status: input?.status ?? "open",
+        ...(input?.entityType ? { entityType: input.entityType } : {}),
+        ...(input?.reasonContains
+          ? { reason: { contains: input.reasonContains, mode: "insensitive" } }
+          : {}),
       },
       orderBy: { createdAt: "desc" },
-      take: Math.min(Math.max(limit, 1), 250),
+      take: limit,
     });
   }
 }

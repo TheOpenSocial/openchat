@@ -6,16 +6,16 @@ test.describe("Web design mock critical path", () => {
   }) => {
     await page.goto("/");
 
-    await expect(page.getByText("Mock data · no API")).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Explore the app" }),
+    ).toBeVisible();
 
     await page.getByTestId("web-design-welcome-continue").click();
-    await expect(
-      page.getByRole("heading", { name: "Preview sign-in" }),
-    ).toBeVisible();
+    await expect(page.getByTestId("web-design-auth-title")).toBeVisible();
 
     await page.getByTestId("web-design-preview-signin").click();
     await expect(
-      page.getByRole("heading", { name: "Tune your signal" }),
+      page.getByRole("heading", { name: "Finish your profile" }),
     ).toBeVisible();
 
     await page.getByTestId("web-onboarding-continue").click();

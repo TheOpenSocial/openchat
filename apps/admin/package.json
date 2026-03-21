@@ -6,23 +6,27 @@
     "dev": "next dev -p 3001",
     "build": "next build",
     "start": "next start -p 3001",
-    "lint": "eslint \"app/**/*.{ts,tsx}\" next.config.ts --max-warnings=0",
+    "lint": "eslint \"app/**/*.{ts,tsx}\" \"e2e/**/*.ts\" next.config.ts playwright.config.ts --max-warnings=0",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "echo 'no tests yet for admin app'"
+    "test": "echo 'no tests yet for admin app'",
+    "test:e2e": "playwright test",
+    "test:e2e:install": "playwright install chromium"
   },
   "dependencies": {
     "@radix-ui/react-label": "^2.1.8",
+    "@radix-ui/react-select": "^2.2.6",
     "@radix-ui/react-separator": "^1.1.8",
     "@radix-ui/react-slot": "^1.2.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.577.0",
-    "next": "^16.2.0",
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4",
+    "next": "^16.2.1",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
     "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.58.2",
     "@tailwindcss/postcss": "^4.2.2",
     "@types/react": "^19.0.11",
     "@types/react-dom": "^19.0.4",

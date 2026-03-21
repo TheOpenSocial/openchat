@@ -2,20 +2,29 @@ import * as Haptics from "expo-haptics";
 import { AccessibilityInfo } from "react-native";
 
 let reduceMotionEnabled = false;
+let reduceMotionSubscription: { remove(): void } | null = null;
 
-void AccessibilityInfo.isReduceMotionEnabled()
-  .then((value) => {
-    reduceMotionEnabled = value;
-  })
-  .catch(() => {});
-
-AccessibilityInfo.addEventListener("reduceMotionChanged", (value) => {
-  reduceMotionEnabled = value;
-});
+function ensureReduceMotionTracking(): void {
+  if (reduceMotionSubscription) {
+    return;
+  }
+  reduceMotionSubscription = AccessibilityInfo.addEventListener(
+    "reduceMotionChanged",
+    (value) => {
+      reduceMotionEnabled = value;
+    },
+  );
+  void AccessibilityInfo.isReduceMotionEnabled()
+    .then((value) => {
+      reduceMotionEnabled = value;
+    })
+    .catch(() => {});
+}
 
 export function hapticImpact(
   style: Haptics.ImpactFeedbackStyle = Haptics.ImpactFeedbackStyle.Light,
 ) {
+  ensureReduceMotionTracking();
   if (reduceMotionEnabled) {
     return;
   }
@@ -23,6 +32,7 @@ export function hapticImpact(
 }
 
 export function hapticSelection() {
+  ensureReduceMotionTracking();
   if (reduceMotionEnabled) {
     return;
   }

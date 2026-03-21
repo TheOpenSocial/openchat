@@ -22,6 +22,10 @@ describe("AgentConversationService integration", () => {
         content: string;
         metadata: Record<string, unknown> | undefined;
       }> = [];
+      const ephemeralWorkflowUpdates: Array<{
+        content: string;
+        metadata: Record<string, unknown> | undefined;
+      }> = [];
       const agentMessages: Array<{ content: string }> = [];
 
       const prisma: any = {
@@ -62,6 +66,22 @@ describe("AgentConversationService integration", () => {
             metadata,
           };
         },
+        appendEphemeralWorkflowUpdate: (
+          _targetThreadId: string,
+          content: string,
+          metadata?: Record<string, unknown>,
+        ) => {
+          ephemeralWorkflowUpdates.push({ content, metadata });
+          return {
+            id: `ephemeral-${ephemeralWorkflowUpdates.length}`,
+            threadId,
+            role: "workflow",
+            content,
+            createdByUserId: null,
+            createdAt: new Date(),
+            metadata,
+          };
+        },
         createAgentMessage: async (
           _targetThreadId: string,
           content: string,
@@ -78,7 +98,17 @@ describe("AgentConversationService integration", () => {
         },
       };
 
-      const service = new AgentConversationService(prisma, agentService);
+      const appCacheService: any = {
+        getJson: async () => null,
+        setJson: async () => undefined,
+        delete: async () => undefined,
+      };
+
+      const service = new AgentConversationService(
+        prisma,
+        agentService,
+        appCacheService,
+      );
       const result = await service.runAgenticTurn({
         threadId,
         userId,
@@ -114,7 +144,7 @@ describe("AgentConversationService integration", () => {
       expect(result.streaming.responseTokenStreamed).toBe(true);
       expect(result.streaming.chunkCount).toBeGreaterThan(0);
 
-      const tokenUpdates = workflowUpdates.filter(
+      const tokenUpdates = ephemeralWorkflowUpdates.filter(
         (update) => update.metadata?.stage === "response_token",
       );
       expect(tokenUpdates.length).toBe(result.streaming.chunkCount);

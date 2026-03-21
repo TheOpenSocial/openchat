@@ -261,6 +261,7 @@ model AgentThread {
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
   messages   AgentMessage[]
+  planCheckpoints AgentPlanCheckpoint[]
 
   @@index([userId, createdAt])
   @@map("agent_threads")
@@ -278,6 +279,29 @@ model AgentMessage {
 
   @@index([threadId, createdAt])
   @@map("agent_messages")
+}
+
+model AgentPlanCheckpoint {
+  id               String   @id @default(uuid()) @db.Uuid
+  threadId         String   @db.Uuid @map("thread_id")
+  userId           String   @db.Uuid @map("user_id")
+  traceId          String   @map("trace_id")
+  requestedByRole  String   @map("requested_by_role")
+  tool             String
+  actionType       String   @map("action_type")
+  riskLevel        String   @map("risk_level")
+  status           String   @default("pending")
+  requestMetadata  Json?    @map("request_metadata")
+  decisionReason   String?  @map("decision_reason")
+  resolvedByUserId String?  @db.Uuid @map("resolved_by_user_id")
+  resolvedAt       DateTime? @map("resolved_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+  thread           AgentThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, status, createdAt])
+  @@index([userId, status, createdAt])
+  @@map("agent_plan_checkpoints")
 }
 
 model Intent {
@@ -438,14 +462,22 @@ model Notification {
 }
 
 model ModerationFlag {
-  id           String   @id @default(uuid()) @db.Uuid
-  entityType   String   @map("entity_type")
-  entityId     String   @db.Uuid @map("entity_id")
-  reason       String
-  status       String   @default("open")
-  createdAt    DateTime @default(now()) @map("created_at")
+  id                 String    @id @default(uuid()) @db.Uuid
+  entityType         String    @map("entity_type")
+  entityId           String    @db.Uuid @map("entity_id")
+  reason             String
+  status             String    @default("open")
+  assigneeUserId     String?   @db.Uuid @map("assignee_user_id")
+  assignmentNote     String?   @map("assignment_note")
+  assignedAt         DateTime? @map("assigned_at")
+  lastDecision       String?   @map("last_decision")
+  triageNote         String?   @map("triage_note")
+  triagedByAdminUserId String? @db.Uuid @map("triaged_by_admin_user_id")
+  triagedAt          DateTime? @map("triaged_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
 
   @@index([entityType, status])
+  @@index([assigneeUserId, status])
   @@map("moderation_flags")
 }
 

@@ -23,7 +23,7 @@ export function Panel({
   return (
     <Card
       className={cn(
-        "animate-rise shadow-[0_18px_44px_rgba(2,6,23,0.35)]",
+        "animate-rise border border-white/5 bg-card/95 shadow-[0_18px_44px_rgba(2,6,23,0.45)] backdrop-blur-sm",
         className,
       )}
     >

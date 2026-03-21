@@ -1,10 +1,20 @@
 import "./global.css";
 
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  type LazyExoticComponent,
+  type FC,
+  Suspense,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { AnimatedScreen } from "./src/components/AnimatedScreen";
+import { AppToastHost } from "./src/components/AppToastHost";
 import { LoadingState } from "./src/components/LoadingState";
 import { api, configureApiAuthLifecycle } from "./src/lib/api";
 import {
@@ -14,10 +24,19 @@ import {
 } from "./src/lib/session-storage";
 import { trackTelemetryEvent } from "./src/lib/telemetry";
 import { AuthScreen } from "./src/screens/AuthScreen";
-import { DesignMockApp } from "./src/screens/DesignMockApp";
-import { HomeScreen } from "./src/screens/HomeScreen";
+import type { HomeScreenProps } from "./src/screens/HomeScreen";
 import { OnboardingScreen } from "./src/screens/OnboardingScreen";
 import { AppStage, MobileSession, UserProfileDraft } from "./src/types";
+
+const HomeScreen: LazyExoticComponent<FC<HomeScreenProps>> = lazy(() =>
+  import("./src/screens/HomeScreen").then((m) => ({ default: m.HomeScreen })),
+);
+
+const DesignMockApp: LazyExoticComponent<FC> = lazy(() =>
+  import("./src/screens/DesignMockApp").then((m) => ({
+    default: m.DesignMockApp,
+  })),
+);
 
 const designMockApp =
   process.env.EXPO_PUBLIC_DESIGN_MOCK === "1" ||
@@ -344,49 +363,58 @@ function ProductionApp() {
 
   if (isBootstrapping) {
     return (
-      <SafeAreaProvider>
+      <SafeAreaProvider style={{ flex: 1 }}>
         <StatusBar style="light" />
         <LoadingState label="Restoring session..." />
+        <AppToastHost />
       </SafeAreaProvider>
     );
   }
 
   return (
-    <SafeAreaProvider>
+    <SafeAreaProvider style={{ flex: 1 }}>
       <StatusBar style="light" />
-      <AnimatedScreen screenKey={stageKey}>
-        {stage === "auth" ? (
-          <AuthScreen
-            allowE2EBypass={allowE2EBypass}
-            errorMessage={authError}
-            loading={authLoading}
-            onAuthenticated={handleAuthenticate}
-          />
-        ) : null}
-        {stage === "onboarding" ? (
-          <OnboardingScreen
-            defaultName={displayName}
-            errorMessage={onboardingError}
-            loading={onboardingLoading}
-            onComplete={handleOnboardingComplete}
-          />
-        ) : null}
-        {stage === "home" && session ? (
-          <HomeScreen
-            initialProfile={profile}
-            onProfileUpdated={setProfile}
-            onResetSession={handleResetSession}
-            session={session}
-          />
-        ) : null}
-      </AnimatedScreen>
+      {stage === "auth" ? (
+        <AuthScreen
+          allowE2EBypass={allowE2EBypass}
+          errorMessage={authError}
+          loading={authLoading}
+          onAuthenticated={handleAuthenticate}
+        />
+      ) : (
+        <AnimatedScreen screenKey={stageKey}>
+          {stage === "onboarding" ? (
+            <OnboardingScreen
+              defaultName={displayName}
+              errorMessage={onboardingError}
+              loading={onboardingLoading}
+              onComplete={handleOnboardingComplete}
+            />
+          ) : null}
+          {stage === "home" && session ? (
+            <Suspense fallback={<LoadingState label="Loading your space…" />}>
+              <HomeScreen
+                initialProfile={profile}
+                onProfileUpdated={setProfile}
+                onResetSession={handleResetSession}
+                session={session}
+              />
+            </Suspense>
+          ) : null}
+        </AnimatedScreen>
+      )}
+      <AppToastHost />
     </SafeAreaProvider>
   );
 }
 
 export default function App() {
   if (designMockApp) {
-    return <DesignMockApp />;
+    return (
+      <Suspense fallback={<LoadingState label="Loading design preview…" />}>
+        <DesignMockApp />
+      </Suspense>
+    );
   }
   return <ProductionApp />;
 }

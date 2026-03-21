@@ -123,4 +123,25 @@ describe("LaunchControlsService", () => {
       ),
     ).rejects.toThrow("disabled");
   });
+
+  it("blocks recurring circles when recurring circles flag is disabled", async () => {
+    const prisma: any = {
+      userPreference: {
+        findMany: vi
+          .fn()
+          .mockResolvedValue([
+            { key: "launch.enable_recurring_circles", value: false },
+          ]),
+      },
+    };
+
+    const service = new LaunchControlsService(prisma);
+
+    await expect(
+      service.assertActionAllowed(
+        "recurring_circles",
+        "11111111-1111-4111-8111-111111111111",
+      ),
+    ).rejects.toThrow("disabled");
+  });
 });

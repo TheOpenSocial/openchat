@@ -10,6 +10,7 @@ type ThreadMessageListener = (message: {
   content: string;
   createdByUserId: string | null;
   createdAt: Date;
+  metadata?: Prisma.JsonValue | null;
 }) => void;
 
 type AgentMessageRole = "user" | "agent" | "system" | "workflow";
@@ -85,6 +86,24 @@ export class AgentService {
     });
   }
 
+  appendEphemeralWorkflowUpdate(
+    threadId: string,
+    content: string,
+    metadata?: Record<string, unknown>,
+  ) {
+    const message = {
+      id: `ephemeral-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+      threadId,
+      role: "workflow",
+      content,
+      createdByUserId: null,
+      createdAt: new Date(),
+      metadata: (metadata as Prisma.JsonValue | undefined) ?? null,
+    };
+    this.emitThreadMessage(threadId, message);
+    return message;
+  }
+
   subscribeToThread(threadId: string, listener: ThreadMessageListener) {
     this.events.on(this.threadEventName(threadId), listener);
   }
@@ -102,6 +121,7 @@ export class AgentService {
       content: string;
       createdByUserId: string | null;
       createdAt: Date;
+      metadata?: Prisma.JsonValue | null;
     },
   ) {
     this.events.emit(this.threadEventName(threadId), message);

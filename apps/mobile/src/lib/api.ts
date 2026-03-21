@@ -6,7 +6,7 @@ import {
   saveStoredSession,
 } from "./session-storage";
 
-type HttpMethod = "GET" | "POST" | "PUT" | "PATCH";
+type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 type RequestQueryValue = string | number | boolean | null | undefined;
 
 interface ApiEnvelope<T> {
@@ -81,6 +81,64 @@ export interface ChatMessageRecord {
   createdAt: string;
 }
 
+export interface RecurringCircleRecord {
+  id: string;
+  ownerUserId: string;
+  title: string;
+  description: string | null;
+  status: "active" | "paused" | "archived";
+  visibility: "private" | "invite_only" | "discoverable";
+  nextSessionAt: string | null;
+}
+
+export interface RecurringCircleSessionRecord {
+  id: string;
+  circleId: string;
+  status: string;
+  scheduledFor: string;
+  generatedIntentId: string | null;
+  summary: string | null;
+}
+
+export interface SavedSearchRecord {
+  id: string;
+  userId: string;
+  title: string;
+  searchType: string;
+  queryConfig: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ScheduledTaskRecord {
+  id: string;
+  userId: string;
+  title: string;
+  description: string | null;
+  taskType: string;
+  status: string;
+  scheduleType: string;
+  scheduleConfig: Record<string, unknown>;
+  taskConfig: Record<string, unknown>;
+  nextRunAt: string | null;
+  lastRunAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ScheduledTaskRunRecord {
+  id: string;
+  scheduledTaskId: string;
+  userId: string;
+  status: string;
+  triggeredAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  traceId: string;
+  resultPayload: Record<string, unknown> | null;
+  errorMessage: string | null;
+}
+
 export interface ChatMetadataRecord {
   chatId: string;
   type: "dm" | "group";
@@ -125,6 +183,49 @@ export interface PendingIntentsSummaryResponse {
   activeIntentCount: number;
   summaryText: string;
   intents: PendingIntentSummaryItem[];
+}
+
+export interface UserIntentExplanation {
+  intentId: string;
+  status: string;
+  summary: string;
+  factors: string[];
+}
+
+export interface SearchSnapshotResponse {
+  userId: string;
+  query: string;
+  generatedAt: string;
+  users: Array<{
+    userId: string;
+    displayName: string;
+    city: string | null;
+    country: string | null;
+    moderationState: string;
+    score: number;
+  }>;
+  topics: Array<{
+    label: string;
+    count: number;
+    score: number;
+  }>;
+  activities: Array<{
+    intentId: string;
+    ownerUserId: string;
+    status: string;
+    summary: string;
+    createdAt: string;
+    score: number;
+  }>;
+  groups: Array<{
+    circleId: string;
+    title: string;
+    description: string | null;
+    visibility: string;
+    ownerUserId: string;
+    nextSessionAt: string | null;
+    score: number;
+  }>;
 }
 
 export interface DiscoveryUserSuggestion {
@@ -247,6 +348,45 @@ function parseEnvelope<T>(payload: unknown): ApiEnvelope<T> {
   return payload as unknown as ApiEnvelope<T>;
 }
 
+/**
+ * NestJS (and similar) error bodies use `{ statusCode, message, error }` without `success`,
+ * which previously surfaced as the vague "Invalid API response envelope" on mobile.
+ */
+function envelopeFromNestStyleError(raw: unknown): ApiEnvelope<never> | null {
+  if (!isRecord(raw) || typeof raw.success === "boolean") {
+    return null;
+  }
+  const statusCode = raw.statusCode;
+  if (typeof statusCode !== "number") {
+    return null;
+  }
+
+  const msg = raw.message;
+  let message: string;
+  if (typeof msg === "string") {
+    message = msg;
+  } else if (Array.isArray(msg)) {
+    message = msg.map((m) => String(m)).join("; ");
+  } else if (isRecord(msg)) {
+    const inner = msg.message;
+    message = typeof inner === "string" ? inner : JSON.stringify(msg);
+  } else {
+    message =
+      typeof raw.error === "string"
+        ? raw.error
+        : `Request failed (${statusCode})`;
+  }
+
+  return {
+    success: false,
+    error: {
+      code: "http_error",
+      message:
+        message.trim().length > 0 ? message : `Request failed (${statusCode})`,
+    },
+  };
+}
+
 async function readEnvelope<T>(response: Response): Promise<ApiEnvelope<T>> {
   const raw = (await response.json().catch(() => null)) as unknown;
   if (!raw) {
@@ -261,6 +401,10 @@ async function readEnvelope<T>(response: Response): Promise<ApiEnvelope<T>> {
   try {
     return parseEnvelope<T>(raw);
   } catch {
+    const nest = envelopeFromNestStyleError(raw);
+    if (nest) {
+      return nest;
+    }
     return {
       success: false,
       error: {
@@ -448,6 +592,16 @@ export interface AgenticTurnResult {
   };
 }
 
+export interface AgentMessageIntentResult {
+  threadId: string;
+  messageId: string;
+  intentId: string;
+  status: string;
+  intentCount: number;
+  intentIds: string[];
+  traceId: string;
+}
+
 export type ModerationRiskDecision = "blocked" | "review" | "clean";
 
 export interface ContentRiskAssessment {
@@ -567,6 +721,58 @@ export const api = {
       accessToken,
     );
   },
+  getLifeGraph(userId: string, accessToken?: string) {
+    return request<Record<string, unknown>>(
+      "GET",
+      `/personalization/${userId}/life-graph`,
+      undefined,
+      accessToken,
+    );
+  },
+  queryRetrievalContext(
+    userId: string,
+    payload: { query: string; maxChunks?: number; maxAgeDays?: number },
+    accessToken?: string,
+  ) {
+    return request<Record<string, unknown>>(
+      "POST",
+      `/personalization/${userId}/retrieval/query`,
+      payload,
+      accessToken,
+    );
+  },
+  refreshProfileSummaryMemory(userId: string, accessToken?: string) {
+    return request<Record<string, unknown>>(
+      "POST",
+      `/personalization/${userId}/retrieval/profile-summary/refresh`,
+      {},
+      accessToken,
+    );
+  },
+  refreshPreferenceMemory(userId: string, accessToken?: string) {
+    return request<Record<string, unknown>>(
+      "POST",
+      `/personalization/${userId}/retrieval/preference-memory/refresh`,
+      {},
+      accessToken,
+    );
+  },
+  resetMemory(
+    userId: string,
+    payload: {
+      actorUserId: string;
+      mode?: "learned_memory" | "all_personalization";
+      reason?: string;
+    },
+    accessToken?: string,
+  ) {
+    return request<Record<string, unknown>>(
+      "POST",
+      `/privacy/${userId}/memory/reset`,
+      payload,
+      accessToken,
+    );
+  },
   setGlobalRules(
     userId: string,
     payload: {
@@ -631,6 +837,30 @@ export const api = {
       accessToken,
       undefined,
       fetchOptions,
+    );
+  },
+  createIntentFromAgentMessage(
+    threadId: string,
+    userId: string,
+    content: string,
+    accessToken?: string,
+    options?: { allowDecomposition?: boolean; maxIntents?: number },
+  ) {
+    return request<AgentMessageIntentResult>(
+      "POST",
+      "/intents/from-agent",
+      {
+        threadId,
+        userId,
+        content,
+        ...(options?.allowDecomposition !== undefined
+          ? { allowDecomposition: options.allowDecomposition }
+          : {}),
+        ...(typeof options?.maxIntents === "number"
+          ? { maxIntents: options.maxIntents }
+          : {}),
+      },
+      accessToken,
     );
   },
   getMyAgentThreadSummary(accessToken?: string) {
@@ -729,12 +959,190 @@ export const api = {
       accessToken,
     );
   },
+  getUserIntentExplanation(intentId: string, accessToken?: string) {
+    return request<UserIntentExplanation>(
+      "GET",
+      `/intents/${intentId}/explanations/user`,
+      undefined,
+      accessToken,
+    );
+  },
+  search(userId: string, q: string, limit = 6, accessToken?: string) {
+    return request<SearchSnapshotResponse>(
+      "GET",
+      `/search/${userId}`,
+      undefined,
+      accessToken,
+      {
+        q,
+        limit,
+      },
+    );
+  },
   sendDigest(userId: string, accessToken?: string) {
     return request<Record<string, unknown>>(
       "POST",
       `/notifications/${userId}/digest`,
       {},
       accessToken,
+    );
+  },
+  listRecurringCircles(userId: string, accessToken?: string) {
+    return request<RecurringCircleRecord[]>(
+      "GET",
+      `/recurring-circles/${userId}`,
+      undefined,
+      accessToken,
+    );
+  },
+  createRecurringCircle(
+    userId: string,
+    payload: {
+      title: string;
+      visibility?: "private" | "invite_only" | "discoverable";
+      topicTags?: string[];
+      cadence: {
+        kind: "weekly";
+        days: Array<"sun" | "mon" | "tue" | "wed" | "thu" | "fri" | "sat">;
+        hour: number;
+        minute: number;
+        timezone: string;
+        intervalWeeks?: number;
+      };
+      description?: string;
+      targetSize?: number;
+      kickoffPrompt?: string;
+    },
+    accessToken?: string,
+  ) {
+    return request<RecurringCircleRecord>(
+      "POST",
+      `/recurring-circles/${userId}`,
+      payload,
+      accessToken,
+    );
+  },
+  listRecurringCircleSessions(circleId: string, accessToken?: string) {
+    return request<RecurringCircleSessionRecord[]>(
+      "GET",
+      `/recurring-circles/${circleId}/sessions`,
+      undefined,
+      accessToken,
+    );
+  },
+  runRecurringCircleSessionNow(circleId: string, accessToken?: string) {
+    return request<RecurringCircleSessionRecord>(
+      "POST",
+      `/recurring-circles/${circleId}/sessions/run-now`,
+      {},
+      accessToken,
+    );
+  },
+  listSavedSearches(userId: string, accessToken?: string) {
+    return request<SavedSearchRecord[]>(
+      "GET",
+      `/saved-searches/${userId}`,
+      undefined,
+      accessToken,
+    );
+  },
+  createSavedSearch(
+    userId: string,
+    payload: {
+      title: string;
+      searchType:
+        | "discovery_people"
+        | "discovery_groups"
+        | "reconnects"
+        | "topic_search"
+        | "activity_search";
+      queryConfig: Record<string, unknown>;
+    },
+    accessToken?: string,
+  ) {
+    return request<SavedSearchRecord>(
+      "POST",
+      `/saved-searches/${userId}`,
+      payload,
+      accessToken,
+    );
+  },
+  deleteSavedSearch(searchId: string, accessToken?: string) {
+    return request<{ deleted: boolean; searchId: string }>(
+      "DELETE",
+      `/saved-searches/${searchId}`,
+      undefined,
+      accessToken,
+    );
+  },
+  listScheduledTasks(
+    userId: string,
+    options?: { status?: string; limit?: number },
+    accessToken?: string,
+  ) {
+    return request<ScheduledTaskRecord[]>(
+      "GET",
+      `/scheduled-tasks/${userId}`,
+      undefined,
+      accessToken,
+      {
+        ...(options?.status ? { status: options.status } : {}),
+        ...(typeof options?.limit === "number" ? { limit: options.limit } : {}),
+      },
+    );
+  },
+  createScheduledTask(
+    userId: string,
+    payload: {
+      title: string;
+      description?: string;
+      schedule:
+        | {
+            kind: "hourly";
+            intervalHours: number;
+            timezone: string;
+          }
+        | {
+            kind: "weekly";
+            days: Array<"sun" | "mon" | "tue" | "wed" | "thu" | "fri" | "sat">;
+            hour: number;
+            minute: number;
+            timezone: string;
+            intervalWeeks?: number;
+          };
+      task: {
+        taskType:
+          | "saved_search"
+          | "discovery_briefing"
+          | "reconnect_briefing"
+          | "social_reminder";
+        config: Record<string, unknown>;
+      };
+    },
+    accessToken?: string,
+  ) {
+    return request<ScheduledTaskRecord>(
+      "POST",
+      `/scheduled-tasks/${userId}`,
+      payload,
+      accessToken,
+    );
+  },
+  runScheduledTaskNow(taskId: string, accessToken?: string) {
+    return request<{ taskId: string; runId: string; status: "queued" }>(
+      "POST",
+      `/scheduled-tasks/${taskId}/run-now`,
+      {},
+      accessToken,
+    );
+  },
+  listScheduledTaskRuns(taskId: string, limit = 10, accessToken?: string) {
+    return request<ScheduledTaskRunRecord[]>(
+      "GET",
+      `/scheduled-tasks/${taskId}/runs`,
+      undefined,
+      accessToken,
+      { limit },
     );
   },
   moderationAssess(

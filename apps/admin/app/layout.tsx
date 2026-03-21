@@ -17,8 +17,8 @@ const bodyFont = Source_Sans_3({
 });
 
 export const metadata: Metadata = {
-  title: "OPENSOCIAL · Admin",
-  description: "Operator console for OPENSOCIAL",
+  title: "OpenSocial · Admin",
+  description: "Operator console for OpenSocial",
   icons: {
     icon: [{ url: "/brand/logo.svg", type: "image/svg+xml" }],
     shortcut: "/brand/logo.svg",

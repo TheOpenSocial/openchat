@@ -62,6 +62,7 @@ pnpm db:up && pnpm db:generate && pnpm dev
 - `docs/openai-model-policy.md`
 - `docs/aws-free-tier-deploy.md`
 - `docs/recurring-tasks-v1.md`
+- `docs/recurring-circles-v1.md`
 
 ## Dependency currency
 Use these commands from repo root:

@@ -17,8 +17,8 @@ const bodyFont = Source_Sans_3({
 });
 
 export const metadata: Metadata = {
-  title: "OPENSOCIAL",
-  description: "Intent-driven social — meet through what you want to do",
+  title: "OpenSocial",
+  description: "Meet through plans — intent-driven social",
   icons: {
     icon: [{ url: "/brand/logo.svg", type: "image/svg+xml" }],
     shortcut: "/brand/logo.svg",

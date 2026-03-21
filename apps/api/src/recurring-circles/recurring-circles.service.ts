@@ -12,9 +12,12 @@ import {
   type recurringCircleUpdateBodySchema,
 } from "@opensocial/types";
 import type { Prisma } from "@prisma/client";
+import { randomUUID } from "node:crypto";
+import { AgentService } from "../agent/agent.service.js";
 import { LaunchControlsService } from "../launch-controls/launch-controls.service.js";
 import { NotificationsService } from "../notifications/notifications.service.js";
 import { PrismaService } from "../database/prisma.service.js";
+import { IntentsService } from "../intents/intents.service.js";
 
 type RecurringCircleCreateBody = zodInfer<
   typeof recurringCircleCreateBodySchema
@@ -39,6 +42,10 @@ export class RecurringCirclesService {
     private readonly notificationsService?: NotificationsService,
     @Optional()
     private readonly launchControlsService?: LaunchControlsService,
+    @Optional()
+    private readonly intentsService?: IntentsService,
+    @Optional()
+    private readonly agentService?: AgentService,
   ) {}
 
   async listCircles(userId: string, query: RecurringCircleListQuery) {
@@ -256,15 +263,7 @@ export class RecurringCirclesService {
   async createSessionNow(circleId: string, ownerUserId: string) {
     const circle = await this.requireCircleOwnership(circleId, ownerUserId);
     const now = new Date();
-    const session = await this.prisma.recurringCircleSession.create({
-      data: {
-        circleId,
-        scheduledFor: now,
-        status: "opened",
-        summary: `Recurring circle session opened for ${circle.title}.`,
-        startedAt: now,
-      },
-    });
+    const session = await this.openCircleSession(circle, now, "manual");
 
     const cadence =
       circle.cadenceConfig as unknown as RecurringCircleCreateBody["cadence"];
@@ -293,33 +292,40 @@ export class RecurringCirclesService {
       orderBy: { nextSessionAt: "asc" },
       take: 50,
     });
+    let failures = 0;
 
     for (const circle of circles) {
-      const cadence =
-        circle.cadenceConfig as unknown as RecurringCircleCreateBody["cadence"];
-      const scheduledFor = circle.nextSessionAt ?? now;
-      await this.prisma.recurringCircleSession.create({
-        data: {
-          circleId: circle.id,
-          scheduledFor,
-          status: "opened",
-          summary: `Scheduled recurring circle session opened for ${circle.title}.`,
-          startedAt: now,
-        },
-      });
-      await this.prisma.recurringCircle.update({
-        where: { id: circle.id },
-        data: {
-          lastSessionAt: now,
-          nextSessionAt: this.computeNextSessionAt(cadence, now),
-          lastFailureAt: null,
-          lastFailureReason: null,
-        },
-      });
-      await this.notifyCircleMembers(circle.id, circle.title);
+      try {
+        const cadence =
+          circle.cadenceConfig as unknown as RecurringCircleCreateBody["cadence"];
+        const scheduledFor = circle.nextSessionAt ?? now;
+        await this.openCircleSession(circle, scheduledFor, "scheduled");
+        await this.prisma.recurringCircle.update({
+          where: { id: circle.id },
+          data: {
+            lastSessionAt: now,
+            nextSessionAt: this.computeNextSessionAt(cadence, now),
+            lastFailureAt: null,
+            lastFailureReason: null,
+          },
+        });
+        await this.notifyCircleMembers(circle.id, circle.title);
+      } catch (error) {
+        failures += 1;
+        await this.prisma.recurringCircle.update({
+          where: { id: circle.id },
+          data: {
+            lastFailureAt: now,
+            lastFailureReason:
+              error instanceof Error
+                ? error.message.slice(0, 300)
+                : "session_open_failed",
+          },
+        });
+      }
     }
 
-    return { dispatched: circles.length };
+    return { dispatched: circles.length - failures, failures };
   }
 
   async listAdminCircles(query: RecurringCircleListQuery) {
@@ -366,6 +372,117 @@ export class RecurringCirclesService {
         ),
       ),
     );
+  }
+
+  private async openCircleSession(
+    circle: {
+      id: string;
+      ownerUserId: string;
+      title: string;
+      kickoffPrompt: string | null;
+      topicTags: Prisma.JsonValue | null;
+    },
+    scheduledFor: Date,
+    trigger: "manual" | "scheduled",
+  ) {
+    const startedAt = new Date();
+    const session = await this.prisma.recurringCircleSession.create({
+      data: {
+        circleId: circle.id,
+        scheduledFor,
+        status: "opened",
+        summary:
+          trigger === "manual"
+            ? `Recurring circle session opened for ${circle.title}.`
+            : `Scheduled recurring circle session opened for ${circle.title}.`,
+        startedAt,
+      },
+    });
+
+    try {
+      const intent = await this.createSessionIntent(circle, session.id);
+      if (intent) {
+        await this.prisma.recurringCircleSession.update({
+          where: { id: session.id },
+          data: {
+            generatedIntentId: intent.id,
+            summary: `Recurring circle session opened for ${circle.title}; intent ${intent.id} is in matching.`,
+          },
+        });
+      }
+    } catch (error) {
+      await this.prisma.recurringCircleSession.update({
+        where: { id: session.id },
+        data: {
+          summary: `Recurring circle session opened for ${circle.title}; intent generation failed.`,
+        },
+      });
+      await this.prisma.recurringCircle.update({
+        where: { id: circle.id },
+        data: {
+          lastFailureAt: new Date(),
+          lastFailureReason:
+            error instanceof Error
+              ? error.message.slice(0, 300)
+              : "session_intent_generation_failed",
+        },
+      });
+    }
+    return session;
+  }
+
+  private async createSessionIntent(
+    circle: {
+      id: string;
+      ownerUserId: string;
+      title: string;
+      kickoffPrompt: string | null;
+      topicTags: Prisma.JsonValue | null;
+    },
+    sessionId: string,
+  ) {
+    if (!this.intentsService) {
+      return null;
+    }
+    const traceId = randomUUID();
+    const topicTags = Array.isArray(circle.topicTags)
+      ? circle.topicTags.filter(
+          (value): value is string => typeof value === "string",
+        )
+      : [];
+    const tagsSuffix =
+      topicTags.length > 0 ? ` Topics: ${topicTags.join(", ")}.` : "";
+    const rawText = circle.kickoffPrompt?.trim().length
+      ? `${circle.kickoffPrompt.trim()}${tagsSuffix}`
+      : `Open the recurring circle '${circle.title}' for this session.${tagsSuffix}`;
+
+    const ownerThread = this.agentService
+      ? await this.agentService.findPrimaryThreadSummaryForUser(
+          circle.ownerUserId,
+        )
+      : null;
+    const intent = await this.intentsService.createIntent(
+      circle.ownerUserId,
+      rawText,
+      traceId,
+      ownerThread?.id,
+    );
+
+    if (this.agentService && ownerThread) {
+      await this.agentService.appendWorkflowUpdate(
+        ownerThread.id,
+        `Recurring circle '${circle.title}' session opened and matching started.`,
+        {
+          category: "recurring_circle_session",
+          circleId: circle.id,
+          sessionId,
+          intentId: intent.id,
+          traceId,
+        },
+      );
+    }
+
+    return intent;
   }
 
   private async assertCircleAccess(circleId: string, userId: string) {

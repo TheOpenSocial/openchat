@@ -196,9 +196,15 @@ export const authGoogleCallbackBodySchema = z.object({
   adminConsole: z.literal(true).optional(),
 });
 
+/** Query strings often send `param=`; coerce empty to undefined so `.url()` does not fail. */
+const optionalOAuthRedirectQuery = z.preprocess(
+  (val) => (val === "" || val == null ? undefined : val),
+  z.string().url().max(2048).optional(),
+);
+
 export const authGoogleStartQuerySchema = z.object({
-  mobileRedirectUri: z.string().url().max(2048).optional(),
-  webRedirectUri: z.string().url().max(2048).optional(),
+  mobileRedirectUri: optionalOAuthRedirectQuery,
+  webRedirectUri: optionalOAuthRedirectQuery,
 });
 
 export const authGoogleBrowserCallbackQuerySchema = z.object({
@@ -409,6 +415,22 @@ export const agentThreadRespondBodySchema = z.object({
   attachments: z.array(agentAttachmentInputSchema).max(8).optional(),
 });
 
+export const agentPlanCheckpointStatusSchema = z.enum([
+  "pending",
+  "approved",
+  "rejected",
+]);
+
+export const agentPlanCheckpointListQuerySchema = z.object({
+  status: agentPlanCheckpointStatusSchema.optional(),
+  limit: z.coerce.number().int().min(1).max(50).optional(),
+});
+
+export const agentPlanCheckpointDecisionBodySchema = z.object({
+  userId: uuidSchema,
+  reason: z.string().min(1).max(500).optional(),
+});
+
 export const createIntentBodySchema = z.object({
   userId: uuidSchema,
   rawText: z.string().min(1),
@@ -443,6 +465,11 @@ export const createIntentFromAgentMessageBodySchema = z.object({
   content: z.string().min(1),
   allowDecomposition: z.boolean().optional(),
   maxIntents: z.number().int().min(1).max(5).optional(),
+});
+
+export const searchQuerySchema = z.object({
+  q: z.string().min(1).max(120),
+  limit: z.coerce.number().int().min(1).max(20).optional(),
 });
 
 export const intentFollowupActionBodySchema = z
@@ -593,6 +620,13 @@ export const adminModerationAgentRiskQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(250).optional(),
   status: z.enum(["open", "resolved", "dismissed"]).optional(),
   decision: z.enum(["review", "blocked"]).optional(),
+});
+
+export const adminModerationQueueQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(250).optional(),
+  status: z.enum(["open", "resolved", "dismissed"]).optional(),
+  entityType: z.string().min(1).max(80).optional(),
+  reasonContains: z.string().min(1).max(160).optional(),
 });
 
 export const adminModerationFlagTriageBodySchema = z

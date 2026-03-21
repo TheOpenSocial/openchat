@@ -5,19 +5,33 @@ import {
   extractResponseTokenDelta,
   type AgentTranscriptRow,
 } from "@opensocial/types";
+import { Home, MessageSquare, UserRound } from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
+import { BrandSignInLayout } from "../src/components/BrandSignInLayout";
 import { ChatBubble } from "../src/components/ChatBubble";
+import { GoogleMark } from "../src/components/GoogleMark";
 import { EmptyState } from "../src/components/EmptyState";
 import { InlineNotice } from "../src/components/InlineNotice";
 import { SurfaceCard } from "../src/components/SurfaceCard";
 import { useBrowserOnline } from "../src/hooks/use-browser-online";
 import { usePrimaryAgentThread } from "../src/hooks/use-primary-agent-thread";
-import { t } from "../src/i18n/strings";
+import { type AppLocale, supportedLocales, t } from "../src/i18n/strings";
 import {
   api,
   buildAgentThreadStreamUrl,
   ChatMessageRecord,
+  DiscoveryInboxSuggestionsResponse,
+  PassiveDiscoveryResponse,
+  PendingIntentsSummaryResponse,
+  RecurringCircleRecord,
+  RecurringCircleSessionRecord,
+  SavedSearchRecord,
+  ScheduledTaskRecord,
+  ScheduledTaskRunRecord,
+  SearchSnapshotResponse,
+  UserIntentExplanation,
   configureApiAuthLifecycle,
   getGoogleOAuthStartUrl,
 } from "../src/lib/api";
@@ -75,6 +89,12 @@ const tabDescriptions: Record<HomeTab, string> = {
   profile: "Preferences, notifications, and account.",
 };
 
+const homeTabIcon = {
+  home: Home,
+  chats: MessageSquare,
+  profile: UserRound,
+} as const;
+
 const interestOptions = [
   "Football",
   "Gaming",
@@ -100,6 +120,10 @@ const WELCOME_HIGHLIGHTS = [
 ] as const;
 
 function ProductionWebPage() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [locale, setLocale] = useState<AppLocale>("en");
   const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [stage, setStage] = useState<AppStage>("auth");
   const [session, setSession] = useState<WebSession | null>(null);
@@ -135,6 +159,8 @@ function ProductionWebPage() {
     "chat",
   );
   const [intentSending, setIntentSending] = useState(false);
+  const [decomposeIntent, setDecomposeIntent] = useState(true);
+  const [decomposeMaxIntents, setDecomposeMaxIntents] = useState(3);
   const netOnline = useBrowserOnline();
   const agentThreadSyncEnabled = Boolean(session) && stage === "home";
   const { loading: agentThreadLoading, threadId: agentThreadId } =
@@ -153,11 +179,96 @@ function ProductionWebPage() {
   const [chatDraft, setChatDraft] = useState("");
   const [chatBusy, setChatBusy] = useState(false);
   const [trustSummary, setTrustSummary] = useState("trust profile not loaded");
+  const [recurringCircles, setRecurringCircles] = useState<
+    RecurringCircleRecord[]
+  >([]);
+  const [selectedCircleId, setSelectedCircleId] = useState<string | null>(null);
+  const [recurringSessions, setRecurringSessions] = useState<
+    RecurringCircleSessionRecord[]
+  >([]);
+  const [circlesBusy, setCirclesBusy] = useState(false);
+  const [passiveDiscovery, setPassiveDiscovery] =
+    useState<PassiveDiscoveryResponse | null>(null);
+  const [inboxSuggestions, setInboxSuggestions] =
+    useState<DiscoveryInboxSuggestionsResponse | null>(null);
+  const [pendingIntentSummary, setPendingIntentSummary] =
+    useState<PendingIntentsSummaryResponse | null>(null);
+  const [selectedIntentId, setSelectedIntentId] = useState<string | null>(null);
+  const [userIntentExplanation, setUserIntentExplanation] =
+    useState<UserIntentExplanation | null>(null);
+  const [discoveryBusy, setDiscoveryBusy] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchSnapshot, setSearchSnapshot] =
+    useState<SearchSnapshotResponse | null>(null);
+  const [searchBusy, setSearchBusy] = useState(false);
+  const [memoryBusy, setMemoryBusy] = useState(false);
+  const [memorySnapshot, setMemorySnapshot] = useState<{
+    lifeGraph: Record<string, unknown> | null;
+    retrieval: Record<string, unknown> | null;
+  }>({ lifeGraph: null, retrieval: null });
+  const [savedSearches, setSavedSearches] = useState<SavedSearchRecord[]>([]);
+  const [scheduledTasks, setScheduledTasks] = useState<ScheduledTaskRecord[]>(
+    [],
+  );
+  const [selectedScheduledTaskId, setSelectedScheduledTaskId] = useState<
+    string | null
+  >(null);
+  const [scheduledTaskRuns, setScheduledTaskRuns] = useState<
+    ScheduledTaskRunRecord[]
+  >([]);
+  const [automationsBusy, setAutomationsBusy] = useState(false);
+
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab === "home" || tab === "chats" || tab === "profile") {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (params.get("tab") === activeTab) {
+      return;
+    }
+    params.set("tab", activeTab);
+    const next = params.toString();
+    router.replace(next.length ? `${pathname}?${next}` : pathname, {
+      scroll: false,
+    });
+  }, [activeTab, pathname, router, searchParams]);
 
   const selectedChat = useMemo(
     () => chatThreads.find((thread) => thread.id === selectedChatId) ?? null,
     [chatThreads, selectedChatId],
   );
+  const selectedCircle = useMemo(
+    () =>
+      recurringCircles.find((circle) => circle.id === selectedCircleId) ?? null,
+    [recurringCircles, selectedCircleId],
+  );
+  const selectedScheduledTask = useMemo(
+    () =>
+      scheduledTasks.find((task) => task.id === selectedScheduledTaskId) ??
+      null,
+    [scheduledTasks, selectedScheduledTaskId],
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const stored = window.localStorage.getItem("opensocial.web.locale");
+    if (stored && supportedLocales.includes(stored as AppLocale)) {
+      setLocale(stored as AppLocale);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem("opensocial.web.locale", locale);
+  }, [locale]);
 
   useEffect(() => {
     configureApiAuthLifecycle({
@@ -187,6 +298,156 @@ function ProductionWebPage() {
       configureApiAuthLifecycle({});
     };
   }, []);
+
+  useEffect(() => {
+    if (!session || activeTab !== "profile") {
+      return;
+    }
+    setAutomationsBusy(true);
+    Promise.all([
+      api.listSavedSearches(session.userId, session.accessToken),
+      api.listScheduledTasks(
+        session.userId,
+        { limit: 20 },
+        session.accessToken,
+      ),
+    ])
+      .then(([searches, tasks]) => {
+        setSavedSearches(searches);
+        setScheduledTasks(tasks);
+        setSelectedScheduledTaskId((current) => {
+          if (current && tasks.some((task) => task.id === current)) {
+            return current;
+          }
+          return tasks[0]?.id ?? null;
+        });
+      })
+      .catch((error) => {
+        setBanner({
+          tone: "error",
+          text: `Could not load automations: ${String(error)}`,
+        });
+      })
+      .finally(() => {
+        setAutomationsBusy(false);
+      });
+  }, [activeTab, session]);
+
+  useEffect(() => {
+    if (!session || !selectedScheduledTaskId || activeTab !== "profile") {
+      setScheduledTaskRuns([]);
+      return;
+    }
+    api
+      .listScheduledTaskRuns(selectedScheduledTaskId, 8, session.accessToken)
+      .then((runs) => {
+        setScheduledTaskRuns(runs);
+      })
+      .catch((error) => {
+        setBanner({
+          tone: "error",
+          text: `Could not load task runs: ${String(error)}`,
+        });
+      });
+  }, [activeTab, selectedScheduledTaskId, session]);
+
+  useEffect(() => {
+    if (!session || activeTab !== "profile") {
+      return;
+    }
+    setCirclesBusy(true);
+    api
+      .listRecurringCircles(session.userId, session.accessToken)
+      .then((circles) => {
+        setRecurringCircles(circles);
+        setSelectedCircleId((current) => {
+          if (current && circles.some((circle) => circle.id === current)) {
+            return current;
+          }
+          return circles[0]?.id ?? null;
+        });
+      })
+      .catch((error) => {
+        setBanner({
+          tone: "error",
+          text: `Could not load circles: ${String(error)}`,
+        });
+      })
+      .finally(() => {
+        setCirclesBusy(false);
+      });
+  }, [activeTab, session]);
+
+  useEffect(() => {
+    if (!session || !selectedCircleId || activeTab !== "profile") {
+      setRecurringSessions([]);
+      return;
+    }
+    api
+      .listRecurringCircleSessions(selectedCircleId, session.accessToken)
+      .then((sessions) => {
+        setRecurringSessions(sessions);
+      })
+      .catch((error) => {
+        setBanner({
+          tone: "error",
+          text: `Could not load circle sessions: ${String(error)}`,
+        });
+      });
+  }, [activeTab, selectedCircleId, session]);
+
+  useEffect(() => {
+    if (!session || activeTab !== "profile") {
+      return;
+    }
+    setDiscoveryBusy(true);
+    Promise.all([
+      api.getPassiveDiscovery(session.userId, 3, session.accessToken),
+      api.getDiscoveryInboxSuggestions(session.userId, 4, session.accessToken),
+      api.summarizePendingIntents(session.userId, 8, session.accessToken),
+    ])
+      .then(([passive, inbox, pending]) => {
+        setPassiveDiscovery(passive);
+        setInboxSuggestions(inbox);
+        setPendingIntentSummary(pending);
+        setSelectedIntentId((current) => {
+          if (
+            current &&
+            pending.intents.some((intent) => intent.intentId === current)
+          ) {
+            return current;
+          }
+          return pending.intents[0]?.intentId ?? null;
+        });
+      })
+      .catch((error) => {
+        setBanner({
+          tone: "error",
+          text: `Could not load discovery snapshots: ${String(error)}`,
+        });
+      })
+      .finally(() => {
+        setDiscoveryBusy(false);
+      });
+  }, [activeTab, session]);
+
+  useEffect(() => {
+    if (!session || !selectedIntentId || activeTab !== "profile") {
+      setUserIntentExplanation(null);
+      return;
+    }
+    api
+      .getUserIntentExplanation(selectedIntentId, session.accessToken)
+      .then((explanation) => {
+        setUserIntentExplanation(explanation);
+      })
+      .catch((error) => {
+        setBanner({
+          tone: "error",
+          text: `Could not load intent explanation: ${String(error)}`,
+        });
+      });
+  }, [activeTab, selectedIntentId, session]);
 
   useEffect(() => {
     const restore = async () => {
@@ -433,7 +694,7 @@ function ProductionWebPage() {
     if (!netOnline) {
       setBanner({
         tone: "error",
-        text: t("sendBlockedOffline"),
+        text: t("sendBlockedOffline", locale),
       });
       return;
     }
@@ -447,9 +708,11 @@ function ProductionWebPage() {
         : undefined;
     const marker = Date.now().toString(36);
     const useAgentChat = agentComposerMode === "chat" && Boolean(agentThreadId);
+    const useIntentAgentEndpoint =
+      agentComposerMode === "intent" && Boolean(agentThreadId);
     const workflowBody = useAgentChat
-      ? t("agentWorkflowThinking")
-      : t("agentWorkflowRouting");
+      ? t("agentWorkflowThinking", locale)
+      : t("agentWorkflowRouting", locale);
 
     setIntentSending(true);
     setIntentDraft("");
@@ -521,6 +784,31 @@ function ProductionWebPage() {
           session.accessToken,
         );
         setAgentTimeline(agentThreadMessagesToTranscript(messages));
+        return;
+      }
+
+      if (useIntentAgentEndpoint && agentThreadId) {
+        const result = await api.createIntentFromAgentMessage(
+          agentThreadId,
+          session.userId,
+          text,
+          session.accessToken,
+          {
+            allowDecomposition: decomposeIntent,
+            maxIntents: decomposeMaxIntents,
+          },
+        );
+        setAgentTimeline((current) => [
+          ...current,
+          {
+            id: `agent_${marker}`,
+            role: "agent",
+            body:
+              result.intentCount > 1
+                ? `Split into ${result.intentCount} intents and started matching.`
+                : `Intent accepted by API (${result.intentId.slice(0, 8)}).`,
+          },
+        ]);
         return;
       }
 
@@ -703,6 +991,339 @@ function ProductionWebPage() {
     }
   };
 
+  const refreshDiscoverySnapshots = async () => {
+    if (!session) {
+      return;
+    }
+    setDiscoveryBusy(true);
+    try {
+      const [passive, inbox, pending] = await Promise.all([
+        api.getPassiveDiscovery(session.userId, 3, session.accessToken),
+        api.getDiscoveryInboxSuggestions(
+          session.userId,
+          4,
+          session.accessToken,
+        ),
+        api.summarizePendingIntents(session.userId, 8, session.accessToken),
+      ]);
+      setPassiveDiscovery(passive);
+      setInboxSuggestions(inbox);
+      setPendingIntentSummary(pending);
+      setSelectedIntentId((current) => {
+        if (
+          current &&
+          pending.intents.some((intent) => intent.intentId === current)
+        ) {
+          return current;
+        }
+        return pending.intents[0]?.intentId ?? null;
+      });
+      setBanner({
+        tone: "success",
+        text: "Discovery and continuity snapshots refreshed.",
+      });
+    } catch (error) {
+      setBanner({
+        tone: "error",
+        text: `Could not refresh discovery snapshots: ${String(error)}`,
+      });
+    } finally {
+      setDiscoveryBusy(false);
+    }
+  };
+
+  const publishDiscoveryToAgent = async () => {
+    if (!session) {
+      return;
+    }
+    try {
+      const result = await api.publishAgentRecommendations(
+        session.userId,
+        {
+          ...(agentThreadId ? { threadId: agentThreadId } : {}),
+          limit: 3,
+        },
+        session.accessToken,
+      );
+      setBanner({
+        tone: "success",
+        text: result.delivered
+          ? "Discovery recommendations posted into your agent thread."
+          : "Recommendations generated but no thread was available.",
+      });
+    } catch (error) {
+      setBanner({
+        tone: "error",
+        text: `Could not publish recommendations: ${String(error)}`,
+      });
+    }
+  };
+
+  const runSearch = async () => {
+    if (!session || searchQuery.trim().length === 0) {
+      return;
+    }
+    setSearchBusy(true);
+    try {
+      const result = await api.search(
+        session.userId,
+        searchQuery.trim(),
+        6,
+        session.accessToken,
+      );
+      setSearchSnapshot(result);
+    } catch (error) {
+      setBanner({
+        tone: "error",
+        text: `Could not run search: ${String(error)}`,
+      });
+    } finally {
+      setSearchBusy(false);
+    }
+  };
+
+  const refreshMemorySnapshot = async () => {
+    if (!session) {
+      return;
+    }
+    setMemoryBusy(true);
+    try {
+      const [lifeGraph, retrieval] = await Promise.all([
+        api.getLifeGraph(session.userId, session.accessToken),
+        api.queryRetrievalContext(
+          session.userId,
+          {
+            query: "Summarize my most relevant social memory context.",
+            maxChunks: 4,
+            maxAgeDays: 90,
+          },
+          session.accessToken,
+        ),
+      ]);
+      setMemorySnapshot({ lifeGraph, retrieval });
+      setBanner({
+        tone: "success",
+        text: "Memory snapshot refreshed.",
+      });
+    } catch (error) {
+      setBanner({
+        tone: "error",
+        text: `Could not refresh memory snapshot: ${String(error)}`,
+      });
+    } finally {
+      setMemoryBusy(false);
+    }
+  };
+
+  const resetLearnedMemory = async () => {
+    if (!session) {
+      return;
+    }
+    setMemoryBusy(true);
+    try {
+      await api.resetMemory(
+        session.userId,
+        {
+          actorUserId: session.userId,
+          mode: "learned_memory",
+          reason: "user_requested_from_profile",
+        },
+        session.accessToken,
+      );
+      setMemorySnapshot({ lifeGraph: null, retrieval: null });
+      setBanner({
+        tone: "success",
+        text: "Learned memory reset completed.",
+      });
+    } catch (error) {
+      setBanner({
+        tone: "error",
+        text: `Could not reset memory: ${String(error)}`,
+      });
+    } finally {
+      setMemoryBusy(false);
+    }
+  };
+
+  const createCircleQuick = async () => {
+    if (!session) {
+      return;
+    }
+    try {
+      const created = await api.createRecurringCircle(
+        session.userId,
+        {
+          title: "Weekly open circle",
+          visibility: "invite_only",
+          topicTags: profile.interests.slice(0, 3),
+          cadence: {
+            kind: "weekly",
+            days: ["thu"],
+            hour: 20,
+            minute: 0,
+            timezone: "UTC",
+            intervalWeeks: 1,
+          },
+          kickoffPrompt: "Find a small group for this week's recurring circle.",
+        },
+        session.accessToken,
+      );
+      setRecurringCircles((current) => [created, ...current]);
+      setSelectedCircleId(created.id);
+      setBanner({
+        tone: "success",
+        text: "Recurring circle created.",
+      });
+    } catch (error) {
+      setBanner({
+        tone: "error",
+        text: `Could not create circle: ${String(error)}`,
+      });
+    }
+  };
+
+  const createSavedSearchQuick = async () => {
+    if (!session) {
+      return;
+    }
+    const seed = searchQuery.trim() || "tennis";
+    try {
+      const created = await api.createSavedSearch(
+        session.userId,
+        {
+          title: `Search: ${seed.slice(0, 28)}`,
+          searchType: "activity_search",
+          queryConfig: {
+            q: seed,
+            limit: 6,
+          },
+        },
+        session.accessToken,
+      );
+      setSavedSearches((current) => [created, ...current]);
+      setBanner({
+        tone: "success",
+        text: "Saved search created.",
+      });
+    } catch (error) {
+      setBanner({
+        tone: "error",
+        text: `Could not create saved search: ${String(error)}`,
+      });
+    }
+  };
+
+  const createAutomationQuick = async () => {
+    if (!session) {
+      return;
+    }
+    try {
+      let savedSearch = savedSearches[0];
+      if (!savedSearch) {
+        const seed = searchQuery.trim() || "tennis";
+        savedSearch = await api.createSavedSearch(
+          session.userId,
+          {
+            title: `Search: ${seed.slice(0, 28)}`,
+            searchType: "activity_search",
+            queryConfig: {
+              q: seed,
+              limit: 6,
+            },
+          },
+          session.accessToken,
+        );
+        setSavedSearches((current) => [savedSearch!, ...current]);
+      }
+
+      const created = await api.createScheduledTask(
+        session.userId,
+        {
+          title: "Weekly saved-search briefing",
+          description:
+            "Runs your top saved search and posts a short discovery briefing.",
+          schedule: {
+            kind: "weekly",
+            days: ["thu"],
+            hour: 18,
+            minute: 0,
+            timezone: "UTC",
+          },
+          task: {
+            taskType: "saved_search",
+            config: {
+              savedSearchId: savedSearch.id,
+              deliveryMode: "notification_and_agent_thread",
+              minResults: 1,
+              maxResults: 5,
+            },
+          },
+        },
+        session.accessToken,
+      );
+      setScheduledTasks((current) => [created, ...current]);
+      setSelectedScheduledTaskId(created.id);
+      setBanner({
+        tone: "success",
+        text: "Scheduled automation created.",
+      });
+    } catch (error) {
+      setBanner({
+        tone: "error",
+        text: `Could not create automation: ${String(error)}`,
+      });
+    }
+  };
+
+  const runAutomationNow = async () => {
+    if (!session || !selectedScheduledTask) {
+      return;
+    }
+    try {
+      await api.runScheduledTaskNow(
+        selectedScheduledTask.id,
+        session.accessToken,
+      );
+      const runs = await api.listScheduledTaskRuns(
+        selectedScheduledTask.id,
+        8,
+        session.accessToken,
+      );
+      setScheduledTaskRuns(runs);
+      setBanner({
+        tone: "success",
+        text: "Automation queued to run now.",
+      });
+    } catch (error) {
+      setBanner({
+        tone: "error",
+        text: `Could not run automation: ${String(error)}`,
+      });
+    }
+  };
+
+  const runCircleSessionNow = async () => {
+    if (!session || !selectedCircleId) {
+      return;
+    }
+    try {
+      const created = await api.runRecurringCircleSessionNow(
+        selectedCircleId,
+        session.accessToken,
+      );
+      setRecurringSessions((current) => [created, ...current]);
+      setBanner({
+        tone: "success",
+        text: "Circle session opened and queued for matching.",
+      });
+    } catch (error) {
+      setBanner({
+        tone: "error",
+        text: `Could not open circle session: ${String(error)}`,
+      });
+    }
+  };
+
   const signOut = () => {
     clearStoredSession();
     setSession(null);
@@ -715,62 +1336,61 @@ function ProductionWebPage() {
 
   if (isBootstrapping) {
     return (
-      <main className="flex min-h-screen flex-col items-center justify-center bg-[#212121] px-6">
-        <img
-          alt=""
-          className="h-14 w-14 rounded-2xl ring-1 ring-white/10"
-          height={56}
-          src="/brand/logo.svg"
-          width={56}
+      <main className="flex min-h-screen flex-col items-center justify-center gap-5 bg-black px-6 text-white">
+        <div className="rounded-2xl border border-white/20 bg-black/60 p-2 shadow-lg shadow-black/40">
+          <img
+            alt=""
+            className="h-10 w-10"
+            height={40}
+            src="/brand/logo.svg"
+            width={40}
+          />
+        </div>
+        <div
+          aria-label="Restoring session"
+          className="h-9 w-9 motion-safe:animate-spin rounded-full border-2 border-white/20 border-t-amber-400"
+          role="progressbar"
         />
-        <p className="mt-4 text-sm text-white/50">OpenSocial</p>
-        <h1 className="mt-2 font-[var(--font-heading)] text-xl text-white">
-          Restoring session…
-        </h1>
+        <p className="text-sm text-white/55">Restoring session…</p>
       </main>
     );
   }
 
   if (stage === "auth") {
     return (
-      <main className="relative min-h-screen overflow-y-auto bg-[#212121]">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 h-48 bg-gradient-to-b from-emerald-500/[0.07] to-transparent"
-        />
-        <div className="relative mx-auto flex min-h-screen w-full max-w-[420px] flex-col justify-center px-6 py-14 pb-10">
-          <header className="mb-8 text-center">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/40">
-              OpenSocial
-            </p>
-            <div className="mx-auto mt-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/[0.07] ring-1 ring-white/10">
+      <BrandSignInLayout contentClassName="justify-end pb-14 pt-10 sm:justify-center sm:pb-16">
+        <div className="flex min-h-[min(100vh,860px)] flex-col">
+          <header className="text-center">
+            <div className="mx-auto flex w-fit rounded-3xl border border-white/25 bg-black p-3 shadow-lg shadow-black/40">
               <img
-                alt=""
-                className="h-11 w-11"
-                height={44}
+                alt="OpenSocial"
+                className="h-14 w-14"
+                height={56}
                 src="/brand/logo.svg"
-                width={44}
+                width={56}
               />
             </div>
-            <h1 className="mt-6 font-[var(--font-heading)] text-[30px] font-semibold leading-[1.15] tracking-tight text-white md:text-[34px]">
-              Welcome
+            <p className="mt-4 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/55">
+              OpenSocial
+            </p>
+            <h1 className="mt-6 font-[var(--font-heading)] text-[28px] font-semibold leading-[1.12] tracking-tight text-white sm:text-[30px]">
+              Meet through plans
             </h1>
-            <p className="mx-auto mt-3 max-w-[340px] text-[16px] leading-relaxed text-white/60">
-              Where your plans meet the right people—social that starts with
-              what you actually want to do.
+            <p className="mx-auto mt-2.5 max-w-[340px] text-[15px] leading-[22px] text-white/75">
+              Real people—not an endless feed.
             </p>
           </header>
 
-          <ul className="mb-10 space-y-4">
+          <ul className="mt-8 space-y-3 sm:mt-10">
             {WELCOME_HIGHLIGHTS.map((item) => (
               <li
-                className="rounded-2xl border border-white/[0.08] bg-white/[0.03] px-4 py-3.5"
+                className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3.5 backdrop-blur-sm"
                 key={item.title}
               >
                 <p className="font-[var(--font-heading)] text-[15px] font-semibold text-white/95">
                   {item.title}
                 </p>
-                <p className="mt-1.5 text-[13px] leading-relaxed text-white/50">
+                <p className="mt-1.5 text-[13px] leading-relaxed text-white/55">
                   {item.body}
                 </p>
               </li>
@@ -778,57 +1398,63 @@ function ProductionWebPage() {
           </ul>
 
           {banner ? (
-            <div className="mb-4">
+            <div className="mt-6">
               <InlineNotice text={banner.text} tone={banner.tone} />
             </div>
           ) : null}
           {!netOnline ? (
-            <div className="mb-4">
-              <InlineNotice text={t("offlineNotice")} tone="info" />
+            <div className="mt-4">
+              <InlineNotice text={t("offlineNotice", locale)} tone="info" />
             </div>
           ) : null}
 
-          <div className="mt-auto space-y-3">
-            <p className="text-center text-[13px] text-white/45">
-              Ready when you are—sign in to save your profile and pick up on any
-              device.
+          <div className="mt-auto space-y-3 pt-10">
+            <p className="text-center text-[13px] text-white/50">
+              Sign in to save your profile and continue on any device.
             </p>
             <button
-              className="flex h-12 w-full items-center justify-center rounded-full bg-white text-[15px] font-medium text-[#0d0d0d] transition hover:bg-white/90 disabled:opacity-60"
+              className="flex h-12 w-full items-center justify-center gap-3 rounded-full bg-white text-[15px] font-medium text-[#0d0d0d] shadow-md transition hover:bg-white hover:shadow-lg active:scale-[0.99] disabled:opacity-60"
               disabled={authLoading || !netOnline}
               onClick={() => void startGoogleOAuth()}
               type="button"
             >
-              {authLoading ? "Redirecting…" : "Continue with Google"}
+              {authLoading ? (
+                "Redirecting…"
+              ) : (
+                <>
+                  <GoogleMark />
+                  Continue with Google
+                </>
+              )}
             </button>
-            <p className="text-center text-xs leading-relaxed text-white/40">
+            <p className="text-center text-[11px] leading-relaxed text-white/55">
               By continuing, Google may share your name and email with
               OpenSocial for account setup.
             </p>
           </div>
 
           {allowWebDemoAuth ? (
-            <details className="mt-8 rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-left">
-              <summary className="cursor-pointer text-sm text-white/50">
+            <details className="mt-8 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-left backdrop-blur-sm">
+              <summary className="cursor-pointer text-sm text-white/55">
                 Developer: sign in without Google
               </summary>
-              <p className="mt-3 text-xs text-white/40">
+              <p className="mt-3 text-xs text-white/45">
                 Uses the API demo exchange when{" "}
-                <code className="text-white/60">demo-web</code> is enabled
+                <code className="text-white/70">demo-web</code> is enabled
                 server-side.
               </p>
-              <label className="mt-3 block text-[11px] uppercase tracking-wider text-white/35">
+              <label className="mt-3 block text-[10px] font-semibold uppercase tracking-wider text-white/40">
                 Auth code
               </label>
               <input
-                className="mt-1.5 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/25 focus:border-white/20"
+                className="mt-1.5 w-full rounded-xl border border-white/15 bg-black/40 px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/30 focus:border-white/25"
                 onChange={(event) => setAuthCode(event.currentTarget.value)}
                 placeholder="demo-web"
                 value={authCode}
               />
               <div className="mt-3 flex flex-wrap gap-2">
                 <button
-                  className="rounded-lg bg-white/10 px-3 py-2 text-xs font-medium text-white/80 hover:bg-white/15 disabled:opacity-50"
+                  className="rounded-xl bg-white/10 px-3 py-2 text-xs font-medium text-white/85 hover:bg-white/15 disabled:opacity-50"
                   disabled={authLoading}
                   onClick={() => void authenticateWithDemoCode()}
                   type="button"
@@ -836,7 +1462,7 @@ function ProductionWebPage() {
                   {authLoading ? "Signing in…" : "Sign in with code"}
                 </button>
                 <button
-                  className="rounded-lg border border-white/10 px-3 py-2 text-xs text-white/55 hover:bg-white/5"
+                  className="rounded-xl border border-white/15 px-3 py-2 text-xs text-white/60 hover:bg-white/5"
                   disabled={authLoading}
                   onClick={() => {
                     setAuthCode("demo-web");
@@ -850,23 +1476,35 @@ function ProductionWebPage() {
             </details>
           ) : null}
         </div>
-      </main>
+      </BrandSignInLayout>
     );
   }
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-6xl px-4 py-5 md:px-8 md:py-8">
-      <div className="mb-5 flex items-center justify-between">
-        <div>
-          <p className="text-xs uppercase tracking-[0.24em] text-ash">
-            OpenSocial Web
-          </p>
-          <h1 className="font-[var(--font-heading)] text-2xl text-ink md:text-3xl">
-            Where your plans meet the right people
-          </h1>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4 border-b border-amber-400/20 pb-5">
+        <div className="flex min-w-0 items-start gap-4">
+          <div className="hidden shrink-0 rounded-2xl border border-white/15 bg-black/35 p-2 shadow-inner shadow-black/20 sm:block">
+            <img
+              alt=""
+              className="h-9 w-9"
+              height={36}
+              src="/brand/logo.svg"
+              width={36}
+            />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-ash">
+              OpenSocial
+            </p>
+            <h1 className="font-[var(--font-heading)] text-2xl font-semibold tracking-tight text-ink md:text-3xl">
+              Where your plans meet the right people
+            </h1>
+            <p className="mt-1 text-xs text-ash/90">Web</p>
+          </div>
         </div>
         <div
-          className={`h-3 w-3 rounded-full animate-pulseSoft ${
+          className={`mt-1 h-3 w-3 shrink-0 rounded-full animate-pulseSoft ${
             netOnline ? "bg-emerald-400" : "bg-rose-500"
           }`}
           title={
@@ -882,7 +1520,7 @@ function ProductionWebPage() {
       ) : null}
       {!netOnline ? (
         <div className="mb-4">
-          <InlineNotice text={t("offlineNotice")} tone="info" />
+          <InlineNotice text={t("offlineNotice", locale)} tone="info" />
         </div>
       ) : null}
 
@@ -1064,20 +1702,28 @@ function ProductionWebPage() {
         <section className="animate-rise">
           <div className="grid gap-5 md:grid-cols-[220px_1fr]">
             <aside className="flex gap-2 overflow-x-auto md:block md:space-y-2">
-              {(Object.keys(tabLabels) as HomeTab[]).map((tab) => (
-                <button
-                  className={`rounded-xl px-3 py-2 text-sm font-semibold transition-colors duration-200 ease-out ${
-                    activeTab === tab
-                      ? "bg-ember text-slate-950 shadow-sm shadow-ember/25"
-                      : "bg-slate-900 text-slate-200 hover:bg-slate-800"
-                  }`}
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  type="button"
-                >
-                  {tabLabels[tab]}
-                </button>
-              ))}
+              {(Object.keys(tabLabels) as HomeTab[]).map((tab) => {
+                const TabIcon = homeTabIcon[tab];
+                return (
+                  <button
+                    className={`flex w-full min-w-[7.5rem] items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors duration-200 ease-out md:min-w-0 ${
+                      activeTab === tab
+                        ? "bg-ember text-slate-950 shadow-sm shadow-ember/25"
+                        : "border border-slate-700/80 bg-slate-900/90 text-slate-200 hover:border-slate-600 hover:bg-slate-800"
+                    }`}
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    type="button"
+                  >
+                    <TabIcon
+                      aria-hidden
+                      className="h-4 w-4 shrink-0 opacity-90"
+                      strokeWidth={2}
+                    />
+                    {tabLabels[tab]}
+                  </button>
+                );
+              })}
             </aside>
 
             <div className="space-y-4">
@@ -1117,7 +1763,7 @@ function ProductionWebPage() {
                       }}
                       type="button"
                     >
-                      {t("agentComposerModeChat")}
+                      {t("agentComposerModeChat", locale)}
                     </button>
                     <button
                       className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
@@ -1130,18 +1776,18 @@ function ProductionWebPage() {
                       }}
                       type="button"
                     >
-                      {t("agentComposerModeIntent")}
+                      {t("agentComposerModeIntent", locale)}
                     </button>
                   </div>
                   {agentThreadLoading ? (
                     <p className="mt-2 text-xs text-ash">
-                      {t("agentHistoryLoading")}
+                      {t("agentHistoryLoading", locale)}
                     </p>
                   ) : null}
                   <p className="mt-2 text-xs text-ash">
                     {agentComposerMode === "chat"
-                      ? t("agentComposerHintChat")
-                      : t("agentComposerHintIntent")}
+                      ? t("agentComposerHintChat", locale)
+                      : t("agentComposerHintIntent", locale)}
                   </p>
                   <textarea
                     className="mt-3 h-24 w-full rounded-xl border border-slate-700 bg-night px-3 py-2 text-sm text-ink outline-none transition-colors duration-200 focus:border-ember disabled:opacity-50"
@@ -1158,7 +1804,7 @@ function ProductionWebPage() {
                         className="mt-3 block text-xs font-medium text-ash"
                         htmlFor="agent-voice-transcript"
                       >
-                        {t("agentVoiceTranscriptOptional")}
+                        {t("agentVoiceTranscriptOptional", locale)}
                       </label>
                       <textarea
                         className="mt-1 h-16 w-full rounded-xl border border-slate-700 bg-night px-3 py-2 text-sm text-ink outline-none transition-colors duration-200 focus:border-ember disabled:opacity-50"
@@ -1174,7 +1820,7 @@ function ProductionWebPage() {
                         className="mt-3 block text-xs font-medium text-ash"
                         htmlFor="agent-image-url"
                       >
-                        {t("agentImageUrlOptional")}
+                        {t("agentImageUrlOptional", locale)}
                       </label>
                       <input
                         className="mt-1 w-full rounded-xl border border-slate-700 bg-night px-3 py-2 text-sm text-ink outline-none transition-colors duration-200 focus:border-ember disabled:opacity-50"
@@ -1188,7 +1834,46 @@ function ProductionWebPage() {
                         value={agentImageDraft}
                       />
                     </>
-                  ) : null}
+                  ) : (
+                    <div className="mt-3 rounded-xl border border-slate-700 bg-night/70 p-3">
+                      <label className="flex items-center gap-2 text-xs text-slate-100">
+                        <input
+                          checked={decomposeIntent}
+                          onChange={(event) =>
+                            setDecomposeIntent(event.currentTarget.checked)
+                          }
+                          type="checkbox"
+                        />
+                        Split a broad message into multiple intents
+                      </label>
+                      <label
+                        className="mt-2 block text-xs font-medium text-ash"
+                        htmlFor="intent-max-splits"
+                      >
+                        Max intents (1-5)
+                      </label>
+                      <input
+                        className="mt-1 w-24 rounded-xl border border-slate-600 bg-night px-3 py-1.5 text-sm text-ink outline-none focus:border-ember"
+                        id="intent-max-splits"
+                        max={5}
+                        min={1}
+                        onChange={(event) => {
+                          const parsed = Number.parseInt(
+                            event.currentTarget.value,
+                            10,
+                          );
+                          if (Number.isFinite(parsed)) {
+                            setDecomposeMaxIntents(
+                              Math.min(Math.max(parsed, 1), 5),
+                            );
+                          }
+                        }}
+                        step={1}
+                        type="number"
+                        value={decomposeMaxIntents}
+                      />
+                    </div>
+                  )}
                   <button
                     className="mt-3 rounded-xl bg-ocean px-4 py-2 text-sm font-semibold text-white transition-[filter] duration-200 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
                     disabled={
@@ -1307,9 +1992,318 @@ function ProductionWebPage() {
                     <p className="mt-1 text-sm text-ash">{trustSummary}</p>
                   </SurfaceCard>
                   <SurfaceCard>
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-semibold text-slate-100">
+                        Discovery snapshot
+                      </h3>
+                      <button
+                        className="rounded-xl border border-slate-600 px-3 py-1 text-xs font-semibold text-slate-100 disabled:opacity-50"
+                        disabled={discoveryBusy}
+                        onClick={() => {
+                          refreshDiscoverySnapshots().catch(() => {});
+                        }}
+                        type="button"
+                      >
+                        {discoveryBusy ? "Refreshing..." : "Refresh"}
+                      </button>
+                    </div>
+                    <p className="mt-2 text-xs text-ash">
+                      Tonight:{" "}
+                      {passiveDiscovery?.tonight.suggestions.length ?? 0} ·
+                      reconnects:{" "}
+                      {passiveDiscovery?.reconnects.reconnects.length ?? 0}
+                    </p>
+                    <div className="mt-2 rounded-xl border border-slate-700 p-2">
+                      {passiveDiscovery?.tonight.suggestions.length ? (
+                        passiveDiscovery.tonight.suggestions
+                          .slice(0, 3)
+                          .map((row) => (
+                            <p
+                              className="mb-1 text-xs text-slate-200"
+                              key={row.userId}
+                            >
+                              {row.displayName} · {Math.round(row.score * 100)}%
+                            </p>
+                          ))
+                      ) : (
+                        <p className="text-xs text-ash">
+                          No tonight suggestions yet.
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      className="mt-3 rounded-xl bg-ocean px-3 py-1 text-xs font-semibold text-white"
+                      onClick={() => {
+                        publishDiscoveryToAgent().catch(() => {});
+                      }}
+                      type="button"
+                    >
+                      Publish to agent thread
+                    </button>
+                  </SurfaceCard>
+                  <SurfaceCard>
+                    <h3 className="font-semibold text-slate-100">
+                      Continuity and reconnect
+                    </h3>
+                    <p className="mt-1 text-xs text-ash">
+                      Pending request suggestions:{" "}
+                      {inboxSuggestions?.pendingRequestCount ?? 0}
+                    </p>
+                    <div className="mt-2 rounded-xl border border-slate-700 p-2">
+                      {inboxSuggestions?.suggestions.length ? (
+                        inboxSuggestions.suggestions
+                          .slice(0, 4)
+                          .map((suggestion) => (
+                            <p
+                              className="mb-1 text-xs text-slate-200"
+                              key={`${suggestion.title}-${suggestion.reason}`}
+                            >
+                              {suggestion.title}
+                            </p>
+                          ))
+                      ) : (
+                        <p className="text-xs text-ash">
+                          No continuity suggestions yet.
+                        </p>
+                      )}
+                    </div>
+                  </SurfaceCard>
+                  <SurfaceCard>
+                    <h3 className="font-semibold text-slate-100">
+                      Why this routing result
+                    </h3>
+                    {pendingIntentSummary?.intents.length ? (
+                      <>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {pendingIntentSummary.intents
+                            .slice(0, 5)
+                            .map((intent) => (
+                              <button
+                                className={`rounded-xl border px-3 py-1 text-xs ${
+                                  selectedIntentId === intent.intentId
+                                    ? "border-ember bg-ember/20 text-amber-100"
+                                    : "border-slate-700 text-slate-200"
+                                }`}
+                                key={intent.intentId}
+                                onClick={() => {
+                                  setSelectedIntentId(intent.intentId);
+                                }}
+                                type="button"
+                              >
+                                {intent.rawText.slice(0, 28)}
+                              </button>
+                            ))}
+                        </div>
+                        <p className="mt-2 text-xs text-ash">
+                          {userIntentExplanation?.summary ??
+                            "Loading explanation..."}
+                        </p>
+                        {userIntentExplanation?.factors.length ? (
+                          <div className="mt-2 rounded-xl border border-slate-700 p-2">
+                            {userIntentExplanation.factors.map((factor) => (
+                              <p
+                                className="mb-1 text-xs text-slate-200"
+                                key={factor}
+                              >
+                                {factor}
+                              </p>
+                            ))}
+                          </div>
+                        ) : null}
+                      </>
+                    ) : (
+                      <p className="mt-2 text-xs text-ash">
+                        No active intents yet to explain.
+                      </p>
+                    )}
+                  </SurfaceCard>
+                  <SurfaceCard>
+                    <h3 className="font-semibold text-slate-100">
+                      Memory controls
+                    </h3>
+                    <p className="mt-1 text-xs text-ash">
+                      Inspect and reset learned social memory.
+                    </p>
+                    <div className="mt-2 flex gap-2">
+                      <button
+                        className="rounded-xl border border-slate-600 px-3 py-1 text-xs font-semibold text-slate-100 disabled:opacity-50"
+                        disabled={memoryBusy}
+                        onClick={() => {
+                          refreshMemorySnapshot().catch(() => {});
+                        }}
+                        type="button"
+                      >
+                        {memoryBusy ? "..." : "Refresh memory"}
+                      </button>
+                      <button
+                        className="rounded-xl border border-rose-500/60 px-3 py-1 text-xs font-semibold text-rose-200 disabled:opacity-50"
+                        disabled={memoryBusy}
+                        onClick={() => {
+                          resetLearnedMemory().catch(() => {});
+                        }}
+                        type="button"
+                      >
+                        Reset learned memory
+                      </button>
+                    </div>
+                    <div className="mt-2 rounded-xl border border-slate-700 p-2 text-xs text-slate-200">
+                      <p>
+                        life graph loaded:{" "}
+                        {memorySnapshot.lifeGraph ? "yes" : "no"} · retrieval
+                        loaded: {memorySnapshot.retrieval ? "yes" : "no"}
+                      </p>
+                    </div>
+                  </SurfaceCard>
+                  <SurfaceCard>
+                    <h3 className="font-semibold text-slate-100">Search</h3>
+                    <p className="mt-1 text-xs text-ash">
+                      Find people, topics, active activities, and circles.
+                    </p>
+                    <div className="mt-2 flex gap-2">
+                      <input
+                        className="w-full rounded-xl border border-slate-700 bg-night px-3 py-2 text-sm text-ink outline-none focus:border-ember"
+                        onChange={(event) =>
+                          setSearchQuery(event.currentTarget.value)
+                        }
+                        placeholder="e.g. tennis, startups, design"
+                        value={searchQuery}
+                      />
+                      <button
+                        className="rounded-xl bg-ocean px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                        disabled={searchBusy || searchQuery.trim().length === 0}
+                        onClick={() => {
+                          runSearch().catch(() => {});
+                        }}
+                        type="button"
+                      >
+                        {searchBusy ? "..." : "Search"}
+                      </button>
+                    </div>
+                    {searchSnapshot ? (
+                      <div className="mt-2 rounded-xl border border-slate-700 p-2 text-xs text-slate-200">
+                        <p>
+                          users {searchSnapshot.users.length} · topics{" "}
+                          {searchSnapshot.topics.length} · activities{" "}
+                          {searchSnapshot.activities.length} · groups{" "}
+                          {searchSnapshot.groups.length}
+                        </p>
+                      </div>
+                    ) : null}
+                  </SurfaceCard>
+                  <SurfaceCard>
+                    <h3 className="font-semibold text-slate-100">
+                      Automations
+                    </h3>
+                    <p className="mt-1 text-xs text-ash">
+                      Saved searches plus scheduled briefings.
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button
+                        className="rounded-xl border border-slate-600 px-3 py-1 text-xs font-semibold text-slate-100 disabled:opacity-50"
+                        disabled={automationsBusy}
+                        onClick={() => {
+                          createSavedSearchQuick().catch(() => {});
+                        }}
+                        type="button"
+                      >
+                        New saved search
+                      </button>
+                      <button
+                        className="rounded-xl border border-slate-600 px-3 py-1 text-xs font-semibold text-slate-100 disabled:opacity-50"
+                        disabled={automationsBusy}
+                        onClick={() => {
+                          createAutomationQuick().catch(() => {});
+                        }}
+                        type="button"
+                      >
+                        New automation
+                      </button>
+                      <button
+                        className="rounded-xl bg-ocean px-3 py-1 text-xs font-semibold text-white disabled:opacity-50"
+                        disabled={!selectedScheduledTask}
+                        onClick={() => {
+                          runAutomationNow().catch(() => {});
+                        }}
+                        type="button"
+                      >
+                        Run now
+                      </button>
+                    </div>
+                    <div className="mt-2 rounded-xl border border-slate-700 p-2 text-xs text-slate-200">
+                      <p>
+                        saved searches: {savedSearches.length} · tasks:{" "}
+                        {scheduledTasks.length}
+                      </p>
+                    </div>
+                    {scheduledTasks.length ? (
+                      <div className="mt-2 grid gap-2">
+                        {scheduledTasks.slice(0, 4).map((task) => (
+                          <button
+                            className={`rounded-xl border px-3 py-2 text-left text-xs ${
+                              selectedScheduledTaskId === task.id
+                                ? "border-ember bg-ember/20 text-amber-100"
+                                : "border-slate-700 text-slate-200"
+                            }`}
+                            key={task.id}
+                            onClick={() => {
+                              setSelectedScheduledTaskId(task.id);
+                            }}
+                            type="button"
+                          >
+                            <p className="font-semibold">{task.title}</p>
+                            <p className="text-[11px] text-ash">
+                              {task.taskType} · {task.status}
+                            </p>
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                    {selectedScheduledTask ? (
+                      <div className="mt-2 rounded-xl border border-slate-700 p-2 text-xs text-slate-200">
+                        {scheduledTaskRuns.length === 0 ? (
+                          <p>No runs yet.</p>
+                        ) : (
+                          scheduledTaskRuns.map((run) => (
+                            <p className="mb-1" key={run.id}>
+                              {new Date(run.triggeredAt).toLocaleString()} ·{" "}
+                              {run.status}
+                            </p>
+                          ))
+                        )}
+                      </div>
+                    ) : null}
+                  </SurfaceCard>
+                  <SurfaceCard>
                     <h3 className="font-semibold text-slate-100">
                       Social mode
                     </h3>
+                    <h4 className="mt-4 text-xs uppercase tracking-wider text-ash">
+                      {t("localeLabel", locale)}
+                    </h4>
+                    <div className="mt-2 flex gap-2">
+                      <button
+                        className={`rounded-xl border px-3 py-2 text-xs ${
+                          locale === "en"
+                            ? "border-ember bg-ember/20 text-amber-100"
+                            : "border-slate-600 text-slate-200"
+                        }`}
+                        onClick={() => setLocale("en")}
+                        type="button"
+                      >
+                        {t("localeEnglish", locale)}
+                      </button>
+                      <button
+                        className={`rounded-xl border px-3 py-2 text-xs ${
+                          locale === "es"
+                            ? "border-ember bg-ember/20 text-amber-100"
+                            : "border-slate-600 text-slate-200"
+                        }`}
+                        onClick={() => setLocale("es")}
+                        type="button"
+                      >
+                        {t("localeSpanish", locale)}
+                      </button>
+                    </div>
                     <div className="mt-2 flex flex-wrap gap-2">
                       {(["one_to_one", "group", "either"] as SocialMode[]).map(
                         (mode) => (
@@ -1356,6 +2350,97 @@ function ProductionWebPage() {
                           {mode}
                         </button>
                       ))}
+                    </div>
+                  </SurfaceCard>
+                  <SurfaceCard>
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-semibold text-slate-100">
+                        Recurring circles
+                      </h3>
+                      <button
+                        className="rounded-xl border border-slate-600 px-3 py-1 text-xs font-semibold text-slate-100"
+                        onClick={() => {
+                          createCircleQuick().catch(() => {});
+                        }}
+                        type="button"
+                      >
+                        New circle
+                      </button>
+                    </div>
+                    {circlesBusy ? (
+                      <p className="mt-2 text-xs text-ash">Loading circles…</p>
+                    ) : recurringCircles.length === 0 ? (
+                      <p className="mt-2 text-xs text-ash">
+                        No circles yet. Create one to start a recurring social
+                        flow.
+                      </p>
+                    ) : (
+                      <div className="mt-2 grid gap-2">
+                        {recurringCircles.map((circle) => (
+                          <button
+                            className={`rounded-xl border px-3 py-2 text-left text-xs ${
+                              selectedCircleId === circle.id
+                                ? "border-ember bg-ember/20 text-amber-100"
+                                : "border-slate-700 text-slate-200"
+                            }`}
+                            key={circle.id}
+                            onClick={() => {
+                              setSelectedCircleId(circle.id);
+                            }}
+                            type="button"
+                          >
+                            <p className="font-semibold">{circle.title}</p>
+                            <p className="text-[11px] text-ash">
+                              {circle.status} · next{" "}
+                              {circle.nextSessionAt
+                                ? new Date(
+                                    circle.nextSessionAt,
+                                  ).toLocaleString()
+                                : "not scheduled"}
+                            </p>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <div className="mt-3 flex items-center justify-between">
+                      <p className="text-xs text-ash">
+                        {selectedCircle
+                          ? `Selected: ${selectedCircle.title}`
+                          : "Select a circle"}
+                      </p>
+                      <button
+                        className="rounded-xl bg-ocean px-3 py-1 text-xs font-semibold text-white disabled:opacity-50"
+                        disabled={!selectedCircle}
+                        onClick={() => {
+                          runCircleSessionNow().catch(() => {});
+                        }}
+                        type="button"
+                      >
+                        Open session now
+                      </button>
+                    </div>
+                    <div className="mt-2 max-h-32 overflow-y-auto rounded-xl border border-slate-700 p-2">
+                      {recurringSessions.length === 0 ? (
+                        <p className="text-xs text-ash">
+                          No recent sessions for this circle.
+                        </p>
+                      ) : (
+                        recurringSessions.map((sessionItem) => (
+                          <p
+                            className="mb-1 text-xs text-slate-200"
+                            key={sessionItem.id}
+                          >
+                            {new Date(
+                              sessionItem.scheduledFor,
+                            ).toLocaleString()}
+                            {" · "}
+                            {sessionItem.status}
+                            {sessionItem.generatedIntentId
+                              ? ` · intent ${sessionItem.generatedIntentId.slice(0, 8)}`
+                              : ""}
+                          </p>
+                        ))
+                      )}
                     </div>
                   </SurfaceCard>
                   <div className="grid gap-2 sm:grid-cols-3">

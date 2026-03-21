@@ -13,11 +13,26 @@ import {
   TextInput,
   View,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { api, buildAgentThreadStreamUrl, ChatMessageRecord } from "../lib/api";
+import {
+  api,
+  buildAgentThreadStreamUrl,
+  ChatMessageRecord,
+  DiscoveryInboxSuggestionsResponse,
+  PassiveDiscoveryResponse,
+  PendingIntentsSummaryResponse,
+  RecurringCircleRecord,
+  RecurringCircleSessionRecord,
+  SavedSearchRecord,
+  ScheduledTaskRecord,
+  ScheduledTaskRunRecord,
+  SearchSnapshotResponse,
+  UserIntentExplanation,
+} from "../lib/api";
 import { openAgentThreadSse } from "../lib/agent-thread-sse";
-import { t } from "../i18n/strings";
+import { type AppLocale, supportedLocales, t } from "../i18n/strings";
 import {
   clearStoredChats,
   loadStoredChats,
@@ -70,7 +85,7 @@ import {
   UserProfileDraft,
 } from "../types";
 
-interface HomeScreenProps {
+export interface HomeScreenProps {
   session: MobileSession;
   initialProfile: UserProfileDraft;
   onProfileUpdated: (profile: UserProfileDraft) => void;
@@ -108,6 +123,7 @@ const tabDescriptions: Record<HomeTab, string> = {
   chats: "Private threads with people you’ve connected with.",
   profile: "Preferences, notifications, and account.",
 };
+const MOBILE_LOCALE_STORAGE_KEY = "opensocial.mobile.locale.v1";
 
 export function HomeScreen({
   designMock = false,
@@ -116,6 +132,7 @@ export function HomeScreen({
   onResetSession,
   session,
 }: HomeScreenProps) {
+  const [locale, setLocale] = useState<AppLocale>("en");
   const enableE2ELocalMode =
     process.env.EXPO_PUBLIC_ENABLE_E2E_LOCAL_MODE === "1";
   const skipNetwork = designMock;
@@ -126,6 +143,8 @@ export function HomeScreen({
   const [draftIntentText, setDraftIntentText] = useState("");
   const [agentImageUrlDraft, setAgentImageUrlDraft] = useState("");
   const [sendingIntent, setSendingIntent] = useState(false);
+  const [decomposeIntent, setDecomposeIntent] = useState(true);
+  const [decomposeMaxIntents, setDecomposeMaxIntents] = useState(3);
   const [agentTimeline, setAgentTimeline] = useState<AgentTimelineMessage[]>(
     () =>
       designMock
@@ -166,6 +185,46 @@ export function HomeScreen({
   const [pushToken, setPushToken] = useState<string | null>(null);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [profileLoading, setProfileLoading] = useState(false);
+  const [recurringCircles, setRecurringCircles] = useState<
+    RecurringCircleRecord[]
+  >([]);
+  const [selectedCircleId, setSelectedCircleId] = useState<string | null>(null);
+  const [recurringSessions, setRecurringSessions] = useState<
+    RecurringCircleSessionRecord[]
+  >([]);
+  const [recurringBusy, setRecurringBusy] = useState(false);
+  const [passiveDiscovery, setPassiveDiscovery] =
+    useState<PassiveDiscoveryResponse | null>(null);
+  const [inboxSuggestions, setInboxSuggestions] =
+    useState<DiscoveryInboxSuggestionsResponse | null>(null);
+  const [pendingIntentSummary, setPendingIntentSummary] =
+    useState<PendingIntentsSummaryResponse | null>(null);
+  const [selectedExplainedIntentId, setSelectedExplainedIntentId] = useState<
+    string | null
+  >(null);
+  const [userIntentExplanation, setUserIntentExplanation] =
+    useState<UserIntentExplanation | null>(null);
+  const [discoveryBusy, setDiscoveryBusy] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchSnapshot, setSearchSnapshot] =
+    useState<SearchSnapshotResponse | null>(null);
+  const [searchBusy, setSearchBusy] = useState(false);
+  const [memoryBusy, setMemoryBusy] = useState(false);
+  const [memorySnapshot, setMemorySnapshot] = useState<{
+    lifeGraph: Record<string, unknown> | null;
+    retrieval: Record<string, unknown> | null;
+  }>({ lifeGraph: null, retrieval: null });
+  const [savedSearches, setSavedSearches] = useState<SavedSearchRecord[]>([]);
+  const [scheduledTasks, setScheduledTasks] = useState<ScheduledTaskRecord[]>(
+    [],
+  );
+  const [selectedScheduledTaskId, setSelectedScheduledTaskId] = useState<
+    string | null
+  >(null);
+  const [scheduledTaskRuns, setScheduledTaskRuns] = useState<
+    ScheduledTaskRunRecord[]
+  >([]);
+  const [automationsBusy, setAutomationsBusy] = useState(false);
   const [trustSummary, setTrustSummary] = useState(() =>
     designMock
       ? "badge: verified · reputation: strong"
@@ -186,6 +245,28 @@ export function HomeScreen({
   const typingClearTimersRef = useRef<
     Map<string, ReturnType<typeof setTimeout>>
   >(new Map());
+
+  useEffect(() => {
+    let mounted = true;
+    AsyncStorage.getItem(MOBILE_LOCALE_STORAGE_KEY)
+      .then((stored: string | null) => {
+        if (
+          mounted &&
+          stored &&
+          supportedLocales.includes(stored as AppLocale)
+        ) {
+          setLocale(stored as AppLocale);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    AsyncStorage.setItem(MOBILE_LOCALE_STORAGE_KEY, locale).catch(() => {});
+  }, [locale]);
   const trackedRequestSentIntentsRef = useRef<Set<string>>(new Set());
   const [agentComposerMode, setAgentComposerMode] = useState<"chat" | "intent">(
     "chat",
@@ -212,6 +293,17 @@ export function HomeScreen({
   const typingUsers = useMemo(
     () => (selectedChatId ? (typingUsersByChat[selectedChatId] ?? []) : []),
     [selectedChatId, typingUsersByChat],
+  );
+  const selectedCircle = useMemo(
+    () =>
+      recurringCircles.find((circle) => circle.id === selectedCircleId) ?? null,
+    [recurringCircles, selectedCircleId],
+  );
+  const selectedScheduledTask = useMemo(
+    () =>
+      scheduledTasks.find((task) => task.id === selectedScheduledTaskId) ??
+      null,
+    [scheduledTasks, selectedScheduledTaskId],
   );
 
   const clearTypingUser = useCallback((chatId: string, userId: string) => {
@@ -345,6 +437,226 @@ export function HomeScreen({
       mounted = false;
     };
   }, [session.accessToken, session.userId, skipNetwork]);
+
+  useEffect(() => {
+    if (skipNetwork || activeTab !== "profile") {
+      return;
+    }
+    let mounted = true;
+    setAutomationsBusy(true);
+    Promise.all([
+      api.listSavedSearches(session.userId, session.accessToken),
+      api.listScheduledTasks(
+        session.userId,
+        { limit: 20 },
+        session.accessToken,
+      ),
+    ])
+      .then(([searches, tasks]) => {
+        if (!mounted) {
+          return;
+        }
+        setSavedSearches(searches);
+        setScheduledTasks(tasks);
+        setSelectedScheduledTaskId((current) => {
+          if (current && tasks.some((task) => task.id === current)) {
+            return current;
+          }
+          return tasks[0]?.id ?? null;
+        });
+      })
+      .catch((error) => {
+        if (!mounted) {
+          return;
+        }
+        setBanner({
+          tone: "error",
+          text: `Could not load automations: ${String(error)}`,
+        });
+      })
+      .finally(() => {
+        if (mounted) {
+          setAutomationsBusy(false);
+        }
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [activeTab, session.accessToken, session.userId, skipNetwork]);
+
+  useEffect(() => {
+    if (skipNetwork || activeTab !== "profile" || !selectedScheduledTaskId) {
+      setScheduledTaskRuns([]);
+      return;
+    }
+    let mounted = true;
+    api
+      .listScheduledTaskRuns(selectedScheduledTaskId, 8, session.accessToken)
+      .then((runs) => {
+        if (!mounted) {
+          return;
+        }
+        setScheduledTaskRuns(runs);
+      })
+      .catch((error) => {
+        if (!mounted) {
+          return;
+        }
+        setBanner({
+          tone: "error",
+          text: `Could not load task runs: ${String(error)}`,
+        });
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [activeTab, selectedScheduledTaskId, session.accessToken, skipNetwork]);
+
+  useEffect(() => {
+    if (skipNetwork || activeTab !== "profile") {
+      return;
+    }
+    let mounted = true;
+    setRecurringBusy(true);
+    api
+      .listRecurringCircles(session.userId, session.accessToken)
+      .then((circles) => {
+        if (!mounted) {
+          return;
+        }
+        setRecurringCircles(circles);
+        setSelectedCircleId((current) => {
+          if (current && circles.some((circle) => circle.id === current)) {
+            return current;
+          }
+          return circles[0]?.id ?? null;
+        });
+      })
+      .catch((error) => {
+        if (!mounted) {
+          return;
+        }
+        setBanner({
+          tone: "error",
+          text: `Could not load circles: ${String(error)}`,
+        });
+      })
+      .finally(() => {
+        if (mounted) {
+          setRecurringBusy(false);
+        }
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [activeTab, session.accessToken, session.userId, skipNetwork]);
+
+  useEffect(() => {
+    if (skipNetwork || activeTab !== "profile" || !selectedCircleId) {
+      setRecurringSessions([]);
+      return;
+    }
+    let mounted = true;
+    api
+      .listRecurringCircleSessions(selectedCircleId, session.accessToken)
+      .then((sessions) => {
+        if (!mounted) {
+          return;
+        }
+        setRecurringSessions(sessions);
+      })
+      .catch((error) => {
+        if (!mounted) {
+          return;
+        }
+        setBanner({
+          tone: "error",
+          text: `Could not load circle sessions: ${String(error)}`,
+        });
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [activeTab, selectedCircleId, session.accessToken, skipNetwork]);
+
+  useEffect(() => {
+    if (skipNetwork || activeTab !== "profile") {
+      return;
+    }
+    let mounted = true;
+    setDiscoveryBusy(true);
+    Promise.all([
+      api.getPassiveDiscovery(session.userId, 3, session.accessToken),
+      api.getDiscoveryInboxSuggestions(session.userId, 4, session.accessToken),
+      api.summarizePendingIntents(session.userId, 8, session.accessToken),
+    ])
+      .then(([passive, inbox, pending]) => {
+        if (!mounted) {
+          return;
+        }
+        setPassiveDiscovery(passive);
+        setInboxSuggestions(inbox);
+        setPendingIntentSummary(pending);
+        setSelectedExplainedIntentId((current) => {
+          if (
+            current &&
+            pending.intents.some((intent) => intent.intentId === current)
+          ) {
+            return current;
+          }
+          return pending.intents[0]?.intentId ?? null;
+        });
+      })
+      .catch((error) => {
+        if (!mounted) {
+          return;
+        }
+        setBanner({
+          tone: "error",
+          text: `Could not load discovery snapshots: ${String(error)}`,
+        });
+      })
+      .finally(() => {
+        if (mounted) {
+          setDiscoveryBusy(false);
+        }
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [activeTab, session.accessToken, session.userId, skipNetwork]);
+
+  useEffect(() => {
+    if (
+      skipNetwork ||
+      activeTab !== "profile" ||
+      selectedExplainedIntentId == null
+    ) {
+      setUserIntentExplanation(null);
+      return;
+    }
+    let mounted = true;
+    api
+      .getUserIntentExplanation(selectedExplainedIntentId, session.accessToken)
+      .then((explanation) => {
+        if (!mounted) {
+          return;
+        }
+        setUserIntentExplanation(explanation);
+      })
+      .catch((error) => {
+        if (!mounted) {
+          return;
+        }
+        setBanner({
+          tone: "error",
+          text: `Could not load routing explanation: ${String(error)}`,
+        });
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [activeTab, selectedExplainedIntentId, session.accessToken, skipNetwork]);
 
   useEffect(() => {
     if (skipNetwork) {
@@ -838,7 +1150,7 @@ export function HomeScreen({
     if (!skipNetwork && !designMock && !enableE2ELocalMode && !netOnline) {
       setBanner({
         tone: "error",
-        text: t("sendBlockedOffline"),
+        text: t("sendBlockedOffline", locale),
       });
       return;
     }
@@ -854,9 +1166,14 @@ export function HomeScreen({
       Boolean(agentThreadId) &&
       !enableE2ELocalMode &&
       !designMock;
+    const useIntentAgentEndpoint =
+      agentComposerMode === "intent" &&
+      Boolean(agentThreadId) &&
+      !enableE2ELocalMode &&
+      !designMock;
     const workflowBody = useAgentChat
-      ? t("agentWorkflowThinking")
-      : t("agentWorkflowRouting");
+      ? t("agentWorkflowThinking", locale)
+      : t("agentWorkflowRouting", locale);
 
     setAgentTimeline((current) => [
       ...current,
@@ -959,6 +1276,44 @@ export function HomeScreen({
         recordTelemetry("agent_turn_completed", {
           textLength: rawText.length,
         });
+        return;
+      }
+
+      if (useIntentAgentEndpoint && agentThreadId) {
+        const intentResult = await api.createIntentFromAgentMessage(
+          agentThreadId,
+          session.userId,
+          rawText,
+          session.accessToken,
+          {
+            allowDecomposition: decomposeIntent,
+            maxIntents: decomposeMaxIntents,
+          },
+        );
+        const primaryIntentId =
+          intentResult.intentIds[0] ?? intentResult.intentId;
+        setAgentTimeline((current) => [
+          ...current,
+          {
+            id: `agent_${timelineIdBase}`,
+            role: "agent",
+            body:
+              intentResult.intentCount > 1
+                ? `Split into ${intentResult.intentCount} intents and started matching.`
+                : `Intent captured (${primaryIntentId.slice(0, 8)}) and sent to matching.`,
+          },
+        ]);
+        recordTelemetry("intent_created", {
+          intentId: primaryIntentId,
+          textLength: rawText.length,
+          decomposed: intentResult.intentCount > 1,
+          intentCount: intentResult.intentCount,
+        });
+        if (primaryIntentId) {
+          setSelectedExplainedIntentId(primaryIntentId);
+          void trackRequestSentForIntent(primaryIntentId);
+        }
+        hapticImpact();
         return;
       }
 
@@ -1485,6 +1840,335 @@ export function HomeScreen({
     }
   };
 
+  const createCircleQuick = async () => {
+    if (skipNetwork) {
+      return;
+    }
+    try {
+      const created = await api.createRecurringCircle(
+        session.userId,
+        {
+          title: "Weekly open circle",
+          visibility: "invite_only",
+          topicTags: profileDraft.interests.slice(0, 3),
+          cadence: {
+            kind: "weekly",
+            days: ["thu"],
+            hour: 20,
+            minute: 0,
+            timezone: "UTC",
+            intervalWeeks: 1,
+          },
+          kickoffPrompt: "Find a small group for this week's recurring circle.",
+        },
+        session.accessToken,
+      );
+      setRecurringCircles((current) => [created, ...current]);
+      setSelectedCircleId(created.id);
+      setBanner({ tone: "success", text: "Recurring circle created." });
+    } catch (error) {
+      setBanner({
+        tone: "error",
+        text: `Could not create recurring circle: ${String(error)}`,
+      });
+    }
+  };
+
+  const runCircleSessionNow = async () => {
+    if (skipNetwork || !selectedCircleId) {
+      return;
+    }
+    try {
+      const opened = await api.runRecurringCircleSessionNow(
+        selectedCircleId,
+        session.accessToken,
+      );
+      setRecurringSessions((current) => [opened, ...current]);
+      setBanner({
+        tone: "success",
+        text: "Circle session opened and matching started.",
+      });
+    } catch (error) {
+      setBanner({
+        tone: "error",
+        text: `Could not open circle session: ${String(error)}`,
+      });
+    }
+  };
+
+  const refreshDiscoverySnapshots = async () => {
+    if (skipNetwork) {
+      return;
+    }
+    setDiscoveryBusy(true);
+    try {
+      const [passive, inbox, pending] = await Promise.all([
+        api.getPassiveDiscovery(session.userId, 3, session.accessToken),
+        api.getDiscoveryInboxSuggestions(
+          session.userId,
+          4,
+          session.accessToken,
+        ),
+        api.summarizePendingIntents(session.userId, 8, session.accessToken),
+      ]);
+      setPassiveDiscovery(passive);
+      setInboxSuggestions(inbox);
+      setPendingIntentSummary(pending);
+      setSelectedExplainedIntentId((current) => {
+        if (
+          current &&
+          pending.intents.some((intent) => intent.intentId === current)
+        ) {
+          return current;
+        }
+        return pending.intents[0]?.intentId ?? null;
+      });
+      setBanner({
+        tone: "success",
+        text: "Discovery snapshots refreshed.",
+      });
+    } catch (error) {
+      setBanner({
+        tone: "error",
+        text: `Could not refresh discovery snapshots: ${String(error)}`,
+      });
+    } finally {
+      setDiscoveryBusy(false);
+    }
+  };
+
+  const publishDiscoveryToAgent = async () => {
+    if (skipNetwork) {
+      return;
+    }
+    try {
+      const result = await api.publishAgentRecommendations(
+        session.userId,
+        {
+          ...(agentThreadId ? { threadId: agentThreadId } : {}),
+          limit: 3,
+        },
+        session.accessToken,
+      );
+      setBanner({
+        tone: "success",
+        text: result.delivered
+          ? "Recommendations posted to your agent thread."
+          : "Recommendations generated but no thread was available.",
+      });
+    } catch (error) {
+      setBanner({
+        tone: "error",
+        text: `Could not publish recommendations: ${String(error)}`,
+      });
+    }
+  };
+
+  const runSearch = async () => {
+    if (skipNetwork || searchQuery.trim().length === 0) {
+      return;
+    }
+    setSearchBusy(true);
+    try {
+      const result = await api.search(
+        session.userId,
+        searchQuery.trim(),
+        6,
+        session.accessToken,
+      );
+      setSearchSnapshot(result);
+    } catch (error) {
+      setBanner({
+        tone: "error",
+        text: `Could not run search: ${String(error)}`,
+      });
+    } finally {
+      setSearchBusy(false);
+    }
+  };
+
+  const refreshMemorySnapshot = async () => {
+    if (skipNetwork) {
+      return;
+    }
+    setMemoryBusy(true);
+    try {
+      const [lifeGraph, retrieval] = await Promise.all([
+        api.getLifeGraph(session.userId, session.accessToken),
+        api.queryRetrievalContext(
+          session.userId,
+          {
+            query: "Summarize my most relevant social memory context.",
+            maxChunks: 4,
+            maxAgeDays: 90,
+          },
+          session.accessToken,
+        ),
+      ]);
+      setMemorySnapshot({ lifeGraph, retrieval });
+      setBanner({
+        tone: "success",
+        text: "Memory snapshot refreshed.",
+      });
+    } catch (error) {
+      setBanner({
+        tone: "error",
+        text: `Could not refresh memory snapshot: ${String(error)}`,
+      });
+    } finally {
+      setMemoryBusy(false);
+    }
+  };
+
+  const resetLearnedMemory = async () => {
+    if (skipNetwork) {
+      return;
+    }
+    setMemoryBusy(true);
+    try {
+      await api.resetMemory(
+        session.userId,
+        {
+          actorUserId: session.userId,
+          mode: "learned_memory",
+          reason: "user_requested_from_profile",
+        },
+        session.accessToken,
+      );
+      setMemorySnapshot({ lifeGraph: null, retrieval: null });
+      setBanner({
+        tone: "success",
+        text: "Learned memory reset completed.",
+      });
+    } catch (error) {
+      setBanner({
+        tone: "error",
+        text: `Could not reset memory: ${String(error)}`,
+      });
+    } finally {
+      setMemoryBusy(false);
+    }
+  };
+
+  const createSavedSearchQuick = async () => {
+    if (skipNetwork) {
+      return;
+    }
+    const seed = searchQuery.trim() || "tennis";
+    try {
+      const created = await api.createSavedSearch(
+        session.userId,
+        {
+          title: `Search: ${seed.slice(0, 28)}`,
+          searchType: "activity_search",
+          queryConfig: {
+            q: seed,
+            limit: 6,
+          },
+        },
+        session.accessToken,
+      );
+      setSavedSearches((current) => [created, ...current]);
+      setBanner({
+        tone: "success",
+        text: "Saved search created.",
+      });
+    } catch (error) {
+      setBanner({
+        tone: "error",
+        text: `Could not create saved search: ${String(error)}`,
+      });
+    }
+  };
+
+  const createAutomationQuick = async () => {
+    if (skipNetwork) {
+      return;
+    }
+    try {
+      let savedSearch = savedSearches[0];
+      if (!savedSearch) {
+        const seed = searchQuery.trim() || "tennis";
+        savedSearch = await api.createSavedSearch(
+          session.userId,
+          {
+            title: `Search: ${seed.slice(0, 28)}`,
+            searchType: "activity_search",
+            queryConfig: {
+              q: seed,
+              limit: 6,
+            },
+          },
+          session.accessToken,
+        );
+        setSavedSearches((current) => [savedSearch!, ...current]);
+      }
+      const created = await api.createScheduledTask(
+        session.userId,
+        {
+          title: "Weekly saved-search briefing",
+          description:
+            "Runs your top saved search and posts a short discovery briefing.",
+          schedule: {
+            kind: "weekly",
+            days: ["thu"],
+            hour: 18,
+            minute: 0,
+            timezone: "UTC",
+          },
+          task: {
+            taskType: "saved_search",
+            config: {
+              savedSearchId: savedSearch.id,
+              deliveryMode: "notification_and_agent_thread",
+              minResults: 1,
+              maxResults: 5,
+            },
+          },
+        },
+        session.accessToken,
+      );
+      setScheduledTasks((current) => [created, ...current]);
+      setSelectedScheduledTaskId(created.id);
+      setBanner({
+        tone: "success",
+        text: "Scheduled automation created.",
+      });
+    } catch (error) {
+      setBanner({
+        tone: "error",
+        text: `Could not create automation: ${String(error)}`,
+      });
+    }
+  };
+
+  const runAutomationNow = async () => {
+    if (skipNetwork || !selectedScheduledTask) {
+      return;
+    }
+    try {
+      await api.runScheduledTaskNow(
+        selectedScheduledTask.id,
+        session.accessToken,
+      );
+      const runs = await api.listScheduledTaskRuns(
+        selectedScheduledTask.id,
+        8,
+        session.accessToken,
+      );
+      setScheduledTaskRuns(runs);
+      setBanner({
+        tone: "success",
+        text: "Automation queued to run now.",
+      });
+    } catch (error) {
+      setBanner({
+        tone: "error",
+        text: `Could not run automation: ${String(error)}`,
+      });
+    }
+  };
+
   return (
     <SafeAreaView className="flex-1 bg-canvas" testID="home-screen">
       <KeyboardAvoidingView
@@ -1525,7 +2209,7 @@ export function HomeScreen({
         ) : null}
         {!skipNetwork && !netOnline ? (
           <View className="px-5 pt-3">
-            <InlineNotice text={t("offlineNotice")} tone="info" />
+            <InlineNotice text={t("offlineNotice", locale)} tone="info" />
           </View>
         ) : null}
 
@@ -1537,6 +2221,7 @@ export function HomeScreen({
                 (message) => message.role === "user",
               )}
               composerMode={agentComposerMode}
+              locale={locale}
               draftMessage={draftIntentText}
               loading={sendingIntent}
               messages={agentTimeline}
@@ -1548,6 +2233,10 @@ export function HomeScreen({
               onVoiceTranscript={(line) => {
                 agentVoiceTranscriptRef.current = line.trim() || null;
               }}
+              decomposeIntent={decomposeIntent}
+              decomposeMaxIntents={decomposeMaxIntents}
+              onDecomposeIntentChange={setDecomposeIntent}
+              onDecomposeMaxIntentsChange={setDecomposeMaxIntents}
               setDraftMessage={setDraftIntentText}
               threadLoading={agentThreadLoading}
             />
@@ -1605,6 +2294,43 @@ export function HomeScreen({
                 }))
               }
               onSaveSettings={saveSettings}
+              circles={recurringCircles}
+              circlesBusy={recurringBusy}
+              selectedCircleId={selectedCircleId}
+              selectedCircleTitle={selectedCircle?.title ?? null}
+              circleSessions={recurringSessions}
+              onCreateCircle={createCircleQuick}
+              onSelectCircle={setSelectedCircleId}
+              onRunCircleSessionNow={runCircleSessionNow}
+              passiveDiscovery={passiveDiscovery}
+              inboxSuggestions={inboxSuggestions}
+              pendingIntentSummary={pendingIntentSummary}
+              selectedExplainedIntentId={selectedExplainedIntentId}
+              userIntentExplanation={userIntentExplanation}
+              discoveryBusy={discoveryBusy}
+              onRefreshDiscovery={refreshDiscoverySnapshots}
+              onPublishDiscoveryToAgent={publishDiscoveryToAgent}
+              onSelectExplainedIntent={setSelectedExplainedIntentId}
+              searchQuery={searchQuery}
+              searchSnapshot={searchSnapshot}
+              searchBusy={searchBusy}
+              onSearchQueryChange={setSearchQuery}
+              onRunSearch={runSearch}
+              memorySnapshot={memorySnapshot}
+              memoryBusy={memoryBusy}
+              locale={locale}
+              onRefreshMemory={refreshMemorySnapshot}
+              onResetLearnedMemory={resetLearnedMemory}
+              onLocaleChange={setLocale}
+              savedSearches={savedSearches}
+              scheduledTasks={scheduledTasks}
+              selectedScheduledTaskId={selectedScheduledTaskId}
+              scheduledTaskRuns={scheduledTaskRuns}
+              automationsBusy={automationsBusy}
+              onSelectScheduledTask={setSelectedScheduledTaskId}
+              onCreateSavedSearch={createSavedSearchQuick}
+              onCreateAutomation={createAutomationQuick}
+              onRunAutomationNow={runAutomationNow}
             />
           ) : null}
         </AnimatedScreen>
@@ -1642,21 +2368,31 @@ interface AgentTabProps {
   messages: AgentTimelineMessage[];
   loading: boolean;
   composerMode: "chat" | "intent";
+  locale: AppLocale;
   onComposerModeChange: (mode: "chat" | "intent") => void;
   threadLoading: boolean;
   onVoiceTranscript?: (line: string) => void;
   agentImageUrl: string;
   onAgentImageUrlChange: (value: string) => void;
+  decomposeIntent: boolean;
+  decomposeMaxIntents: number;
+  onDecomposeIntentChange: (value: boolean) => void;
+  onDecomposeMaxIntentsChange: (value: number) => void;
 }
 
 function AgentTab({
   agentImageUrl,
   canRegenerate,
   composerMode,
+  locale,
   draftMessage,
   loading,
   messages,
   onAgentImageUrlChange,
+  decomposeIntent,
+  decomposeMaxIntents,
+  onDecomposeIntentChange,
+  onDecomposeMaxIntentsChange,
   onComposerModeChange,
   onVoiceTranscript,
   onRegenerate,
@@ -1693,7 +2429,7 @@ function AgentTab({
         />
         <View className="mb-2 flex-row flex-wrap gap-2">
           <ChoiceChip
-            label={t("agentComposerModeChat")}
+            label={t("agentComposerModeChat", locale)}
             onPress={() => {
               onComposerModeChange("chat");
             }}
@@ -1701,7 +2437,7 @@ function AgentTab({
             testID="agent-mode-chat"
           />
           <ChoiceChip
-            label={t("agentComposerModeIntent")}
+            label={t("agentComposerModeIntent", locale)}
             onPress={() => {
               onComposerModeChange("intent");
             }}
@@ -1711,13 +2447,13 @@ function AgentTab({
         </View>
         {threadLoading ? (
           <Text className="mb-2 text-[12px] text-muted">
-            {t("agentHistoryLoading")}
+            {t("agentHistoryLoading", locale)}
           </Text>
         ) : null}
         <Text className="mb-2 text-[12px] font-medium text-muted">
           {composerMode === "chat"
-            ? t("agentComposerHintChat")
-            : t("agentComposerHintIntent")}
+            ? t("agentComposerHintChat", locale)
+            : t("agentComposerHintIntent", locale)}
         </Text>
         <MessageComposer
           canSend={canSend}
@@ -1736,7 +2472,7 @@ function AgentTab({
         {composerMode === "chat" ? (
           <>
             <Text className="mb-1 mt-2 text-[11px] text-muted">
-              {t("agentImageUrlOptional")}
+              {t("agentImageUrlOptional", locale)}
             </Text>
             <TextInput
               autoCapitalize="none"
@@ -1749,7 +2485,34 @@ function AgentTab({
               value={agentImageUrl}
             />
           </>
-        ) : null}
+        ) : (
+          <View className="mb-1 mt-2 rounded-2xl border border-hairline bg-surface px-3 py-2">
+            <Pressable
+              className="mb-2 flex-row items-center justify-between"
+              onPress={() => onDecomposeIntentChange(!decomposeIntent)}
+            >
+              <Text className="text-[12px] text-ink">
+                Split broad message into multiple intents
+              </Text>
+              <Text className="text-[12px] font-semibold text-primary">
+                {decomposeIntent ? "ON" : "OFF"}
+              </Text>
+            </Pressable>
+            <Text className="mb-1 text-[11px] text-muted">
+              Max intents (1-5)
+            </Text>
+            <View className="flex-row gap-2">
+              {[1, 2, 3, 4, 5].map((value) => (
+                <ChoiceChip
+                  key={`max-intents-${value}`}
+                  label={String(value)}
+                  onPress={() => onDecomposeMaxIntentsChange(value)}
+                  selected={decomposeMaxIntents === value}
+                />
+              ))}
+            </View>
+          </View>
+        )}
         <Text className="mt-1.5 text-[11px] text-muted">
           {intentTextLength}/240
         </Text>
@@ -2009,10 +2772,50 @@ interface ProfileTabProps {
   telemetrySummary: TelemetrySummary | null;
   pushEnabled: boolean;
   pushToken: string | null;
+  circles: RecurringCircleRecord[];
+  circlesBusy: boolean;
+  selectedCircleId: string | null;
+  selectedCircleTitle: string | null;
+  circleSessions: RecurringCircleSessionRecord[];
+  passiveDiscovery: PassiveDiscoveryResponse | null;
+  inboxSuggestions: DiscoveryInboxSuggestionsResponse | null;
+  pendingIntentSummary: PendingIntentsSummaryResponse | null;
+  selectedExplainedIntentId: string | null;
+  userIntentExplanation: UserIntentExplanation | null;
+  discoveryBusy: boolean;
+  searchQuery: string;
+  searchSnapshot: SearchSnapshotResponse | null;
+  searchBusy: boolean;
+  memorySnapshot: {
+    lifeGraph: Record<string, unknown> | null;
+    retrieval: Record<string, unknown> | null;
+  };
+  memoryBusy: boolean;
+  locale: AppLocale;
+  savedSearches: SavedSearchRecord[];
+  scheduledTasks: ScheduledTaskRecord[];
+  selectedScheduledTaskId: string | null;
+  scheduledTaskRuns: ScheduledTaskRunRecord[];
+  automationsBusy: boolean;
   onSocialModeChange: (value: UserProfileDraft["socialMode"]) => void;
   onNotificationModeChange: (
     value: UserProfileDraft["notificationMode"],
   ) => void;
+  onCreateCircle: () => Promise<void>;
+  onSelectCircle: (circleId: string) => void;
+  onRunCircleSessionNow: () => Promise<void>;
+  onRefreshDiscovery: () => Promise<void>;
+  onPublishDiscoveryToAgent: () => Promise<void>;
+  onSelectExplainedIntent: (intentId: string) => void;
+  onSearchQueryChange: (value: string) => void;
+  onRunSearch: () => Promise<void>;
+  onRefreshMemory: () => Promise<void>;
+  onResetLearnedMemory: () => Promise<void>;
+  onLocaleChange: (value: AppLocale) => void;
+  onSelectScheduledTask: (taskId: string) => void;
+  onCreateSavedSearch: () => Promise<void>;
+  onCreateAutomation: () => Promise<void>;
+  onRunAutomationNow: () => Promise<void>;
   onSaveSettings: () => Promise<void>;
   onSendDigestNow: () => Promise<void>;
   onSignOut: () => Promise<void>;
@@ -2029,8 +2832,45 @@ function ProfileTab({
   profile,
   pushEnabled,
   pushToken,
+  circles,
+  circlesBusy,
+  selectedCircleId,
+  selectedCircleTitle,
+  circleSessions,
+  passiveDiscovery,
+  inboxSuggestions,
+  pendingIntentSummary,
+  selectedExplainedIntentId,
+  userIntentExplanation,
+  discoveryBusy,
+  searchQuery,
+  searchSnapshot,
+  searchBusy,
+  memorySnapshot,
+  memoryBusy,
+  locale,
+  savedSearches,
+  scheduledTasks,
+  selectedScheduledTaskId,
+  scheduledTaskRuns,
+  automationsBusy,
   telemetrySummary,
   trustSummary,
+  onCreateCircle,
+  onSelectCircle,
+  onRunCircleSessionNow,
+  onRefreshDiscovery,
+  onPublishDiscoveryToAgent,
+  onSelectExplainedIntent,
+  onSearchQueryChange,
+  onRunSearch,
+  onRefreshMemory,
+  onResetLearnedMemory,
+  onLocaleChange,
+  onSelectScheduledTask,
+  onCreateSavedSearch,
+  onCreateAutomation,
+  onRunAutomationNow,
 }: ProfileTabProps) {
   return (
     <ScrollView
@@ -2048,6 +2888,24 @@ function ProfileTab({
               <Text className="text-xs text-ink">{interest}</Text>
             </View>
           ))}
+        </View>
+      </SurfaceCard>
+
+      <SurfaceCard>
+        <Text className="mb-2 text-base font-semibold text-ink">
+          {t("localeLabel", locale)}
+        </Text>
+        <View className="flex-row flex-wrap gap-2">
+          <ChoiceChip
+            label={t("localeEnglish", locale)}
+            onPress={() => onLocaleChange("en")}
+            selected={locale === "en"}
+          />
+          <ChoiceChip
+            label={t("localeSpanish", locale)}
+            onPress={() => onLocaleChange("es")}
+            selected={locale === "es"}
+          />
         </View>
       </SurfaceCard>
 
@@ -2101,6 +2959,286 @@ function ProfileTab({
       <SurfaceCard>
         <Text className="text-sm text-muted">Trust summary</Text>
         <Text className="mt-1 text-sm text-ink">{trustSummary}</Text>
+      </SurfaceCard>
+
+      <SurfaceCard>
+        <View className="mb-2 flex-row items-center justify-between">
+          <Text className="text-base font-semibold text-ink">
+            Discovery snapshot
+          </Text>
+          <PrimaryButton
+            label={discoveryBusy ? "Refreshing..." : "Refresh"}
+            onPress={onRefreshDiscovery}
+            variant="ghost"
+          />
+        </View>
+        <Text className="text-xs text-muted">
+          tonight: {passiveDiscovery?.tonight.suggestions.length ?? 0} ·
+          reconnects: {passiveDiscovery?.reconnects.reconnects.length ?? 0}
+        </Text>
+        <View className="mt-2 rounded-xl border border-border bg-surface p-2">
+          {passiveDiscovery?.tonight.suggestions.length ? (
+            passiveDiscovery.tonight.suggestions
+              .slice(0, 3)
+              .map((suggestion) => (
+                <Text className="mb-1 text-xs text-ink" key={suggestion.userId}>
+                  {suggestion.displayName} ·{" "}
+                  {Math.round(suggestion.score * 100)}%
+                </Text>
+              ))
+          ) : (
+            <Text className="text-xs text-muted">
+              No tonight suggestions yet.
+            </Text>
+          )}
+        </View>
+        <View className="mt-2">
+          <PrimaryButton
+            label="Publish to Agent Thread"
+            onPress={onPublishDiscoveryToAgent}
+            variant="secondary"
+          />
+        </View>
+      </SurfaceCard>
+
+      <SurfaceCard>
+        <Text className="mb-2 text-base font-semibold text-ink">
+          Continuity and reconnect
+        </Text>
+        <Text className="text-xs text-muted">
+          pending request suggestions:{" "}
+          {inboxSuggestions?.pendingRequestCount ?? 0}
+        </Text>
+        <View className="mt-2 rounded-xl border border-border bg-surface p-2">
+          {inboxSuggestions?.suggestions.length ? (
+            inboxSuggestions.suggestions.slice(0, 4).map((suggestion) => (
+              <Text
+                className="mb-1 text-xs text-ink"
+                key={`${suggestion.title}-${suggestion.reason}`}
+              >
+                {suggestion.title}
+              </Text>
+            ))
+          ) : (
+            <Text className="text-xs text-muted">
+              No reconnect suggestions yet.
+            </Text>
+          )}
+        </View>
+      </SurfaceCard>
+
+      <SurfaceCard>
+        <Text className="mb-2 text-base font-semibold text-ink">
+          Why this routing result
+        </Text>
+        {pendingIntentSummary?.intents.length ? (
+          <>
+            <View className="mb-2 flex-row flex-wrap gap-2">
+              {pendingIntentSummary.intents.slice(0, 5).map((intent) => (
+                <ChoiceChip
+                  key={intent.intentId}
+                  label={intent.rawText.slice(0, 18)}
+                  onPress={() => onSelectExplainedIntent(intent.intentId)}
+                  selected={selectedExplainedIntentId === intent.intentId}
+                />
+              ))}
+            </View>
+            <Text className="text-xs text-muted">
+              {userIntentExplanation?.summary ?? "Loading explanation..."}
+            </Text>
+            {userIntentExplanation?.factors.length ? (
+              <View className="mt-2 rounded-xl border border-border bg-surface p-2">
+                {userIntentExplanation.factors.map((factor) => (
+                  <Text className="mb-1 text-xs text-ink" key={factor}>
+                    {factor}
+                  </Text>
+                ))}
+              </View>
+            ) : null}
+          </>
+        ) : (
+          <Text className="text-xs text-muted">
+            No active intents available to explain yet.
+          </Text>
+        )}
+      </SurfaceCard>
+
+      <SurfaceCard>
+        <Text className="mb-2 text-base font-semibold text-ink">Search</Text>
+        <TextInput
+          autoCapitalize="none"
+          autoCorrect={false}
+          className="mb-2 min-h-[40px] rounded-2xl border border-hairline bg-surface px-3 py-2 text-[14px] text-ink"
+          onChangeText={onSearchQueryChange}
+          placeholder="tennis, startups, design..."
+          value={searchQuery}
+        />
+        <PrimaryButton
+          label={searchBusy ? "Searching..." : "Search"}
+          onPress={onRunSearch}
+          variant="secondary"
+        />
+        {searchSnapshot ? (
+          <Text className="mt-2 text-xs text-muted">
+            users {searchSnapshot.users.length} · topics{" "}
+            {searchSnapshot.topics.length} · activities{" "}
+            {searchSnapshot.activities.length} · groups{" "}
+            {searchSnapshot.groups.length}
+          </Text>
+        ) : null}
+      </SurfaceCard>
+
+      <SurfaceCard>
+        <Text className="mb-2 text-base font-semibold text-ink">
+          Memory controls
+        </Text>
+        <PrimaryButton
+          label={memoryBusy ? "Refreshing..." : "Refresh Memory Snapshot"}
+          onPress={onRefreshMemory}
+          variant="secondary"
+        />
+        <View className="mt-2">
+          <PrimaryButton
+            label="Reset Learned Memory"
+            onPress={onResetLearnedMemory}
+            variant="ghost"
+          />
+        </View>
+        <Text className="mt-2 text-xs text-muted">
+          life graph loaded: {memorySnapshot.lifeGraph ? "yes" : "no"} ·
+          retrieval loaded: {memorySnapshot.retrieval ? "yes" : "no"}
+        </Text>
+      </SurfaceCard>
+
+      <SurfaceCard>
+        <Text className="mb-2 text-base font-semibold text-ink">
+          Automations
+        </Text>
+        <Text className="text-xs text-muted">
+          Saved searches and scheduled briefings.
+        </Text>
+        <View className="mt-2 flex-row flex-wrap gap-2">
+          <PrimaryButton
+            label="New saved search"
+            onPress={onCreateSavedSearch}
+            variant="ghost"
+            disabled={automationsBusy}
+          />
+          <PrimaryButton
+            label="New automation"
+            onPress={onCreateAutomation}
+            variant="ghost"
+            disabled={automationsBusy}
+          />
+          <PrimaryButton
+            label="Run now"
+            onPress={onRunAutomationNow}
+            variant="secondary"
+            disabled={!selectedScheduledTaskId}
+          />
+        </View>
+        <Text className="mt-2 text-xs text-muted">
+          saved searches: {savedSearches.length} · tasks:{" "}
+          {scheduledTasks.length}
+        </Text>
+        {scheduledTasks.length ? (
+          <View className="mt-2 gap-2">
+            {scheduledTasks.slice(0, 4).map((task) => (
+              <Pressable
+                className={`rounded-xl border px-3 py-2 ${
+                  selectedScheduledTaskId === task.id
+                    ? "border-primary bg-primary/10"
+                    : "border-border bg-surface"
+                }`}
+                key={task.id}
+                onPress={() => onSelectScheduledTask(task.id)}
+              >
+                <Text className="text-xs font-semibold text-ink">
+                  {task.title}
+                </Text>
+                <Text className="mt-1 text-[11px] text-muted">
+                  {task.taskType} · {task.status}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+        {selectedScheduledTaskId ? (
+          <View className="mt-2 rounded-xl border border-border bg-surface p-2">
+            {scheduledTaskRuns.length === 0 ? (
+              <Text className="text-xs text-muted">No runs yet.</Text>
+            ) : (
+              scheduledTaskRuns.map((run) => (
+                <Text className="mb-1 text-xs text-ink" key={run.id}>
+                  {formatRelativeTime(run.triggeredAt)} · {run.status}
+                </Text>
+              ))
+            )}
+          </View>
+        ) : null}
+      </SurfaceCard>
+
+      <SurfaceCard>
+        <View className="mb-2 flex-row items-center justify-between">
+          <Text className="text-base font-semibold text-ink">
+            Recurring circles
+          </Text>
+          <PrimaryButton label="New" onPress={onCreateCircle} variant="ghost" />
+        </View>
+        {circlesBusy ? (
+          <Text className="text-xs text-muted">Loading circles...</Text>
+        ) : circles.length === 0 ? (
+          <Text className="text-xs text-muted">
+            No circles yet. Create one to start recurring sessions.
+          </Text>
+        ) : (
+          <View className="gap-2">
+            {circles.map((circle) => (
+              <Pressable
+                className={`rounded-xl border px-3 py-2 ${
+                  selectedCircleId === circle.id
+                    ? "border-primary bg-primary/10"
+                    : "border-border bg-surface"
+                }`}
+                key={circle.id}
+                onPress={() => onSelectCircle(circle.id)}
+              >
+                <Text className="text-xs font-semibold text-ink">
+                  {circle.title}
+                </Text>
+                <Text className="mt-1 text-[11px] text-muted">
+                  {circle.status} · next{" "}
+                  {circle.nextSessionAt
+                    ? formatRelativeTime(circle.nextSessionAt)
+                    : "not scheduled"}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+        <View className="mt-3 flex-row items-center justify-between">
+          <Text className="text-xs text-muted">
+            {selectedCircleTitle ?? "Select a circle"}
+          </Text>
+          <PrimaryButton
+            label="Open now"
+            onPress={onRunCircleSessionNow}
+            variant="secondary"
+            disabled={!selectedCircleId}
+          />
+        </View>
+        <View className="mt-2 rounded-xl border border-border bg-surface p-2">
+          {circleSessions.length === 0 ? (
+            <Text className="text-xs text-muted">No recent sessions.</Text>
+          ) : (
+            circleSessions.map((sessionItem) => (
+              <Text className="mb-1 text-xs text-ink" key={sessionItem.id}>
+                {formatRelativeTime(sessionItem.scheduledFor)} ·{" "}
+                {sessionItem.status}
+              </Text>
+            ))
+          )}
+        </View>
       </SurfaceCard>
 
       <SurfaceCard>

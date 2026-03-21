@@ -9,8 +9,15 @@ import {
   type OpenAIAgentRole,
 } from "@opensocial/openai";
 import { Prisma } from "@prisma/client";
-import { Injectable, Logger, Optional } from "@nestjs/common";
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  Optional,
+} from "@nestjs/common";
 import { randomUUID } from "node:crypto";
+import { AppCacheService } from "../common/app-cache.service.js";
 import { PrismaService } from "../database/prisma.service.js";
 import { ModerationService } from "../moderation/moderation.service.js";
 import { AgentService } from "./agent.service.js";
@@ -47,6 +54,8 @@ type ModerationGateResult = {
   reasons: string[];
 };
 
+type AgentPlanCheckpointStatus = "pending" | "approved" | "rejected";
+
 @Injectable()
 export class AgentConversationService {
   private readonly logger = new Logger(AgentConversationService.name);
@@ -57,9 +66,75 @@ export class AgentConversationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly agentService: AgentService,
+    private readonly appCacheService: AppCacheService,
     @Optional()
     private readonly moderationService?: ModerationService,
   ) {}
+
+  async listPlanCheckpoints(input: {
+    threadId: string;
+    status?: AgentPlanCheckpointStatus;
+    limit?: number;
+  }) {
+    const limit = Math.min(Math.max(input.limit ?? 20, 1), 50);
+    return this.prisma.agentPlanCheckpoint.findMany({
+      where: {
+        threadId: input.threadId,
+        ...(input.status ? { status: input.status } : {}),
+      },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+    });
+  }
+
+  async resolvePlanCheckpoint(input: {
+    threadId: string;
+    checkpointId: string;
+    actorUserId: string;
+    decision: "approved" | "rejected";
+    reason?: string;
+  }) {
+    const checkpoint = await this.prisma.agentPlanCheckpoint.findFirst({
+      where: {
+        id: input.checkpointId,
+        threadId: input.threadId,
+      },
+    });
+    if (!checkpoint) {
+      throw new NotFoundException("plan checkpoint not found");
+    }
+    if (checkpoint.status !== "pending") {
+      throw new BadRequestException("plan checkpoint already resolved");
+    }
+
+    const next = await this.prisma.agentPlanCheckpoint.update({
+      where: { id: input.checkpointId },
+      data: {
+        status: input.decision,
+        decisionReason: input.reason?.trim() || null,
+        resolvedByUserId: input.actorUserId,
+        resolvedAt: new Date(),
+      },
+    });
+
+    await this.agentService.appendWorkflowUpdate(
+      input.threadId,
+      `Plan checkpoint ${input.decision}: ${checkpoint.actionType.replaceAll("_", " ")} (${checkpoint.riskLevel} risk).`,
+      {
+        category: "plan_checkpoint_decision",
+        traceId: checkpoint.traceId,
+        checkpointId: checkpoint.id,
+        decision: input.decision,
+        actionType: checkpoint.actionType,
+        riskLevel: checkpoint.riskLevel,
+        ...(input.reason?.trim()
+          ? { details: { reason: input.reason.trim() } }
+          : {}),
+      },
+    );
+
+    return next;
+  }
 
   async runAgenticTurn(input: {
     threadId: string;
@@ -104,69 +179,6 @@ export class AgentConversationService {
       "Planning agentic response.",
     );
 
-    const threadMessages = await this.prisma.agentMessage.findMany({
-      where: { threadId: input.threadId },
-      orderBy: { createdAt: "desc" },
-      take: 24,
-      select: {
-        id: true,
-        role: true,
-        content: true,
-        createdAt: true,
-        metadata: true,
-      },
-    });
-
-    const threadSummary = this.buildThreadSummary(threadMessages);
-
-    const allowedSpecialists: OpenAIAgentRole[] = [
-      "intent_parser",
-      "ranking_explanation",
-      "personalization_interpreter",
-      "notification_copy",
-      "moderation_assistant",
-    ];
-
-    const planned = await this.openai.planConversationTurn(
-      {
-        userMessage: userContent,
-        threadSummary,
-        multimodalContext: hasMultimodal
-          ? {
-              voiceTranscript: multimodalContext.voiceTranscript,
-              attachments: multimodalContext.attachments,
-            }
-          : undefined,
-        allowedSpecialists,
-        maxToolCalls: 8,
-      },
-      traceId,
-    );
-
-    const specialists = planned.specialists.filter((role) =>
-      canAgentHandoff("manager", role),
-    );
-    const delegatedSpecialistSet = new Set<OpenAIAgentRole>(specialists);
-    const toolCalls = planned.toolCalls.map((toolCall) => ({
-      role: toolCall.role,
-      tool: toolCall.tool,
-      input: toolCall.input ?? {},
-    }));
-
-    await this.appendOrchestrationStep(
-      input.threadId,
-      traceId,
-      "plan_ready",
-      `Plan ready: ${specialists.length} specialists, ${toolCalls.length} tools.`,
-      {
-        specialists,
-        toolCalls: toolCalls.map((call) => ({
-          role: call.role,
-          tool: call.tool,
-        })),
-      },
-    );
-
     const preToolRisk = this.assessRiskGate({
       content: userContent,
       surface: "agent_turn",
@@ -196,118 +208,109 @@ export class AgentConversationService {
       assessment: preToolRisk,
     });
 
-    const toolResults: ConversationToolResult[] = [];
+    let specialists: OpenAIAgentRole[] = [];
+    let toolCalls: ConversationToolCall[] = [];
+    let delegatedSpecialistSet = new Set<OpenAIAgentRole>();
+    let responseGoal: string | null = null;
+
+    if (
+      preToolRisk.decision === "clean" &&
+      this.shouldUseSimpleFastPath(userContent, multimodalContext)
+    ) {
+      responseGoal =
+        "Answer directly with a concise, helpful response. Ask at most one clarifying question only if it is essential.";
+      await this.appendOrchestrationStep(
+        input.threadId,
+        traceId,
+        "fast_path_selected",
+        "Simple-turn fast path selected.",
+        {
+          responseGoal,
+        },
+      );
+    } else {
+      const threadMessages = await this.prisma.agentMessage.findMany({
+        where: { threadId: input.threadId },
+        orderBy: { createdAt: "desc" },
+        take: 24,
+        select: {
+          id: true,
+          role: true,
+          content: true,
+          createdAt: true,
+          metadata: true,
+        },
+      });
+
+      const threadSummary = this.buildThreadSummary(threadMessages);
+
+      const allowedSpecialists: OpenAIAgentRole[] = [
+        "intent_parser",
+        "ranking_explanation",
+        "personalization_interpreter",
+        "notification_copy",
+        "moderation_assistant",
+      ];
+
+      const planned = await this.openai.planConversationTurn(
+        {
+          userMessage: userContent,
+          threadSummary,
+          multimodalContext: hasMultimodal
+            ? {
+                voiceTranscript: multimodalContext.voiceTranscript,
+                attachments: multimodalContext.attachments,
+              }
+            : undefined,
+          allowedSpecialists,
+          maxToolCalls: 8,
+        },
+        traceId,
+      );
+
+      specialists = planned.specialists.filter((role) =>
+        canAgentHandoff("manager", role),
+      );
+      delegatedSpecialistSet = new Set<OpenAIAgentRole>(specialists);
+      toolCalls = planned.toolCalls.map((toolCall) => ({
+        role: toolCall.role,
+        tool: toolCall.tool,
+        input: toolCall.input ?? {},
+      }));
+      responseGoal = planned.responseGoal ?? null;
+
+      await this.appendOrchestrationStep(
+        input.threadId,
+        traceId,
+        "plan_ready",
+        `Plan ready: ${specialists.length} specialists, ${toolCalls.length} tools.`,
+        {
+          specialists,
+          toolCalls: toolCalls.map((call) => ({
+            role: call.role,
+            tool: call.tool,
+          })),
+        },
+      );
+    }
+
+    let toolResults: ConversationToolResult[] = [];
     const specialistOutputs: Partial<Record<OpenAIAgentRole, unknown>> = {};
     const specialistNotes: Array<{ role: OpenAIAgentRole; status: string }> =
       [];
 
-    for (const call of toolCalls) {
-      if (preToolRisk.decision === "blocked") {
-        toolResults.push({
-          role: call.role,
-          tool: call.tool,
-          status: "denied",
-          reason: "blocked_by_risk_assessment",
-        });
-        await this.appendOrchestrationStep(
-          input.threadId,
+    toolResults = await Promise.all(
+      toolCalls.map((call) =>
+        this.executeToolCallWithLifecycle({
+          threadId: input.threadId,
+          userId: input.userId,
           traceId,
-          "tool_finished",
-          `Tool ${call.tool} denied by risk gate.`,
-          {
-            role: call.role,
-            tool: call.tool,
-            status: "denied",
-            reason: "blocked_by_risk_assessment",
-          },
-        );
-        continue;
-      }
-
-      if (
-        preToolRisk.decision === "review" &&
-        this.isRiskSensitiveTool(call.tool)
-      ) {
-        toolResults.push({
-          role: call.role,
-          tool: call.tool,
-          status: "denied",
-          reason: "review_restricted_tool",
-        });
-        await this.appendOrchestrationStep(
-          input.threadId,
-          traceId,
-          "tool_finished",
-          `Tool ${call.tool} blocked while under review gate.`,
-          {
-            role: call.role,
-            tool: call.tool,
-            status: "denied",
-            reason: "review_restricted_tool",
-          },
-        );
-        continue;
-      }
-
-      await this.appendOrchestrationStep(
-        input.threadId,
-        traceId,
-        "tool_started",
-        `Running tool ${call.tool} as ${call.role}.`,
-        { role: call.role, tool: call.tool },
-      );
-
-      if (call.role !== "manager" && !delegatedSpecialistSet.has(call.role)) {
-        this.logger.warn(
-          JSON.stringify({
-            event: "agentic.tool_denied",
-            traceId,
-            role: call.role,
-            tool: call.tool,
-            reason: "tool_role_not_handed_off",
-          }),
-        );
-        toolResults.push({
-          role: call.role,
-          tool: call.tool,
-          status: "denied",
-          reason: "tool_role_not_handed_off",
-        });
-        await this.appendOrchestrationStep(
-          input.threadId,
-          traceId,
-          "tool_finished",
-          `Tool ${call.tool} denied for ${call.role}.`,
-          {
-            role: call.role,
-            tool: call.tool,
-            status: "denied",
-            reason: "tool_role_not_handed_off",
-          },
-        );
-        continue;
-      }
-
-      const toolResult = await this.executeToolCall(
-        input.threadId,
-        input.userId,
-        traceId,
-        call,
-      );
-      toolResults.push(toolResult);
-      await this.appendOrchestrationStep(
-        input.threadId,
-        traceId,
-        "tool_finished",
-        `Tool ${call.tool} ${toolResult.status} for ${call.role}.`,
-        {
-          role: call.role,
-          tool: call.tool,
-          status: toolResult.status,
-          reason: toolResult.reason,
-        },
-      );
-    }
+          call,
+          preToolRiskDecision: preToolRisk.decision,
+          delegatedSpecialistSet,
+        }),
+      ),
+    );
 
     if (preToolRisk.decision === "blocked") {
       for (const specialist of specialists) {
@@ -318,60 +321,27 @@ export class AgentConversationService {
       }
     }
 
-    for (const specialist of specialists) {
-      if (preToolRisk.decision === "blocked") {
-        continue;
-      }
-      await this.appendOrchestrationStep(
-        input.threadId,
-        traceId,
-        "specialist_started",
-        `Running specialist ${specialist}.`,
-        { specialist },
-      );
-      try {
-        const output = await this.runSpecialist(
-          specialist,
-          userContent,
-          traceId,
-          toolResults,
-        );
-        specialistOutputs[specialist] = output;
-        specialistNotes.push({ role: specialist, status: "executed" });
-        await this.appendOrchestrationStep(
-          input.threadId,
-          traceId,
-          "specialist_finished",
-          `Specialist ${specialist} completed.`,
-          { specialist, status: "executed" },
-        );
-      } catch (error) {
-        specialistNotes.push({ role: specialist, status: "failed" });
-        this.logger.warn(
-          JSON.stringify({
-            event: "agentic.specialist_failed",
+    if (preToolRisk.decision !== "blocked") {
+      const specialistRuns = await Promise.all(
+        specialists.map((specialist) =>
+          this.runSpecialistWithLifecycle({
+            threadId: input.threadId,
             traceId,
             specialist,
-            error:
-              error instanceof Error
-                ? error.message
-                : "specialist_failed_unknown",
+            userContent,
+            toolResults,
           }),
-        );
-        await this.appendOrchestrationStep(
-          input.threadId,
-          traceId,
-          "specialist_finished",
-          `Specialist ${specialist} failed.`,
-          {
-            specialist,
-            status: "failed",
-            error:
-              error instanceof Error
-                ? error.message
-                : "specialist_failed_unknown",
-          },
-        );
+        ),
+      );
+
+      for (const run of specialistRuns) {
+        specialistNotes.push({
+          role: run.specialist,
+          status: run.status,
+        });
+        if (run.status === "executed") {
+          specialistOutputs[run.specialist] = run.output;
+        }
       }
     }
 
@@ -384,7 +354,7 @@ export class AgentConversationService {
 
     const responseInput = {
       userMessage: userContent,
-      responseGoal: planned.responseGoal,
+      ...(responseGoal ? { responseGoal } : {}),
       multimodalContext: hasMultimodal
         ? {
             voiceTranscript: multimodalContext.voiceTranscript,
@@ -559,7 +529,7 @@ export class AgentConversationService {
           role: call.role,
           tool: call.tool,
         })),
-        responseGoal: planned.responseGoal ?? null,
+        responseGoal,
       },
       toolResults,
       specialistNotes,
@@ -625,6 +595,17 @@ export class AgentConversationService {
         riskLevel,
       );
       if (!actionCheck.allowed) {
+        const approvalCheckpoint =
+          actionCheck.reason === "human_approval_required"
+            ? await this.createHumanApprovalCheckpoint({
+                threadId,
+                userId,
+                traceId,
+                call,
+                actionType,
+                riskLevel,
+              })
+            : null;
         this.logger.warn(
           JSON.stringify({
             event: "agentic.action_blocked",
@@ -634,6 +615,7 @@ export class AgentConversationService {
             actionType,
             riskLevel,
             reason: actionCheck.reason,
+            checkpointId: approvalCheckpoint?.id ?? null,
           }),
         );
         return {
@@ -641,6 +623,14 @@ export class AgentConversationService {
           tool: call.tool,
           status: "denied",
           reason: actionCheck.reason,
+          ...(approvalCheckpoint
+            ? {
+                output: {
+                  checkpointId: approvalCheckpoint.id,
+                  status: approvalCheckpoint.status,
+                },
+              }
+            : {}),
         };
       }
     }
@@ -754,17 +744,41 @@ export class AgentConversationService {
         }
         case "personalization.retrieve": {
           const maxDocs = this.readIntInRange(call.input.maxDocs, 1, 10, 4);
-          const documents = await this.prisma.retrievalDocument.findMany({
-            where: { userId },
-            orderBy: { createdAt: "desc" },
-            take: maxDocs,
-            select: {
-              id: true,
-              docType: true,
-              content: true,
-              createdAt: true,
-            },
-          });
+          const cacheKey = `agent:personalization:${userId}:${maxDocs}`;
+          const cachedDocuments = await this.appCacheService.getJson<
+            Array<{
+              id: string;
+              docType: string;
+              content: string;
+              createdAt: string;
+            }>
+          >(cacheKey);
+          const documents =
+            cachedDocuments?.map((document) => ({
+              ...document,
+              createdAt: new Date(document.createdAt),
+            })) ??
+            (await this.prisma.retrievalDocument.findMany({
+              where: { userId },
+              orderBy: { createdAt: "desc" },
+              take: maxDocs,
+              select: {
+                id: true,
+                docType: true,
+                content: true,
+                createdAt: true,
+              },
+            }));
+          if (!cachedDocuments) {
+            await this.appCacheService.setJson(
+              cacheKey,
+              documents.map((document) => ({
+                ...document,
+                createdAt: document.createdAt.toISOString(),
+              })),
+              60,
+            );
+          }
           return {
             role: call.role,
             tool: call.tool,
@@ -824,6 +838,124 @@ export class AgentConversationService {
     }
   }
 
+  private async executeToolCallWithLifecycle(input: {
+    threadId: string;
+    userId: string;
+    traceId: string;
+    call: ConversationToolCall;
+    preToolRiskDecision: ModerationGateResult["decision"];
+    delegatedSpecialistSet: Set<OpenAIAgentRole>;
+  }) {
+    const { call, delegatedSpecialistSet, preToolRiskDecision, threadId } =
+      input;
+
+    if (preToolRiskDecision === "blocked") {
+      const deniedResult: ConversationToolResult = {
+        role: call.role,
+        tool: call.tool,
+        status: "denied",
+        reason: "blocked_by_risk_assessment",
+      };
+      await this.appendOrchestrationStep(
+        threadId,
+        input.traceId,
+        "tool_finished",
+        `Tool ${call.tool} denied by risk gate.`,
+        {
+          role: call.role,
+          tool: call.tool,
+          status: "denied",
+          reason: "blocked_by_risk_assessment",
+        },
+      );
+      return deniedResult;
+    }
+
+    if (
+      preToolRiskDecision === "review" &&
+      this.isRiskSensitiveTool(call.tool)
+    ) {
+      const deniedResult: ConversationToolResult = {
+        role: call.role,
+        tool: call.tool,
+        status: "denied",
+        reason: "review_restricted_tool",
+      };
+      await this.appendOrchestrationStep(
+        threadId,
+        input.traceId,
+        "tool_finished",
+        `Tool ${call.tool} blocked while under review gate.`,
+        {
+          role: call.role,
+          tool: call.tool,
+          status: "denied",
+          reason: "review_restricted_tool",
+        },
+      );
+      return deniedResult;
+    }
+
+    await this.appendOrchestrationStep(
+      threadId,
+      input.traceId,
+      "tool_started",
+      `Running tool ${call.tool} as ${call.role}.`,
+      { role: call.role, tool: call.tool },
+    );
+
+    if (call.role !== "manager" && !delegatedSpecialistSet.has(call.role)) {
+      this.logger.warn(
+        JSON.stringify({
+          event: "agentic.tool_denied",
+          traceId: input.traceId,
+          role: call.role,
+          tool: call.tool,
+          reason: "tool_role_not_handed_off",
+        }),
+      );
+      const deniedResult: ConversationToolResult = {
+        role: call.role,
+        tool: call.tool,
+        status: "denied",
+        reason: "tool_role_not_handed_off",
+      };
+      await this.appendOrchestrationStep(
+        threadId,
+        input.traceId,
+        "tool_finished",
+        `Tool ${call.tool} denied for ${call.role}.`,
+        {
+          role: call.role,
+          tool: call.tool,
+          status: "denied",
+          reason: "tool_role_not_handed_off",
+        },
+      );
+      return deniedResult;
+    }
+
+    const toolResult = await this.executeToolCall(
+      threadId,
+      input.userId,
+      input.traceId,
+      call,
+    );
+    await this.appendOrchestrationStep(
+      threadId,
+      input.traceId,
+      "tool_finished",
+      `Tool ${call.tool} ${toolResult.status} for ${call.role}.`,
+      {
+        role: call.role,
+        tool: call.tool,
+        status: toolResult.status,
+        reason: toolResult.reason,
+      },
+    );
+    return toolResult;
+  }
+
   private async runSpecialist(
     specialist: OpenAIAgentRole,
     content: string,
@@ -879,6 +1011,72 @@ export class AgentConversationService {
       case "manager": {
         return { skipped: true };
       }
+    }
+  }
+
+  private async runSpecialistWithLifecycle(input: {
+    threadId: string;
+    traceId: string;
+    specialist: OpenAIAgentRole;
+    userContent: string;
+    toolResults: ConversationToolResult[];
+  }) {
+    await this.appendOrchestrationStep(
+      input.threadId,
+      input.traceId,
+      "specialist_started",
+      `Running specialist ${input.specialist}.`,
+      { specialist: input.specialist },
+    );
+    try {
+      const output = await this.runSpecialist(
+        input.specialist,
+        input.userContent,
+        input.traceId,
+        input.toolResults,
+      );
+      await this.appendOrchestrationStep(
+        input.threadId,
+        input.traceId,
+        "specialist_finished",
+        `Specialist ${input.specialist} completed.`,
+        { specialist: input.specialist, status: "executed" },
+      );
+      return {
+        specialist: input.specialist,
+        status: "executed" as const,
+        output,
+      };
+    } catch (error) {
+      this.logger.warn(
+        JSON.stringify({
+          event: "agentic.specialist_failed",
+          traceId: input.traceId,
+          specialist: input.specialist,
+          error:
+            error instanceof Error
+              ? error.message
+              : "specialist_failed_unknown",
+        }),
+      );
+      await this.appendOrchestrationStep(
+        input.threadId,
+        input.traceId,
+        "specialist_finished",
+        `Specialist ${input.specialist} failed.`,
+        {
+          specialist: input.specialist,
+          status: "failed",
+          error:
+            error instanceof Error
+              ? error.message
+              : "specialist_failed_unknown",
+        },
+      );
+      return {
+        specialist: input.specialist,
+        status: "failed" as const,
+      };
     }
   }
 
@@ -1017,6 +1215,44 @@ export class AgentConversationService {
 
   private normalizeStreamChunk(value: string) {
     return value.replace(/\s+/g, " ").trim().slice(0, 240);
+  }
+
+  private async createHumanApprovalCheckpoint(input: {
+    threadId: string;
+    userId: string;
+    traceId: string;
+    call: ConversationToolCall;
+    actionType: AgentActionType;
+    riskLevel: "low" | "medium" | "high";
+  }) {
+    const checkpoint = await this.prisma.agentPlanCheckpoint.create({
+      data: {
+        threadId: input.threadId,
+        userId: input.userId,
+        traceId: input.traceId,
+        requestedByRole: input.call.role,
+        tool: input.call.tool,
+        actionType: input.actionType,
+        riskLevel: input.riskLevel,
+        status: "pending",
+        requestMetadata: input.call.input as Prisma.InputJsonValue,
+      },
+    });
+
+    await this.agentService.appendWorkflowUpdate(
+      input.threadId,
+      `Approval needed for ${input.actionType.replaceAll("_", " ")} (${input.riskLevel} risk).`,
+      {
+        category: "plan_checkpoint",
+        traceId: input.traceId,
+        checkpointId: checkpoint.id,
+        actionType: input.actionType,
+        riskLevel: input.riskLevel,
+        stage: "approval_checkpoint_created",
+      },
+    );
+
+    return checkpoint;
   }
 
   private isRiskSensitiveTool(tool: AgentTool) {
@@ -1222,11 +1458,21 @@ export class AgentConversationService {
     content: string,
     details?: Record<string, unknown>,
   ) {
-    await this.agentService.appendWorkflowUpdate(threadId, content, {
+    const metadata = {
       traceId,
       stage,
       details: details ?? {},
-    });
+    };
+    if (this.shouldPersistWorkflowStage(stage)) {
+      await this.agentService.appendWorkflowUpdate(threadId, content, metadata);
+      return;
+    }
+
+    this.agentService.appendEphemeralWorkflowUpdate(
+      threadId,
+      content,
+      metadata,
+    );
   }
 
   private async streamResponseTokenChunks(
@@ -1304,6 +1550,66 @@ export class AgentConversationService {
     }
     const trimmed = value.trim();
     return trimmed.length > 0 ? trimmed : null;
+  }
+
+  private shouldPersistWorkflowStage(stage: string) {
+    if (
+      stage === "response_token" &&
+      process.env.AGENT_STREAM_PERSIST_TOKENS !== "true"
+    ) {
+      return false;
+    }
+    return true;
+  }
+
+  private shouldUseSimpleFastPath(
+    userContent: string,
+    multimodalContext: {
+      voiceTranscript: string;
+      attachments: AgentAttachmentInput[];
+    },
+  ) {
+    if (multimodalContext.voiceTranscript.length > 0) {
+      return false;
+    }
+    if (multimodalContext.attachments.length > 0) {
+      return false;
+    }
+    const normalized = userContent.trim().toLowerCase();
+    if (normalized.length === 0 || normalized.length > 80) {
+      return false;
+    }
+    if (normalized.includes("\n") || normalized.includes("http")) {
+      return false;
+    }
+    const richerAgentHints = [
+      "rank",
+      "notify",
+      "notification",
+      "preference",
+      "remember",
+      "schedule",
+      "search",
+      "screenshot",
+      "image",
+      "file",
+      "upload",
+      "tool",
+      "plan",
+      "moderation",
+      "safety",
+      "transcript",
+      "need",
+      "tonight",
+      "tomorrow",
+      "partner",
+      "match",
+      "connect",
+      "invite",
+      "circle",
+      "cancel",
+    ];
+    return !richerAgentHints.some((hint) => normalized.includes(hint));
   }
 
   private readActionType(value: string): AgentActionType | null {

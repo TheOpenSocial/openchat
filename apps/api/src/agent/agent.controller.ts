@@ -5,9 +5,12 @@ import {
   MessageEvent,
   Param,
   Post,
+  Query,
   Sse,
 } from "@nestjs/common";
 import {
+  agentPlanCheckpointDecisionBodySchema,
+  agentPlanCheckpointListQuerySchema,
   agentThreadRespondBodySchema,
   postAgentThreadMessageBodySchema,
   uuidSchema,
@@ -147,5 +150,86 @@ export class AgentController {
     });
 
     return ok(result, result.traceId);
+  }
+
+  @Get(":threadId/plan-checkpoints")
+  async listPlanCheckpoints(
+    @Param("threadId") threadIdParam: string,
+    @Query() query: unknown,
+    @ActorUserId() actorUserId: string,
+  ) {
+    const threadId = parseRequestPayload(uuidSchema, threadIdParam);
+    const payload = parseRequestPayload(
+      agentPlanCheckpointListQuerySchema,
+      query,
+    );
+    await this.agentService.assertThreadOwnership(threadId, actorUserId);
+    return ok(
+      await this.agentConversationService.listPlanCheckpoints({
+        threadId,
+        status: payload.status,
+        limit: payload.limit,
+      }),
+    );
+  }
+
+  @Post(":threadId/plan-checkpoints/:checkpointId/approve")
+  async approvePlanCheckpoint(
+    @Param("threadId") threadIdParam: string,
+    @Param("checkpointId") checkpointIdParam: string,
+    @Body() body: unknown,
+    @ActorUserId() actorUserId: string,
+  ) {
+    const threadId = parseRequestPayload(uuidSchema, threadIdParam);
+    const checkpointId = parseRequestPayload(uuidSchema, checkpointIdParam);
+    const payload = parseRequestPayload(
+      agentPlanCheckpointDecisionBodySchema,
+      body,
+    );
+    await this.agentService.assertThreadOwnership(threadId, actorUserId);
+    assertActorOwnsUser(
+      actorUserId,
+      payload.userId,
+      "plan checkpoint approval user does not match authenticated user",
+    );
+    return ok(
+      await this.agentConversationService.resolvePlanCheckpoint({
+        threadId,
+        checkpointId,
+        actorUserId: payload.userId,
+        decision: "approved",
+        reason: payload.reason,
+      }),
+    );
+  }
+
+  @Post(":threadId/plan-checkpoints/:checkpointId/reject")
+  async rejectPlanCheckpoint(
+    @Param("threadId") threadIdParam: string,
+    @Param("checkpointId") checkpointIdParam: string,
+    @Body() body: unknown,
+    @ActorUserId() actorUserId: string,
+  ) {
+    const threadId = parseRequestPayload(uuidSchema, threadIdParam);
+    const checkpointId = parseRequestPayload(uuidSchema, checkpointIdParam);
+    const payload = parseRequestPayload(
+      agentPlanCheckpointDecisionBodySchema,
+      body,
+    );
+    await this.agentService.assertThreadOwnership(threadId, actorUserId);
+    assertActorOwnsUser(
+      actorUserId,
+      payload.userId,
+      "plan checkpoint rejection user does not match authenticated user",
+    );
+    return ok(
+      await this.agentConversationService.resolvePlanCheckpoint({
+        threadId,
+        checkpointId,
+        actorUserId: payload.userId,
+        decision: "rejected",
+        reason: payload.reason,
+      }),
+    );
   }
 }

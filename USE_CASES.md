@@ -309,12 +309,11 @@ Success looks like:
 
 These are conceptually important and should remain visible:
 
-- multi-intent decomposition and coordination
-- user-defined recurring tasks
-- saved searches and scheduled discovery
-- user-facing recurring communities and circles
-- stronger continuity surfaces in clients
-- deeper user-facing memory controls and explanations
+- live staging/production validation of all documented flows, not just local and mocked verification
+- deployment hardening so required runtime dependencies cannot be omitted silently
+- deeper end-to-end verification for recurring automation/circle flows against a real deployed environment
+- richer moderation operations ergonomics: queue ownership, reviewer notes, enforcement explainability, and triage SLA visibility
+- broader real-user/manual QA for continuity, memory explanations, and moderation edge cases
 
 ## Source Alignment
 

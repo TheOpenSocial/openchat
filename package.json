@@ -28,6 +28,7 @@
     "settings:sync:prod": "node scripts/sync-settings.mjs --env production",
     "brand:generate": "node scripts/generate-brand-assets.mjs",
     "staging:smoke:api": "node scripts/staging-smoke-api.mjs",
+    "staging:verify:incident": "node scripts/staging-incident-verify.mjs",
     "jarvis": "bash scripts/jarvis-ios.sh",
     "deps:outdated": "pnpm outdated -r",
     "deps:outdated:latest": "pnpm outdated -r --long",
@@ -42,8 +43,8 @@
     "husky": "^9.1.7",
     "lint-staged": "^16.4.0",
     "prettier": "^3.5.3",
-    "sharp": "^0.34.5",
     "prisma": "^7.5.0",
+    "sharp": "^0.34.5",
     "turbo": "^2.8.20",
     "typescript": "^5.8.2",
     "typescript-eslint": "^8.46.2"
@@ -61,8 +62,15 @@
     "overrides": {
       "@hono/node-server": "1.19.10",
       "hono": "4.12.7",
+      "lightningcss": "1.30.1",
       "lodash": "4.17.23",
-      "markdown-it": "12.3.2"
+      "markdown-it": "12.3.2",
+      "react": "19.2.3",
+      "react-dom": "19.2.3"
+    },
+    "patchedDependencies": {
+      "expo-modules-core@55.0.17": "patches/expo-modules-core@55.0.17.patch",
+      "expo@55.0.8": "patches/expo@55.0.8.patch"
     }
   }
 }

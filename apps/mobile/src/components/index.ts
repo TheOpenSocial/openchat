@@ -14,5 +14,6 @@ export { LoadingState } from "./LoadingState";
 export { MessageComposer } from "./MessageComposer";
 export { PrimaryButton } from "./PrimaryButton";
 export { VoiceMicButton } from "./VoiceMicButton";
+export { WelcomeBackdrop } from "./WelcomeBackdrop";
 export { SectionHeader } from "./SectionHeader";
 export { SurfaceCard } from "./SurfaceCard";

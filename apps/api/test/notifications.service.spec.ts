@@ -27,6 +27,8 @@ describe("NotificationsService", () => {
   });
 
   it("routes non-urgent notification to digest during quiet hours", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-21T01:30:00.000Z"));
     const prisma: any = {
       notification: {
         findFirst: vi.fn().mockResolvedValue(null),
@@ -52,6 +54,7 @@ describe("NotificationsService", () => {
         data: expect.objectContaining({ channel: "digest" }),
       }),
     );
+    vi.useRealTimers();
   });
 
   it("builds and sends digest summary notification", async () => {

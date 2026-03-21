@@ -1,0 +1,143 @@
+diff --git a/ios/Legacy/Protocols/EXEventEmitter.h b/ios/Legacy/Protocols/EXEventEmitter.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..b798418d8541d0e65321e08659d07b78a0e7287a
+--- /dev/null
++++ b/ios/Legacy/Protocols/EXEventEmitter.h
+@@ -0,0 +1,10 @@
++// Restored for legacy universal modules (e.g. expo-av) that still declare
++// `EXEventEmitter` conformance. The protocol is intentionally empty on SDK 55+.
++#import <Foundation/Foundation.h>
++
++NS_ASSUME_NONNULL_BEGIN
++
++@protocol EXEventEmitter
++@end
++
++NS_ASSUME_NONNULL_END
+diff --git a/ios/Legacy/Protocols/EXEventEmitterService.h b/ios/Legacy/Protocols/EXEventEmitterService.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..5727d9b3dd48dd41161433c45a41709b30e93f57
+--- /dev/null
++++ b/ios/Legacy/Protocols/EXEventEmitterService.h
+@@ -0,0 +1,10 @@
++// Service used by legacy modules to emit JS events via the React Native bridge.
++#import <Foundation/Foundation.h>
++
++NS_ASSUME_NONNULL_BEGIN
++
++@protocol EXEventEmitterService
++- (void)sendEventWithName:(NSString *)eventName body:(nullable id)body;
++@end
++
++NS_ASSUME_NONNULL_END
+diff --git a/ios/Legacy/Services/EXLegacyEventEmitterService.mm b/ios/Legacy/Services/EXLegacyEventEmitterService.mm
+new file mode 100644
+index 0000000000000000000000000000000000000000..fcd8a4004ff364cb294ea0c27207de590b126194
+--- /dev/null
++++ b/ios/Legacy/Services/EXLegacyEventEmitterService.mm
+@@ -0,0 +1,46 @@
++// Bridges legacy EXEventEmitterService to RCTDeviceEventEmitter (SDK 55+).
++#import <React/RCTBridge.h>
++#import <React/RCTBridgeModule.h>
++
++#import <ExpoModulesCore/EXDefines.h>
++#import <ExpoModulesCore/EXEventEmitterService.h>
++#import <ExpoModulesCore/EXInternalModule.h>
++
++@interface EXLegacyEventEmitterService : NSObject <EXInternalModule, RCTBridgeModule, EXEventEmitterService>
++@end
++
++@implementation EXLegacyEventEmitterService
++
++EX_REGISTER_MODULE();
++
++@synthesize bridge = _bridge;
++
+++ (NSString *)moduleName
++{
++  return @"EXLegacyEventEmitterService";
++}
++
+++ (BOOL)requiresMainQueueSetup
++{
++  return NO;
++}
++
+++ (const NSArray<Protocol *> *)exportedInterfaces
++{
++  return @[@protocol(EXEventEmitterService)];
++}
++
++- (void)sendEventWithName:(NSString *)eventName body:(id)body
++{
++  RCTBridge *bridge = self.bridge;
++  if (!bridge) {
++    return;
++  }
++  NSArray *args = body != nil ? @[ eventName, body ] : @[ eventName ];
++  [bridge enqueueJSCall:@"RCTDeviceEventEmitter"
++                 method:@"emit"
++                   args:args
++             completion:NULL];
++}
++
++@end
+diff --git a/ios/Legacy/Protocols/EXLegacyExpoViewProtocol.h b/ios/Legacy/Protocols/EXLegacyExpoViewProtocol.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..6b74ff5a8e6ed70373fc301e657ba403e706590b
+--- /dev/null
++++ b/ios/Legacy/Protocols/EXLegacyExpoViewProtocol.h
+@@ -0,0 +1,14 @@
++// Copyright 2022-present 650 Industries. All rights reserved.
++// Restored for legacy Obj-C views (e.g. expo-av EXVideoView) on SDK 55+.
++
++#import <ExpoModulesCore/EXModuleRegistry.h>
++
++/**
++ * Protocol for Objective-C views initialized with the legacy module registry.
++ */
++@protocol EXLegacyExpoViewProtocol
++
++- (instancetype)initWithModuleRegistry:(nullable EXModuleRegistry *)moduleRegistry;
++
++@end
++
+diff --git a/ios/EXDefines.h b/ios/EXDefines.h
+index 7412ee777be8744d5429ecfb0f8511cb95e3522f..143afa2a4b0ca826a206eeb3942d5442391c8f59 100644
+--- a/ios/EXDefines.h
++++ b/ios/EXDefines.h
+@@ -93,3 +93,34 @@ typedef struct EXModuleInfo {
+ typedef void (^EXDirectEventBlock)(NSDictionary *body);
+ typedef void (NS_SWIFT_SENDABLE ^EXPromiseResolveBlock)(id result);
+ typedef void (NS_SWIFT_SENDABLE ^EXPromiseRejectBlock)(NSString *code, NSString *message, NSError *error);
++
++// Legacy unimodules type aliases (e.g. expo-av)
++typedef EXPromiseResolveBlock UMPromiseResolveBlock;
++typedef EXPromiseRejectBlock UMPromiseRejectBlock;
++
++NS_ASSUME_NONNULL_BEGIN
++
++NS_INLINE NSError *EXErrorWithMessage(NSString *message)
++{
++  return [NSError errorWithDomain:@"expo.modules.legacy"
++                             code:1
++                         userInfo:@{NSLocalizedDescriptionKey: message ?: @""}];
++}
++
++NS_INLINE void EXFatal(NSError *error)
++{
++  NSString *reason = error.localizedDescription ?: @"fatal error";
++  @throw [NSException exceptionWithName:@"EXFatal" reason:reason userInfo:@{NSUnderlyingErrorKey: error}];
++}
++
++NS_ASSUME_NONNULL_END
++
++#ifndef EXLogWarn
++#define EXLogWarn(...) NSLog(__VA_ARGS__)
++#endif
++#ifndef EXLogError
++#define EXLogError(...) NSLog(__VA_ARGS__)
++#endif
++#ifndef EXLogInfo
++#define EXLogInfo(...) NSLog(__VA_ARGS__)
++#endif

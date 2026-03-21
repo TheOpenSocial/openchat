@@ -57,7 +57,189 @@ export interface ChatMessageRecord {
   createdAt: string;
 }
 
-type HttpMethod = "GET" | "POST" | "PUT" | "PATCH";
+export interface RecurringCircleRecord {
+  id: string;
+  ownerUserId: string;
+  title: string;
+  description: string | null;
+  status: "active" | "paused" | "archived";
+  visibility: "private" | "invite_only" | "discoverable";
+  nextSessionAt: string | null;
+}
+
+export interface RecurringCircleSessionRecord {
+  id: string;
+  circleId: string;
+  status: string;
+  scheduledFor: string;
+  generatedIntentId: string | null;
+  summary: string | null;
+}
+
+export interface SavedSearchRecord {
+  id: string;
+  userId: string;
+  title: string;
+  searchType: string;
+  queryConfig: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ScheduledTaskRecord {
+  id: string;
+  userId: string;
+  title: string;
+  description: string | null;
+  taskType: string;
+  status: string;
+  scheduleType: string;
+  scheduleConfig: Record<string, unknown>;
+  taskConfig: Record<string, unknown>;
+  nextRunAt: string | null;
+  lastRunAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ScheduledTaskRunRecord {
+  id: string;
+  scheduledTaskId: string;
+  userId: string;
+  status: string;
+  triggeredAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  traceId: string;
+  resultPayload: Record<string, unknown> | null;
+  errorMessage: string | null;
+}
+
+export interface PendingIntentSummaryItem {
+  intentId: string;
+  rawText: string;
+  status: string;
+  ageMinutes: number;
+  requests: {
+    pending: number;
+    accepted: number;
+    rejected: number;
+    expired: number;
+    cancelled: number;
+  };
+}
+
+export interface PendingIntentsSummaryResponse {
+  userId: string;
+  activeIntentCount: number;
+  summaryText: string;
+  intents: PendingIntentSummaryItem[];
+}
+
+export interface DiscoveryUserSuggestion {
+  userId: string;
+  displayName: string;
+  score: number;
+  reason: string;
+}
+
+export interface DiscoveryGroupSuggestion {
+  title: string;
+  topic: string;
+  participantUserIds: string[];
+  score: number;
+}
+
+export interface DiscoveryReconnectSuggestion {
+  userId: string;
+  displayName: string;
+  interactionCount: number;
+  lastInteractionAt: string | null;
+  score: number;
+}
+
+export interface PassiveDiscoveryResponse {
+  userId: string;
+  generatedAt: string;
+  tonight: {
+    suggestions: DiscoveryUserSuggestion[];
+    seedTopics: string[];
+  };
+  activeIntentsOrUsers: {
+    items: Array<Record<string, unknown>>;
+  };
+  groups: {
+    groups: DiscoveryGroupSuggestion[];
+  };
+  reconnects: {
+    reconnects: DiscoveryReconnectSuggestion[];
+  };
+}
+
+export interface DiscoveryInboxSuggestionsResponse {
+  userId: string;
+  generatedAt: string;
+  pendingRequestCount: number;
+  suggestions: Array<{
+    title: string;
+    reason: string;
+    score: number;
+  }>;
+}
+
+export interface DiscoveryAgentRecommendationsResponse {
+  userId: string;
+  generatedAt: string;
+  threadId: string | null;
+  delivered: boolean;
+  message: string;
+  discovery: PassiveDiscoveryResponse;
+}
+
+export interface UserIntentExplanation {
+  intentId: string;
+  status: string;
+  summary: string;
+  factors: string[];
+}
+
+export interface SearchSnapshotResponse {
+  userId: string;
+  query: string;
+  generatedAt: string;
+  users: Array<{
+    userId: string;
+    displayName: string;
+    city: string | null;
+    country: string | null;
+    moderationState: string;
+    score: number;
+  }>;
+  topics: Array<{
+    label: string;
+    count: number;
+    score: number;
+  }>;
+  activities: Array<{
+    intentId: string;
+    ownerUserId: string;
+    status: string;
+    summary: string;
+    createdAt: string;
+    score: number;
+  }>;
+  groups: Array<{
+    circleId: string;
+    title: string;
+    description: string | null;
+    visibility: string;
+    ownerUserId: string;
+    nextSessionAt: string | null;
+    score: number;
+  }>;
+}
+
+type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 interface ApiEnvelope<T> {
   success: boolean;
@@ -284,6 +466,16 @@ export interface AgenticTurnResult {
   };
 }
 
+export interface AgentMessageIntentResult {
+  threadId: string;
+  messageId: string;
+  intentId: string;
+  status: string;
+  intentCount: number;
+  intentIds: string[];
+  traceId: string;
+}
+
 export type ModerationRiskDecision = "blocked" | "review" | "clean";
 
 export interface ContentRiskAssessment {
@@ -414,6 +606,58 @@ export const api = {
       accessToken,
     );
   },
+  getLifeGraph(userId: string, accessToken?: string) {
+    return request<Record<string, unknown>>(
+      "GET",
+      `/personalization/${userId}/life-graph`,
+      undefined,
+      accessToken,
+    );
+  },
+  queryRetrievalContext(
+    userId: string,
+    payload: { query: string; maxChunks?: number; maxAgeDays?: number },
+    accessToken?: string,
+  ) {
+    return request<Record<string, unknown>>(
+      "POST",
+      `/personalization/${userId}/retrieval/query`,
+      payload,
+      accessToken,
+    );
+  },
+  refreshProfileSummaryMemory(userId: string, accessToken?: string) {
+    return request<Record<string, unknown>>(
+      "POST",
+      `/personalization/${userId}/retrieval/profile-summary/refresh`,
+      {},
+      accessToken,
+    );
+  },
+  refreshPreferenceMemory(userId: string, accessToken?: string) {
+    return request<Record<string, unknown>>(
+      "POST",
+      `/personalization/${userId}/retrieval/preference-memory/refresh`,
+      {},
+      accessToken,
+    );
+  },
+  resetMemory(
+    userId: string,
+    payload: {
+      actorUserId: string;
+      mode?: "learned_memory" | "all_personalization";
+      reason?: string;
+    },
+    accessToken?: string,
+  ) {
+    return request<Record<string, unknown>>(
+      "POST",
+      `/privacy/${userId}/memory/reset`,
+      payload,
+      accessToken,
+    );
+  },
   getTrustProfile(userId: string, accessToken?: string) {
     return request<Record<string, unknown>>(
       "GET",
@@ -463,6 +707,53 @@ export const api = {
       },
       accessToken,
       fetchOpts,
+    );
+  },
+  createIntentFromAgentMessage(
+    threadId: string,
+    userId: string,
+    content: string,
+    accessToken?: string,
+    options?: { allowDecomposition?: boolean; maxIntents?: number },
+  ) {
+    return request<AgentMessageIntentResult>(
+      "POST",
+      "/intents/from-agent",
+      {
+        threadId,
+        userId,
+        content,
+        ...(options?.allowDecomposition !== undefined
+          ? { allowDecomposition: options.allowDecomposition }
+          : {}),
+        ...(typeof options?.maxIntents === "number"
+          ? { maxIntents: options.maxIntents }
+          : {}),
+      },
+      accessToken,
+    );
+  },
+  summarizePendingIntents(
+    userId: string,
+    maxIntents = 5,
+    accessToken?: string,
+  ) {
+    return request<PendingIntentsSummaryResponse>(
+      "POST",
+      "/intents/summarize-pending",
+      {
+        userId,
+        maxIntents,
+      },
+      accessToken,
+    );
+  },
+  getUserIntentExplanation(intentId: string, accessToken?: string) {
+    return request<UserIntentExplanation>(
+      "GET",
+      `/intents/${intentId}/explanations/user`,
+      undefined,
+      accessToken,
     );
   },
   getMyAgentThreadSummary(accessToken?: string) {
@@ -572,6 +863,213 @@ export const api = {
       "POST",
       `/notifications/${userId}/digest`,
       {},
+      accessToken,
+    );
+  },
+  getPassiveDiscovery(userId: string, limit = 3, accessToken?: string) {
+    return request<PassiveDiscoveryResponse>(
+      "GET",
+      `/discovery/${userId}/passive?limit=${encodeURIComponent(String(limit))}`,
+      undefined,
+      accessToken,
+    );
+  },
+  getDiscoveryInboxSuggestions(
+    userId: string,
+    limit = 3,
+    accessToken?: string,
+  ) {
+    return request<DiscoveryInboxSuggestionsResponse>(
+      "GET",
+      `/discovery/${userId}/inbox-suggestions?limit=${encodeURIComponent(
+        String(limit),
+      )}`,
+      undefined,
+      accessToken,
+    );
+  },
+  publishAgentRecommendations(
+    userId: string,
+    payload?: { threadId?: string; limit?: number },
+    accessToken?: string,
+  ) {
+    return request<DiscoveryAgentRecommendationsResponse>(
+      "POST",
+      `/discovery/${userId}/agent-recommendations`,
+      payload ?? {},
+      accessToken,
+    );
+  },
+  search(userId: string, q: string, limit = 6, accessToken?: string) {
+    const params = new URLSearchParams({
+      q,
+      limit: String(limit),
+    });
+    return request<SearchSnapshotResponse>(
+      "GET",
+      `/search/${userId}?${params.toString()}`,
+      undefined,
+      accessToken,
+    );
+  },
+  listRecurringCircles(userId: string, accessToken?: string) {
+    return request<RecurringCircleRecord[]>(
+      "GET",
+      `/recurring-circles/${userId}`,
+      undefined,
+      accessToken,
+    );
+  },
+  createRecurringCircle(
+    userId: string,
+    payload: {
+      title: string;
+      visibility?: "private" | "invite_only" | "discoverable";
+      topicTags?: string[];
+      cadence: {
+        kind: "weekly";
+        days: Array<"sun" | "mon" | "tue" | "wed" | "thu" | "fri" | "sat">;
+        hour: number;
+        minute: number;
+        timezone: string;
+        intervalWeeks?: number;
+      };
+      description?: string;
+      targetSize?: number;
+      kickoffPrompt?: string;
+    },
+    accessToken?: string,
+  ) {
+    return request<RecurringCircleRecord>(
+      "POST",
+      `/recurring-circles/${userId}`,
+      payload,
+      accessToken,
+    );
+  },
+  listRecurringCircleSessions(circleId: string, accessToken?: string) {
+    return request<RecurringCircleSessionRecord[]>(
+      "GET",
+      `/recurring-circles/${circleId}/sessions`,
+      undefined,
+      accessToken,
+    );
+  },
+  runRecurringCircleSessionNow(circleId: string, accessToken?: string) {
+    return request<RecurringCircleSessionRecord>(
+      "POST",
+      `/recurring-circles/${circleId}/sessions/run-now`,
+      {},
+      accessToken,
+    );
+  },
+  listSavedSearches(userId: string, accessToken?: string) {
+    return request<SavedSearchRecord[]>(
+      "GET",
+      `/saved-searches/${userId}`,
+      undefined,
+      accessToken,
+    );
+  },
+  createSavedSearch(
+    userId: string,
+    payload: {
+      title: string;
+      searchType:
+        | "discovery_people"
+        | "discovery_groups"
+        | "reconnects"
+        | "topic_search"
+        | "activity_search";
+      queryConfig: Record<string, unknown>;
+    },
+    accessToken?: string,
+  ) {
+    return request<SavedSearchRecord>(
+      "POST",
+      `/saved-searches/${userId}`,
+      payload,
+      accessToken,
+    );
+  },
+  deleteSavedSearch(searchId: string, accessToken?: string) {
+    return request<{ deleted: boolean; searchId: string }>(
+      "DELETE",
+      `/saved-searches/${searchId}`,
+      undefined,
+      accessToken,
+    );
+  },
+  listScheduledTasks(
+    userId: string,
+    options?: { status?: string; limit?: number },
+    accessToken?: string,
+  ) {
+    const params = new URLSearchParams();
+    if (options?.status) {
+      params.set("status", options.status);
+    }
+    if (typeof options?.limit === "number") {
+      params.set("limit", String(options.limit));
+    }
+    const suffix = params.toString();
+    return request<ScheduledTaskRecord[]>(
+      "GET",
+      `/scheduled-tasks/${userId}${suffix ? `?${suffix}` : ""}`,
+      undefined,
+      accessToken,
+    );
+  },
+  createScheduledTask(
+    userId: string,
+    payload: {
+      title: string;
+      description?: string;
+      schedule:
+        | {
+            kind: "hourly";
+            intervalHours: number;
+            timezone: string;
+          }
+        | {
+            kind: "weekly";
+            days: Array<"sun" | "mon" | "tue" | "wed" | "thu" | "fri" | "sat">;
+            hour: number;
+            minute: number;
+            timezone: string;
+            intervalWeeks?: number;
+          };
+      task: {
+        taskType:
+          | "saved_search"
+          | "discovery_briefing"
+          | "reconnect_briefing"
+          | "social_reminder";
+        config: Record<string, unknown>;
+      };
+    },
+    accessToken?: string,
+  ) {
+    return request<ScheduledTaskRecord>(
+      "POST",
+      `/scheduled-tasks/${userId}`,
+      payload,
+      accessToken,
+    );
+  },
+  runScheduledTaskNow(taskId: string, accessToken?: string) {
+    return request<{ taskId: string; runId: string; status: "queued" }>(
+      "POST",
+      `/scheduled-tasks/${taskId}/run-now`,
+      {},
+      accessToken,
+    );
+  },
+  listScheduledTaskRuns(taskId: string, limit = 10, accessToken?: string) {
+    return request<ScheduledTaskRunRecord[]>(
+      "GET",
+      `/scheduled-tasks/${taskId}/runs?limit=${encodeURIComponent(String(limit))}`,
+      undefined,
       accessToken,
     );
   },

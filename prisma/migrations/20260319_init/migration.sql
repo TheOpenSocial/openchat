@@ -34,6 +34,7 @@ CREATE TABLE "users" (
     "email" TEXT,
     "google_subject_id" TEXT,
     "display_name" TEXT NOT NULL,
+    "username" TEXT,
     "locale" TEXT NOT NULL DEFAULT 'en',
     "timezone" TEXT NOT NULL DEFAULT 'UTC',
     "status" "UserStatus" NOT NULL DEFAULT 'active',
@@ -50,6 +51,7 @@ CREATE TABLE "user_profiles" (
     "city" TEXT,
     "country" TEXT,
     "visibility" TEXT NOT NULL DEFAULT 'public',
+    "onboarding_state" TEXT NOT NULL DEFAULT 'not_started',
     "availability_mode" "AvailabilityMode" NOT NULL DEFAULT 'flexible',
     "trust_score" DECIMAL(5,2) NOT NULL DEFAULT 0.0,
     "moderation_state" "ModerationState" NOT NULL DEFAULT 'clean',
@@ -110,6 +112,25 @@ CREATE TABLE "user_rules" (
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "user_rules_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "user_sessions" (
+    "id" UUID NOT NULL,
+    "user_id" UUID NOT NULL,
+    "device_id" TEXT,
+    "device_name" TEXT,
+    "user_agent" TEXT,
+    "ip_address" TEXT,
+    "refresh_token_hash" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'active',
+    "expires_at" TIMESTAMP(3) NOT NULL,
+    "last_used_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "revoked_at" TIMESTAMP(3),
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "user_sessions_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -413,7 +434,16 @@ CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
 CREATE UNIQUE INDEX "users_google_subject_id_key" ON "users"("google_subject_id");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "users_username_key" ON "users"("username");
+
+-- CreateIndex
 CREATE INDEX "user_profile_images_user_id_idx" ON "user_profile_images"("user_id");
+
+-- CreateIndex
+CREATE INDEX "user_sessions_user_id_status_last_used_at_idx" ON "user_sessions"("user_id", "status", "last_used_at");
+
+-- CreateIndex
+CREATE INDEX "user_sessions_expires_at_status_idx" ON "user_sessions"("expires_at", "status");
 
 -- CreateIndex
 CREATE INDEX "user_interests_user_id_kind_idx" ON "user_interests"("user_id", "kind");
@@ -500,6 +530,9 @@ CREATE INDEX "embeddings_owner_type_owner_id_idx" ON "embeddings"("owner_type", 
 ALTER TABLE "user_profiles" ADD CONSTRAINT "user_profiles_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "user_sessions" ADD CONSTRAINT "user_sessions_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "user_interests" ADD CONSTRAINT "user_interests_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "user_profiles"("user_id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -516,4 +549,3 @@ ALTER TABLE "chat_messages" ADD CONSTRAINT "chat_messages_chat_id_fkey" FOREIGN 
 
 -- AddForeignKey
 ALTER TABLE "message_receipts" ADD CONSTRAINT "message_receipts_message_id_fkey" FOREIGN KEY ("message_id") REFERENCES "chat_messages"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-

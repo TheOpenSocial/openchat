@@ -1,6 +1,7 @@
 FROM node:22-alpine AS deps
 WORKDIR /app
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* ./
+COPY patches ./patches
 COPY apps/web/package.json ./apps/web/package.json
 COPY packages ./packages
 RUN corepack enable && pnpm install --filter @opensocial/web... --frozen-lockfile=false

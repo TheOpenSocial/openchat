@@ -187,6 +187,14 @@ jobs:
         if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.web_e2e == 'true'
         run: pnpm --filter @opensocial/web test:e2e
 
+      - name: Install Playwright for Admin (Chromium)
+        if: github.event_name == 'workflow_dispatch'
+        run: pnpm --filter @opensocial/admin exec playwright install chromium --with-deps
+
+      - name: Admin E2E (sign-in gate baseline)
+        if: github.event_name == 'workflow_dispatch'
+        run: pnpm --filter @opensocial/admin test:e2e
+
   format:
     needs: changes
     if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.format == 'true'

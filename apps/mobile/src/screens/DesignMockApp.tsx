@@ -1,8 +1,17 @@
-import { useMemo, useState } from "react";
 import { StatusBar } from "expo-status-bar";
+import {
+  lazy,
+  type LazyExoticComponent,
+  type FC,
+  Suspense,
+  useMemo,
+  useState,
+} from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { AnimatedScreen } from "../components/AnimatedScreen";
+import { AppToastHost } from "../components/AppToastHost";
+import { LoadingState } from "../components/LoadingState";
 import {
   DESIGN_MOCK_AUTH_CODE,
   DESIGN_MOCK_PROFILE,
@@ -10,9 +19,13 @@ import {
 } from "../mocks/design-fixtures";
 import { MobileSession, UserProfileDraft } from "../types";
 import { AuthScreen } from "./AuthScreen";
-import { HomeScreen } from "./HomeScreen";
+import type { HomeScreenProps } from "./HomeScreen";
 import { OnboardingScreen } from "./OnboardingScreen";
 import { WelcomeScreen } from "./WelcomeScreen";
+
+const HomeScreen: LazyExoticComponent<FC<HomeScreenProps>> = lazy(() =>
+  import("./HomeScreen").then((m) => ({ default: m.HomeScreen })),
+);
 
 type DesignMockStage = "welcome" | "auth" | "onboarding" | "home";
 
@@ -72,38 +85,42 @@ export function DesignMockApp() {
   };
 
   return (
-    <SafeAreaProvider>
+    <SafeAreaProvider style={{ flex: 1 }}>
       <StatusBar style="light" />
-      <AnimatedScreen screenKey={stageKey}>
-        {stage === "welcome" ? (
-          <WelcomeScreen onContinue={() => setStage("auth")} />
-        ) : null}
-        {stage === "auth" ? (
-          <AuthScreen
-            designPreviewMode
-            errorMessage={authError}
-            loading={authLoading}
-            onAuthenticated={handleAuthenticate}
-          />
-        ) : null}
-        {stage === "onboarding" && session ? (
-          <OnboardingScreen
-            defaultName={displayName}
-            errorMessage={onboardingError}
-            loading={onboardingLoading}
-            onComplete={handleOnboardingComplete}
-          />
-        ) : null}
-        {stage === "home" && session ? (
-          <HomeScreen
-            designMock
-            initialProfile={profile}
-            onProfileUpdated={setProfile}
-            onResetSession={handleResetSession}
-            session={session}
-          />
-        ) : null}
-      </AnimatedScreen>
+      {stage === "auth" ? (
+        <AuthScreen
+          designPreviewMode
+          errorMessage={authError}
+          loading={authLoading}
+          onAuthenticated={handleAuthenticate}
+        />
+      ) : (
+        <AnimatedScreen screenKey={stageKey}>
+          {stage === "welcome" ? (
+            <WelcomeScreen onContinue={() => setStage("auth")} />
+          ) : null}
+          {stage === "onboarding" && session ? (
+            <OnboardingScreen
+              defaultName={displayName}
+              errorMessage={onboardingError}
+              loading={onboardingLoading}
+              onComplete={handleOnboardingComplete}
+            />
+          ) : null}
+          {stage === "home" && session ? (
+            <Suspense fallback={<LoadingState label="Loading your space…" />}>
+              <HomeScreen
+                designMock
+                initialProfile={profile}
+                onProfileUpdated={setProfile}
+                onResetSession={handleResetSession}
+                session={session}
+              />
+            </Suspense>
+          ) : null}
+        </AnimatedScreen>
+      )}
+      <AppToastHost />
     </SafeAreaProvider>
   );
 }

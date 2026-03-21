@@ -34,6 +34,15 @@ function createServiceHarness() {
     moderationFlag: {
       create: vi.fn().mockResolvedValue({ id: "mod-flag-1" }),
     },
+    agentPlanCheckpoint: {
+      create: vi.fn().mockResolvedValue({
+        id: "checkpoint-1",
+        status: "pending",
+      }),
+      findMany: vi.fn().mockResolvedValue([]),
+      findFirst: vi.fn().mockResolvedValue(null),
+      update: vi.fn(),
+    },
     auditLog: {
       create: vi.fn().mockResolvedValue({ id: "audit-log-1" }),
     },
@@ -53,6 +62,14 @@ function createServiceHarness() {
       threadId: IDS.threadId,
       role: "workflow",
       content: "update",
+      createdByUserId: null,
+      createdAt: new Date("2026-03-20T11:00:01.000Z"),
+    }),
+    appendEphemeralWorkflowUpdate: vi.fn().mockReturnValue({
+      id: "workflow-ephemeral-1",
+      threadId: IDS.threadId,
+      role: "workflow",
+      content: "ephemeral update",
       createdByUserId: null,
       createdAt: new Date("2026-03-20T11:00:01.000Z"),
     }),
@@ -81,9 +98,16 @@ function createServiceHarness() {
     }),
   };
 
+  const appCacheService: any = {
+    getJson: vi.fn().mockResolvedValue(null),
+    setJson: vi.fn().mockResolvedValue(undefined),
+    delete: vi.fn().mockResolvedValue(undefined),
+  };
+
   const service = new AgentConversationService(
     prisma,
     agentService,
+    appCacheService,
     moderationService,
   );
 
@@ -127,7 +151,18 @@ function createServiceHarness() {
     agentService,
     openai,
     moderationService,
+    appCacheService,
   };
+}
+
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
 }
 
 describe("AgentConversationService", () => {
@@ -247,8 +282,121 @@ describe("AgentConversationService", () => {
     );
   });
 
-  it("blocks risky tool actions that require human approval", async () => {
+  it("runs independent tools and specialists in parallel", async () => {
     const { service, openai } = createServiceHarness();
+    const toolOne = createDeferred<{
+      version: number;
+      rawText: string;
+      intentType: string;
+      urgency: string;
+      topics: string[];
+      activities: string[];
+      timingConstraints: string[];
+      skillConstraints: string[];
+      vibeConstraints: string[];
+      confidence: number;
+      requiresFollowUp: boolean;
+    }>();
+    const toolTwo = createDeferred<{
+      candidateUserId: string;
+      score: number;
+      blockedByPolicy: boolean;
+      reasons: string[];
+    }>();
+
+    openai.planConversationTurn.mockResolvedValueOnce({
+      specialists: ["intent_parser", "ranking_explanation"],
+      toolCalls: [
+        {
+          role: "intent_parser",
+          tool: "intent.parse",
+          input: { text: "Need a tennis partner tonight" },
+        },
+        {
+          role: "ranking_explanation",
+          tool: "ranking.explain",
+          input: {
+            candidateUserId: IDS.userId,
+            score: 0.55,
+            features: { semanticFit: 0.71 },
+          },
+        },
+      ],
+      responseGoal: "respond after concurrent work",
+    });
+
+    let toolCallsInFlight = 0;
+    let maxToolCallsInFlight = 0;
+    openai.parseIntent.mockImplementationOnce(async () => {
+      toolCallsInFlight += 1;
+      maxToolCallsInFlight = Math.max(maxToolCallsInFlight, toolCallsInFlight);
+      try {
+        return await toolOne.promise;
+      } finally {
+        toolCallsInFlight -= 1;
+      }
+    });
+    openai.explainRanking.mockImplementationOnce(async () => {
+      toolCallsInFlight += 1;
+      maxToolCallsInFlight = Math.max(maxToolCallsInFlight, toolCallsInFlight);
+      try {
+        return await toolTwo.promise;
+      } finally {
+        toolCallsInFlight -= 1;
+      }
+    });
+    openai.composeConversationResponse.mockResolvedValueOnce(
+      "Parallel work finished.",
+    );
+
+    const runPromise = service.runAgenticTurn({
+      threadId: IDS.threadId,
+      userId: IDS.userId,
+      content: "Need a tennis partner tonight",
+      traceId: "trace-agentic-parallel",
+    });
+
+    await vi.waitFor(() => {
+      expect(maxToolCallsInFlight).toBe(2);
+    });
+
+    toolOne.resolve({
+      version: 1,
+      rawText: "Need a tennis partner tonight",
+      intentType: "activity",
+      urgency: "soon",
+      topics: ["tennis"],
+      activities: ["play"],
+      timingConstraints: ["tonight"],
+      skillConstraints: [],
+      vibeConstraints: [],
+      confidence: 0.72,
+      requiresFollowUp: false,
+    });
+    toolTwo.resolve({
+      candidateUserId: IDS.userId,
+      score: 0.62,
+      blockedByPolicy: false,
+      reasons: ["semanticFit: 0.74"],
+    });
+
+    const result = await runPromise;
+    expect(result.toolResults).toEqual([
+      expect.objectContaining({
+        role: "intent_parser",
+        tool: "intent.parse",
+        status: "executed",
+      }),
+      expect.objectContaining({
+        role: "ranking_explanation",
+        tool: "ranking.explain",
+        status: "executed",
+      }),
+    ]);
+  });
+
+  it("blocks risky tool actions that require human approval", async () => {
+    const { service, openai, prisma, agentService } = createServiceHarness();
 
     openai.planConversationTurn.mockResolvedValueOnce({
       specialists: ["intent_parser"],
@@ -282,8 +430,102 @@ describe("AgentConversationService", () => {
         tool: "workflow.write",
         status: "denied",
         reason: "human_approval_required",
+        output: expect.objectContaining({
+          checkpointId: "checkpoint-1",
+          status: "pending",
+        }),
       }),
     ]);
+    expect(prisma.agentPlanCheckpoint.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          threadId: IDS.threadId,
+          userId: IDS.userId,
+          actionType: "cancel_intent_flow",
+          riskLevel: "medium",
+          status: "pending",
+        }),
+      }),
+    );
+    expect(agentService.appendWorkflowUpdate).toHaveBeenCalledWith(
+      IDS.threadId,
+      expect.stringContaining("Approval needed"),
+      expect.objectContaining({
+        category: "plan_checkpoint",
+        checkpointId: "checkpoint-1",
+      }),
+    );
+  });
+
+  it("lists and resolves plan checkpoints", async () => {
+    const { service, prisma, agentService } = createServiceHarness();
+    prisma.agentPlanCheckpoint.findMany.mockResolvedValueOnce([
+      {
+        id: "checkpoint-1",
+        threadId: IDS.threadId,
+        userId: IDS.userId,
+        traceId: "trace-1",
+        requestedByRole: "manager",
+        tool: "workflow.write",
+        actionType: "cancel_intent_flow",
+        riskLevel: "medium",
+        status: "pending",
+        requestMetadata: {},
+        decisionReason: null,
+        resolvedByUserId: null,
+        resolvedAt: null,
+        createdAt: new Date("2026-03-20T11:00:00.000Z"),
+        updatedAt: new Date("2026-03-20T11:00:00.000Z"),
+      },
+    ]);
+    prisma.agentPlanCheckpoint.findFirst.mockResolvedValueOnce({
+      id: "checkpoint-1",
+      threadId: IDS.threadId,
+      userId: IDS.userId,
+      traceId: "trace-1",
+      requestedByRole: "manager",
+      tool: "workflow.write",
+      actionType: "cancel_intent_flow",
+      riskLevel: "medium",
+      status: "pending",
+    });
+    prisma.agentPlanCheckpoint.update.mockResolvedValueOnce({
+      id: "checkpoint-1",
+      status: "approved",
+    });
+
+    const checkpoints = await service.listPlanCheckpoints({
+      threadId: IDS.threadId,
+      status: "pending",
+      limit: 10,
+    });
+    expect(checkpoints).toHaveLength(1);
+    expect(prisma.agentPlanCheckpoint.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          threadId: IDS.threadId,
+          status: "pending",
+        }),
+      }),
+    );
+
+    const resolved = await service.resolvePlanCheckpoint({
+      threadId: IDS.threadId,
+      checkpointId: "checkpoint-1",
+      actorUserId: IDS.userId,
+      decision: "approved",
+      reason: "safe to proceed",
+    });
+    expect(resolved).toEqual({ id: "checkpoint-1", status: "approved" });
+    expect(agentService.appendWorkflowUpdate).toHaveBeenCalledWith(
+      IDS.threadId,
+      expect.stringContaining("Plan checkpoint approved"),
+      expect.objectContaining({
+        category: "plan_checkpoint_decision",
+        checkpointId: "checkpoint-1",
+        decision: "approved",
+      }),
+    );
   });
 
   it("chunks assistant text into response_token workflow updates when streaming is enabled", async () => {
@@ -313,7 +555,7 @@ describe("AgentConversationService", () => {
     expect(result.streaming.responseTokenStreamed).toBe(true);
     expect(result.streaming.chunkCount).toBeGreaterThan(0);
     const tokenUpdateCalls =
-      agentService.appendWorkflowUpdate.mock.calls.filter(
+      agentService.appendEphemeralWorkflowUpdate.mock.calls.filter(
         (_call: unknown[]) =>
           (_call[2] as { stage?: string } | undefined)?.stage ===
           "response_token",
@@ -354,7 +596,7 @@ describe("AgentConversationService", () => {
 
     expect(result.streaming.responseTokenStreamed).toBe(true);
     const tokenUpdateCalls =
-      agentService.appendWorkflowUpdate.mock.calls.filter(
+      agentService.appendEphemeralWorkflowUpdate.mock.calls.filter(
         (_call: unknown[]) =>
           (_call[2] as { stage?: string } | undefined)?.stage ===
           "response_token",
@@ -424,6 +666,31 @@ describe("AgentConversationService", () => {
       }),
       "trace-agentic-multimodal",
       undefined,
+    );
+  });
+
+  it("uses the simple fast path for lightweight turns", async () => {
+    const { service, openai, prisma, agentService } = createServiceHarness();
+
+    openai.composeConversationResponse.mockResolvedValueOnce("Quick answer.");
+
+    const result = await service.runAgenticTurn({
+      threadId: IDS.threadId,
+      userId: IDS.userId,
+      content: "hey can you help me",
+      traceId: "trace-agentic-fast-path",
+    });
+
+    expect(result.plan.specialists).toEqual([]);
+    expect(result.plan.toolCalls).toEqual([]);
+    expect(openai.planConversationTurn).not.toHaveBeenCalled();
+    expect(prisma.agentMessage.findMany).not.toHaveBeenCalled();
+    expect(agentService.appendWorkflowUpdate).toHaveBeenCalledWith(
+      IDS.threadId,
+      "Simple-turn fast path selected.",
+      expect.objectContaining({
+        stage: "fast_path_selected",
+      }),
     );
   });
 

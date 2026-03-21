@@ -195,15 +195,22 @@ export class IntentsService {
       userId,
     );
     const allowDecomposition = options.allowDecomposition ?? true;
-    const maxIntents = this.clampIntentCount(options.maxIntents ?? 3);
+    const requestedMaxIntents = this.clampIntentCount(options.maxIntents ?? 3);
+    const quotaBoundMaxIntents = allowDecomposition
+      ? await this.resolveSafeIntentDecompositionCap(
+          userId,
+          requestedMaxIntents,
+        )
+      : 1;
     const intentTexts = allowDecomposition
-      ? this.decomposeAgentMessageToIntents(content, maxIntents)
+      ? this.decomposeAgentMessageToIntents(content, requestedMaxIntents)
       : [content.trim()];
+    const boundedIntentTexts = intentTexts.slice(0, quotaBoundMaxIntents);
 
     const intents = [];
-    for (const [index, intentText] of intentTexts.entries()) {
+    for (const [index, intentText] of boundedIntentTexts.entries()) {
       const scopedTraceId =
-        intentTexts.length > 1 ? `${traceId}:${index + 1}` : traceId;
+        boundedIntentTexts.length > 1 ? `${traceId}:${index + 1}` : traceId;
       const intent = await this.createIntent(
         userId,
         intentText,
@@ -221,9 +228,11 @@ export class IntentsService {
 
     await this.agentService.createAgentMessage(
       threadId,
-      intents.length === 1
-        ? "Got it. I captured your request and started matching now."
-        : `Got it. I split your request into ${intents.length} intents and started matching each one.`,
+      intentTexts.length > boundedIntentTexts.length
+        ? `Got it. I split your request into ${intents.length} intents for now and applied a safety cap based on current outreach quota.`
+        : intents.length === 1
+          ? "Got it. I captured your request and started matching now."
+          : `Got it. I split your request into ${intents.length} intents and started matching each one.`,
     );
 
     return {
@@ -1158,6 +1167,27 @@ export class IntentsService {
       maxIntents,
     );
     return uniqueSegments.length > 0 ? uniqueSegments : [normalized];
+  }
+
+  private async resolveSafeIntentDecompositionCap(
+    userId: string,
+    requestedMaxIntents: number,
+  ) {
+    const quota = await this.loadFanoutQuotaSnapshot(userId);
+    const remainingPendingQuota = Math.max(
+      0,
+      MAX_PENDING_OUTGOING_REQUESTS_PER_SENDER - quota.pendingOutgoingCount,
+    );
+    const remainingDailyQuota = Math.max(
+      0,
+      MAX_DAILY_OUTGOING_REQUESTS_PER_SENDER - quota.dailyOutgoingCount,
+    );
+    const remainingQuota = Math.min(remainingPendingQuota, remainingDailyQuota);
+    if (remainingQuota <= 1) {
+      return 1;
+    }
+    const quotaBound = Math.max(1, Math.floor(remainingQuota / 3));
+    return Math.max(1, Math.min(requestedMaxIntents, quotaBound));
   }
 
   private resolveTimeoutEscalation(input: {

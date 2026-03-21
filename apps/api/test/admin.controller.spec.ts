@@ -9,6 +9,7 @@ import {
   recordWebsocketError,
   resetOpsRuntimeMetrics,
 } from "../src/common/ops-metrics.js";
+import { DatabaseLatencyService } from "../src/database/database-latency.service.js";
 import { JOB_QUEUE_NAMES } from "../src/jobs/jobs.module.js";
 
 const ADMIN_USER_ID = "11111111-1111-4111-8111-111111111111";
@@ -32,16 +33,28 @@ function createController(overrides: Partial<Record<string, any>> = {}) {
     listModerationQueue: vi.fn().mockResolvedValue([]),
     listAuditLogs: vi.fn().mockResolvedValue([]),
   };
+  const appCacheService = overrides.appCacheService ?? {
+    getJson: vi.fn().mockResolvedValue(null),
+    setJson: vi.fn().mockResolvedValue(undefined),
+    delete: vi.fn().mockResolvedValue(undefined),
+  };
+  const databaseLatencyService = overrides.databaseLatencyService ?? {
+    measureLatencyMs: vi.fn().mockResolvedValue(42),
+  };
   const prisma = overrides.prisma ?? {
     user: {
       update: vi.fn(),
       findMany: vi.fn().mockResolvedValue([]),
+      count: vi.fn().mockResolvedValue(0),
     },
     intent: { findMany: vi.fn().mockResolvedValue([]) },
     intentRequest: { findMany: vi.fn().mockResolvedValue([]) },
     connection: { findMany: vi.fn().mockResolvedValue([]) },
     chat: { findMany: vi.fn().mockResolvedValue([]) },
-    userReport: { findMany: vi.fn().mockResolvedValue([]) },
+    userReport: {
+      findMany: vi.fn().mockResolvedValue([]),
+      count: vi.fn().mockResolvedValue(0),
+    },
     moderationFlag: {
       findMany: vi.fn().mockResolvedValue([]),
       count: vi.fn().mockResolvedValue(0),
@@ -53,7 +66,13 @@ function createController(overrides: Partial<Record<string, any>> = {}) {
       create: vi.fn().mockResolvedValue({ id: "audit-1" }),
     },
     userSession: { updateMany: vi.fn() },
-    userProfile: { upsert: vi.fn() },
+    userProfile: {
+      upsert: vi.fn(),
+      count: vi.fn().mockResolvedValue(0),
+    },
+    notification: {
+      count: vi.fn().mockResolvedValue(0),
+    },
   };
   const intentsService = overrides.intentsService ?? {
     retryIntent: vi.fn().mockResolvedValue({ status: "queued" }),
@@ -94,6 +113,8 @@ function createController(overrides: Partial<Record<string, any>> = {}) {
     deadLetterService,
     outboxRelayService,
     adminAuditService,
+    appCacheService,
+    databaseLatencyService,
     prisma,
     intentsService,
     moderationService,
@@ -106,6 +127,8 @@ function createController(overrides: Partial<Record<string, any>> = {}) {
       deadLetterService,
       outboxRelayService,
       adminAuditService,
+      appCacheService,
+      databaseLatencyService as DatabaseLatencyService,
       prisma,
       intentsService,
       moderationService,
@@ -164,13 +187,38 @@ describe("AdminController", () => {
 
     await controller.moderationQueue(ADMIN_USER_ID, "moderator", "50");
 
-    expect(adminAuditService.listModerationQueue).toHaveBeenCalledWith(50);
+    expect(adminAuditService.listModerationQueue).toHaveBeenCalledWith({
+      limit: 50,
+      status: undefined,
+      entityType: undefined,
+      reasonContains: undefined,
+    });
     expect(adminAuditService.recordAction).toHaveBeenCalledWith(
       expect.objectContaining({
         role: "moderator",
         action: "admin.moderation_queue_list",
       }),
     );
+  });
+
+  it("passes moderation queue filters through to the audit service", async () => {
+    const { controller, adminAuditService } = createController();
+
+    await controller.moderationQueue(
+      ADMIN_USER_ID,
+      "moderator",
+      "25",
+      "resolved",
+      "chat_message",
+      "threat",
+    );
+
+    expect(adminAuditService.listModerationQueue).toHaveBeenCalledWith({
+      limit: 25,
+      status: "resolved",
+      entityType: "chat_message",
+      reasonContains: "threat",
+    });
   });
 
   it("lists agent-thread moderation risk flags with filters", async () => {
@@ -409,6 +457,173 @@ describe("AdminController", () => {
     );
   });
 
+  it("builds a moderation summary snapshot", async () => {
+    const { controller, adminAuditService } = createController({
+      prisma: {
+        moderationFlag: {
+          count: vi
+            .fn()
+            .mockResolvedValueOnce(12)
+            .mockResolvedValueOnce(4)
+            .mockResolvedValueOnce(2)
+            .mockResolvedValueOnce(5),
+          findMany: vi.fn().mockResolvedValue([
+            {
+              id: DEAD_LETTER_ID,
+              entityType: "agent_thread",
+              entityId: AGENT_THREAD_ID,
+              reason: "agent_pre_tools_blocked:blocked_term",
+              status: "open",
+              createdAt: new Date("2026-03-20T18:00:00.000Z"),
+            },
+          ]),
+        },
+        userReport: {
+          count: vi.fn().mockResolvedValueOnce(3).mockResolvedValueOnce(8),
+          findMany: vi.fn().mockResolvedValue([
+            {
+              id: INTENT_ID,
+              reporterUserId: ADMIN_USER_ID,
+              targetUserId: DEAD_LETTER_ID,
+              reason: "abuse",
+              status: "open",
+              createdAt: new Date("2026-03-20T18:30:00.000Z"),
+            },
+          ]),
+        },
+        userProfile: {
+          count: vi.fn().mockResolvedValue(6),
+        },
+        user: {
+          count: vi.fn().mockResolvedValue(2),
+        },
+      },
+    });
+
+    const result = await controller.moderationSummary(
+      ADMIN_USER_ID,
+      "moderator",
+    );
+    const payload = result.data as {
+      queue: {
+        openFlags: number;
+        agentRiskOpenFlags: number;
+        reportsOpen: number;
+      };
+      actions24h: {
+        reports24h: number;
+        resolvedFlags24h: number;
+        dismissedFlags24h: number;
+      };
+      enforcement: { blockedProfiles: number; suspendedUsers: number };
+      recent: { flags: unknown[]; reports: unknown[] };
+    };
+
+    expect(payload.queue).toEqual({
+      openFlags: 12,
+      agentRiskOpenFlags: 5,
+      reportsOpen: 3,
+    });
+    expect(payload.actions24h).toEqual({
+      reports24h: 8,
+      resolvedFlags24h: 4,
+      dismissedFlags24h: 2,
+    });
+    expect(payload.enforcement).toEqual({
+      blockedProfiles: 6,
+      suspendedUsers: 2,
+    });
+    expect(payload.recent.flags).toHaveLength(1);
+    expect(payload.recent.reports).toHaveLength(1);
+    expect(adminAuditService.recordAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "admin.moderation_summary_view",
+      }),
+    );
+  });
+
+  it("returns a sanitized moderation settings snapshot", async () => {
+    const originalEnv = {
+      MODERATION_PROVIDER: process.env.MODERATION_PROVIDER,
+      MODERATION_PROVIDER_API_KEY: process.env.MODERATION_PROVIDER_API_KEY,
+      MODERATION_AGENT_RISK_ENABLED: process.env.MODERATION_AGENT_RISK_ENABLED,
+      MODERATION_AUTO_BLOCK_TERMS_ENABLED:
+        process.env.MODERATION_AUTO_BLOCK_TERMS_ENABLED,
+      MODERATION_STRICT_MEDIA_REVIEW_ENABLED:
+        process.env.MODERATION_STRICT_MEDIA_REVIEW_ENABLED,
+      MODERATION_USER_REPORTS_ENABLED:
+        process.env.MODERATION_USER_REPORTS_ENABLED,
+      ALERT_MODERATION_BACKLOG_THRESHOLD:
+        process.env.ALERT_MODERATION_BACKLOG_THRESHOLD,
+      ALERT_DB_LATENCY_THRESHOLD_MS: process.env.ALERT_DB_LATENCY_THRESHOLD_MS,
+      ALERT_OPENAI_ERROR_RATE_THRESHOLD:
+        process.env.ALERT_OPENAI_ERROR_RATE_THRESHOLD,
+      MODERATION_AGENT_BLOCKED_LABEL:
+        process.env.MODERATION_AGENT_BLOCKED_LABEL,
+      MODERATION_AGENT_REVIEW_LABEL: process.env.MODERATION_AGENT_REVIEW_LABEL,
+    };
+    process.env.MODERATION_PROVIDER = "openai";
+    process.env.MODERATION_PROVIDER_API_KEY = "set";
+    process.env.MODERATION_AGENT_RISK_ENABLED = "true";
+    process.env.MODERATION_AUTO_BLOCK_TERMS_ENABLED = "false";
+    process.env.MODERATION_STRICT_MEDIA_REVIEW_ENABLED = "true";
+    process.env.MODERATION_USER_REPORTS_ENABLED = "true";
+    process.env.ALERT_MODERATION_BACKLOG_THRESHOLD = "111";
+    process.env.ALERT_DB_LATENCY_THRESHOLD_MS = "900";
+    process.env.ALERT_OPENAI_ERROR_RATE_THRESHOLD = "0.4";
+    process.env.MODERATION_AGENT_BLOCKED_LABEL = "blocked";
+    process.env.MODERATION_AGENT_REVIEW_LABEL = "review";
+
+    try {
+      const { controller, adminAuditService } = createController();
+      const result = await controller.moderationSettings(
+        ADMIN_USER_ID,
+        "moderator",
+      );
+      const payload = result.data as {
+        provider: string;
+        keys: {
+          moderationProviderConfigured: boolean;
+          openaiConfigured: boolean;
+          customProviderConfigured: boolean;
+        };
+        toggles: {
+          agentRiskEnabled: boolean;
+          autoBlockTermsEnabled: boolean;
+          strictMediaReview: boolean;
+          userReportsEnabled: boolean;
+        };
+        thresholds: {
+          moderationBacklogAlert: number;
+          dbLatencyAlertMs: number;
+          openAiErrorRateAlert: number;
+        };
+      };
+
+      expect(payload.provider).toBe("openai");
+      expect(payload.keys.moderationProviderConfigured).toBe(true);
+      expect(payload.toggles.autoBlockTermsEnabled).toBe(false);
+      expect(payload.thresholds).toEqual({
+        moderationBacklogAlert: 111,
+        dbLatencyAlertMs: 900,
+        openAiErrorRateAlert: 0.4,
+      });
+      expect(adminAuditService.recordAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: "admin.moderation_settings_view",
+        }),
+      );
+    } finally {
+      for (const [key, value] of Object.entries(originalEnv)) {
+        if (value === undefined) {
+          delete process.env[key];
+        } else {
+          process.env[key] = value;
+        }
+      }
+    }
+  });
+
   it("deactivates users and revokes active sessions", async () => {
     const { controller, prisma, adminAuditService } = createController({
       prisma: {
@@ -598,7 +813,6 @@ describe("AdminController", () => {
 
     const { controller, adminAuditService } = createController({
       prisma: {
-        $queryRawUnsafe: vi.fn().mockResolvedValue([{ "?column?": 1 }]),
         user: { count: vi.fn().mockResolvedValue(50) },
         userReport: { count: vi.fn().mockResolvedValue(2) },
         moderationFlag: { count: vi.fn().mockResolvedValue(1) },
@@ -639,6 +853,47 @@ describe("AdminController", () => {
     );
   });
 
+  it("reuses cached ops metric counts when available", async () => {
+    resetOpsRuntimeMetrics();
+
+    const appCacheService = {
+      getJson: vi.fn().mockResolvedValue({
+        dbLatencyMs: 12,
+        totalUsers: 10,
+        reports24h: 1,
+        moderationFlags24h: 2,
+        blockedProfiles: 1,
+        pushSent24h: 8,
+        pushRead24h: 3,
+      }),
+      setJson: vi.fn().mockResolvedValue(undefined),
+      delete: vi.fn().mockResolvedValue(undefined),
+    };
+    const prisma = {
+      user: { count: vi.fn() },
+      userReport: { count: vi.fn() },
+      moderationFlag: { count: vi.fn() },
+      userProfile: { count: vi.fn() },
+      notification: { count: vi.fn() },
+    };
+    const { controller } = createController({
+      appCacheService,
+      prisma,
+    });
+
+    const result = await controller.opsMetrics(ADMIN_USER_ID, "support");
+    const payload = result.data as {
+      dbLatency: { pingMs: number | null };
+      moderationRates: { reports24h: number; moderationFlags24h: number };
+    };
+
+    expect(payload.dbLatency.pingMs).toBe(12);
+    expect(payload.moderationRates.reports24h).toBe(1);
+    expect(payload.moderationRates.moderationFlags24h).toBe(2);
+    expect(prisma.user.count).not.toHaveBeenCalled();
+    expect(appCacheService.setJson).not.toHaveBeenCalled();
+  });
+
   it("returns triggered ops alerts for backlog/error conditions", async () => {
     resetOpsRuntimeMetrics();
     recordWebsocketConnectionOpened();
@@ -666,9 +921,11 @@ describe("AdminController", () => {
       get: vi.fn().mockReturnValue(queue),
     };
     const { controller, adminAuditService } = createController({
+      databaseLatencyService: {
+        measureLatencyMs: vi.fn().mockResolvedValue(700),
+      },
       moduleRef,
       prisma: {
-        $queryRawUnsafe: vi.fn().mockResolvedValue([{ "?column?": 1 }]),
         auditLog: { count: vi.fn().mockResolvedValue(2) },
         moderationFlag: { count: vi.fn().mockResolvedValue(180) },
       },

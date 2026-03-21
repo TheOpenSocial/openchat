@@ -1,7 +1,9 @@
 "use client";
 
+import { Home, MessageSquare, Sparkles, UserRound } from "lucide-react";
 import { useMemo, useState } from "react";
 
+import { BrandSignInLayout } from "./components/BrandSignInLayout";
 import { ChatBubble } from "./components/ChatBubble";
 import { EmptyState } from "./components/EmptyState";
 import { InlineNotice } from "./components/InlineNotice";
@@ -31,6 +33,12 @@ const tabDescriptions: Record<Tab, string> = {
   chats: "Private threads with people you’ve connected with.",
   profile: "Preferences, notifications, and account.",
 };
+
+const designTabIcon = {
+  home: Home,
+  chats: MessageSquare,
+  profile: UserRound,
+} as const;
 
 const interestOptions = [
   "Football",
@@ -178,72 +186,124 @@ export function WebDesignMockApp() {
     setAgentTimeline([]);
   };
 
+  if (stage === "welcome") {
+    return (
+      <BrandSignInLayout contentClassName="justify-center py-16 sm:py-20">
+        <div className="mx-auto w-full max-w-md text-center">
+          <div className="mb-8 flex items-center justify-between text-left">
+            <span className="rounded-full border border-white/20 bg-white/[0.06] px-3 py-1 text-[11px] font-semibold uppercase tracking-widest text-white/55">
+              Design preview
+            </span>
+            <Sparkles
+              aria-hidden
+              className="h-5 w-5 text-amber-400/90"
+              strokeWidth={2}
+            />
+          </div>
+          <div className="mx-auto flex w-fit rounded-3xl border border-white/25 bg-black p-3 shadow-lg shadow-black/40">
+            <img
+              alt="OpenSocial"
+              className="h-14 w-14"
+              height={56}
+              src="/brand/logo.svg"
+              width={56}
+            />
+          </div>
+          <p className="mt-4 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/55">
+            OpenSocial
+          </p>
+          <h1 className="mt-5 font-[var(--font-heading)] text-[clamp(1.85rem,6vw,2.15rem)] font-semibold leading-tight tracking-tight text-white">
+            Explore the app
+          </h1>
+          <p className="mx-auto mt-4 max-w-[340px] text-[15px] leading-7 text-white/70">
+            Walk the full web shell—home, chats, profile—with mock data. No API
+            or account required.
+          </p>
+          <button
+            className="mt-10 h-12 w-full rounded-full bg-white text-[15px] font-medium text-[#0d0d0d] shadow-md transition hover:shadow-lg active:scale-[0.99]"
+            data-testid="web-design-welcome-continue"
+            onClick={() => setStage("auth")}
+            type="button"
+          >
+            Explore the app
+          </button>
+          <p className="mt-4 text-center text-[12px] text-white/50">
+            Preview mode · data stays in this browser only
+          </p>
+        </div>
+      </BrandSignInLayout>
+    );
+  }
+
+  if (stage === "auth") {
+    return (
+      <BrandSignInLayout contentClassName="justify-end pb-16 pt-10 sm:justify-center sm:pb-20">
+        <div className="mx-auto w-full max-w-md text-center">
+          <div className="mx-auto flex w-fit rounded-3xl border border-white/25 bg-black p-3 shadow-lg shadow-black/40">
+            <img
+              alt="OpenSocial"
+              className="h-14 w-14"
+              height={56}
+              src="/brand/logo.svg"
+              width={56}
+            />
+          </div>
+          <p className="mt-4 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/55">
+            OpenSocial
+          </p>
+          <h1
+            className="mt-6 font-[var(--font-heading)] text-[26px] font-semibold leading-[1.12] tracking-tight text-white sm:text-[28px]"
+            data-testid="web-design-auth-title"
+          >
+            Preview sign-in
+          </h1>
+          <p className="mx-auto mt-2.5 max-w-[320px] text-[15px] leading-relaxed text-white/70">
+            OAuth is off in this build. Continue with a static profile to try
+            onboarding and tabs.
+          </p>
+          <button
+            className="mt-10 flex h-12 w-full items-center justify-center rounded-full bg-white text-[15px] font-medium text-[#0d0d0d] shadow-md transition hover:shadow-lg active:scale-[0.99]"
+            data-testid="web-design-preview-signin"
+            onClick={previewSignIn}
+            type="button"
+          >
+            Continue with preview profile
+          </button>
+        </div>
+      </BrandSignInLayout>
+    );
+  }
+
   return (
     <main className="mx-auto min-h-screen w-full max-w-6xl px-4 py-5 md:px-8 md:py-8">
-      <div className="mb-5 flex items-center justify-between">
-        <div>
-          <p className="text-xs uppercase tracking-[0.24em] text-ash">
-            OpenSocial Web · design preview
-          </p>
-          <h1 className="font-[var(--font-heading)] text-2xl text-ink md:text-3xl">
-            Mock data · no API
-          </h1>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4 border-b border-amber-400/20 pb-5">
+        <div className="flex min-w-0 items-start gap-4">
+          <div className="hidden shrink-0 rounded-2xl border border-white/15 bg-black/35 p-2 shadow-inner shadow-black/20 sm:block">
+            <img
+              alt=""
+              className="h-9 w-9"
+              height={36}
+              src="/brand/logo.svg"
+              width={36}
+            />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-ash">
+              OpenSocial
+            </p>
+            <h1 className="font-[var(--font-heading)] text-2xl font-semibold tracking-tight text-ink md:text-3xl">
+              Design preview
+            </h1>
+            <p className="mt-1 text-xs text-ash/90">Mock data · no API</p>
+          </div>
         </div>
-        <div className="h-3 w-3 rounded-full bg-amber-400 animate-pulseSoft" />
+        <div className="mt-1 h-3 w-3 shrink-0 rounded-full bg-amber-400 animate-pulseSoft" />
       </div>
 
       {banner ? (
         <div className="mb-4">
           <InlineNotice text={banner.text} tone={banner.tone} />
         </div>
-      ) : null}
-
-      {stage === "welcome" ? (
-        <section className="animate-rise">
-          <SurfaceCard className="mx-auto max-w-xl">
-            <h2 className="font-[var(--font-heading)] text-3xl text-ink">
-              Explore the product
-            </h2>
-            <p className="mt-2 text-sm leading-6 text-ash">
-              Walk through welcome, sign-in, onboarding, and all main tabs with
-              realistic placeholder content. Set{" "}
-              <code className="rounded bg-slate-800 px-1 py-0.5 text-xs">
-                NEXT_PUBLIC_DESIGN_MOCK=1
-              </code>{" "}
-              to launch this mode.
-            </p>
-            <button
-              className="mt-6 w-full rounded-xl bg-ember px-4 py-3 text-sm font-semibold text-slate-950 transition hover:brightness-105"
-              data-testid="web-design-welcome-continue"
-              onClick={() => setStage("auth")}
-              type="button"
-            >
-              Explore the app
-            </button>
-          </SurfaceCard>
-        </section>
-      ) : null}
-
-      {stage === "auth" ? (
-        <section className="animate-rise">
-          <SurfaceCard className="mx-auto max-w-xl">
-            <h2 className="font-[var(--font-heading)] text-3xl text-ink">
-              Preview sign-in
-            </h2>
-            <p className="mt-2 text-sm text-ash">
-              OAuth is disabled in this build. Continue with a static profile to
-              reach onboarding.
-            </p>
-            <button
-              className="mt-6 w-full rounded-xl bg-ocean px-4 py-3 text-sm font-semibold text-white transition hover:brightness-110"
-              data-testid="web-design-preview-signin"
-              onClick={previewSignIn}
-              type="button"
-            >
-              Continue with preview profile
-            </button>
-          </SurfaceCard>
-        </section>
       ) : null}
 
       {stage === "onboarding" ? (
@@ -404,21 +464,29 @@ export function WebDesignMockApp() {
         <section className="animate-rise">
           <div className="grid gap-5 md:grid-cols-[220px_1fr]">
             <aside className="flex gap-2 overflow-x-auto md:block md:space-y-2">
-              {(Object.keys(tabLabels) as Tab[]).map((tab) => (
-                <button
-                  className={`rounded-xl px-3 py-2 text-sm font-semibold transition-colors duration-200 ease-out ${
-                    activeTab === tab
-                      ? "bg-ember text-slate-950 shadow-sm shadow-ember/25"
-                      : "bg-slate-900 text-slate-200 hover:bg-slate-800"
-                  }`}
-                  data-testid={`web-tab-${tab}`}
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  type="button"
-                >
-                  {tabLabels[tab]}
-                </button>
-              ))}
+              {(Object.keys(tabLabels) as Tab[]).map((tab) => {
+                const TabIcon = designTabIcon[tab];
+                return (
+                  <button
+                    className={`flex w-full min-w-[7.5rem] items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors duration-200 ease-out md:min-w-0 ${
+                      activeTab === tab
+                        ? "bg-ember text-slate-950 shadow-sm shadow-ember/25"
+                        : "border border-slate-700/80 bg-slate-900/90 text-slate-200 hover:border-slate-600 hover:bg-slate-800"
+                    }`}
+                    data-testid={`web-tab-${tab}`}
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    type="button"
+                  >
+                    <TabIcon
+                      aria-hidden
+                      className="h-4 w-4 shrink-0 opacity-90"
+                      strokeWidth={2}
+                    />
+                    {tabLabels[tab]}
+                  </button>
+                );
+              })}
             </aside>
 
             <div className="space-y-4">
