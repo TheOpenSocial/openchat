@@ -87,7 +87,13 @@ run_deploy_commands() {
 
 if [[ "$LOCAL_DEPLOY" == "1" ]]; then
   mkdir -p "$DEPLOY_PATH"
-  rsync -a --delete --exclude ".git" --exclude "node_modules" ./ "$DEPLOY_PATH"/
+  rsync -a --delete \
+    --exclude ".git" \
+    --exclude "node_modules" \
+    --exclude ".env" \
+    --exclude ".env.local" \
+    --exclude ".env.production" \
+    ./ "$DEPLOY_PATH"/
   sync_local_env_var "OPENAI_API_KEY" "${OPENAI_API_KEY:-}"
   cd "$DEPLOY_PATH"
   run_deploy_commands
