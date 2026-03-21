@@ -10,7 +10,7 @@ on:
 
 jobs:
   deploy-production:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, opensocial-prod]
     environment: production
     concurrency:
       group: deploy-production
@@ -19,23 +19,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Prepare SSH key
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p ~/.ssh
-          echo "${PRODUCTION_SSH_KEY}" > ~/.ssh/production_key
-          chmod 600 ~/.ssh/production_key
-        env:
-          PRODUCTION_SSH_KEY: ${{ secrets.PRODUCTION_SSH_KEY }}
-
       - name: Deploy to production
         shell: bash
         env:
-          DEPLOY_HOST: ${{ secrets.PRODUCTION_HOST }}
-          DEPLOY_USER: ${{ secrets.PRODUCTION_USER }}
-          DEPLOY_PATH: ${{ secrets.PRODUCTION_DEPLOY_PATH }}
-          SSH_KEY_PATH: ~/.ssh/production_key
+          LOCAL_DEPLOY: "1"
+          DEPLOY_PATH: /opt/opensocial
+          REMOTE_ENV_FILE: .env.production
           IMAGE_TAG: ${{ inputs.image_tag }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
