@@ -1,7 +1,9 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 
 import { AdminShell } from "./components/AdminShell";
 import { AdminSignIn } from "./components/AdminSignIn";
@@ -284,7 +286,7 @@ function createHistoryId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export default function AdminHome() {
+function AdminHomeContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -3419,5 +3421,13 @@ export default function AdminHome() {
         </section>
       ) : null}
     </AdminShell>
+  );
+}
+
+export default function AdminHome() {
+  return (
+    <Suspense fallback={<AppLoading />}>
+      <AdminHomeContent />
+    </Suspense>
   );
 }

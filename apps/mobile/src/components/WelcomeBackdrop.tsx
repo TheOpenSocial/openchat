@@ -1,5 +1,4 @@
 import { useEvent } from "expo";
-import { LinearGradient } from "expo-linear-gradient";
 import { useVideoPlayer, VideoView, type VideoSource } from "expo-video";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import {
@@ -17,9 +16,9 @@ import {
 } from "../constants/welcome-backdrop";
 
 /** Bundled Pexels-derived loop (15s, ~960p short side, muted); see `docs/welcome-backdrop.md`. */
-// Metro resolves video assets via `require()` (not ESM `import`).
-// eslint-disable-next-line @typescript-eslint/no-require-imports -- asset bundle
 const WELCOME_VIDEO_BUNDLED =
+  // Metro resolves video assets via `require()` (not ESM `import`).
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- asset bundle
   require("../../assets/video/welcome-bg.mp4") as number;
 
 type WelcomeBackdropProps = {
@@ -33,8 +32,8 @@ type WelcomeBackdropProps = {
 };
 
 /**
- * Full-bleed social mood: looping MP4 (bundled by default, or CDN via env) over an Unsplash still,
- * with a bottom-heavy scrim so copy and CTAs stay readable.
+ * Full-bleed background: still + looping muted video (bundled or CDN). Gradient scrim lives in the
+ * sign-in stack (`SignInGradientOverlay`) so the video stays the hero layer.
  */
 export function WelcomeBackdrop({ children, style }: WelcomeBackdropProps) {
   const [videoFailed, setVideoFailed] = useState(false);
@@ -60,6 +59,15 @@ export function WelcomeBackdrop({ children, style }: WelcomeBackdropProps) {
       setVideoFailed(true);
     }
   }, [status]);
+
+  // Initial play() in useVideoPlayer setup can run before the asset is ready; ensure loop + autoplay
+  // once buffered (especially for remote EXPO_PUBLIC_WELCOME_VIDEO_URI).
+  useEffect(() => {
+    if (status !== "readyToPlay") return;
+    player.loop = true;
+    player.muted = true;
+    player.play();
+  }, [status, player]);
 
   const showVideo = !videoFailed;
 
@@ -90,16 +98,9 @@ export function WelcomeBackdrop({ children, style }: WelcomeBackdropProps) {
           {...(Platform.OS === "android"
             ? { surfaceType: "textureView" as const }
             : {})}
+          {...(Platform.OS === "web" ? { playsInline: true as const } : {})}
         />
       ) : null}
-      <LinearGradient
-        accessibilityElementsHidden
-        colors={["rgba(0,0,0,0.2)", "rgba(0,0,0,0.45)", "rgba(0,0,0,0.88)"]}
-        importantForAccessibility="no-hide-descendants"
-        locations={[0, 0.42, 1]}
-        pointerEvents="none"
-        style={StyleSheet.absoluteFill}
-      />
       {children != null ? (
         <View
           collapsable={false}

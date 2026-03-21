@@ -1,23 +1,18 @@
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import { useEffect, useMemo, useState } from "react";
-import {
-  ActivityIndicator,
-  Image,
-  Platform,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { WelcomeBackdrop } from "../components/WelcomeBackdrop";
-import { Button } from "../components/ui/button";
 import { api } from "../lib/api";
 import { showErrorToast } from "../lib/app-toast";
-import logoImage from "../../assets/brand/logo.png";
 import { DESIGN_MOCK_AUTH_CODE } from "../mocks/design-fixtures";
-import { appTheme } from "../theme";
+
+import { SignInActions } from "./sign-in/SignInActions";
+import { SignInGradientOverlay } from "./sign-in/SignInGradientOverlay";
+import { SignInHeroCopy } from "./sign-in/SignInHeroCopy";
+import { signInTheme } from "./sign-in/sign-in-theme";
 
 interface AuthScreenProps {
   onAuthenticated: (code: string) => Promise<void>;
@@ -30,6 +25,10 @@ interface AuthScreenProps {
 
 WebBrowser.maybeCompleteAuthSession();
 
+/**
+ * Premium full-screen sign-in / landing: video hero, cinematic scrim, minimal copy and CTA.
+ * @alias OpenSocialSignInScreen
+ */
 export function AuthScreen({
   allowE2EBypass = false,
   designPreviewMode = false,
@@ -88,97 +87,46 @@ export function AuthScreen({
     }
   };
 
+  const title = designPreviewMode ? "Preview" : "Agentic social.";
+  const subtitle = designPreviewMode
+    ? "Sample flows and data. Stays on this device."
+    : "Start with intent. We find your people.";
+
   return (
     <View className="flex-1 bg-black" testID="auth-screen">
       <WelcomeBackdrop style={StyleSheet.absoluteFillObject}>
+        <SignInGradientOverlay />
         <SafeAreaView
-          className="flex-1"
           edges={["top", "bottom", "left", "right"]}
-          style={styles.authSafeArea}
+          style={styles.safeArea}
         >
-          <View className="flex-1 px-6 pb-8 pt-3">
-            <View className="items-center pt-1">
-              <View style={styles.logoHalo}>
-                <View style={styles.logoSquircle}>
-                  <Image
-                    accessibilityIgnoresInvertColors
-                    accessibilityLabel="OpenSocial"
-                    source={logoImage}
-                    style={styles.logoImage}
-                  />
-                </View>
-              </View>
-              <Text className="mt-4 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/55">
-                OpenSocial
-              </Text>
+          <View style={styles.shell}>
+            <Text accessibilityElementsHidden style={styles.wordmark}>
+              OPENSOCIAL
+            </Text>
+
+            <View style={styles.middle}>
+              <View style={styles.flexSpacer} />
+              <SignInHeroCopy subtitle={subtitle} title={title} />
+              <View style={styles.flexSpacerLarge} />
             </View>
 
-            <View className="mt-6 flex-1 justify-end px-1 pb-2">
-              <Text
-                className="text-center text-[28px] font-semibold leading-[1.14] tracking-tight text-white"
-                style={{ fontFamily: appTheme.fonts.heading }}
-              >
-                {designPreviewMode
-                  ? "Stress-test the whole product"
-                  : "Agentic social."}
-              </Text>
-              <Text className="mt-2.5 max-w-[340px] self-center text-center text-[15px] leading-[22px] text-white/78">
-                {designPreviewMode
-                  ? "Sample people, the agent, every tab. Zero sync, zero account, this device only."
-                  : "Say what you want. We find the right people and help you make a plan."}
-              </Text>
-            </View>
-
-            <View className="mt-6">
-              {designPreviewMode ? (
-                <Button
-                  className="h-12 min-h-[48px] rounded-full border-0 bg-white"
-                  disabled={loading}
-                  label="Continue with preview profile"
-                  labelClassName="text-[15px] font-medium text-[#0d0d0d]"
-                  onPress={() => void onAuthenticated(DESIGN_MOCK_AUTH_CODE)}
-                  testID="auth-design-preview-button"
-                >
-                  {loading ? <ActivityIndicator color="#0d0d0d" /> : null}
-                </Button>
-              ) : (
-                <Button
-                  className="h-12 min-h-[48px] rounded-full border-0 bg-white"
-                  disabled={loading || oauthLoading}
-                  label="Continue with Google"
-                  labelClassName="text-[15px] font-medium text-[#0d0d0d]"
-                  onPress={() => {
-                    void handleGoogleOAuth();
-                  }}
-                  testID="auth-google-button"
-                >
-                  {loading || oauthLoading ? (
-                    <ActivityIndicator color="#0d0d0d" />
-                  ) : null}
-                </Button>
-              )}
-
-              {!designPreviewMode ? (
-                <Text className="mt-3 text-center text-[11px] leading-relaxed text-white/55">
-                  Google opens in your browser, then you’re back here.
-                </Text>
-              ) : (
-                <Text className="mt-4 text-center text-xs leading-relaxed text-white/55">
-                  OAuth is off in this build. Run without design mock to sign in
-                  with Google.
-                </Text>
-              )}
-
-              {!designPreviewMode && allowE2EBypass ? (
-                <View className="mt-6">
-                  <Button
-                    label="E2E bypass sign-in"
-                    onPress={() => onAuthenticated("maestro-e2e-auth-code")}
-                    testID="auth-e2e-bypass-button"
-                    variant="outline"
-                  />
-                </View>
-              ) : null}
+            <View style={styles.footer}>
+              <SignInActions
+                allowE2EBypass={allowE2EBypass}
+                designPreviewMode={designPreviewMode}
+                loading={loading}
+                oauthLoading={oauthLoading}
+                onE2EBypassPress={() =>
+                  void onAuthenticated("maestro-e2e-auth-code")
+                }
+                onGooglePress={() => {
+                  void handleGoogleOAuth();
+                }}
+                onPreviewPress={() =>
+                  void onAuthenticated(DESIGN_MOCK_AUTH_CODE)
+                }
+              />
             </View>
           </View>
         </SafeAreaView>
@@ -187,42 +135,41 @@ export function AuthScreen({
   );
 }
 
-const LOGO_SIZE = 56;
+/** Same screen as {@link AuthScreen}; use either name in imports. */
+export const OpenSocialSignInScreen = AuthScreen;
 
 const styles = StyleSheet.create({
-  authSafeArea: {
+  safeArea: {
     flex: 1,
   },
-  logoHalo: {
-    borderRadius: 26,
-    padding: 2,
-    backgroundColor: "rgba(255,255,255,0.14)",
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.45,
-        shadowRadius: 18,
-      },
-      android: {
-        elevation: 12,
-      },
-      default: {},
-    }),
+  shell: {
+    flex: 1,
+    paddingHorizontal: signInTheme.contentPaddingH,
+    paddingTop: 8,
   },
-  logoSquircle: {
-    alignItems: "center",
+  wordmark: {
+    alignSelf: "center",
+    color: "rgba(255,255,255,0.36)",
+    fontSize: signInTheme.wordmarkSize,
+    fontWeight: "600",
+    letterSpacing: signInTheme.wordmarkSize * 0.22,
+    marginBottom: 4,
+  },
+  middle: {
+    flex: 1,
     justifyContent: "center",
-    borderRadius: 24,
-    overflow: "hidden",
-    padding: 12,
-    backgroundColor: "rgba(14,14,16,0.78)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.28)",
+    minHeight: 0,
   },
-  logoImage: {
-    width: LOGO_SIZE,
-    height: LOGO_SIZE,
+  flexSpacer: {
+    flex: 1.05,
+    minHeight: 0,
+  },
+  flexSpacerLarge: {
+    flex: 1.35,
+    minHeight: 0,
+  },
+  footer: {
+    paddingBottom: 10,
   },
 });
 

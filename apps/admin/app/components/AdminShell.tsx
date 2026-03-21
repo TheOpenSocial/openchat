@@ -6,16 +6,10 @@ import { type ReactNode, useState } from "react";
 import { Badge } from "@/app/components/ui/badge";
 import { Button } from "@/app/components/ui/button";
 import { Separator } from "@/app/components/ui/separator";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/app/components/ui/select";
 import { cn } from "@/app/lib/cn";
 import { adminNavIconFor } from "@/app/lib/admin-nav-icons";
 import { type AppLocale } from "@/app/lib/i18n";
+import { nativeControlClass } from "@/app/lib/form-control-classes";
 
 export function AdminShell({
   navItems,
@@ -186,22 +180,18 @@ export function AdminShell({
               <label className="sr-only" htmlFor="admin-locale">
                 {localeLabel}
               </label>
-              <Select
-                onValueChange={(value) => onLocaleChange(value as AppLocale)}
+              <select
+                aria-label={localeLabel}
+                className={cn(nativeControlClass, "w-[120px]")}
+                id="admin-locale"
+                onChange={(event) =>
+                  onLocaleChange(event.currentTarget.value as AppLocale)
+                }
                 value={locale}
               >
-                <SelectTrigger
-                  aria-label={localeLabel}
-                  className="w-[120px]"
-                  id="admin-locale"
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="en">{localeEnglishLabel}</SelectItem>
-                  <SelectItem value="es">{localeSpanishLabel}</SelectItem>
-                </SelectContent>
-              </Select>
+                <option value="en">{localeEnglishLabel}</option>
+                <option value="es">{localeSpanishLabel}</option>
+              </select>
               <Badge
                 className="max-w-[12rem] truncate font-normal"
                 title={sessionTitle}

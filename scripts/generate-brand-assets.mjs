@@ -31,12 +31,18 @@ async function main() {
   ensureDir(webPublicBrand);
   ensureDir(adminPublicBrand);
 
-  // --- Expo / mobile ---
-  await sharp(svgBuffer).resize(1024, 1024).png().toFile(join(mobileAssets, "icon.png"));
-  await sharp(svgBuffer)
-    .resize(1024, 1024)
-    .png()
-    .toFile(join(mobileAssets, "adaptive-icon.png"));
+  // --- Expo / mobile: solid black plate behind mark (launcher / adaptive icon) ---
+  const iconForeground = await sharp(svgBuffer).resize(1024, 1024).png().toBuffer();
+  async function writeBlackAppIcon(outPath) {
+    await sharp({
+      create: { width: 1024, height: 1024, channels: 4, background: BLACK },
+    })
+      .composite([{ input: iconForeground, gravity: "center" }])
+      .png()
+      .toFile(outPath);
+  }
+  await writeBlackAppIcon(join(mobileAssets, "icon.png"));
+  await writeBlackAppIcon(join(mobileAssets, "adaptive-icon.png"));
 
   const logoCore = await sharp(svgBuffer).resize(720, 720).png().toBuffer();
   await sharp({
