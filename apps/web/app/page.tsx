@@ -7,7 +7,7 @@ import {
 } from "@opensocial/types";
 import { Home, MessageSquare, UserRound } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 
 import { BrandSignInLayout } from "../src/components/BrandSignInLayout";
 import { ChatBubble } from "../src/components/ChatBubble";
@@ -2508,5 +2508,9 @@ export default function Page() {
   if (webDesignMock) {
     return <WebDesignMockApp />;
   }
-  return <ProductionWebPage />;
+  return (
+    <Suspense fallback={null}>
+      <ProductionWebPage />
+    </Suspense>
+  );
 }
