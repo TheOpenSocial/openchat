@@ -313,6 +313,27 @@ describe("AuthService", () => {
     );
   });
 
+  it("builds OAuth start URL with exp+opensocial dev-client redirect in state", () => {
+    const prisma: any = {};
+    const jwtService: any = {
+      sign: vi.fn(),
+      verify: vi.fn(),
+    };
+
+    const service = new AuthService(jwtService, prisma);
+    const mobileRedirectUri = "exp+opensocial://expo-development-client/";
+    const { url } = service.getGoogleOAuthUrl({ mobileRedirectUri });
+
+    const parsed = new URL(url);
+    const state = parsed.searchParams.get("state");
+    expect(state).toBeTruthy();
+
+    const decoded = JSON.parse(
+      Buffer.from(state ?? "", "base64url").toString("utf8"),
+    ) as { mobileRedirectUri?: string };
+    expect(decoded.mobileRedirectUri).toBe(mobileRedirectUri);
+  });
+
   it("builds OAuth start URL with admin dashboard redirect in state for localhost callback", () => {
     const prisma: any = {};
     const jwtService: any = {

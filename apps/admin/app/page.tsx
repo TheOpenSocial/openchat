@@ -76,6 +76,13 @@ interface ModerationFlagRow {
   entityId: string;
   reason: string;
   status: string;
+  assigneeUserId?: string | null;
+  assignmentNote?: string | null;
+  assignedAt?: string | null;
+  lastDecision?: string | null;
+  triageNote?: string | null;
+  triagedByAdminUserId?: string | null;
+  triagedAt?: string | null;
   createdAt: string;
   latestRiskAudit?: {
     id: string;
@@ -113,6 +120,13 @@ interface ModerationSummarySnapshot {
   enforcement: {
     blockedProfiles: number;
     suspendedUsers: number;
+  };
+  analytics: {
+    avgTimeToAssignmentMinutes: number | null;
+    avgTimeToDecisionMinutes: number | null;
+    dismissalRate24h: number;
+    repeatOffenders24h: number;
+    topReasons: Array<{ reason: string; count: number }>;
   };
   recent: {
     flags: ModerationFlagRow[];
@@ -1335,6 +1349,8 @@ export default function AdminHome() {
     setTriageFlagId(flag.id);
     setAssignFlagId(flag.id);
     setTriageReason(flag.reason);
+    setAssignReason(flag.assignmentNote ?? "");
+    setAssigneeUserId(flag.assigneeUserId ?? "");
   };
 
   const assignAgentRiskFlag = () => {
@@ -1480,6 +1496,18 @@ export default function AdminHome() {
         }
       },
     );
+
+  useEffect(() => {
+    if (activeTab !== "moderation") {
+      return;
+    }
+    if (!moderationSummarySnapshot) {
+      void loadModerationSummary();
+    }
+    if (!moderationSettingsSnapshot) {
+      void loadModerationSettings();
+    }
+  }, [activeTab, moderationSettingsSnapshot, moderationSummarySnapshot]);
 
   const postAgentMessage = () => {
     if (!threadId.trim()) {
@@ -2440,6 +2468,46 @@ export default function AdminHome() {
                   </div>
                 ))}
               </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {[
+                  {
+                    label: "Avg assign mins",
+                    value:
+                      moderationSummarySnapshot?.analytics
+                        .avgTimeToAssignmentMinutes ?? "—",
+                  },
+                  {
+                    label: "Avg decision mins",
+                    value:
+                      moderationSummarySnapshot?.analytics
+                        .avgTimeToDecisionMinutes ?? "—",
+                  },
+                  {
+                    label: "Dismissal rate",
+                    value:
+                      moderationSummarySnapshot?.analytics.dismissalRate24h ??
+                      "—",
+                  },
+                  {
+                    label: "Repeat offenders (24h)",
+                    value:
+                      moderationSummarySnapshot?.analytics.repeatOffenders24h ??
+                      "—",
+                  },
+                ].map((item) => (
+                  <div
+                    className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
+                    key={item.label}
+                  >
+                    <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">
+                      {item.label}
+                    </p>
+                    <p className="mt-2 text-2xl font-semibold text-cyan-200">
+                      {item.value}
+                    </p>
+                  </div>
+                ))}
+              </div>
               <div className="mt-4 grid gap-3 lg:grid-cols-2">
                 <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
@@ -2511,6 +2579,23 @@ export default function AdminHome() {
                       )
                     )}
                   </div>
+                </div>
+              </div>
+              <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                  Top reasons
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {(moderationSummarySnapshot?.analytics.topReasons ?? []).map(
+                    (item) => (
+                      <span
+                        className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300"
+                        key={`${item.reason}-${item.count}`}
+                      >
+                        {item.reason} ({item.count})
+                      </span>
+                    ),
+                  )}
                 </div>
               </div>
             </Panel>
@@ -2822,6 +2907,20 @@ export default function AdminHome() {
                       <p className="mt-3 text-sm text-slate-200">
                         {flag.reason}
                       </p>
+                      <div className="mt-2 space-y-1 text-xs text-slate-400">
+                        {flag.assigneeUserId ? (
+                          <p>Assignee: {flag.assigneeUserId}</p>
+                        ) : null}
+                        {flag.assignmentNote ? (
+                          <p>Assignment note: {flag.assignmentNote}</p>
+                        ) : null}
+                        {flag.lastDecision ? (
+                          <p>Last decision: {flag.lastDecision}</p>
+                        ) : null}
+                        {flag.triageNote ? (
+                          <p>Triage note: {flag.triageNote}</p>
+                        ) : null}
+                      </div>
                       <div className="mt-3 flex flex-wrap gap-2">
                         <button
                           className={adminButtonGhostClass}
@@ -2960,10 +3059,26 @@ export default function AdminHome() {
                         {JSON.stringify(flag.latestAssignment.metadata)}
                       </p>
                     ) : null}
+                    {flag.assigneeUserId ? (
+                      <p className="mt-2 text-xs text-slate-400">
+                        Current assignee: {flag.assigneeUserId}
+                      </p>
+                    ) : null}
+                    {flag.assignmentNote ? (
+                      <p className="mt-2 text-xs text-slate-400">
+                        Assignment note: {flag.assignmentNote}
+                      </p>
+                    ) : null}
                     {flag.latestRiskAudit ? (
                       <p className="mt-2 text-xs text-slate-400">
                         Risk audit:{" "}
                         {JSON.stringify(flag.latestRiskAudit.metadata)}
+                      </p>
+                    ) : null}
+                    {flag.lastDecision ? (
+                      <p className="mt-2 text-xs text-slate-400">
+                        Last decision: {flag.lastDecision}
+                        {flag.triageNote ? ` · ${flag.triageNote}` : ""}
                       </p>
                     ) : null}
                     <div className="mt-3 flex flex-wrap gap-2">

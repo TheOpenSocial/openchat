@@ -540,6 +540,7 @@ export class AdminController {
       suspendedUsers,
       latestFlags,
       latestReports,
+      flags24hForAnalytics,
     ] = await Promise.all([
       this.prisma.moderationFlag?.count
         ? this.prisma.moderationFlag.count({ where: { status: "open" } })
@@ -605,7 +606,70 @@ export class AdminController {
             },
           })
         : [],
+      this.prisma.moderationFlag?.findMany
+        ? this.prisma.moderationFlag.findMany({
+            where: { createdAt: { gte: windowStart } },
+            select: {
+              entityId: true,
+              reason: true,
+              status: true,
+              createdAt: true,
+              assignedAt: true,
+              triagedAt: true,
+            },
+          })
+        : [],
     ]);
+
+    const flagsWithAssignment = flags24hForAnalytics.filter(
+      (flag) => flag.assignedAt instanceof Date,
+    );
+    const flagsWithDecision = flags24hForAnalytics.filter(
+      (flag) => flag.triagedAt instanceof Date,
+    );
+    const avgMinutes = (
+      rows: Array<{
+        createdAt: Date;
+        assignedAt?: Date | null;
+        triagedAt?: Date | null;
+      }>,
+      targetKey: "assignedAt" | "triagedAt",
+    ) => {
+      if (rows.length === 0) {
+        return null;
+      }
+      const totalMs = rows.reduce((sum, row) => {
+        const target = row[targetKey];
+        if (!(target instanceof Date)) {
+          return sum;
+        }
+        return sum + (target.getTime() - row.createdAt.getTime());
+      }, 0);
+      return Math.round(totalMs / rows.length / 60_000);
+    };
+    const repeatOffenders = new Set(
+      flags24hForAnalytics
+        .map((flag) => flag.entityId)
+        .filter((entityId, index, all) => all.indexOf(entityId) !== index),
+    ).size;
+    const topReasons = Array.from(
+      flags24hForAnalytics.reduce((counts, flag) => {
+        counts.set(flag.reason, (counts.get(flag.reason) ?? 0) + 1);
+        return counts;
+      }, new Map<string, number>()),
+    )
+      .sort((left, right) => right[1] - left[1])
+      .slice(0, 5)
+      .map(([reason, count]) => ({ reason, count }));
+    const dismissalRate24h =
+      resolvedFlags24h + dismissedFlags24h === 0
+        ? 0
+        : Number(
+            (
+              dismissedFlags24h /
+              (resolvedFlags24h + dismissedFlags24h)
+            ).toFixed(2),
+          );
 
     await this.adminAuditService.recordAction({
       adminUserId: admin.adminUserId,
@@ -629,6 +693,16 @@ export class AdminController {
       enforcement: {
         blockedProfiles,
         suspendedUsers,
+      },
+      analytics: {
+        avgTimeToAssignmentMinutes: avgMinutes(
+          flagsWithAssignment,
+          "assignedAt",
+        ),
+        avgTimeToDecisionMinutes: avgMinutes(flagsWithDecision, "triagedAt"),
+        dismissalRate24h,
+        repeatOffenders24h: repeatOffenders,
+        topReasons,
       },
       recent: {
         flags: latestFlags,

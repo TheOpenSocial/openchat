@@ -24,6 +24,7 @@ It is organized as a production-grade build checklist with:
 Last verified: 2026-03-20
 
 ## Implementation Notes
+- 2026-03-21: Advanced moderation command-center lane with persisted reviewer ownership + analytics (`M-04`/`M-05`). Added `moderation_flags` assignment/decision fields (`assigneeUserId`, notes, timestamps, lastDecision`) plus migration `20260321_moderation_command_center`, updated admin moderation actions to persist assignee/triage state, and extended moderation summary with SLA-style analytics (avg assignment/decision minutes, dismissal rate, repeat offenders, top reasons). Upgraded admin moderation cards to surface assignee/decision context directly alongside queue and agent-risk triage.
 - 2026-03-21: Started moderation command-center v1 pass across backend + admin. Added filtered moderation queue querying (`status`, `entityType`, `reasonContains`), new admin moderation summary/settings APIs (`GET /api/admin/moderation/summary`, `GET /api/admin/moderation/settings`), and upgraded the admin moderation tab into a more operational dashboard with KPI cards, policy/settings visibility, filtered queue review, and faster triage affordances. Added regression coverage in `apps/api/test/admin.controller.spec.ts`.
 - 2026-03-20: Advanced staging hardening lane (`B-10`) with executable incident-readiness automation. Added `scripts/staging-incident-verify.mjs` + root command `pnpm staging:verify:incident` to validate health, `ops/alerts`, `ops/metrics`, launch controls, queue visibility, and runbook file presence with configurable fail gates (`INCIDENT_VERIFY_REQUIRE_HEALTHY`, `INCIDENT_VERIFY_FAIL_ON_WARNING`). Wired manual staging deploy workflow (`deploy-staging.yml`) with optional post-deploy verification input (`run_post_deploy_verification`) and staging secrets (`STAGING_API_BASE_URL`, `STAGING_SMOKE_*`) so go/no-go checks are repeatable.
 - 2026-03-20: Re-ran workspace dependency currency sweep with `pnpm deps:outdated` (`pnpm outdated -r`) and confirmed no remaining outdated dependencies across tracked lanes at this checkpoint. Marked `D-01` complete while keeping future cadence as a recurring maintenance practice.
@@ -1455,6 +1456,6 @@ This section maps the conceptual product surface in [USE_CASES.md](/Users/crucib
 - [x] `M-01` Audit current moderation backend/admin implementation and define moderation-command-center lane.
 - [x] `M-02` Add moderation summary + settings admin APIs and richer moderation-queue filters.
 - [x] `M-03` Upgrade admin moderation tab into a dashboard with KPIs, settings visibility, filtered queue review, and faster triage entry points.
-- [ ] `M-04` Add moderator notes / assignee state as first-class persisted fields instead of audit-log-only metadata.
-- [ ] `M-05` Add moderation analytics slices for false positives, repeat offenders, and SLA/triage latency.
+- [x] `M-04` Add moderator notes / assignee state as first-class persisted fields instead of audit-log-only metadata.
+- [x] `M-05` Add moderation analytics slices for false positives, repeat offenders, and SLA/triage latency.
 - [ ] `M-06` Add staging/prod moderation drill covering report -> flag -> triage -> enforcement -> audit verification.

@@ -290,6 +290,39 @@ export interface DiscoveryAgentRecommendationsResponse {
 
 const REMOTE_API_BASE_URL = "https://api.opensocial.so/api";
 
+/**
+ * Accepts `api.opensocial.so`, `https://api.opensocial.so`, or full `https://…/api`.
+ * Paths default to `/api` when omitted so `fetch(\`\${base}/auth/…\`)` stays correct.
+ */
+function normalizeExpoPublicApiBaseUrl(
+  raw: string | undefined,
+): string | undefined {
+  if (raw == null) {
+    return undefined;
+  }
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  let withScheme = trimmed;
+  if (!/^https?:\/\//i.test(withScheme)) {
+    withScheme = `https://${withScheme}`;
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(withScheme);
+  } catch {
+    return trimmed;
+  }
+
+  const path = parsed.pathname.replace(/\/+$/, "") || "";
+  const suffix = path === "" || path === "/" ? "/api" : path;
+
+  return `${parsed.origin}${suffix}`.replace(/\/+$/, "");
+}
+
 const LOCAL_API_BASE = Platform.select({
   android: "http://10.0.2.2:3000/api",
   default: "http://localhost:3000/api",
@@ -314,11 +347,12 @@ const useLocalApiInDev =
 /**
  * Default: production API (`https://api.opensocial.so/api`) so dev builds and
  * store builds behave the same unless you override.
+ * - Production host only: `EXPO_PUBLIC_API_BASE_URL=api.opensocial.so` (https + `/api` added).
  * - Local API: `EXPO_PUBLIC_API_BASE_URL=http://<host>:3000/api` or
  *   `EXPO_PUBLIC_USE_LOCAL_API=1` (LAN / emulator defaults).
  */
 export const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_BASE_URL ??
+  normalizeExpoPublicApiBaseUrl(process.env.EXPO_PUBLIC_API_BASE_URL) ??
   (__DEV__ && useLocalApiInDev ? devApiBase : REMOTE_API_BASE_URL);
 
 let refreshInFlight: Promise<SessionTokens> | null = null;

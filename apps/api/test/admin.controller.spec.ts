@@ -316,6 +316,10 @@ describe("AdminController", () => {
             status: "open",
             createdAt: new Date("2026-03-20T18:05:00.000Z"),
           }),
+          update: vi.fn().mockResolvedValue({
+            id: DEAD_LETTER_ID,
+            assigneeUserId: ADMIN_USER_ID,
+          }),
         },
         auditLog: {
           create: vi.fn().mockResolvedValue({
@@ -344,6 +348,15 @@ describe("AdminController", () => {
           metadata: expect.objectContaining({
             assigneeUserId: ADMIN_USER_ID,
           }),
+        }),
+      }),
+    );
+    expect(prisma.moderationFlag.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: DEAD_LETTER_ID },
+        data: expect.objectContaining({
+          assigneeUserId: ADMIN_USER_ID,
+          assignmentNote: "manual review ownership",
         }),
       }),
     );
@@ -467,16 +480,44 @@ describe("AdminController", () => {
             .mockResolvedValueOnce(4)
             .mockResolvedValueOnce(2)
             .mockResolvedValueOnce(5),
-          findMany: vi.fn().mockResolvedValue([
-            {
-              id: DEAD_LETTER_ID,
-              entityType: "agent_thread",
-              entityId: AGENT_THREAD_ID,
-              reason: "agent_pre_tools_blocked:blocked_term",
-              status: "open",
-              createdAt: new Date("2026-03-20T18:00:00.000Z"),
-            },
-          ]),
+          findMany: vi
+            .fn()
+            .mockResolvedValueOnce([
+              {
+                id: DEAD_LETTER_ID,
+                entityType: "agent_thread",
+                entityId: AGENT_THREAD_ID,
+                reason: "agent_pre_tools_blocked:blocked_term",
+                status: "open",
+                createdAt: new Date("2026-03-20T18:00:00.000Z"),
+              },
+            ])
+            .mockResolvedValueOnce([
+              {
+                entityId: AGENT_THREAD_ID,
+                reason: "agent_pre_tools_blocked:blocked_term",
+                status: "open",
+                createdAt: new Date("2026-03-20T18:00:00.000Z"),
+                assignedAt: new Date("2026-03-20T18:05:00.000Z"),
+                triagedAt: new Date("2026-03-20T18:12:00.000Z"),
+              },
+              {
+                entityId: AGENT_THREAD_ID,
+                reason: "agent_pre_tools_blocked:blocked_term",
+                status: "dismissed",
+                createdAt: new Date("2026-03-20T19:00:00.000Z"),
+                assignedAt: new Date("2026-03-20T19:06:00.000Z"),
+                triagedAt: new Date("2026-03-20T19:15:00.000Z"),
+              },
+              {
+                entityId: INTENT_ID,
+                reason: "profile_media_review",
+                status: "resolved",
+                createdAt: new Date("2026-03-20T20:00:00.000Z"),
+                assignedAt: new Date("2026-03-20T20:04:00.000Z"),
+                triagedAt: new Date("2026-03-20T20:08:00.000Z"),
+              },
+            ]),
         },
         userReport: {
           count: vi.fn().mockResolvedValueOnce(3).mockResolvedValueOnce(8),
@@ -516,6 +557,13 @@ describe("AdminController", () => {
         dismissedFlags24h: number;
       };
       enforcement: { blockedProfiles: number; suspendedUsers: number };
+      analytics: {
+        avgTimeToAssignmentMinutes: number | null;
+        avgTimeToDecisionMinutes: number | null;
+        dismissalRate24h: number;
+        repeatOffenders24h: number;
+        topReasons: Array<{ reason: string; count: number }>;
+      };
       recent: { flags: unknown[]; reports: unknown[] };
     };
 
@@ -532,6 +580,14 @@ describe("AdminController", () => {
     expect(payload.enforcement).toEqual({
       blockedProfiles: 6,
       suspendedUsers: 2,
+    });
+    expect(payload.analytics.avgTimeToAssignmentMinutes).toBe(5);
+    expect(payload.analytics.avgTimeToDecisionMinutes).toBe(12);
+    expect(payload.analytics.dismissalRate24h).toBeCloseTo(0.33);
+    expect(payload.analytics.repeatOffenders24h).toBe(1);
+    expect(payload.analytics.topReasons[0]).toEqual({
+      reason: "agent_pre_tools_blocked:blocked_term",
+      count: 2,
     });
     expect(payload.recent.flags).toHaveLength(1);
     expect(payload.recent.reports).toHaveLength(1);
