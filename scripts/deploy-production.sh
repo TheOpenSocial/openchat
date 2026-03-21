@@ -5,6 +5,13 @@ LOCAL_DEPLOY="${LOCAL_DEPLOY:-0}"
 
 DEPLOY_PATH="${DEPLOY_PATH:-/opt/opensocial}"
 REMOTE_ENV_FILE="${REMOTE_ENV_FILE:-.env.production}"
+DEPLOY_MODE="${DEPLOY_MODE:-build}"
+API_IMAGE="${API_IMAGE:-}"
+ADMIN_IMAGE="${ADMIN_IMAGE:-}"
+WEB_IMAGE="${WEB_IMAGE:-}"
+REGISTRY_HOST="${REGISTRY_HOST:-ghcr.io}"
+REGISTRY_USERNAME="${REGISTRY_USERNAME:-}"
+REGISTRY_PASSWORD="${REGISTRY_PASSWORD:-}"
 
 sync_remote_env_var() {
   local key="$1"
@@ -79,7 +86,14 @@ PY
 }
 
 run_deploy_commands() {
-  COMPOSE_BAKE=true docker compose -f docker-compose.prod.yml --env-file "$REMOTE_ENV_FILE" build api admin web
+  if [[ "$DEPLOY_MODE" == "images" ]]; then
+    if [[ -n "$REGISTRY_USERNAME" && -n "$REGISTRY_PASSWORD" ]]; then
+      printf "%s" "$REGISTRY_PASSWORD" | docker login "$REGISTRY_HOST" --username "$REGISTRY_USERNAME" --password-stdin
+    fi
+    docker compose -f docker-compose.prod.yml --env-file "$REMOTE_ENV_FILE" pull api admin web
+  else
+    COMPOSE_BAKE=true docker compose -f docker-compose.prod.yml --env-file "$REMOTE_ENV_FILE" build api admin web
+  fi
   docker compose -f docker-compose.prod.yml --env-file "$REMOTE_ENV_FILE" run --rm --entrypoint sh api -lc "corepack enable && pnpm --filter @opensocial/api prisma:migrate:deploy"
   docker compose -f docker-compose.prod.yml --env-file "$REMOTE_ENV_FILE" up -d nginx api admin web valkey
   docker compose -f docker-compose.prod.yml --env-file "$REMOTE_ENV_FILE" ps
@@ -95,6 +109,10 @@ if [[ "$LOCAL_DEPLOY" == "1" ]]; then
     --exclude ".env.production" \
     ./ "$DEPLOY_PATH"/
   sync_local_env_var "OPENAI_API_KEY" "${OPENAI_API_KEY:-}"
+  sync_local_env_var "DATABASE_URL" "${DATABASE_URL:-}"
+  sync_local_env_var "API_IMAGE" "${API_IMAGE:-}"
+  sync_local_env_var "ADMIN_IMAGE" "${ADMIN_IMAGE:-}"
+  sync_local_env_var "WEB_IMAGE" "${WEB_IMAGE:-}"
   cd "$DEPLOY_PATH"
   run_deploy_commands
   exit 0
@@ -112,12 +130,19 @@ ssh_opts=(
 )
 
 sync_remote_env_var "OPENAI_API_KEY" "${OPENAI_API_KEY:-}"
+sync_remote_env_var "DATABASE_URL" "${DATABASE_URL:-}"
+sync_remote_env_var "API_IMAGE" "${API_IMAGE:-}"
+sync_remote_env_var "ADMIN_IMAGE" "${ADMIN_IMAGE:-}"
+sync_remote_env_var "WEB_IMAGE" "${WEB_IMAGE:-}"
 
 ssh "${ssh_opts[@]}" \
   "$REMOTE_TARGET" \
   "set -euo pipefail; \
     cd '$DEPLOY_PATH'; \
-    COMPOSE_BAKE=true docker compose -f docker-compose.prod.yml --env-file '$REMOTE_ENV_FILE' build api admin web; \
+    if [[ '$DEPLOY_MODE' == 'images' ]]; then \
+      if [[ -n '$REGISTRY_USERNAME' && -n '$REGISTRY_PASSWORD' ]]; then printf '%s' '$REGISTRY_PASSWORD' | docker login '$REGISTRY_HOST' --username '$REGISTRY_USERNAME' --password-stdin; fi; \
+      docker compose -f docker-compose.prod.yml --env-file '$REMOTE_ENV_FILE' pull api admin web; \
+    else COMPOSE_BAKE=true docker compose -f docker-compose.prod.yml --env-file '$REMOTE_ENV_FILE' build api admin web; fi; \
     docker compose -f docker-compose.prod.yml --env-file '$REMOTE_ENV_FILE' run --rm --entrypoint sh api -lc 'corepack enable && pnpm --filter @opensocial/api prisma:migrate:deploy'; \
     docker compose -f docker-compose.prod.yml --env-file '$REMOTE_ENV_FILE' up -d nginx api admin web valkey; \
     docker compose -f docker-compose.prod.yml --env-file '$REMOTE_ENV_FILE' ps"

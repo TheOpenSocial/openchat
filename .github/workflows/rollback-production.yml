@@ -3,9 +3,29 @@ name: Rollback Production
 on:
   workflow_dispatch:
     inputs:
-      rollback_image_tag:
-        description: "Container image tag to rollback to"
+      deploy_mode:
+        description: "Rollback from git ref or prebuilt images"
         required: true
+        default: build
+        type: choice
+        options:
+          - build
+          - images
+      rollback_ref:
+        description: "Git ref to rollback to when using build mode"
+        required: false
+        type: string
+      api_image:
+        description: "Prebuilt API image reference when using images mode"
+        required: false
+        type: string
+      admin_image:
+        description: "Prebuilt admin image reference when using images mode"
+        required: false
+        type: string
+      web_image:
+        description: "Prebuilt web image reference when using images mode"
+        required: false
         type: string
 
 jobs:
@@ -36,8 +56,16 @@ jobs:
           DEPLOY_USER: ${{ secrets.PRODUCTION_USER }}
           DEPLOY_PATH: ${{ secrets.PRODUCTION_DEPLOY_PATH }}
           SSH_KEY_PATH: ~/.ssh/production_key
-          ROLLBACK_IMAGE_TAG: ${{ inputs.rollback_image_tag }}
+          DEPLOY_MODE: ${{ inputs.deploy_mode }}
+          ROLLBACK_REF: ${{ inputs.rollback_ref }}
+          API_IMAGE: ${{ inputs.api_image }}
+          ADMIN_IMAGE: ${{ inputs.admin_image }}
+          WEB_IMAGE: ${{ inputs.web_image }}
+          REGISTRY_HOST: ghcr.io
+          REGISTRY_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          REGISTRY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
           set -euo pipefail
           chmod +x scripts/deploy-rollback.sh

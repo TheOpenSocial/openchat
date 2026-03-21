@@ -17,6 +17,10 @@ describe("Deployment pipeline artifacts", () => {
     resolve(root, ".github/workflows/rollback-production.yml"),
     "utf8",
   );
+  const buildImagesWorkflow = readFileSync(
+    resolve(root, ".github/workflows/build-images.yml"),
+    "utf8",
+  );
 
   const stagingScript = readFileSync(
     resolve(root, "scripts/deploy-staging.sh"),
@@ -37,6 +41,7 @@ describe("Deployment pipeline artifacts", () => {
   it("defines staging and production deploy workflows", () => {
     expect(stagingWorkflow).toContain("name: Deploy Staging");
     expect(productionWorkflow).toContain("name: Deploy Production");
+    expect(buildImagesWorkflow).toContain("name: Build Images");
   });
 
   it("passes OpenAI secret from GitHub Actions into deploy/rollback jobs", () => {
@@ -48,6 +53,18 @@ describe("Deployment pipeline artifacts", () => {
     );
     expect(rollbackWorkflow).toContain(
       "OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}",
+    );
+  });
+
+  it("passes DATABASE_URL secret from GitHub Actions into deploy/rollback jobs", () => {
+    expect(stagingWorkflow).toContain(
+      "DATABASE_URL: ${{ secrets.DATABASE_URL }}",
+    );
+    expect(productionWorkflow).toContain(
+      "DATABASE_URL: ${{ secrets.DATABASE_URL }}",
+    );
+    expect(rollbackWorkflow).toContain(
+      "DATABASE_URL: ${{ secrets.DATABASE_URL }}",
     );
   });
 
@@ -67,9 +84,25 @@ describe("Deployment pipeline artifacts", () => {
     );
   });
 
+  it("supports registry-backed image deploys", () => {
+    expect(buildImagesWorkflow).toContain("ghcr.io");
+    expect(stagingWorkflow).toContain("DEPLOY_MODE");
+    expect(productionWorkflow).toContain("DEPLOY_MODE");
+    expect(rollbackWorkflow).toContain("DEPLOY_MODE");
+    expect(stagingWorkflow).toContain("GHCR_TOKEN");
+    expect(productionWorkflow).toContain("GHCR_TOKEN");
+    expect(rollbackWorkflow).toContain("GHCR_TOKEN");
+  });
+
   it("syncs runtime OpenAI secret into remote env file before compose deploy", () => {
     expect(stagingScript).toContain('sync_remote_env_var "OPENAI_API_KEY"');
     expect(productionScript).toContain('sync_remote_env_var "OPENAI_API_KEY"');
     expect(rollbackScript).toContain('sync_remote_env_var "OPENAI_API_KEY"');
+  });
+
+  it("syncs DATABASE_URL into runtime env file before compose deploy", () => {
+    expect(stagingScript).toContain('sync_remote_env_var "DATABASE_URL"');
+    expect(productionScript).toContain('sync_remote_env_var "DATABASE_URL"');
+    expect(rollbackScript).toContain('sync_remote_env_var "DATABASE_URL"');
   });
 });

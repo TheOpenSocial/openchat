@@ -3,9 +3,25 @@ name: Deploy Production
 on:
   workflow_dispatch:
     inputs:
-      image_tag:
-        description: "Container image tag to deploy"
+      deploy_mode:
+        description: "Deploy from local build or prebuilt images"
         required: true
+        default: build
+        type: choice
+        options:
+          - build
+          - images
+      api_image:
+        description: "Optional prebuilt API image reference"
+        required: false
+        type: string
+      admin_image:
+        description: "Optional prebuilt admin image reference"
+        required: false
+        type: string
+      web_image:
+        description: "Optional prebuilt web image reference"
+        required: false
         type: string
 
 jobs:
@@ -25,8 +41,15 @@ jobs:
           LOCAL_DEPLOY: "1"
           DEPLOY_PATH: /opt/opensocial
           REMOTE_ENV_FILE: .env.production
-          IMAGE_TAG: ${{ inputs.image_tag }}
+          DEPLOY_MODE: ${{ inputs.deploy_mode }}
+          API_IMAGE: ${{ inputs.api_image }}
+          ADMIN_IMAGE: ${{ inputs.admin_image }}
+          WEB_IMAGE: ${{ inputs.web_image }}
+          REGISTRY_HOST: ghcr.io
+          REGISTRY_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          REGISTRY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
           set -euo pipefail
           chmod +x scripts/deploy-production.sh

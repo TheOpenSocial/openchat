@@ -3,10 +3,31 @@ name: Deploy Staging
 on:
   workflow_dispatch:
     inputs:
-      image_tag:
-        description: "Container image tag to deploy"
+      deploy_mode:
+        description: "Deploy from local build or prebuilt images"
+        required: false
+        default: build
+        type: choice
+        options:
+          - build
+          - images
+      api_image:
+        description: "Optional prebuilt API image reference"
         required: false
         type: string
+      admin_image:
+        description: "Optional prebuilt admin image reference"
+        required: false
+        type: string
+      web_image:
+        description: "Optional prebuilt web image reference"
+        required: false
+        type: string
+      run_post_deploy_verification:
+        description: "Run incident-readiness verification after deploy"
+        required: false
+        default: true
+        type: boolean
 
 jobs:
   deploy-staging:
@@ -36,9 +57,50 @@ jobs:
           DEPLOY_USER: ${{ secrets.STAGING_USER }}
           DEPLOY_PATH: ${{ secrets.STAGING_DEPLOY_PATH }}
           SSH_KEY_PATH: ~/.ssh/staging_key
-          IMAGE_TAG: ${{ inputs.image_tag != '' && inputs.image_tag || github.sha }}
+          DEPLOY_MODE: ${{ inputs.deploy_mode }}
+          API_IMAGE: ${{ inputs.api_image }}
+          ADMIN_IMAGE: ${{ inputs.admin_image }}
+          WEB_IMAGE: ${{ inputs.web_image }}
+          REGISTRY_HOST: ghcr.io
+          REGISTRY_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          REGISTRY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
           set -euo pipefail
           chmod +x scripts/deploy-staging.sh
           ./scripts/deploy-staging.sh
+
+      - name: Setup Node (post-deploy verification)
+        if: ${{ inputs.run_post_deploy_verification }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Setup pnpm (post-deploy verification)
+        if: ${{ inputs.run_post_deploy_verification }}
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.7.1
+
+      - name: Install deps (post-deploy verification)
+        if: ${{ inputs.run_post_deploy_verification }}
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Verify incident-readiness gates
+        if: ${{ inputs.run_post_deploy_verification }}
+        env:
+          SMOKE_BASE_URL: ${{ secrets.STAGING_API_BASE_URL }}
+          SMOKE_ADMIN_USER_ID: ${{ secrets.STAGING_SMOKE_ADMIN_USER_ID }}
+          SMOKE_ADMIN_ROLE: ${{ secrets.STAGING_SMOKE_ADMIN_ROLE }}
+          SMOKE_ADMIN_API_KEY: ${{ secrets.STAGING_SMOKE_ADMIN_API_KEY }}
+          SMOKE_ACCESS_TOKEN: ${{ secrets.STAGING_SMOKE_ACCESS_TOKEN }}
+          SMOKE_TIMEOUT_MS: "15000"
+          INCIDENT_VERIFY_REQUIRE_HEALTHY: "true"
+          INCIDENT_VERIFY_FAIL_ON_WARNING: "false"
+          INCIDENT_VERIFY_RUNBOOKS: "true"
+        run: |
+          set -euo pipefail
+          pnpm staging:verify:incident

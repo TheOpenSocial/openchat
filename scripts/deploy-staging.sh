@@ -8,6 +8,13 @@ set -euo pipefail
 DEPLOY_PATH="${DEPLOY_PATH:-/opt/opensocial}"
 REMOTE_ENV_FILE="${REMOTE_ENV_FILE:-.env.production}"
 REMOTE_TARGET="$DEPLOY_USER@$DEPLOY_HOST"
+DEPLOY_MODE="${DEPLOY_MODE:-build}"
+API_IMAGE="${API_IMAGE:-}"
+ADMIN_IMAGE="${ADMIN_IMAGE:-}"
+WEB_IMAGE="${WEB_IMAGE:-}"
+REGISTRY_HOST="${REGISTRY_HOST:-ghcr.io}"
+REGISTRY_USERNAME="${REGISTRY_USERNAME:-}"
+REGISTRY_PASSWORD="${REGISTRY_PASSWORD:-}"
 
 ssh_opts=(
   -i "$SSH_KEY_PATH"
@@ -56,12 +63,19 @@ REMOTE_SCRIPT
 }
 
 sync_remote_env_var "OPENAI_API_KEY" "${OPENAI_API_KEY:-}"
+sync_remote_env_var "DATABASE_URL" "${DATABASE_URL:-}"
+sync_remote_env_var "API_IMAGE" "${API_IMAGE:-}"
+sync_remote_env_var "ADMIN_IMAGE" "${ADMIN_IMAGE:-}"
+sync_remote_env_var "WEB_IMAGE" "${WEB_IMAGE:-}"
 
 ssh "${ssh_opts[@]}" \
   "$REMOTE_TARGET" \
   "set -euo pipefail; \
     cd '$DEPLOY_PATH'; \
-    docker compose -f docker-compose.prod.yml --env-file '$REMOTE_ENV_FILE' build api admin web; \
+    if [[ '$DEPLOY_MODE' == 'images' ]]; then \
+      if [[ -n '$REGISTRY_USERNAME' && -n '$REGISTRY_PASSWORD' ]]; then printf '%s' '$REGISTRY_PASSWORD' | docker login '$REGISTRY_HOST' --username '$REGISTRY_USERNAME' --password-stdin; fi; \
+      docker compose -f docker-compose.prod.yml --env-file '$REMOTE_ENV_FILE' pull api admin web; \
+    else docker compose -f docker-compose.prod.yml --env-file '$REMOTE_ENV_FILE' build api admin web; fi; \
     docker compose -f docker-compose.prod.yml --env-file '$REMOTE_ENV_FILE' run --rm api pnpm --filter @opensocial/api prisma:migrate:deploy; \
     docker compose -f docker-compose.prod.yml --env-file '$REMOTE_ENV_FILE' up -d nginx api admin web valkey; \
     docker compose -f docker-compose.prod.yml --env-file '$REMOTE_ENV_FILE' ps"
