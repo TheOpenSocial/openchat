@@ -3,6 +3,7 @@ import {
   loadStoredSession,
   saveStoredSession,
 } from "./session";
+import { webEnv } from "./env";
 
 export interface SessionTokens {
   accessToken: string;
@@ -239,6 +240,13 @@ export interface SearchSnapshotResponse {
   }>;
 }
 
+export interface ProfilePhotoUploadIntent {
+  imageId: string;
+  uploadUrl: string;
+  uploadToken: string;
+  requiredHeaders: Record<string, string>;
+}
+
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 interface ApiEnvelope<T> {
@@ -256,13 +264,7 @@ interface AuthLifecycleHandlers {
   onAuthFailure?: () => void;
 }
 
-const REMOTE_API_BASE_URL = "https://api.opensocial.so/api";
-
-export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ??
-  (process.env.NODE_ENV === "production"
-    ? REMOTE_API_BASE_URL
-    : "http://localhost:3000/api");
+export const API_BASE_URL = webEnv.apiBaseUrl;
 
 let refreshInFlight: Promise<SessionTokens> | null = null;
 let authLifecycleHandlers: AuthLifecycleHandlers = {};
@@ -519,6 +521,14 @@ export const api = {
       accessToken,
     );
   },
+  getProfile(userId: string, accessToken?: string) {
+    return request<Record<string, unknown>>(
+      "GET",
+      `/profiles/${userId}`,
+      undefined,
+      accessToken,
+    );
+  },
   updateProfile(
     userId: string,
     payload: {
@@ -584,6 +594,7 @@ export const api = {
       intentMode: "one_to_one" | "group" | "balanced";
       modality: "online" | "offline" | "either";
       languagePreferences: string[];
+      countryPreferences: string[];
       requireVerifiedUsers: boolean;
       notificationMode: "immediate" | "digest" | "quiet";
       agentAutonomy: "manual" | "suggest_only" | "auto_non_risky";
@@ -687,6 +698,26 @@ export const api = {
       "POST",
       `/inbox/requests/${requestId}/reject`,
       {},
+      accessToken,
+    );
+  },
+  bulkInboxAction(
+    recipientUserId: string,
+    requestIds: string[],
+    payload: { action: "decline" | "snooze"; snoozeMinutes?: number },
+    accessToken?: string,
+  ) {
+    return request<Record<string, unknown>>(
+      "POST",
+      "/inbox/requests/bulk",
+      {
+        recipientUserId,
+        requestIds,
+        action: payload.action,
+        ...(payload.snoozeMinutes
+          ? { snoozeMinutes: payload.snoozeMinutes }
+          : {}),
+      },
       accessToken,
     );
   },
@@ -856,6 +887,40 @@ export const api = {
       payload,
       accessToken,
       fetchOpts,
+    );
+  },
+  reportUser(
+    reporterUserId: string,
+    targetUserId: string,
+    reason: string,
+    details: string,
+    accessToken?: string,
+  ) {
+    return request<Record<string, unknown>>(
+      "POST",
+      "/moderation/reports",
+      {
+        reporterUserId,
+        targetUserId,
+        reason,
+        details,
+      },
+      accessToken,
+    );
+  },
+  blockUser(
+    blockerUserId: string,
+    blockedUserId: string,
+    accessToken?: string,
+  ) {
+    return request<Record<string, unknown>>(
+      "POST",
+      "/moderation/blocks",
+      {
+        blockerUserId,
+        blockedUserId,
+      },
+      accessToken,
     );
   },
   sendDigest(userId: string, accessToken?: string) {
@@ -1116,6 +1181,48 @@ export const api = {
         senderUserId,
         body,
       },
+      accessToken,
+    );
+  },
+  createProfilePhotoUploadIntent(
+    userId: string,
+    payload: {
+      fileName: string;
+      mimeType: "image/jpeg" | "image/png" | "image/webp";
+      byteSize: number;
+    },
+    accessToken?: string,
+  ) {
+    return request<ProfilePhotoUploadIntent>(
+      "POST",
+      `/profiles/${userId}/photos/upload-intent`,
+      payload,
+      accessToken,
+    );
+  },
+  completeProfilePhotoUpload(
+    userId: string,
+    imageId: string,
+    payload: {
+      uploadToken: string;
+      byteSize: number;
+      width?: number;
+      height?: number;
+      sha256?: string;
+    },
+    accessToken?: string,
+  ) {
+    return request<Record<string, unknown>>(
+      "POST",
+      `/profiles/${userId}/photos/${imageId}/complete`,
+      payload,
+      accessToken,
+    );
+  },
+  getPrimaryProfilePhoto(userId: string, accessToken?: string) {
+    return requestNullable<Record<string, unknown>>(
+      "GET",
+      `/profiles/${userId}/photo`,
       accessToken,
     );
   },

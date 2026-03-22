@@ -209,6 +209,35 @@ export class ModerationService {
     return block;
   }
 
+  async unblockUser(blockerUserId: string, blockedUserId: string) {
+    const result = await this.prisma.block.deleteMany({
+      where: { blockerUserId, blockedUserId },
+    });
+    await this.trackAnalyticsEventSafe({
+      eventType: "user_unblocked",
+      actorUserId: blockerUserId,
+      entityType: "block",
+      entityId: blockedUserId,
+      properties: {
+        blockedUserId,
+        removedCount: result.count,
+      },
+    });
+    return {
+      blockerUserId,
+      blockedUserId,
+      removed: result.count > 0,
+      removedCount: result.count,
+    };
+  }
+
+  async listBlocks(blockerUserId: string) {
+    return this.prisma.block.findMany({
+      where: { blockerUserId },
+      orderBy: { createdAt: "desc" },
+    });
+  }
+
   async issueStrike(input: {
     moderatorUserId: string;
     targetUserId: string;

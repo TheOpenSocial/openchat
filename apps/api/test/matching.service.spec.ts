@@ -236,6 +236,172 @@ describe("MatchingService", () => {
     ]);
   });
 
+  it("filters candidates when language preferences do not overlap", async () => {
+    const prisma: any = {
+      user: {
+        findUnique: async () => ({
+          id: "11111111-1111-4111-8111-111111111111",
+          googleSubjectId: "sender-google",
+          email: "sender@example.com",
+          createdAt: new Date("2026-01-01T00:00:00.000Z"),
+          profile: { trustScore: 70, availabilityMode: "now" },
+        }),
+        findMany: async () => [
+          {
+            id: "22222222-2222-4222-8222-222222222222",
+            displayName: "English Speaker",
+            status: "active",
+            createdAt: new Date("2026-01-01T00:00:00.000Z"),
+            email: "en@example.com",
+            googleSubjectId: null,
+            profile: { availabilityMode: "now", trustScore: 70 },
+          },
+          {
+            id: "33333333-3333-4333-8333-333333333333",
+            displayName: "Spanish Speaker",
+            status: "active",
+            createdAt: new Date("2026-01-01T00:00:00.000Z"),
+            email: "es@example.com",
+            googleSubjectId: null,
+            profile: { availabilityMode: "now", trustScore: 70 },
+          },
+        ],
+      },
+      block: { findMany: async () => [] },
+      userInterest: {
+        findMany: async () => [
+          {
+            userId: "22222222-2222-4222-8222-222222222222",
+            normalizedLabel: "design",
+          },
+          {
+            userId: "33333333-3333-4333-8333-333333333333",
+            normalizedLabel: "design",
+          },
+        ],
+      },
+      userTopic: { findMany: async () => [] },
+      intentRequest: { findMany: async () => [] },
+      userPreference: {
+        findMany: async () => [
+          {
+            userId: "11111111-1111-4111-8111-111111111111",
+            key: "global_rules_language_preferences",
+            value: ["es"],
+          },
+          {
+            userId: "22222222-2222-4222-8222-222222222222",
+            key: "global_rules_language_preferences",
+            value: ["en"],
+          },
+          {
+            userId: "33333333-3333-4333-8333-333333333333",
+            key: "global_rules_language_preferences",
+            value: ["es"],
+          },
+        ],
+      },
+    };
+
+    const service = new MatchingService(prisma);
+    const results = await service.retrieveCandidates(
+      "11111111-1111-4111-8111-111111111111",
+      {
+        topics: ["design"],
+        intentType: "chat",
+      },
+      5,
+    );
+
+    expect(results.map((candidate) => candidate.userId)).toEqual([
+      "33333333-3333-4333-8333-333333333333",
+    ]);
+  });
+
+  it("filters candidates when explicit country preferences do not match", async () => {
+    const prisma: any = {
+      user: {
+        findUnique: async () => ({
+          id: "11111111-1111-4111-8111-111111111111",
+          googleSubjectId: "sender-google",
+          email: "sender@example.com",
+          createdAt: new Date("2026-01-01T00:00:00.000Z"),
+          profile: {
+            trustScore: 70,
+            availabilityMode: "now",
+            country: "AR",
+          },
+        }),
+        findMany: async () => [
+          {
+            id: "22222222-2222-4222-8222-222222222222",
+            displayName: "Uruguay Match",
+            status: "active",
+            createdAt: new Date("2026-01-01T00:00:00.000Z"),
+            email: "uy@example.com",
+            googleSubjectId: null,
+            profile: {
+              availabilityMode: "now",
+              trustScore: 70,
+              country: "UY",
+            },
+          },
+          {
+            id: "33333333-3333-4333-8333-333333333333",
+            displayName: "Spain Mismatch",
+            status: "active",
+            createdAt: new Date("2026-01-01T00:00:00.000Z"),
+            email: "es@example.com",
+            googleSubjectId: null,
+            profile: {
+              availabilityMode: "now",
+              trustScore: 70,
+              country: "ES",
+            },
+          },
+        ],
+      },
+      block: { findMany: async () => [] },
+      userInterest: {
+        findMany: async () => [
+          {
+            userId: "22222222-2222-4222-8222-222222222222",
+            normalizedLabel: "founders",
+          },
+          {
+            userId: "33333333-3333-4333-8333-333333333333",
+            normalizedLabel: "founders",
+          },
+        ],
+      },
+      userTopic: { findMany: async () => [] },
+      intentRequest: { findMany: async () => [] },
+      userPreference: {
+        findMany: async () => [
+          {
+            userId: "11111111-1111-4111-8111-111111111111",
+            key: "global_rules_country_preferences",
+            value: ["uy"],
+          },
+        ],
+      },
+    };
+
+    const service = new MatchingService(prisma);
+    const results = await service.retrieveCandidates(
+      "11111111-1111-4111-8111-111111111111",
+      {
+        topics: ["founders"],
+        intentType: "chat",
+      },
+      5,
+    );
+
+    expect(results.map((candidate) => candidate.userId)).toEqual([
+      "22222222-2222-4222-8222-222222222222",
+    ]);
+  });
+
   it("applies offline account-age and location privacy safeguards", async () => {
     const oldAccountDate = new Date(Date.now() - 40 * 24 * 60 * 60_000);
     const newAccountDate = new Date(Date.now() - 2 * 24 * 60 * 60_000);

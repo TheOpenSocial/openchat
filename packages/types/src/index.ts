@@ -293,6 +293,7 @@ export const globalRulesBodySchema = z.object({
   intentMode: z.enum(["one_to_one", "group", "balanced"]),
   modality: z.enum(["online", "offline", "either"]),
   languagePreferences: z.array(z.string().min(2).max(32)).max(10),
+  countryPreferences: z.array(z.string().min(2).max(120)).max(10),
   requireVerifiedUsers: z.boolean(),
   notificationMode: z.enum(["immediate", "digest", "quiet"]),
   agentAutonomy: z.enum(["manual", "suggest_only", "auto_non_risky"]),

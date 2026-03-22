@@ -55,8 +55,6 @@ import {
   type RealtimeConnectionState,
   type RealtimeSession,
 } from "../lib/realtime";
-import { AgentIntentToolbar } from "../components/AgentIntentToolbar";
-import { AgentSuggestionChips } from "../components/AgentSuggestionChips";
 import { AnimatedScreen } from "../components/AnimatedScreen";
 import { AppDrawer } from "../components/AppDrawer";
 import { AppTopBar } from "../components/AppTopBar";
@@ -77,6 +75,7 @@ import {
   DESIGN_MOCK_CHATS,
   DESIGN_MOCK_TELEMETRY_SUMMARY,
 } from "../mocks/design-fixtures";
+import { OpenChatScreen } from "../open-chat/OpenChatScreen";
 import { appTheme } from "../theme";
 import {
   type AgentTimelineMessage,
@@ -92,6 +91,10 @@ export interface HomeScreenProps {
   onResetSession: () => Promise<void>;
   /** Full UI on local fixtures; skips API, realtime, and chat persistence. */
   designMock?: boolean;
+  /** When set, sent as the first agent-thread message once the primary thread is ready (e.g. post-onboarding). */
+  initialAgentMessage?: string | null;
+  /** Called after the seed message attempt finishes (success or error). */
+  onInitialAgentMessageConsumed?: () => void;
 }
 
 type LocalChatThread = StoredChatThread;
@@ -127,7 +130,9 @@ const MOBILE_LOCALE_STORAGE_KEY = "opensocial.mobile.locale.v1";
 
 export function HomeScreen({
   designMock = false,
+  initialAgentMessage = null,
   initialProfile,
+  onInitialAgentMessageConsumed,
   onProfileUpdated,
   onResetSession,
   session,
@@ -625,6 +630,29 @@ export function HomeScreen({
       mounted = false;
     };
   }, [activeTab, session.accessToken, session.userId, skipNetwork]);
+
+  useEffect(() => {
+    if (skipNetwork || designMock || activeTab !== "home") {
+      return;
+    }
+    let cancelled = false;
+    const refreshPending = () => {
+      void api
+        .summarizePendingIntents(session.userId, 8, session.accessToken)
+        .then((pending) => {
+          if (!cancelled) {
+            setPendingIntentSummary(pending);
+          }
+        })
+        .catch(() => {});
+    };
+    refreshPending();
+    const interval = setInterval(refreshPending, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [activeTab, designMock, session.accessToken, session.userId, skipNetwork]);
 
   useEffect(() => {
     if (
@@ -1141,8 +1169,8 @@ export function HomeScreen({
     [designMock, recordTelemetry, session.accessToken, session.userId],
   );
 
-  const sendIntent = async () => {
-    const rawText = draftIntentText.trim();
+  const sendIntent = async (messageOverride?: string) => {
+    const rawText = (messageOverride ?? draftIntentText).trim();
     if (!rawText || sendingIntent) {
       return;
     }
@@ -1157,8 +1185,10 @@ export function HomeScreen({
 
     const imageExtras = parseOptionalImageAttachmentUrl(agentImageUrlDraft);
     setSendingIntent(true);
-    setDraftIntentText("");
-    setAgentImageUrlDraft("");
+    if (messageOverride == null) {
+      setDraftIntentText("");
+      setAgentImageUrlDraft("");
+    }
     const timelineIdBase = Date.now().toString(36);
     const workflowMessageId = `workflow_${timelineIdBase}`;
     const useAgentChat =
@@ -1372,6 +1402,144 @@ export function HomeScreen({
       setSendingIntent(false);
     }
   };
+
+  const onboardingSeedHandledRef = useRef(false);
+
+  useEffect(() => {
+    const seed = initialAgentMessage?.trim();
+    if (!seed || !onInitialAgentMessageConsumed) {
+      return;
+    }
+    if (onboardingSeedHandledRef.current) {
+      return;
+    }
+
+    if (!skipNetwork && !designMock && !enableE2ELocalMode && !netOnline) {
+      onboardingSeedHandledRef.current = true;
+      onInitialAgentMessageConsumed();
+      setBanner({
+        tone: "error",
+        text: t("sendBlockedOffline", locale),
+      });
+      return;
+    }
+
+    if (designMock || enableE2ELocalMode || skipNetwork) {
+      onboardingSeedHandledRef.current = true;
+      if (designMock && seed) {
+        setAgentTimeline((current) => [
+          ...current,
+          { id: `user_onboarding_seed`, role: "user", body: seed },
+          {
+            id: `agent_onboarding_seed`,
+            role: "agent",
+            body: "Got it. I'm looking for people who fit that.",
+          },
+        ]);
+      }
+      onInitialAgentMessageConsumed();
+      return;
+    }
+
+    if (agentThreadLoading) {
+      return;
+    }
+
+    if (!agentThreadId) {
+      onboardingSeedHandledRef.current = true;
+      onInitialAgentMessageConsumed();
+      setBanner({
+        tone: "error",
+        text: "Could not open your agent thread yet. Try sending from the composer below.",
+      });
+      return;
+    }
+
+    onboardingSeedHandledRef.current = true;
+    const timelineIdBase = Date.now().toString(36);
+    const workflowMessageId = `workflow_${timelineIdBase}`;
+    const streamingId = `agent_stream_${timelineIdBase}`;
+    const workflowBody = t("agentWorkflowThinking", locale);
+    const rawText = seed;
+
+    setAgentTimeline((current) => [
+      ...current,
+      { id: `user_${timelineIdBase}`, role: "user", body: rawText },
+      { id: workflowMessageId, role: "workflow", body: workflowBody },
+      { id: streamingId, role: "agent" as const, body: "" },
+    ]);
+
+    const controller = new AbortController();
+    intentAbortRef.current = controller;
+    const traceId =
+      globalThis.crypto?.randomUUID?.() ??
+      `trace-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+
+    void (async () => {
+      try {
+        const sse = openAgentThreadSse(
+          buildAgentThreadStreamUrl(agentThreadId, session.accessToken),
+          (msg) => {
+            const delta = extractResponseTokenDelta(msg, traceId);
+            if (delta === null) {
+              return;
+            }
+            setAgentTimeline((current) =>
+              current.map((row) =>
+                row.id === streamingId
+                  ? { ...row, body: row.body + delta }
+                  : row,
+              ),
+            );
+          },
+        );
+        try {
+          await api.agentThreadRespondStream(
+            agentThreadId,
+            session.userId,
+            rawText,
+            session.accessToken,
+            { signal: controller.signal, traceId },
+          );
+        } finally {
+          sse.close();
+        }
+        const messages = await api.listAgentThreadMessages(
+          agentThreadId,
+          session.accessToken,
+        );
+        setAgentTimeline(agentThreadMessagesToTranscript(messages));
+        hapticImpact();
+        recordTelemetry("agent_turn_completed", {
+          textLength: rawText.length,
+        });
+      } catch (error) {
+        setAgentTimeline((current) => [
+          ...current,
+          {
+            id: `agent_error_${timelineIdBase}`,
+            role: "error",
+            body: `Could not send your first intent. ${String(error)}`,
+          },
+        ]);
+      } finally {
+        intentAbortRef.current = null;
+        onInitialAgentMessageConsumed();
+      }
+    })();
+  }, [
+    agentThreadId,
+    agentThreadLoading,
+    designMock,
+    enableE2ELocalMode,
+    initialAgentMessage,
+    locale,
+    netOnline,
+    onInitialAgentMessageConsumed,
+    session.accessToken,
+    session.userId,
+    skipNetwork,
+  ]);
 
   const reportUser = async (
     targetUserId: string,
@@ -1780,6 +1948,7 @@ export function HomeScreen({
                   : "balanced",
             modality: "either",
             languagePreferences: ["en", "es"],
+            countryPreferences: [],
             requireVerifiedUsers: false,
             notificationMode:
               profileDraft.notificationMode === "digest"
@@ -2215,28 +2384,31 @@ export function HomeScreen({
 
         <AnimatedScreen screenKey={activeTab}>
           {activeTab === "home" ? (
-            <AgentTab
+            <OpenChatScreen
               agentImageUrl={agentImageUrlDraft}
               canRegenerate={agentTimeline.some(
                 (message) => message.role === "user",
               )}
               composerMode={agentComposerMode}
-              locale={locale}
+              decomposeIntent={decomposeIntent}
+              decomposeMaxIntents={decomposeMaxIntents}
               draftMessage={draftIntentText}
-              loading={sendingIntent}
+              e2eSubmitOnReturn={enableE2ELocalMode}
+              locale={locale}
               messages={agentTimeline}
               onAgentImageUrlChange={setAgentImageUrlDraft}
               onComposerModeChange={setAgentComposerMode}
+              onDecomposeIntentChange={setDecomposeIntent}
+              onDecomposeMaxIntentsChange={setDecomposeMaxIntents}
+              onOpenChatsTab={() => setActiveTab("chats")}
               onRegenerate={regenerateLastIntent}
               onSend={sendIntent}
               onStop={cancelIntentSend}
               onVoiceTranscript={(line) => {
                 agentVoiceTranscriptRef.current = line.trim() || null;
               }}
-              decomposeIntent={decomposeIntent}
-              decomposeMaxIntents={decomposeMaxIntents}
-              onDecomposeIntentChange={setDecomposeIntent}
-              onDecomposeMaxIntentsChange={setDecomposeMaxIntents}
+              pendingIntentSummary={pendingIntentSummary}
+              sending={sendingIntent}
               setDraftMessage={setDraftIntentText}
               threadLoading={agentThreadLoading}
             />
@@ -2355,169 +2527,6 @@ export function HomeScreen({
         visible={drawerOpen}
       />
     </SafeAreaView>
-  );
-}
-
-interface AgentTabProps {
-  draftMessage: string;
-  setDraftMessage: (value: string) => void;
-  onSend: () => Promise<void>;
-  onStop: () => void;
-  onRegenerate: () => void;
-  canRegenerate: boolean;
-  messages: AgentTimelineMessage[];
-  loading: boolean;
-  composerMode: "chat" | "intent";
-  locale: AppLocale;
-  onComposerModeChange: (mode: "chat" | "intent") => void;
-  threadLoading: boolean;
-  onVoiceTranscript?: (line: string) => void;
-  agentImageUrl: string;
-  onAgentImageUrlChange: (value: string) => void;
-  decomposeIntent: boolean;
-  decomposeMaxIntents: number;
-  onDecomposeIntentChange: (value: boolean) => void;
-  onDecomposeMaxIntentsChange: (value: number) => void;
-}
-
-function AgentTab({
-  agentImageUrl,
-  canRegenerate,
-  composerMode,
-  locale,
-  draftMessage,
-  loading,
-  messages,
-  onAgentImageUrlChange,
-  decomposeIntent,
-  decomposeMaxIntents,
-  onDecomposeIntentChange,
-  onDecomposeMaxIntentsChange,
-  onComposerModeChange,
-  onVoiceTranscript,
-  onRegenerate,
-  onSend,
-  onStop,
-  setDraftMessage,
-  threadLoading,
-}: AgentTabProps) {
-  const intentTextLength = draftMessage.trim().length;
-  const canSend = intentTextLength > 0 && !loading;
-
-  return (
-    <View className="min-h-0 flex-1 px-4 pb-1 pt-2">
-      <View className="min-h-0 flex-1">
-        <ChatTranscriptList
-          messages={messages}
-          renderBubble={(message) => (
-            <ChatBubble body={message.body} role={message.role} />
-          )}
-        />
-      </View>
-
-      <AgentSuggestionChips
-        onSelect={setDraftMessage}
-        visible={messages.length <= 1}
-      />
-
-      <View className="flex-shrink-0 border-t border-hairline/50 pt-3">
-        <AgentIntentToolbar
-          canRegenerate={canRegenerate}
-          loading={loading}
-          onRegenerate={onRegenerate}
-          onStop={onStop}
-        />
-        <View className="mb-2 flex-row flex-wrap gap-2">
-          <ChoiceChip
-            label={t("agentComposerModeChat", locale)}
-            onPress={() => {
-              onComposerModeChange("chat");
-            }}
-            selected={composerMode === "chat"}
-            testID="agent-mode-chat"
-          />
-          <ChoiceChip
-            label={t("agentComposerModeIntent", locale)}
-            onPress={() => {
-              onComposerModeChange("intent");
-            }}
-            selected={composerMode === "intent"}
-            testID="agent-mode-intent"
-          />
-        </View>
-        {threadLoading ? (
-          <Text className="mb-2 text-[12px] text-muted">
-            {t("agentHistoryLoading", locale)}
-          </Text>
-        ) : null}
-        <Text className="mb-2 text-[12px] font-medium text-muted">
-          {composerMode === "chat"
-            ? t("agentComposerHintChat", locale)
-            : t("agentComposerHintIntent", locale)}
-        </Text>
-        <MessageComposer
-          canSend={canSend}
-          inputTestID="agent-intent-input"
-          maxLength={240}
-          multiline
-          onChangeText={setDraftMessage}
-          onSend={onSend}
-          onVoiceTranscript={onVoiceTranscript}
-          placeholder="Share what you’re looking for…"
-          sendAccessibilityLabel="Send message"
-          sendTestID="agent-send-intent-button"
-          sending={loading}
-          value={draftMessage}
-        />
-        {composerMode === "chat" ? (
-          <>
-            <Text className="mb-1 mt-2 text-[11px] text-muted">
-              {t("agentImageUrlOptional", locale)}
-            </Text>
-            <TextInput
-              autoCapitalize="none"
-              autoCorrect={false}
-              className="mb-1 min-h-[40px] rounded-2xl border border-hairline bg-surface px-3 py-2 text-[14px] text-ink"
-              editable={!loading}
-              keyboardType="url"
-              onChangeText={onAgentImageUrlChange}
-              placeholder="https://…"
-              value={agentImageUrl}
-            />
-          </>
-        ) : (
-          <View className="mb-1 mt-2 rounded-2xl border border-hairline bg-surface px-3 py-2">
-            <Pressable
-              className="mb-2 flex-row items-center justify-between"
-              onPress={() => onDecomposeIntentChange(!decomposeIntent)}
-            >
-              <Text className="text-[12px] text-ink">
-                Split broad message into multiple intents
-              </Text>
-              <Text className="text-[12px] font-semibold text-primary">
-                {decomposeIntent ? "ON" : "OFF"}
-              </Text>
-            </Pressable>
-            <Text className="mb-1 text-[11px] text-muted">
-              Max intents (1-5)
-            </Text>
-            <View className="flex-row gap-2">
-              {[1, 2, 3, 4, 5].map((value) => (
-                <ChoiceChip
-                  key={`max-intents-${value}`}
-                  label={String(value)}
-                  onPress={() => onDecomposeMaxIntentsChange(value)}
-                  selected={decomposeMaxIntents === value}
-                />
-              ))}
-            </View>
-          </View>
-        )}
-        <Text className="mt-1.5 text-[11px] text-muted">
-          {intentTextLength}/240
-        </Text>
-      </View>
-    </View>
   );
 }
 

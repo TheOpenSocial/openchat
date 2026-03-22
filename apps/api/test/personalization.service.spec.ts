@@ -315,6 +315,7 @@ describe("PersonalizationService", () => {
       intentMode: "balanced",
       modality: "either",
       languagePreferences: [],
+      countryPreferences: [],
       requireVerifiedUsers: false,
       notificationMode: "immediate",
       agentAutonomy: "suggest_only",
@@ -329,6 +330,7 @@ describe("PersonalizationService", () => {
       intentMode: "one_to_one",
       modality: "offline",
       languagePreferences: ["en", "es"],
+      countryPreferences: ["ar", "uy"],
       requireVerifiedUsers: true,
       notificationMode: "digest",
       agentAutonomy: "manual",
@@ -351,6 +353,10 @@ describe("PersonalizationService", () => {
           {
             key: "global_rules_language_preferences",
             value: expected.languagePreferences,
+          },
+          {
+            key: "global_rules_country_preferences",
+            value: expected.countryPreferences,
           },
           {
             key: "global_rules_require_verified_users",
@@ -413,7 +419,7 @@ describe("PersonalizationService", () => {
       expected,
     );
 
-    expect(prisma.userPreference.create).toHaveBeenCalledTimes(9);
+    expect(prisma.userPreference.create).toHaveBeenCalledTimes(10);
     expect(result).toEqual(expected);
     expect(analyticsService.trackEvent).toHaveBeenCalledWith(
       expect.objectContaining({

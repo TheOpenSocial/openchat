@@ -326,4 +326,39 @@ describe("ModerationService", () => {
       vi.unstubAllEnvs();
     }
   });
+
+  it("supports unblocking previously blocked users", async () => {
+    const prisma: any = {
+      block: {
+        deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+    };
+    const analyticsService: any = {
+      trackEvent: vi.fn().mockResolvedValue({}),
+    };
+
+    const service = new ModerationService(prisma, analyticsService);
+    const result = await service.unblockUser(
+      "11111111-1111-4111-8111-111111111111",
+      "22222222-2222-4222-8222-222222222222",
+    );
+
+    expect(prisma.block.deleteMany).toHaveBeenCalledWith({
+      where: {
+        blockerUserId: "11111111-1111-4111-8111-111111111111",
+        blockedUserId: "22222222-2222-4222-8222-222222222222",
+      },
+    });
+    expect(result).toEqual(
+      expect.objectContaining({
+        removed: true,
+        removedCount: 1,
+      }),
+    );
+    expect(analyticsService.trackEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "user_unblocked",
+      }),
+    );
+  });
 });

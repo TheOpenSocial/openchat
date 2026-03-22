@@ -44,6 +44,18 @@ export interface GoogleAuthUrlResponse {
   url: string;
 }
 
+export interface ProfilePhotoUploadIntentResult {
+  imageId: string;
+  storageKey: string;
+  mimeType: string;
+  maxByteSize: number;
+  expiresAt: string;
+  uploadToken: string;
+  uploadUrl: string;
+  deliveryBaseUrl: string;
+  requiredHeaders: Record<string, string>;
+}
+
 export interface ProfileCompletion {
   completed: boolean;
   onboardingState: string;
@@ -686,6 +698,40 @@ export const api = {
   ) {
     return request("PUT", `/profiles/${userId}`, payload, accessToken);
   },
+  createProfilePhotoUploadIntent(
+    userId: string,
+    payload: {
+      fileName: string;
+      mimeType: "image/jpeg" | "image/png" | "image/webp";
+      byteSize: number;
+    },
+    accessToken?: string,
+  ) {
+    return request<ProfilePhotoUploadIntentResult>(
+      "POST",
+      `/profiles/${userId}/photos/upload-intent`,
+      payload,
+      accessToken,
+    );
+  },
+  completeProfilePhotoUpload(
+    userId: string,
+    imageId: string,
+    payload: {
+      uploadToken: string;
+      byteSize: number;
+      width?: number;
+      height?: number;
+    },
+    accessToken?: string,
+  ) {
+    return request(
+      "POST",
+      `/profiles/${userId}/photos/${imageId}/complete`,
+      payload,
+      accessToken,
+    );
+  },
   replaceInterests(
     userId: string,
     interests: Array<{
@@ -815,6 +861,7 @@ export const api = {
       intentMode: "one_to_one" | "group" | "balanced";
       modality: "online" | "offline" | "either";
       languagePreferences: string[];
+      countryPreferences: string[];
       requireVerifiedUsers: boolean;
       notificationMode: "immediate" | "digest" | "quiet";
       agentAutonomy: "manual" | "suggest_only" | "auto_non_risky";

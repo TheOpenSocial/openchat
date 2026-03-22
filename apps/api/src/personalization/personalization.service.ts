@@ -18,6 +18,7 @@ export interface GlobalRules {
   intentMode: "one_to_one" | "group" | "balanced";
   modality: "online" | "offline" | "either";
   languagePreferences: string[];
+  countryPreferences: string[];
   requireVerifiedUsers: boolean;
   notificationMode: "immediate" | "digest" | "quiet";
   agentAutonomy: "manual" | "suggest_only" | "auto_non_risky";
@@ -78,6 +79,7 @@ const GLOBAL_RULE_DEFAULTS: GlobalRules = {
   intentMode: "balanced",
   modality: "either",
   languagePreferences: [],
+  countryPreferences: [],
   requireVerifiedUsers: false,
   notificationMode: "immediate",
   agentAutonomy: "suggest_only",
@@ -90,6 +92,7 @@ const GLOBAL_RULE_PREF_KEYS: Record<keyof GlobalRules, string> = {
   intentMode: "global_rules_intent_mode",
   modality: "global_rules_modality",
   languagePreferences: "global_rules_language_preferences",
+  countryPreferences: "global_rules_country_preferences",
   requireVerifiedUsers: "global_rules_require_verified_users",
   notificationMode: "global_rules_notification_mode",
   agentAutonomy: "global_rules_agent_autonomy",
@@ -252,6 +255,10 @@ export class PersonalizationService {
         this.readStringArrayValue(
           byKey.get(GLOBAL_RULE_PREF_KEYS.languagePreferences),
         ) ?? GLOBAL_RULE_DEFAULTS.languagePreferences,
+      countryPreferences:
+        this.readStringArrayValue(
+          byKey.get(GLOBAL_RULE_PREF_KEYS.countryPreferences),
+        ) ?? GLOBAL_RULE_DEFAULTS.countryPreferences,
       requireVerifiedUsers:
         this.readBooleanValue(
           byKey.get(GLOBAL_RULE_PREF_KEYS.requireVerifiedUsers),
@@ -1048,6 +1055,7 @@ export class PersonalizationService {
       `rules.reachability: ${input.globalRules.reachable}`,
       `rules.contact: ${input.globalRules.whoCanContact}`,
       `rules.languages: ${input.globalRules.languagePreferences.join(", ") || "unspecified"}`,
+      `rules.countries: ${input.globalRules.countryPreferences.join(", ") || "unspecified"}`,
     ];
     return lines.join("\n");
   }

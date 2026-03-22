@@ -592,6 +592,7 @@ describe("AgentConversationService", () => {
         intentMode: "group",
         modality: undefined,
         languagePreferences: undefined,
+        countryPreferences: undefined,
         requireVerifiedUsers: undefined,
         notificationMode: undefined,
         agentAutonomy: undefined,
