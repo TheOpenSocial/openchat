@@ -73,6 +73,69 @@ describe("ScheduledTasksService", () => {
     );
   });
 
+  it("computes weekly next run in the scheduled timezone instead of UTC", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-21T00:00:00.000Z"));
+
+    try {
+      const prisma: any = {
+        savedSearch: {
+          findFirst: vi.fn().mockResolvedValue({
+            id: SEARCH_ID,
+            userId: USER_ID,
+            title: "Morning plans",
+            searchType: "discovery_people",
+          }),
+        },
+        scheduledTask: {
+          create: vi.fn().mockResolvedValue({
+            id: TASK_ID,
+            userId: USER_ID,
+            status: "active",
+          }),
+        },
+      };
+      const launchControls: any = {
+        assertActionAllowed: vi.fn().mockResolvedValue(undefined),
+      };
+
+      const service = new ScheduledTasksService(
+        prisma,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        launchControls,
+      );
+
+      await service.createTask(USER_ID, {
+        title: "Saturday morning search",
+        schedule: {
+          kind: "weekly",
+          days: ["sat"],
+          hour: 10,
+          minute: 30,
+          timezone: "America/Argentina/Buenos_Aires",
+        },
+        task: {
+          taskType: "saved_search",
+          config: {
+            savedSearchId: SEARCH_ID,
+            deliveryMode: "agent_thread",
+            minResults: 1,
+            maxResults: 5,
+          },
+        },
+      });
+
+      expect(
+        prisma.scheduledTask.create.mock.calls[0][0].data.nextRunAt.toISOString(),
+      ).toBe("2026-03-21T13:30:00.000Z");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("dispatches due tasks and queues runs", async () => {
     const queue: any = {
       add: vi.fn().mockResolvedValue({}),

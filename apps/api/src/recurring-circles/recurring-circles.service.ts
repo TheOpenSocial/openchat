@@ -14,6 +14,7 @@ import {
 import type { Prisma } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { AgentService } from "../agent/agent.service.js";
+import { computeNextWeeklyOccurrence } from "../common/timezone-scheduling.js";
 import { LaunchControlsService } from "../launch-controls/launch-controls.service.js";
 import { NotificationsService } from "../notifications/notifications.service.js";
 import { PrismaService } from "../database/prisma.service.js";
@@ -526,51 +527,17 @@ export class RecurringCirclesService {
     cadence: RecurringCircleCreateBody["cadence"],
     from: Date,
   ) {
-    const dayMap: Record<string, number> = {
-      sun: 0,
-      mon: 1,
-      tue: 2,
-      wed: 3,
-      thu: 4,
-      fri: 5,
-      sat: 6,
-    };
-
-    const selectedDays = cadence.days
-      .map((day) => dayMap[day])
-      .filter((value) => Number.isInteger(value))
-      .sort((a, b) => a - b);
-
-    if (selectedDays.length === 0) {
+    if (cadence.days.length === 0) {
       throw new ForbiddenException("circle cadence days cannot be empty");
     }
-
-    const base = new Date(from);
-    base.setUTCSeconds(0, 0);
-
-    const start = new Date(base);
-    start.setUTCHours(cadence.hour, cadence.minute, 0, 0);
-
-    for (let offset = 0; offset <= 28; offset += 1) {
-      const candidate = new Date(start);
-      candidate.setUTCDate(start.getUTCDate() + offset);
-      const candidateDow = candidate.getUTCDay();
-      if (!selectedDays.includes(candidateDow)) {
-        continue;
-      }
-      if (candidate <= from) {
-        continue;
-      }
-      const weekDelta = Math.floor(offset / 7);
-      if (weekDelta % cadence.intervalWeeks !== 0) {
-        continue;
-      }
-      return candidate;
-    }
-
-    const fallback = new Date(start);
-    fallback.setUTCDate(start.getUTCDate() + 7 * cadence.intervalWeeks);
-    return fallback;
+    return computeNextWeeklyOccurrence({
+      days: cadence.days,
+      hour: cadence.hour,
+      minute: cadence.minute,
+      timezone: cadence.timezone,
+      from,
+      intervalWeeks: cadence.intervalWeeks,
+    });
   }
 
   private async assertLaunchAction(
