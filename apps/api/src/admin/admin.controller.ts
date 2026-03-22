@@ -13,6 +13,7 @@ import { getQueueToken } from "@nestjs/bullmq";
 import { ModuleRef } from "@nestjs/core";
 import { getOpenAIBudgetGuardrailSnapshot } from "@opensocial/openai";
 import {
+  adminAgentActionDebugQuerySchema,
   adminModerationFlagAssignBodySchema,
   adminModerationAgentRiskQuerySchema,
   adminModerationFlagTriageBodySchema,
@@ -395,6 +396,318 @@ export class AdminController {
     });
 
     return ok(snapshot);
+  }
+
+  @Get("ops/agent-actions")
+  async opsAgentActions(
+    @Headers("x-admin-user-id") adminUserIdHeader?: string,
+    @Headers("x-admin-role") adminRoleHeader?: string,
+    @Query() query?: unknown,
+  ) {
+    const admin = this.parseAdminContext(adminUserIdHeader, adminRoleHeader, [
+      "admin",
+      "support",
+      "moderator",
+    ]);
+    const payload = parseRequestPayload(
+      adminAgentActionDebugQuerySchema,
+      query,
+    );
+    const limit = payload.limit ?? 25;
+
+    const actionRows = this.prisma.auditLog?.findMany
+      ? await this.prisma.auditLog.findMany({
+          where: {
+            action: "agent.tool_action_executed",
+            entityType: "agent_thread",
+            ...(payload.actorUserId
+              ? { actorUserId: payload.actorUserId }
+              : {}),
+            ...(payload.threadId ? { entityId: payload.threadId } : {}),
+          },
+          orderBy: { createdAt: "desc" },
+          take: Math.min(limit * 8, 500),
+          select: {
+            id: true,
+            actorUserId: true,
+            entityId: true,
+            createdAt: true,
+            metadata: true,
+          },
+        })
+      : [];
+
+    const normalizedRows = actionRows
+      .map((row) => {
+        const metadata = this.readJsonObject(row.metadata);
+        return {
+          id: row.id,
+          actorUserId: row.actorUserId,
+          threadId: row.entityId,
+          createdAt: row.createdAt,
+          metadata,
+          traceId: this.readString(metadata["traceId"]),
+          tool: this.readString(metadata["tool"]),
+          status: this.readString(metadata["status"]),
+          role: this.readString(metadata["role"]),
+          reason: this.readString(metadata["reason"]),
+          summary: this.readString(metadata["summary"]),
+          input: metadata["input"],
+          output: metadata["output"],
+        };
+      })
+      .filter((row) => (payload.tool ? row.tool === payload.tool : true))
+      .filter((row) => (payload.status ? row.status === payload.status : true))
+      .filter((row) =>
+        payload.traceId ? row.traceId === payload.traceId : true,
+      )
+      .slice(0, limit);
+
+    const threadIds = Array.from(
+      new Set(
+        normalizedRows
+          .map((row) => row.threadId)
+          .filter((value): value is string => typeof value === "string"),
+      ),
+    );
+    const traceIds = Array.from(
+      new Set(
+        normalizedRows
+          .map((row) => row.traceId)
+          .filter((value): value is string => typeof value === "string"),
+      ),
+    );
+
+    const [checkpoints, threads, userMessages, relatedTraceAuditRows] =
+      await Promise.all([
+        this.prisma.agentPlanCheckpoint?.findMany
+          ? this.prisma.agentPlanCheckpoint.findMany({
+              where: {
+                ...(threadIds.length > 0
+                  ? {
+                      threadId: {
+                        in: threadIds,
+                      },
+                    }
+                  : {}),
+                ...(traceIds.length > 0
+                  ? {
+                      traceId: {
+                        in: traceIds,
+                      },
+                    }
+                  : {}),
+              },
+              orderBy: { createdAt: "desc" },
+              select: {
+                id: true,
+                threadId: true,
+                traceId: true,
+                actionType: true,
+                riskLevel: true,
+                status: true,
+                decisionReason: true,
+                requestedByRole: true,
+                tool: true,
+                createdAt: true,
+                resolvedAt: true,
+              },
+            })
+          : [],
+        this.prisma.agentThread?.findMany
+          ? this.prisma.agentThread.findMany({
+              where: {
+                id: {
+                  in: threadIds,
+                },
+              },
+              select: {
+                id: true,
+                title: true,
+                createdAt: true,
+              },
+            })
+          : [],
+        this.prisma.agentMessage?.findMany
+          ? this.prisma.agentMessage.findMany({
+              where: {
+                threadId: {
+                  in: threadIds,
+                },
+                role: "user",
+              },
+              orderBy: { createdAt: "desc" },
+              take: Math.max(threadIds.length * 3, 20),
+              select: {
+                id: true,
+                threadId: true,
+                content: true,
+                createdAt: true,
+              },
+            })
+          : [],
+        traceIds.length > 0
+          ? this.prisma.auditLog.findMany({
+              where: {
+                action: {
+                  in: [
+                    "matching.candidates_retrieved",
+                    "routing.filters_widened",
+                    "moderation.agent_risk_assessed",
+                    "analytics.event",
+                  ],
+                },
+              },
+              orderBy: { createdAt: "desc" },
+              take: 500,
+              select: {
+                id: true,
+                action: true,
+                entityType: true,
+                entityId: true,
+                metadata: true,
+                createdAt: true,
+              },
+            })
+          : [],
+      ]);
+
+    const latestUserMessageByThreadId = new Map<
+      string,
+      { id: string; content: string; createdAt: Date }
+    >();
+    for (const message of userMessages) {
+      if (!latestUserMessageByThreadId.has(message.threadId)) {
+        latestUserMessageByThreadId.set(message.threadId, message);
+      }
+    }
+
+    const threadById = new Map(threads.map((thread) => [thread.id, thread]));
+    const checkpointByTraceId = new Map<string, (typeof checkpoints)[number]>();
+    for (const checkpoint of checkpoints) {
+      if (!checkpointByTraceId.has(checkpoint.traceId)) {
+        checkpointByTraceId.set(checkpoint.traceId, checkpoint);
+      }
+    }
+
+    const relatedTraceEventsByTraceId = new Map<
+      string,
+      Array<{
+        id: string;
+        action: string;
+        entityType: string;
+        entityId: string | null;
+        createdAt: string;
+        summary: string | null;
+      }>
+    >();
+    for (const row of relatedTraceAuditRows) {
+      const metadata = this.readJsonObject(row.metadata);
+      const traceId = this.readString(metadata["traceId"]);
+      if (!traceId || !traceIds.includes(traceId)) {
+        continue;
+      }
+      const existing = relatedTraceEventsByTraceId.get(traceId) ?? [];
+      existing.push({
+        id: row.id,
+        action: row.action,
+        entityType: row.entityType,
+        entityId: row.entityId,
+        createdAt: row.createdAt.toISOString(),
+        summary:
+          this.readString(metadata["summary"]) ??
+          this.readString(metadata["eventType"]) ??
+          null,
+      });
+      relatedTraceEventsByTraceId.set(traceId, existing.slice(0, 5));
+    }
+
+    await this.adminAuditService.recordAction({
+      adminUserId: admin.adminUserId,
+      role: admin.role,
+      action: "admin.ops_agent_actions_view",
+      entityType: "ops_agent_actions",
+      metadata: {
+        limit,
+        tool: payload.tool ?? null,
+        status: payload.status ?? null,
+        actorUserId: payload.actorUserId ?? null,
+        threadId: payload.threadId ?? null,
+        traceId: payload.traceId ?? null,
+        resultCount: normalizedRows.length,
+      },
+    });
+
+    return ok({
+      filters: {
+        limit,
+        tool: payload.tool ?? null,
+        status: payload.status ?? null,
+        actorUserId: payload.actorUserId ?? null,
+        threadId: payload.threadId ?? null,
+        traceId: payload.traceId ?? null,
+      },
+      items: normalizedRows.map((row) => {
+        const thread = row.threadId
+          ? (threadById.get(row.threadId) ?? null)
+          : null;
+        const latestUserMessage = row.threadId
+          ? (latestUserMessageByThreadId.get(row.threadId) ?? null)
+          : null;
+        const checkpoint = row.traceId
+          ? (checkpointByTraceId.get(row.traceId) ?? null)
+          : null;
+        return {
+          id: row.id,
+          actorUserId: row.actorUserId,
+          threadId: row.threadId,
+          createdAt: row.createdAt.toISOString(),
+          traceId: row.traceId,
+          tool: row.tool,
+          status: row.status,
+          role: row.role,
+          reason: row.reason,
+          summary: row.summary,
+          input: row.input ?? null,
+          output: row.output ?? null,
+          thread: thread
+            ? {
+                title: thread.title ?? null,
+                createdAt: thread.createdAt.toISOString(),
+              }
+            : null,
+          latestUserMessage: latestUserMessage
+            ? {
+                id: latestUserMessage.id,
+                content: latestUserMessage.content,
+                createdAt: latestUserMessage.createdAt.toISOString(),
+              }
+            : null,
+          linkedCheckpoint: checkpoint
+            ? {
+                id: checkpoint.id,
+                actionType: checkpoint.actionType,
+                tool: checkpoint.tool,
+                riskLevel: checkpoint.riskLevel,
+                status: checkpoint.status,
+                decisionReason: checkpoint.decisionReason,
+                requestedByRole: checkpoint.requestedByRole,
+                createdAt: checkpoint.createdAt.toISOString(),
+                resolvedAt: checkpoint.resolvedAt?.toISOString() ?? null,
+              }
+            : null,
+          relatedTraceEvents: row.traceId
+            ? (relatedTraceEventsByTraceId.get(row.traceId) ?? [])
+            : [],
+          replayHint: this.buildAgentActionReplayHint({
+            status: row.status,
+            tool: row.tool,
+            reason: row.reason,
+            checkpointStatus: checkpoint?.status ?? null,
+          }),
+        };
+      }),
+    });
   }
 
   @Get("security/posture")
@@ -1802,6 +2115,47 @@ export class AdminController {
       return false;
     }
     return fallback;
+  }
+
+  private readJsonObject(
+    value: Prisma.JsonValue | null | undefined,
+  ): Record<string, unknown> {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return {};
+    }
+    return value as Record<string, unknown>;
+  }
+
+  private readString(value: unknown): string | null {
+    return typeof value === "string" && value.trim().length > 0 ? value : null;
+  }
+
+  private buildAgentActionReplayHint(args: {
+    status: string | null;
+    tool: string | null;
+    reason: string | null;
+    checkpointStatus: string | null;
+  }) {
+    if (
+      args.status === "denied" &&
+      (args.reason === "human_approval_required" ||
+        args.checkpointStatus === "pending")
+    ) {
+      return "Review the linked approval checkpoint before replaying this action.";
+    }
+    if (args.status === "failed") {
+      return "Inspect related trace events, launch controls, and domain-service availability before replaying.";
+    }
+    if (args.status === "executed") {
+      return "Action already executed. Review related trace events and downstream outcomes before replaying.";
+    }
+    if (args.tool?.startsWith("intro.")) {
+      return "Re-run this intro path only after confirming consent, availability overlap, and matching filters.";
+    }
+    if (args.tool?.startsWith("circle.") || args.tool === "group.plan") {
+      return "Verify group eligibility, current supply, and recent reconciliation events before replaying.";
+    }
+    return "Inspect the linked trace and user context before replaying this action.";
   }
 
   private async measureDbLatencyMs() {

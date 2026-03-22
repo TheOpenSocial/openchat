@@ -630,6 +630,15 @@ export const adminModerationQueueQuerySchema = z.object({
   reasonContains: z.string().min(1).max(160).optional(),
 });
 
+export const adminAgentActionDebugQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+  status: z.enum(["executed", "denied", "failed"]).optional(),
+  tool: z.string().min(1).max(80).optional(),
+  actorUserId: uuidSchema.optional(),
+  threadId: uuidSchema.optional(),
+  traceId: z.string().min(1).max(120).optional(),
+});
+
 export const adminModerationFlagTriageBodySchema = z
   .object({
     action: z.enum(["resolve", "reopen", "escalate_strike", "restrict_user"]),
