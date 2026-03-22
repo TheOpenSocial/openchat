@@ -231,6 +231,148 @@ export class AnalyticsService {
     };
   }
 
+  async getAgentOutcomeMetrics(
+    input: {
+      days?: number;
+      followupEngagementHours?: number;
+    } = {},
+  ) {
+    const days = this.normalizeLimit(input.days, 30, 365);
+    const followupEngagementHours = this.normalizeLimit(
+      input.followupEngagementHours,
+      24,
+      168,
+    );
+    const windowStart = new Date(Date.now() - days * 24 * 60 * 60_000);
+
+    if (!this.prisma.auditLog?.findMany) {
+      return {
+        window: {
+          days,
+          start: windowStart.toISOString(),
+          end: new Date().toISOString(),
+          followupEngagementHours,
+        },
+        summary: {
+          totalActions: 0,
+          executedActions: 0,
+          deniedActions: 0,
+          failedActions: 0,
+        },
+        toolAttempts: [],
+        introRequestAcceptance: {
+          attempted: 0,
+          accepted: 0,
+          pending: 0,
+          rejected: 0,
+          cancelled: 0,
+          expired: 0,
+          settled: 0,
+          acceptanceRate: null,
+          settledRate: null,
+        },
+        circleJoinConversion: {
+          attempted: 0,
+          executed: 0,
+          converted: 0,
+          failed: 0,
+          conversionRate: null,
+        },
+        followupUsefulness: {
+          scheduled: 0,
+          completedRuns: 0,
+          skippedRuns: 0,
+          failedRuns: 0,
+          engagedRuns: 0,
+          completionRate: null,
+          usefulnessRate: null,
+          engagementWindowHours: followupEngagementHours,
+        },
+      };
+    }
+
+    const analyticsRows = await this.prisma.auditLog.findMany({
+      where: {
+        action: ANALYTICS_ACTION,
+        createdAt: {
+          gte: windowStart,
+        },
+      },
+      orderBy: {
+        createdAt: "asc",
+      },
+      take: 5000,
+    });
+
+    const socialActions = analyticsRows
+      .map((row) => this.toAnalyticsEvent(row))
+      .filter((event) => event.eventType === "agent_social_action");
+
+    const toolCounts = new Map<
+      string,
+      { attempted: number; executed: number; denied: number; failed: number }
+    >();
+
+    for (const event of socialActions) {
+      const tool = this.readString(event.properties.tool) ?? "unknown";
+      const status = this.readString(event.properties.status) ?? "unknown";
+      const counts = toolCounts.get(tool) ?? {
+        attempted: 0,
+        executed: 0,
+        denied: 0,
+        failed: 0,
+      };
+      counts.attempted += 1;
+      if (status === "executed") {
+        counts.executed += 1;
+      } else if (status === "denied") {
+        counts.denied += 1;
+      } else if (status === "failed") {
+        counts.failed += 1;
+      }
+      toolCounts.set(tool, counts);
+    }
+
+    const introMetrics =
+      await this.computeAgentIntroAcceptanceMetrics(socialActions);
+    const circleMetrics = this.computeAgentCircleJoinMetrics(socialActions);
+    const followupMetrics = await this.computeAgentFollowupUsefulness(
+      socialActions,
+      analyticsRows,
+      followupEngagementHours,
+    );
+
+    return {
+      window: {
+        days,
+        start: windowStart.toISOString(),
+        end: new Date().toISOString(),
+        followupEngagementHours,
+      },
+      summary: {
+        totalActions: socialActions.length,
+        executedActions: socialActions.filter(
+          (event) => event.properties.status === "executed",
+        ).length,
+        deniedActions: socialActions.filter(
+          (event) => event.properties.status === "denied",
+        ).length,
+        failedActions: socialActions.filter(
+          (event) => event.properties.status === "failed",
+        ).length,
+      },
+      toolAttempts: Array.from(toolCounts.entries())
+        .map(([tool, counts]) => ({
+          tool,
+          ...counts,
+        }))
+        .sort((left, right) => left.tool.localeCompare(right.tool)),
+      introRequestAcceptance: introMetrics,
+      circleJoinConversion: circleMetrics,
+      followupUsefulness: followupMetrics,
+    };
+  }
+
   private async computeIntentTimingMetrics(windowStart: Date) {
     if (!this.prisma.intent?.findMany) {
       return {
@@ -732,6 +874,251 @@ export class AnalyticsService {
 
   private readString(value: unknown): string | null {
     return typeof value === "string" ? value : null;
+  }
+
+  private readBoolean(value: unknown): boolean | null {
+    return typeof value === "boolean" ? value : null;
+  }
+
+  private toAnalyticsEvent(row: {
+    id: string;
+    actorUserId: string | null;
+    entityType: string;
+    entityId: string | null;
+    createdAt: Date;
+    metadata: unknown;
+  }) {
+    const metadata = this.readJsonObject(row.metadata);
+    return {
+      id: row.id,
+      actorUserId: row.actorUserId,
+      entityType: row.entityType,
+      entityId: row.entityId,
+      createdAt: row.createdAt,
+      eventType: this.readString(metadata["eventType"]) ?? "unknown",
+      properties: this.readJsonObject(metadata["properties"]),
+    };
+  }
+
+  private async computeAgentIntroAcceptanceMetrics(
+    socialActions: Array<{
+      actorUserId: string | null;
+      properties: Record<string, unknown>;
+    }>,
+  ) {
+    const introSendEvents = socialActions.filter(
+      (event) => event.properties.tool === "intro.send_request",
+    );
+    const requestIds = introSendEvents
+      .map((event) => this.readString(event.properties.requestId))
+      .filter((value): value is string => Boolean(value));
+    if (requestIds.length === 0 || !this.prisma.intentRequest?.findMany) {
+      return {
+        attempted: introSendEvents.length,
+        accepted: 0,
+        pending: 0,
+        rejected: 0,
+        cancelled: 0,
+        expired: 0,
+        settled: 0,
+        acceptanceRate: introSendEvents.length === 0 ? null : 0,
+        settledRate: introSendEvents.length === 0 ? null : 0,
+      };
+    }
+
+    const requests = await this.prisma.intentRequest.findMany({
+      where: {
+        id: {
+          in: requestIds,
+        },
+      },
+      select: {
+        id: true,
+        status: true,
+      },
+    });
+
+    let accepted = 0;
+    let pending = 0;
+    let rejected = 0;
+    let cancelled = 0;
+    let expired = 0;
+    for (const request of requests) {
+      if (request.status === "accepted") {
+        accepted += 1;
+      } else if (request.status === "pending") {
+        pending += 1;
+      } else if (request.status === "rejected") {
+        rejected += 1;
+      } else if (request.status === "cancelled") {
+        cancelled += 1;
+      } else if (request.status === "expired") {
+        expired += 1;
+      }
+    }
+
+    const attempted = introSendEvents.length;
+    const settled = accepted + rejected + cancelled + expired;
+    return {
+      attempted,
+      accepted,
+      pending,
+      rejected,
+      cancelled,
+      expired,
+      settled,
+      acceptanceRate:
+        attempted === 0 ? null : this.round(accepted / attempted, 4),
+      settledRate: attempted === 0 ? null : this.round(settled / attempted, 4),
+    };
+  }
+
+  private computeAgentCircleJoinMetrics(
+    socialActions: Array<{
+      properties: Record<string, unknown>;
+    }>,
+  ) {
+    const joinEvents = socialActions.filter(
+      (event) => event.properties.tool === "circle.join",
+    );
+    const attempted = joinEvents.length;
+    const executed = joinEvents.filter(
+      (event) => event.properties.status === "executed",
+    ).length;
+    const converted = joinEvents.filter(
+      (event) =>
+        event.properties.status === "executed" &&
+        this.readBoolean(event.properties.joined) === true,
+    ).length;
+    const failed = joinEvents.filter(
+      (event) => event.properties.status === "failed",
+    ).length;
+
+    return {
+      attempted,
+      executed,
+      converted,
+      failed,
+      conversionRate:
+        attempted === 0 ? null : this.round(converted / attempted, 4),
+    };
+  }
+
+  private async computeAgentFollowupUsefulness(
+    socialActions: Array<{
+      actorUserId: string | null;
+      properties: Record<string, unknown>;
+    }>,
+    analyticsRows: Array<{
+      id: string;
+      actorUserId: string | null;
+      entityType: string;
+      entityId: string | null;
+      createdAt: Date;
+      metadata: unknown;
+    }>,
+    followupEngagementHours: number,
+  ) {
+    const followupEvents = socialActions.filter(
+      (event) => event.properties.tool === "followup.schedule",
+    );
+    const scheduled = followupEvents.length;
+    const taskIds = followupEvents
+      .map((event) => this.readString(event.properties.taskId))
+      .filter((value): value is string => Boolean(value));
+
+    if (taskIds.length === 0 || !this.prisma.scheduledTaskRun?.findMany) {
+      return {
+        scheduled,
+        completedRuns: 0,
+        skippedRuns: 0,
+        failedRuns: 0,
+        engagedRuns: 0,
+        completionRate: scheduled === 0 ? null : 0,
+        usefulnessRate: scheduled === 0 ? null : 0,
+        engagementWindowHours: followupEngagementHours,
+      };
+    }
+
+    const runs = await this.prisma.scheduledTaskRun.findMany({
+      where: {
+        scheduledTaskId: {
+          in: taskIds,
+        },
+      },
+      select: {
+        id: true,
+        scheduledTaskId: true,
+        userId: true,
+        status: true,
+        triggeredAt: true,
+        finishedAt: true,
+      },
+      orderBy: {
+        triggeredAt: "asc",
+      },
+    });
+
+    const engagementEvents = analyticsRows
+      .map((row) => this.toAnalyticsEvent(row))
+      .filter((event) =>
+        [
+          "intent_created",
+          "request_sent",
+          "first_message_sent",
+          "message_replied",
+          "connection_created",
+        ].includes(event.eventType),
+      );
+
+    const engagementByUserId = new Map<
+      string,
+      Array<{ createdAt: Date; eventType: string }>
+    >();
+    for (const event of engagementEvents) {
+      if (!event.actorUserId) {
+        continue;
+      }
+      const existing = engagementByUserId.get(event.actorUserId) ?? [];
+      existing.push({
+        createdAt: event.createdAt,
+        eventType: event.eventType,
+      });
+      engagementByUserId.set(event.actorUserId, existing);
+    }
+
+    const completedRuns = runs.filter((run) => run.status === "completed");
+    const skippedRuns = runs.filter((run) => run.status === "skipped").length;
+    const failedRuns = runs.filter((run) => run.status === "failed").length;
+    const engagedRuns = completedRuns.filter((run) => {
+      const userEvents = engagementByUserId.get(run.userId) ?? [];
+      const engagementStart = run.finishedAt ?? run.triggeredAt;
+      const engagementEnd = new Date(
+        engagementStart.getTime() + followupEngagementHours * 60 * 60_000,
+      );
+      return userEvents.some(
+        (event) =>
+          event.createdAt >= engagementStart &&
+          event.createdAt <= engagementEnd,
+      );
+    }).length;
+
+    return {
+      scheduled,
+      completedRuns: completedRuns.length,
+      skippedRuns,
+      failedRuns,
+      engagedRuns,
+      completionRate:
+        scheduled === 0
+          ? null
+          : this.round(completedRuns.length / scheduled, 4),
+      usefulnessRate:
+        completedRuns.length === 0
+          ? null
+          : this.round(engagedRuns / completedRuns.length, 4),
+      engagementWindowHours: followupEngagementHours,
+    };
   }
 
   private toJsonValue(input: Record<string, unknown>): Prisma.InputJsonValue {

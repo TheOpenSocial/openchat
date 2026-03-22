@@ -41,6 +41,51 @@ function createController(overrides: Partial<Record<string, any>> = {}) {
   const databaseLatencyService = overrides.databaseLatencyService ?? {
     measureLatencyMs: vi.fn().mockResolvedValue(42),
   };
+  const analyticsService = overrides.analyticsService ?? {
+    getAgentOutcomeMetrics: vi.fn().mockResolvedValue({
+      window: {
+        days: 30,
+        start: "2026-03-01T00:00:00.000Z",
+        end: "2026-03-31T00:00:00.000Z",
+        followupEngagementHours: 24,
+      },
+      summary: {
+        totalActions: 0,
+        executedActions: 0,
+        deniedActions: 0,
+        failedActions: 0,
+      },
+      toolAttempts: [],
+      introRequestAcceptance: {
+        attempted: 0,
+        accepted: 0,
+        pending: 0,
+        rejected: 0,
+        cancelled: 0,
+        expired: 0,
+        settled: 0,
+        acceptanceRate: null,
+        settledRate: null,
+      },
+      circleJoinConversion: {
+        attempted: 0,
+        executed: 0,
+        converted: 0,
+        failed: 0,
+        conversionRate: null,
+      },
+      followupUsefulness: {
+        scheduled: 0,
+        completedRuns: 0,
+        skippedRuns: 0,
+        failedRuns: 0,
+        engagedRuns: 0,
+        completionRate: null,
+        usefulnessRate: null,
+        engagementWindowHours: 24,
+      },
+    }),
+  };
   const prisma = overrides.prisma ?? {
     user: {
       update: vi.fn(),
@@ -115,6 +160,7 @@ function createController(overrides: Partial<Record<string, any>> = {}) {
     adminAuditService,
     appCacheService,
     databaseLatencyService,
+    analyticsService,
     prisma,
     intentsService,
     moderationService,
@@ -130,6 +176,7 @@ function createController(overrides: Partial<Record<string, any>> = {}) {
       appCacheService,
       databaseLatencyService as DatabaseLatencyService,
       prisma,
+      analyticsService,
       intentsService,
       moderationService,
       personalizationService,
@@ -1048,6 +1095,90 @@ describe("AdminController", () => {
     expect(adminAuditService.recordAction).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "admin.ops_agentic_evals_view",
+      }),
+    );
+  });
+
+  it("returns agent outcome telemetry snapshot for support role", async () => {
+    const { controller, adminAuditService, analyticsService } =
+      createController({
+        analyticsService: {
+          getAgentOutcomeMetrics: vi.fn().mockResolvedValue({
+            window: {
+              days: 14,
+              start: "2026-03-08T00:00:00.000Z",
+              end: "2026-03-22T00:00:00.000Z",
+              followupEngagementHours: 24,
+            },
+            summary: {
+              totalActions: 9,
+              executedActions: 7,
+              deniedActions: 1,
+              failedActions: 1,
+            },
+            toolAttempts: [
+              {
+                tool: "intro.send_request",
+                attempted: 3,
+                executed: 3,
+                denied: 0,
+                failed: 0,
+              },
+            ],
+            introRequestAcceptance: {
+              attempted: 3,
+              accepted: 2,
+              pending: 1,
+              rejected: 0,
+              cancelled: 0,
+              expired: 0,
+              settled: 2,
+              acceptanceRate: 0.6667,
+              settledRate: 0.6667,
+            },
+            circleJoinConversion: {
+              attempted: 2,
+              executed: 2,
+              converted: 1,
+              failed: 0,
+              conversionRate: 0.5,
+            },
+            followupUsefulness: {
+              scheduled: 2,
+              completedRuns: 1,
+              skippedRuns: 0,
+              failedRuns: 0,
+              engagedRuns: 1,
+              completionRate: 0.5,
+              usefulnessRate: 1,
+              engagementWindowHours: 24,
+            },
+          }),
+        },
+      });
+
+    const result = await controller.opsAgentOutcomes(
+      ADMIN_USER_ID,
+      "support",
+      "14",
+    );
+    const payload = result.data as {
+      summary: { totalActions: number };
+      introRequestAcceptance: { accepted: number };
+      circleJoinConversion: { conversionRate: number | null };
+      followupUsefulness: { usefulnessRate: number | null };
+    };
+
+    expect(analyticsService.getAgentOutcomeMetrics).toHaveBeenCalledWith({
+      days: 14,
+    });
+    expect(payload.summary.totalActions).toBe(9);
+    expect(payload.introRequestAcceptance.accepted).toBe(2);
+    expect(payload.circleJoinConversion.conversionRate).toBe(0.5);
+    expect(payload.followupUsefulness.usefulnessRate).toBe(1);
+    expect(adminAuditService.recordAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "admin.ops_agent_outcomes_view",
       }),
     );
   });

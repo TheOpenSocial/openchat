@@ -31,6 +31,7 @@ import { ok } from "../common/api-response.js";
 import { getOpsRuntimeMetricsSnapshot } from "../common/ops-metrics.js";
 import { evaluateSecurityPosture } from "../common/security-posture.js";
 import { parseRequestPayload } from "../common/validation.js";
+import { AnalyticsService } from "../analytics/analytics.service.js";
 import { DatabaseLatencyService } from "../database/database-latency.service.js";
 import { PrismaService } from "../database/prisma.service.js";
 import { IntentsService } from "../intents/intents.service.js";
@@ -54,6 +55,7 @@ export class AdminController {
     private readonly appCacheService: AppCacheService,
     private readonly databaseLatencyService: DatabaseLatencyService,
     private readonly prisma: PrismaService,
+    private readonly analyticsService: AnalyticsService,
     private readonly intentsService: IntentsService,
     private readonly moderationService: ModerationService,
     private readonly personalizationService: PersonalizationService,
@@ -359,6 +361,36 @@ export class AdminController {
       metadata: {
         scenarioCount: snapshot.summary.total,
         passRate: snapshot.summary.passRate,
+      },
+    });
+
+    return ok(snapshot);
+  }
+
+  @Get("ops/agent-outcomes")
+  async opsAgentOutcomes(
+    @Headers("x-admin-user-id") adminUserIdHeader?: string,
+    @Headers("x-admin-role") adminRoleHeader?: string,
+    @Query("days") daysParam?: string,
+  ) {
+    const admin = this.parseAdminContext(adminUserIdHeader, adminRoleHeader, [
+      "admin",
+      "support",
+      "moderator",
+    ]);
+    const days = Number(daysParam ?? 30);
+    const snapshot = await this.analyticsService.getAgentOutcomeMetrics({
+      days: Number.isFinite(days) ? days : 30,
+    });
+
+    await this.adminAuditService.recordAction({
+      adminUserId: admin.adminUserId,
+      role: admin.role,
+      action: "admin.ops_agent_outcomes_view",
+      entityType: "ops_agent_outcomes",
+      metadata: {
+        totalActions: snapshot.summary.totalActions,
+        toolCount: snapshot.toolAttempts.length,
       },
     });
 

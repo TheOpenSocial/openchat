@@ -17,6 +17,7 @@ import {
   Optional,
 } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
+import { AnalyticsService } from "../analytics/analytics.service.js";
 import { AppCacheService } from "../common/app-cache.service.js";
 import { PrismaService } from "../database/prisma.service.js";
 import { ModerationService } from "../moderation/moderation.service.js";
@@ -96,6 +97,8 @@ export class AgentConversationService {
     private readonly prisma: PrismaService,
     private readonly agentService: AgentService,
     private readonly appCacheService: AppCacheService,
+    @Optional()
+    private readonly analyticsService?: AnalyticsService,
     @Optional()
     private readonly moderationService?: ModerationService,
     @Optional()
@@ -1957,28 +1960,84 @@ export class AgentConversationService {
     }
 
     if (!this.prisma.auditLog?.create) {
-      return;
+      if (!this.analyticsService) {
+        return;
+      }
     }
 
-    await this.prisma.auditLog.create({
-      data: {
-        actorUserId: input.userId,
-        actorType: "user",
-        action: "agent.tool_action_executed",
-        entityType: "agent_thread",
-        entityId: input.threadId,
-        metadata: {
-          traceId: input.traceId,
-          role: input.call.role,
-          tool: input.call.tool,
-          status: input.toolResult.status,
-          reason: input.toolResult.reason ?? null,
-          input: input.call.input,
-          output: this.compactToolActionOutput(input.toolResult.output),
-          summary: actionSummary,
-        } as Prisma.InputJsonValue,
+    const compactOutput = this.compactToolActionOutput(input.toolResult.output);
+
+    if (this.prisma.auditLog?.create) {
+      await this.prisma.auditLog.create({
+        data: {
+          actorUserId: input.userId,
+          actorType: "user",
+          action: "agent.tool_action_executed",
+          entityType: "agent_thread",
+          entityId: input.threadId,
+          metadata: {
+            traceId: input.traceId,
+            role: input.call.role,
+            tool: input.call.tool,
+            status: input.toolResult.status,
+            reason: input.toolResult.reason ?? null,
+            input: input.call.input,
+            output: compactOutput,
+            summary: actionSummary,
+          } as Prisma.InputJsonValue,
+        },
+      });
+    }
+
+    await this.analyticsService?.trackEvent({
+      eventType: "agent_social_action",
+      actorUserId: input.userId,
+      entityType: "agent_thread",
+      entityId: input.threadId,
+      properties: {
+        traceId: input.traceId,
+        role: input.call.role,
+        tool: input.call.tool,
+        status: input.toolResult.status,
+        reason: input.toolResult.reason ?? null,
+        summary: actionSummary,
+        ...this.extractToolTelemetryProperties(compactOutput),
       },
     });
+  }
+
+  private extractToolTelemetryProperties(output: unknown) {
+    if (!output || typeof output !== "object" || Array.isArray(output)) {
+      return {};
+    }
+
+    const value = output as Record<string, unknown>;
+    return {
+      requestId: this.readTelemetryString(value.requestId),
+      intentId: this.readTelemetryString(value.intentId),
+      circleId: this.readTelemetryString(value.circleId),
+      taskId: this.readTelemetryString(value.taskId),
+      threadId: this.readTelemetryString(value.threadId),
+      sent: this.readTelemetryBoolean(value.sent),
+      accepted: this.readTelemetryBoolean(value.accepted),
+      rejected: this.readTelemetryBoolean(value.rejected),
+      retracted: this.readTelemetryBoolean(value.retracted),
+      created: this.readTelemetryBoolean(value.created),
+      joined: this.readTelemetryBoolean(value.joined),
+      patched: this.readTelemetryBoolean(value.patched),
+      scheduled: this.readTelemetryBoolean(value.scheduled),
+      persisted: this.readTelemetryBoolean(value.persisted),
+      planned: this.readTelemetryBoolean(value.planned),
+      statusDetail: this.readTelemetryString(value.status),
+    };
+  }
+
+  private readTelemetryString(value: unknown) {
+    return typeof value === "string" ? value : null;
+  }
+
+  private readTelemetryBoolean(value: unknown) {
+    return typeof value === "boolean" ? value : null;
   }
 
   private isVisibleSocialActionTool(tool: AgentTool) {
