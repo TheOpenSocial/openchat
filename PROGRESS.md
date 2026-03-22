@@ -24,6 +24,7 @@ It is organized as a production-grade build checklist with:
 Last verified: 2026-03-20
 
 ## Implementation Notes
+- 2026-03-22: Audited client connectivity resilience. Web/mobile already detect online/offline state and block intent/chat sends while offline, and auth refresh uses an in-flight guard, but there is not yet a first-class client outbox, transient retry/backoff policy, or resumable SSE/chat sync recovery layer. Added a dedicated pending lane to track offline/retry hardening before broader mobile/web scale-up.
 - 2026-03-22: Completed `AH-06` operator replay/debug coverage for agent-issued social actions. Finished the admin debug surface for `GET /api/admin/ops/agent-actions` so blocked or failed tools now reconstruct from audit traces, linked approval checkpoints, latest user turn, and related trace events with concrete replay guidance. Added regression coverage in `apps/api/test/admin.controller.spec.ts`.
 - 2026-03-22: Closed a backend matching/trust gap that surfaced during the policy audit. Added unblock support (`DELETE /api/moderation/blocks/:blockedUserId`, `GET /api/moderation/users/:userId/blocks`), introduced explicit `countryPreferences` in global rules, and upgraded `MatchingService` hard filters so explicit language and country preferences now actually gate matches instead of being stored-only metadata.
 - 2026-03-22: Completed `AH-05` outcome telemetry + eval coverage for agent-issued social actions. The agent runtime now emits structured `agent_social_action` analytics for visible social tools, analytics now computes bounded admin-facing outcome metrics for intro acceptance, circle-join conversion, and follow-up usefulness, and admin ops gained a dedicated snapshot surface (`GET /api/admin/ops/agent-outcomes`) plus eval coverage for telemetry health in `AgenticEvalsService`.
@@ -1507,3 +1508,17 @@ This section maps the conceptual product surface in [USE_CASES.md](/Users/crucib
 - Users can clearly control who they are matched with and why, especially across language, region, and safety-sensitive preferences.
 - Matching quality improves with real behavioral reliability signals instead of relying only on declared interests.
 - The agent adapts honestly in sparse markets and operators can validate trust-sensitive flows before scaling a region.
+
+### 35.13 Client Resilience and Offline Lane
+
+- [ ] `CR-01` Add a shared client retry policy for transient network failures with bounded exponential backoff, cancellation, and idempotent request guards.
+- [ ] `CR-02` Add a persistent offline outbox for high-value user mutations (`intent send`, `agent chat send`, `request actions`, `profile/settings updates`) on mobile first, then web where appropriate.
+- [ ] `CR-03` Add reconnect/resume logic for agent SSE and chat sync so clients can recover after internet loss without losing streamed output or unread state.
+- [ ] `CR-04` Add optimistic pending-state UX for offline or retrying actions so users can see what is queued, failed, retried, or needs manual retry.
+- [ ] `CR-05` Add conflict-resolution and dedupe rules for replayed client mutations, including safe idempotency keys across reconnects and app restarts.
+- [ ] `CR-06` Add offline-aware bootstrap/auth handling so stored sessions, onboarding completion, and profile restoration degrade gracefully when startup happens without internet.
+
+**Acceptance criteria**
+- Losing connectivity does not silently drop core user actions or force the user to rewrite intent/chat messages.
+- Reconnect flows resume streaming and chat synchronization predictably with clear user feedback.
+- Client retries stay bounded, observable, and safe against duplicate mutation side effects.
