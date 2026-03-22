@@ -1,5 +1,5 @@
 import { BullModule } from "@nestjs/bullmq";
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { AgentModule } from "../agent/agent.module.js";
 import { DiscoveryModule } from "../discovery/discovery.module.js";
 import { LaunchControlsModule } from "../launch-controls/launch-controls.module.js";
@@ -12,7 +12,7 @@ import { ScheduledTasksService } from "./scheduled-tasks.service.js";
     BullModule.registerQueue({ name: "scheduled-tasks" }),
     DiscoveryModule,
     NotificationsModule,
-    AgentModule,
+    forwardRef(() => AgentModule),
     LaunchControlsModule,
   ],
   providers: [ScheduledTasksService],

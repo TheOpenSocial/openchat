@@ -20,6 +20,7 @@ import { randomUUID } from "node:crypto";
 import { AppCacheService } from "../common/app-cache.service.js";
 import { PrismaService } from "../database/prisma.service.js";
 import { ModerationService } from "../moderation/moderation.service.js";
+import { AgentOutcomeToolsService } from "./agent-outcome-tools.service.js";
 import { AgentService } from "./agent.service.js";
 
 type AgentAttachmentInput =
@@ -56,6 +57,34 @@ type ModerationGateResult = {
 
 type AgentPlanCheckpointStatus = "pending" | "approved" | "rejected";
 
+type SocialContextPacket = {
+  freshOnboardingTurn: boolean;
+  profile: {
+    displayName: string | null;
+    bio: string | null;
+    city: string | null;
+    country: string | null;
+    onboardingState: string | null;
+    availabilityMode: string | null;
+  };
+  interests: string[];
+  goals: string[];
+  preferences: {
+    intentMode: string;
+    modality: string;
+    reachable: string;
+    notificationMode: string;
+    memoryMode: string;
+    timezone: string;
+  };
+  thread: {
+    title: string | null;
+    ageMinutes: number | null;
+    existingMessageCount: number;
+  };
+  memoryHighlights: string[];
+};
+
 @Injectable()
 export class AgentConversationService {
   private readonly logger = new Logger(AgentConversationService.name);
@@ -69,6 +98,8 @@ export class AgentConversationService {
     private readonly appCacheService: AppCacheService,
     @Optional()
     private readonly moderationService?: ModerationService,
+    @Optional()
+    private readonly agentOutcomeToolsService?: AgentOutcomeToolsService,
   ) {}
 
   async listPlanCheckpoints(input: {
@@ -212,11 +243,17 @@ export class AgentConversationService {
     let toolCalls: ConversationToolCall[] = [];
     let delegatedSpecialistSet = new Set<OpenAIAgentRole>();
     let responseGoal: string | null = null;
+    let socialContext: SocialContextPacket | null = null;
 
     if (
       preToolRisk.decision === "clean" &&
       this.shouldUseSimpleFastPath(userContent, multimodalContext)
     ) {
+      socialContext = await this.buildSocialContextPacket({
+        userId: input.userId,
+        threadId: input.threadId,
+        existingMessageCount: 0,
+      });
       responseGoal =
         "Answer directly with a concise, helpful response. Ask at most one clarifying question only if it is essential.";
       await this.appendOrchestrationStep(
@@ -243,6 +280,11 @@ export class AgentConversationService {
       });
 
       const threadSummary = this.buildThreadSummary(threadMessages);
+      socialContext = await this.buildSocialContextPacket({
+        userId: input.userId,
+        threadId: input.threadId,
+        existingMessageCount: threadMessages.length,
+      });
 
       const allowedSpecialists: OpenAIAgentRole[] = [
         "intent_parser",
@@ -256,6 +298,7 @@ export class AgentConversationService {
         {
           userMessage: userContent,
           threadSummary,
+          ...(socialContext ? { socialContext } : {}),
           multimodalContext: hasMultimodal
             ? {
                 voiceTranscript: multimodalContext.voiceTranscript,
@@ -355,6 +398,7 @@ export class AgentConversationService {
     const responseInput = {
       userMessage: userContent,
       ...(responseGoal ? { responseGoal } : {}),
+      ...(socialContext ? { socialContext } : {}),
       multimodalContext: hasMultimodal
         ? {
             voiceTranscript: multimodalContext.voiceTranscript,
@@ -538,6 +582,144 @@ export class AgentConversationService {
         chunkCount: streamedTokenChunkCount,
       },
     };
+  }
+
+  private async buildSocialContextPacket(input: {
+    userId: string;
+    threadId: string;
+    existingMessageCount: number;
+  }): Promise<SocialContextPacket> {
+    const globalRuleKeys = [
+      "global_rules_intent_mode",
+      "global_rules_modality",
+      "global_rules_reachable",
+      "global_rules_notification_mode",
+      "global_rules_memory_mode",
+      "global_rules_timezone",
+    ];
+
+    const [user, profile, interests, preferences, thread, retrievalDocs] =
+      await Promise.all([
+        this.prisma.user.findUnique({
+          where: { id: input.userId },
+          select: {
+            displayName: true,
+          },
+        }),
+        this.prisma.userProfile.findUnique({
+          where: { userId: input.userId },
+          select: {
+            bio: true,
+            city: true,
+            country: true,
+            onboardingState: true,
+            availabilityMode: true,
+          },
+        }),
+        this.prisma.userInterest.findMany({
+          where: { userId: input.userId },
+          orderBy: [{ createdAt: "desc" }],
+          take: 8,
+          select: {
+            label: true,
+            kind: true,
+          },
+        }),
+        this.prisma.userPreference.findMany({
+          where: {
+            userId: input.userId,
+            key: { in: globalRuleKeys },
+          },
+          select: {
+            key: true,
+            value: true,
+          },
+        }),
+        this.prisma.agentThread.findUnique({
+          where: { id: input.threadId },
+          select: {
+            title: true,
+            createdAt: true,
+          },
+        }),
+        this.prisma.retrievalDocument.findMany({
+          where: {
+            userId: input.userId,
+            docType: {
+              in: ["profile_summary", "preference_memory"],
+            },
+          },
+          orderBy: [{ createdAt: "desc" }],
+          take: 2,
+          select: {
+            docType: true,
+            content: true,
+          },
+        }),
+      ]);
+
+    const prefMap = new Map(preferences.map((pref) => [pref.key, pref.value]));
+    const readStringPref = (key: string, fallback: string) => {
+      const value = prefMap.get(key);
+      return typeof value === "string" && value.trim().length > 0
+        ? value
+        : fallback;
+    };
+    const memoryHighlights = retrievalDocs
+      .map((doc) => this.toShortMemoryHighlight(doc.content))
+      .filter((value): value is string => value.length > 0)
+      .slice(0, 2);
+    const goals = interests
+      .filter((interest) => interest.kind.toLowerCase() !== "topic")
+      .map((interest) => interest.label);
+
+    return {
+      freshOnboardingTurn: input.existingMessageCount <= 1,
+      profile: {
+        displayName: user?.displayName ?? null,
+        bio: profile?.bio ?? null,
+        city: profile?.city ?? null,
+        country: profile?.country ?? null,
+        onboardingState: profile?.onboardingState ?? null,
+        availabilityMode: profile?.availabilityMode ?? null,
+      },
+      interests: interests
+        .filter((interest) => interest.kind.toLowerCase() === "topic")
+        .map((interest) => interest.label),
+      goals,
+      preferences: {
+        intentMode: readStringPref("global_rules_intent_mode", "balanced"),
+        modality: readStringPref("global_rules_modality", "either"),
+        reachable: readStringPref("global_rules_reachable", "always"),
+        notificationMode: readStringPref(
+          "global_rules_notification_mode",
+          "immediate",
+        ),
+        memoryMode: readStringPref("global_rules_memory_mode", "standard"),
+        timezone: readStringPref("global_rules_timezone", "UTC"),
+      },
+      thread: {
+        title: thread?.title ?? null,
+        ageMinutes: thread?.createdAt
+          ? Math.max(
+              0,
+              Math.round((Date.now() - thread.createdAt.getTime()) / 60_000),
+            )
+          : null,
+        existingMessageCount: input.existingMessageCount,
+      },
+      memoryHighlights,
+    };
+  }
+
+  private toShortMemoryHighlight(content: string) {
+    const normalized = content.replace(/\s+/g, " ").trim();
+    if (!normalized) {
+      return "";
+    }
+    return normalized.length <= 160
+      ? normalized
+      : `${normalized.slice(0, 157)}...`;
   }
 
   private async executeToolCall(
@@ -784,6 +966,159 @@ export class AgentConversationService {
             tool: call.tool,
             status: "executed",
             output: documents,
+          };
+        }
+        case "candidate.search": {
+          if (!this.agentOutcomeToolsService) {
+            return {
+              role: call.role,
+              tool: call.tool,
+              status: "failed",
+              reason: "agent_outcome_tools_unavailable",
+            };
+          }
+          const text =
+            this.readString(call.input.text) ??
+            this.readString(call.input.intentText) ??
+            "";
+          if (!text) {
+            return {
+              role: call.role,
+              tool: call.tool,
+              status: "failed",
+              reason: "missing_search_text",
+            };
+          }
+          const result = await this.agentOutcomeToolsService.searchCandidates({
+            userId,
+            traceId,
+            text,
+            take: this.readIntInRange(call.input.take, 1, 10, 5),
+            parsedIntent: this.coerceParsedIntent(call.input.parsedIntent),
+          });
+          return {
+            role: call.role,
+            tool: call.tool,
+            status: "executed",
+            output: result,
+          };
+        }
+        case "intent.persist": {
+          if (!this.agentOutcomeToolsService) {
+            return {
+              role: call.role,
+              tool: call.tool,
+              status: "failed",
+              reason: "agent_outcome_tools_unavailable",
+            };
+          }
+          const text =
+            this.readString(call.input.text) ??
+            this.readString(call.input.intentText) ??
+            "";
+          if (!text) {
+            return {
+              role: call.role,
+              tool: call.tool,
+              status: "failed",
+              reason: "missing_intent_text",
+            };
+          }
+          const result = await this.agentOutcomeToolsService.persistIntent({
+            userId,
+            threadId,
+            traceId,
+            text,
+          });
+          return {
+            role: call.role,
+            tool: call.tool,
+            status: "executed",
+            output: result,
+          };
+        }
+        case "conversation.start": {
+          if (!this.agentOutcomeToolsService) {
+            return {
+              role: call.role,
+              tool: call.tool,
+              status: "failed",
+              reason: "agent_outcome_tools_unavailable",
+            };
+          }
+          const result = await this.agentOutcomeToolsService.startConversation({
+            userId,
+            title: this.readString(call.input.title) ?? undefined,
+            initialMessage:
+              this.readString(call.input.initialMessage) ?? undefined,
+          });
+          return {
+            role: call.role,
+            tool: call.tool,
+            status: "executed",
+            output: result,
+          };
+        }
+        case "memory.write": {
+          if (!this.agentOutcomeToolsService) {
+            return {
+              role: call.role,
+              tool: call.tool,
+              status: "failed",
+              reason: "agent_outcome_tools_unavailable",
+            };
+          }
+          const summary =
+            this.readString(call.input.summary) ??
+            this.readString(call.input.content) ??
+            "";
+          if (!summary) {
+            return {
+              role: call.role,
+              tool: call.tool,
+              status: "failed",
+              reason: "missing_memory_summary",
+            };
+          }
+          const result = await this.agentOutcomeToolsService.writeMemory({
+            userId,
+            summary,
+            context: this.coerceRecord(call.input.context),
+            topics: this.readStringArray(call.input.topics),
+            activities: this.readStringArray(call.input.activities),
+          });
+          return {
+            role: call.role,
+            tool: call.tool,
+            status: "executed",
+            output: result,
+          };
+        }
+        case "followup.schedule": {
+          if (!this.agentOutcomeToolsService) {
+            return {
+              role: call.role,
+              tool: call.tool,
+              status: "failed",
+              reason: "agent_outcome_tools_unavailable",
+            };
+          }
+          const result = await this.agentOutcomeToolsService.scheduleFollowup({
+            userId,
+            title: this.readString(call.input.title) ?? undefined,
+            summary:
+              this.readString(call.input.summary) ??
+              this.readString(call.input.description) ??
+              undefined,
+            timezone: this.readString(call.input.timezone) ?? undefined,
+            deliveryMode: this.readDeliveryMode(call.input.deliveryMode),
+            schedule: this.coerceSchedule(call.input.schedule),
+          });
+          return {
+            role: call.role,
+            tool: call.tool,
+            status: "executed",
+            output: result,
           };
         }
         case "ranking.explain": {
@@ -1258,6 +1593,9 @@ export class AgentConversationService {
   private isRiskSensitiveTool(tool: AgentTool) {
     return (
       tool === "intent.parse" ||
+      tool === "intent.persist" ||
+      tool === "memory.write" ||
+      tool === "followup.schedule" ||
       tool === "workflow.write" ||
       tool === "notification.compose"
     );
@@ -1429,6 +1767,110 @@ export class AgentConversationService {
       },
       {} as Record<string, string | number | boolean>,
     );
+  }
+
+  private coerceRecord(value: unknown): Record<string, unknown> | undefined {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return undefined;
+    }
+    return value as Record<string, unknown>;
+  }
+
+  private readStringArray(value: unknown) {
+    if (!Array.isArray(value)) {
+      return undefined;
+    }
+    const items = value
+      .map((entry) => this.readString(entry))
+      .filter((entry): entry is string => Boolean(entry))
+      .slice(0, 8);
+    return items.length > 0 ? items : undefined;
+  }
+
+  private coerceParsedIntent(value: unknown):
+    | {
+        topics?: string[];
+        activities?: string[];
+        intentType?: string;
+        modality?: string;
+        timingConstraints?: string[];
+        skillConstraints?: string[];
+        vibeConstraints?: string[];
+      }
+    | undefined {
+    const record = this.coerceRecord(value);
+    if (!record) {
+      return undefined;
+    }
+    return {
+      topics: this.readStringArray(record.topics),
+      activities: this.readStringArray(record.activities),
+      intentType: this.readString(record.intentType) ?? undefined,
+      modality: this.readString(record.modality) ?? undefined,
+      timingConstraints: this.readStringArray(record.timingConstraints),
+      skillConstraints: this.readStringArray(record.skillConstraints),
+      vibeConstraints: this.readStringArray(record.vibeConstraints),
+    };
+  }
+
+  private readDeliveryMode(
+    value: unknown,
+  ):
+    | "notification"
+    | "agent_thread"
+    | "notification_and_agent_thread"
+    | undefined {
+    if (
+      value === "notification" ||
+      value === "agent_thread" ||
+      value === "notification_and_agent_thread"
+    ) {
+      return value;
+    }
+    return undefined;
+  }
+
+  private coerceSchedule(value: unknown):
+    | {
+        kind?: "hourly" | "weekly";
+        intervalHours?: number;
+        days?: Array<"sun" | "mon" | "tue" | "wed" | "thu" | "fri" | "sat">;
+        hour?: number;
+        minute?: number;
+      }
+    | undefined {
+    const record = this.coerceRecord(value);
+    if (!record) {
+      return undefined;
+    }
+    const kind =
+      record.kind === "hourly" || record.kind === "weekly"
+        ? record.kind
+        : undefined;
+    const dayValues = Array.isArray(record.days)
+      ? record.days.filter(
+          (
+            entry,
+          ): entry is "sun" | "mon" | "tue" | "wed" | "thu" | "fri" | "sat" =>
+            entry === "sun" ||
+            entry === "mon" ||
+            entry === "tue" ||
+            entry === "wed" ||
+            entry === "thu" ||
+            entry === "fri" ||
+            entry === "sat",
+        )
+      : undefined;
+    return {
+      kind,
+      intervalHours:
+        typeof record.intervalHours === "number"
+          ? record.intervalHours
+          : undefined,
+      days: dayValues,
+      hour: typeof record.hour === "number" ? record.hour : undefined,
+      minute: typeof record.minute === "number" ? record.minute : undefined,
+    };
   }
 
   private readIntInRange(

@@ -32,6 +32,45 @@ describe("AgentConversationService integration", () => {
         agentMessage: {
           findMany: async () => [baseMessage],
         },
+        agentThread: {
+          findUnique: async () => ({
+            title: "Main",
+            createdAt: new Date("2026-03-20T09:30:00.000Z"),
+          }),
+        },
+        user: {
+          findUnique: async () => ({
+            displayName: "Alex Rivera",
+          }),
+        },
+        userProfile: {
+          findUnique: async () => ({
+            bio: "Looking for people to talk with.",
+            city: "Buenos Aires",
+            country: "AR",
+            onboardingState: "complete",
+            availabilityMode: "flexible",
+          }),
+        },
+        userInterest: {
+          findMany: async () => [
+            { label: "Conversation", kind: "topic" },
+            { label: "Meet people", kind: "goal" },
+          ],
+        },
+        userPreference: {
+          findMany: async () => [
+            { key: "global_rules_intent_mode", value: "balanced" },
+            { key: "global_rules_modality", value: "either" },
+            { key: "global_rules_reachable", value: "always" },
+            { key: "global_rules_notification_mode", value: "immediate" },
+            { key: "global_rules_memory_mode", value: "standard" },
+            {
+              key: "global_rules_timezone",
+              value: "America/Argentina/Buenos_Aires",
+            },
+          ],
+        },
         retrievalDocument: {
           findMany: async () => [],
         },
@@ -120,8 +159,8 @@ describe("AgentConversationService integration", () => {
       expect(result.plan.specialists).toEqual(
         expect.arrayContaining([
           "intent_parser",
+          "personalization_interpreter",
           "moderation_assistant",
-          "notification_copy",
         ]),
       );
       expect(result.toolResults).toEqual(
