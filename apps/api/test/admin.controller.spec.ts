@@ -110,6 +110,15 @@ function createController(overrides: Partial<Record<string, any>> = {}) {
       findMany: vi.fn().mockResolvedValue([]),
       create: vi.fn().mockResolvedValue({ id: "audit-1" }),
     },
+    agentPlanCheckpoint: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    agentMessage: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    agentThread: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     userSession: { updateMany: vi.fn() },
     userProfile: {
       upsert: vi.fn(),
@@ -349,6 +358,133 @@ describe("AdminController", () => {
         action: "admin.moderation_agent_risk_list",
       }),
     );
+  });
+
+  it("builds agent action debug snapshots with replay hints", async () => {
+    const auditLogFindMany = vi
+      .fn()
+      .mockResolvedValueOnce([
+        {
+          id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          actorUserId: DEAD_LETTER_ID,
+          entityId: AGENT_THREAD_ID,
+          createdAt: new Date("2026-03-22T12:00:00.000Z"),
+          metadata: {
+            traceId: "trace-agentic-debug",
+            tool: "intro.send_request",
+            status: "denied",
+            role: "manager",
+            reason: "human_approval_required",
+            summary: "Planner requested approval before sending intro.",
+            input: {
+              targetUserId: INTENT_ID,
+            },
+            output: null,
+          },
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          action: "matching.candidates_retrieved",
+          entityType: "agent_thread",
+          entityId: AGENT_THREAD_ID,
+          createdAt: new Date("2026-03-22T11:59:58.000Z"),
+          metadata: {
+            traceId: "trace-agentic-debug",
+            summary: "Retrieved 3 candidate profiles after language filtering.",
+          },
+        },
+      ]);
+
+    const { controller, prisma, adminAuditService } = createController({
+      prisma: {
+        auditLog: {
+          findMany: auditLogFindMany,
+          create: vi.fn().mockResolvedValue({ id: "audit-1" }),
+        },
+        agentPlanCheckpoint: {
+          findMany: vi.fn().mockResolvedValue([
+            {
+              id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+              threadId: AGENT_THREAD_ID,
+              traceId: "trace-agentic-debug",
+              actionType: "social_outreach",
+              riskLevel: "high",
+              status: "pending",
+              decisionReason: "human_approval_required",
+              requestedByRole: "manager",
+              tool: "intro.send_request",
+              createdAt: new Date("2026-03-22T12:00:01.000Z"),
+              resolvedAt: null,
+            },
+          ]),
+        },
+        agentMessage: {
+          findMany: vi.fn().mockResolvedValue([
+            {
+              id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+              threadId: AGENT_THREAD_ID,
+              content: "Find me someone to talk startups with tonight.",
+              createdAt: new Date("2026-03-22T11:59:50.000Z"),
+            },
+          ]),
+        },
+        agentThread: {
+          findMany: vi.fn().mockResolvedValue([
+            {
+              id: AGENT_THREAD_ID,
+              title: "Tonight startup intros",
+              createdAt: new Date("2026-03-22T11:58:00.000Z"),
+            },
+          ]),
+        },
+      },
+    });
+
+    const result = await controller.opsAgentActions(ADMIN_USER_ID, "support", {
+      limit: "25",
+      status: "denied",
+      tool: "intro.send_request",
+      threadId: AGENT_THREAD_ID,
+      traceId: "trace-agentic-debug",
+    });
+
+    const payload = result.data as {
+      items: Array<{
+        tool: string | null;
+        status: string | null;
+        latestUserMessage: { content: string } | null;
+        linkedCheckpoint: { id: string } | null;
+        replayHint: string;
+        relatedTraceEvents: Array<{ id: string }>;
+      }>;
+    };
+
+    expect(payload.items).toHaveLength(1);
+    expect(payload.items[0]?.tool).toBe("intro.send_request");
+    expect(payload.items[0]?.status).toBe("denied");
+    expect(payload.items[0]?.latestUserMessage?.content).toContain(
+      "talk startups with tonight",
+    );
+    expect(payload.items[0]?.linkedCheckpoint?.id).toBe(
+      "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+    );
+    expect(payload.items[0]?.relatedTraceEvents).toEqual([
+      expect.objectContaining({
+        id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      }),
+    ]);
+    expect(payload.items[0]?.replayHint).toContain("approval checkpoint");
+    expect(adminAuditService.recordAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        role: "support",
+        action: "admin.ops_agent_actions_view",
+      }),
+    );
+    expect(prisma.agentPlanCheckpoint.findMany).toHaveBeenCalled();
+    expect(prisma.agentMessage.findMany).toHaveBeenCalled();
+    expect(prisma.agentThread.findMany).toHaveBeenCalled();
   });
 
   it("assigns moderation flags to an admin reviewer", async () => {

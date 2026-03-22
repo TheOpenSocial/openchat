@@ -24,6 +24,7 @@ It is organized as a production-grade build checklist with:
 Last verified: 2026-03-20
 
 ## Implementation Notes
+- 2026-03-22: Completed `AH-06` operator replay/debug coverage for agent-issued social actions. Finished the admin debug surface for `GET /api/admin/ops/agent-actions` so blocked or failed tools now reconstruct from audit traces, linked approval checkpoints, latest user turn, and related trace events with concrete replay guidance. Added regression coverage in `apps/api/test/admin.controller.spec.ts`.
 - 2026-03-22: Closed a backend matching/trust gap that surfaced during the policy audit. Added unblock support (`DELETE /api/moderation/blocks/:blockedUserId`, `GET /api/moderation/users/:userId/blocks`), introduced explicit `countryPreferences` in global rules, and upgraded `MatchingService` hard filters so explicit language and country preferences now actually gate matches instead of being stored-only metadata.
 - 2026-03-22: Completed `AH-05` outcome telemetry + eval coverage for agent-issued social actions. The agent runtime now emits structured `agent_social_action` analytics for visible social tools, analytics now computes bounded admin-facing outcome metrics for intro acceptance, circle-join conversion, and follow-up usefulness, and admin ops gained a dedicated snapshot surface (`GET /api/admin/ops/agent-outcomes`) plus eval coverage for telemetry health in `AgenticEvalsService`.
 - 2026-03-21: Advanced moderation command-center lane with persisted reviewer ownership + analytics (`M-04`/`M-05`). Added `moderation_flags` assignment/decision fields (`assigneeUserId`, notes, timestamps, lastDecision`) plus migration `20260321_moderation_command_center`, updated admin moderation actions to persist assignee/triage state, and extended moderation summary with SLA-style analytics (avg assignment/decision minutes, dismissal rate, repeat offenders, top reasons). Upgraded admin moderation cards to surface assignee/decision context directly alongside queue and agent-risk triage.
@@ -1485,10 +1486,24 @@ This section maps the conceptual product surface in [USE_CASES.md](/Users/crucib
 - [x] `AH-03` Add consented `profile.patch` / preference-update tooling so the agent can turn explicit user corrections into durable defaults.
 - [x] `AH-04` Add execution reconciliation for tool-created outcomes so cancelled requests, expired follow-ups, and failed group formation feed back into agent memory and UI state.
 - [x] `AH-05` Add outcome telemetry + eval coverage for tool-issued social actions, including acceptance rate, circle join conversion, and follow-up usefulness.
-- [ ] `AH-06` Add operator replay/debug tooling for blocked or failed social actions so admins can inspect why the planner chose a path and where it stopped.
+- [x] `AH-06` Add operator replay/debug tooling for blocked or failed social actions so admins can inspect why the planner chose a path and where it stopped.
 - [ ] `AH-07` Add production smoke coverage for real-user end-to-end social execution: intent -> candidate search -> intro or circle outcome -> audit trace.
 
 **Acceptance criteria**
 - The execution layer adapts when good matches are scarce instead of stalling on the first attempt.
 - Explicit user feedback can upgrade profile defaults and future agent plans without brittle UI-only logic.
 - Operators can inspect, replay, and measure social execution quality in production.
+
+### 35.12 Trust, Fit, and Market Hardening Lane
+
+- [ ] `TF-01` Add first-class user-facing controls for `languagePreferences`, `countryPreferences`, verified-only matching, and contact style across mobile/web/profile settings.
+- [ ] `TF-02` Add reputation and reliability signals to matching/ranking (`reply rate`, `acceptance rate`, `follow-through`, moderation incidents) with bounded weighting and admin visibility.
+- [ ] `TF-03` Add sparse-market adaptation so the agent can switch between intros, group plans, circles, and scheduled follow-ups based on supply density instead of using one static strategy.
+- [ ] `TF-04` Add language-fit nuance beyond hard filtering: bilingual compatibility, translation tolerance, and explicit opt-in translation behavior for mismatched-language markets.
+- [ ] `TF-05` Add market-stage strategy controls (`empty`, `seed`, `healthy`) so agent behavior and ranking wideners adapt per launch region.
+- [ ] `TF-06` Add real production operator drills with real-user smoke coverage for trust-sensitive flows: block/unblock, language/country fit, intro lifecycle, circle lifecycle, and moderation audit verification.
+
+**Acceptance criteria**
+- Users can clearly control who they are matched with and why, especially across language, region, and safety-sensitive preferences.
+- Matching quality improves with real behavioral reliability signals instead of relying only on declared interests.
+- The agent adapts honestly in sparse markets and operators can validate trust-sensitive flows before scaling a region.
