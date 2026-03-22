@@ -1229,6 +1229,12 @@ export class OpenAIClient {
       normalized.includes("talk") ||
       normalized.includes("play") ||
       normalized.includes("looking for");
+    const looksTimeSensitive =
+      normalized.includes("now") ||
+      normalized.includes("tonight") ||
+      normalized.includes("today") ||
+      normalized.includes("active") ||
+      normalized.includes("available");
     const looksLikeGroup =
       normalized.includes("group") ||
       normalized.includes("small group") ||
@@ -1280,6 +1286,15 @@ export class OpenAIClient {
           tool: "personalization.retrieve",
           input: { maxDocs: 4 },
         },
+        ...(looksTimeSensitive
+          ? [
+              {
+                role: "manager" as const,
+                tool: "availability.lookup" as const,
+                input: {},
+              },
+            ]
+          : []),
         {
           role: "intent_parser",
           tool: "intent.parse",
@@ -1298,6 +1313,7 @@ export class OpenAIClient {
                 input: {
                   text: userMessage.slice(0, 500),
                   take: 5,
+                  widenOnScarcity: true,
                 },
               },
               {

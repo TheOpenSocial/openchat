@@ -13,6 +13,7 @@ export const agentTools = [
   "intent.parse",
   "ranking.explain",
   "personalization.retrieve",
+  "availability.lookup",
   "candidate.search",
   "circle.search",
   "group.plan",
@@ -75,6 +76,7 @@ const openAIAgentDefinitions: Record<OpenAIAgentRole, AgentDefinition> = {
     allowedTools: [
       "workflow.read",
       "workflow.write",
+      "availability.lookup",
       "candidate.search",
       "circle.search",
       "group.plan",

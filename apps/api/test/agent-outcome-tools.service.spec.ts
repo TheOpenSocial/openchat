@@ -8,6 +8,19 @@ describe("AgentOutcomeToolsService", () => {
     const discoveryService: any = {};
     const inboxService: any = {};
     const matchingService: any = {
+      lookupAvailabilityContext: vi.fn().mockResolvedValue({
+        requester: {
+          userId: "user-1",
+          availabilityMode: "now",
+          reachable: "always",
+          modality: "either",
+          currentlyAvailable: true,
+          contactAllowed: true,
+          overlapMinutesWithRequester: 0,
+        },
+        candidates: [],
+        generatedAt: new Date("2026-03-22T00:00:00.000Z").toISOString(),
+      }),
       retrieveCandidates: vi.fn().mockResolvedValue([
         {
           userId: "candidate-1",
@@ -41,6 +54,12 @@ describe("AgentOutcomeToolsService", () => {
         modality: "either",
       },
       take: 4,
+      widenOnScarcity: true,
+      scarcityThreshold: 2,
+    });
+    const availability = await service.lookupAvailability({
+      userId: "user-1",
+      candidateUserIds: ["candidate-1"],
     });
 
     expect(matchingService.retrieveCandidates).toHaveBeenCalledWith(
@@ -57,12 +76,30 @@ describe("AgentOutcomeToolsService", () => {
     expect(result).toEqual(
       expect.objectContaining({
         count: 1,
+        scarcity: expect.objectContaining({
+          detected: true,
+          widened: true,
+          widenedCandidateCount: 1,
+        }),
         candidates: [
           expect.objectContaining({
             userId: "candidate-1",
             score: 0.88,
           }),
         ],
+      }),
+    );
+    expect(matchingService.retrieveCandidates).toHaveBeenCalledTimes(2);
+    expect(matchingService.lookupAvailabilityContext).toHaveBeenCalledWith(
+      "user-1",
+      ["candidate-1"],
+    );
+    expect(availability).toEqual(
+      expect.objectContaining({
+        requester: expect.objectContaining({
+          userId: "user-1",
+          currentlyAvailable: true,
+        }),
       }),
     );
   });

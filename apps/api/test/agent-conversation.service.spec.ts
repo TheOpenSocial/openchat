@@ -145,6 +145,19 @@ function createServiceHarness() {
   };
 
   const agentOutcomeToolsService: any = {
+    lookupAvailability: vi.fn().mockResolvedValue({
+      requester: {
+        userId: IDS.userId,
+        availabilityMode: "flexible",
+        reachable: "always",
+        modality: "either",
+        currentlyAvailable: true,
+        contactAllowed: true,
+        overlapMinutesWithRequester: 0,
+      },
+      candidates: [],
+      generatedAt: new Date("2026-03-20T11:00:00.000Z").toISOString(),
+    }),
     searchCandidates: vi.fn().mockResolvedValue({
       count: 1,
       candidates: [{ userId: "candidate-1", score: 0.91 }],
@@ -477,6 +490,59 @@ describe("AgentConversationService", () => {
             summary: "Scheduled a follow-up task (task-1).",
           }),
         }),
+      }),
+    );
+  });
+
+  it("executes availability lookup before time-sensitive social search", async () => {
+    const { service, openai, agentOutcomeToolsService } =
+      createServiceHarness();
+
+    openai.planConversationTurn.mockResolvedValueOnce({
+      specialists: ["intent_parser"],
+      toolCalls: [
+        {
+          role: "manager",
+          tool: "availability.lookup",
+          input: {
+            candidateUserIds: ["candidate-1"],
+          },
+        },
+        {
+          role: "manager",
+          tool: "candidate.search",
+          input: {
+            text: "Find someone active tonight to talk design with",
+            take: 4,
+            widenOnScarcity: true,
+            scarcityThreshold: 2,
+          },
+        },
+      ],
+      responseGoal: "prioritize people who can actually connect tonight",
+    });
+    openai.composeConversationResponse.mockResolvedValueOnce(
+      "I checked who is reachable now and started looking for strong design matches tonight.",
+    );
+
+    await service.runAgenticTurn({
+      threadId: IDS.threadId,
+      userId: IDS.userId,
+      content: "Find someone active tonight to talk design with",
+      traceId: "trace-agentic-availability",
+    });
+
+    expect(agentOutcomeToolsService.lookupAvailability).toHaveBeenCalledWith({
+      userId: IDS.userId,
+      candidateUserIds: ["candidate-1"],
+    });
+    expect(agentOutcomeToolsService.searchCandidates).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: IDS.userId,
+        text: "Find someone active tonight to talk design with",
+        take: 4,
+        widenOnScarcity: true,
+        scarcityThreshold: 2,
       }),
     );
   });

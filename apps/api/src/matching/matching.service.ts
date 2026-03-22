@@ -21,6 +21,16 @@ export interface RetrievedCandidate {
   rationale: Record<string, unknown>;
 }
 
+export interface AvailabilitySnapshot {
+  userId: string;
+  availabilityMode: string | null;
+  reachable: "always" | "available_only" | "do_not_disturb";
+  modality: "online" | "offline" | "either";
+  currentlyAvailable: boolean;
+  contactAllowed: boolean;
+  overlapMinutesWithRequester: number;
+}
+
 interface RetrieveCandidatesOptions {
   intentId?: string;
   traceId?: string;
@@ -442,6 +452,143 @@ export class MatchingService {
     return selected;
   }
 
+  async lookupAvailabilityContext(
+    requesterUserId: string,
+    candidateUserIds: string[] = [],
+  ): Promise<{
+    requester: AvailabilitySnapshot | null;
+    candidates: AvailabilitySnapshot[];
+    generatedAt: string;
+  }> {
+    const targetUserIds = Array.from(
+      new Set(
+        [requesterUserId, ...candidateUserIds].filter(
+          (userId): userId is string =>
+            typeof userId === "string" && userId.length > 0,
+        ),
+      ),
+    );
+    if (targetUserIds.length === 0) {
+      return {
+        requester: null,
+        candidates: [],
+        generatedAt: new Date().toISOString(),
+      };
+    }
+
+    const [users, preferences, availabilityWindowRows] = await Promise.all([
+      this.prisma.user.findMany({
+        where: {
+          id: {
+            in: targetUserIds,
+          },
+        },
+        include: {
+          profile: true,
+        },
+      }),
+      this.prisma.userPreference.findMany({
+        where: {
+          userId: {
+            in: targetUserIds,
+          },
+          key: {
+            in: ["global_rules_reachable", "global_rules_modality"],
+          },
+        },
+        select: {
+          userId: true,
+          key: true,
+          value: true,
+        },
+      }),
+      this.prisma.userAvailabilityWindow.findMany({
+        where: {
+          userId: {
+            in: targetUserIds,
+          },
+        },
+        select: {
+          userId: true,
+          dayOfWeek: true,
+          startMinute: true,
+          endMinute: true,
+          mode: true,
+        },
+      }),
+    ]);
+
+    const usersById = new Map(users.map((user) => [user.id, user]));
+    const preferencesByUser = new Map<string, Map<string, unknown>>();
+    for (const preference of preferences) {
+      const existing = preferencesByUser.get(preference.userId) ?? new Map();
+      existing.set(preference.key, preference.value);
+      preferencesByUser.set(preference.userId, existing);
+    }
+
+    const availabilityWindowsByUser = this.indexAvailabilityWindowsByUser(
+      availabilityWindowRows,
+    );
+
+    const requester = usersById.get(requesterUserId);
+    const requesterWindows =
+      availabilityWindowsByUser.get(requesterUserId) ?? [];
+
+    const buildSnapshot = (userId: string): AvailabilitySnapshot | null => {
+      const user = usersById.get(userId);
+      if (!user) {
+        return null;
+      }
+
+      const availabilityMode = user.profile?.availabilityMode ?? null;
+      const reachable =
+        (this.readStringPreference(
+          preferencesByUser,
+          userId,
+          "global_rules_reachable",
+        ) as AvailabilitySnapshot["reachable"] | null) ?? "always";
+      const modality = this.resolveModalityPreference(
+        this.readStringPreference(
+          preferencesByUser,
+          userId,
+          "global_rules_modality",
+        ),
+      );
+      const userWindows = availabilityWindowsByUser.get(userId) ?? [];
+
+      return {
+        userId,
+        availabilityMode,
+        reachable,
+        modality,
+        currentlyAvailable: this.isCurrentlyAvailable(
+          availabilityMode,
+          userWindows,
+        ),
+        contactAllowed: this.isReachabilityAllowed(
+          userId,
+          preferencesByUser,
+          availabilityMode,
+        ),
+        overlapMinutesWithRequester:
+          userId === requesterUserId
+            ? 0
+            : this.computeCurrentDayWindowOverlapMinutes(
+                requesterWindows,
+                userWindows,
+              ),
+      };
+    };
+
+    return {
+      requester: buildSnapshot(requesterUserId),
+      candidates: candidateUserIds
+        .map((userId) => buildSnapshot(userId))
+        .filter((value): value is AvailabilitySnapshot => value !== null),
+      generatedAt: new Date().toISOString(),
+    };
+  }
+
   async upsertUserProfileEmbedding(userId: string) {
     const [profile, interests, topics] = await Promise.all([
       this.prisma.userProfile.findUnique({
@@ -765,6 +912,67 @@ export class MatchingService {
       }
     }
     return overlapMinutes;
+  }
+
+  private computeCurrentDayWindowOverlapMinutes(
+    requesterWindows: Array<{
+      dayOfWeek: number;
+      startMinute: number;
+      endMinute: number;
+      mode: string;
+    }>,
+    candidateWindows: Array<{
+      dayOfWeek: number;
+      startMinute: number;
+      endMinute: number;
+      mode: string;
+    }>,
+  ) {
+    const now = new Date();
+    const utcDay = now.getUTCDay();
+    const requesterCurrentDay = requesterWindows
+      .filter((window) => window.dayOfWeek === utcDay)
+      .filter((window) => window.mode === "available");
+    const candidateCurrentDay = candidateWindows
+      .filter((window) => window.dayOfWeek === utcDay)
+      .filter((window) => window.mode === "available");
+
+    if (requesterCurrentDay.length === 0 || candidateCurrentDay.length === 0) {
+      return 0;
+    }
+
+    return this.computeWindowOverlapMinutes(
+      requesterCurrentDay,
+      candidateCurrentDay,
+    );
+  }
+
+  private isCurrentlyAvailable(
+    availabilityMode: string | null,
+    windows: Array<{
+      dayOfWeek: number;
+      startMinute: number;
+      endMinute: number;
+      mode: string;
+    }>,
+  ) {
+    if (availabilityMode === "away" || availabilityMode === "invisible") {
+      return false;
+    }
+    if (availabilityMode === "now") {
+      return true;
+    }
+
+    const now = new Date();
+    const utcDay = now.getUTCDay();
+    const utcMinute = now.getUTCHours() * 60 + now.getUTCMinutes();
+    return windows.some(
+      (window) =>
+        window.dayOfWeek === utcDay &&
+        window.mode === "available" &&
+        utcMinute >= window.startMinute &&
+        utcMinute <= window.endMinute,
+    );
   }
 
   private computeTrustScore(input: {

@@ -45,6 +45,8 @@ export class AgentOutcomeToolsService {
     traceId: string;
     text: string;
     take?: number;
+    widenOnScarcity?: boolean;
+    scarcityThreshold?: number;
     parsedIntent?: {
       topics?: string[];
       activities?: string[];
@@ -63,6 +65,10 @@ export class AgentOutcomeToolsService {
       input.parsedIntent ??
       (await this.openai.parseIntent(input.text, input.traceId));
     const take = Math.min(Math.max(input.take ?? 5, 1), 10);
+    const scarcityThreshold = Math.min(
+      Math.max(input.scarcityThreshold ?? 2, 1),
+      take,
+    );
     const candidates = await this.matchingService.retrieveCandidates(
       input.userId,
       parsedIntent,
@@ -71,16 +77,74 @@ export class AgentOutcomeToolsService {
         traceId: input.traceId,
       },
     );
+    const shouldWiden =
+      input.widenOnScarcity === true && candidates.length < scarcityThreshold;
+    const widenedIntent = shouldWiden
+      ? this.widenParsedIntentForScarcity(parsedIntent, 1)
+      : null;
+    const widenedCandidates =
+      shouldWiden && widenedIntent
+        ? await this.matchingService.retrieveCandidates(
+            input.userId,
+            widenedIntent,
+            take,
+            {
+              traceId: `${input.traceId}:widened`,
+            },
+          )
+        : null;
+    const selectedCandidates =
+      widenedCandidates && widenedCandidates.length > candidates.length
+        ? widenedCandidates
+        : candidates;
 
     return {
-      count: candidates.length,
-      parsedIntent,
-      candidates: candidates.map((candidate) => ({
+      count: selectedCandidates.length,
+      parsedIntent: widenedCandidates
+        ? (widenedIntent ?? parsedIntent)
+        : parsedIntent,
+      candidates: selectedCandidates.map((candidate) => ({
         userId: candidate.userId,
         score: candidate.score,
         rationale: candidate.rationale,
       })),
+      scarcity:
+        candidates.length < scarcityThreshold
+          ? {
+              detected: true,
+              originalCount: candidates.length,
+              threshold: scarcityThreshold,
+              widened: Boolean(widenedCandidates),
+              widenedLevel: widenedCandidates ? 1 : 0,
+              widenedCandidateCount: widenedCandidates?.length ?? null,
+            }
+          : {
+              detected: false,
+              originalCount: candidates.length,
+              threshold: scarcityThreshold,
+              widened: false,
+              widenedLevel: 0,
+              widenedCandidateCount: null,
+            },
     };
+  }
+
+  async lookupAvailability(input: {
+    userId: string;
+    candidateUserIds?: string[];
+  }) {
+    if (!this.matchingService) {
+      return {
+        requester: null,
+        candidates: [],
+        reason: "matching_service_unavailable",
+      };
+    }
+
+    return this.matchingService.lookupAvailabilityContext(
+      input.userId,
+      input.candidateUserIds ?? [],
+    );
   }
 
   async searchCircles(input: { userId: string; limit?: number }) {
@@ -696,5 +760,38 @@ export class AgentOutcomeToolsService {
           .filter((value) => value.length > 0),
       ),
     ).slice(0, limit);
+  }
+
+  private widenParsedIntentForScarcity(
+    input: {
+      topics?: string[];
+      activities?: string[];
+      intentType?: string;
+      modality?: string;
+      timingConstraints?: string[];
+      skillConstraints?: string[];
+      vibeConstraints?: string[];
+    },
+    level: 1 | 2,
+  ) {
+    const widened = {
+      ...input,
+    };
+
+    if (level >= 1) {
+      if (widened.modality === "offline" || widened.modality === "online") {
+        widened.modality = "either";
+      }
+      widened.timingConstraints = [];
+      widened.skillConstraints = [];
+      widened.vibeConstraints = [];
+    }
+
+    if (level >= 2) {
+      widened.topics = [];
+      widened.activities = [];
+    }
+
+    return widened;
   }
 }
