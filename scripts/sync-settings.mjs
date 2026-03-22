@@ -55,12 +55,18 @@ if (!envConfig) {
   throw new Error(`settings.json missing environments.${envName}`);
 }
 
-const apiOrigin = normalizeOrigin(envConfig.domains?.apiOrigin, `${envName}.domains.apiOrigin`);
+const apiOrigin = normalizeOrigin(
+  envConfig.domains?.apiOrigin,
+  `${envName}.domains.apiOrigin`,
+);
 const adminOrigin = normalizeOrigin(
   envConfig.domains?.adminOrigin,
   `${envName}.domains.adminOrigin`,
 );
-const appOrigin = normalizeOrigin(envConfig.domains?.appOrigin, `${envName}.domains.appOrigin`);
+const appOrigin = normalizeOrigin(
+  envConfig.domains?.appOrigin,
+  `${envName}.domains.appOrigin`,
+);
 const apiBasePath = normalizePath(envConfig.apiBasePath);
 const apiBaseUrl = `${apiOrigin}${apiBasePath}`;
 const googleRedirectUri = `${apiBaseUrl}/auth/google/callback`;

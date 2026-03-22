@@ -32,7 +32,10 @@ async function main() {
   ensureDir(adminPublicBrand);
 
   // --- Expo / mobile: solid black plate behind mark (launcher / adaptive icon) ---
-  const iconForeground = await sharp(svgBuffer).resize(1024, 1024).png().toBuffer();
+  const iconForeground = await sharp(svgBuffer)
+    .resize(1024, 1024)
+    .png()
+    .toBuffer();
   async function writeBlackAppIcon(outPath) {
     await sharp({
       create: { width: 1024, height: 1024, channels: 4, background: BLACK },
@@ -57,7 +60,10 @@ async function main() {
     .png()
     .toFile(join(mobileAssets, "splash.png"));
 
-  await sharp(svgBuffer).resize(512, 512).png().toFile(join(mobileBrand, "logo.png"));
+  await sharp(svgBuffer)
+    .resize(512, 512)
+    .png()
+    .toFile(join(mobileBrand, "logo.png"));
   copyFileSync(SOURCE_SVG, join(mobileBrand, "logo.svg"));
 
   // --- Web + admin: public SVG ---
@@ -70,16 +76,30 @@ async function main() {
   ensureDir(webApp);
   ensureDir(adminApp);
 
-  await sharp(svgBuffer).resize(512, 512).png().toFile(join(webApp, "icon.png"));
-  await sharp(svgBuffer).resize(180, 180).png().toFile(join(webApp, "apple-icon.png"));
+  await sharp(svgBuffer)
+    .resize(512, 512)
+    .png()
+    .toFile(join(webApp, "icon.png"));
+  await sharp(svgBuffer)
+    .resize(180, 180)
+    .png()
+    .toFile(join(webApp, "apple-icon.png"));
 
-  await sharp(svgBuffer).resize(512, 512).png().toFile(join(adminApp, "icon.png"));
-  await sharp(svgBuffer).resize(180, 180).png().toFile(join(adminApp, "apple-icon.png"));
+  await sharp(svgBuffer)
+    .resize(512, 512)
+    .png()
+    .toFile(join(adminApp, "icon.png"));
+  await sharp(svgBuffer)
+    .resize(180, 180)
+    .png()
+    .toFile(join(adminApp, "apple-icon.png"));
 
   console.log("Brand assets generated from packages/brand/assets/logo.svg");
   console.log("  apps/mobile/assets/{icon,adaptive-icon,splash}.png");
   console.log("  apps/mobile/assets/brand/{logo.png,logo.svg}");
-  console.log("  apps/web + apps/admin: public/brand/logo.svg, app/{icon,apple-icon}.png");
+  console.log(
+    "  apps/web + apps/admin: public/brand/logo.svg, app/{icon,apple-icon}.png",
+  );
 }
 
 main().catch((err) => {
