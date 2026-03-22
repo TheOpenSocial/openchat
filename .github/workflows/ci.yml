@@ -44,80 +44,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  changes:
-    runs-on: ubuntu-latest
-    outputs:
-      backend: ${{ steps.filter.outputs.backend }}
-      web: ${{ steps.filter.outputs.web }}
-      web_e2e: ${{ steps.filter.outputs.web_e2e }}
-      format: ${{ steps.filter.outputs.format }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Detect changed areas
-        id: filter
-        uses: dorny/paths-filter@v3
-        with:
-          filters: |
-            backend:
-              - 'apps/api/**'
-              - 'prisma/**'
-              - 'packages/**'
-              - 'scripts/**'
-              - 'deploy/**'
-              - 'docker-compose.yml'
-              - 'docker-compose.prod.yml'
-              - 'package.json'
-              - 'pnpm-lock.yaml'
-              - 'pnpm-workspace.yaml'
-              - 'turbo.json'
-              - 'tsconfig.base.json'
-              - 'eslint.config.mjs'
-              - '.github/workflows/ci.yml'
-            web:
-              - 'apps/web/**'
-              - 'apps/admin/**'
-              - 'packages/**'
-              - 'scripts/**'
-              - 'deploy/**'
-              - 'docker-compose.yml'
-              - 'docker-compose.prod.yml'
-              - 'package.json'
-              - 'pnpm-lock.yaml'
-              - 'pnpm-workspace.yaml'
-              - 'turbo.json'
-              - 'tsconfig.base.json'
-              - 'eslint.config.mjs'
-              - '.github/workflows/ci.yml'
-            web_e2e:
-              - 'apps/web/**'
-              - 'packages/**'
-              - 'package.json'
-              - 'pnpm-lock.yaml'
-              - 'pnpm-workspace.yaml'
-              - 'turbo.json'
-              - 'tsconfig.base.json'
-              - '.github/workflows/ci.yml'
-            format:
-              - 'apps/**'
-              - 'packages/**'
-              - 'prisma/**'
-              - 'scripts/**'
-              - 'deploy/**'
-              - '*.json'
-              - '*.yml'
-              - '*.yaml'
-              - '*.md'
-              - '*.ts'
-              - '*.tsx'
-              - '*.js'
-              - '*.mjs'
-              - '.github/**'
-
   backend:
-    needs: changes
-    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -157,8 +84,6 @@ jobs:
         run: pnpm turbo run test --filter=@opensocial/api...
 
   web:
-    needs: changes
-    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -195,11 +120,9 @@ jobs:
         run: pnpm turbo run test --filter=@opensocial/web... --filter=@opensocial/admin...
 
       - name: Install Playwright (Chromium)
-        if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.web_e2e == 'true'
         run: pnpm --filter @opensocial/web exec playwright install chromium --with-deps
 
       - name: Web E2E (design mock)
-        if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.web_e2e == 'true'
         run: pnpm --filter @opensocial/web test:e2e
 
       - name: Install Playwright for Admin (Chromium)
@@ -211,8 +134,6 @@ jobs:
         run: pnpm --filter @opensocial/admin test:e2e
 
   format:
-    needs: changes
-    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.format == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
