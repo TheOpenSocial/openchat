@@ -225,6 +225,61 @@ describe("RecurringCirclesService", () => {
     );
   });
 
+  it("does not dispatch due sessions for owners blocked by launch controls", async () => {
+    const prisma: any = {
+      recurringCircle: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: CIRCLE_ID,
+            ownerUserId: OWNER_USER_ID,
+            title: "Invite-only builders",
+            status: "active",
+            nextSessionAt: new Date(Date.now() - 5 * 60_000),
+            cadenceConfig: {
+              kind: "weekly",
+              days: ["thu"],
+              hour: 18,
+              minute: 0,
+              timezone: "UTC",
+              intervalWeeks: 1,
+            },
+          },
+        ]),
+        update: vi.fn().mockResolvedValue({}),
+      },
+      recurringCircleSession: {
+        create: vi.fn(),
+      },
+      recurringCircleMember: {
+        findMany: vi.fn(),
+      },
+    };
+    const launchControls: any = {
+      assertActionAllowed: vi
+        .fn()
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(new Error("user is not in the alpha cohort")),
+    };
+
+    const service = new RecurringCirclesService(
+      prisma,
+      undefined,
+      launchControls,
+    );
+    const result = await service.dispatchDueSessions();
+
+    expect(result).toEqual({ dispatched: 0, failures: 1 });
+    expect(prisma.recurringCircleSession.create).not.toHaveBeenCalled();
+    expect(prisma.recurringCircle.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: CIRCLE_ID },
+        data: expect.objectContaining({
+          lastFailureReason: expect.stringContaining("alpha cohort"),
+        }),
+      }),
+    );
+  });
+
   it("auto-generates owner intent and publishes agent workflow update on session open", async () => {
     const prisma: any = {
       recurringCircle: {
