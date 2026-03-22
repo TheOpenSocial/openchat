@@ -30,6 +30,7 @@ describe("AgentOutcomeToolsService", () => {
       ]),
     };
     const personalizationService: any = {};
+    const profilesService: any = {};
     const scheduledTasksService: any = {};
 
     const service = new AgentOutcomeToolsService(
@@ -39,6 +40,7 @@ describe("AgentOutcomeToolsService", () => {
       inboxService,
       matchingService,
       personalizationService,
+      profilesService,
       undefined,
       scheduledTasksService,
     );
@@ -154,6 +156,19 @@ describe("AgentOutcomeToolsService", () => {
       }),
       recordBehaviorSignal: vi.fn().mockResolvedValue(undefined),
       refreshPreferenceMemoryDocument: vi.fn().mockResolvedValue(undefined),
+      refreshProfileSummaryDocument: vi.fn().mockResolvedValue(undefined),
+      patchGlobalRules: vi.fn().mockResolvedValue({
+        intentMode: "group",
+        reachable: "available_only",
+      }),
+    };
+    const profilesService: any = {
+      applyAgentProfilePatch: vi.fn().mockResolvedValue({
+        displayName: "Alex",
+        profile: {
+          bio: "Designer",
+        },
+      }),
     };
     const scheduledTasksService: any = {
       createTask: vi.fn().mockResolvedValue({
@@ -183,6 +198,7 @@ describe("AgentOutcomeToolsService", () => {
       inboxService,
       matchingService,
       personalizationService,
+      profilesService,
       recurringCirclesService,
       scheduledTasksService,
     );
@@ -238,6 +254,18 @@ describe("AgentOutcomeToolsService", () => {
       circleId: "circle-1",
       ownerUserId: "owner-1",
       userId: "user-2",
+    });
+    const patched = await service.patchProfile({
+      userId: "user-1",
+      consentGranted: true,
+      consentSource: "explicit_user_message",
+      profile: {
+        displayName: "Alex",
+      },
+      globalRules: {
+        intentMode: "group",
+        reachable: "available_only",
+      },
     });
 
     expect(circles).toEqual(
@@ -305,6 +333,32 @@ describe("AgentOutcomeToolsService", () => {
         joined: true,
         circleId: "circle-1",
         userId: "user-2",
+      }),
+    );
+    expect(patched).toEqual(
+      expect.objectContaining({
+        patched: true,
+        consentSource: "explicit_user_message",
+        profile: expect.objectContaining({
+          displayName: "Alex",
+        }),
+        globalRules: expect.objectContaining({
+          intentMode: "group",
+          reachable: "available_only",
+        }),
+      }),
+    );
+    expect(profilesService.applyAgentProfilePatch).toHaveBeenCalledWith(
+      "user-1",
+      expect.objectContaining({
+        displayName: "Alex",
+      }),
+    );
+    expect(personalizationService.patchGlobalRules).toHaveBeenCalledWith(
+      "user-1",
+      expect.objectContaining({
+        intentMode: "group",
+        reachable: "available_only",
       }),
     );
     expect(personalizationService.storeInteractionSummary).toHaveBeenCalledWith(

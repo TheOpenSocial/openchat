@@ -28,6 +28,11 @@ type ProfileUpdatePayload = {
   visibility?: "public" | "limited" | "private";
 };
 
+export type AgentProfilePatchPayload = ProfileUpdatePayload & {
+  displayName?: string;
+  availabilityMode?: "now" | "later_today" | "flexible" | "away" | "invisible";
+};
+
 type ProfilePhotoMimeType = "image/jpeg" | "image/png" | "image/webp";
 
 const PROFILE_PHOTO_MAX_BYTES = 10 * 1024 * 1024;
@@ -160,6 +165,51 @@ export class ProfilesService {
       includeInterestTopicVectors: false,
     });
     return result;
+  }
+
+  async applyAgentProfilePatch(
+    userId: string,
+    payload: AgentProfilePatchPayload,
+  ) {
+    const profilePayload: ProfileUpdatePayload & {
+      availabilityMode?: AgentProfilePatchPayload["availabilityMode"];
+    } = {};
+
+    if (payload.bio !== undefined) {
+      profilePayload.bio = payload.bio;
+    }
+    if (payload.city !== undefined) {
+      profilePayload.city = payload.city;
+    }
+    if (payload.country !== undefined) {
+      profilePayload.country = payload.country;
+    }
+    if (payload.visibility !== undefined) {
+      profilePayload.visibility = payload.visibility;
+    }
+    if (payload.availabilityMode !== undefined) {
+      profilePayload.availabilityMode = payload.availabilityMode;
+    }
+
+    const profile =
+      Object.keys(profilePayload).length > 0
+        ? await this.upsertProfile(userId, profilePayload)
+        : await this.getProfile(userId);
+
+    const normalizedDisplayName = payload.displayName?.trim();
+    if (normalizedDisplayName) {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          displayName: normalizedDisplayName.slice(0, 120),
+        },
+      });
+    }
+
+    return {
+      displayName: normalizedDisplayName?.slice(0, 120) ?? null,
+      profile,
+    };
   }
 
   async getProfileCompletion(userId: string) {

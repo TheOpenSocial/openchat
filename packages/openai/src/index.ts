@@ -1268,6 +1268,12 @@ export class OpenAIClient {
       normalized.includes("nothing yet") ||
       normalized.includes("not finding anyone") ||
       normalized.includes("no matches");
+    const looksLikePreferenceUpdate =
+      normalized.includes("remember that") ||
+      normalized.includes("i prefer") ||
+      normalized.includes("set my default") ||
+      normalized.includes("update my preferences") ||
+      normalized.includes("change my profile");
 
     return conversationPlanSchema.parse({
       specialists: [
@@ -1400,6 +1406,18 @@ export class OpenAIClient {
                 input: {
                   title: "Follow up on this social goal",
                   summary: userMessage.slice(0, 240),
+                },
+              },
+            ]
+          : []),
+        ...(looksLikePreferenceUpdate
+          ? [
+              {
+                role: "manager" as const,
+                tool: "profile.patch" as const,
+                input: {
+                  consentGranted: true,
+                  consentSource: "explicit_user_message",
                 },
               },
             ]

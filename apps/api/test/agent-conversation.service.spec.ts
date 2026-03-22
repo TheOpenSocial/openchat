@@ -211,6 +211,17 @@ function createServiceHarness() {
       status: "active",
       role: "member",
     }),
+    patchProfile: vi.fn().mockResolvedValue({
+      patched: true,
+      consentSource: "explicit_user_message",
+      profile: {
+        displayName: "Alex",
+      },
+      globalRules: {
+        intentMode: "group",
+        reachable: "available_only",
+      },
+    }),
     startConversation: vi.fn().mockResolvedValue({
       threadId: "thread-2",
       title: "Tennis tonight",
@@ -488,6 +499,88 @@ describe("AgentConversationService", () => {
             tool: "followup.schedule",
             status: "executed",
             summary: "Scheduled a follow-up task (task-1).",
+          }),
+        }),
+      }),
+    );
+  });
+
+  it("applies profile.patch only with explicit consent", async () => {
+    const { service, openai, agentOutcomeToolsService, agentService, prisma } =
+      createServiceHarness();
+
+    openai.planConversationTurn.mockResolvedValueOnce({
+      specialists: ["personalization_interpreter"],
+      toolCalls: [
+        {
+          role: "manager",
+          tool: "profile.patch",
+          input: {
+            consentGranted: true,
+            consentSource: "explicit_user_message",
+            profile: {
+              displayName: "Alex",
+            },
+            globalRules: {
+              intentMode: "group",
+              reachable: "available_only",
+            },
+          },
+        },
+      ],
+      responseGoal: "save the user preference for future planning",
+    });
+    openai.composeConversationResponse.mockResolvedValueOnce(
+      "Saved. I’ll bias future planning toward groups and only reach out when it fits your availability.",
+    );
+
+    await service.runAgenticTurn({
+      threadId: IDS.threadId,
+      userId: IDS.userId,
+      content:
+        "Remember that I prefer small groups and only when I'm available",
+      traceId: "trace-agentic-profile-patch",
+    });
+
+    expect(agentOutcomeToolsService.patchProfile).toHaveBeenCalledWith({
+      userId: IDS.userId,
+      consentGranted: true,
+      consentSource: "explicit_user_message",
+      profile: {
+        displayName: "Alex",
+        bio: undefined,
+        city: undefined,
+        country: undefined,
+        visibility: undefined,
+        availabilityMode: undefined,
+      },
+      globalRules: {
+        whoCanContact: undefined,
+        reachable: "available_only",
+        intentMode: "group",
+        modality: undefined,
+        languagePreferences: undefined,
+        requireVerifiedUsers: undefined,
+        notificationMode: undefined,
+        agentAutonomy: undefined,
+        memoryMode: undefined,
+      },
+    });
+    expect(agentService.appendWorkflowUpdate).toHaveBeenCalledWith(
+      IDS.threadId,
+      "Saved updated profile defaults for future planning.",
+      expect.objectContaining({
+        category: "agent_tool_action",
+        tool: "profile.patch",
+      }),
+    );
+    expect(prisma.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: "agent.tool_action_executed",
+          metadata: expect.objectContaining({
+            tool: "profile.patch",
+            summary: "Saved updated profile defaults for future planning.",
           }),
         }),
       }),
