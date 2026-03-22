@@ -30,6 +30,8 @@ import {
   ScheduledTaskRunRecord,
   SearchSnapshotResponse,
   UserIntentExplanation,
+  isOfflineApiError,
+  isRetryableApiError,
 } from "../lib/api";
 import { openAgentThreadSse } from "../lib/agent-thread-sse";
 import { type AppLocale, supportedLocales, t } from "../i18n/strings";
@@ -68,6 +70,13 @@ import { MessageComposer } from "../components/MessageComposer";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { SurfaceCard } from "../components/SurfaceCard";
 import { hapticImpact, hapticSelection } from "../lib/haptics";
+import {
+  clearOfflineOutbox,
+  loadOfflineOutbox,
+  processOfflineOutbox,
+  queueOfflineComposerSend,
+  queueOfflineProfileSave,
+} from "../lib/offline-outbox";
 import { useNetworkOnline } from "../lib/use-network-online";
 import { usePrimaryAgentThread } from "../lib/use-primary-agent-thread";
 import {
@@ -178,6 +187,7 @@ export function HomeScreen({
   const [creatingChat, setCreatingChat] = useState(false);
   const [syncingChats, setSyncingChats] = useState<Record<string, boolean>>({});
   const [syncingAllChats, setSyncingAllChats] = useState(false);
+  const [pendingOutboxCount, setPendingOutboxCount] = useState(0);
   const [chatStorageReady, setChatStorageReady] = useState(() => designMock);
   const [realtimeState, setRealtimeState] = useState<RealtimeConnectionState>(
     () => (designMock ? "connected" : "offline"),
@@ -277,6 +287,14 @@ export function HomeScreen({
     "chat",
   );
   const netOnline = useNetworkOnline(skipNetwork);
+  const refreshPendingOutboxCount = useCallback(async () => {
+    if (designMock || enableE2ELocalMode || skipNetwork) {
+      setPendingOutboxCount(0);
+      return;
+    }
+    const pending = await loadOfflineOutbox(session.userId);
+    setPendingOutboxCount(pending.length);
+  }, [designMock, enableE2ELocalMode, session.userId, skipNetwork]);
   const agentThreadSyncEnabled =
     !skipNetwork && !enableE2ELocalMode && !designMock;
   const { loading: agentThreadLoading, threadId: agentThreadId } =
@@ -290,6 +308,10 @@ export function HomeScreen({
           text: "Could not load your conversation.",
         }),
     });
+
+  useEffect(() => {
+    void refreshPendingOutboxCount().catch(() => {});
+  }, [refreshPendingOutboxCount]);
 
   const selectedChat = useMemo(
     () => chats.find((chat) => chat.id === selectedChatId) ?? null,
@@ -1005,6 +1027,9 @@ export function HomeScreen({
     if (skipNetwork) {
       return;
     }
+    if (!netOnline) {
+      return;
+    }
     if (!chatStorageReady || chats.length === 0) {
       return;
     }
@@ -1029,7 +1054,88 @@ export function HomeScreen({
       cancelled = true;
       clearInterval(interval);
     };
-  }, [chatStorageReady, chats.length, skipNetwork, syncChatThread]);
+  }, [chatStorageReady, chats.length, netOnline, skipNetwork, syncChatThread]);
+
+  useEffect(() => {
+    if (skipNetwork || designMock || enableE2ELocalMode || !netOnline) {
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      const result = await processOfflineOutbox({
+        userId: session.userId,
+        accessToken: session.accessToken,
+      }).catch(() => null);
+      if (cancelled || !result) {
+        return;
+      }
+      await refreshPendingOutboxCount().catch(() => {});
+      if (result.sentThreadIds.includes(agentThreadId ?? "")) {
+        const messages = agentThreadId
+          ? await api
+              .listAgentThreadMessages(agentThreadId, session.accessToken)
+              .catch(() => null)
+          : null;
+        if (messages) {
+          setAgentTimeline(agentThreadMessagesToTranscript(messages));
+        }
+      }
+      if (result.processed > 0) {
+        setBanner({
+          tone: "success",
+          text:
+            result.remaining > 0
+              ? `Synced ${result.processed} queued action${result.processed === 1 ? "" : "s"}. ${result.remaining} still waiting.`
+              : `Synced ${result.processed} queued action${result.processed === 1 ? "" : "s"}.`,
+        });
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    agentThreadId,
+    designMock,
+    enableE2ELocalMode,
+    netOnline,
+    refreshPendingOutboxCount,
+    session.accessToken,
+    session.userId,
+    skipNetwork,
+  ]);
+
+  useEffect(() => {
+    if (
+      skipNetwork ||
+      designMock ||
+      enableE2ELocalMode ||
+      !netOnline ||
+      !agentThreadId
+    ) {
+      return;
+    }
+    let cancelled = false;
+    void api
+      .listAgentThreadMessages(agentThreadId, session.accessToken)
+      .then((messages) => {
+        if (!cancelled) {
+          setAgentTimeline(agentThreadMessagesToTranscript(messages));
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    agentThreadId,
+    designMock,
+    enableE2ELocalMode,
+    netOnline,
+    session.accessToken,
+    skipNetwork,
+  ]);
 
   const syncChatsNow = async () => {
     const chatIds = chatsRef.current.map((thread) => thread.id);
@@ -1175,14 +1281,6 @@ export function HomeScreen({
       return;
     }
 
-    if (!skipNetwork && !designMock && !enableE2ELocalMode && !netOnline) {
-      setBanner({
-        tone: "error",
-        text: t("sendBlockedOffline", locale),
-      });
-      return;
-    }
-
     const imageExtras = parseOptionalImageAttachmentUrl(agentImageUrlDraft);
     setSendingIntent(true);
     if (messageOverride == null) {
@@ -1227,6 +1325,41 @@ export function HomeScreen({
           ]
         : []),
     ]);
+
+    if (!skipNetwork && !designMock && !enableE2ELocalMode && !netOnline) {
+      await queueOfflineComposerSend({
+        userId: session.userId,
+        mode: agentComposerMode,
+        threadId: agentThreadId ?? null,
+        text: rawText,
+        ...(agentVoiceTranscriptRef.current?.trim()
+          ? { voiceTranscript: agentVoiceTranscriptRef.current.trim() }
+          : {}),
+        ...(imageExtras?.length ? { attachments: imageExtras } : {}),
+        ...(agentComposerMode === "intent"
+          ? {
+              allowDecomposition: decomposeIntent,
+              maxIntents: decomposeMaxIntents,
+            }
+          : {}),
+      });
+      agentVoiceTranscriptRef.current = null;
+      await refreshPendingOutboxCount().catch(() => {});
+      setAgentTimeline((current) => [
+        ...current,
+        {
+          id: `agent_queue_${timelineIdBase}`,
+          role: "agent",
+          body: "Queued offline. I’ll send this as soon as you’re back online.",
+        },
+      ]);
+      setBanner({
+        tone: "info",
+        text: "Queued offline. We’ll send it automatically when internet returns.",
+      });
+      setSendingIntent(false);
+      return;
+    }
 
     try {
       if (enableE2ELocalMode || designMock) {
@@ -1389,6 +1522,40 @@ export function HomeScreen({
         return;
       }
 
+      if (isOfflineApiError(error) || isRetryableApiError(error)) {
+        await queueOfflineComposerSend({
+          userId: session.userId,
+          mode: agentComposerMode,
+          threadId: agentThreadId ?? null,
+          text: rawText,
+          ...(agentVoiceTranscriptRef.current?.trim()
+            ? { voiceTranscript: agentVoiceTranscriptRef.current.trim() }
+            : {}),
+          ...(imageExtras?.length ? { attachments: imageExtras } : {}),
+          ...(agentComposerMode === "intent"
+            ? {
+                allowDecomposition: decomposeIntent,
+                maxIntents: decomposeMaxIntents,
+              }
+            : {}),
+        });
+        agentVoiceTranscriptRef.current = null;
+        await refreshPendingOutboxCount().catch(() => {});
+        setAgentTimeline((current) => [
+          ...current,
+          {
+            id: `agent_queue_${timelineIdBase}`,
+            role: "agent",
+            body: "Network dropped, so I queued this and will retry automatically.",
+          },
+        ]);
+        setBanner({
+          tone: "info",
+          text: "Network issue detected. Your message is queued and will retry automatically.",
+        });
+        return;
+      }
+
       setAgentTimeline((current) => [
         ...current,
         {
@@ -1416,10 +1583,16 @@ export function HomeScreen({
 
     if (!skipNetwork && !designMock && !enableE2ELocalMode && !netOnline) {
       onboardingSeedHandledRef.current = true;
+      void queueOfflineComposerSend({
+        userId: session.userId,
+        mode: "chat",
+        threadId: agentThreadId ?? null,
+        text: seed,
+      }).then(() => refreshPendingOutboxCount().catch(() => {}));
       onInitialAgentMessageConsumed();
       setBanner({
-        tone: "error",
-        text: t("sendBlockedOffline", locale),
+        tone: "info",
+        text: "Your first intent is queued offline and will send automatically when internet returns.",
       });
       return;
     }
@@ -1514,6 +1687,24 @@ export function HomeScreen({
           textLength: rawText.length,
         });
       } catch (error) {
+        if (isOfflineApiError(error) || isRetryableApiError(error)) {
+          await queueOfflineComposerSend({
+            userId: session.userId,
+            mode: "chat",
+            threadId: agentThreadId,
+            text: rawText,
+          });
+          await refreshPendingOutboxCount().catch(() => {});
+          setAgentTimeline((current) => [
+            ...current,
+            {
+              id: `agent_queue_${timelineIdBase}`,
+              role: "agent",
+              body: "Your first intent is queued and will retry automatically.",
+            },
+          ]);
+          return;
+        }
         setAgentTimeline((current) => [
           ...current,
           {
@@ -1894,12 +2085,51 @@ export function HomeScreen({
     if (!designMock) {
       await clearStoredChats(session.userId).catch(() => {});
       await clearTelemetryEvents(session.userId).catch(() => {});
+      await clearOfflineOutbox(session.userId).catch(() => {});
     }
     setTelemetrySummary(null);
     await onResetSession();
   };
 
   const saveSettings = async () => {
+    const socialModePayloadValue =
+      profileDraft.socialMode === "one_to_one"
+        ? {
+            socialMode: "balanced" as const,
+            preferOneToOne: true,
+            allowGroupInvites: false,
+          }
+        : profileDraft.socialMode === "group"
+          ? {
+              socialMode: "high_energy" as const,
+              preferOneToOne: false,
+              allowGroupInvites: true,
+            }
+          : {
+              socialMode: "balanced" as const,
+              preferOneToOne: false,
+              allowGroupInvites: true,
+            };
+    const globalRulesPayloadValue = {
+      whoCanContact: "anyone" as const,
+      reachable: "always" as const,
+      intentMode:
+        profileDraft.socialMode === "one_to_one"
+          ? ("one_to_one" as const)
+          : profileDraft.socialMode === "group"
+            ? ("group" as const)
+            : ("balanced" as const),
+      modality: "either" as const,
+      languagePreferences: ["en", "es"],
+      countryPreferences: [],
+      requireVerifiedUsers: false,
+      notificationMode:
+        profileDraft.notificationMode === "digest"
+          ? ("digest" as const)
+          : ("immediate" as const),
+      agentAutonomy: "suggest_only" as const,
+      memoryMode: "standard" as const,
+    };
     try {
       if (designMock) {
         onProfileUpdated(profileDraft);
@@ -1913,50 +2143,35 @@ export function HomeScreen({
         });
         return;
       }
+      if (!netOnline) {
+        await queueOfflineProfileSave({
+          userId: session.userId,
+          displayName: profileDraft.displayName,
+          bio: profileDraft.bio,
+          city: profileDraft.city,
+          country: profileDraft.country,
+          visibility: "public",
+          interests: profileDraft.interests,
+          socialMode: socialModePayloadValue,
+          globalRules: globalRulesPayloadValue,
+        });
+        await refreshPendingOutboxCount().catch(() => {});
+        onProfileUpdated(profileDraft);
+        setBanner({
+          tone: "info",
+          text: "Settings saved locally and queued for sync.",
+        });
+        return;
+      }
       await Promise.all([
         api.setSocialMode(
           session.userId,
-          profileDraft.socialMode === "one_to_one"
-            ? {
-                socialMode: "balanced",
-                preferOneToOne: true,
-                allowGroupInvites: false,
-              }
-            : profileDraft.socialMode === "group"
-              ? {
-                  socialMode: "high_energy",
-                  preferOneToOne: false,
-                  allowGroupInvites: true,
-                }
-              : {
-                  socialMode: "balanced",
-                  preferOneToOne: false,
-                  allowGroupInvites: true,
-                },
+          socialModePayloadValue,
           session.accessToken,
         ),
         api.setGlobalRules(
           session.userId,
-          {
-            whoCanContact: "anyone",
-            reachable: "always",
-            intentMode:
-              profileDraft.socialMode === "one_to_one"
-                ? "one_to_one"
-                : profileDraft.socialMode === "group"
-                  ? "group"
-                  : "balanced",
-            modality: "either",
-            languagePreferences: ["en", "es"],
-            countryPreferences: [],
-            requireVerifiedUsers: false,
-            notificationMode:
-              profileDraft.notificationMode === "digest"
-                ? "digest"
-                : "immediate",
-            agentAutonomy: "suggest_only",
-            memoryMode: "standard",
-          },
+          globalRulesPayloadValue,
           session.accessToken,
         ),
       ]);
@@ -1971,6 +2186,26 @@ export function HomeScreen({
         notificationMode: profileDraft.notificationMode,
       });
     } catch (error) {
+      if (isOfflineApiError(error) || isRetryableApiError(error)) {
+        await queueOfflineProfileSave({
+          userId: session.userId,
+          displayName: profileDraft.displayName,
+          bio: profileDraft.bio,
+          city: profileDraft.city,
+          country: profileDraft.country,
+          visibility: "public",
+          interests: profileDraft.interests,
+          socialMode: socialModePayloadValue,
+          globalRules: globalRulesPayloadValue,
+        });
+        await refreshPendingOutboxCount().catch(() => {});
+        onProfileUpdated(profileDraft);
+        setBanner({
+          tone: "info",
+          text: "Network issue detected. Settings are queued and will sync automatically.",
+        });
+        return;
+      }
       setBanner({
         tone: "error",
         text: `Could not save settings: ${String(error)}`,
@@ -2379,6 +2614,14 @@ export function HomeScreen({
         {!skipNetwork && !netOnline ? (
           <View className="px-5 pt-3">
             <InlineNotice text={t("offlineNotice", locale)} tone="info" />
+          </View>
+        ) : null}
+        {!skipNetwork && pendingOutboxCount > 0 ? (
+          <View className="px-5 pt-3">
+            <InlineNotice
+              text={`${pendingOutboxCount} action${pendingOutboxCount === 1 ? "" : "s"} queued for sync.`}
+              tone="info"
+            />
           </View>
         ) : null}
 

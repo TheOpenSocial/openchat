@@ -13,6 +13,8 @@ export interface WebSession {
   accessToken: string;
   refreshToken: string;
   sessionId: string;
+  profileCompleted?: boolean;
+  onboardingState?: string | null;
 }
 
 export interface UserProfileDraft {

@@ -6,6 +6,7 @@ import {
   type LazyExoticComponent,
   type FC,
   Suspense,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -16,16 +17,32 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AnimatedScreen } from "./src/components/AnimatedScreen";
 import { AppToastHost } from "./src/components/AppToastHost";
 import { LoadingState } from "./src/components/LoadingState";
-import { api, configureApiAuthLifecycle } from "./src/lib/api";
+import { PremiumSplashOverlay } from "./src/components/PremiumSplashOverlay";
+import { showErrorToast } from "./src/lib/app-toast";
+import {
+  api,
+  configureApiAuthLifecycle,
+  isOfflineApiError,
+  isRetryableApiError,
+} from "./src/lib/api";
+import { queueOfflineProfileSave } from "./src/lib/offline-outbox";
+import { uploadProfilePhotoFromPickerAsset } from "./src/lib/profile-photo-upload";
 import {
   clearStoredSession,
   loadStoredSession,
   saveStoredSession,
 } from "./src/lib/session-storage";
 import { trackTelemetryEvent } from "./src/lib/telemetry";
+import {
+  draftStateToUserProfileDraft,
+  globalRulesPayload,
+  socialModePayload,
+  type OnboardingDraftState,
+} from "./src/onboarding/onboarding-model";
+import { clearOnboardingDraft } from "./src/onboarding/onboarding-storage";
+import { OnboardingFlow } from "./src/onboarding/OnboardingFlow";
 import { AuthScreen } from "./src/screens/AuthScreen";
 import type { HomeScreenProps } from "./src/screens/HomeScreen";
-import { OnboardingScreen } from "./src/screens/OnboardingScreen";
 import { AppStage, MobileSession, UserProfileDraft } from "./src/types";
 
 const HomeScreen: LazyExoticComponent<FC<HomeScreenProps>> = lazy(() =>
@@ -47,13 +64,13 @@ function ProductionApp() {
   const enableE2ELocalMode =
     process.env.EXPO_PUBLIC_ENABLE_E2E_LOCAL_MODE === "1";
   const [isBootstrapping, setIsBootstrapping] = useState(true);
+  const [splashLayerVisible, setSplashLayerVisible] = useState(true);
   const [stage, setStage] = useState<AppStage>("auth");
   const [authError, setAuthError] = useState<string | null>(null);
   const [onboardingError, setOnboardingError] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
   const [onboardingLoading, setOnboardingLoading] = useState(false);
   const [session, setSession] = useState<MobileSession | null>(null);
-  const [displayName, setDisplayName] = useState("Explorer");
   const [profile, setProfile] = useState<UserProfileDraft>({
     displayName: "Explorer",
     bio: "",
@@ -63,6 +80,9 @@ function ProductionApp() {
     socialMode: "one_to_one",
     notificationMode: "live",
   });
+  const [homeAgentSeedMessage, setHomeAgentSeedMessage] = useState<
+    string | null
+  >(null);
   const appOpenedTrackedRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -103,8 +123,9 @@ function ProductionApp() {
     let mounted = true;
 
     const restore = async () => {
+      let stored = null as Awaited<ReturnType<typeof loadStoredSession>>;
       try {
-        const stored = await loadStoredSession();
+        stored = await loadStoredSession();
         if (!stored) {
           return;
         }
@@ -126,21 +147,51 @@ function ProductionApp() {
           return;
         }
 
+        const cached = stored;
         setSession(restoredSession);
-        setDisplayName(stored.displayName);
         setProfile((current) => ({
           ...current,
-          displayName: stored.displayName,
+          displayName: cached.displayName,
         }));
         setStage(completion.completed ? "home" : "onboarding");
-        void trackTelemetryEvent(stored.userId, "auth_session_restored", {
+        void saveStoredSession({
+          ...cached,
+          profileCompleted: completion.completed,
+          onboardingState: completion.onboardingState,
+        }).catch(() => {});
+        void trackTelemetryEvent(cached.userId, "auth_session_restored", {
           completionState: completion.onboardingState,
           profileCompleted: completion.completed,
         }).catch(() => {});
-      } catch {
-        await clearStoredSession();
-        if (mounted) {
-          setStage("auth");
+      } catch (error) {
+        const canUseCached =
+          isOfflineApiError(error) || isRetryableApiError(error);
+        if (canUseCached && stored) {
+          const cached = stored;
+          if (!mounted) {
+            return;
+          }
+          setSession({
+            userId: cached.userId,
+            displayName: cached.displayName,
+            email: cached.email ?? null,
+            accessToken: cached.accessToken,
+            refreshToken: cached.refreshToken,
+            sessionId: cached.sessionId,
+          });
+          setProfile((current) => ({
+            ...current,
+            displayName: cached.displayName,
+          }));
+          setStage(cached.profileCompleted ? "home" : "onboarding");
+          setAuthError(
+            "You’re offline. Restored your last session state and will sync when internet returns.",
+          );
+        } else {
+          await clearStoredSession();
+          if (mounted) {
+            setStage("auth");
+          }
         }
       } finally {
         if (mounted) {
@@ -188,7 +239,6 @@ function ProductionApp() {
         });
 
         setSession(nextSession);
-        setDisplayName(nextSession.displayName);
         setProfile((current) => ({
           ...current,
           displayName: nextSession.displayName,
@@ -225,12 +275,21 @@ function ProductionApp() {
       );
 
       setSession(nextSession);
-      setDisplayName(nextSession.displayName);
       setProfile((current) => ({
         ...current,
         displayName: nextSession.displayName,
       }));
       setStage(completion.completed ? "home" : "onboarding");
+      await saveStoredSession({
+        userId: nextSession.userId,
+        displayName: nextSession.displayName,
+        email: nextSession.email,
+        accessToken: nextSession.accessToken,
+        refreshToken: nextSession.refreshToken,
+        sessionId: nextSession.sessionId,
+        profileCompleted: completion.completed,
+        onboardingState: completion.onboardingState,
+      });
       void trackTelemetryEvent(nextSession.userId, "auth_success", {
         source: "oauth",
       }).catch(() => {});
@@ -241,7 +300,10 @@ function ProductionApp() {
     }
   };
 
-  const handleOnboardingComplete = async (draft: UserProfileDraft) => {
+  const handleOnboardingComplete = async (
+    state: OnboardingDraftState,
+    meta: { firstIntentText: string | null },
+  ) => {
     if (!session) {
       setOnboardingError("Missing authenticated session.");
       return;
@@ -249,6 +311,46 @@ function ProductionApp() {
 
     setOnboardingLoading(true);
     setOnboardingError(null);
+
+    const draft = draftStateToUserProfileDraft(state);
+    const nextDisplayName = draft.displayName.trim() || session.displayName;
+
+    const finalizeLocally = async (queued: boolean) => {
+      await saveStoredSession({
+        userId: session.userId,
+        displayName: nextDisplayName,
+        email: session.email,
+        accessToken: session.accessToken,
+        refreshToken: session.refreshToken,
+        sessionId: session.sessionId,
+        profileCompleted: true,
+        onboardingState: "completed",
+      });
+      setSession((prev) =>
+        prev
+          ? {
+              ...prev,
+              displayName: nextDisplayName,
+            }
+          : prev,
+      );
+      setProfile(draft);
+      setHomeAgentSeedMessage(meta.firstIntentText?.trim() || null);
+      await clearOnboardingDraft(session.userId);
+      setStage("home");
+      if (queued) {
+        setOnboardingError(
+          "Saved locally. We’ll finish syncing your onboarding when internet is back.",
+        );
+      }
+      void trackTelemetryEvent(session.userId, "onboarding_completed", {
+        socialMode: draft.socialMode,
+        notificationMode: draft.notificationMode,
+        interestsCount: draft.interests.length,
+        goalsCount: state.onboardingGoals.length,
+        hadFirstIntent: Boolean(meta.firstIntentText?.trim()),
+      }).catch(() => {});
+    };
 
     try {
       await api.updateProfile(
@@ -261,6 +363,24 @@ function ProductionApp() {
         },
         session.accessToken,
       );
+
+      if (state.profilePhotoUri) {
+        try {
+          await uploadProfilePhotoFromPickerAsset(
+            session.userId,
+            session.accessToken,
+            {
+              uri: state.profilePhotoUri,
+              mimeType: state.profilePhotoMimeType,
+              fileSize: state.profilePhotoFileSize,
+            },
+          );
+        } catch (photoErr) {
+          showErrorToast(String(photoErr), {
+            title: "Photo not uploaded",
+          });
+        }
+      }
 
       await Promise.all([
         api.replaceInterests(
@@ -280,61 +400,54 @@ function ProductionApp() {
         ),
         api.setSocialMode(
           session.userId,
-          draft.socialMode === "one_to_one"
-            ? {
-                socialMode: "balanced",
-                preferOneToOne: true,
-                allowGroupInvites: false,
-              }
-            : draft.socialMode === "group"
-              ? {
-                  socialMode: "high_energy",
-                  preferOneToOne: false,
-                  allowGroupInvites: true,
-                }
-              : {
-                  socialMode: "balanced",
-                  preferOneToOne: false,
-                  allowGroupInvites: true,
-                },
+          socialModePayload(state),
           session.accessToken,
         ),
         api.setGlobalRules(
           session.userId,
-          {
-            whoCanContact: "anyone",
-            reachable: "always",
-            intentMode:
-              draft.socialMode === "one_to_one"
-                ? "one_to_one"
-                : draft.socialMode === "group"
-                  ? "group"
-                  : "balanced",
-            modality: "either",
-            languagePreferences: ["en", "es"],
-            requireVerifiedUsers: false,
-            notificationMode:
-              draft.notificationMode === "digest" ? "digest" : "immediate",
-            agentAutonomy: "suggest_only",
-            memoryMode: "standard",
-          },
+          globalRulesPayload(state),
           session.accessToken,
         ),
       ]);
-
-      setProfile(draft);
-      setStage("home");
-      void trackTelemetryEvent(session.userId, "onboarding_completed", {
-        socialMode: draft.socialMode,
-        notificationMode: draft.notificationMode,
-        interestsCount: draft.interests.length,
-      }).catch(() => {});
+      await finalizeLocally(false);
     } catch (error) {
-      setOnboardingError(String(error));
+      if (isOfflineApiError(error) || isRetryableApiError(error)) {
+        await queueOfflineProfileSave({
+          userId: session.userId,
+          displayName: nextDisplayName,
+          bio: draft.bio,
+          city: draft.city,
+          country: draft.country,
+          visibility: "public",
+          interests: draft.interests,
+          socialMode: socialModePayload(state),
+          globalRules: globalRulesPayload(state),
+          ...(state.profilePhotoUri
+            ? {
+                profilePhoto: {
+                  uri: state.profilePhotoUri,
+                  ...(state.profilePhotoMimeType
+                    ? { mimeType: state.profilePhotoMimeType }
+                    : {}),
+                  ...(typeof state.profilePhotoFileSize === "number"
+                    ? { fileSize: state.profilePhotoFileSize }
+                    : {}),
+                },
+              }
+            : {}),
+        });
+        await finalizeLocally(true);
+      } else {
+        setOnboardingError(String(error));
+      }
     } finally {
       setOnboardingLoading(false);
     }
   };
+
+  const handleInitialAgentSeedConsumed = useCallback(() => {
+    setHomeAgentSeedMessage(null);
+  }, []);
 
   const handleResetSession = async () => {
     await clearStoredSession();
@@ -361,48 +474,54 @@ function ProductionApp() {
     }).catch(() => {});
   }, [isBootstrapping, session?.userId, stage]);
 
-  if (isBootstrapping) {
-    return (
-      <SafeAreaProvider style={{ flex: 1 }}>
-        <StatusBar style="light" />
-        <LoadingState label="Restoring session..." />
-        <AppToastHost />
-      </SafeAreaProvider>
-    );
-  }
+  const handleSplashExitComplete = useCallback(() => {
+    setSplashLayerVisible(false);
+  }, []);
+
+  const bootstrapReady = !isBootstrapping;
 
   return (
     <SafeAreaProvider style={{ flex: 1 }}>
       <StatusBar style="light" />
-      {stage === "auth" ? (
-        <AuthScreen
-          allowE2EBypass={allowE2EBypass}
-          errorMessage={authError}
-          loading={authLoading}
-          onAuthenticated={handleAuthenticate}
-        />
-      ) : (
-        <AnimatedScreen screenKey={stageKey}>
-          {stage === "onboarding" ? (
-            <OnboardingScreen
-              defaultName={displayName}
-              errorMessage={onboardingError}
-              loading={onboardingLoading}
-              onComplete={handleOnboardingComplete}
-            />
-          ) : null}
-          {stage === "home" && session ? (
-            <Suspense fallback={<LoadingState label="Loading your space…" />}>
-              <HomeScreen
-                initialProfile={profile}
-                onProfileUpdated={setProfile}
-                onResetSession={handleResetSession}
+      {bootstrapReady ? (
+        stage === "auth" ? (
+          <AuthScreen
+            allowE2EBypass={allowE2EBypass}
+            errorMessage={authError}
+            loading={authLoading}
+            onAuthenticated={handleAuthenticate}
+          />
+        ) : (
+          <AnimatedScreen screenKey={stageKey}>
+            {stage === "onboarding" && session ? (
+              <OnboardingFlow
+                errorMessage={onboardingError}
+                loading={onboardingLoading}
+                onSubmit={handleOnboardingComplete}
                 session={session}
               />
-            </Suspense>
-          ) : null}
-        </AnimatedScreen>
-      )}
+            ) : null}
+            {stage === "home" && session ? (
+              <Suspense fallback={<LoadingState label="Loading your space…" />}>
+                <HomeScreen
+                  initialAgentMessage={homeAgentSeedMessage}
+                  initialProfile={profile}
+                  onInitialAgentMessageConsumed={handleInitialAgentSeedConsumed}
+                  onProfileUpdated={setProfile}
+                  onResetSession={handleResetSession}
+                  session={session}
+                />
+              </Suspense>
+            ) : null}
+          </AnimatedScreen>
+        )
+      ) : null}
+      {splashLayerVisible ? (
+        <PremiumSplashOverlay
+          onExitComplete={handleSplashExitComplete}
+          requestExit={bootstrapReady}
+        />
+      ) : null}
       <AppToastHost />
     </SafeAreaProvider>
   );

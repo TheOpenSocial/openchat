@@ -24,6 +24,7 @@ It is organized as a production-grade build checklist with:
 Last verified: 2026-03-20
 
 ## Implementation Notes
+- 2026-03-22: Shipped the first real client resilience slice across mobile + web. Added bounded transient retry/backoff and typed offline/transient API errors in both client API layers, mobile persistent offline outbox + replay for composer sends and profile/settings writes, reconnect-triggered agent-thread refresh, pending queued-action UX on mobile, and offline-aware bootstrap/auth restoration on both clients using cached completion state. Remaining gap is `CR-05`: true cross-restart idempotency/conflict resolution still needs deeper backend-backed replay safety beyond client-side dedupe.
 - 2026-03-22: Audited client connectivity resilience. Web/mobile already detect online/offline state and block intent/chat sends while offline, and auth refresh uses an in-flight guard, but there is not yet a first-class client outbox, transient retry/backoff policy, or resumable SSE/chat sync recovery layer. Added a dedicated pending lane to track offline/retry hardening before broader mobile/web scale-up.
 - 2026-03-22: Completed `AH-06` operator replay/debug coverage for agent-issued social actions. Finished the admin debug surface for `GET /api/admin/ops/agent-actions` so blocked or failed tools now reconstruct from audit traces, linked approval checkpoints, latest user turn, and related trace events with concrete replay guidance. Added regression coverage in `apps/api/test/admin.controller.spec.ts`.
 - 2026-03-22: Closed a backend matching/trust gap that surfaced during the policy audit. Added unblock support (`DELETE /api/moderation/blocks/:blockedUserId`, `GET /api/moderation/users/:userId/blocks`), introduced explicit `countryPreferences` in global rules, and upgraded `MatchingService` hard filters so explicit language and country preferences now actually gate matches instead of being stored-only metadata.
@@ -1511,12 +1512,12 @@ This section maps the conceptual product surface in [USE_CASES.md](/Users/crucib
 
 ### 35.13 Client Resilience and Offline Lane
 
-- [ ] `CR-01` Add a shared client retry policy for transient network failures with bounded exponential backoff, cancellation, and idempotent request guards.
-- [ ] `CR-02` Add a persistent offline outbox for high-value user mutations (`intent send`, `agent chat send`, `request actions`, `profile/settings updates`) on mobile first, then web where appropriate.
-- [ ] `CR-03` Add reconnect/resume logic for agent SSE and chat sync so clients can recover after internet loss without losing streamed output or unread state.
-- [ ] `CR-04` Add optimistic pending-state UX for offline or retrying actions so users can see what is queued, failed, retried, or needs manual retry.
-- [ ] `CR-05` Add conflict-resolution and dedupe rules for replayed client mutations, including safe idempotency keys across reconnects and app restarts.
-- [ ] `CR-06` Add offline-aware bootstrap/auth handling so stored sessions, onboarding completion, and profile restoration degrade gracefully when startup happens without internet.
+- [x] `CR-01` Add a shared client retry policy for transient network failures with bounded exponential backoff, cancellation, and typed transient/offline request errors in mobile/web API layers.
+- [x] `CR-02` Add a persistent offline outbox for high-value user mutations (`intent send`, `agent chat send`, `profile/settings updates`) on mobile, with replay on reconnect and profile-photo carry-through where possible.
+- [x] `CR-03` Add reconnect/resume logic for agent SSE and chat sync so clients can recover after internet loss without losing streamed output or unread state.
+- [x] `CR-04` Add optimistic pending-state UX for offline or retrying actions so users can see what is queued and when replay will happen automatically.
+- [~] `CR-05` Add conflict-resolution and dedupe rules for replayed client mutations, including safe idempotency keys across reconnects and app restarts.
+- [x] `CR-06` Add offline-aware bootstrap/auth handling so stored sessions, onboarding completion, and profile restoration degrade gracefully when startup happens without internet.
 
 **Acceptance criteria**
 - Losing connectivity does not silently drop core user actions or force the user to rewrite intent/chat messages.

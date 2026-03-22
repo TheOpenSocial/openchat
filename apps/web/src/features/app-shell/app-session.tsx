@@ -16,6 +16,8 @@ import {
   api,
   configureApiAuthLifecycle,
   getGoogleOAuthStartUrl,
+  isOfflineApiError,
+  isRetryableApiError,
 } from "@/src/lib/api";
 import { webEnv } from "@/src/lib/env";
 import {
@@ -191,8 +193,9 @@ export function AppSessionProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      let stored: WebSession | null = null;
       try {
-        const stored = loadStoredSession();
+        stored = loadStoredSession();
         if (!stored) {
           return;
         }
@@ -201,14 +204,37 @@ export function AppSessionProvider({ children }: { children: ReactNode }) {
           stored.userId,
           stored.accessToken,
         );
+        const cached = stored;
         setSession(stored);
         setProfileComplete(completion.completed);
         setProfileDraft((current) => ({
           ...current,
-          displayName: stored.displayName,
+          displayName: cached.displayName,
         }));
-      } catch {
-        clearStoredSession();
+        saveStoredSession({
+          ...cached,
+          profileCompleted: completion.completed,
+          onboardingState: completion.onboardingState,
+        });
+      } catch (error) {
+        if (
+          (isOfflineApiError(error) || isRetryableApiError(error)) &&
+          stored
+        ) {
+          const cached = stored;
+          setSession(cached);
+          setProfileComplete(Boolean(cached.profileCompleted));
+          setProfileDraft((current) => ({
+            ...current,
+            displayName: cached.displayName,
+          }));
+          setBanner({
+            tone: "info",
+            text: "You’re offline. Restored your last session state and will sync when internet returns.",
+          });
+        } else {
+          clearStoredSession();
+        }
       } finally {
         setBootstrapping(false);
       }
@@ -242,6 +268,11 @@ export function AppSessionProvider({ children }: { children: ReactNode }) {
       nextSession.userId,
       nextSession.accessToken,
     );
+    saveStoredSession({
+      ...nextSession,
+      profileCompleted: completion.completed,
+      onboardingState: completion.onboardingState,
+    });
     setProfileComplete(completion.completed);
     return completion.completed ? ("/home" as const) : ("/onboarding" as const);
   };
