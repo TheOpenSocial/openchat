@@ -24,6 +24,13 @@ interface AuthLifecycleHandlers {
   onAuthFailure?: () => void;
 }
 
+type RetryMode = "none" | "transient";
+
+type RequestOptions = {
+  signal?: AbortSignal;
+  retryMode?: RetryMode;
+};
+
 export interface SessionTokens {
   accessToken: string;
   refreshToken: string;
@@ -398,8 +405,42 @@ export const API_BASE_URL =
 let refreshInFlight: Promise<SessionTokens> | null = null;
 let authLifecycleHandlers: AuthLifecycleHandlers = {};
 
+const TRANSIENT_STATUS_CODES = new Set([408, 425, 429, 500, 502, 503, 504]);
+const RETRY_BASE_DELAY_MS = 350;
+const RETRY_MAX_ATTEMPTS = 3;
+
+export class ApiRequestError extends Error {
+  readonly code: string;
+  readonly statusCode: number | null;
+  readonly transient: boolean;
+  readonly offline: boolean;
+
+  constructor(input: {
+    message: string;
+    code: string;
+    statusCode?: number | null;
+    transient?: boolean;
+    offline?: boolean;
+  }) {
+    super(input.message);
+    this.name = "ApiRequestError";
+    this.code = input.code;
+    this.statusCode = input.statusCode ?? null;
+    this.transient = input.transient ?? false;
+    this.offline = input.offline ?? false;
+  }
+}
+
 export function configureApiAuthLifecycle(handlers: AuthLifecycleHandlers) {
   authLifecycleHandlers = handlers;
+}
+
+export function isRetryableApiError(error: unknown): error is ApiRequestError {
+  return error instanceof ApiRequestError && error.transient;
+}
+
+export function isOfflineApiError(error: unknown): error is ApiRequestError {
+  return error instanceof ApiRequestError && error.offline;
 }
 
 export function buildAgentThreadStreamUrl(
@@ -489,6 +530,116 @@ async function readEnvelope<T>(response: Response): Promise<ApiEnvelope<T>> {
   }
 }
 
+function isAbortError(error: unknown) {
+  return error instanceof Error && error.name === "AbortError";
+}
+
+function isOfflineLikeError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  const message = error.message.toLowerCase();
+  return (
+    message.includes("network request failed") ||
+    message.includes("networkerror") ||
+    message.includes("failed to fetch") ||
+    message.includes("load failed") ||
+    message.includes("offline")
+  );
+}
+
+function shouldRetryStatus(statusCode: number) {
+  return TRANSIENT_STATUS_CODES.has(statusCode);
+}
+
+function shouldRetryMode(method: HttpMethod, mode: RetryMode | undefined) {
+  if (mode) {
+    return mode === "transient";
+  }
+  return method === "GET";
+}
+
+async function delayWithSignal(ms: number, signal?: AbortSignal) {
+  if (signal?.aborted) {
+    throw new DOMException("Aborted", "AbortError");
+  }
+  await new Promise<void>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      cleanup();
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      cleanup();
+      reject(new DOMException("Aborted", "AbortError"));
+    };
+    const cleanup = () => {
+      clearTimeout(timeout);
+      signal?.removeEventListener("abort", onAbort);
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+async function performRequestWithRetry(
+  method: HttpMethod,
+  doFetch: () => Promise<Response>,
+  signal?: AbortSignal,
+  retryMode?: RetryMode,
+) {
+  const allowRetry = shouldRetryMode(method, retryMode);
+  let attempt = 0;
+
+  while (true) {
+    try {
+      const response = await doFetch();
+      if (
+        allowRetry &&
+        shouldRetryStatus(response.status) &&
+        attempt < RETRY_MAX_ATTEMPTS - 1
+      ) {
+        attempt += 1;
+        await delayWithSignal(RETRY_BASE_DELAY_MS * 2 ** (attempt - 1), signal);
+        continue;
+      }
+      return response;
+    } catch (error) {
+      if (isAbortError(error)) {
+        throw error;
+      }
+      const offline = isOfflineLikeError(error);
+      const transient = offline || allowRetry;
+      if (!transient || attempt >= RETRY_MAX_ATTEMPTS - 1) {
+        throw new ApiRequestError({
+          message:
+            error instanceof Error ? error.message : "Network request failed",
+          code: offline ? "offline" : "network_error",
+          transient,
+          offline,
+        });
+      }
+      attempt += 1;
+      await delayWithSignal(RETRY_BASE_DELAY_MS * 2 ** (attempt - 1), signal);
+    }
+  }
+}
+
+function toApiRequestError(
+  envelope: ApiEnvelope<unknown>,
+  method: HttpMethod,
+  path: string,
+  response: Response,
+) {
+  const statusCode = response.status;
+  return new ApiRequestError({
+    message:
+      envelope.error?.message ??
+      `API request failed: ${method} ${path} (${statusCode})`,
+    code: envelope.error?.code ?? "http_error",
+    statusCode,
+    transient: shouldRetryStatus(statusCode),
+  });
+}
+
 async function refreshSessionTokens(): Promise<SessionTokens> {
   if (refreshInFlight) {
     return refreshInFlight;
@@ -500,15 +651,21 @@ async function refreshSessionTokens(): Promise<SessionTokens> {
       throw new Error("Missing refresh token");
     }
 
-    const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        refreshToken: currentSession.refreshToken,
-      }),
-    });
+    const response = await performRequestWithRetry(
+      "POST",
+      () =>
+        fetch(`${API_BASE_URL}/auth/refresh`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            refreshToken: currentSession.refreshToken,
+          }),
+        }),
+      undefined,
+      "transient",
+    );
 
     const envelope = await readEnvelope<SessionTokens>(response);
     if (!response.ok || !envelope.success || envelope.data == null) {
@@ -526,6 +683,9 @@ async function refreshSessionTokens(): Promise<SessionTokens> {
     return refreshed;
   })()
     .catch(async (error) => {
+      if (isRetryableApiError(error)) {
+        throw error;
+      }
       await clearStoredSession();
       authLifecycleHandlers.onAuthFailure?.();
       throw error;
@@ -565,7 +725,7 @@ async function request<T>(
   body?: Record<string, unknown>,
   accessToken?: string,
   query?: Record<string, RequestQueryValue>,
-  fetchOptions?: { signal?: AbortSignal },
+  requestOptions?: RequestOptions,
 ): Promise<T> {
   const pathWithQuery = buildPathWithQuery(path, query);
   const doRequest = (token?: string) =>
@@ -576,25 +736,36 @@ async function request<T>(
         ...(token ? { authorization: `Bearer ${token}` } : {}),
       },
       body: body ? JSON.stringify(body) : undefined,
-      signal: fetchOptions?.signal,
+      signal: requestOptions?.signal,
     });
 
-  let response = await doRequest(accessToken);
+  let response = await performRequestWithRetry(
+    method,
+    () => doRequest(accessToken),
+    requestOptions?.signal,
+    requestOptions?.retryMode,
+  );
   if (response.status === 401 && accessToken) {
     try {
       const refreshed = await refreshSessionTokens();
-      response = await doRequest(refreshed.accessToken);
+      response = await performRequestWithRetry(
+        method,
+        () => doRequest(refreshed.accessToken),
+        requestOptions?.signal,
+        requestOptions?.retryMode,
+      );
     } catch {
-      throw new Error("Session expired. Sign in again.");
+      throw new ApiRequestError({
+        message: "Session expired. Sign in again.",
+        code: "auth_expired",
+        statusCode: 401,
+      });
     }
   }
 
   const envelope = await readEnvelope<T>(response);
   if (!response.ok || !envelope.success || envelope.data == null) {
-    throw new Error(
-      envelope.error?.message ??
-        `API request failed: ${method} ${pathWithQuery}`,
-    );
+    throw toApiRequestError(envelope, method, pathWithQuery, response);
   }
 
   return envelope.data;
@@ -616,22 +787,27 @@ async function requestNullable<T>(
       },
     });
 
-  let response = await doRequest(accessToken);
+  let response = await performRequestWithRetry("GET", () =>
+    doRequest(accessToken),
+  );
   if (response.status === 401 && accessToken) {
     try {
       const refreshed = await refreshSessionTokens();
-      response = await doRequest(refreshed.accessToken);
+      response = await performRequestWithRetry("GET", () =>
+        doRequest(refreshed.accessToken),
+      );
     } catch {
-      throw new Error("Session expired. Sign in again.");
+      throw new ApiRequestError({
+        message: "Session expired. Sign in again.",
+        code: "auth_expired",
+        statusCode: 401,
+      });
     }
   }
 
   const envelope = await readEnvelope<T | null>(response);
   if (!response.ok || !envelope.success) {
-    throw new Error(
-      envelope.error?.message ??
-        `API request failed: ${method} ${pathWithQuery}`,
-    );
+    throw toApiRequestError(envelope, method, pathWithQuery, response);
   }
 
   return envelope.data ?? null;

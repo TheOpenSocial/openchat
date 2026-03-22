@@ -1511,12 +1511,15 @@ This section maps the conceptual product surface in [USE_CASES.md](/Users/crucib
 
 ### 35.13 Client Resilience and Offline Lane
 
-- [ ] `CR-01` Add a shared client retry policy for transient network failures with bounded exponential backoff, cancellation, and idempotent request guards.
+- [x] `CR-01` Add a shared client retry policy for transient network failures with bounded exponential backoff, cancellation, and idempotent request guards.
 - [ ] `CR-02` Add a persistent offline outbox for high-value user mutations (`intent send`, `agent chat send`, `request actions`, `profile/settings updates`) on mobile first, then web where appropriate.
 - [ ] `CR-03` Add reconnect/resume logic for agent SSE and chat sync so clients can recover after internet loss without losing streamed output or unread state.
 - [ ] `CR-04` Add optimistic pending-state UX for offline or retrying actions so users can see what is queued, failed, retried, or needs manual retry.
 - [ ] `CR-05` Add conflict-resolution and dedupe rules for replayed client mutations, including safe idempotency keys across reconnects and app restarts.
-- [ ] `CR-06` Add offline-aware bootstrap/auth handling so stored sessions, onboarding completion, and profile restoration degrade gracefully when startup happens without internet.
+- [x] `CR-06` Add offline-aware bootstrap/auth handling so stored sessions, onboarding completion, and profile restoration degrade gracefully when startup happens without internet.
+
+Implementation notes
+- 2026-03-22: Added shared transient retry helpers and typed offline/retryable request errors to both mobile and web client API layers, then taught session bootstrap/auth restore to reuse cached completion state instead of clearing the session on temporary network loss. This intentionally leaves durable outbox/idempotency work (`CR-02` to `CR-05`) open.
 
 **Acceptance criteria**
 - Losing connectivity does not silently drop core user actions or force the user to rewrite intent/chat messages.

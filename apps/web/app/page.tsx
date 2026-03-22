@@ -34,6 +34,8 @@ import {
   UserIntentExplanation,
   configureApiAuthLifecycle,
   getGoogleOAuthStartUrl,
+  isOfflineApiError,
+  isRetryableApiError,
 } from "../src/lib/api";
 import { openAgentThreadSse } from "../src/lib/agent-thread-sse";
 import {
@@ -281,7 +283,11 @@ function ProductionWebPage() {
             ...current,
             ...tokens,
           };
-          saveStoredSession(next);
+          saveStoredSession({
+            ...next,
+            profileCompleted: true,
+            onboardingState: "completed",
+          });
           return next;
         });
       },
@@ -451,8 +457,9 @@ function ProductionWebPage() {
 
   useEffect(() => {
     const restore = async () => {
+      let stored: ReturnType<typeof loadStoredSession> | null = null;
       try {
-        const stored = loadStoredSession();
+        stored = loadStoredSession();
         if (!stored) {
           setStage("auth");
           return;
@@ -462,16 +469,40 @@ function ProductionWebPage() {
           stored.userId,
           stored.accessToken,
         );
+        const restoredDisplayName = stored.displayName;
         setSession(stored);
-        setDisplayName(stored.displayName);
+        setDisplayName(restoredDisplayName);
         setProfile((current) => ({
           ...current,
-          displayName: stored.displayName,
+          displayName: restoredDisplayName,
         }));
         setStage(completion.completed ? "home" : "onboarding");
-      } catch {
-        clearStoredSession();
-        setStage("auth");
+        saveStoredSession({
+          ...stored,
+          profileCompleted: completion.completed,
+          onboardingState: completion.onboardingState,
+        });
+      } catch (error) {
+        if (
+          stored &&
+          (isRetryableApiError(error) || isOfflineApiError(error))
+        ) {
+          const restoredDisplayName = stored.displayName;
+          setSession(stored);
+          setDisplayName(restoredDisplayName);
+          setProfile((current) => ({
+            ...current,
+            displayName: restoredDisplayName,
+          }));
+          setStage(stored.profileCompleted ? "home" : "onboarding");
+          setBanner({
+            tone: "info",
+            text: "You appear to be offline. Restored your saved session and will refresh when the connection returns.",
+          });
+        } else {
+          clearStoredSession();
+          setStage("auth");
+        }
       } finally {
         setIsBootstrapping(false);
       }
@@ -492,6 +523,9 @@ function ProductionWebPage() {
     let timer: ReturnType<typeof setInterval> | null = null;
 
     const refreshDashboard = async () => {
+      if (!netOnline) {
+        return;
+      }
       try {
         const [globalRules, trust] = await Promise.all([
           api.getGlobalRules(session.userId, session.accessToken),
@@ -533,7 +567,7 @@ function ProductionWebPage() {
         clearInterval(timer);
       }
     };
-  }, [session, stage]);
+  }, [netOnline, session, stage]);
 
   const allowWebDemoAuth =
     process.env.NODE_ENV === "development" ||
@@ -569,7 +603,11 @@ function ProductionWebPage() {
         refreshToken: auth.refreshToken,
         sessionId: auth.sessionId,
       };
-      saveStoredSession(nextSession);
+      saveStoredSession({
+        ...nextSession,
+        profileCompleted: false,
+        onboardingState: "started",
+      });
 
       const completion = await api.getProfileCompletion(
         nextSession.userId,
@@ -582,6 +620,11 @@ function ProductionWebPage() {
         displayName: nextSession.displayName,
       }));
       setStage(completion.completed ? "home" : "onboarding");
+      saveStoredSession({
+        ...nextSession,
+        profileCompleted: completion.completed,
+        onboardingState: completion.onboardingState,
+      });
       setBanner({
         tone: "success",
         text: "Authenticated and session persisted.",

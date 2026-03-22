@@ -7,6 +7,8 @@ export interface StoredSession {
   accessToken: string;
   refreshToken: string;
   sessionId: string;
+  profileCompleted?: boolean;
+  onboardingState?: string | null;
 }
 
 const SESSION_KEY = "opensocial.mobile.session.v1";

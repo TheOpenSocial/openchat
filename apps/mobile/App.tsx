@@ -16,7 +16,12 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AnimatedScreen } from "./src/components/AnimatedScreen";
 import { AppToastHost } from "./src/components/AppToastHost";
 import { LoadingState } from "./src/components/LoadingState";
-import { api, configureApiAuthLifecycle } from "./src/lib/api";
+import {
+  api,
+  configureApiAuthLifecycle,
+  isOfflineApiError,
+  isRetryableApiError,
+} from "./src/lib/api";
 import { uploadProfilePhoto } from "./src/lib/profile-photo-upload";
 import { clearOnboardingDraft } from "./src/onboarding-storage";
 import {
@@ -88,6 +93,8 @@ function ProductionApp() {
             accessToken: next.accessToken,
             refreshToken: next.refreshToken,
             sessionId: next.sessionId,
+            profileCompleted: true,
+            onboardingState: "completed",
           }).catch(() => {});
           return next;
         });
@@ -108,8 +115,9 @@ function ProductionApp() {
     let mounted = true;
 
     const restore = async () => {
+      let stored: Awaited<ReturnType<typeof loadStoredSession>> | null = null;
       try {
-        const stored = await loadStoredSession();
+        stored = await loadStoredSession();
         if (!stored) {
           return;
         }
@@ -126,26 +134,58 @@ function ProductionApp() {
           refreshToken: stored.refreshToken,
           sessionId: stored.sessionId,
         };
+        const restoredDisplayName = stored.displayName;
 
         if (!mounted) {
           return;
         }
 
         setSession(restoredSession);
-        setDisplayName(stored.displayName);
+        setDisplayName(restoredDisplayName);
         setProfile((current) => ({
           ...current,
-          displayName: stored.displayName,
+          displayName: restoredDisplayName,
         }));
         setStage(completion.completed ? "home" : "onboarding");
+        void saveStoredSession({
+          ...stored,
+          profileCompleted: completion.completed,
+          onboardingState: completion.onboardingState,
+        }).catch(() => {});
         void trackTelemetryEvent(stored.userId, "auth_session_restored", {
           completionState: completion.onboardingState,
           profileCompleted: completion.completed,
         }).catch(() => {});
-      } catch {
-        await clearStoredSession();
-        if (mounted) {
-          setStage("auth");
+      } catch (error) {
+        if (
+          mounted &&
+          stored &&
+          (isRetryableApiError(error) || isOfflineApiError(error))
+        ) {
+          const restoredDisplayName = stored.displayName;
+          const restoredSession: MobileSession = {
+            userId: stored.userId,
+            displayName: restoredDisplayName,
+            email: stored.email ?? null,
+            accessToken: stored.accessToken,
+            refreshToken: stored.refreshToken,
+            sessionId: stored.sessionId,
+          };
+          setSession(restoredSession);
+          setDisplayName(restoredDisplayName);
+          setProfile((current) => ({
+            ...current,
+            displayName: restoredDisplayName,
+          }));
+          setStage(stored.profileCompleted ? "home" : "onboarding");
+          setAuthError(
+            "You appear to be offline. Restored your saved session and will refresh when the network is back.",
+          );
+        } else {
+          await clearStoredSession();
+          if (mounted) {
+            setStage("auth");
+          }
         }
       } finally {
         if (mounted) {
@@ -190,6 +230,8 @@ function ProductionApp() {
           accessToken: nextSession.accessToken,
           refreshToken: nextSession.refreshToken,
           sessionId: nextSession.sessionId,
+          profileCompleted: true,
+          onboardingState: "completed",
         });
 
         setSession(nextSession);
@@ -222,6 +264,8 @@ function ProductionApp() {
         accessToken: nextSession.accessToken,
         refreshToken: nextSession.refreshToken,
         sessionId: nextSession.sessionId,
+        profileCompleted: false,
+        onboardingState: "started",
       });
 
       const completion = await api.getProfileCompletion(
@@ -236,6 +280,16 @@ function ProductionApp() {
         displayName: nextSession.displayName,
       }));
       setStage(completion.completed ? "home" : "onboarding");
+      await saveStoredSession({
+        userId: nextSession.userId,
+        displayName: nextSession.displayName,
+        email: nextSession.email,
+        accessToken: nextSession.accessToken,
+        refreshToken: nextSession.refreshToken,
+        sessionId: nextSession.sessionId,
+        profileCompleted: completion.completed,
+        onboardingState: completion.onboardingState,
+      });
       void trackTelemetryEvent(nextSession.userId, "auth_success", {
         source: "oauth",
       }).catch(() => {});
@@ -362,6 +416,8 @@ function ProductionApp() {
         accessToken: session.accessToken,
         refreshToken: session.refreshToken,
         sessionId: session.sessionId,
+        profileCompleted: true,
+        onboardingState: "completed",
       });
 
       setSession((current) =>
