@@ -2,6 +2,7 @@ import {
   IntentType,
   IntentUrgency,
   intentPayloadSchema,
+  onboardingInferResponseSchema,
 } from "@opensocial/types";
 import { SpanStatusCode, context, trace } from "@opentelemetry/api";
 import OpenAI from "openai";
@@ -79,6 +80,9 @@ export type Suggestion = z.infer<typeof suggestionSchema>;
 export type RankingExplanation = z.infer<typeof rankingExplanationSchema>;
 export type ModerationAssistResult = z.infer<typeof moderationAssistSchema>;
 export type ConversationPlan = z.infer<typeof conversationPlanSchema>;
+export type ParsedOnboardingInference = z.infer<
+  typeof onboardingInferResponseSchema
+>;
 
 export interface OpenAIClientOptions {
   apiKey: string;
@@ -123,6 +127,7 @@ let openAIClientInstanceCounter = 0;
 
 const DEFAULT_MODEL_BY_TASK: Record<OpenAIRoutingTask, string> = {
   intent_parsing: "gpt-4.1-mini",
+  onboarding_inference: "gpt-4.1-mini",
   follow_up_question: "gpt-4.1-mini",
   suggestion_generation: "gpt-4.1-mini",
   ranking_explanation: "gpt-4.1-mini",
@@ -434,6 +439,86 @@ export class OpenAIClient {
             error instanceof Error ? error.message : "request_failed_unknown",
         });
         return this.fallbackParseIntent(rawText);
+      }
+    });
+  }
+
+  async inferOnboarding(
+    rawText: string,
+    traceId: string,
+  ): Promise<ParsedOnboardingInference | null> {
+    return this.runWithOpenAISpan("onboarding_inference", traceId, async () => {
+      if (this.detectPromptInjection(rawText)) {
+        this.captureFailure({
+          task: "onboarding_inference",
+          traceId,
+          model: this.getModelForTask("onboarding_inference"),
+          promptVersion: getPromptDefinition("onboarding_inference").version,
+          reason: "prompt_injection_detected",
+          inputPayload: rawText,
+        });
+        return null;
+      }
+
+      if (!this.apiEnabled) {
+        return null;
+      }
+
+      const prompt = getPromptDefinition("onboarding_inference");
+      const model = this.getModelForTask("onboarding_inference");
+
+      try {
+        const response = await this.client.responses.create({
+          model,
+          instructions: prompt.instructions,
+          input: rawText,
+          metadata: this.createTraceMetadata(traceId, "onboarding_inference", {
+            feature: "onboarding_inference",
+            promptVersion: prompt.version,
+          }),
+        });
+
+        const text = response.output_text?.trim();
+        if (!text) {
+          this.captureFailure({
+            task: "onboarding_inference",
+            traceId,
+            model,
+            promptVersion: prompt.version,
+            reason: "empty_output",
+            inputPayload: rawText,
+          });
+          return null;
+        }
+
+        try {
+          return onboardingInferResponseSchema.parse(JSON.parse(text));
+        } catch (error) {
+          this.captureFailure({
+            task: "onboarding_inference",
+            traceId,
+            model,
+            promptVersion: prompt.version,
+            reason: "schema_parse_failed",
+            inputPayload: rawText,
+            responseText: text,
+            errorMessage:
+              error instanceof Error ? error.message : "parse_error",
+          });
+          return null;
+        }
+      } catch (error) {
+        this.captureFailure({
+          task: "onboarding_inference",
+          traceId,
+          model,
+          promptVersion: prompt.version,
+          reason: "request_failed",
+          inputPayload: rawText,
+          errorMessage:
+            error instanceof Error ? error.message : "request_failed_unknown",
+        });
+        return null;
       }
     });
   }

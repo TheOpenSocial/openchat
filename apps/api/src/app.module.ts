@@ -27,6 +27,7 @@ import { ScheduledTasksModule } from "./scheduled-tasks/scheduled-tasks.module.j
 import { RecurringCirclesModule } from "./recurring-circles/recurring-circles.module.js";
 import { HealthController } from "./health/health.controller.js";
 import { SearchModule } from "./search/search.module.js";
+import { OnboardingModule } from "./onboarding/onboarding.module.js";
 
 @Module({
   controllers: [HealthController],
@@ -61,6 +62,7 @@ import { SearchModule } from "./search/search.module.js";
     ScheduledTasksModule,
     RecurringCirclesModule,
     SearchModule,
+    OnboardingModule,
   ],
   providers: [
     {
