@@ -56,6 +56,34 @@ type ModerationGateResult = {
 
 type AgentPlanCheckpointStatus = "pending" | "approved" | "rejected";
 
+type SocialContextPacket = {
+  freshOnboardingTurn: boolean;
+  profile: {
+    displayName: string | null;
+    bio: string | null;
+    city: string | null;
+    country: string | null;
+    onboardingState: string | null;
+    availabilityMode: string | null;
+  };
+  interests: string[];
+  goals: string[];
+  preferences: {
+    intentMode: string;
+    modality: string;
+    reachable: string;
+    notificationMode: string;
+    memoryMode: string;
+    timezone: string;
+  };
+  thread: {
+    title: string | null;
+    ageMinutes: number | null;
+    existingMessageCount: number;
+  };
+  memoryHighlights: string[];
+};
+
 @Injectable()
 export class AgentConversationService {
   private readonly logger = new Logger(AgentConversationService.name);
@@ -212,11 +240,17 @@ export class AgentConversationService {
     let toolCalls: ConversationToolCall[] = [];
     let delegatedSpecialistSet = new Set<OpenAIAgentRole>();
     let responseGoal: string | null = null;
+    let socialContext: SocialContextPacket | null = null;
 
     if (
       preToolRisk.decision === "clean" &&
       this.shouldUseSimpleFastPath(userContent, multimodalContext)
     ) {
+      socialContext = await this.buildSocialContextPacket({
+        userId: input.userId,
+        threadId: input.threadId,
+        existingMessageCount: 0,
+      });
       responseGoal =
         "Answer directly with a concise, helpful response. Ask at most one clarifying question only if it is essential.";
       await this.appendOrchestrationStep(
@@ -243,6 +277,11 @@ export class AgentConversationService {
       });
 
       const threadSummary = this.buildThreadSummary(threadMessages);
+      socialContext = await this.buildSocialContextPacket({
+        userId: input.userId,
+        threadId: input.threadId,
+        existingMessageCount: threadMessages.length,
+      });
 
       const allowedSpecialists: OpenAIAgentRole[] = [
         "intent_parser",
@@ -256,6 +295,7 @@ export class AgentConversationService {
         {
           userMessage: userContent,
           threadSummary,
+          ...(socialContext ? { socialContext } : {}),
           multimodalContext: hasMultimodal
             ? {
                 voiceTranscript: multimodalContext.voiceTranscript,
@@ -355,6 +395,7 @@ export class AgentConversationService {
     const responseInput = {
       userMessage: userContent,
       ...(responseGoal ? { responseGoal } : {}),
+      ...(socialContext ? { socialContext } : {}),
       multimodalContext: hasMultimodal
         ? {
             voiceTranscript: multimodalContext.voiceTranscript,
@@ -538,6 +579,144 @@ export class AgentConversationService {
         chunkCount: streamedTokenChunkCount,
       },
     };
+  }
+
+  private async buildSocialContextPacket(input: {
+    userId: string;
+    threadId: string;
+    existingMessageCount: number;
+  }): Promise<SocialContextPacket> {
+    const globalRuleKeys = [
+      "global_rules_intent_mode",
+      "global_rules_modality",
+      "global_rules_reachable",
+      "global_rules_notification_mode",
+      "global_rules_memory_mode",
+      "global_rules_timezone",
+    ];
+
+    const [user, profile, interests, preferences, thread, retrievalDocs] =
+      await Promise.all([
+        this.prisma.user.findUnique({
+          where: { id: input.userId },
+          select: {
+            displayName: true,
+          },
+        }),
+        this.prisma.userProfile.findUnique({
+          where: { userId: input.userId },
+          select: {
+            bio: true,
+            city: true,
+            country: true,
+            onboardingState: true,
+            availabilityMode: true,
+          },
+        }),
+        this.prisma.userInterest.findMany({
+          where: { userId: input.userId },
+          orderBy: [{ createdAt: "desc" }],
+          take: 8,
+          select: {
+            label: true,
+            kind: true,
+          },
+        }),
+        this.prisma.userPreference.findMany({
+          where: {
+            userId: input.userId,
+            key: { in: globalRuleKeys },
+          },
+          select: {
+            key: true,
+            value: true,
+          },
+        }),
+        this.prisma.agentThread.findUnique({
+          where: { id: input.threadId },
+          select: {
+            title: true,
+            createdAt: true,
+          },
+        }),
+        this.prisma.retrievalDocument.findMany({
+          where: {
+            userId: input.userId,
+            docType: {
+              in: ["profile_summary", "preference_memory"],
+            },
+          },
+          orderBy: [{ createdAt: "desc" }],
+          take: 2,
+          select: {
+            docType: true,
+            content: true,
+          },
+        }),
+      ]);
+
+    const prefMap = new Map(preferences.map((pref) => [pref.key, pref.value]));
+    const readStringPref = (key: string, fallback: string) => {
+      const value = prefMap.get(key);
+      return typeof value === "string" && value.trim().length > 0
+        ? value
+        : fallback;
+    };
+    const memoryHighlights = retrievalDocs
+      .map((doc) => this.toShortMemoryHighlight(doc.content))
+      .filter((value): value is string => value.length > 0)
+      .slice(0, 2);
+    const goals = interests
+      .filter((interest) => interest.kind.toLowerCase() !== "topic")
+      .map((interest) => interest.label);
+
+    return {
+      freshOnboardingTurn: input.existingMessageCount <= 1,
+      profile: {
+        displayName: user?.displayName ?? null,
+        bio: profile?.bio ?? null,
+        city: profile?.city ?? null,
+        country: profile?.country ?? null,
+        onboardingState: profile?.onboardingState ?? null,
+        availabilityMode: profile?.availabilityMode ?? null,
+      },
+      interests: interests
+        .filter((interest) => interest.kind.toLowerCase() === "topic")
+        .map((interest) => interest.label),
+      goals,
+      preferences: {
+        intentMode: readStringPref("global_rules_intent_mode", "balanced"),
+        modality: readStringPref("global_rules_modality", "either"),
+        reachable: readStringPref("global_rules_reachable", "always"),
+        notificationMode: readStringPref(
+          "global_rules_notification_mode",
+          "immediate",
+        ),
+        memoryMode: readStringPref("global_rules_memory_mode", "standard"),
+        timezone: readStringPref("global_rules_timezone", "UTC"),
+      },
+      thread: {
+        title: thread?.title ?? null,
+        ageMinutes: thread?.createdAt
+          ? Math.max(
+              0,
+              Math.round((Date.now() - thread.createdAt.getTime()) / 60_000),
+            )
+          : null,
+        existingMessageCount: input.existingMessageCount,
+      },
+      memoryHighlights,
+    };
+  }
+
+  private toShortMemoryHighlight(content: string) {
+    const normalized = content.replace(/\s+/g, " ").trim();
+    if (!normalized) {
+      return "";
+    }
+    return normalized.length <= 160
+      ? normalized
+      : `${normalized.slice(0, 157)}...`;
   }
 
   private async executeToolCall(

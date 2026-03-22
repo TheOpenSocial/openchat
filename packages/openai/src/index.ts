@@ -632,6 +632,7 @@ export class OpenAIClient {
     input: {
       userMessage: string;
       threadSummary?: string;
+      socialContext?: Record<string, unknown>;
       multimodalContext?: Record<string, unknown>;
       allowedSpecialists?: OpenAIAgentRole[];
       maxToolCalls?: number;
@@ -736,6 +737,7 @@ export class OpenAIClient {
     input: {
       userMessage: string;
       responseGoal?: string;
+      socialContext?: Record<string, unknown>;
       multimodalContext?: Record<string, unknown>;
       specialistOutputs?: Record<string, unknown>;
       toolOutputs?: Record<string, unknown>;
@@ -1239,12 +1241,13 @@ export class OpenAIClient {
         },
       ],
       responseGoal:
-        "Answer clearly, mention the inferred intent, and suggest one next action.",
+        "Answer clearly, ground the reply in the user's social context, and suggest one next action.",
     });
   }
 
   private fallbackConversationResponse(input: {
     userMessage: string;
+    socialContext?: Record<string, unknown>;
     specialistOutputs?: Record<string, unknown>;
   }) {
     const intentOutput = input.specialistOutputs?.intent_parser;
@@ -1256,6 +1259,33 @@ export class OpenAIClient {
       Array.isArray(parsedIntent?.topics) && parsedIntent.topics.length > 0
         ? parsedIntent.topics[0]
         : null;
+
+    const socialContext =
+      input.socialContext && typeof input.socialContext === "object"
+        ? (input.socialContext as {
+            freshOnboardingTurn?: boolean;
+            goals?: string[];
+            interests?: string[];
+            preferences?: {
+              modality?: string;
+              intentMode?: string;
+              reachable?: string;
+            };
+          })
+        : null;
+    const leadGoal =
+      Array.isArray(socialContext?.goals) && socialContext.goals.length > 0
+        ? socialContext.goals[0]
+        : null;
+    const leadInterest =
+      Array.isArray(socialContext?.interests) &&
+      socialContext.interests.length > 0
+        ? socialContext.interests[0]
+        : null;
+
+    if (socialContext?.freshOnboardingTurn) {
+      return `I’m on it. I’ll work from your ${leadGoal ?? "current"} intent${leadInterest ? ` and your interest in ${leadInterest}` : ""} to narrow the best next introductions or plans. ${socialContext?.preferences?.intentMode === "group" ? "I’ll keep groups in the mix." : "I’ll start with the strongest 1:1 fit unless the signal suggests a group."}`;
+    }
 
     if (parsedIntent?.intentType || topic) {
       return `I understood this as ${parsedIntent?.intentType ?? "a social"} intent${topic ? ` around ${topic}` : ""}. I can help refine constraints (time, mode, and group size) to improve matching.`;
@@ -1336,6 +1366,7 @@ export class OpenAIClient {
     input: {
       userMessage: string;
       responseGoal?: string;
+      socialContext?: Record<string, unknown>;
       multimodalContext?: Record<string, unknown>;
       specialistOutputs?: Record<string, unknown>;
       toolOutputs?: Record<string, unknown>;

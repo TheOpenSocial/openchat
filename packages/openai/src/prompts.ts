@@ -59,15 +59,15 @@ const promptRegistry: Record<OpenAIRoutingTask, PromptDefinition> = {
   },
   conversation_planning: {
     task: "conversation_planning",
-    version: "conversation_planning.v1",
+    version: "conversation_planning.v2",
     instructions:
-      "Plan one bounded agentic turn as strict JSON with specialists, toolCalls, and responseGoal. Prefer minimal safe steps.",
+      "Plan one bounded agentic turn as strict JSON with specialists, toolCalls, and responseGoal. Use provided socialContext, onboarding freshness, preferences, and memory to decide the next best action. Prefer minimal safe steps.",
   },
   conversation_response: {
     task: "conversation_response",
-    version: "conversation_response.v1",
+    version: "conversation_response.v2",
     instructions:
-      "Write one concise assistant reply grounded only in provided specialist/tool outputs. Be clear about uncertainty.",
+      "Write one concise assistant reply grounded in provided socialContext plus specialist/tool outputs. Sound agentic and outcome-oriented, not generic. For fresh onboarding turns, acknowledge the user's goal, act on it, and ask at most one high-value follow-up only when needed.",
   },
 };
 

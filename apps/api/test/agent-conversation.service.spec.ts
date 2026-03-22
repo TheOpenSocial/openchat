@@ -20,6 +20,46 @@ function createServiceHarness() {
         },
       ]),
     },
+    agentThread: {
+      findUnique: vi.fn().mockResolvedValue({
+        title: "Main",
+        createdAt: new Date("2026-03-20T09:30:00.000Z"),
+      }),
+    },
+    user: {
+      findUnique: vi.fn().mockResolvedValue({
+        displayName: "Alex Rivera",
+      }),
+    },
+    userProfile: {
+      findUnique: vi.fn().mockResolvedValue({
+        bio: "Designer who likes fast plans.",
+        city: "Buenos Aires",
+        country: "AR",
+        onboardingState: "complete",
+        availabilityMode: "flexible",
+      }),
+    },
+    userInterest: {
+      findMany: vi.fn().mockResolvedValue([
+        { label: "Design", kind: "topic" },
+        { label: "AI", kind: "topic" },
+        { label: "Meet people", kind: "goal" },
+      ]),
+    },
+    userPreference: {
+      findMany: vi.fn().mockResolvedValue([
+        { key: "global_rules_intent_mode", value: "balanced" },
+        { key: "global_rules_modality", value: "either" },
+        { key: "global_rules_reachable", value: "always" },
+        { key: "global_rules_notification_mode", value: "immediate" },
+        { key: "global_rules_memory_mode", value: "standard" },
+        {
+          key: "global_rules_timezone",
+          value: "America/Argentina/Buenos_Aires",
+        },
+      ]),
+    },
     retrievalDocument: {
       findMany: vi.fn().mockResolvedValue([
         {
@@ -657,12 +697,25 @@ describe("AgentConversationService", () => {
     expect(openai.planConversationTurn).toHaveBeenCalledWith(
       expect.objectContaining({
         userMessage: expect.stringContaining("Need help debugging"),
+        socialContext: expect.objectContaining({
+          freshOnboardingTurn: true,
+          interests: expect.arrayContaining(["Design", "AI"]),
+          goals: expect.arrayContaining(["Meet people"]),
+        }),
       }),
       "trace-agentic-multimodal",
     );
     expect(openai.composeConversationResponse).toHaveBeenCalledWith(
       expect.objectContaining({
         userMessage: expect.stringContaining("[Voice transcript]"),
+        socialContext: expect.objectContaining({
+          profile: expect.objectContaining({
+            displayName: "Alex Rivera",
+          }),
+          preferences: expect.objectContaining({
+            timezone: "America/Argentina/Buenos_Aires",
+          }),
+        }),
       }),
       "trace-agentic-multimodal",
       undefined,
