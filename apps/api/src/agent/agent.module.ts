@@ -1,4 +1,5 @@
 import { Module, forwardRef } from "@nestjs/common";
+import { DiscoveryModule } from "../discovery/discovery.module.js";
 import { IntentsModule } from "../intents/intents.module.js";
 import { MatchingModule } from "../matching/matching.module.js";
 import { ModerationModule } from "../moderation/moderation.module.js";
@@ -14,6 +15,7 @@ import { AgentService } from "./agent.service.js";
     ModerationModule,
     MatchingModule,
     PersonalizationModule,
+    forwardRef(() => DiscoveryModule),
     forwardRef(() => IntentsModule),
     forwardRef(() => ScheduledTasksModule),
   ],
