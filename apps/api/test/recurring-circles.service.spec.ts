@@ -65,6 +65,56 @@ describe("RecurringCirclesService", () => {
     );
   });
 
+  it("computes next session in the circle timezone instead of UTC", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-21T00:00:00.000Z"));
+
+    try {
+      const tx: any = {
+        recurringCircle: {
+          create: vi
+            .fn()
+            .mockResolvedValue({ id: CIRCLE_ID, ownerUserId: OWNER_USER_ID }),
+        },
+        recurringCircleMember: {
+          create: vi.fn().mockResolvedValue({ id: "member-1" }),
+        },
+      };
+      const prisma: any = {
+        $transaction: vi.fn(async (cb: any) => cb(tx)),
+      };
+      const launchControls: any = {
+        assertActionAllowed: vi.fn().mockResolvedValue(undefined),
+      };
+
+      const service = new RecurringCirclesService(
+        prisma,
+        undefined,
+        launchControls,
+      );
+
+      await service.createCircle(OWNER_USER_ID, {
+        title: "Saturday brunch",
+        visibility: "invite_only",
+        topicTags: ["friends"],
+        cadence: {
+          kind: "weekly",
+          days: ["sat"],
+          hour: 10,
+          minute: 0,
+          timezone: "America/Argentina/Buenos_Aires",
+          intervalWeeks: 1,
+        },
+      });
+
+      expect(
+        tx.recurringCircle.create.mock.calls[0][0].data.nextSessionAt.toISOString(),
+      ).toBe("2026-03-21T13:00:00.000Z");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("creates run-now session and notifies active members", async () => {
     const prisma: any = {
       recurringCircle: {

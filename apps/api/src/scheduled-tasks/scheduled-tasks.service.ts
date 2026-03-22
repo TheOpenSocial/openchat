@@ -18,6 +18,7 @@ import type { Prisma } from "@prisma/client";
 import { Queue } from "bullmq";
 import { randomUUID } from "node:crypto";
 import { AgentService } from "../agent/agent.service.js";
+import { computeNextWeeklyOccurrence } from "../common/timezone-scheduling.js";
 import { PrismaService } from "../database/prisma.service.js";
 import { DiscoveryService } from "../discovery/discovery.service.js";
 import { ExecutionReconciliationService } from "../execution-reconciliation/execution-reconciliation.service.js";
@@ -722,42 +723,13 @@ export class ScheduledTasksService {
       return new Date(fromMs + schedule.intervalHours * 60 * 60 * 1000);
     }
 
-    const dayIndexes = new Set<number>(
-      schedule.days.map((day) => this.dayNameToIndex(day)),
-    );
-    const start = new Date(fromMs + 60_000);
-    for (let offset = 0; offset <= 14; offset += 1) {
-      const candidate = new Date(
-        Date.UTC(
-          start.getUTCFullYear(),
-          start.getUTCMonth(),
-          start.getUTCDate() + offset,
-          schedule.hour,
-          schedule.minute,
-          0,
-          0,
-        ),
-      );
-      if (!dayIndexes.has(candidate.getUTCDay())) {
-        continue;
-      }
-      if (candidate.getTime() >= start.getTime()) {
-        return candidate;
-      }
-    }
-    return new Date(fromMs + 24 * 60 * 60 * 1000);
-  }
-
-  private dayNameToIndex(
-    day: "sun" | "mon" | "tue" | "wed" | "thu" | "fri" | "sat",
-  ) {
-    if (day === "sun") return 0;
-    if (day === "mon") return 1;
-    if (day === "tue") return 2;
-    if (day === "wed") return 3;
-    if (day === "thu") return 4;
-    if (day === "fri") return 5;
-    return 6;
+    return computeNextWeeklyOccurrence({
+      days: schedule.days,
+      hour: schedule.hour,
+      minute: schedule.minute,
+      timezone: schedule.timezone,
+      from: fromDate,
+    });
   }
 
   private toRecord(value: unknown) {
