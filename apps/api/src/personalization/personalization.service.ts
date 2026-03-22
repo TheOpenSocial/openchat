@@ -22,6 +22,7 @@ export interface GlobalRules {
   notificationMode: "immediate" | "digest" | "quiet";
   agentAutonomy: "manual" | "suggest_only" | "auto_non_risky";
   memoryMode: "minimal" | "standard" | "extended";
+  timezone: string;
 }
 
 export type LifeGraphNodeType =
@@ -82,6 +83,7 @@ const GLOBAL_RULE_DEFAULTS: GlobalRules = {
   notificationMode: "immediate",
   agentAutonomy: "suggest_only",
   memoryMode: "standard",
+  timezone: "UTC",
 };
 
 const GLOBAL_RULE_PREF_KEYS: Record<keyof GlobalRules, string> = {
@@ -94,6 +96,7 @@ const GLOBAL_RULE_PREF_KEYS: Record<keyof GlobalRules, string> = {
   notificationMode: "global_rules_notification_mode",
   agentAutonomy: "global_rules_agent_autonomy",
   memoryMode: "global_rules_memory_mode",
+  timezone: "global_rules_timezone",
 };
 
 const LIFE_GRAPH_PREF_SCOPE = "life_graph_edge";
@@ -274,6 +277,9 @@ export class PersonalizationService {
           "standard",
           "extended",
         ]) ?? GLOBAL_RULE_DEFAULTS.memoryMode,
+      timezone:
+        this.readStringValue(byKey.get(GLOBAL_RULE_PREF_KEYS.timezone)) ??
+        GLOBAL_RULE_DEFAULTS.timezone,
     };
   }
 
@@ -1413,6 +1419,12 @@ export class PersonalizationService {
 
   private readBooleanValue(value: unknown): boolean | null {
     return typeof value === "boolean" ? value : null;
+  }
+
+  private readStringValue(value: unknown): string | null {
+    return typeof value === "string" && value.trim().length > 0
+      ? value.trim()
+      : null;
   }
 
   private readStringArrayValue(value: unknown): string[] | null {

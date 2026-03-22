@@ -9,6 +9,7 @@ import { NotificationType } from "@opensocial/types";
 import { Queue } from "bullmq";
 import { randomUUID } from "node:crypto";
 import { AnalyticsService } from "../analytics/analytics.service.js";
+import { getLocalHour } from "../common/timezone-scheduling.js";
 import {
   recordNotificationDispatch,
   recordNotificationOpened,
@@ -166,6 +167,7 @@ export class NotificationsService {
             "quiet_hours_end",
             "digest_mode",
             "global_rules_notification_mode",
+            "global_rules_timezone",
           ],
         },
       },
@@ -195,7 +197,11 @@ export class NotificationsService {
     const end = Number(
       prefs.find((p) => p.key === "quiet_hours_end")?.value ?? 0,
     );
-    const hour = new Date().getHours();
+    const timeZone = await this.resolveNotificationTimeZone(
+      recipientUserId,
+      prefs,
+    );
+    const hour = getLocalHour(new Date(), timeZone);
 
     if (start === end) return "in_app";
 
@@ -203,6 +209,35 @@ export class NotificationsService {
       start < end ? hour >= start && hour < end : hour >= start || hour < end;
 
     return inQuietHours ? "digest" : "in_app";
+  }
+
+  private async resolveNotificationTimeZone(
+    recipientUserId: string,
+    prefs: Array<{ key: string; value: unknown }>,
+  ) {
+    const explicit = this.readTimeZone(
+      prefs.find((pref) => pref.key === "global_rules_timezone")?.value,
+    );
+    if (explicit) {
+      return explicit;
+    }
+
+    if (this.prisma.userAvailabilityWindow?.findFirst) {
+      const window = await this.prisma.userAvailabilityWindow.findFirst({
+        where: {
+          userId: recipientUserId,
+          timezone: { not: null },
+        },
+        orderBy: { createdAt: "asc" },
+        select: { timezone: true },
+      });
+      const fallback = this.readTimeZone(window?.timezone);
+      if (fallback) {
+        return fallback;
+      }
+    }
+
+    return "UTC";
   }
 
   private async hasPushReachableSession(recipientUserId: string) {
@@ -236,6 +271,12 @@ export class NotificationsService {
       NotificationType.REQUEST_ACCEPTED,
       NotificationType.MODERATION_NOTICE,
     ].includes(type);
+  }
+
+  private readTimeZone(value: unknown) {
+    return typeof value === "string" && value.trim().length > 0
+      ? value.trim()
+      : null;
   }
 
   private async enqueueDigestEmailDispatch(notification: {

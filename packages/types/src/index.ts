@@ -297,6 +297,7 @@ export const globalRulesBodySchema = z.object({
   notificationMode: z.enum(["immediate", "digest", "quiet"]),
   agentAutonomy: z.enum(["manual", "suggest_only", "auto_non_risky"]),
   memoryMode: z.enum(["minimal", "standard", "extended"]),
+  timezone: z.string().min(1).max(128).default("UTC"),
 });
 
 export const lifeGraphNodeTypeSchema = z.enum([
