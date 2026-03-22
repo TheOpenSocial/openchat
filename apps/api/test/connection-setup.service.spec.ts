@@ -71,6 +71,9 @@ describe("ConnectionSetupService", () => {
       emitConnectionCreated: vi.fn(),
       emitRequestCreated: vi.fn(),
     };
+    const executionReconciliationService: any = {
+      recordGroupFormationStalled: vi.fn().mockResolvedValue(undefined),
+    };
 
     const service = new ConnectionSetupService(
       prisma,
@@ -80,6 +83,7 @@ describe("ConnectionSetupService", () => {
       personalizationService,
       matchingService,
       agentService,
+      executionReconciliationService,
       undefined,
       undefined,
       realtimeEventsService,
@@ -201,6 +205,9 @@ describe("ConnectionSetupService", () => {
         upsertConversationSummaryEmbedding: vi.fn().mockResolvedValue({}),
       } as any,
       { createAgentMessage: vi.fn().mockResolvedValue({}) } as any,
+      {
+        recordGroupFormationStalled: vi.fn().mockResolvedValue(undefined),
+      } as any,
     );
 
     const result = await service.setupFromAcceptedRequest("req-convert");
@@ -281,6 +288,9 @@ describe("ConnectionSetupService", () => {
     const agentService: any = {
       createAgentMessage: vi.fn().mockResolvedValue({}),
     };
+    const executionReconciliationService: any = {
+      recordGroupFormationStalled: vi.fn().mockResolvedValue(undefined),
+    };
 
     const service = new ConnectionSetupService(
       prisma,
@@ -290,6 +300,7 @@ describe("ConnectionSetupService", () => {
       personalizationService,
       matchingService,
       agentService,
+      executionReconciliationService,
     );
 
     const result = await service.setupFromAcceptedRequest("req-2");
@@ -375,6 +386,9 @@ describe("ConnectionSetupService", () => {
     const agentService: any = {
       createAgentMessage: vi.fn().mockResolvedValue({}),
     };
+    const executionReconciliationService: any = {
+      recordGroupFormationStalled: vi.fn().mockResolvedValue(undefined),
+    };
 
     const service = new ConnectionSetupService(
       prisma,
@@ -384,6 +398,7 @@ describe("ConnectionSetupService", () => {
       personalizationService,
       matchingService,
       agentService,
+      executionReconciliationService,
     );
 
     const result = await service.setupFromAcceptedRequest("req-3");
@@ -490,6 +505,9 @@ describe("ConnectionSetupService", () => {
     const agentService: any = {
       createAgentMessage: vi.fn().mockResolvedValue({}),
     };
+    const executionReconciliationService: any = {
+      recordGroupFormationStalled: vi.fn().mockResolvedValue(undefined),
+    };
 
     const service = new ConnectionSetupService(
       prisma,
@@ -499,6 +517,7 @@ describe("ConnectionSetupService", () => {
       personalizationService,
       matchingService,
       agentService,
+      executionReconciliationService,
     );
 
     const result = await service.setupFromAcceptedRequest("req-4");
@@ -593,6 +612,9 @@ describe("ConnectionSetupService", () => {
     const agentService: any = {
       createAgentMessage: vi.fn().mockResolvedValue({}),
     };
+    const executionReconciliationService: any = {
+      recordGroupFormationStalled: vi.fn().mockResolvedValue(undefined),
+    };
 
     const service = new ConnectionSetupService(
       prisma,
@@ -602,6 +624,7 @@ describe("ConnectionSetupService", () => {
       personalizationService,
       matchingService,
       agentService,
+      executionReconciliationService,
     );
 
     const result = await service.setupFromAcceptedRequest("req-5");
@@ -702,6 +725,9 @@ describe("ConnectionSetupService", () => {
         upsertConversationSummaryEmbedding: vi.fn().mockResolvedValue({}),
       } as any,
       { createAgentMessage: vi.fn().mockResolvedValue({}) } as any,
+      {
+        recordGroupFormationStalled: vi.fn().mockResolvedValue(undefined),
+      } as any,
     );
 
     const result = await service.setupFromAcceptedRequest("req-6");
@@ -729,6 +755,7 @@ describe("ConnectionSetupService", () => {
           createMany,
         },
       } as any,
+      {} as any,
       {} as any,
       {} as any,
       {} as any,
@@ -788,6 +815,7 @@ describe("ConnectionSetupService", () => {
       {
         createSystemMessage,
       } as any,
+      {} as any,
       {} as any,
       {} as any,
       {} as any,

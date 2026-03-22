@@ -38,16 +38,21 @@ function createConsumer() {
     captureFailedJob: vi.fn().mockResolvedValue({}),
     captureStalledJob: vi.fn().mockResolvedValue({}),
   };
+  const executionReconciliationService: any = {
+    recordIntentTerminalState: vi.fn().mockResolvedValue(undefined),
+  };
 
   return {
     prisma,
     agentService,
     notificationsService,
     deadLetterService,
+    executionReconciliationService,
     consumer: new AsyncAgentFollowupConsumer(
       prisma,
       agentService,
       notificationsService,
+      executionReconciliationService,
       deadLetterService,
     ),
   };
@@ -92,8 +97,13 @@ describe("AsyncAgentFollowupConsumer", () => {
   });
 
   it("skips processing when intent is no longer processable", async () => {
-    const { consumer, prisma, agentService, notificationsService } =
-      createConsumer();
+    const {
+      consumer,
+      prisma,
+      agentService,
+      notificationsService,
+      executionReconciliationService,
+    } = createConsumer();
     prisma.intent.findUnique.mockResolvedValueOnce({
       id: "22222222-2222-4222-8222-222222222222",
       userId: "11111111-1111-4111-8111-111111111111",
@@ -127,5 +137,15 @@ describe("AsyncAgentFollowupConsumer", () => {
     );
     expect(agentService.createAgentMessage).not.toHaveBeenCalled();
     expect(notificationsService.createInAppNotification).not.toHaveBeenCalled();
+    expect(
+      executionReconciliationService.recordIntentTerminalState,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "11111111-1111-4111-8111-111111111111",
+        intentId: "22222222-2222-4222-8222-222222222222",
+        status: "connected",
+        source: "jobs.async_agent_followup",
+      }),
+    );
   });
 });

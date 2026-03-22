@@ -11,6 +11,7 @@ import { AnalyticsService } from "../analytics/analytics.service.js";
 import { AgentService } from "../agent/agent.service.js";
 import { ChatsService } from "../chats/chats.service.js";
 import { PrismaService } from "../database/prisma.service.js";
+import { ExecutionReconciliationService } from "../execution-reconciliation/execution-reconciliation.service.js";
 import { MatchingService } from "../matching/matching.service.js";
 import { NotificationsService } from "../notifications/notifications.service.js";
 import { PersonalizationService } from "../personalization/personalization.service.js";
@@ -33,6 +34,7 @@ export class ConnectionSetupService {
     private readonly personalizationService: PersonalizationService,
     private readonly matchingService: MatchingService,
     private readonly agentService: AgentService,
+    private readonly executionReconciliationService: ExecutionReconciliationService,
     @Optional()
     private readonly launchControlsService?: LaunchControlsService,
     @Optional()
@@ -445,6 +447,15 @@ export class ConnectionSetupService {
           request.senderUserId,
           `I sent ${backfillRequested} backfill invite${backfillRequested === 1 ? "" : "s"} to keep building your group.`,
         );
+      } else {
+        await this.executionReconciliationService.recordGroupFormationStalled({
+          userId: request.senderUserId,
+          intentId: request.intentId,
+          participantCount,
+          targetSize,
+          backfillRequested,
+          source: "connections.group_progress",
+        });
       }
     }
 

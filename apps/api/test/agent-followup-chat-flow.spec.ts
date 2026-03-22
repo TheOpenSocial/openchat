@@ -221,17 +221,24 @@ describe("Agent thread async-followup to chat creation flow", () => {
       captureFailedJob: vi.fn().mockResolvedValue({}),
       captureStalledJob: vi.fn().mockResolvedValue({}),
     };
+    const executionReconciliationService: any = {
+      recordIntentTerminalState: vi.fn().mockResolvedValue(undefined),
+      recordRequestOutcome: vi.fn().mockResolvedValue(undefined),
+      recordGroupFormationStalled: vi.fn().mockResolvedValue(undefined),
+    };
 
     const asyncFollowupConsumer = new AsyncAgentFollowupConsumer(
       prisma,
       agentService,
       notificationsService,
+      executionReconciliationService,
       deadLetterService,
     );
     const inboxService = new InboxService(
       prisma,
       notificationsService,
       personalizationService,
+      executionReconciliationService,
       queue,
     );
     const connectionSetupService = new ConnectionSetupService(
@@ -242,6 +249,7 @@ describe("Agent thread async-followup to chat creation flow", () => {
       personalizationService,
       matchingService,
       agentService,
+      executionReconciliationService,
     );
     const connectionSetupConsumer = new ConnectionSetupConsumer(
       connectionSetupService,

@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { BullModule } from "@nestjs/bullmq";
 import { AnalyticsModule } from "../analytics/analytics.module.js";
+import { ExecutionReconciliationModule } from "../execution-reconciliation/execution-reconciliation.module.js";
 import { NotificationsModule } from "../notifications/notifications.module.js";
 import { PersonalizationModule } from "../personalization/personalization.module.js";
 import { RealtimeModule } from "../realtime/realtime.module.js";
@@ -12,6 +13,7 @@ import { InboxService } from "./inbox.service.js";
     BullModule.registerQueue({ name: "connection-setup" }),
     NotificationsModule,
     PersonalizationModule,
+    ExecutionReconciliationModule,
     AnalyticsModule,
     RealtimeModule,
   ],

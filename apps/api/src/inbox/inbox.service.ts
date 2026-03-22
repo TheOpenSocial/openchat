@@ -12,6 +12,7 @@ import { Queue } from "bullmq";
 import { randomUUID } from "node:crypto";
 import { AnalyticsService } from "../analytics/analytics.service.js";
 import { PrismaService } from "../database/prisma.service.js";
+import { ExecutionReconciliationService } from "../execution-reconciliation/execution-reconciliation.service.js";
 import { NotificationsService } from "../notifications/notifications.service.js";
 import { PersonalizationService } from "../personalization/personalization.service.js";
 import { RealtimeEventsService } from "../realtime/realtime-events.service.js";
@@ -24,6 +25,7 @@ export class InboxService {
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
     private readonly personalizationService: PersonalizationService,
+    private readonly executionReconciliationService: ExecutionReconciliationService,
     @InjectQueue("connection-setup")
     private readonly connectionSetupQueue: Queue,
     @Optional()
@@ -333,6 +335,14 @@ export class InboxService {
       NotificationType.AGENT_UPDATE,
       "A pending request was cancelled by the sender.",
     );
+    await this.executionReconciliationService.recordRequestOutcome({
+      senderUserId: updated.senderUserId,
+      recipientUserId: updated.recipientUserId,
+      requestId: updated.id,
+      intentId: updated.intentId,
+      outcome: "cancelled",
+      source: "inbox.cancel_by_originator",
+    });
 
     return { request: updated };
   }
@@ -365,6 +375,18 @@ export class InboxService {
         RequestStatus.EXPIRED,
       );
     }
+    await Promise.all(
+      stale.map((staleRequest) =>
+        this.executionReconciliationService.recordRequestOutcome({
+          senderUserId: staleRequest.senderUserId,
+          recipientUserId: staleRequest.recipientUserId,
+          requestId: staleRequest.id,
+          intentId: staleRequest.intentId,
+          outcome: "expired",
+          source: "inbox.expire_stale_requests",
+        }),
+      ),
+    );
 
     return { expiredCount: ids.length };
   }
