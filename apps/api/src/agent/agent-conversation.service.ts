@@ -1003,6 +1003,66 @@ export class AgentConversationService {
             output: result,
           };
         }
+        case "circle.search": {
+          if (!this.agentOutcomeToolsService) {
+            return {
+              role: call.role,
+              tool: call.tool,
+              status: "failed",
+              reason: "agent_outcome_tools_unavailable",
+            };
+          }
+          const result = await this.agentOutcomeToolsService.searchCircles({
+            userId,
+            limit: this.readIntInRange(call.input.limit, 1, 5, 3),
+          });
+          return {
+            role: call.role,
+            tool: call.tool,
+            status: "executed",
+            output: result,
+          };
+        }
+        case "group.plan": {
+          if (!this.agentOutcomeToolsService) {
+            return {
+              role: call.role,
+              tool: call.tool,
+              status: "failed",
+              reason: "agent_outcome_tools_unavailable",
+            };
+          }
+          const text =
+            this.readString(call.input.text) ??
+            this.readString(call.input.intentText) ??
+            "";
+          if (!text) {
+            return {
+              role: call.role,
+              tool: call.tool,
+              status: "failed",
+              reason: "missing_group_plan_text",
+            };
+          }
+          const result = await this.agentOutcomeToolsService.planGroup({
+            userId,
+            threadId,
+            traceId,
+            text,
+            groupSizeTarget: this.readIntInRange(
+              call.input.groupSizeTarget,
+              2,
+              4,
+              3,
+            ),
+          });
+          return {
+            role: call.role,
+            tool: call.tool,
+            status: "executed",
+            output: result,
+          };
+        }
         case "intent.persist": {
           if (!this.agentOutcomeToolsService) {
             return {
@@ -1029,6 +1089,38 @@ export class AgentConversationService {
             threadId,
             traceId,
             text,
+          });
+          return {
+            role: call.role,
+            tool: call.tool,
+            status: "executed",
+            output: result,
+          };
+        }
+        case "intro.send_request": {
+          if (!this.agentOutcomeToolsService) {
+            return {
+              role: call.role,
+              tool: call.tool,
+              status: "failed",
+              reason: "agent_outcome_tools_unavailable",
+            };
+          }
+          const intentId = this.readString(call.input.intentId);
+          const recipientUserId = this.readString(call.input.recipientUserId);
+          if (!intentId || !recipientUserId) {
+            return {
+              role: call.role,
+              tool: call.tool,
+              status: "failed",
+              reason: "missing_intro_request_fields",
+            };
+          }
+          const result = await this.agentOutcomeToolsService.sendIntroRequest({
+            intentId,
+            recipientUserId,
+            traceId,
+            threadId,
           });
           return {
             role: call.role,
@@ -1593,7 +1685,9 @@ export class AgentConversationService {
   private isRiskSensitiveTool(tool: AgentTool) {
     return (
       tool === "intent.parse" ||
+      tool === "group.plan" ||
       tool === "intent.persist" ||
+      tool === "intro.send_request" ||
       tool === "memory.write" ||
       tool === "followup.schedule" ||
       tool === "workflow.write" ||

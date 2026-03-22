@@ -1229,6 +1229,11 @@ export class OpenAIClient {
       normalized.includes("talk") ||
       normalized.includes("play") ||
       normalized.includes("looking for");
+    const looksLikeGroup =
+      normalized.includes("group") ||
+      normalized.includes("small group") ||
+      normalized.includes("circle") ||
+      normalized.includes("people to join");
 
     return conversationPlanSchema.parse({
       specialists: [
@@ -1271,6 +1276,25 @@ export class OpenAIClient {
                 role: "manager" as const,
                 tool: "intent.persist" as const,
                 input: { text: userMessage.slice(0, 500) },
+              },
+            ]
+          : []),
+        ...(looksLikeGroup
+          ? [
+              {
+                role: "manager" as const,
+                tool: "circle.search" as const,
+                input: {
+                  limit: 3,
+                },
+              },
+              {
+                role: "manager" as const,
+                tool: "group.plan" as const,
+                input: {
+                  text: userMessage.slice(0, 500),
+                  groupSizeTarget: 3,
+                },
               },
             ]
           : []),

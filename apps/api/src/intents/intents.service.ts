@@ -115,71 +115,161 @@ export class IntentsService {
       });
     }
 
-    const intent = await this.prisma.intent.create({
-      data: {
-        userId,
-        rawText,
-        status: "parsed",
-        parsedIntent: parsed,
-        confidence: parsed.confidence ?? 0.4,
-      },
-    });
-    this.emitIntentUpdatedSafe(intent.userId, intent.id, intent.status);
-    await this.trackAnalyticsEventSafe({
-      eventType: "intent_created",
-      actorUserId: userId,
-      entityType: "intent",
-      entityId: intent.id,
-      properties: {
-        source: agentThreadId ? "agent_thread" : "direct",
-        status: intent.status,
-      },
-    });
-
-    const moderationResult = await this.applyIntentModeration({
-      intent,
-      intentId: intent.id,
+    return this.persistIntentWithParsedPayload({
       userId,
       rawText,
       traceId,
+      parsed,
       agentThreadId,
     });
-    if (moderationResult.decision !== "clean") {
-      return moderationResult.intent;
+  }
+
+  async createIntentWithOverrides(input: {
+    userId: string;
+    rawText: string;
+    traceId: string;
+    agentThreadId?: string;
+    parsedIntentOverrides: Record<string, unknown>;
+  }) {
+    const parseStartedAt = Date.now();
+    const parsed = await this.openai.parseIntent(input.rawText, input.traceId);
+    if (process.env.OPENAI_API_KEY) {
+      recordOpenAIMetric({
+        operation: "intent_parsing",
+        latencyMs: Date.now() - parseStartedAt,
+        ok: true,
+      });
     }
 
-    await this.captureIntentSignals(userId, parsed);
-    await this.captureIntentEmbedding(intent.id);
+    return this.persistIntentWithParsedPayload({
+      userId: input.userId,
+      rawText: input.rawText,
+      traceId: input.traceId,
+      parsed: {
+        ...parsed,
+        ...input.parsedIntentOverrides,
+      },
+      agentThreadId: input.agentThreadId,
+    });
+  }
 
-    const idempotencyKey = this.buildIntentProcessingIdempotencyKey(
-      intent.id,
-      "initial",
+  async sendIntentRequest(input: {
+    intentId: string;
+    recipientUserId: string;
+    traceId: string;
+    agentThreadId?: string;
+  }) {
+    const intent = await this.prisma.intent.findUnique({
+      where: { id: input.intentId },
+    });
+    if (!intent) {
+      throw new NotFoundException("intent not found");
+    }
+
+    if (intent.userId === input.recipientUserId) {
+      throw new ForbiddenException("cannot send a request to yourself");
+    }
+
+    const existing = await this.prisma.intentRequest.findFirst({
+      where: {
+        intentId: input.intentId,
+        recipientUserId: input.recipientUserId,
+        status: {
+          in: ["pending", "accepted"],
+        },
+      },
+      orderBy: { sentAt: "desc" },
+    });
+    if (existing) {
+      return {
+        requestId: existing.id,
+        status: existing.status,
+        existing: true as const,
+      };
+    }
+
+    const quota = await this.loadFanoutQuotaSnapshot(intent.userId);
+    const remainingPendingQuota = Math.max(
+      0,
+      MAX_PENDING_OUTGOING_REQUESTS_PER_SENDER - quota.pendingOutgoingCount,
     );
-    await this.intentProcessingQueue.add(
-      "IntentCreated",
-      {
-        version: 1,
-        traceId,
-        idempotencyKey,
-        timestamp: new Date().toISOString(),
-        type: "IntentCreated",
-        payload: {
+    const remainingDailyQuota = Math.max(
+      0,
+      MAX_DAILY_OUTGOING_REQUESTS_PER_SENDER - quota.dailyOutgoingCount,
+    );
+    if (remainingPendingQuota <= 0 || remainingDailyQuota <= 0) {
+      return {
+        requestId: null,
+        status: "quota_reached" as const,
+        existing: false as const,
+      };
+    }
+
+    const request = await this.prisma.intentRequest.create({
+      data: {
+        intentId: intent.id,
+        senderUserId: intent.userId,
+        recipientUserId: input.recipientUserId,
+        status: "pending",
+        wave: 1,
+        relevanceFeatures: {
+          source: "agent_manual_intro",
+          traceId: input.traceId,
+        } as Prisma.InputJsonValue,
+        expiresAt: new Date(Date.now() + 20 * 60_000),
+      },
+    });
+
+    await this.prisma.intent.update({
+      where: { id: intent.id },
+      data: {
+        status: "fanout",
+      },
+    });
+    this.emitIntentUpdatedSafe(intent.userId, intent.id, "fanout");
+    this.emitRequestCreatedSafe(
+      input.recipientUserId,
+      request.id,
+      input.intentId,
+    );
+    await this.trackAnalyticsEventSafe({
+      eventType: "request_sent",
+      actorUserId: intent.userId,
+      entityType: "intent_request",
+      entityId: request.id,
+      properties: {
+        source: "agent_manual_intro",
+        intentId: intent.id,
+        recipientUserId: input.recipientUserId,
+      },
+    });
+    await this.notificationsService.createInAppNotification(
+      input.recipientUserId,
+      NotificationType.REQUEST_RECEIVED,
+      "Someone wants to connect with you right now.",
+    );
+
+    const workflowThreadId =
+      input.agentThreadId ??
+      (await this.resolveLatestThreadIdForUser(intent.userId));
+    if (workflowThreadId) {
+      await this.agentService.appendWorkflowUpdate(
+        workflowThreadId,
+        "I sent a direct intro request to a selected match.",
+        {
           intentId: intent.id,
-          agentThreadId: agentThreadId ?? undefined,
+          requestId: request.id,
+          recipientUserId: input.recipientUserId,
+          source: "agent_manual_intro",
         },
-      },
-      {
-        jobId: idempotencyKey,
-        removeOnComplete: 500,
-        attempts: 3,
-        backoff: {
-          type: "exponential",
-          delay: 1000,
-        },
-      },
-    );
+      );
+    }
 
-    return intent;
+    return {
+      requestId: request.id,
+      status: request.status,
+      existing: false as const,
+    };
   }
 
   async createIntentFromAgentMessage(
@@ -244,6 +334,80 @@ export class IntentsService {
       intentIds: intents.map((intent) => intent.id),
       traceId,
     };
+  }
+
+  private async persistIntentWithParsedPayload(input: {
+    userId: string;
+    rawText: string;
+    traceId: string;
+    parsed: ParsedIntentPayload & { confidence?: number };
+    agentThreadId?: string;
+  }) {
+    const intent = await this.prisma.intent.create({
+      data: {
+        userId: input.userId,
+        rawText: input.rawText,
+        status: "parsed",
+        parsedIntent: input.parsed as Prisma.InputJsonValue,
+        confidence: input.parsed.confidence ?? 0.4,
+      },
+    });
+    this.emitIntentUpdatedSafe(intent.userId, intent.id, intent.status);
+    await this.trackAnalyticsEventSafe({
+      eventType: "intent_created",
+      actorUserId: input.userId,
+      entityType: "intent",
+      entityId: intent.id,
+      properties: {
+        source: input.agentThreadId ? "agent_thread" : "direct",
+        status: intent.status,
+      },
+    });
+
+    const moderationResult = await this.applyIntentModeration({
+      intent,
+      intentId: intent.id,
+      userId: input.userId,
+      rawText: input.rawText,
+      traceId: input.traceId,
+      agentThreadId: input.agentThreadId,
+    });
+    if (moderationResult.decision !== "clean") {
+      return moderationResult.intent;
+    }
+
+    await this.captureIntentSignals(input.userId, input.parsed);
+    await this.captureIntentEmbedding(intent.id);
+
+    const idempotencyKey = this.buildIntentProcessingIdempotencyKey(
+      intent.id,
+      "initial",
+    );
+    await this.intentProcessingQueue.add(
+      "IntentCreated",
+      {
+        version: 1,
+        traceId: input.traceId,
+        idempotencyKey,
+        timestamp: new Date().toISOString(),
+        type: "IntentCreated",
+        payload: {
+          intentId: intent.id,
+          agentThreadId: input.agentThreadId ?? undefined,
+        },
+      },
+      {
+        jobId: idempotencyKey,
+        removeOnComplete: 500,
+        attempts: 3,
+        backoff: {
+          type: "exponential",
+          delay: 1000,
+        },
+      },
+    );
+
+    return intent;
   }
 
   async processIntentPipeline(

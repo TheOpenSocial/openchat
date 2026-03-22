@@ -6,6 +6,7 @@ import {
 import { OpenAIClient } from "@opensocial/openai";
 import type { z } from "zod";
 import { AgentService } from "./agent.service.js";
+import { DiscoveryService } from "../discovery/discovery.service.js";
 import { IntentsService } from "../intents/intents.service.js";
 import { MatchingService } from "../matching/matching.service.js";
 import { PersonalizationService } from "../personalization/personalization.service.js";
@@ -23,6 +24,8 @@ export class AgentOutcomeToolsService {
     private readonly agentService: AgentService,
     @Optional()
     private readonly intentsService?: IntentsService,
+    @Optional()
+    private readonly discoveryService?: DiscoveryService,
     @Optional()
     private readonly matchingService?: MatchingService,
     @Optional()
@@ -74,6 +77,55 @@ export class AgentOutcomeToolsService {
     };
   }
 
+  async searchCircles(input: { userId: string; limit?: number }) {
+    if (!this.discoveryService) {
+      return { groups: [], reason: "discovery_service_unavailable" };
+    }
+
+    const result = await this.discoveryService.suggestGroups(
+      input.userId,
+      Math.min(Math.max(input.limit ?? 3, 1), 5),
+    );
+    return {
+      count: result.groups.length,
+      groups: result.groups,
+    };
+  }
+
+  async planGroup(input: {
+    userId: string;
+    threadId: string;
+    traceId: string;
+    text: string;
+    groupSizeTarget?: number;
+  }) {
+    if (!this.intentsService) {
+      return { planned: false, reason: "intents_service_unavailable" };
+    }
+
+    const groupSizeTarget = Math.min(
+      Math.max(input.groupSizeTarget ?? 3, 2),
+      4,
+    );
+    const intent = await this.intentsService.createIntentWithOverrides({
+      userId: input.userId,
+      rawText: input.text,
+      traceId: input.traceId,
+      agentThreadId: input.threadId,
+      parsedIntentOverrides: {
+        intentType: "group",
+        groupSizeTarget,
+      },
+    });
+
+    return {
+      planned: true,
+      intentId: intent.id,
+      status: intent.status,
+      groupSizeTarget,
+    };
+  }
+
   async persistIntent(input: {
     userId: string;
     threadId: string;
@@ -96,6 +148,29 @@ export class AgentOutcomeToolsService {
       intentId: intent.id,
       status: intent.status,
       safetyState: intent.safetyState,
+    };
+  }
+
+  async sendIntroRequest(input: {
+    intentId: string;
+    recipientUserId: string;
+    traceId: string;
+    threadId?: string;
+  }) {
+    if (!this.intentsService) {
+      return { sent: false, reason: "intents_service_unavailable" };
+    }
+
+    const result = await this.intentsService.sendIntentRequest({
+      intentId: input.intentId,
+      recipientUserId: input.recipientUserId,
+      traceId: input.traceId,
+      agentThreadId: input.threadId,
+    });
+
+    return {
+      sent: result.status === "pending" || result.status === "accepted",
+      ...result,
     };
   }
 

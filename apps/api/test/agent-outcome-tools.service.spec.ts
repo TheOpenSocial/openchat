@@ -5,6 +5,7 @@ describe("AgentOutcomeToolsService", () => {
   it("searches candidates using parsed intent and matching service", async () => {
     const agentService: any = {};
     const intentsService: any = {};
+    const discoveryService: any = {};
     const matchingService: any = {
       retrieveCandidates: vi.fn().mockResolvedValue([
         {
@@ -20,6 +21,7 @@ describe("AgentOutcomeToolsService", () => {
     const service = new AgentOutcomeToolsService(
       agentService,
       intentsService,
+      discoveryService,
       matchingService,
       personalizationService,
       scheduledTasksService,
@@ -67,7 +69,22 @@ describe("AgentOutcomeToolsService", () => {
       createThread: vi.fn(),
       appendWorkflowUpdate: vi.fn(),
     };
-    const intentsService: any = {};
+    const intentsService: any = {
+      createIntentWithOverrides: vi.fn().mockResolvedValue({
+        id: "intent-group-1",
+        status: "parsed",
+      }),
+      sendIntentRequest: vi.fn().mockResolvedValue({
+        requestId: "request-1",
+        status: "pending",
+        existing: false,
+      }),
+    };
+    const discoveryService: any = {
+      suggestGroups: vi.fn().mockResolvedValue({
+        groups: [{ title: "Founders circle", score: 0.82 }],
+      }),
+    };
     const matchingService: any = {};
     const personalizationService: any = {
       storeInteractionSummary: vi.fn().mockResolvedValue({
@@ -88,10 +105,24 @@ describe("AgentOutcomeToolsService", () => {
     const service = new AgentOutcomeToolsService(
       agentService,
       intentsService,
+      discoveryService,
       matchingService,
       personalizationService,
       scheduledTasksService,
     );
+
+    const circles = await service.searchCircles({
+      userId: "user-1",
+      limit: 2,
+    });
+
+    const groupPlan = await service.planGroup({
+      userId: "user-1",
+      threadId: "thread-1",
+      traceId: "trace-1",
+      text: "Create a small founders group for this week.",
+      groupSizeTarget: 4,
+    });
 
     const memory = await service.writeMemory({
       userId: "user-1",
@@ -108,6 +139,25 @@ describe("AgentOutcomeToolsService", () => {
       timezone: "America/Argentina/Buenos_Aires",
     });
 
+    const intro = await service.sendIntroRequest({
+      intentId: "intent-group-1",
+      recipientUserId: "candidate-1",
+      traceId: "trace-1",
+      threadId: "thread-1",
+    });
+
+    expect(circles).toEqual(
+      expect.objectContaining({
+        count: 1,
+      }),
+    );
+    expect(groupPlan).toEqual(
+      expect.objectContaining({
+        planned: true,
+        intentId: "intent-group-1",
+        groupSizeTarget: 4,
+      }),
+    );
     expect(memory).toEqual(
       expect.objectContaining({
         stored: true,
@@ -130,6 +180,12 @@ describe("AgentOutcomeToolsService", () => {
         scheduled: true,
         taskId: "task-1",
         status: "active",
+      }),
+    );
+    expect(intro).toEqual(
+      expect.objectContaining({
+        sent: true,
+        requestId: "request-1",
       }),
     );
   });

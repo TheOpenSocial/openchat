@@ -149,10 +149,25 @@ function createServiceHarness() {
       count: 1,
       candidates: [{ userId: "candidate-1", score: 0.91 }],
     }),
+    searchCircles: vi.fn().mockResolvedValue({
+      count: 1,
+      groups: [{ title: "Design circle", score: 0.74 }],
+    }),
+    planGroup: vi.fn().mockResolvedValue({
+      planned: true,
+      intentId: "intent-group-1",
+      status: "parsed",
+      groupSizeTarget: 3,
+    }),
     persistIntent: vi.fn().mockResolvedValue({
       persisted: true,
       intentId: "intent-1",
       status: "parsed",
+    }),
+    sendIntroRequest: vi.fn().mockResolvedValue({
+      sent: true,
+      requestId: "request-1",
+      status: "pending",
     }),
     startConversation: vi.fn().mockResolvedValue({
       threadId: "thread-2",
