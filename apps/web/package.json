@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start -p 3002",
     "lint": "eslint \"app/**/*.{ts,tsx}\" \"src/**/*.{ts,tsx}\" \"e2e/**/*.ts\" next.config.ts playwright.config.ts --max-warnings=0",
+    "pretypecheck": "pnpm --filter @opensocial/types build && next typegen",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "echo 'no tests yet for web app'",
     "test:e2e": "playwright test",
