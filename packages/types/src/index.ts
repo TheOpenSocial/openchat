@@ -474,6 +474,50 @@ export const searchQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(20).optional(),
 });
 
+export const onboardingInferenceSourceSchema = z.enum([
+  "voice",
+  "manual",
+  "inferred",
+]);
+
+export const onboardingInferenceFieldMetaSchema = z.object({
+  source: onboardingInferenceSourceSchema,
+  confidence: z.number().min(0).max(1),
+  needsConfirmation: z.boolean(),
+});
+
+export const onboardingInferBodySchema = z.object({
+  userId: uuidSchema,
+  transcript: z.string().min(1).max(4_000),
+});
+
+export const onboardingInferResponseSchema = z.object({
+  transcript: z.string().min(1),
+  interests: z.array(z.string().min(1)).max(12),
+  goals: z.array(z.string().min(1)).max(8),
+  mode: z.enum(["social", "dating", "both"]),
+  format: z.enum(["one_to_one", "small_groups", "both"]),
+  style: z.enum(["Chill", "Spontaneous", "Planned", "Focused", "Outgoing"]),
+  availability: z.enum(["Right now", "Evenings", "Weekends", "Flexible"]),
+  area: z.string().default(""),
+  country: z.string().default(""),
+  summary: z.string().min(1),
+  persona: z.string().min(1),
+  firstIntent: z.string().min(1),
+  followUpQuestion: z.string().optional(),
+  inferenceMeta: z.object({
+    goals: onboardingInferenceFieldMetaSchema,
+    interests: onboardingInferenceFieldMetaSchema,
+    format: onboardingInferenceFieldMetaSchema,
+    mode: onboardingInferenceFieldMetaSchema,
+    style: onboardingInferenceFieldMetaSchema,
+    availability: onboardingInferenceFieldMetaSchema,
+    location: onboardingInferenceFieldMetaSchema,
+    firstIntent: onboardingInferenceFieldMetaSchema,
+    persona: onboardingInferenceFieldMetaSchema,
+  }),
+});
+
 export const intentFollowupActionBodySchema = z
   .object({ agentThreadId: uuidSchema.optional() })
   .default({});
