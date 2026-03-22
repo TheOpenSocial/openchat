@@ -176,6 +176,7 @@ function createService(overrides: Partial<Record<string, unknown>> = {}) {
         intentMode: "balanced",
         modality: "either",
         languagePreferences: [],
+        countryPreferences: [],
         requireVerifiedUsers: false,
         notificationMode: "immediate",
         agentAutonomy: "suggest_only",

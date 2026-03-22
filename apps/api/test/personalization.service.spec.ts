@@ -315,11 +315,11 @@ describe("PersonalizationService", () => {
       intentMode: "balanced",
       modality: "either",
       languagePreferences: [],
+      countryPreferences: [],
       requireVerifiedUsers: false,
       notificationMode: "immediate",
       agentAutonomy: "suggest_only",
       memoryMode: "standard",
-      timezone: "UTC",
     });
   });
 
@@ -330,11 +330,11 @@ describe("PersonalizationService", () => {
       intentMode: "one_to_one",
       modality: "offline",
       languagePreferences: ["en", "es"],
+      countryPreferences: ["ar", "uy"],
       requireVerifiedUsers: true,
       notificationMode: "digest",
       agentAutonomy: "manual",
       memoryMode: "minimal",
-      timezone: "America/Argentina/Buenos_Aires",
     };
 
     const prisma: any = {
@@ -355,6 +355,10 @@ describe("PersonalizationService", () => {
             value: expected.languagePreferences,
           },
           {
+            key: "global_rules_country_preferences",
+            value: expected.countryPreferences,
+          },
+          {
             key: "global_rules_require_verified_users",
             value: expected.requireVerifiedUsers,
           },
@@ -364,7 +368,6 @@ describe("PersonalizationService", () => {
           },
           { key: "global_rules_agent_autonomy", value: expected.agentAutonomy },
           { key: "global_rules_memory_mode", value: expected.memoryMode },
-          { key: "global_rules_timezone", value: expected.timezone },
         ]),
       },
       lifeGraphNode: {

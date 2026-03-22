@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Post } from "@nestjs/common";
 import {
   moderationAssessBodySchema,
   moderationBlockBodySchema,
@@ -71,6 +71,31 @@ export class ModerationController {
         payload.blockedUserId,
       ),
     );
+  }
+
+  @Delete("blocks/:blockedUserId")
+  async unblock(
+    @Param("blockedUserId") blockedUserIdParam: string,
+    @ActorUserId() actorUserId: string,
+  ) {
+    const blockedUserId = parseRequestPayload(uuidSchema, blockedUserIdParam);
+    return ok(
+      await this.moderationService.unblockUser(actorUserId, blockedUserId),
+    );
+  }
+
+  @Get("users/:userId/blocks")
+  async listBlocks(
+    @Param("userId") userIdParam: string,
+    @ActorUserId() actorUserId: string,
+  ) {
+    const userId = parseRequestPayload(uuidSchema, userIdParam);
+    assertActorOwnsUser(
+      actorUserId,
+      userId,
+      "block list does not belong to authenticated user",
+    );
+    return ok(await this.moderationService.listBlocks(userId));
   }
 
   @Post("strikes")

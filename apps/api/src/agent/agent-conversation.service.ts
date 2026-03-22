@@ -2414,6 +2414,7 @@ export class AgentConversationService {
         intentMode: "one_to_one" | "group" | "balanced";
         modality: "online" | "offline" | "either";
         languagePreferences: string[];
+        countryPreferences: string[];
         requireVerifiedUsers: boolean;
         notificationMode: "immediate" | "digest" | "quiet";
         agentAutonomy: "manual" | "suggest_only" | "auto_non_risky";
@@ -2456,6 +2457,7 @@ export class AgentConversationService {
           ? modality
           : undefined,
       languagePreferences: this.readStringArray(record.languagePreferences),
+      countryPreferences: this.readStringArray(record.countryPreferences),
       requireVerifiedUsers:
         typeof record.requireVerifiedUsers === "boolean"
           ? record.requireVerifiedUsers

@@ -167,6 +167,8 @@ export class MatchingService {
                   "global_rules_reachable",
                   "global_rules_intent_mode",
                   "global_rules_modality",
+                  "global_rules_language_preferences",
+                  "global_rules_country_preferences",
                   "global_rules_require_verified_users",
                 ],
               },
@@ -1259,6 +1261,7 @@ export class MatchingService {
       intentModality?: string;
       intentType?: string;
       sender: {
+        id: string;
         createdAt: Date;
         email: string | null;
         googleSubjectId: string | null;
@@ -1300,6 +1303,25 @@ export class MatchingService {
         user.id,
         input.preferencesByUser,
         input.intentType,
+      )
+    ) {
+      return false;
+    }
+    if (
+      !this.isLanguageAllowedByGlobalRules(
+        user.id,
+        input.preferencesByUser,
+        input.sender?.id ?? null,
+      )
+    ) {
+      return false;
+    }
+    if (
+      !this.isCountryAllowedByGlobalRules(
+        user.id,
+        input.preferencesByUser,
+        input.sender,
+        user,
       )
     ) {
       return false;
@@ -1571,6 +1593,87 @@ export class MatchingService {
     return true;
   }
 
+  private isLanguageAllowedByGlobalRules(
+    candidateUserId: string,
+    preferencesByUser: Map<string, Map<string, unknown>>,
+    senderUserId: string | null,
+  ) {
+    if (!senderUserId) {
+      return true;
+    }
+
+    const senderLanguages = this.readNormalizedStringArrayPreference(
+      preferencesByUser,
+      senderUserId,
+      "global_rules_language_preferences",
+    );
+    const candidateLanguages = this.readNormalizedStringArrayPreference(
+      preferencesByUser,
+      candidateUserId,
+      "global_rules_language_preferences",
+    );
+
+    if (senderLanguages.length === 0 && candidateLanguages.length === 0) {
+      return true;
+    }
+    if (senderLanguages.length === 0 || candidateLanguages.length === 0) {
+      return false;
+    }
+
+    return senderLanguages.some((language) =>
+      candidateLanguages.includes(language),
+    );
+  }
+
+  private isCountryAllowedByGlobalRules(
+    candidateUserId: string,
+    preferencesByUser: Map<string, Map<string, unknown>>,
+    sender: {
+      id?: string;
+      profile?: {
+        country?: string | null;
+      } | null;
+    } | null,
+    candidate: {
+      profile?: {
+        country?: string | null;
+      } | null;
+    },
+  ) {
+    const senderUserId = typeof sender?.id === "string" ? sender.id : null;
+    const senderCountry = this.normalizeCountry(sender?.profile?.country);
+    const candidateCountry = this.normalizeCountry(candidate.profile?.country);
+    const senderCountryPreferences = senderUserId
+      ? this.readNormalizedStringArrayPreference(
+          preferencesByUser,
+          senderUserId,
+          "global_rules_country_preferences",
+        )
+      : [];
+    const candidateCountryPreferences =
+      this.readNormalizedStringArrayPreference(
+        preferencesByUser,
+        candidateUserId,
+        "global_rules_country_preferences",
+      );
+
+    if (
+      senderCountryPreferences.length > 0 &&
+      (!candidateCountry ||
+        !senderCountryPreferences.includes(candidateCountry))
+    ) {
+      return false;
+    }
+    if (
+      candidateCountryPreferences.length > 0 &&
+      (!senderCountry || !candidateCountryPreferences.includes(senderCountry))
+    ) {
+      return false;
+    }
+
+    return true;
+  }
+
   private readStringPreference(
     preferencesByUser: Map<string, Map<string, unknown>>,
     userId: string,
@@ -1587,6 +1690,22 @@ export class MatchingService {
   ): boolean | null {
     const value = preferencesByUser.get(userId)?.get(key);
     return typeof value === "boolean" ? value : null;
+  }
+
+  private readNormalizedStringArrayPreference(
+    preferencesByUser: Map<string, Map<string, unknown>>,
+    userId: string,
+    key: string,
+  ) {
+    const value = preferencesByUser.get(userId)?.get(key);
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return value
+      .map((item) =>
+        typeof item === "string" ? item.trim().toLowerCase() : "",
+      )
+      .filter((item) => item.length > 0);
   }
 
   private resolveVerificationLevel(input: {

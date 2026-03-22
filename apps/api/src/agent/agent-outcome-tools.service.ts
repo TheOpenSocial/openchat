@@ -508,6 +508,7 @@ export class AgentOutcomeToolsService {
       intentMode: "one_to_one" | "group" | "balanced";
       modality: "online" | "offline" | "either";
       languagePreferences: string[];
+      countryPreferences: string[];
       requireVerifiedUsers: boolean;
       notificationMode: "immediate" | "digest" | "quiet";
       agentAutonomy: "manual" | "suggest_only" | "auto_non_risky";

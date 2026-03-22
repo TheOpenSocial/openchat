@@ -18,11 +18,11 @@ export interface GlobalRules {
   intentMode: "one_to_one" | "group" | "balanced";
   modality: "online" | "offline" | "either";
   languagePreferences: string[];
+  countryPreferences: string[];
   requireVerifiedUsers: boolean;
   notificationMode: "immediate" | "digest" | "quiet";
   agentAutonomy: "manual" | "suggest_only" | "auto_non_risky";
   memoryMode: "minimal" | "standard" | "extended";
-  timezone: string;
 }
 
 export type LifeGraphNodeType =
@@ -79,11 +79,11 @@ const GLOBAL_RULE_DEFAULTS: GlobalRules = {
   intentMode: "balanced",
   modality: "either",
   languagePreferences: [],
+  countryPreferences: [],
   requireVerifiedUsers: false,
   notificationMode: "immediate",
   agentAutonomy: "suggest_only",
   memoryMode: "standard",
-  timezone: "UTC",
 };
 
 const GLOBAL_RULE_PREF_KEYS: Record<keyof GlobalRules, string> = {
@@ -92,11 +92,11 @@ const GLOBAL_RULE_PREF_KEYS: Record<keyof GlobalRules, string> = {
   intentMode: "global_rules_intent_mode",
   modality: "global_rules_modality",
   languagePreferences: "global_rules_language_preferences",
+  countryPreferences: "global_rules_country_preferences",
   requireVerifiedUsers: "global_rules_require_verified_users",
   notificationMode: "global_rules_notification_mode",
   agentAutonomy: "global_rules_agent_autonomy",
   memoryMode: "global_rules_memory_mode",
-  timezone: "global_rules_timezone",
 };
 
 const LIFE_GRAPH_PREF_SCOPE = "life_graph_edge";
@@ -255,6 +255,10 @@ export class PersonalizationService {
         this.readStringArrayValue(
           byKey.get(GLOBAL_RULE_PREF_KEYS.languagePreferences),
         ) ?? GLOBAL_RULE_DEFAULTS.languagePreferences,
+      countryPreferences:
+        this.readStringArrayValue(
+          byKey.get(GLOBAL_RULE_PREF_KEYS.countryPreferences),
+        ) ?? GLOBAL_RULE_DEFAULTS.countryPreferences,
       requireVerifiedUsers:
         this.readBooleanValue(
           byKey.get(GLOBAL_RULE_PREF_KEYS.requireVerifiedUsers),
@@ -277,9 +281,6 @@ export class PersonalizationService {
           "standard",
           "extended",
         ]) ?? GLOBAL_RULE_DEFAULTS.memoryMode,
-      timezone:
-        this.readStringValue(byKey.get(GLOBAL_RULE_PREF_KEYS.timezone)) ??
-        GLOBAL_RULE_DEFAULTS.timezone,
     };
   }
 
@@ -1054,6 +1055,7 @@ export class PersonalizationService {
       `rules.reachability: ${input.globalRules.reachable}`,
       `rules.contact: ${input.globalRules.whoCanContact}`,
       `rules.languages: ${input.globalRules.languagePreferences.join(", ") || "unspecified"}`,
+      `rules.countries: ${input.globalRules.countryPreferences.join(", ") || "unspecified"}`,
     ];
     return lines.join("\n");
   }
@@ -1428,12 +1430,6 @@ export class PersonalizationService {
 
   private readBooleanValue(value: unknown): boolean | null {
     return typeof value === "boolean" ? value : null;
-  }
-
-  private readStringValue(value: unknown): string | null {
-    return typeof value === "string" && value.trim().length > 0
-      ? value.trim()
-      : null;
   }
 
   private readStringArrayValue(value: unknown): string[] | null {

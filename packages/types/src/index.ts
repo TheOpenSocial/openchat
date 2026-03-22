@@ -232,7 +232,6 @@ export const authRevokeAllSessionsBodySchema = z.object({
 });
 
 export const profileUpdateBodySchema = z.object({
-  displayName: z.string().min(1).max(120).optional(),
   bio: z.string().max(500).optional(),
   city: z.string().max(120).optional(),
   country: z.string().max(120).optional(),
@@ -294,11 +293,11 @@ export const globalRulesBodySchema = z.object({
   intentMode: z.enum(["one_to_one", "group", "balanced"]),
   modality: z.enum(["online", "offline", "either"]),
   languagePreferences: z.array(z.string().min(2).max(32)).max(10),
+  countryPreferences: z.array(z.string().min(2).max(120)).max(10).default([]),
   requireVerifiedUsers: z.boolean(),
   notificationMode: z.enum(["immediate", "digest", "quiet"]),
   agentAutonomy: z.enum(["manual", "suggest_only", "auto_non_risky"]),
   memoryMode: z.enum(["minimal", "standard", "extended"]),
-  timezone: z.string().min(1).max(128).default("UTC"),
 });
 
 export const lifeGraphNodeTypeSchema = z.enum([
