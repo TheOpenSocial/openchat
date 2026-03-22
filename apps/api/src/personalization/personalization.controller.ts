@@ -22,7 +22,10 @@ import { ActorUserId } from "../common/actor-user-id.decorator.js";
 import { assertActorOwnsUser } from "../common/auth-context.js";
 import { LaunchControlsService } from "../launch-controls/launch-controls.service.js";
 import { parseRequestPayload } from "../common/validation.js";
-import { PersonalizationService } from "./personalization.service.js";
+import {
+  type GlobalRules,
+  PersonalizationService,
+} from "./personalization.service.js";
 
 @Controller("personalization")
 export class PersonalizationController {
@@ -50,7 +53,13 @@ export class PersonalizationController {
   ) {
     const userId = this.parseOwnedUserId(userIdParam, actorUserId);
     await this.assertPersonalizationEnabled(userId);
-    const payload = parseRequestPayload(globalRulesBodySchema, body);
+    const rawPayload = globalRulesBodySchema.parse(body) as GlobalRules & {
+      timezone?: string;
+    };
+    const payload: GlobalRules = {
+      ...rawPayload,
+      timezone: rawPayload.timezone ?? "UTC",
+    };
     return ok(
       await this.personalizationService.setGlobalRules(userId, payload),
     );

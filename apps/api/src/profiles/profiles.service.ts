@@ -21,6 +21,7 @@ import { MatchingService } from "../matching/matching.service.js";
 import { NotificationsService } from "../notifications/notifications.service.js";
 
 type ProfileUpdatePayload = {
+  displayName?: string;
   bio?: string;
   city?: string;
   country?: string;
@@ -98,7 +99,7 @@ export class ProfilesService {
     });
     const textModeration = await this.moderateProfileTextFields(
       userId,
-      [merged.bio, merged.city, merged.country],
+      [payload.displayName, merged.bio, merged.city, merged.country],
       "profile_text",
     );
     if (textModeration.decision === "blocked") {
@@ -106,10 +107,22 @@ export class ProfilesService {
       throw new BadRequestException("profile text violates moderation policy");
     }
 
+    if (typeof payload.displayName === "string") {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          displayName: payload.displayName.trim(),
+        },
+      });
+    }
+
     const result = await this.prisma.userProfile.upsert({
       where: { userId },
       update: {
-        ...payload,
+        bio: payload.bio,
+        city: payload.city,
+        country: payload.country,
+        visibility: payload.visibility,
         ...(textModeration.decision === "review"
           ? { moderationState: "review" }
           : {}),
@@ -117,7 +130,10 @@ export class ProfilesService {
       },
       create: {
         userId,
-        ...payload,
+        bio: payload.bio,
+        city: payload.city,
+        country: payload.country,
+        visibility: payload.visibility,
         ...(textModeration.decision === "review"
           ? { moderationState: "review" }
           : {}),
@@ -739,12 +755,12 @@ export class ProfilesService {
       hasCountry: Boolean(input.country && input.country.trim().length > 0),
       hasInterests: (input.interestCount ?? 0) > 0,
     };
-    const completed =
-      checks.hasBio &&
-      checks.hasCity &&
-      checks.hasCountry &&
+    const completed = checks.hasInterests;
+    const started =
+      checks.hasBio ||
+      checks.hasCity ||
+      checks.hasCountry ||
       checks.hasInterests;
-    const started = checks.hasBio || checks.hasCity || checks.hasCountry;
 
     return {
       completed,

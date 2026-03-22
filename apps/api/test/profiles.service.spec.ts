@@ -36,6 +36,9 @@ function createService(prisma: any) {
 describe("ProfilesService", () => {
   it("returns completion status from profile + interests", async () => {
     const prisma: any = {
+      user: {
+        update: vi.fn().mockResolvedValue({}),
+      },
       userProfile: {
         findUnique: vi.fn().mockResolvedValue({
           userId: "11111111-1111-4111-8111-111111111111",
@@ -55,6 +58,31 @@ describe("ProfilesService", () => {
     );
 
     expect(completion.completed).toBe(true);
+    expect(completion.onboardingState).toBe("complete");
+  });
+
+  it("treats interests as sufficient to complete onboarding", async () => {
+    const prisma: any = {
+      userProfile: {
+        findUnique: vi.fn().mockResolvedValue({
+          userId: "11111111-1111-4111-8111-111111111111",
+          bio: null,
+          city: null,
+          country: null,
+        }),
+      },
+      userInterest: {
+        count: vi.fn().mockResolvedValue(1),
+      },
+    };
+
+    const { service } = createService(prisma);
+    const completion = await service.getProfileCompletion(
+      "11111111-1111-4111-8111-111111111111",
+    );
+
+    expect(completion.completed).toBe(true);
+    expect(completion.checks.hasBio).toBe(false);
     expect(completion.onboardingState).toBe("complete");
   });
 
@@ -89,6 +117,38 @@ describe("ProfilesService", () => {
     expect(matchingService.upsertUserProfileEmbedding).toHaveBeenCalledWith(
       "11111111-1111-4111-8111-111111111111",
     );
+  });
+
+  it("updates display name when provided through profile update", async () => {
+    const prisma: any = {
+      user: {
+        update: vi.fn().mockResolvedValue({}),
+      },
+      userProfile: {
+        findUnique: vi.fn().mockResolvedValue({
+          userId: "11111111-1111-4111-8111-111111111111",
+          bio: null,
+          city: null,
+          country: null,
+        }),
+        upsert: vi.fn().mockResolvedValue({}),
+      },
+      userInterest: {
+        count: vi.fn().mockResolvedValue(0),
+      },
+    };
+
+    const { service } = createService(prisma);
+    await service.upsertProfile("11111111-1111-4111-8111-111111111111", {
+      displayName: "New Name",
+    });
+
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: "11111111-1111-4111-8111-111111111111" },
+      data: {
+        displayName: "New Name",
+      },
+    });
   });
 
   it("emits profile-completed analytics when onboarding transitions to complete", async () => {

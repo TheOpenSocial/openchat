@@ -11,6 +11,18 @@ export type SocialMode = "one_to_one" | "group" | "either";
 
 export type NotificationMode = "live" | "digest";
 
+export type OnboardingAvailability =
+  | "now"
+  | "evenings"
+  | "weekends"
+  | "flexible";
+
+export type OnboardingFormat = "one_to_one" | "small_groups" | "both";
+
+export type OnboardingMode = "online" | "in_person" | "both";
+
+export type OnboardingStyle = "chill" | "spontaneous" | "planned" | "focused";
+
 /** Renders in `ChatBubble` (agent thread + human chat). */
 export type ChatBubbleRole = AgentTranscriptBubbleRole;
 
@@ -34,6 +46,13 @@ export interface UserProfileDraft {
   interests: string[];
   socialMode: SocialMode;
   notificationMode: NotificationMode;
+  onboardingGoals?: string[];
+  preferredAvailability?: OnboardingAvailability;
+  preferredFormat?: OnboardingFormat;
+  preferredMode?: OnboardingMode;
+  preferredStyle?: OnboardingStyle;
+  firstIntentText?: string | null;
+  timezone?: string;
 }
 
 export interface InboxRequest {

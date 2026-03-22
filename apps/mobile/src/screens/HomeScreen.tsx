@@ -88,6 +88,8 @@ import {
 export interface HomeScreenProps {
   session: MobileSession;
   initialProfile: UserProfileDraft;
+  initialIntentText?: string | null;
+  onInitialIntentHandled?: () => void;
   onProfileUpdated: (profile: UserProfileDraft) => void;
   onResetSession: () => Promise<void>;
   /** Full UI on local fixtures; skips API, realtime, and chat persistence. */
@@ -127,7 +129,9 @@ const MOBILE_LOCALE_STORAGE_KEY = "opensocial.mobile.locale.v1";
 
 export function HomeScreen({
   designMock = false,
+  initialIntentText,
   initialProfile,
+  onInitialIntentHandled,
   onProfileUpdated,
   onResetSession,
   session,
@@ -218,6 +222,7 @@ export function HomeScreen({
   const [scheduledTasks, setScheduledTasks] = useState<ScheduledTaskRecord[]>(
     [],
   );
+  const initialIntentHandledRef = useRef(false);
   const [selectedScheduledTaskId, setSelectedScheduledTaskId] = useState<
     string | null
   >(null);
@@ -1141,8 +1146,8 @@ export function HomeScreen({
     [designMock, recordTelemetry, session.accessToken, session.userId],
   );
 
-  const sendIntent = async () => {
-    const rawText = draftIntentText.trim();
+  const submitIntentText = async (rawInput: string) => {
+    const rawText = rawInput.trim();
     if (!rawText || sendingIntent) {
       return;
     }
@@ -1372,6 +1377,30 @@ export function HomeScreen({
       setSendingIntent(false);
     }
   };
+
+  const sendIntent = async () => {
+    await submitIntentText(draftIntentText);
+  };
+
+  useEffect(() => {
+    const normalizedIntent = initialIntentText?.trim();
+    if (!normalizedIntent || initialIntentHandledRef.current) {
+      return;
+    }
+    if (agentThreadLoading) {
+      return;
+    }
+    initialIntentHandledRef.current = true;
+    setActiveTab("home");
+    setAgentComposerMode("chat");
+    onInitialIntentHandled?.();
+    void submitIntentText(normalizedIntent);
+  }, [
+    agentThreadLoading,
+    initialIntentText,
+    onInitialIntentHandled,
+    submitIntentText,
+  ]);
 
   const reportUser = async (
     targetUserId: string,

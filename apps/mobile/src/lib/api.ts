@@ -677,6 +677,7 @@ export const api = {
   updateProfile(
     userId: string,
     payload: {
+      displayName?: string;
       bio?: string;
       city?: string;
       country?: string;
@@ -819,6 +820,7 @@ export const api = {
       notificationMode: "immediate" | "digest" | "quiet";
       agentAutonomy: "manual" | "suggest_only" | "auto_non_risky";
       memoryMode: "minimal" | "standard" | "extended";
+      timezone?: string;
     },
     accessToken?: string,
   ) {

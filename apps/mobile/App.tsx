@@ -54,13 +54,16 @@ function ProductionApp() {
   const [onboardingLoading, setOnboardingLoading] = useState(false);
   const [session, setSession] = useState<MobileSession | null>(null);
   const [displayName, setDisplayName] = useState("Explorer");
+  const [pendingOnboardingIntent, setPendingOnboardingIntent] = useState<
+    string | null
+  >(null);
   const [profile, setProfile] = useState<UserProfileDraft>({
     displayName: "Explorer",
     bio: "",
     city: "",
     country: "",
-    interests: ["Football", "AI"],
-    socialMode: "one_to_one",
+    interests: [],
+    socialMode: "either",
     notificationMode: "live",
   });
   const appOpenedTrackedRef = useRef<string | null>(null);
@@ -254,13 +257,25 @@ function ProductionApp() {
       await api.updateProfile(
         session.userId,
         {
-          bio: draft.bio,
-          city: draft.city,
-          country: draft.country,
+          displayName: draft.displayName,
+          bio: draft.bio || undefined,
+          city: draft.city || undefined,
+          country: draft.country || undefined,
           visibility: "public",
         },
         session.accessToken,
       );
+
+      const topicLabels = Array.from(
+        new Set([...(draft.onboardingGoals ?? []), ...draft.interests]),
+      );
+      const preferredLocale = (() => {
+        try {
+          return Intl.DateTimeFormat().resolvedOptions().locale;
+        } catch {
+          return "en";
+        }
+      })();
 
       await Promise.all([
         api.replaceInterests(
@@ -273,8 +288,8 @@ function ProductionApp() {
         ),
         api.replaceTopics(
           session.userId,
-          draft.interests.map((interest) => ({
-            label: interest,
+          topicLabels.map((label) => ({
+            label,
           })),
           session.accessToken,
         ),
@@ -303,26 +318,53 @@ function ProductionApp() {
           session.userId,
           {
             whoCanContact: "anyone",
-            reachable: "always",
+            reachable:
+              draft.preferredAvailability === "now"
+                ? "available_only"
+                : "always",
             intentMode:
               draft.socialMode === "one_to_one"
                 ? "one_to_one"
                 : draft.socialMode === "group"
                   ? "group"
                   : "balanced",
-            modality: "either",
-            languagePreferences: ["en", "es"],
+            modality:
+              draft.preferredMode === "online"
+                ? "online"
+                : draft.preferredMode === "in_person"
+                  ? "offline"
+                  : "either",
+            languagePreferences: [preferredLocale],
             requireVerifiedUsers: false,
-            notificationMode:
-              draft.notificationMode === "digest" ? "digest" : "immediate",
+            notificationMode: "immediate",
             agentAutonomy: "suggest_only",
             memoryMode: "standard",
+            timezone: draft.timezone,
           },
           session.accessToken,
         ),
       ]);
 
+      await saveStoredSession({
+        userId: session.userId,
+        displayName: draft.displayName,
+        email: session.email ?? null,
+        accessToken: session.accessToken,
+        refreshToken: session.refreshToken,
+        sessionId: session.sessionId,
+      });
+
+      setSession((current) =>
+        current
+          ? {
+              ...current,
+              displayName: draft.displayName,
+            }
+          : current,
+      );
+      setDisplayName(draft.displayName);
       setProfile(draft);
+      setPendingOnboardingIntent(draft.firstIntentText?.trim() || null);
       setStage("home");
       void trackTelemetryEvent(session.userId, "onboarding_completed", {
         socialMode: draft.socialMode,
@@ -394,7 +436,9 @@ function ProductionApp() {
           {stage === "home" && session ? (
             <Suspense fallback={<LoadingState label="Loading your space…" />}>
               <HomeScreen
+                initialIntentText={pendingOnboardingIntent}
                 initialProfile={profile}
+                onInitialIntentHandled={() => setPendingOnboardingIntent(null)}
                 onProfileUpdated={setProfile}
                 onResetSession={handleResetSession}
                 session={session}
