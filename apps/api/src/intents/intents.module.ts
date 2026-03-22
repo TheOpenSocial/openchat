@@ -1,5 +1,5 @@
 import { BullModule } from "@nestjs/bullmq";
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { AnalyticsModule } from "../analytics/analytics.module.js";
 import { AgentModule } from "../agent/agent.module.js";
 import { MatchingModule } from "../matching/matching.module.js";
@@ -18,7 +18,7 @@ import { IntentsService } from "./intents.service.js";
     MatchingModule,
     NotificationsModule,
     PersonalizationModule,
-    AgentModule,
+    forwardRef(() => AgentModule),
     AnalyticsModule,
     RealtimeModule,
   ],

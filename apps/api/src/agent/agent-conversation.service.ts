@@ -20,6 +20,7 @@ import { randomUUID } from "node:crypto";
 import { AppCacheService } from "../common/app-cache.service.js";
 import { PrismaService } from "../database/prisma.service.js";
 import { ModerationService } from "../moderation/moderation.service.js";
+import { AgentOutcomeToolsService } from "./agent-outcome-tools.service.js";
 import { AgentService } from "./agent.service.js";
 
 type AgentAttachmentInput =
@@ -97,6 +98,8 @@ export class AgentConversationService {
     private readonly appCacheService: AppCacheService,
     @Optional()
     private readonly moderationService?: ModerationService,
+    @Optional()
+    private readonly agentOutcomeToolsService?: AgentOutcomeToolsService,
   ) {}
 
   async listPlanCheckpoints(input: {
@@ -965,6 +968,159 @@ export class AgentConversationService {
             output: documents,
           };
         }
+        case "candidate.search": {
+          if (!this.agentOutcomeToolsService) {
+            return {
+              role: call.role,
+              tool: call.tool,
+              status: "failed",
+              reason: "agent_outcome_tools_unavailable",
+            };
+          }
+          const text =
+            this.readString(call.input.text) ??
+            this.readString(call.input.intentText) ??
+            "";
+          if (!text) {
+            return {
+              role: call.role,
+              tool: call.tool,
+              status: "failed",
+              reason: "missing_search_text",
+            };
+          }
+          const result = await this.agentOutcomeToolsService.searchCandidates({
+            userId,
+            traceId,
+            text,
+            take: this.readIntInRange(call.input.take, 1, 10, 5),
+            parsedIntent: this.coerceParsedIntent(call.input.parsedIntent),
+          });
+          return {
+            role: call.role,
+            tool: call.tool,
+            status: "executed",
+            output: result,
+          };
+        }
+        case "intent.persist": {
+          if (!this.agentOutcomeToolsService) {
+            return {
+              role: call.role,
+              tool: call.tool,
+              status: "failed",
+              reason: "agent_outcome_tools_unavailable",
+            };
+          }
+          const text =
+            this.readString(call.input.text) ??
+            this.readString(call.input.intentText) ??
+            "";
+          if (!text) {
+            return {
+              role: call.role,
+              tool: call.tool,
+              status: "failed",
+              reason: "missing_intent_text",
+            };
+          }
+          const result = await this.agentOutcomeToolsService.persistIntent({
+            userId,
+            threadId,
+            traceId,
+            text,
+          });
+          return {
+            role: call.role,
+            tool: call.tool,
+            status: "executed",
+            output: result,
+          };
+        }
+        case "conversation.start": {
+          if (!this.agentOutcomeToolsService) {
+            return {
+              role: call.role,
+              tool: call.tool,
+              status: "failed",
+              reason: "agent_outcome_tools_unavailable",
+            };
+          }
+          const result = await this.agentOutcomeToolsService.startConversation({
+            userId,
+            title: this.readString(call.input.title) ?? undefined,
+            initialMessage:
+              this.readString(call.input.initialMessage) ?? undefined,
+          });
+          return {
+            role: call.role,
+            tool: call.tool,
+            status: "executed",
+            output: result,
+          };
+        }
+        case "memory.write": {
+          if (!this.agentOutcomeToolsService) {
+            return {
+              role: call.role,
+              tool: call.tool,
+              status: "failed",
+              reason: "agent_outcome_tools_unavailable",
+            };
+          }
+          const summary =
+            this.readString(call.input.summary) ??
+            this.readString(call.input.content) ??
+            "";
+          if (!summary) {
+            return {
+              role: call.role,
+              tool: call.tool,
+              status: "failed",
+              reason: "missing_memory_summary",
+            };
+          }
+          const result = await this.agentOutcomeToolsService.writeMemory({
+            userId,
+            summary,
+            context: this.coerceRecord(call.input.context),
+            topics: this.readStringArray(call.input.topics),
+            activities: this.readStringArray(call.input.activities),
+          });
+          return {
+            role: call.role,
+            tool: call.tool,
+            status: "executed",
+            output: result,
+          };
+        }
+        case "followup.schedule": {
+          if (!this.agentOutcomeToolsService) {
+            return {
+              role: call.role,
+              tool: call.tool,
+              status: "failed",
+              reason: "agent_outcome_tools_unavailable",
+            };
+          }
+          const result = await this.agentOutcomeToolsService.scheduleFollowup({
+            userId,
+            title: this.readString(call.input.title) ?? undefined,
+            summary:
+              this.readString(call.input.summary) ??
+              this.readString(call.input.description) ??
+              undefined,
+            timezone: this.readString(call.input.timezone) ?? undefined,
+            deliveryMode: this.readDeliveryMode(call.input.deliveryMode),
+            schedule: this.coerceSchedule(call.input.schedule),
+          });
+          return {
+            role: call.role,
+            tool: call.tool,
+            status: "executed",
+            output: result,
+          };
+        }
         case "ranking.explain": {
           const candidateUserId =
             typeof call.input.candidateUserId === "string"
@@ -1437,6 +1593,9 @@ export class AgentConversationService {
   private isRiskSensitiveTool(tool: AgentTool) {
     return (
       tool === "intent.parse" ||
+      tool === "intent.persist" ||
+      tool === "memory.write" ||
+      tool === "followup.schedule" ||
       tool === "workflow.write" ||
       tool === "notification.compose"
     );
@@ -1608,6 +1767,110 @@ export class AgentConversationService {
       },
       {} as Record<string, string | number | boolean>,
     );
+  }
+
+  private coerceRecord(value: unknown): Record<string, unknown> | undefined {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return undefined;
+    }
+    return value as Record<string, unknown>;
+  }
+
+  private readStringArray(value: unknown) {
+    if (!Array.isArray(value)) {
+      return undefined;
+    }
+    const items = value
+      .map((entry) => this.readString(entry))
+      .filter((entry): entry is string => Boolean(entry))
+      .slice(0, 8);
+    return items.length > 0 ? items : undefined;
+  }
+
+  private coerceParsedIntent(value: unknown):
+    | {
+        topics?: string[];
+        activities?: string[];
+        intentType?: string;
+        modality?: string;
+        timingConstraints?: string[];
+        skillConstraints?: string[];
+        vibeConstraints?: string[];
+      }
+    | undefined {
+    const record = this.coerceRecord(value);
+    if (!record) {
+      return undefined;
+    }
+    return {
+      topics: this.readStringArray(record.topics),
+      activities: this.readStringArray(record.activities),
+      intentType: this.readString(record.intentType) ?? undefined,
+      modality: this.readString(record.modality) ?? undefined,
+      timingConstraints: this.readStringArray(record.timingConstraints),
+      skillConstraints: this.readStringArray(record.skillConstraints),
+      vibeConstraints: this.readStringArray(record.vibeConstraints),
+    };
+  }
+
+  private readDeliveryMode(
+    value: unknown,
+  ):
+    | "notification"
+    | "agent_thread"
+    | "notification_and_agent_thread"
+    | undefined {
+    if (
+      value === "notification" ||
+      value === "agent_thread" ||
+      value === "notification_and_agent_thread"
+    ) {
+      return value;
+    }
+    return undefined;
+  }
+
+  private coerceSchedule(value: unknown):
+    | {
+        kind?: "hourly" | "weekly";
+        intervalHours?: number;
+        days?: Array<"sun" | "mon" | "tue" | "wed" | "thu" | "fri" | "sat">;
+        hour?: number;
+        minute?: number;
+      }
+    | undefined {
+    const record = this.coerceRecord(value);
+    if (!record) {
+      return undefined;
+    }
+    const kind =
+      record.kind === "hourly" || record.kind === "weekly"
+        ? record.kind
+        : undefined;
+    const dayValues = Array.isArray(record.days)
+      ? record.days.filter(
+          (
+            entry,
+          ): entry is "sun" | "mon" | "tue" | "wed" | "thu" | "fri" | "sat" =>
+            entry === "sun" ||
+            entry === "mon" ||
+            entry === "tue" ||
+            entry === "wed" ||
+            entry === "thu" ||
+            entry === "fri" ||
+            entry === "sat",
+        )
+      : undefined;
+    return {
+      kind,
+      intervalHours:
+        typeof record.intervalHours === "number"
+          ? record.intervalHours
+          : undefined,
+      days: dayValues,
+      hour: typeof record.hour === "number" ? record.hour : undefined,
+      minute: typeof record.minute === "number" ? record.minute : undefined,
+    };
   }
 
   private readIntInRange(

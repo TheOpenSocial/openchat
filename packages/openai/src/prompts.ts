@@ -59,9 +59,9 @@ const promptRegistry: Record<OpenAIRoutingTask, PromptDefinition> = {
   },
   conversation_planning: {
     task: "conversation_planning",
-    version: "conversation_planning.v2",
+    version: "conversation_planning.v3",
     instructions:
-      "Plan one bounded agentic turn as strict JSON with specialists, toolCalls, and responseGoal. Use provided socialContext, onboarding freshness, preferences, and memory to decide the next best action. Prefer minimal safe steps.",
+      "Plan one bounded agentic turn as strict JSON with specialists, toolCalls, and responseGoal. Use provided socialContext, onboarding freshness, preferences, and memory to decide the next best action. Available tools include intent.parse, personalization.retrieve, candidate.search, intent.persist, conversation.start, memory.write, followup.schedule, notification.compose, moderation.review, workflow.read, and workflow.write. Prefer minimal safe steps and only use world-action tools when they move the user toward a concrete social outcome.",
   },
   conversation_response: {
     task: "conversation_response",

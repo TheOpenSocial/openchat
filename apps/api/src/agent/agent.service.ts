@@ -56,6 +56,15 @@ export class AgentService {
     });
   }
 
+  createThread(userId: string, title?: string) {
+    return this.prisma.agentThread.create({
+      data: {
+        userId,
+        title: title?.trim() ? title.trim().slice(0, 120) : null,
+      },
+    });
+  }
+
   async createUserMessage(
     threadId: string,
     content: string,

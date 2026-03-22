@@ -1202,8 +1202,9 @@ export class OpenAIClient {
         ? new Set(allowedSpecialists)
         : null;
 
-    const specialists = plan.specialists.filter((specialist) =>
-      allowedSpecialistSet ? allowedSpecialistSet.has(specialist) : true,
+    const specialists = plan.specialists.filter(
+      (specialist: OpenAIAgentRole) =>
+        allowedSpecialistSet ? allowedSpecialistSet.has(specialist) : true,
     );
 
     return conversationPlanSchema.parse({
@@ -1217,17 +1218,34 @@ export class OpenAIClient {
   }
 
   private fallbackConversationPlan(userMessage: string): ConversationPlan {
+    const normalized = userMessage.toLowerCase();
+    const looksLikeReminder =
+      normalized.includes("remind me") ||
+      normalized.includes("follow up") ||
+      normalized.includes("check back");
+    const looksLikeSearch =
+      normalized.includes("meet") ||
+      normalized.includes("find") ||
+      normalized.includes("talk") ||
+      normalized.includes("play") ||
+      normalized.includes("looking for");
+
     return conversationPlanSchema.parse({
       specialists: [
         "intent_parser",
+        "personalization_interpreter",
         "moderation_assistant",
-        "notification_copy",
       ],
       toolCalls: [
         {
           role: "manager",
           tool: "workflow.read",
           input: { maxMessages: 12 },
+        },
+        {
+          role: "personalization_interpreter",
+          tool: "personalization.retrieve",
+          input: { maxDocs: 4 },
         },
         {
           role: "intent_parser",
@@ -1239,9 +1257,38 @@ export class OpenAIClient {
           tool: "moderation.review",
           input: { text: userMessage.slice(0, 500) },
         },
+        ...(looksLikeSearch
+          ? [
+              {
+                role: "manager" as const,
+                tool: "candidate.search" as const,
+                input: {
+                  text: userMessage.slice(0, 500),
+                  take: 5,
+                },
+              },
+              {
+                role: "manager" as const,
+                tool: "intent.persist" as const,
+                input: { text: userMessage.slice(0, 500) },
+              },
+            ]
+          : []),
+        ...(looksLikeReminder
+          ? [
+              {
+                role: "manager" as const,
+                tool: "followup.schedule" as const,
+                input: {
+                  title: "Follow up on this social goal",
+                  summary: userMessage.slice(0, 240),
+                },
+              },
+            ]
+          : []),
       ],
       responseGoal:
-        "Answer clearly, ground the reply in the user's social context, and suggest one next action.",
+        "Answer clearly, ground the reply in the user's social context, and move toward a concrete social next action.",
     });
   }
 
