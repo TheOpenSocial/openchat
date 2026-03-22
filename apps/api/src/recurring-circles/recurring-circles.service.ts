@@ -297,6 +297,7 @@ export class RecurringCirclesService {
 
     for (const circle of circles) {
       try {
+        await this.assertLaunchAction("recurring_circles", circle.ownerUserId);
         const cadence =
           circle.cadenceConfig as unknown as RecurringCircleCreateBody["cadence"];
         const scheduledFor = circle.nextSessionAt ?? now;
