@@ -29,6 +29,7 @@
     "brand:generate": "node scripts/generate-brand-assets.mjs",
     "staging:smoke:api": "node scripts/staging-smoke-api.mjs",
     "staging:verify:incident": "node scripts/staging-incident-verify.mjs",
+    "moderation:drill": "node scripts/moderation-drill.mjs",
     "jarvis": "bash scripts/jarvis-ios.sh",
     "deps:outdated": "pnpm outdated -r",
     "deps:outdated:latest": "pnpm outdated -r --long",
