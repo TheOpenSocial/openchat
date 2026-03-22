@@ -1,5 +1,13 @@
-import { type Dispatch, type SetStateAction, useMemo, useState } from "react";
+import { LinearGradient } from "expo-linear-gradient";
 import {
+  type Dispatch,
+  type SetStateAction,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import {
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -14,16 +22,23 @@ import { AnimatedScreen } from "../components/AnimatedScreen";
 import { ChoiceChip } from "../components/ChoiceChip";
 import { InlineNotice } from "../components/InlineNotice";
 import { PrimaryButton } from "../components/PrimaryButton";
+import { pickProfilePhoto } from "../lib/profile-photo-upload";
+import {
+  loadOnboardingDraft,
+  saveOnboardingDraft,
+} from "../onboarding-storage";
 import {
   type OnboardingAvailability,
   type OnboardingFormat,
   type OnboardingMode,
   type OnboardingStyle,
+  type ProfilePhotoDraft,
   type SocialMode,
   type UserProfileDraft,
 } from "../types";
 
 interface OnboardingScreenProps {
+  userId: string;
   defaultName: string;
   onComplete: (profile: UserProfileDraft) => Promise<void>;
   loading: boolean;
@@ -134,7 +149,7 @@ function StepDots({ activeIndex }: { activeIndex: number }) {
         <View
           className={
             index === activeIndex
-              ? "h-2 w-5 rounded-full bg-white"
+              ? "h-2 w-6 rounded-full bg-white"
               : "h-2 w-2 rounded-full bg-white/20"
           }
           key={step}
@@ -152,7 +167,41 @@ function SectionLabel({ children }: { children: string }) {
   );
 }
 
+function AmbientBackdrop() {
+  return (
+    <View className="absolute inset-0 overflow-hidden">
+      <LinearGradient
+        colors={["rgba(151,206,255,0.14)", "rgba(151,206,255,0)"]}
+        end={{ x: 1, y: 1 }}
+        start={{ x: 0, y: 0 }}
+        style={{
+          position: "absolute",
+          top: -120,
+          right: -50,
+          width: 280,
+          height: 280,
+          borderRadius: 280,
+        }}
+      />
+      <LinearGradient
+        colors={["rgba(118,255,195,0.09)", "rgba(118,255,195,0)"]}
+        end={{ x: 1, y: 1 }}
+        start={{ x: 0, y: 0 }}
+        style={{
+          position: "absolute",
+          bottom: -160,
+          left: -80,
+          width: 320,
+          height: 320,
+          borderRadius: 320,
+        }}
+      />
+    </View>
+  );
+}
+
 export function OnboardingScreen({
+  userId,
   defaultName,
   errorMessage,
   loading,
@@ -172,8 +221,82 @@ export function OnboardingScreen({
   const [bio, setBio] = useState("");
   const [location, setLocation] = useState("");
   const [firstIntentText, setFirstIntentText] = useState("");
+  const [profilePhoto, setProfilePhoto] = useState<ProfilePhotoDraft | null>(
+    null,
+  );
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
+  const [hydrated, setHydrated] = useState(false);
 
   const activeStep = steps[stepIndex];
+
+  useEffect(() => {
+    let mounted = true;
+    void loadOnboardingDraft(userId)
+      .then((draft) => {
+        if (!mounted || !draft) {
+          return;
+        }
+        setStepIndex(draft.stepIndex);
+        setGoals(draft.goals);
+        setInterests(draft.interests);
+        setAvailability(draft.availability);
+        setFormat(draft.format);
+        setMode(draft.mode);
+        setStyle(draft.style);
+        setName(draft.name || defaultName);
+        setBio(draft.bio);
+        setLocation(draft.location);
+        setFirstIntentText(draft.firstIntentText);
+        setProfilePhoto(draft.profilePhoto);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (mounted) {
+          setHydrated(true);
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [defaultName, userId]);
+
+  useEffect(() => {
+    if (!hydrated) {
+      return;
+    }
+    void saveOnboardingDraft(userId, {
+      stepIndex,
+      goals,
+      interests,
+      availability,
+      format,
+      mode,
+      style,
+      name,
+      bio,
+      location,
+      firstIntentText,
+      profilePhoto,
+    }).catch(() => {});
+  }, [
+    availability,
+    bio,
+    firstIntentText,
+    format,
+    goals,
+    hydrated,
+    interests,
+    location,
+    mode,
+    name,
+    profilePhoto,
+    stepIndex,
+    style,
+    userId,
+  ]);
+
   const filteredInterests = useMemo(() => {
     const normalizedQuery = interestQuery.trim().toLowerCase();
     if (!normalizedQuery) {
@@ -227,7 +350,26 @@ export function OnboardingScreen({
     setStepIndex((current) => Math.max(0, current - 1));
   };
 
+  const buildDraft = (intentText: string | null): UserProfileDraft => ({
+    displayName: name.trim(),
+    bio: bio.trim(),
+    city: location.trim(),
+    country: "",
+    interests,
+    socialMode: mapFormatToSocialMode(format),
+    notificationMode: "live",
+    onboardingGoals: goals,
+    preferredAvailability: availability,
+    preferredFormat: format,
+    preferredMode: mode,
+    preferredStyle: style,
+    firstIntentText: intentText,
+    timezone: resolveTimezone(),
+    profilePhoto,
+  });
+
   const handleContinue = async () => {
+    setLocalError(null);
     if (activeStep !== "intent") {
       if (!canContinue) {
         return;
@@ -236,41 +378,27 @@ export function OnboardingScreen({
       return;
     }
 
-    await onComplete({
-      displayName: name.trim(),
-      bio: bio.trim(),
-      city: location.trim(),
-      country: "",
-      interests,
-      socialMode: mapFormatToSocialMode(format),
-      notificationMode: "live",
-      onboardingGoals: goals,
-      preferredAvailability: availability,
-      preferredFormat: format,
-      preferredMode: mode,
-      preferredStyle: style,
-      firstIntentText: firstIntentText.trim() || null,
-      timezone: resolveTimezone(),
-    });
+    await onComplete(buildDraft(firstIntentText.trim() || null));
   };
 
   const handleSkipIntent = async () => {
-    await onComplete({
-      displayName: name.trim(),
-      bio: bio.trim(),
-      city: location.trim(),
-      country: "",
-      interests,
-      socialMode: mapFormatToSocialMode(format),
-      notificationMode: "live",
-      onboardingGoals: goals,
-      preferredAvailability: availability,
-      preferredFormat: format,
-      preferredMode: mode,
-      preferredStyle: style,
-      firstIntentText: null,
-      timezone: resolveTimezone(),
-    });
+    setLocalError(null);
+    await onComplete(buildDraft(null));
+  };
+
+  const handlePickProfilePhoto = async () => {
+    setPhotoBusy(true);
+    setLocalError(null);
+    try {
+      const nextPhoto = await pickProfilePhoto();
+      if (nextPhoto) {
+        setProfilePhoto(nextPhoto);
+      }
+    } catch (error) {
+      setLocalError(String(error));
+    } finally {
+      setPhotoBusy(false);
+    }
   };
 
   const title =
@@ -301,6 +429,7 @@ export function OnboardingScreen({
 
   return (
     <SafeAreaView className="flex-1 bg-canvas" testID="onboarding-screen">
+      <AmbientBackdrop />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         className="flex-1"
@@ -327,6 +456,9 @@ export function OnboardingScreen({
             {errorMessage ? (
               <InlineNotice text={errorMessage} tone="error" />
             ) : null}
+            {localError ? (
+              <InlineNotice text={localError} tone="error" />
+            ) : null}
             {validationMessage && activeStep !== "intent" ? (
               <View className="mt-3">
                 <InlineNotice text={validationMessage} tone="info" />
@@ -340,39 +472,42 @@ export function OnboardingScreen({
               showsVerticalScrollIndicator={false}
             >
               {activeStep === "welcome" ? (
-                <View className="flex-1 justify-center pt-10">
-                  <View className="rounded-[28px] border border-white/8 bg-surface px-5 py-6">
-                    <Text className="text-[18px] font-semibold tracking-tight text-ink">
+                <LinearGradient
+                  colors={["rgba(255,255,255,0.12)", "rgba(255,255,255,0.04)"]}
+                  end={{ x: 1, y: 1 }}
+                  start={{ x: 0, y: 0 }}
+                  style={{ borderRadius: 28, padding: 1 }}
+                >
+                  <View className="rounded-[27px] bg-surface px-5 py-6">
+                    <Text className="text-[20px] font-semibold tracking-tight text-ink">
                       Meet the right people faster.
                     </Text>
                     <Text className="mt-3 text-[15px] leading-[24px] text-muted">
-                      We’ll use a few signals to understand who you want to
-                      meet, what you want to do, and how to move you into a real
-                      conversation.
+                      We’ll collect only the signals that help us understand who
+                      you want to meet, what you want to do, and how to move you
+                      into a real conversation.
                     </Text>
                   </View>
-                </View>
+                </LinearGradient>
               ) : null}
 
               {activeStep === "goals" ? (
-                <View>
-                  <View className="flex-row flex-wrap gap-3">
-                    {goalOptions.map((goal) => (
-                      <ChoiceChip
-                        key={goal}
-                        label={goal}
-                        onPress={() => toggleMultiSelect(goal, setGoals)}
-                        selected={goals.includes(goal)}
-                      />
-                    ))}
-                  </View>
+                <View className="flex-row flex-wrap gap-3">
+                  {goalOptions.map((goal) => (
+                    <ChoiceChip
+                      key={goal}
+                      label={goal}
+                      onPress={() => toggleMultiSelect(goal, setGoals)}
+                      selected={goals.includes(goal)}
+                    />
+                  ))}
                 </View>
               ) : null}
 
               {activeStep === "interests" ? (
                 <View>
                   <TextInput
-                    className="rounded-2xl border border-hairline bg-surface px-4 py-3 text-[15px] text-ink"
+                    className="rounded-2xl border border-hairline bg-surface/90 px-4 py-3 text-[15px] text-ink"
                     onChangeText={setInterestQuery}
                     placeholder="Search topics"
                     placeholderTextColor="#8e8e8e"
@@ -394,7 +529,7 @@ export function OnboardingScreen({
                     <SectionLabel>Custom topic</SectionLabel>
                     <View className="flex-row gap-3">
                       <TextInput
-                        className="flex-1 rounded-2xl border border-hairline bg-surface px-4 py-3 text-[15px] text-ink"
+                        className="flex-1 rounded-2xl border border-hairline bg-surface/90 px-4 py-3 text-[15px] text-ink"
                         onChangeText={setCustomInterest}
                         onSubmitEditing={addCustomInterest}
                         placeholder="Add your own"
@@ -474,16 +609,77 @@ export function OnboardingScreen({
 
               {activeStep === "profile" ? (
                 <View className="gap-5">
-                  <View className="rounded-[24px] border border-white/8 bg-surface px-4 py-4">
-                    <Text className="text-[14px] leading-[21px] text-muted">
-                      Your Google sign-in already gives us a starting identity.
-                      You can refine it here and add a photo later from Profile.
-                    </Text>
+                  <LinearGradient
+                    colors={["rgba(151,206,255,0.2)", "rgba(255,255,255,0.05)"]}
+                    end={{ x: 1, y: 1 }}
+                    start={{ x: 0, y: 0 }}
+                    style={{ borderRadius: 28, padding: 1 }}
+                  >
+                    <View className="rounded-[27px] bg-surface px-4 py-4">
+                      <Text className="text-[14px] leading-[21px] text-muted">
+                        Google already got you through the door. Add a name,
+                        optional photo, and a small bit of context so the first
+                        reply feels personal.
+                      </Text>
+                    </View>
+                  </LinearGradient>
+                  <View>
+                    <SectionLabel>Profile photo</SectionLabel>
+                    <Pressable
+                      className="rounded-[28px] border border-white/10 bg-surface px-5 py-5"
+                      onPress={handlePickProfilePhoto}
+                    >
+                      <View className="flex-row items-center gap-4">
+                        {profilePhoto ? (
+                          <Image
+                            source={{ uri: profilePhoto.uri }}
+                            style={{ width: 72, height: 72, borderRadius: 24 }}
+                          />
+                        ) : (
+                          <LinearGradient
+                            colors={[
+                              "rgba(151,206,255,0.32)",
+                              "rgba(118,255,195,0.18)",
+                            ]}
+                            end={{ x: 1, y: 1 }}
+                            start={{ x: 0, y: 0 }}
+                            style={{
+                              width: 72,
+                              height: 72,
+                              borderRadius: 24,
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                          >
+                            <Text className="text-[22px] font-semibold text-ink">
+                              +
+                            </Text>
+                          </LinearGradient>
+                        )}
+                        <View className="flex-1">
+                          <Text className="text-[16px] font-semibold text-ink">
+                            {profilePhoto
+                              ? "Photo selected"
+                              : "Add a profile photo"}
+                          </Text>
+                          <Text className="mt-1 text-[14px] leading-[20px] text-muted">
+                            {profilePhoto
+                              ? "We’ll upload it when you finish onboarding."
+                              : "Optional, but it makes replies feel more human."}
+                          </Text>
+                        </View>
+                      </View>
+                    </Pressable>
+                    {photoBusy ? (
+                      <Text className="mt-2 text-[13px] text-muted">
+                        Opening library…
+                      </Text>
+                    ) : null}
                   </View>
                   <View>
                     <SectionLabel>Name</SectionLabel>
                     <TextInput
-                      className="rounded-2xl border border-hairline bg-surface px-4 py-3 text-[15px] text-ink"
+                      className="rounded-2xl border border-hairline bg-surface/90 px-4 py-3 text-[15px] text-ink"
                       onChangeText={setName}
                       placeholder="Your name"
                       placeholderTextColor="#8e8e8e"
@@ -493,7 +689,7 @@ export function OnboardingScreen({
                   <View>
                     <SectionLabel>Short bio</SectionLabel>
                     <TextInput
-                      className="min-h-[110px] rounded-2xl border border-hairline bg-surface px-4 py-3 text-[15px] leading-[22px] text-ink"
+                      className="min-h-[110px] rounded-2xl border border-hairline bg-surface/90 px-4 py-3 text-[15px] leading-[22px] text-ink"
                       multiline
                       onChangeText={setBio}
                       placeholder="A line or two if you want"
@@ -505,7 +701,7 @@ export function OnboardingScreen({
                   <View>
                     <SectionLabel>Location</SectionLabel>
                     <TextInput
-                      className="rounded-2xl border border-hairline bg-surface px-4 py-3 text-[15px] text-ink"
+                      className="rounded-2xl border border-hairline bg-surface/90 px-4 py-3 text-[15px] text-ink"
                       onChangeText={setLocation}
                       placeholder="City or area"
                       placeholderTextColor="#8e8e8e"
@@ -517,23 +713,34 @@ export function OnboardingScreen({
 
               {activeStep === "intent" ? (
                 <View className="gap-5">
-                  <TextInput
-                    className="min-h-[210px] rounded-[28px] border border-hairline bg-surface px-5 py-5 text-[17px] leading-[25px] text-ink"
-                    multiline
-                    onChangeText={setFirstIntentText}
-                    placeholder={[
-                      "I want to play Apex tonight",
-                      "Talk about the match",
-                      "Meet people into design",
-                      "Find someone to run with",
-                      "Talk to founders",
-                    ].join("\n")}
-                    placeholderTextColor="#8e8e8e"
-                    textAlignVertical="top"
-                    value={firstIntentText}
-                  />
+                  <LinearGradient
+                    colors={[
+                      "rgba(255,255,255,0.12)",
+                      "rgba(255,255,255,0.04)",
+                    ]}
+                    end={{ x: 1, y: 1 }}
+                    start={{ x: 0, y: 0 }}
+                    style={{ borderRadius: 32, padding: 1 }}
+                  >
+                    <TextInput
+                      className="min-h-[220px] rounded-[31px] bg-surface px-5 py-5 text-[17px] leading-[25px] text-ink"
+                      multiline
+                      onChangeText={setFirstIntentText}
+                      placeholder={[
+                        "I want to play Apex tonight",
+                        "Talk about the match",
+                        "Meet people into design",
+                        "Find someone to run with",
+                        "Talk to founders",
+                      ].join("\n")}
+                      placeholderTextColor="#8e8e8e"
+                      textAlignVertical="top"
+                      value={firstIntentText}
+                    />
+                  </LinearGradient>
                   <Text className="text-[14px] leading-[21px] text-muted">
-                    We’ll turn this into your first live interaction right away.
+                    We’ll open your main agent thread and use this as the first
+                    thing it acts on.
                   </Text>
                 </View>
               ) : null}
@@ -554,13 +761,7 @@ export function OnboardingScreen({
             <View className="flex-1">
               <PrimaryButton
                 disabled={activeStep !== "intent" && !canContinue}
-                label={
-                  activeStep === "intent"
-                    ? "Try it"
-                    : activeStep === "welcome"
-                      ? "Continue"
-                      : "Continue"
-                }
+                label={activeStep === "intent" ? "Try it" : "Continue"}
                 loading={loading}
                 onPress={handleContinue}
                 testID="onboarding-continue-button"

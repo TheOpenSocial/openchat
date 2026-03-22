@@ -55,6 +55,37 @@ export interface ProfileCompletion {
   };
 }
 
+export interface ProfilePhotoUploadIntent {
+  imageId: string;
+  storageKey: string;
+  mimeType: "image/jpeg" | "image/png" | "image/webp";
+  maxByteSize: number;
+  expiresAt: string;
+  uploadToken: string;
+  uploadUrl: string;
+  deliveryBaseUrl: string;
+  requiredHeaders: Record<string, string>;
+}
+
+export interface ProfilePhotoUploadConfirmation {
+  imageId: string;
+  status: "processing";
+  metadata: {
+    uploadToken: string;
+    byteSize: number;
+    width?: number;
+    height?: number;
+    sha256?: string;
+  };
+}
+
+export interface PrimaryProfilePhoto {
+  kind: "uploaded" | "generated";
+  imageId?: string;
+  originalUrl: string;
+  thumbUrl?: string | null;
+}
+
 export interface InboxRequestRecord {
   id: string;
   intentId: string;
@@ -686,6 +717,49 @@ export const api = {
     accessToken?: string,
   ) {
     return request("PUT", `/profiles/${userId}`, payload, accessToken);
+  },
+  createProfilePhotoUploadIntent(
+    userId: string,
+    payload: {
+      fileName: string;
+      mimeType: "image/jpeg" | "image/png" | "image/webp";
+      byteSize: number;
+    },
+    accessToken?: string,
+  ) {
+    return request<ProfilePhotoUploadIntent>(
+      "POST",
+      `/profiles/${userId}/photos/upload-intent`,
+      payload,
+      accessToken,
+    );
+  },
+  completeProfilePhotoUpload(
+    userId: string,
+    imageId: string,
+    payload: {
+      uploadToken: string;
+      byteSize: number;
+      width?: number;
+      height?: number;
+      sha256?: string;
+    },
+    accessToken?: string,
+  ) {
+    return request<ProfilePhotoUploadConfirmation>(
+      "POST",
+      `/profiles/${userId}/photos/${imageId}/complete`,
+      payload,
+      accessToken,
+    );
+  },
+  getPrimaryProfilePhoto(userId: string, accessToken?: string) {
+    return request<PrimaryProfilePhoto>(
+      "GET",
+      `/profiles/${userId}/photo`,
+      undefined,
+      accessToken,
+    );
   },
   replaceInterests(
     userId: string,

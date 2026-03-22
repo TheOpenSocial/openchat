@@ -17,6 +17,8 @@ import { AnimatedScreen } from "./src/components/AnimatedScreen";
 import { AppToastHost } from "./src/components/AppToastHost";
 import { LoadingState } from "./src/components/LoadingState";
 import { api, configureApiAuthLifecycle } from "./src/lib/api";
+import { uploadProfilePhoto } from "./src/lib/profile-photo-upload";
+import { clearOnboardingDraft } from "./src/onboarding-storage";
 import {
   clearStoredSession,
   loadStoredSession,
@@ -345,6 +347,14 @@ function ProductionApp() {
         ),
       ]);
 
+      if (draft.profilePhoto) {
+        await uploadProfilePhoto({
+          userId: session.userId,
+          accessToken: session.accessToken,
+          photo: draft.profilePhoto,
+        });
+      }
+
       await saveStoredSession({
         userId: session.userId,
         displayName: draft.displayName,
@@ -365,6 +375,7 @@ function ProductionApp() {
       setDisplayName(draft.displayName);
       setProfile(draft);
       setPendingOnboardingIntent(draft.firstIntentText?.trim() || null);
+      await clearOnboardingDraft(session.userId);
       setStage("home");
       void trackTelemetryEvent(session.userId, "onboarding_completed", {
         socialMode: draft.socialMode,
@@ -425,8 +436,9 @@ function ProductionApp() {
         />
       ) : (
         <AnimatedScreen screenKey={stageKey}>
-          {stage === "onboarding" ? (
+          {stage === "onboarding" && session ? (
             <OnboardingScreen
+              userId={session.userId}
               defaultName={displayName}
               errorMessage={onboardingError}
               loading={onboardingLoading}

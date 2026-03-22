@@ -23,6 +23,15 @@ export type OnboardingMode = "online" | "in_person" | "both";
 
 export type OnboardingStyle = "chill" | "spontaneous" | "planned" | "focused";
 
+export interface ProfilePhotoDraft {
+  uri: string;
+  fileName: string;
+  mimeType: "image/jpeg" | "image/png" | "image/webp";
+  byteSize: number;
+  width?: number;
+  height?: number;
+}
+
 /** Renders in `ChatBubble` (agent thread + human chat). */
 export type ChatBubbleRole = AgentTranscriptBubbleRole;
 
@@ -53,6 +62,7 @@ export interface UserProfileDraft {
   preferredStyle?: OnboardingStyle;
   firstIntentText?: string | null;
   timezone?: string;
+  profilePhoto?: ProfilePhotoDraft | null;
 }
 
 export interface InboxRequest {
