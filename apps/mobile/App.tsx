@@ -1,5 +1,6 @@
 import "./global.css";
 
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { StatusBar } from "expo-status-bar";
 import {
   lazy,
@@ -18,6 +19,8 @@ import { AnimatedScreen } from "./src/components/AnimatedScreen";
 import { AppToastHost } from "./src/components/AppToastHost";
 import { LoadingState } from "./src/components/LoadingState";
 import { PremiumSplashOverlay } from "./src/components/PremiumSplashOverlay";
+import { StageCurtain } from "./src/components/StageCurtain";
+import { type AppLocale, supportedLocales, t } from "./src/i18n/strings";
 import { showErrorToast } from "./src/lib/app-toast";
 import {
   api,
@@ -58,6 +61,7 @@ const DesignMockApp: LazyExoticComponent<FC> = lazy(() =>
 const designMockApp =
   process.env.EXPO_PUBLIC_DESIGN_MOCK === "1" ||
   process.env.EXPO_PUBLIC_DESIGN_MOCK === "true";
+const MOBILE_LOCALE_STORAGE_KEY = "opensocial.mobile.locale.v1";
 
 function ProductionApp() {
   const allowE2EBypass = process.env.EXPO_PUBLIC_ENABLE_E2E_AUTH_BYPASS === "1";
@@ -70,6 +74,8 @@ function ProductionApp() {
   const [onboardingError, setOnboardingError] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
   const [onboardingLoading, setOnboardingLoading] = useState(false);
+  const [stageCurtainVisible, setStageCurtainVisible] = useState(false);
+  const [locale, setLocale] = useState<AppLocale>("en");
   const [session, setSession] = useState<MobileSession | null>(null);
   const [profile, setProfile] = useState<UserProfileDraft>({
     displayName: "Explorer",
@@ -84,6 +90,52 @@ function ProductionApp() {
     string | null
   >(null);
   const appOpenedTrackedRef = useRef<string | null>(null);
+
+  const mobileSessionFromStored = useCallback(
+    (
+      stored: NonNullable<Awaited<ReturnType<typeof loadStoredSession>>>,
+    ): MobileSession => ({
+      userId: stored.userId,
+      displayName: stored.displayName,
+      email: stored.email ?? null,
+      accessToken: stored.accessToken,
+      refreshToken: stored.refreshToken,
+      sessionId: stored.sessionId,
+    }),
+    [],
+  );
+
+  useEffect(() => {
+    AsyncStorage.getItem(MOBILE_LOCALE_STORAGE_KEY)
+      .then((stored) => {
+        if (stored && supportedLocales.includes(stored as AppLocale)) {
+          setLocale(stored as AppLocale);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    AsyncStorage.setItem(MOBILE_LOCALE_STORAGE_KEY, locale).catch(() => {});
+  }, [locale]);
+
+  const transitionToStage = useCallback(
+    async (nextStage: AppStage, options?: { delayMs?: number }) => {
+      const coverDelayMs = options?.delayMs ?? 260;
+      setStageCurtainVisible(true);
+      await new Promise((resolve) => setTimeout(resolve, coverDelayMs));
+      setStage(nextStage);
+      await new Promise((resolve) =>
+        requestAnimationFrame(() => resolve(null)),
+      );
+      await new Promise((resolve) =>
+        requestAnimationFrame(() => resolve(null)),
+      );
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      setStageCurtainVisible(false);
+    },
+    [],
+  );
 
   useEffect(() => {
     configureApiAuthLifecycle({
@@ -109,15 +161,23 @@ function ProductionApp() {
       },
       onAuthFailure: () => {
         setSession(null);
-        setStage("auth");
-        setAuthError("Session expired. Sign in again.");
+        const nextMessage =
+          stage === "onboarding"
+            ? t("authSessionExpiredContinueOnboarding", locale)
+            : t("authSessionExpired", locale);
+        setAuthError(nextMessage);
+        if (stage === "auth") {
+          setStage("auth");
+          return;
+        }
+        void transitionToStage("auth", { delayMs: 180 });
       },
     });
 
     return () => {
       configureApiAuthLifecycle({});
     };
-  }, []);
+  }, [locale, stage, transitionToStage]);
 
   useEffect(() => {
     let mounted = true;
@@ -134,20 +194,14 @@ function ProductionApp() {
           stored.userId,
           stored.accessToken,
         );
-        const restoredSession: MobileSession = {
-          userId: stored.userId,
-          displayName: stored.displayName,
-          email: stored.email ?? null,
-          accessToken: stored.accessToken,
-          refreshToken: stored.refreshToken,
-          sessionId: stored.sessionId,
-        };
+        const latestStored = (await loadStoredSession()) ?? stored;
+        const restoredSession = mobileSessionFromStored(latestStored);
 
         if (!mounted) {
           return;
         }
 
-        const cached = stored;
+        const cached = latestStored;
         setSession(restoredSession);
         setProfile((current) => ({
           ...current,
@@ -184,9 +238,7 @@ function ProductionApp() {
             displayName: cached.displayName,
           }));
           setStage(cached.profileCompleted ? "home" : "onboarding");
-          setAuthError(
-            "You’re offline. Restored your last session state and will sync when internet returns.",
-          );
+          setAuthError(t("authOfflineRestored", locale));
         } else {
           await clearStoredSession();
           if (mounted) {
@@ -208,7 +260,7 @@ function ProductionApp() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [locale, mobileSessionFromStored]);
 
   const handleAuthenticate = async (code: string) => {
     setAuthLoading(true);
@@ -274,19 +326,31 @@ function ProductionApp() {
         nextSession.accessToken,
       );
 
-      setSession(nextSession);
-      setProfile((current) => ({
-        ...current,
-        displayName: nextSession.displayName,
-      }));
-      setStage(completion.completed ? "home" : "onboarding");
-      await saveStoredSession({
+      const latestStored = (await loadStoredSession()) ?? {
         userId: nextSession.userId,
         displayName: nextSession.displayName,
         email: nextSession.email,
         accessToken: nextSession.accessToken,
         refreshToken: nextSession.refreshToken,
         sessionId: nextSession.sessionId,
+      };
+      const hydratedSession = mobileSessionFromStored(latestStored);
+
+      setSession(hydratedSession);
+      setProfile((current) => ({
+        ...current,
+        displayName: hydratedSession.displayName,
+      }));
+      await transitionToStage(completion.completed ? "home" : "onboarding", {
+        delayMs: 260,
+      });
+      await saveStoredSession({
+        userId: hydratedSession.userId,
+        displayName: hydratedSession.displayName,
+        email: hydratedSession.email,
+        accessToken: hydratedSession.accessToken,
+        refreshToken: hydratedSession.refreshToken,
+        sessionId: hydratedSession.sessionId,
         profileCompleted: completion.completed,
         onboardingState: completion.onboardingState,
       });
@@ -305,7 +369,7 @@ function ProductionApp() {
     meta: { firstIntentText: string | null },
   ) => {
     if (!session) {
-      setOnboardingError("Missing authenticated session.");
+      setOnboardingError(t("onboardingMissingSession", locale));
       return;
     }
 
@@ -337,11 +401,9 @@ function ProductionApp() {
       setProfile(draft);
       setHomeAgentSeedMessage(meta.firstIntentText?.trim() || null);
       await clearOnboardingDraft(session.userId);
-      setStage("home");
+      await transitionToStage("home", { delayMs: 220 });
       if (queued) {
-        setOnboardingError(
-          "Saved locally. We’ll finish syncing your onboarding when internet is back.",
-        );
+        setOnboardingError(t("onboardingSavedLocally", locale));
       }
       void trackTelemetryEvent(session.userId, "onboarding_completed", {
         socialMode: draft.socialMode,
@@ -377,7 +439,7 @@ function ProductionApp() {
           );
         } catch (photoErr) {
           showErrorToast(String(photoErr), {
-            title: "Photo not uploaded",
+            title: t("onboardingPhotoUploadFailed", locale),
           });
         }
       }
@@ -484,38 +546,42 @@ function ProductionApp() {
     <SafeAreaProvider style={{ flex: 1 }}>
       <StatusBar style="light" />
       {bootstrapReady ? (
-        stage === "auth" ? (
-          <AuthScreen
-            allowE2EBypass={allowE2EBypass}
-            errorMessage={authError}
-            loading={authLoading}
-            onAuthenticated={handleAuthenticate}
-          />
-        ) : (
-          <AnimatedScreen screenKey={stageKey}>
-            {stage === "onboarding" && session ? (
-              <OnboardingFlow
-                errorMessage={onboardingError}
-                loading={onboardingLoading}
-                onSubmit={handleOnboardingComplete}
+        <AnimatedScreen screenKey={stageKey}>
+          {stage === "auth" ? (
+            <AuthScreen
+              allowE2EBypass={allowE2EBypass}
+              errorMessage={authError}
+              locale={locale}
+              loading={authLoading}
+              onAuthenticated={handleAuthenticate}
+            />
+          ) : null}
+          {stage === "onboarding" && session ? (
+            <OnboardingFlow
+              errorMessage={onboardingError}
+              locale={locale}
+              loading={onboardingLoading}
+              onSubmit={handleOnboardingComplete}
+              session={session}
+            />
+          ) : null}
+          {stage === "home" && session ? (
+            <Suspense
+              fallback={<LoadingState label={t("loadingYourSpace", locale)} />}
+            >
+              <HomeScreen
+                initialAgentMessage={homeAgentSeedMessage}
+                initialProfile={profile}
+                onInitialAgentMessageConsumed={handleInitialAgentSeedConsumed}
+                onProfileUpdated={setProfile}
+                onResetSession={handleResetSession}
                 session={session}
               />
-            ) : null}
-            {stage === "home" && session ? (
-              <Suspense fallback={<LoadingState label="Loading your space…" />}>
-                <HomeScreen
-                  initialAgentMessage={homeAgentSeedMessage}
-                  initialProfile={profile}
-                  onInitialAgentMessageConsumed={handleInitialAgentSeedConsumed}
-                  onProfileUpdated={setProfile}
-                  onResetSession={handleResetSession}
-                  session={session}
-                />
-              </Suspense>
-            ) : null}
-          </AnimatedScreen>
-        )
+            </Suspense>
+          ) : null}
+        </AnimatedScreen>
       ) : null}
+      <StageCurtain visible={stageCurtainVisible} />
       {splashLayerVisible ? (
         <PremiumSplashOverlay
           onExitComplete={handleSplashExitComplete}
@@ -530,7 +596,7 @@ function ProductionApp() {
 export default function App() {
   if (designMockApp) {
     return (
-      <Suspense fallback={<LoadingState label="Loading design preview…" />}>
+      <Suspense fallback={<LoadingState label={t("loadingDesignPreview")} />}>
         <DesignMockApp />
       </Suspense>
     );

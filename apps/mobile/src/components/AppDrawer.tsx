@@ -3,6 +3,7 @@ import type { ComponentProps } from "react";
 import { Modal, Platform, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { type AppLocale, t } from "../i18n/strings";
 import { appTheme } from "../theme";
 import type { HomeTab } from "../types";
 
@@ -12,24 +13,39 @@ interface AppDrawerProps {
   displayName: string;
   onNavigate: (tab: HomeTab) => void;
   onNewAgentConversation: () => void;
+  locale: AppLocale;
 }
 
 type IonName = ComponentProps<typeof Ionicons>["name"];
 
-const ROWS: Array<{ tab: HomeTab; label: string; icon: IonName }> = [
-  { tab: "home", label: "Home", icon: "sparkles-outline" },
-  { tab: "chats", label: "Chats", icon: "chatbubble-outline" },
-  { tab: "profile", label: "Profile", icon: "person-circle-outline" },
+const ROWS: Array<{
+  tab: HomeTab;
+  labelKey: keyof ReturnType<typeof buildLabels>;
+  icon: IonName;
+}> = [
+  { tab: "home", labelKey: "home", icon: "sparkles-outline" },
+  { tab: "chats", labelKey: "chats", icon: "chatbubble-outline" },
+  { tab: "profile", labelKey: "profile", icon: "person-circle-outline" },
 ];
+
+function buildLabels(locale: AppLocale) {
+  return {
+    home: t("homeTabHome", locale),
+    chats: t("homeTabChats", locale),
+    profile: t("homeTabProfile", locale),
+  };
+}
 
 export function AppDrawer({
   displayName,
+  locale,
   onClose,
   onNavigate,
   onNewAgentConversation,
   visible,
 }: AppDrawerProps) {
   const insets = useSafeAreaInsets();
+  const labels = buildLabels(locale);
 
   return (
     <Modal
@@ -56,7 +72,7 @@ export function AppDrawer({
               </Text>
             </View>
             <Pressable
-              accessibilityLabel="Close menu"
+              accessibilityLabel={t("homeDrawerCloseMenu", locale)}
               accessibilityRole="button"
               android_ripple={
                 Platform.OS === "android"
@@ -89,15 +105,15 @@ export function AppDrawer({
             testID="home-drawer-new-conversation"
           >
             <Text className="text-[15px] font-semibold text-accent">
-              New conversation
+              {t("homeDrawerNewConversation", locale)}
             </Text>
             <Text className="mt-1 text-[12px] leading-[17px] text-muted">
-              Clear this conversation and start fresh on this device.
+              {t("homeDrawerNewConversationBody", locale)}
             </Text>
           </Pressable>
 
           <Text className="mb-2 px-4 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
-            Navigate
+            {t("homeDrawerNavigate", locale)}
           </Text>
           {ROWS.map((row) => (
             <Pressable
@@ -120,13 +136,13 @@ export function AppDrawer({
             >
               <Ionicons color={appTheme.colors.ink} name={row.icon} size={22} />
               <Text className="text-[16px] font-medium text-ink">
-                {row.label}
+                {labels[row.labelKey]}
               </Text>
             </Pressable>
           ))}
         </View>
         <Pressable
-          accessibilityLabel="Dismiss menu"
+          accessibilityLabel={t("homeDrawerDismissMenu", locale)}
           accessibilityRole="button"
           className="flex-1 bg-black/50"
           onPress={onClose}

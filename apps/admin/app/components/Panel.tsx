@@ -23,15 +23,15 @@ export function Panel({
   return (
     <Card
       className={cn(
-        "animate-rise border border-white/5 bg-card/95 shadow-[0_18px_44px_rgba(2,6,23,0.45)] backdrop-blur-sm",
+        "border-border bg-card/96 shadow-[0_16px_36px_rgba(0,0,0,0.22)]",
         className,
       )}
     >
-      <CardHeader>
-        <CardTitle className="text-ink">{title}</CardTitle>
+      <CardHeader className="border-b border-border/80 pb-4">
+        <CardTitle>{title}</CardTitle>
         {subtitle ? <CardDescription>{subtitle}</CardDescription> : null}
       </CardHeader>
-      <CardContent className="pt-0">{children}</CardContent>
+      <CardContent className="pt-4">{children}</CardContent>
     </Card>
   );
 }

@@ -10,10 +10,10 @@ module.exports = {
         sm: "calc(var(--radius) - 4px)",
       },
       colors: {
-        ink: "#e7efff",
-        ash: "#95a8ce",
-        ember: "#ffbe63",
-        night: "#070b17",
+        ink: "#fafafa",
+        ash: "#a1a1aa",
+        ember: "#fafafa",
+        night: "#09090b",
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
@@ -47,15 +47,6 @@ module.exports = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
-      },
-      keyframes: {
-        rise: {
-          "0%": { opacity: "0", transform: "translateY(10px)" },
-          "100%": { opacity: "1", transform: "translateY(0)" },
-        },
-      },
-      animation: {
-        rise: "rise 0.32s cubic-bezier(0.22, 1, 0.36, 1) forwards",
       },
     },
   },

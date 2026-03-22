@@ -4,7 +4,7 @@ import {
 } from "expo-speech-recognition";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useCallback, useState } from "react";
-import { Alert, Pressable } from "react-native";
+import { Alert, Pressable, Text } from "react-native";
 
 import { cn } from "../lib/cn";
 import { appTheme } from "../theme";
@@ -12,15 +12,41 @@ import { appTheme } from "../theme";
 export interface VoiceMicButtonImplProps {
   disabled?: boolean;
   onFinalTranscript: (text: string) => void;
+  onListeningChange?: (listening: boolean) => void;
   voiceEnabled?: boolean;
+  className?: string;
+  iconSize?: number;
+  accessibilityLabelIdle?: string;
+  accessibilityLabelActive?: string;
+  label?: string;
+  activeLabel?: string;
+  iconColorIdle?: string;
+  iconColorActive?: string;
 }
 
 export function VoiceMicButtonImpl({
+  activeLabel,
+  accessibilityLabelActive = "Stop dictation",
+  accessibilityLabelIdle = "Voice input",
+  className,
   disabled = false,
+  iconColorActive = appTheme.colors.accent,
+  iconColorIdle = appTheme.colors.muted,
+  iconSize = 22,
+  label,
   onFinalTranscript,
+  onListeningChange,
   voiceEnabled = true,
 }: VoiceMicButtonImplProps) {
   const [listening, setListening] = useState(false);
+
+  const updateListening = useCallback(
+    (next: boolean) => {
+      setListening(next);
+      onListeningChange?.(next);
+    },
+    [onListeningChange],
+  );
 
   useSpeechRecognitionEvent("result", (event) => {
     const line = event.results[0]?.transcript?.trim();
@@ -29,7 +55,7 @@ export function VoiceMicButtonImpl({
     }
     if (event.isFinal) {
       onFinalTranscript(line);
-      setListening(false);
+      updateListening(false);
       try {
         ExpoSpeechRecognitionModule.stop();
       } catch {
@@ -39,11 +65,11 @@ export function VoiceMicButtonImpl({
   });
 
   useSpeechRecognitionEvent("error", () => {
-    setListening(false);
+    updateListening(false);
   });
 
   useSpeechRecognitionEvent("end", () => {
-    setListening(false);
+    updateListening(false);
   });
 
   const toggle = useCallback(async () => {
@@ -56,7 +82,7 @@ export function VoiceMicButtonImpl({
       } catch {
         /* ignore */
       }
-      setListening(false);
+      updateListening(false);
       return;
     }
 
@@ -71,7 +97,7 @@ export function VoiceMicButtonImpl({
         return;
       }
 
-      setListening(true);
+      updateListening(true);
       ExpoSpeechRecognitionModule.start({
         addsPunctuation: true,
         continuous: false,
@@ -79,14 +105,14 @@ export function VoiceMicButtonImpl({
         lang: "en-US",
       });
     } catch {
-      setListening(false);
+      updateListening(false);
       Alert.alert(
         "Voice input unavailable",
         "Speech recognition requires a dev build with the native module enabled.",
         [{ text: "OK" }],
       );
     }
-  }, [disabled, listening, voiceEnabled]);
+  }, [disabled, listening, updateListening, voiceEnabled]);
 
   if (!voiceEnabled) {
     return null;
@@ -94,12 +120,17 @@ export function VoiceMicButtonImpl({
 
   return (
     <Pressable
-      accessibilityLabel={listening ? "Stop dictation" : "Voice input"}
+      accessibilityLabel={
+        listening ? accessibilityLabelActive : accessibilityLabelIdle
+      }
       accessibilityRole="button"
       accessibilityState={{ selected: listening }}
       className={cn(
-        "mb-1 h-9 w-9 items-center justify-center rounded-full active:opacity-85",
+        label
+          ? "mb-0 flex-row items-center justify-center gap-2 rounded-full px-5 py-4 active:opacity-85"
+          : "mb-1 h-9 w-9 items-center justify-center rounded-full active:opacity-85",
         listening ? "bg-accentMuted" : "bg-transparent",
+        className,
       )}
       disabled={disabled}
       hitSlop={8}
@@ -107,10 +138,20 @@ export function VoiceMicButtonImpl({
       testID="composer-voice-button"
     >
       <Ionicons
-        color={listening ? appTheme.colors.accent : appTheme.colors.muted}
+        color={listening ? iconColorActive : iconColorIdle}
         name={listening ? "mic" : "mic-outline"}
-        size={22}
+        size={iconSize}
       />
+      {label ? (
+        <Text
+          className="text-[15px] font-medium"
+          style={{
+            color: listening ? iconColorActive : iconColorIdle,
+          }}
+        >
+          {listening ? (activeLabel ?? label) : label}
+        </Text>
+      ) : null}
     </Pressable>
   );
 }

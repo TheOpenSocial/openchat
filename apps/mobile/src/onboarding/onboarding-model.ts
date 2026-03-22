@@ -1,6 +1,6 @@
 import type { SocialMode, UserProfileDraft } from "../types";
 
-export const ONBOARDING_STEP_COUNT = 6;
+export const ONBOARDING_STEP_COUNT = 4;
 
 export const ONBOARDING_GOAL_OPTIONS = [
   "Meet people",
@@ -62,9 +62,54 @@ export const STYLE_OPTIONS = [
 
 export type PreferredFormatId = "one_to_one" | "group" | "both";
 export type PreferredModeId = "online" | "in_person" | "both";
+export type InferenceSource = "voice" | "manual" | "inferred";
+
+export interface InferredFieldMeta {
+  source: InferenceSource;
+  confidence: number;
+  needsConfirmation: boolean;
+}
+
+export interface OnboardingInferenceMeta {
+  goals: InferredFieldMeta;
+  interests: InferredFieldMeta;
+  format: InferredFieldMeta;
+  mode: InferredFieldMeta;
+  style: InferredFieldMeta;
+  availability: InferredFieldMeta;
+  location: InferredFieldMeta;
+  firstIntent: InferredFieldMeta;
+  persona: InferredFieldMeta;
+}
+
+function defaultFieldMeta(): InferredFieldMeta {
+  return {
+    source: "manual",
+    confidence: 1,
+    needsConfirmation: false,
+  };
+}
+
+export function defaultInferenceMeta(): OnboardingInferenceMeta {
+  return {
+    goals: defaultFieldMeta(),
+    interests: defaultFieldMeta(),
+    format: defaultFieldMeta(),
+    mode: defaultFieldMeta(),
+    style: defaultFieldMeta(),
+    availability: defaultFieldMeta(),
+    location: defaultFieldMeta(),
+    firstIntent: defaultFieldMeta(),
+    persona: defaultFieldMeta(),
+  };
+}
 
 export interface OnboardingDraftState {
   stepIndex: number;
+  onboardingIntakeText: string;
+  persona: string;
+  personaSummary: string;
+  inferenceMeta: OnboardingInferenceMeta;
   onboardingGoals: string[];
   interests: string[];
   preferredAvailability: (typeof AVAILABILITY_OPTIONS)[number];
@@ -86,6 +131,10 @@ export function defaultOnboardingState(
 ): OnboardingDraftState {
   return {
     stepIndex: 0,
+    onboardingIntakeText: "",
+    persona: "",
+    personaSummary: "",
+    inferenceMeta: defaultInferenceMeta(),
     onboardingGoals: [],
     interests: ["Design", "AI", "Football"],
     preferredAvailability: "Flexible",
@@ -125,6 +174,23 @@ export function mergeLoadedDraft(
     onboardingGoals: Array.isArray(partial.onboardingGoals)
       ? partial.onboardingGoals
       : base.onboardingGoals,
+    onboardingIntakeText:
+      typeof partial.onboardingIntakeText === "string"
+        ? partial.onboardingIntakeText
+        : base.onboardingIntakeText,
+    persona:
+      typeof partial.persona === "string" ? partial.persona : base.persona,
+    personaSummary:
+      typeof partial.personaSummary === "string"
+        ? partial.personaSummary
+        : base.personaSummary,
+    inferenceMeta:
+      partial.inferenceMeta && typeof partial.inferenceMeta === "object"
+        ? {
+            ...base.inferenceMeta,
+            ...partial.inferenceMeta,
+          }
+        : base.inferenceMeta,
     interests: Array.isArray(partial.interests)
       ? partial.interests
       : base.interests,
@@ -268,18 +334,13 @@ export function stepValidation(
     case 0:
       return true;
     case 1:
-      return state.onboardingGoals.length > 0;
+      return state.onboardingGoals.length > 0 || state.interests.length > 0;
     case 2:
-      return state.interests.length > 0;
-    case 3:
-      return true;
-    case 4:
       return (
-        state.displayName.trim().length > 0 &&
-        state.area.trim().length > 0 &&
-        state.country.trim().length > 0
+        state.persona.trim().length > 0 ||
+        state.firstIntentText.trim().length > 0
       );
-    case 5:
+    case 3:
       return true;
     default:
       return false;

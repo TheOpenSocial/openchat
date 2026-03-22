@@ -24,6 +24,8 @@ const WELCOME_VIDEO_BUNDLED =
 type WelcomeBackdropProps = {
   /** Extra style on the root (e.g. absolute fill). */
   style?: StyleProp<ViewStyle>;
+  /** Optional onboarding/auth-specific local or remote video source override. */
+  videoSourceOverride?: VideoSource;
   /**
    * Rendered above image/video/scrim. Keep interactive UI here: native video surfaces often draw
    * over sibling views outside this container (auth used to show only video + gradient).
@@ -35,13 +37,20 @@ type WelcomeBackdropProps = {
  * Full-bleed background: still + looping muted video (bundled or CDN). Gradient scrim lives in the
  * sign-in stack (`SignInGradientOverlay`) so the video stays the hero layer.
  */
-export function WelcomeBackdrop({ children, style }: WelcomeBackdropProps) {
+export function WelcomeBackdrop({
+  children,
+  style,
+  videoSourceOverride,
+}: WelcomeBackdropProps) {
   const [videoFailed, setVideoFailed] = useState(false);
 
   const videoSource = useMemo<VideoSource>(
     () =>
-      WELCOME_VIDEO_URI.length > 0 ? WELCOME_VIDEO_URI : WELCOME_VIDEO_BUNDLED,
-    [WELCOME_VIDEO_URI],
+      videoSourceOverride ??
+      (WELCOME_VIDEO_URI.length > 0
+        ? WELCOME_VIDEO_URI
+        : WELCOME_VIDEO_BUNDLED),
+    [videoSourceOverride],
   );
 
   const player = useVideoPlayer(videoSource, (p) => {

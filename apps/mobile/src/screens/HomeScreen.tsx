@@ -34,7 +34,12 @@ import {
   isRetryableApiError,
 } from "../lib/api";
 import { openAgentThreadSse } from "../lib/agent-thread-sse";
-import { type AppLocale, supportedLocales, t } from "../i18n/strings";
+import {
+  type AppLocale,
+  supportedLocales,
+  t,
+  type TranslationKey,
+} from "../i18n/strings";
 import {
   clearStoredChats,
   loadStoredChats,
@@ -60,6 +65,7 @@ import {
 import { AnimatedScreen } from "../components/AnimatedScreen";
 import { AppDrawer } from "../components/AppDrawer";
 import { AppTopBar } from "../components/AppTopBar";
+import { CalmTextField } from "../components/CalmTextField";
 import { ChatBubble } from "../components/ChatBubble";
 import { ChatTranscriptList } from "../components/ChatTranscriptList";
 import { ChoiceChip } from "../components/ChoiceChip";
@@ -124,16 +130,16 @@ function parseOptionalImageAttachmentUrl(raw: string) {
   }
 }
 
-const tabLabels: Record<HomeTab, string> = {
-  home: "Home",
-  chats: "Chats",
-  profile: "Profile",
+const tabLabels: Record<HomeTab, TranslationKey> = {
+  home: "homeTabHome",
+  chats: "homeTabChats",
+  profile: "homeTabProfile",
 };
 
-const tabDescriptions: Record<HomeTab, string> = {
-  home: "Plan, chat, and follow along as things move forward.",
-  chats: "Private threads with people you’ve connected with.",
-  profile: "Preferences, notifications, and account.",
+const tabDescriptions: Record<HomeTab, TranslationKey> = {
+  home: "homeTabHomeDescription",
+  chats: "homeTabChatsDescription",
+  profile: "homeTabProfileDescription",
 };
 const MOBILE_LOCALE_STORAGE_KEY = "opensocial.mobile.locale.v1";
 
@@ -167,7 +173,7 @@ export function HomeScreen({
             {
               id: "seed_1",
               role: "agent",
-              body: "What would you like to do today—or who would you like to meet?",
+              body: t("homeAgentSeedPrompt", "en"),
             },
           ],
   );
@@ -2603,9 +2609,15 @@ export function HomeScreen({
             </Pressable>
           }
           subtitle={
-            activeTab === "home" ? undefined : tabDescriptions[activeTab]
+            activeTab === "home"
+              ? undefined
+              : t(tabDescriptions[activeTab], locale)
           }
-          title={activeTab === "home" ? "OpenSocial" : tabLabels[activeTab]}
+          title={
+            activeTab === "home"
+              ? "OpenSocial"
+              : t(tabLabels[activeTab], locale)
+          }
         />
 
         {banner ? (
@@ -2621,7 +2633,10 @@ export function HomeScreen({
         {!skipNetwork && pendingOutboxCount > 0 ? (
           <View className="px-5 pt-3">
             <InlineNotice
-              text={`${pendingOutboxCount} action${pendingOutboxCount === 1 ? "" : "s"} queued for sync.`}
+              text={t("homeQueuedActions", locale, {
+                count: pendingOutboxCount,
+                plural: pendingOutboxCount === 1 ? "" : "s",
+              })}
               tone="info"
             />
           </View>
@@ -2668,6 +2683,7 @@ export function HomeScreen({
               loadingMessages={
                 selectedChatId != null && Boolean(syncingChats[selectedChatId])
               }
+              locale={locale}
               onChatTypeChange={setNewChatType}
               onCreateChat={createDemoChat}
               onModerationBlock={async (targetUserId, chatId) => {
@@ -2754,6 +2770,7 @@ export function HomeScreen({
 
         <HomeTabBar
           activeTab={activeTab}
+          locale={locale}
           onChange={(tab) => {
             hapticSelection();
             setActiveTab(tab);
@@ -2763,6 +2780,7 @@ export function HomeScreen({
 
       <AppDrawer
         displayName={session.displayName}
+        locale={locale}
         onClose={() => setDrawerOpen(false)}
         onNavigate={setActiveTab}
         onNewAgentConversation={() => {
@@ -2776,6 +2794,7 @@ export function HomeScreen({
 }
 
 interface ChatsTabProps {
+  locale: AppLocale;
   e2eSubmitOnReturn?: boolean;
   currentUserId: string;
   chatCreationType: "dm" | "group";
@@ -2805,6 +2824,7 @@ function ChatsTab({
   draftChatMessage,
   e2eSubmitOnReturn = false,
   loadingMessages,
+  locale,
   onChatTypeChange,
   onCreateChat,
   onModerationBlock,
@@ -2839,23 +2859,22 @@ function ChatsTab({
                 : "text-muted"
           }`}
         >
-          Realtime:{" "}
           {realtimeState === "connected"
-            ? "live"
+            ? t("chatsRealtimeLive", locale)
             : realtimeState === "connecting"
-              ? "connecting"
-              : "offline (polling fallback active)"}
+              ? t("chatsRealtimeConnecting", locale)
+              : t("chatsRealtimeOffline", locale)}
         </Text>
       </View>
       <View className="mb-3 flex-row gap-2">
         <ChoiceChip
-          label="DM"
+          label={t("chatsDm", locale)}
           onPress={() => onChatTypeChange("dm")}
           selected={chatCreationType === "dm"}
           testID="chat-type-dm-chip"
         />
         <ChoiceChip
-          label="Group"
+          label={t("chatsGroup", locale)}
           onPress={() => onChatTypeChange("group")}
           selected={chatCreationType === "group"}
           testID="chat-type-group-chip"
@@ -2866,8 +2885,8 @@ function ChatsTab({
           <PrimaryButton
             label={
               chatCreationType === "group"
-                ? "Create Group Sandbox"
-                : "Create Chat Sandbox"
+                ? t("chatsCreateGroupSandbox", locale)
+                : t("chatsCreateChatSandbox", locale)
             }
             loading={creatingChat}
             onPress={onCreateChat}
@@ -2877,7 +2896,11 @@ function ChatsTab({
         </View>
         <View className="flex-1">
           <PrimaryButton
-            label={syncingNow ? "Syncing..." : "Sync Now"}
+            label={
+              syncingNow
+                ? t("chatsSyncingNow", locale)
+                : t("chatsSyncNow", locale)
+            }
             loading={syncingNow}
             onPress={onSyncNow}
             testID="chat-sync-button"
@@ -2888,8 +2911,8 @@ function ChatsTab({
 
       {threads.length === 0 ? (
         <EmptyState
-          title="No chats yet"
-          description="Create a chat sandbox to test message persistence using the live API."
+          title={t("chatsEmptyTitle", locale)}
+          description={t("chatsEmptyDescription", locale)}
         />
       ) : (
         <ScrollView className="mb-3 max-h-44">
@@ -2918,7 +2941,7 @@ function ChatsTab({
                 {thread.unreadCount > 0 ? (
                   <View className="rounded-full bg-accentMuted px-2 py-1">
                     <Text className="text-[10px] font-semibold text-accent">
-                      {thread.unreadCount} unread
+                      {t("chatsUnread", locale, { count: thread.unreadCount })}
                     </Text>
                   </View>
                 ) : null}
@@ -2940,7 +2963,7 @@ function ChatsTab({
             <View className="mb-2 flex-row gap-2">
               <View className="flex-1">
                 <PrimaryButton
-                  label="Report User"
+                  label={t("chatsReportUser", locale)}
                   onPress={() =>
                     onModerationReport(moderationTargetUserId, selectedChat.id)
                   }
@@ -2949,7 +2972,7 @@ function ChatsTab({
               </View>
               <View className="flex-1">
                 <PrimaryButton
-                  label="Block User"
+                  label={t("chatsBlockUser", locale)}
                   onPress={() =>
                     onModerationBlock(moderationTargetUserId, selectedChat.id)
                   }
@@ -2960,7 +2983,7 @@ function ChatsTab({
           ) : null}
           {selectedChat.messages.length === 0 && !loadingMessages ? (
             <Text className="mb-3 text-[13px] text-muted">
-              No messages yet in this thread.
+              {t("chatsNoMessages", locale)}
             </Text>
           ) : null}
           {selectedChat.messages.length > 0 ? (
@@ -2985,14 +3008,14 @@ function ChatsTab({
           ) : null}
           {loadingMessages ? (
             <Text className="mb-2 text-[11px] text-accent">
-              Syncing latest messages...
+              {t("chatsSyncingLatest", locale)}
             </Text>
           ) : null}
           {typingUsers.length > 0 ? (
             <Text className="mb-2 text-[11px] text-muted">
               {typingUsers.length === 1
-                ? "Someone is typing..."
-                : `${typingUsers.length} people are typing...`}
+                ? t("chatsSomeoneTyping", locale)
+                : t("chatsPeopleTyping", locale, { count: typingUsers.length })}
             </Text>
           ) : null}
           <View className="flex-shrink-0">
@@ -3004,8 +3027,8 @@ function ChatsTab({
               multiline
               onChangeText={setDraftChatMessage}
               onSend={onSendMessage}
-              placeholder="Message…"
-              sendAccessibilityLabel="Send chat message"
+              placeholder={t("chatsMessagePlaceholder", locale)}
+              sendAccessibilityLabel={t("chatsSendMessage", locale)}
               sendTestID="chat-send-button"
               sending={sendingMessage}
               value={draftChatMessage}
@@ -3135,7 +3158,9 @@ function ProfileTab({
       }}
     >
       <SurfaceCard>
-        <Text className="mb-2 text-base font-semibold text-ink">Interests</Text>
+        <Text className="mb-2 text-base font-semibold text-ink">
+          {t("profileInterests", locale)}
+        </Text>
         <View className="flex-row flex-wrap gap-2">
           {profile.interests.map((interest) => (
             <View className="rounded-full bg-surface px-3 py-2" key={interest}>
@@ -3165,7 +3190,7 @@ function ProfileTab({
 
       <SurfaceCard>
         <Text className="mb-2 text-base font-semibold text-ink">
-          Default social mode
+          {t("profileDefaultSocialMode", locale)}
         </Text>
         <View className="flex-row flex-wrap gap-2">
           <ChoiceChip
@@ -3174,12 +3199,12 @@ function ProfileTab({
             selected={profile.socialMode === "one_to_one"}
           />
           <ChoiceChip
-            label="Group"
+            label={t("profileModeGroup", locale)}
             onPress={() => onSocialModeChange("group")}
             selected={profile.socialMode === "group"}
           />
           <ChoiceChip
-            label="Flexible"
+            label={t("profileModeFlexible", locale)}
             onPress={() => onSocialModeChange("either")}
             selected={profile.socialMode === "either"}
           />
@@ -3188,47 +3213,63 @@ function ProfileTab({
 
       <SurfaceCard>
         <Text className="mb-2 text-base font-semibold text-ink">
-          Notifications
+          {t("profileNotifications", locale)}
         </Text>
         <View className="mb-3 flex-row flex-wrap gap-2">
           <ChoiceChip
-            label="Live alerts"
+            label={t("profileLiveAlerts", locale)}
             onPress={() => onNotificationModeChange("live")}
             selected={profile.notificationMode === "live"}
           />
           <ChoiceChip
-            label="Digest mode"
+            label={t("profileDigestMode", locale)}
             onPress={() => onNotificationModeChange("digest")}
             selected={profile.notificationMode === "digest"}
           />
         </View>
         <Text className="text-xs text-muted">
-          push: {pushEnabled ? "enabled" : "disabled"}
+          {t("profilePushStatus", locale, {
+            status: pushEnabled
+              ? t("profileEnabled", locale)
+              : t("profileDisabled", locale),
+          })}
         </Text>
         <Text className="mt-1 text-xs text-muted">
-          token: {pushToken ? `${pushToken.slice(0, 18)}...` : "not registered"}
+          {t("profileTokenStatus", locale, {
+            status: pushToken
+              ? `${pushToken.slice(0, 18)}...`
+              : t("profileNotRegistered", locale),
+          })}
         </Text>
       </SurfaceCard>
 
       <SurfaceCard>
-        <Text className="text-sm text-muted">Trust summary</Text>
+        <Text className="text-sm text-muted">
+          {t("profileTrustSummary", locale)}
+        </Text>
         <Text className="mt-1 text-sm text-ink">{trustSummary}</Text>
       </SurfaceCard>
 
       <SurfaceCard>
         <View className="mb-2 flex-row items-center justify-between">
           <Text className="text-base font-semibold text-ink">
-            Discovery snapshot
+            {t("profileDiscoverySnapshot", locale)}
           </Text>
           <PrimaryButton
-            label={discoveryBusy ? "Refreshing..." : "Refresh"}
+            label={
+              discoveryBusy
+                ? t("profileRefreshing", locale)
+                : t("commonRefresh", locale)
+            }
             onPress={onRefreshDiscovery}
             variant="ghost"
           />
         </View>
         <Text className="text-xs text-muted">
-          tonight: {passiveDiscovery?.tonight.suggestions.length ?? 0} ·
-          reconnects: {passiveDiscovery?.reconnects.reconnects.length ?? 0}
+          {t("profileTonightReconnects", locale, {
+            tonight: passiveDiscovery?.tonight.suggestions.length ?? 0,
+            reconnects: passiveDiscovery?.reconnects.reconnects.length ?? 0,
+          })}
         </Text>
         <View className="mt-2 rounded-xl border border-border bg-surface p-2">
           {passiveDiscovery?.tonight.suggestions.length ? (
@@ -3242,13 +3283,13 @@ function ProfileTab({
               ))
           ) : (
             <Text className="text-xs text-muted">
-              No tonight suggestions yet.
+              {t("profileNoTonightSuggestions", locale)}
             </Text>
           )}
         </View>
         <View className="mt-2">
           <PrimaryButton
-            label="Publish to Agent Thread"
+            label={t("profilePublishToAgent", locale)}
             onPress={onPublishDiscoveryToAgent}
             variant="secondary"
           />
@@ -3257,11 +3298,12 @@ function ProfileTab({
 
       <SurfaceCard>
         <Text className="mb-2 text-base font-semibold text-ink">
-          Continuity and reconnect
+          {t("profileContinuityReconnect", locale)}
         </Text>
         <Text className="text-xs text-muted">
-          pending request suggestions:{" "}
-          {inboxSuggestions?.pendingRequestCount ?? 0}
+          {t("profilePendingRequestSuggestions", locale, {
+            count: inboxSuggestions?.pendingRequestCount ?? 0,
+          })}
         </Text>
         <View className="mt-2 rounded-xl border border-border bg-surface p-2">
           {inboxSuggestions?.suggestions.length ? (
@@ -3275,7 +3317,7 @@ function ProfileTab({
             ))
           ) : (
             <Text className="text-xs text-muted">
-              No reconnect suggestions yet.
+              {t("profileNoReconnectSuggestions", locale)}
             </Text>
           )}
         </View>
@@ -3283,7 +3325,7 @@ function ProfileTab({
 
       <SurfaceCard>
         <Text className="mb-2 text-base font-semibold text-ink">
-          Why this routing result
+          {t("profileWhyThisRoutingResult", locale)}
         </Text>
         {pendingIntentSummary?.intents.length ? (
           <>
@@ -3298,7 +3340,8 @@ function ProfileTab({
               ))}
             </View>
             <Text className="text-xs text-muted">
-              {userIntentExplanation?.summary ?? "Loading explanation..."}
+              {userIntentExplanation?.summary ??
+                t("profileLoadingExplanation", locale)}
             </Text>
             {userIntentExplanation?.factors.length ? (
               <View className="mt-2 rounded-xl border border-border bg-surface p-2">
@@ -3312,88 +3355,109 @@ function ProfileTab({
           </>
         ) : (
           <Text className="text-xs text-muted">
-            No active intents available to explain yet.
+            {t("profileNoIntentsToExplain", locale)}
           </Text>
         )}
       </SurfaceCard>
 
       <SurfaceCard>
-        <Text className="mb-2 text-base font-semibold text-ink">Search</Text>
-        <TextInput
+        <Text className="mb-2 text-base font-semibold text-ink">
+          {t("commonSearch", locale)}
+        </Text>
+        <CalmTextField
           autoCapitalize="none"
           autoCorrect={false}
-          className="mb-2 min-h-[40px] rounded-2xl border border-hairline bg-surface px-3 py-2 text-[14px] text-ink"
+          containerClassName="mb-2"
+          inputClassName="text-[14px]"
           onChangeText={onSearchQueryChange}
-          placeholder="tennis, startups, design..."
+          placeholder={t("profileSearchPlaceholder", locale)}
           value={searchQuery}
         />
         <PrimaryButton
-          label={searchBusy ? "Searching..." : "Search"}
+          label={
+            searchBusy
+              ? t("profileSearching", locale)
+              : t("commonSearch", locale)
+          }
           onPress={onRunSearch}
           variant="secondary"
         />
         {searchSnapshot ? (
           <Text className="mt-2 text-xs text-muted">
-            users {searchSnapshot.users.length} · topics{" "}
-            {searchSnapshot.topics.length} · activities{" "}
-            {searchSnapshot.activities.length} · groups{" "}
-            {searchSnapshot.groups.length}
+            {t("profileSearchCounts", locale, {
+              users: searchSnapshot.users.length,
+              topics: searchSnapshot.topics.length,
+              activities: searchSnapshot.activities.length,
+              groups: searchSnapshot.groups.length,
+            })}
           </Text>
         ) : null}
       </SurfaceCard>
 
       <SurfaceCard>
         <Text className="mb-2 text-base font-semibold text-ink">
-          Memory controls
+          {t("profileMemoryControls", locale)}
         </Text>
         <PrimaryButton
-          label={memoryBusy ? "Refreshing..." : "Refresh Memory Snapshot"}
+          label={
+            memoryBusy
+              ? t("profileRefreshing", locale)
+              : t("profileRefreshMemorySnapshot", locale)
+          }
           onPress={onRefreshMemory}
           variant="secondary"
         />
         <View className="mt-2">
           <PrimaryButton
-            label="Reset Learned Memory"
+            label={t("profileResetLearnedMemory", locale)}
             onPress={onResetLearnedMemory}
             variant="ghost"
           />
         </View>
         <Text className="mt-2 text-xs text-muted">
-          life graph loaded: {memorySnapshot.lifeGraph ? "yes" : "no"} ·
-          retrieval loaded: {memorySnapshot.retrieval ? "yes" : "no"}
+          {t("profileMemoryLoaded", locale, {
+            lifeGraph: memorySnapshot.lifeGraph
+              ? t("profileYes", locale)
+              : t("profileNo", locale),
+            retrieval: memorySnapshot.retrieval
+              ? t("profileYes", locale)
+              : t("profileNo", locale),
+          })}
         </Text>
       </SurfaceCard>
 
       <SurfaceCard>
         <Text className="mb-2 text-base font-semibold text-ink">
-          Automations
+          {t("profileAutomations", locale)}
         </Text>
         <Text className="text-xs text-muted">
-          Saved searches and scheduled briefings.
+          {t("profileAutomationsBody", locale)}
         </Text>
         <View className="mt-2 flex-row flex-wrap gap-2">
           <PrimaryButton
-            label="New saved search"
+            label={t("profileNewSavedSearch", locale)}
             onPress={onCreateSavedSearch}
             variant="ghost"
             disabled={automationsBusy}
           />
           <PrimaryButton
-            label="New automation"
+            label={t("profileNewAutomation", locale)}
             onPress={onCreateAutomation}
             variant="ghost"
             disabled={automationsBusy}
           />
           <PrimaryButton
-            label="Run now"
+            label={t("profileRunNow", locale)}
             onPress={onRunAutomationNow}
             variant="secondary"
             disabled={!selectedScheduledTaskId}
           />
         </View>
         <Text className="mt-2 text-xs text-muted">
-          saved searches: {savedSearches.length} · tasks:{" "}
-          {scheduledTasks.length}
+          {t("profileSavedSearchesTasks", locale, {
+            searches: savedSearches.length,
+            tasks: scheduledTasks.length,
+          })}
         </Text>
         {scheduledTasks.length ? (
           <View className="mt-2 gap-2">
@@ -3420,7 +3484,9 @@ function ProfileTab({
         {selectedScheduledTaskId ? (
           <View className="mt-2 rounded-xl border border-border bg-surface p-2">
             {scheduledTaskRuns.length === 0 ? (
-              <Text className="text-xs text-muted">No runs yet.</Text>
+              <Text className="text-xs text-muted">
+                {t("profileNoRunsYet", locale)}
+              </Text>
             ) : (
               scheduledTaskRuns.map((run) => (
                 <Text className="mb-1 text-xs text-ink" key={run.id}>
@@ -3435,15 +3501,21 @@ function ProfileTab({
       <SurfaceCard>
         <View className="mb-2 flex-row items-center justify-between">
           <Text className="text-base font-semibold text-ink">
-            Recurring circles
+            {t("profileRecurringCircles", locale)}
           </Text>
-          <PrimaryButton label="New" onPress={onCreateCircle} variant="ghost" />
+          <PrimaryButton
+            label={t("profileNew", locale)}
+            onPress={onCreateCircle}
+            variant="ghost"
+          />
         </View>
         {circlesBusy ? (
-          <Text className="text-xs text-muted">Loading circles...</Text>
+          <Text className="text-xs text-muted">
+            {t("profileLoadingCircles", locale)}
+          </Text>
         ) : circles.length === 0 ? (
           <Text className="text-xs text-muted">
-            No circles yet. Create one to start recurring sessions.
+            {t("profileNoCircles", locale)}
           </Text>
         ) : (
           <View className="gap-2">
@@ -3464,7 +3536,7 @@ function ProfileTab({
                   {circle.status} · next{" "}
                   {circle.nextSessionAt
                     ? formatRelativeTime(circle.nextSessionAt)
-                    : "not scheduled"}
+                    : t("profileNextScheduled", locale)}
                 </Text>
               </Pressable>
             ))}
@@ -3472,10 +3544,10 @@ function ProfileTab({
         )}
         <View className="mt-3 flex-row items-center justify-between">
           <Text className="text-xs text-muted">
-            {selectedCircleTitle ?? "Select a circle"}
+            {selectedCircleTitle ?? t("profileSelectCircle", locale)}
           </Text>
           <PrimaryButton
-            label="Open now"
+            label={t("profileOpenNow", locale)}
             onPress={onRunCircleSessionNow}
             variant="secondary"
             disabled={!selectedCircleId}
@@ -3483,7 +3555,9 @@ function ProfileTab({
         </View>
         <View className="mt-2 rounded-xl border border-border bg-surface p-2">
           {circleSessions.length === 0 ? (
-            <Text className="text-xs text-muted">No recent sessions.</Text>
+            <Text className="text-xs text-muted">
+              {t("profileNoRecentSessions", locale)}
+            </Text>
           ) : (
             circleSessions.map((sessionItem) => (
               <Text className="mb-1 text-xs text-ink" key={sessionItem.id}>
@@ -3497,82 +3571,102 @@ function ProfileTab({
 
       <SurfaceCard>
         <Text className="mb-2 text-base font-semibold text-ink">
-          Local telemetry
+          {t("profileLocalTelemetry", locale)}
         </Text>
         <Text className="text-xs text-muted">
-          events: {telemetrySummary?.totalEvents ?? 0}
+          {t("profileEvents", locale, {
+            count: telemetrySummary?.totalEvents ?? 0,
+          })}
         </Text>
         <Text className="text-xs text-muted">
-          last:{" "}
-          {telemetrySummary?.lastEventAt
-            ? formatRelativeTime(telemetrySummary.lastEventAt)
-            : "n/a"}
+          {t("profileLast", locale, {
+            value: telemetrySummary?.lastEventAt
+              ? formatRelativeTime(telemetrySummary.lastEventAt)
+              : t("profileNa", locale),
+          })}
         </Text>
         <Text className="mt-2 text-xs text-muted">
-          intents: {telemetrySummary?.counters.intentsCreated ?? 0} · requests
-          sent: {telemetrySummary?.counters.requestsSent ?? 0} · responded:{" "}
-          {telemetrySummary?.counters.requestsResponded ?? 0}
+          {t("profileTelemetryIntents", locale, {
+            intents: telemetrySummary?.counters.intentsCreated ?? 0,
+            sent: telemetrySummary?.counters.requestsSent ?? 0,
+            responded: telemetrySummary?.counters.requestsResponded ?? 0,
+          })}
         </Text>
         <Text className="text-xs text-muted">
-          chats started: {telemetrySummary?.counters.chatsStarted ?? 0} · first
-          messages: {telemetrySummary?.counters.firstMessagesSent ?? 0}
+          {t("profileTelemetryChats", locale, {
+            started: telemetrySummary?.counters.chatsStarted ?? 0,
+            messages: telemetrySummary?.counters.firstMessagesSent ?? 0,
+          })}
         </Text>
         <Text className="text-xs text-muted">
-          reports: {telemetrySummary?.counters.reportsSubmitted ?? 0} · blocked
-          users: {telemetrySummary?.counters.usersBlocked ?? 0}
+          {t("profileTelemetryModeration", locale, {
+            reports: telemetrySummary?.counters.reportsSubmitted ?? 0,
+            blocked: telemetrySummary?.counters.usersBlocked ?? 0,
+          })}
         </Text>
         <Text className="text-xs text-muted">
-          intent→accept:{" "}
-          {formatMetricSeconds(
-            telemetrySummary?.metrics.avgIntentToFirstAcceptanceSeconds ?? null,
-          )}{" "}
-          · intent→first msg:{" "}
-          {formatMetricSeconds(
-            telemetrySummary?.metrics.avgIntentToFirstMessageSeconds ?? null,
-          )}
+          {t("profileTelemetryIntentMetrics", locale, {
+            accept: formatMetricSeconds(
+              telemetrySummary?.metrics.avgIntentToFirstAcceptanceSeconds ??
+                null,
+            ),
+            firstMessage: formatMetricSeconds(
+              telemetrySummary?.metrics.avgIntentToFirstMessageSeconds ?? null,
+            ),
+          })}
         </Text>
         <Text className="text-xs text-muted">
-          connection success:{" "}
-          {formatMetricRate(
-            telemetrySummary?.metrics.connectionSuccessRate ?? null,
-          )}{" "}
-          · group completion:{" "}
-          {formatMetricRate(
-            telemetrySummary?.metrics.groupFormationCompletionRate ?? null,
-          )}
+          {t("profileTelemetryConnectionMetrics", locale, {
+            success: formatMetricRate(
+              telemetrySummary?.metrics.connectionSuccessRate ?? null,
+            ),
+            completion: formatMetricRate(
+              telemetrySummary?.metrics.groupFormationCompletionRate ?? null,
+            ),
+          })}
         </Text>
         <Text className="text-xs text-muted">
-          notification→open:{" "}
-          {formatMetricRate(
-            telemetrySummary?.metrics.notificationToOpenRate ?? null,
-          )}{" "}
-          · moderation incidence:{" "}
-          {formatMetricRate(
-            telemetrySummary?.metrics.moderationIncidentRate ?? null,
-          )}
+          {t("profileTelemetryNotificationMetrics", locale, {
+            open: formatMetricRate(
+              telemetrySummary?.metrics.notificationToOpenRate ?? null,
+            ),
+            incidence: formatMetricRate(
+              telemetrySummary?.metrics.moderationIncidentRate ?? null,
+            ),
+          })}
         </Text>
         <Text className="text-xs text-muted">
-          sync failure:{" "}
-          {formatMetricRate(telemetrySummary?.metrics.syncFailureRate ?? null)}{" "}
-          · repeat:{" "}
-          {formatMetricRate(
-            telemetrySummary?.metrics.repeatConnectionRate ?? null,
-          )}
+          {t("profileTelemetrySyncMetrics", locale, {
+            failure: formatMetricRate(
+              telemetrySummary?.metrics.syncFailureRate ?? null,
+            ),
+            repeat: formatMetricRate(
+              telemetrySummary?.metrics.repeatConnectionRate ?? null,
+            ),
+          })}
         </Text>
       </SurfaceCard>
 
       <PrimaryButton
-        label={loading ? "Loading..." : "Save Settings"}
+        label={
+          loading
+            ? t("commonLoading", locale)
+            : t("profileSaveSettings", locale)
+        }
         loading={loading}
         onPress={onSaveSettings}
         variant="secondary"
       />
       <PrimaryButton
-        label="Request Digest Now"
+        label={t("profileRequestDigestNow", locale)}
         onPress={onSendDigestNow}
         variant="ghost"
       />
-      <PrimaryButton label="Sign out" onPress={onSignOut} variant="ghost" />
+      <PrimaryButton
+        label={t("profileSignOut", locale)}
+        onPress={onSignOut}
+        variant="ghost"
+      />
     </ScrollView>
   );
 }

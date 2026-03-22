@@ -3,6 +3,7 @@ import type { ComponentProps } from "react";
 import { Platform, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { type AppLocale, t } from "../i18n/strings";
 import { cn } from "../lib/cn";
 import { appTheme } from "../theme";
 import type { HomeTab } from "../types";
@@ -13,23 +14,28 @@ type IonName = ComponentProps<typeof Ionicons>["name"];
 
 const TAB_META: Record<
   HomeTab,
-  { label: string; hint: string; iconActive: IonName; iconIdle: IonName }
+  {
+    labelKey: "homeTabHome" | "homeTabChats" | "homeTabProfile";
+    hintKey: "homeTabHomeHint" | "homeTabChatsHint" | "homeTabProfileHint";
+    iconActive: IonName;
+    iconIdle: IonName;
+  }
 > = {
   home: {
-    label: "Home",
-    hint: "Plans & chat",
+    labelKey: "homeTabHome",
+    hintKey: "homeTabHomeHint",
     iconActive: "sparkles",
     iconIdle: "sparkles-outline",
   },
   chats: {
-    label: "Chats",
-    hint: "Your conversations",
+    labelKey: "homeTabChats",
+    hintKey: "homeTabChatsHint",
     iconActive: "chatbubbles",
     iconIdle: "chatbubble-outline",
   },
   profile: {
-    label: "Profile",
-    hint: "Account and settings",
+    labelKey: "homeTabProfile",
+    hintKey: "homeTabProfileHint",
     iconActive: "person-circle",
     iconIdle: "person-circle-outline",
   },
@@ -38,9 +44,10 @@ const TAB_META: Record<
 interface HomeTabBarProps {
   activeTab: HomeTab;
   onChange: (tab: HomeTab) => void;
+  locale: AppLocale;
 }
 
-export function HomeTabBar({ activeTab, onChange }: HomeTabBarProps) {
+export function HomeTabBar({ activeTab, locale, onChange }: HomeTabBarProps) {
   const insets = useSafeAreaInsets();
   const bottomPad = Math.max(insets.bottom, 10);
 
@@ -71,8 +78,8 @@ export function HomeTabBar({ activeTab, onChange }: HomeTabBarProps) {
 
           return (
             <Pressable
-              accessibilityHint={meta.hint}
-              accessibilityLabel={meta.label}
+              accessibilityHint={t(meta.hintKey, locale)}
+              accessibilityLabel={t(meta.labelKey, locale)}
               accessibilityRole="button"
               accessibilityState={{ selected: active }}
               android_ripple={
@@ -108,7 +115,7 @@ export function HomeTabBar({ activeTab, onChange }: HomeTabBarProps) {
                   )}
                   numberOfLines={1}
                 >
-                  {meta.label}
+                  {t(meta.labelKey, locale)}
                 </Text>
               </View>
             </Pressable>

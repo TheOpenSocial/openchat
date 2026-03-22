@@ -16,10 +16,11 @@ export default defineConfig({
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
-    command: "NEXT_PUBLIC_DESIGN_MOCK=1 pnpm exec next dev -p 3002",
+    command:
+      "NEXT_PUBLIC_DESIGN_MOCK=1 pnpm exec next build && NEXT_PUBLIC_DESIGN_MOCK=1 pnpm exec next start -p 3002 -H 127.0.0.1",
     cwd: __dirname,
     url: "http://127.0.0.1:3002",
     reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
+    timeout: 180_000,
   },
 });

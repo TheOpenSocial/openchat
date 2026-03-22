@@ -112,7 +112,7 @@ const styles = StyleSheet.create({
     fontWeight: "400",
     letterSpacing: 0.15,
     lineHeight: signInTheme.subtitleSize * 1.45,
-    marginTop: 14,
+    marginTop: signInTheme.heroTitleSubtitleGap,
     textAlign: "center",
   },
 });

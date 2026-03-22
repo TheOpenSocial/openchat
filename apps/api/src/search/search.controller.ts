@@ -35,4 +35,30 @@ export class SearchController {
       await this.searchService.search(userId, payload.q, payload.limit),
     );
   }
+
+  @Get(":userId/topic-suggestions")
+  async topicSuggestions(
+    @Param("userId") userIdParam: string,
+    @Query("q") query: string | undefined,
+    @Query("limit") limitRaw: string | undefined,
+    @ActorUserId() actorUserId: string,
+  ) {
+    const userId = parseRequestPayload(uuidSchema, userIdParam);
+    assertActorOwnsUser(
+      actorUserId,
+      userId,
+      "search target does not match authenticated user",
+    );
+    if (this.launchControlsService) {
+      await this.launchControlsService.assertActionAllowed("discovery", userId);
+    }
+
+    const limit = Number(limitRaw);
+    return ok(
+      await this.searchService.topicSuggestions(
+        query ?? "",
+        Number.isFinite(limit) ? limit : 12,
+      ),
+    );
+  }
 }

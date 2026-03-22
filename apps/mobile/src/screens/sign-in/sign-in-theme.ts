@@ -2,6 +2,8 @@
 export const signInTheme = {
   contentPaddingH: 24,
   heroMaxWidth: 320,
+  /** Space between hero headline and subtitle (~0.25× title cap height; tight but readable). */
+  heroTitleSubtitleGap: 10,
   ctaMaxWidth: 360,
   titleSize: 34,
   subtitleSize: 16,

@@ -11,6 +11,15 @@ import { AppLoading } from "./components/AppLoading";
 import { JsonView } from "./components/JsonView";
 import { Notice } from "./components/Notice";
 import { Panel } from "./components/Panel";
+import { AgentTab } from "./components/workbench/AgentTab";
+import { ChatsTab } from "./components/workbench/ChatsTab";
+import { IntentsTab } from "./components/workbench/IntentsTab";
+import { ModerationTab } from "./components/workbench/ModerationTab";
+import { OverviewTab } from "./components/workbench/OverviewTab";
+import { PersonalizationTab } from "./components/workbench/PersonalizationTab";
+import { UserInspectorTab } from "./components/workbench/UserInspectorTab";
+import { type ModerationFlagRow } from "./components/workbench/moderation-shared";
+import { useModerationWorkbench } from "./components/workbench/useModerationWorkbench";
 import {
   clearAdminSession,
   clearLegacyAdminApiKeyStorage,
@@ -70,100 +79,6 @@ interface DebugHistoryRow {
   method: HttpMethod;
   path: string;
   success: boolean;
-}
-
-interface ModerationFlagRow {
-  id: string;
-  entityType: string;
-  entityId: string;
-  reason: string;
-  status: string;
-  assigneeUserId?: string | null;
-  assignmentNote?: string | null;
-  assignedAt?: string | null;
-  lastDecision?: string | null;
-  triageNote?: string | null;
-  triagedByAdminUserId?: string | null;
-  triagedAt?: string | null;
-  createdAt: string;
-  latestRiskAudit?: {
-    id: string;
-    metadata: unknown;
-    createdAt: string;
-  } | null;
-  latestAssignment?: {
-    id: string;
-    metadata: unknown;
-    createdAt: string;
-  } | null;
-}
-
-interface ModerationReportRow {
-  id: string;
-  reporterUserId: string;
-  targetUserId: string | null;
-  reason: string;
-  status: string;
-  createdAt: string;
-}
-
-interface ModerationSummarySnapshot {
-  generatedAt: string;
-  queue: {
-    openFlags: number;
-    agentRiskOpenFlags: number;
-    reportsOpen: number;
-  };
-  actions24h: {
-    reports24h: number;
-    resolvedFlags24h: number;
-    dismissedFlags24h: number;
-  };
-  enforcement: {
-    blockedProfiles: number;
-    suspendedUsers: number;
-  };
-  analytics: {
-    avgTimeToAssignmentMinutes: number | null;
-    avgTimeToDecisionMinutes: number | null;
-    dismissalRate24h: number;
-    repeatOffenders24h: number;
-    topReasons: Array<{ reason: string; count: number }>;
-  };
-  recent: {
-    flags: ModerationFlagRow[];
-    reports: ModerationReportRow[];
-  };
-}
-
-interface ModerationSettingsSnapshot {
-  provider: string;
-  keys: {
-    moderationProviderConfigured: boolean;
-    openaiConfigured: boolean;
-    customProviderConfigured: boolean;
-  };
-  toggles: {
-    agentRiskEnabled: boolean;
-    autoBlockTermsEnabled: boolean;
-    strictMediaReview: boolean;
-    userReportsEnabled: boolean;
-  };
-  thresholds: {
-    moderationBacklogAlert: number;
-    dbLatencyAlertMs: number;
-    openAiErrorRateAlert: number;
-  };
-  policyModes: {
-    agentBlockedDecisionLabel: string;
-    agentReviewDecisionLabel: string;
-  };
-  surfaces: {
-    profilePhotos: boolean;
-    chatMessages: boolean;
-    intents: boolean;
-    agentThreads: boolean;
-  };
 }
 
 const DEFAULT_UUID = "00000000-0000-0000-0000-000000000000";
@@ -322,13 +237,6 @@ function AdminHomeContent() {
   const [syncAfter, setSyncAfter] = useState("");
   const [groupSizeTarget, setGroupSizeTarget] = useState(3);
 
-  const [reporterUserId, setReporterUserId] = useState(DEFAULT_UUID);
-  const [targetUserId, setTargetUserId] = useState(DEFAULT_UUID);
-  const [reportReason, setReportReason] = useState("abuse");
-  const [reportDetails, setReportDetails] = useState("");
-  const [blockerUserId, setBlockerUserId] = useState(DEFAULT_UUID);
-  const [blockedUserId, setBlockedUserId] = useState(DEFAULT_UUID);
-
   const [policyContextInput, setPolicyContextInput] = useState(
     '{"surface":"admin","source":"manual"}',
   );
@@ -399,38 +307,6 @@ function AdminHomeContent() {
     useState<unknown>(null);
   const [chatSyncSnapshot, setChatSyncSnapshot] = useState<unknown>(null);
 
-  const [moderationSnapshot, setModerationSnapshot] = useState<unknown>(null);
-  const [moderationSummarySnapshot, setModerationSummarySnapshot] =
-    useState<ModerationSummarySnapshot | null>(null);
-  const [moderationSettingsSnapshot, setModerationSettingsSnapshot] =
-    useState<ModerationSettingsSnapshot | null>(null);
-  const [moderationQueueSnapshot, setModerationQueueSnapshot] =
-    useState<unknown>(null);
-  const [auditLogSnapshot, setAuditLogSnapshot] = useState<unknown>(null);
-  const [moderationQueueLimit, setModerationQueueLimit] = useState(100);
-  const [moderationQueueStatusQuery, setModerationQueueStatusQuery] = useState<
-    "open" | "resolved" | "dismissed"
-  >("open");
-  const [moderationQueueEntityTypeQuery, setModerationQueueEntityTypeQuery] =
-    useState("");
-  const [moderationQueueReasonQuery, setModerationQueueReasonQuery] =
-    useState("");
-  const [auditLogLimit, setAuditLogLimit] = useState(100);
-  const [agentRiskSnapshot, setAgentRiskSnapshot] = useState<unknown>(null);
-  const [agentRiskLimit, setAgentRiskLimit] = useState(50);
-  const [agentRiskStatusQuery, setAgentRiskStatusQuery] = useState<
-    "open" | "resolved" | "dismissed"
-  >("open");
-  const [agentRiskDecisionQuery, setAgentRiskDecisionQuery] = useState("");
-  const [triageFlagId, setTriageFlagId] = useState("");
-  const [triageAction, setTriageAction] = useState<
-    "resolve" | "reopen" | "escalate_strike" | "restrict_user"
-  >("resolve");
-  const [triageTargetUserId, setTriageTargetUserId] = useState("");
-  const [triageReason, setTriageReason] = useState("");
-  const [assignFlagId, setAssignFlagId] = useState("");
-  const [assigneeUserId, setAssigneeUserId] = useState("");
-  const [assignReason, setAssignReason] = useState("");
   const [deactivateReason, setDeactivateReason] =
     useState("support escalation");
   const [restrictReason, setRestrictReason] = useState("safety restriction");
@@ -547,25 +423,6 @@ function AdminHomeContent() {
         ...adminRequestHeaders,
       },
     });
-
-  const moderationQueueItems = useMemo(() => {
-    if (!Array.isArray(moderationQueueSnapshot)) {
-      return [];
-    }
-    return moderationQueueSnapshot as ModerationFlagRow[];
-  }, [moderationQueueSnapshot]);
-
-  const agentRiskItems = useMemo(() => {
-    if (
-      !agentRiskSnapshot ||
-      typeof agentRiskSnapshot !== "object" ||
-      !("items" in agentRiskSnapshot) ||
-      !Array.isArray((agentRiskSnapshot as { items?: unknown }).items)
-    ) {
-      return [];
-    }
-    return (agentRiskSnapshot as { items: ModerationFlagRow[] }).items;
-  }, [agentRiskSnapshot]);
 
   const pushStreamEvent = (kind: string, payload: unknown) => {
     setStreamEvents((current) =>
@@ -1208,180 +1065,12 @@ function AdminHomeContent() {
     );
   };
 
-  const createReport = () =>
-    runAction(
-      "Create report",
-      () =>
-        requestApi("POST", "/moderation/reports", {
-          body: {
-            reporterUserId: reporterUserId.trim(),
-            targetUserId:
-              targetUserId.trim().length > 0 ? targetUserId.trim() : null,
-            reason: reportReason.trim(),
-            ...(reportDetails.trim() ? { details: reportDetails.trim() } : {}),
-          },
-        }),
-      "Moderation report created.",
-      (payload) => setModerationSnapshot(payload),
-    );
-
-  const createBlock = () =>
-    runAction(
-      "Create block",
-      () =>
-        requestApi("POST", "/moderation/blocks", {
-          body: {
-            blockerUserId: blockerUserId.trim(),
-            blockedUserId: blockedUserId.trim(),
-          },
-        }),
-      "User block created.",
-      (payload) => setModerationSnapshot(payload),
-    );
-
-  const loadModerationSummary = () =>
-    runAction(
-      "Load moderation summary",
-      () =>
-        requestApi<ModerationSummarySnapshot>(
-          "GET",
-          "/admin/moderation/summary",
-        ),
-      "Moderation summary loaded.",
-      (payload) => setModerationSummarySnapshot(payload),
-    );
-
-  const loadModerationSettings = () =>
-    runAction(
-      "Load moderation settings",
-      () =>
-        requestApi<ModerationSettingsSnapshot>(
-          "GET",
-          "/admin/moderation/settings",
-        ),
-      "Moderation settings loaded.",
-      (payload) => setModerationSettingsSnapshot(payload),
-    );
-
-  const loadModerationQueue = () =>
-    runAction(
-      "Load moderation queue",
-      () =>
-        requestApi("GET", "/admin/moderation/queue", {
-          query: {
-            limit: moderationQueueLimit,
-            status: moderationQueueStatusQuery,
-            entityType:
-              moderationQueueEntityTypeQuery.trim().length > 0
-                ? moderationQueueEntityTypeQuery.trim()
-                : undefined,
-            reasonContains:
-              moderationQueueReasonQuery.trim().length > 0
-                ? moderationQueueReasonQuery.trim()
-                : undefined,
-          },
-        }),
-      "Moderation queue snapshot loaded.",
-      (payload) => setModerationQueueSnapshot(payload),
-    );
-
-  const loadAuditLogs = () =>
-    runAction(
-      "Load audit logs",
-      () =>
-        requestApi("GET", "/admin/audit-logs", {
-          query: {
-            limit: auditLogLimit,
-          },
-        }),
-      "Audit log snapshot loaded.",
-      (payload) => setAuditLogSnapshot(payload),
-    );
-
-  const loadAgentRiskFlags = () =>
-    runAction(
-      "Load agent risk flags",
-      () =>
-        requestApi("GET", "/admin/moderation/agent-risk-flags", {
-          query: {
-            limit: agentRiskLimit,
-            status: agentRiskStatusQuery,
-            ...(agentRiskDecisionQuery.trim() === "review" ||
-            agentRiskDecisionQuery.trim() === "blocked"
-              ? {
-                  decision: agentRiskDecisionQuery.trim() as
-                    | "review"
-                    | "blocked",
-                }
-              : {}),
-          },
-        }),
-      "Agent risk flags loaded.",
-      (payload) => setAgentRiskSnapshot(payload),
-    );
-
-  const triageAgentRiskFlag = () => {
-    if (!triageFlagId.trim()) {
-      setBanner({ tone: "error", text: "Provide a moderation flag id." });
-      return Promise.resolve(null);
-    }
-    const body: Record<string, unknown> = { action: triageAction };
-    if (triageReason.trim()) {
-      body.reason = triageReason.trim();
-    }
-    if (triageTargetUserId.trim()) {
-      body.targetUserId = triageTargetUserId.trim();
-    }
-    return runAction(
-      "Triage moderation flag",
-      () =>
-        requestApi(
-          "POST",
-          `/admin/moderation/flags/${triageFlagId.trim()}/triage`,
-          { body },
-        ),
-      "Flag triage applied.",
-      () => {
-        void loadAgentRiskFlags();
-      },
-    );
-  };
-
-  const primeTriageFromFlag = (flag: ModerationFlagRow) => {
-    setTriageFlagId(flag.id);
-    setAssignFlagId(flag.id);
-    setTriageReason(flag.reason);
-    setAssignReason(flag.assignmentNote ?? "");
-    setAssigneeUserId(flag.assigneeUserId ?? "");
-  };
-
-  const assignAgentRiskFlag = () => {
-    if (!assignFlagId.trim() || !assigneeUserId.trim()) {
-      setBanner({
-        tone: "error",
-        text: "Provide flag id and assignee user id.",
-      });
-      return Promise.resolve(null);
-    }
-    return runAction(
-      "Assign moderation flag",
-      () =>
-        requestApi(
-          "POST",
-          `/admin/moderation/flags/${assignFlagId.trim()}/assign`,
-          {
-            body: {
-              assigneeUserId: assigneeUserId.trim(),
-              ...(assignReason.trim() ? { reason: assignReason.trim() } : {}),
-            },
-          },
-        ),
-      "Assignment recorded.",
-      () => {
-        void loadAgentRiskFlags();
-      },
-    );
-  };
+  const moderation = useModerationWorkbench({
+    activeTab,
+    requestApi,
+    runAction,
+    setBanner,
+  });
 
   const deactivateUser = () => {
     if (!userId.trim()) {
@@ -1398,7 +1087,7 @@ function AdminHomeContent() {
           },
         }),
       "Account deactivated.",
-      (payload) => setModerationSnapshot(payload),
+      (payload) => moderation.setModerationSnapshot(payload),
     );
   };
 
@@ -1417,7 +1106,7 @@ function AdminHomeContent() {
           },
         }),
       "Account restriction applied.",
-      (payload) => setModerationSnapshot(payload),
+      (payload) => moderation.setModerationSnapshot(payload),
     );
   };
 
@@ -1498,18 +1187,6 @@ function AdminHomeContent() {
         }
       },
     );
-
-  useEffect(() => {
-    if (activeTab !== "moderation") {
-      return;
-    }
-    if (!moderationSummarySnapshot) {
-      void loadModerationSummary();
-    }
-    if (!moderationSettingsSnapshot) {
-      void loadModerationSettings();
-    }
-  }, [activeTab, moderationSettingsSnapshot, moderationSummarySnapshot]);
 
   const postAgentMessage = () => {
     if (!threadId.trim()) {
@@ -1696,1729 +1373,263 @@ function AdminHomeContent() {
       </p>
 
       {activeTab === "overview" ? (
-        <section className="mt-4 space-y-4">
-          <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
-            <Panel
-              subtitle="Live queue operations and system health."
-              title="System Controls"
-            >
-              <div className="flex flex-wrap gap-2">
-                <button
-                  className={adminButtonClass}
-                  onClick={loadDeadLetters}
-                  type="button"
-                >
-                  Load dead letters
-                </button>
-                <button
-                  className={adminButtonClass}
-                  onClick={relayOutbox}
-                  type="button"
-                >
-                  Relay outbox
-                </button>
-              </div>
-              <p className="mt-3 text-xs text-ash">
-                health: <span className="text-slate-200">{health}</span>
-              </p>
-              <p className="text-xs text-ash">
-                outbox processed:{" "}
-                <span className="text-slate-200">{relayCount ?? "n/a"}</span>
-              </p>
-            </Panel>
-
-            <Panel
-              subtitle="Google sign-in sets your admin user id. Override only for impersonation or debugging."
-              title="Context"
-            >
-              <label className={adminLabelClass}>
-                admin user id (x-admin-user-id)
-                <input
-                  className={adminInputClass}
-                  onChange={(event) =>
-                    setAdminUserId(event.currentTarget.value)
-                  }
-                  value={adminUserId}
-                />
-              </label>
-              <label className={adminLabelClass}>
-                admin role (x-admin-role)
-                <select
-                  className={adminInputClass}
-                  onChange={(event) =>
-                    setAdminRole(
-                      event.currentTarget.value as
-                        | "admin"
-                        | "support"
-                        | "moderator",
-                    )
-                  }
-                  value={adminRole}
-                >
-                  <option value="admin">admin</option>
-                  <option value="support">support</option>
-                  <option value="moderator">moderator</option>
-                </select>
-              </label>
-              <label className={adminLabelClass}>
-                user id
-                <input
-                  className={adminInputClass}
-                  onChange={(event) => setUserId(event.currentTarget.value)}
-                  value={userId}
-                />
-              </label>
-              <label className={adminLabelClass}>
-                thread id
-                <input
-                  className={adminInputClass}
-                  onChange={(event) => setThreadId(event.currentTarget.value)}
-                  placeholder="agent thread uuid"
-                  value={threadId}
-                />
-              </label>
-            </Panel>
-          </div>
-
-          <Panel
-            subtitle="Replay failed jobs without touching Redis manually."
-            title="Dead-letter Queue"
-          >
-            {deadLetters.length === 0 ? (
-              <p className="text-sm text-ash">No dead-letter rows loaded.</p>
-            ) : (
-              <div className="space-y-2">
-                {deadLetters.map((row) => (
-                  <article
-                    className="rounded-xl border border-slate-700 bg-night px-3 py-3"
-                    key={row.id}
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-sm font-semibold text-slate-100">
-                        {row.queueName} / {row.jobName}
-                      </p>
-                      <button
-                        className={adminButtonGhostClass}
-                        onClick={() => {
-                          replayDeadLetter(row.id).catch(() => {});
-                        }}
-                        type="button"
-                      >
-                        Replay
-                      </button>
-                    </div>
-                    <p className="mt-1 text-xs text-ash">
-                      attempts: {row.attempts} · createdAt: {row.createdAt}
-                    </p>
-                    <p className="mt-1 text-xs text-rose-200">
-                      {row.lastError}
-                    </p>
-                  </article>
-                ))}
-              </div>
-            )}
-          </Panel>
-
-          <div className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
-            <Panel
-              subtitle="Call any API route directly from admin with JSON query/body payloads."
-              title="Internal Query Helper"
-            >
-              <div className="grid gap-3 md:grid-cols-3">
-                <label className={adminLabelClass}>
-                  method
-                  <select
-                    className={adminInputClass}
-                    onChange={(event) =>
-                      setDebugMethod(event.currentTarget.value as HttpMethod)
-                    }
-                    value={debugMethod}
-                  >
-                    <option value="GET">GET</option>
-                    <option value="POST">POST</option>
-                    <option value="PUT">PUT</option>
-                    <option value="PATCH">PATCH</option>
-                  </select>
-                </label>
-                <label className={`${adminLabelClass} md:col-span-2`}>
-                  path
-                  <input
-                    className={adminInputClass}
-                    onChange={(event) =>
-                      setDebugPath(event.currentTarget.value)
-                    }
-                    placeholder="/admin/health"
-                    value={debugPath}
-                  />
-                </label>
-              </div>
-
-              <div className="mt-3 grid gap-3 lg:grid-cols-2">
-                <label className={adminLabelClass}>
-                  query json
-                  <textarea
-                    className={`${adminInputClass} min-h-24`}
-                    onChange={(event) =>
-                      setDebugQueryInput(event.currentTarget.value)
-                    }
-                    value={debugQueryInput}
-                  />
-                </label>
-                <label className={adminLabelClass}>
-                  body json
-                  <textarea
-                    className={`${adminInputClass} min-h-24`}
-                    disabled={debugMethod === "GET"}
-                    onChange={(event) =>
-                      setDebugBodyInput(event.currentTarget.value)
-                    }
-                    value={debugBodyInput}
-                  />
-                </label>
-              </div>
-
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button
-                  className={adminButtonClass}
-                  onClick={() => {
-                    executeDebugQuery().catch(() => {});
-                  }}
-                  type="button"
-                >
-                  Execute query
-                </button>
-                <button
-                  className={adminButtonGhostClass}
-                  onClick={() => {
-                    setDebugMethod("GET");
-                    setDebugPath("/admin/health");
-                    setDebugQueryInput("{}");
-                    setDebugBodyInput("{}");
-                  }}
-                  type="button"
-                >
-                  Load health preset
-                </button>
-                <button
-                  className={adminButtonGhostClass}
-                  onClick={() => {
-                    setDebugMethod("GET");
-                    setDebugPath("/admin/jobs/dead-letters");
-                    setDebugQueryInput("{}");
-                    setDebugBodyInput("{}");
-                  }}
-                  type="button"
-                >
-                  Load dead-letter preset
-                </button>
-              </div>
-
-              <div className="mt-3">
-                <JsonView
-                  emptyLabel="No debug response yet."
-                  value={debugResponse}
-                />
-              </div>
-            </Panel>
-
-            <Panel
-              subtitle="Recent manual debug queries."
-              title="Debug History"
-            >
-              {debugHistory.length === 0 ? (
-                <p className="text-sm text-ash">
-                  No debug queries executed yet.
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {debugHistory.map((item) => (
-                    <article
-                      className="rounded-xl border border-slate-700 bg-night px-3 py-2"
-                      key={item.id}
-                    >
-                      <p className="text-xs font-semibold text-slate-100">
-                        {item.method} {item.path}
-                      </p>
-                      <p className="mt-1 text-xs text-ash">
-                        {item.at} · {item.success ? "ok" : "failed"}
-                      </p>
-                    </article>
-                  ))}
-                </div>
-              )}
-            </Panel>
-          </div>
-        </section>
+        <OverviewTab
+          adminButtonClass={adminButtonClass}
+          adminButtonGhostClass={adminButtonGhostClass}
+          adminInputClass={adminInputClass}
+          adminLabelClass={adminLabelClass}
+          adminRole={adminRole}
+          adminUserId={adminUserId}
+          deadLetters={deadLetters}
+          debugBodyInput={debugBodyInput}
+          debugHistory={debugHistory}
+          debugMethod={debugMethod}
+          debugPath={debugPath}
+          debugQueryInput={debugQueryInput}
+          debugResponse={debugResponse}
+          executeDebugQuery={executeDebugQuery}
+          health={health}
+          loadDeadLetters={loadDeadLetters}
+          relayCount={relayCount}
+          relayOutbox={relayOutbox}
+          replayDeadLetter={replayDeadLetter}
+          setAdminRole={setAdminRole}
+          setAdminUserId={setAdminUserId}
+          setDebugBodyInput={setDebugBodyInput}
+          setDebugMethod={setDebugMethod}
+          setDebugPath={setDebugPath}
+          setDebugQueryInput={setDebugQueryInput}
+          setThreadId={setThreadId}
+          setUserId={setUserId}
+          threadId={threadId}
+          userId={userId}
+        />
       ) : null}
 
       {activeTab === "users" ? (
-        <section className="mt-4 space-y-4">
-          <Panel
-            subtitle="Inspect profile, trust, rules, sessions, and inbox from one action."
-            title="User Inspector"
-          >
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <label className={adminLabelClass}>
-                user id
-                <input
-                  className={adminInputClass}
-                  onChange={(event) => setUserId(event.currentTarget.value)}
-                  value={userId}
-                />
-              </label>
-              <label className={adminLabelClass}>
-                revoke session id
-                <input
-                  className={adminInputClass}
-                  onChange={(event) =>
-                    setRevokeSessionId(event.currentTarget.value)
-                  }
-                  placeholder="session uuid"
-                  value={revokeSessionId}
-                />
-              </label>
-              <label className={adminLabelClass}>
-                search query
-                <input
-                  className={adminInputClass}
-                  onChange={(event) =>
-                    setSearchQuery(event.currentTarget.value)
-                  }
-                  placeholder="tennis"
-                  value={searchQuery}
-                />
-              </label>
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                className={adminButtonClass}
-                onClick={inspectUser}
-                type="button"
-              >
-                Inspect user
-              </button>
-              <button
-                className={adminButtonGhostClass}
-                onClick={sendDigest}
-                type="button"
-              >
-                Send digest
-              </button>
-              <button
-                className={adminButtonGhostClass}
-                onClick={summarizePendingIntents}
-                type="button"
-              >
-                Summarize pending intents
-              </button>
-              <button
-                className={adminButtonGhostClass}
-                onClick={runSearch}
-                type="button"
-              >
-                Run search
-              </button>
-              <button
-                className={adminButtonGhostClass}
-                onClick={revokeSession}
-                type="button"
-              >
-                Revoke one session
-              </button>
-              <button
-                className={adminButtonDangerClass}
-                onClick={revokeAllSessions}
-                type="button"
-              >
-                Revoke all sessions
-              </button>
-            </div>
-            <div className="mt-3 grid gap-3 lg:grid-cols-2">
-              <label className={adminLabelClass}>
-                deactivate reason
-                <input
-                  className={adminInputClass}
-                  onChange={(event) =>
-                    setDeactivateReason(event.currentTarget.value)
-                  }
-                  value={deactivateReason}
-                />
-              </label>
-              <label className={adminLabelClass}>
-                restrict reason
-                <input
-                  className={adminInputClass}
-                  onChange={(event) =>
-                    setRestrictReason(event.currentTarget.value)
-                  }
-                  value={restrictReason}
-                />
-              </label>
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                className={adminButtonDangerClass}
-                onClick={deactivateUser}
-                type="button"
-              >
-                Deactivate account
-              </button>
-              <button
-                className={adminButtonDangerClass}
-                onClick={restrictUser}
-                type="button"
-              >
-                Restrict / shadow-ban
-              </button>
-            </div>
-          </Panel>
-
-          <div className="grid gap-4 lg:grid-cols-3">
-            <Panel title="Profile">
-              <JsonView
-                emptyLabel="No profile data loaded."
-                value={profileSnapshot}
-              />
-            </Panel>
-            <Panel title="Trust">
-              <JsonView
-                emptyLabel="No trust data loaded."
-                value={trustSnapshot}
-              />
-            </Panel>
-            <Panel title="Global Rules">
-              <JsonView emptyLabel="No rules loaded." value={ruleSnapshot} />
-            </Panel>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-3">
-            <Panel title="Interests">
-              <JsonView value={interestSnapshot} />
-            </Panel>
-            <Panel title="Topics">
-              <JsonView value={topicSnapshot} />
-            </Panel>
-            <Panel title="Availability">
-              <JsonView value={availabilitySnapshot} />
-            </Panel>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-3">
-            <Panel title="Photos">
-              <JsonView value={photoSnapshot} />
-            </Panel>
-            <Panel title="Sessions">
-              <JsonView value={sessionSnapshot} />
-            </Panel>
-            <Panel title="Inbox Requests">
-              <JsonView value={inboxSnapshot} />
-            </Panel>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Panel title="Recurring Circles">
-              <JsonView value={recurringCircleSnapshot} />
-            </Panel>
-            <Panel title="Circle Sessions (first circle)">
-              <JsonView value={recurringCircleSessionSnapshot} />
-            </Panel>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-3">
-            <Panel title="Saved Searches">
-              <JsonView value={savedSearchSnapshot} />
-            </Panel>
-            <Panel title="Scheduled Tasks">
-              <JsonView value={scheduledTaskSnapshot} />
-            </Panel>
-            <Panel title="Scheduled Task Runs (first task)">
-              <JsonView value={scheduledTaskRunsSnapshot} />
-            </Panel>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Panel title="Passive Discovery">
-              <JsonView value={discoveryPassiveSnapshot} />
-            </Panel>
-            <Panel title="Inbox Suggestions">
-              <JsonView value={discoveryInboxSnapshot} />
-            </Panel>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Panel title="Pending Intent Summary">
-              <JsonView value={pendingIntentSummarySnapshot} />
-            </Panel>
-            <Panel title="User Routing Explanation (first pending intent)">
-              <JsonView value={continuityIntentExplainSnapshot} />
-            </Panel>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-1">
-            <Panel title="Search Snapshot">
-              <JsonView value={searchSnapshot} />
-            </Panel>
-          </div>
-        </section>
+        <UserInspectorTab
+          adminButtonClass={adminButtonClass}
+          adminButtonDangerClass={adminButtonDangerClass}
+          adminButtonGhostClass={adminButtonGhostClass}
+          adminInputClass={adminInputClass}
+          adminLabelClass={adminLabelClass}
+          availabilitySnapshot={availabilitySnapshot}
+          continuityIntentExplainSnapshot={continuityIntentExplainSnapshot}
+          deactivateReason={deactivateReason}
+          deactivateUser={deactivateUser}
+          discoveryInboxSnapshot={discoveryInboxSnapshot}
+          discoveryPassiveSnapshot={discoveryPassiveSnapshot}
+          inboxSnapshot={inboxSnapshot}
+          inspectUser={inspectUser}
+          interestSnapshot={interestSnapshot}
+          pendingIntentSummarySnapshot={pendingIntentSummarySnapshot}
+          photoSnapshot={photoSnapshot}
+          profileSnapshot={profileSnapshot}
+          recurringCircleSessionSnapshot={recurringCircleSessionSnapshot}
+          recurringCircleSnapshot={recurringCircleSnapshot}
+          restrictReason={restrictReason}
+          restrictUser={restrictUser}
+          revokeAllSessions={revokeAllSessions}
+          revokeSession={revokeSession}
+          revokeSessionId={revokeSessionId}
+          ruleSnapshot={ruleSnapshot}
+          runSearch={runSearch}
+          savedSearchSnapshot={savedSearchSnapshot}
+          scheduledTaskRunsSnapshot={scheduledTaskRunsSnapshot}
+          scheduledTaskSnapshot={scheduledTaskSnapshot}
+          searchQuery={searchQuery}
+          searchSnapshot={searchSnapshot}
+          sendDigest={sendDigest}
+          sessionSnapshot={sessionSnapshot}
+          setDeactivateReason={setDeactivateReason}
+          setRestrictReason={setRestrictReason}
+          setRevokeSessionId={setRevokeSessionId}
+          setSearchQuery={setSearchQuery}
+          setUserId={setUserId}
+          summarizePendingIntents={summarizePendingIntents}
+          topicSnapshot={topicSnapshot}
+          trustSnapshot={trustSnapshot}
+          userId={userId}
+        />
       ) : null}
 
       {activeTab === "intents" ? (
-        <section className="mt-4 space-y-4">
-          <Panel
-            subtitle="Run intent follow-up superpowers without direct DB edits."
-            title="Intent Controls"
-          >
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <label className={adminLabelClass}>
-                intent id
-                <input
-                  className={adminInputClass}
-                  onChange={(event) => setIntentId(event.currentTarget.value)}
-                  placeholder="intent uuid"
-                  value={intentId}
-                />
-              </label>
-              <label className={adminLabelClass}>
-                user id (cancel)
-                <input
-                  className={adminInputClass}
-                  onChange={(event) => setUserId(event.currentTarget.value)}
-                  value={userId}
-                />
-              </label>
-              <label className={adminLabelClass}>
-                agent thread id (optional)
-                <input
-                  className={adminInputClass}
-                  onChange={(event) => setThreadId(event.currentTarget.value)}
-                  value={threadId}
-                />
-              </label>
-              <label className={adminLabelClass}>
-                group size target (2-4)
-                <input
-                  className={adminInputClass}
-                  max={4}
-                  min={2}
-                  onChange={(event) =>
-                    setGroupSizeTarget(Number(event.currentTarget.value))
-                  }
-                  type="number"
-                  value={groupSizeTarget}
-                />
-              </label>
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                className={adminButtonClass}
-                onClick={inspectIntent}
-                type="button"
-              >
-                Inspect explanations
-              </button>
-              <button
-                className={adminButtonGhostClass}
-                onClick={cancelIntent}
-                type="button"
-              >
-                Force-cancel intent
-              </button>
-              <button
-                className={adminButtonGhostClass}
-                onClick={retryIntent}
-                type="button"
-              >
-                Retry routing
-              </button>
-              <button
-                className={adminButtonGhostClass}
-                onClick={widenIntent}
-                type="button"
-              >
-                Widen filters
-              </button>
-              <button
-                className={adminButtonGhostClass}
-                onClick={() => {
-                  convertIntent("group").catch(() => {});
-                }}
-                type="button"
-              >
-                Convert to group
-              </button>
-              <button
-                className={adminButtonGhostClass}
-                onClick={() => {
-                  convertIntent("one_to_one").catch(() => {});
-                }}
-                type="button"
-              >
-                Convert to 1:1
-              </button>
-            </div>
-          </Panel>
-
-          <div className="grid gap-4 lg:grid-cols-3">
-            <Panel title="Admin Explanation">
-              <JsonView value={intentExplainSnapshot} />
-            </Panel>
-            <Panel title="User-facing Explanation">
-              <JsonView value={intentUserExplainSnapshot} />
-            </Panel>
-            <Panel title="Last Action Result">
-              <JsonView value={intentActionSnapshot} />
-            </Panel>
-          </div>
-        </section>
+        <IntentsTab
+          adminButtonClass={adminButtonClass}
+          adminButtonGhostClass={adminButtonGhostClass}
+          adminInputClass={adminInputClass}
+          adminLabelClass={adminLabelClass}
+          cancelIntent={cancelIntent}
+          convertIntent={convertIntent}
+          groupSizeTarget={groupSizeTarget}
+          inspectIntent={inspectIntent}
+          intentActionSnapshot={intentActionSnapshot}
+          intentExplainSnapshot={intentExplainSnapshot}
+          intentId={intentId}
+          intentUserExplainSnapshot={intentUserExplainSnapshot}
+          retryIntent={retryIntent}
+          setGroupSizeTarget={setGroupSizeTarget}
+          setIntentId={setIntentId}
+          setThreadId={setThreadId}
+          setUserId={setUserId}
+          threadId={threadId}
+          userId={userId}
+          widenIntent={widenIntent}
+        />
       ) : null}
 
       {activeTab === "chats" ? (
-        <section className="mt-4 space-y-4">
-          <Panel
-            subtitle="Inspect chat health and recover flows with sync and membership actions."
-            title="Chat Controls"
-          >
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <label className={adminLabelClass}>
-                chat id
-                <input
-                  className={adminInputClass}
-                  onChange={(event) => setChatId(event.currentTarget.value)}
-                  placeholder="chat uuid"
-                  value={chatId}
-                />
-              </label>
-              <label className={adminLabelClass}>
-                acting user id
-                <input
-                  className={adminInputClass}
-                  onChange={(event) =>
-                    setActingUserId(event.currentTarget.value)
-                  }
-                  value={actingUserId}
-                />
-              </label>
-              <label className={adminLabelClass}>
-                sync after (ISO)
-                <input
-                  className={adminInputClass}
-                  onChange={(event) => setSyncAfter(event.currentTarget.value)}
-                  placeholder="2026-03-19T20:00:00.000Z"
-                  value={syncAfter}
-                />
-              </label>
-              <label className={adminLabelClass}>
-                message id (hide action)
-                <input
-                  className={adminInputClass}
-                  onChange={(event) => setMessageId(event.currentTarget.value)}
-                  placeholder="message uuid"
-                  value={messageId}
-                />
-              </label>
-            </div>
-            <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              <label className={adminLabelClass}>
-                moderator user id
-                <input
-                  className={adminInputClass}
-                  onChange={(event) =>
-                    setModeratorUserId(event.currentTarget.value)
-                  }
-                  value={moderatorUserId}
-                />
-              </label>
-              <label className={adminLabelClass}>
-                hide reason
-                <input
-                  className={adminInputClass}
-                  onChange={(event) => setHideReason(event.currentTarget.value)}
-                  value={hideReason}
-                />
-              </label>
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                className={adminButtonClass}
-                onClick={inspectChat}
-                type="button"
-              >
-                Inspect messages + metadata
-              </button>
-              <button
-                className={adminButtonGhostClass}
-                onClick={syncChat}
-                type="button"
-              >
-                Reconnect sync
-              </button>
-              <button
-                className={adminButtonGhostClass}
-                onClick={leaveChat}
-                type="button"
-              >
-                Leave participant
-              </button>
-              <button
-                className={adminButtonGhostClass}
-                onClick={repairChatFlow}
-                type="button"
-              >
-                Repair stuck flow
-              </button>
-              <button
-                className={adminButtonDangerClass}
-                onClick={hideChatMessage}
-                type="button"
-              >
-                Hide message
-              </button>
-            </div>
-          </Panel>
-
-          <div className="grid gap-4 lg:grid-cols-3">
-            <Panel title="Messages">
-              <JsonView value={chatMessagesSnapshot} />
-            </Panel>
-            <Panel title="Metadata (connection view)">
-              <JsonView value={chatMetadataSnapshot} />
-            </Panel>
-            <Panel title="Sync Snapshot">
-              <JsonView value={chatSyncSnapshot} />
-            </Panel>
-          </div>
-        </section>
+        <ChatsTab
+          actingUserId={actingUserId}
+          adminButtonClass={adminButtonClass}
+          adminButtonDangerClass={adminButtonDangerClass}
+          adminButtonGhostClass={adminButtonGhostClass}
+          adminInputClass={adminInputClass}
+          adminLabelClass={adminLabelClass}
+          chatId={chatId}
+          chatMessagesSnapshot={chatMessagesSnapshot}
+          chatMetadataSnapshot={chatMetadataSnapshot}
+          chatSyncSnapshot={chatSyncSnapshot}
+          hideChatMessage={hideChatMessage}
+          hideReason={hideReason}
+          inspectChat={inspectChat}
+          leaveChat={leaveChat}
+          messageId={messageId}
+          moderatorUserId={moderatorUserId}
+          repairChatFlow={repairChatFlow}
+          setActingUserId={setActingUserId}
+          setChatId={setChatId}
+          setHideReason={setHideReason}
+          setMessageId={setMessageId}
+          setModeratorUserId={setModeratorUserId}
+          setSyncAfter={setSyncAfter}
+          syncAfter={syncAfter}
+          syncChat={syncChat}
+        />
       ) : null}
 
       {activeTab === "moderation" ? (
-        <section className="mt-4 space-y-4">
-          <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]">
-            <Panel
-              subtitle="Backlog, enforcement, and recent safety activity."
-              title="Moderation Command Center"
-            >
-              <div className="flex flex-wrap gap-2">
-                <button
-                  className={adminButtonClass}
-                  onClick={() => {
-                    loadModerationSummary().catch(() => {});
-                  }}
-                  type="button"
-                >
-                  Refresh summary
-                </button>
-                <button
-                  className={adminButtonGhostClass}
-                  onClick={() => {
-                    loadModerationSettings().catch(() => {});
-                  }}
-                  type="button"
-                >
-                  Refresh settings
-                </button>
-              </div>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {[
-                  {
-                    label: "Open flags",
-                    value: moderationSummarySnapshot?.queue.openFlags ?? "—",
-                    tone: "text-rose-300",
-                  },
-                  {
-                    label: "Agent risk open",
-                    value:
-                      moderationSummarySnapshot?.queue.agentRiskOpenFlags ??
-                      "—",
-                    tone: "text-amber-300",
-                  },
-                  {
-                    label: "Open reports",
-                    value: moderationSummarySnapshot?.queue.reportsOpen ?? "—",
-                    tone: "text-sky-300",
-                  },
-                  {
-                    label: "Reports (24h)",
-                    value:
-                      moderationSummarySnapshot?.actions24h.reports24h ?? "—",
-                    tone: "text-violet-300",
-                  },
-                  {
-                    label: "Blocked profiles",
-                    value:
-                      moderationSummarySnapshot?.enforcement.blockedProfiles ??
-                      "—",
-                    tone: "text-fuchsia-300",
-                  },
-                  {
-                    label: "Suspended users",
-                    value:
-                      moderationSummarySnapshot?.enforcement.suspendedUsers ??
-                      "—",
-                    tone: "text-orange-300",
-                  },
-                ].map((item) => (
-                  <div
-                    className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
-                    key={item.label}
-                  >
-                    <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">
-                      {item.label}
-                    </p>
-                    <p className={`mt-2 text-3xl font-semibold ${item.tone}`}>
-                      {item.value}
-                    </p>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                {[
-                  {
-                    label: "Avg assign mins",
-                    value:
-                      moderationSummarySnapshot?.analytics
-                        .avgTimeToAssignmentMinutes ?? "—",
-                  },
-                  {
-                    label: "Avg decision mins",
-                    value:
-                      moderationSummarySnapshot?.analytics
-                        .avgTimeToDecisionMinutes ?? "—",
-                  },
-                  {
-                    label: "Dismissal rate",
-                    value:
-                      moderationSummarySnapshot?.analytics.dismissalRate24h ??
-                      "—",
-                  },
-                  {
-                    label: "Repeat offenders (24h)",
-                    value:
-                      moderationSummarySnapshot?.analytics.repeatOffenders24h ??
-                      "—",
-                  },
-                ].map((item) => (
-                  <div
-                    className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
-                    key={item.label}
-                  >
-                    <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">
-                      {item.label}
-                    </p>
-                    <p className="mt-2 text-2xl font-semibold text-cyan-200">
-                      {item.value}
-                    </p>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-4 grid gap-3 lg:grid-cols-2">
-                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                    Recent flags
-                  </p>
-                  <div className="mt-3 space-y-2">
-                    {(moderationSummarySnapshot?.recent.flags ?? []).length ===
-                    0 ? (
-                      <p className="text-sm text-slate-400">
-                        No recent flags loaded yet.
-                      </p>
-                    ) : (
-                      moderationSummarySnapshot?.recent.flags.map((flag) => (
-                        <button
-                          className="w-full rounded-xl border border-slate-800 bg-slate-900/80 px-3 py-3 text-left text-sm text-slate-100 transition hover:border-slate-600"
-                          key={flag.id}
-                          onClick={() => primeTriageFromFlag(flag)}
-                          type="button"
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="font-medium text-slate-100">
-                              {flag.entityType}
-                            </span>
-                            <span className="text-xs uppercase tracking-wide text-slate-400">
-                              {flag.status}
-                            </span>
-                          </div>
-                          <p className="mt-1 text-xs text-slate-400">
-                            {flag.reason}
-                          </p>
-                        </button>
-                      ))
-                    )}
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                    Recent reports
-                  </p>
-                  <div className="mt-3 space-y-2">
-                    {(moderationSummarySnapshot?.recent.reports ?? [])
-                      .length === 0 ? (
-                      <p className="text-sm text-slate-400">
-                        No recent reports loaded yet.
-                      </p>
-                    ) : (
-                      moderationSummarySnapshot?.recent.reports.map(
-                        (report) => (
-                          <div
-                            className="rounded-xl border border-slate-800 bg-slate-900/80 px-3 py-3"
-                            key={report.id}
-                          >
-                            <div className="flex items-center justify-between gap-3">
-                              <span className="font-medium text-slate-100">
-                                {report.reason}
-                              </span>
-                              <span className="text-xs uppercase tracking-wide text-slate-400">
-                                {report.status}
-                              </span>
-                            </div>
-                            <p className="mt-1 text-xs text-slate-400">
-                              reporter {report.reporterUserId}
-                              {report.targetUserId
-                                ? ` -> target ${report.targetUserId}`
-                                : ""}
-                            </p>
-                          </div>
-                        ),
-                      )
-                    )}
-                  </div>
-                </div>
-              </div>
-              <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                  Top reasons
-                </p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {(moderationSummarySnapshot?.analytics.topReasons ?? []).map(
-                    (item) => (
-                      <span
-                        className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300"
-                        key={`${item.reason}-${item.count}`}
-                      >
-                        {item.reason} ({item.count})
-                      </span>
-                    ),
-                  )}
-                </div>
-              </div>
-            </Panel>
-
-            <Panel
-              subtitle="Configured provider, switches, and alert thresholds."
-              title="Policy Settings"
-            >
-              <div className="space-y-4 text-sm text-slate-200">
-                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
-                    Provider
-                  </p>
-                  <p className="mt-2 text-xl font-semibold text-slate-100">
-                    {moderationSettingsSnapshot?.provider ?? "Not loaded"}
-                  </p>
-                  <div className="mt-3 grid gap-2">
-                    {[
-                      [
-                        "Provider key configured",
-                        moderationSettingsSnapshot?.keys
-                          .moderationProviderConfigured,
-                      ],
-                      [
-                        "OpenAI configured",
-                        moderationSettingsSnapshot?.keys.openaiConfigured,
-                      ],
-                      [
-                        "Custom provider configured",
-                        moderationSettingsSnapshot?.keys
-                          .customProviderConfigured,
-                      ],
-                    ].map(([label, enabled]) => (
-                      <div
-                        className="flex items-center justify-between rounded-xl border border-slate-800 px-3 py-2"
-                        key={String(label)}
-                      >
-                        <span>{label}</span>
-                        <span
-                          className={
-                            enabled ? "text-emerald-300" : "text-amber-300"
-                          }
-                        >
-                          {enabled ? "yes" : "no"}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
-                    Toggles
-                  </p>
-                  <div className="mt-3 grid gap-2">
-                    {Object.entries(
-                      moderationSettingsSnapshot?.toggles ?? {},
-                    ).map(([label, enabled]) => (
-                      <div
-                        className="flex items-center justify-between rounded-xl border border-slate-800 px-3 py-2"
-                        key={label}
-                      >
-                        <span>{label}</span>
-                        <span
-                          className={
-                            enabled ? "text-emerald-300" : "text-slate-400"
-                          }
-                        >
-                          {enabled ? "enabled" : "disabled"}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
-                    Thresholds
-                  </p>
-                  <div className="mt-3 space-y-2">
-                    <div className="flex items-center justify-between rounded-xl border border-slate-800 px-3 py-2">
-                      <span>Moderation backlog alert</span>
-                      <span>
-                        {moderationSettingsSnapshot?.thresholds
-                          .moderationBacklogAlert ?? "—"}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between rounded-xl border border-slate-800 px-3 py-2">
-                      <span>DB latency alert</span>
-                      <span>
-                        {moderationSettingsSnapshot?.thresholds
-                          .dbLatencyAlertMs ?? "—"}
-                        ms
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between rounded-xl border border-slate-800 px-3 py-2">
-                      <span>OpenAI error-rate alert</span>
-                      <span>
-                        {moderationSettingsSnapshot?.thresholds
-                          .openAiErrorRateAlert ?? "—"}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </Panel>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Panel
-              subtitle="Create moderation report records."
-              title="Report User"
-            >
-              <div className="grid gap-3 md:grid-cols-2">
-                <label className={adminLabelClass}>
-                  reporter user id
-                  <input
-                    className={adminInputClass}
-                    onChange={(event) =>
-                      setReporterUserId(event.currentTarget.value)
-                    }
-                    value={reporterUserId}
-                  />
-                </label>
-                <label className={adminLabelClass}>
-                  target user id (optional)
-                  <input
-                    className={adminInputClass}
-                    onChange={(event) =>
-                      setTargetUserId(event.currentTarget.value)
-                    }
-                    value={targetUserId}
-                  />
-                </label>
-              </div>
-              <label className={`${adminLabelClass} mt-3`}>
-                reason
-                <input
-                  className={adminInputClass}
-                  onChange={(event) =>
-                    setReportReason(event.currentTarget.value)
-                  }
-                  value={reportReason}
-                />
-              </label>
-              <label className={`${adminLabelClass} mt-3`}>
-                details
-                <textarea
-                  className={`${adminInputClass} min-h-24`}
-                  onChange={(event) =>
-                    setReportDetails(event.currentTarget.value)
-                  }
-                  value={reportDetails}
-                />
-              </label>
-              <button
-                className={`${adminButtonClass} mt-3`}
-                onClick={createReport}
-                type="button"
-              >
-                Create report
-              </button>
-            </Panel>
-
-            <Panel
-              subtitle="Block relationships for safety enforcement."
-              title="Block User"
-            >
-              <div className="grid gap-3 md:grid-cols-2">
-                <label className={adminLabelClass}>
-                  blocker user id
-                  <input
-                    className={adminInputClass}
-                    onChange={(event) =>
-                      setBlockerUserId(event.currentTarget.value)
-                    }
-                    value={blockerUserId}
-                  />
-                </label>
-                <label className={adminLabelClass}>
-                  blocked user id
-                  <input
-                    className={adminInputClass}
-                    onChange={(event) =>
-                      setBlockedUserId(event.currentTarget.value)
-                    }
-                    value={blockedUserId}
-                  />
-                </label>
-              </div>
-              <button
-                className={`${adminButtonClass} mt-3`}
-                onClick={createBlock}
-                type="button"
-              >
-                Create block
-              </button>
-            </Panel>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-3">
-            <Panel title="Moderation Result">
-              <JsonView value={moderationSnapshot} />
-            </Panel>
-            <Panel
-              subtitle="Filter open or resolved items and drill into flagged content quickly."
-              title="Moderation Queue"
-            >
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                <label className={adminLabelClass}>
-                  limit
-                  <input
-                    className={adminInputClass}
-                    max={250}
-                    min={1}
-                    onChange={(event) =>
-                      setModerationQueueLimit(
-                        Number(event.currentTarget.value) || 100,
-                      )
-                    }
-                    type="number"
-                    value={moderationQueueLimit}
-                  />
-                </label>
-                <label className={adminLabelClass}>
-                  status
-                  <select
-                    className={adminInputClass}
-                    onChange={(event) =>
-                      setModerationQueueStatusQuery(
-                        event.currentTarget.value as
-                          | "open"
-                          | "resolved"
-                          | "dismissed",
-                      )
-                    }
-                    value={moderationQueueStatusQuery}
-                  >
-                    <option value="open">open</option>
-                    <option value="resolved">resolved</option>
-                    <option value="dismissed">dismissed</option>
-                  </select>
-                </label>
-                <label className={adminLabelClass}>
-                  entity type (optional)
-                  <input
-                    className={adminInputClass}
-                    onChange={(event) =>
-                      setModerationQueueEntityTypeQuery(
-                        event.currentTarget.value,
-                      )
-                    }
-                    placeholder="agent_thread"
-                    value={moderationQueueEntityTypeQuery}
-                  />
-                </label>
-                <label className={adminLabelClass}>
-                  reason contains
-                  <input
-                    className={adminInputClass}
-                    onChange={(event) =>
-                      setModerationQueueReasonQuery(event.currentTarget.value)
-                    }
-                    placeholder="threat"
-                    value={moderationQueueReasonQuery}
-                  />
-                </label>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button
-                  className={adminButtonClass}
-                  onClick={loadModerationQueue}
-                  type="button"
-                >
-                  Load moderation queue
-                </button>
-                <button
-                  className={adminButtonGhostClass}
-                  onClick={() => setModerationQueueSnapshot(null)}
-                  type="button"
-                >
-                  Clear
-                </button>
-              </div>
-              <div className="mt-4 space-y-3">
-                {moderationQueueItems.length === 0 ? (
-                  <p className="text-sm text-slate-400">
-                    No moderation queue items loaded.
-                  </p>
-                ) : (
-                  moderationQueueItems.map((flag) => (
-                    <div
-                      className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
-                      key={flag.id}
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold text-slate-100">
-                            {flag.entityType}
-                          </p>
-                          <p className="text-xs text-slate-400">
-                            {flag.id} · {flag.entityId}
-                          </p>
-                        </div>
-                        <span className="rounded-full border border-slate-700 px-3 py-1 text-xs uppercase tracking-wide text-slate-300">
-                          {flag.status}
-                        </span>
-                      </div>
-                      <p className="mt-3 text-sm text-slate-200">
-                        {flag.reason}
-                      </p>
-                      <div className="mt-2 space-y-1 text-xs text-slate-400">
-                        {flag.assigneeUserId ? (
-                          <p>Assignee: {flag.assigneeUserId}</p>
-                        ) : null}
-                        {flag.assignmentNote ? (
-                          <p>Assignment note: {flag.assignmentNote}</p>
-                        ) : null}
-                        {flag.lastDecision ? (
-                          <p>Last decision: {flag.lastDecision}</p>
-                        ) : null}
-                        {flag.triageNote ? (
-                          <p>Triage note: {flag.triageNote}</p>
-                        ) : null}
-                      </div>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <button
-                          className={adminButtonGhostClass}
-                          onClick={() => primeTriageFromFlag(flag)}
-                          type="button"
-                        >
-                          Use in triage
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-              <div className="mt-4">
-                <JsonView value={moderationQueueSnapshot} />
-              </div>
-            </Panel>
-            <Panel
-              subtitle="Load from /api/admin/audit-logs."
-              title="Audit Logs"
-            >
-              <label className={adminLabelClass}>
-                limit
-                <input
-                  className={adminInputClass}
-                  max={250}
-                  min={1}
-                  onChange={(event) =>
-                    setAuditLogLimit(Number(event.currentTarget.value) || 100)
-                  }
-                  type="number"
-                  value={auditLogLimit}
-                />
-              </label>
-              <button
-                className={`${adminButtonClass} mt-3`}
-                onClick={loadAuditLogs}
-                type="button"
-              >
-                Load audit logs
-              </button>
-              <div className="mt-3">
-                <JsonView value={auditLogSnapshot} />
-              </div>
-            </Panel>
-          </div>
-
-          <Panel
-            subtitle="Flags from conversational risk checks on agent threads; pair with audit action moderation.agent_risk_assessed."
-            title="Agent thread risk flags"
-          >
-            <div className="grid gap-3 md:grid-cols-3">
-              <label className={adminLabelClass}>
-                limit
-                <input
-                  className={adminInputClass}
-                  max={250}
-                  min={1}
-                  onChange={(event) =>
-                    setAgentRiskLimit(Number(event.currentTarget.value) || 50)
-                  }
-                  type="number"
-                  value={agentRiskLimit}
-                />
-              </label>
-              <label className={adminLabelClass}>
-                status
-                <select
-                  className={adminInputClass}
-                  onChange={(event) =>
-                    setAgentRiskStatusQuery(
-                      event.currentTarget.value as
-                        | "open"
-                        | "resolved"
-                        | "dismissed",
-                    )
-                  }
-                  value={agentRiskStatusQuery}
-                >
-                  <option value="open">open</option>
-                  <option value="resolved">resolved</option>
-                  <option value="dismissed">dismissed</option>
-                </select>
-              </label>
-              <label className={adminLabelClass}>
-                decision filter (optional)
-                <select
-                  className={adminInputClass}
-                  onChange={(event) =>
-                    setAgentRiskDecisionQuery(event.currentTarget.value)
-                  }
-                  value={agentRiskDecisionQuery}
-                >
-                  <option value="">any</option>
-                  <option value="blocked">blocked</option>
-                  <option value="review">review</option>
-                </select>
-              </label>
-            </div>
-            <button
-              className={`${adminButtonClass} mt-3`}
-              onClick={() => {
-                loadAgentRiskFlags().catch(() => {});
-              }}
-              type="button"
-            >
-              Load agent risk flags
-            </button>
-            <div className="mt-4 space-y-3">
-              {agentRiskItems.length === 0 ? (
-                <p className="text-sm text-slate-400">
-                  No agent risk flags loaded.
-                </p>
-              ) : (
-                agentRiskItems.map((flag) => (
-                  <div
-                    className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
-                    key={flag.id}
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-100">
-                          {flag.reason}
-                        </p>
-                        <p className="text-xs text-slate-400">
-                          {flag.id} · thread {flag.entityId}
-                        </p>
-                      </div>
-                      <span className="rounded-full border border-slate-700 px-3 py-1 text-xs uppercase tracking-wide text-slate-300">
-                        {flag.status}
-                      </span>
-                    </div>
-                    {flag.latestAssignment ? (
-                      <p className="mt-2 text-xs text-slate-400">
-                        Assigned:{" "}
-                        {JSON.stringify(flag.latestAssignment.metadata)}
-                      </p>
-                    ) : null}
-                    {flag.assigneeUserId ? (
-                      <p className="mt-2 text-xs text-slate-400">
-                        Current assignee: {flag.assigneeUserId}
-                      </p>
-                    ) : null}
-                    {flag.assignmentNote ? (
-                      <p className="mt-2 text-xs text-slate-400">
-                        Assignment note: {flag.assignmentNote}
-                      </p>
-                    ) : null}
-                    {flag.latestRiskAudit ? (
-                      <p className="mt-2 text-xs text-slate-400">
-                        Risk audit:{" "}
-                        {JSON.stringify(flag.latestRiskAudit.metadata)}
-                      </p>
-                    ) : null}
-                    {flag.lastDecision ? (
-                      <p className="mt-2 text-xs text-slate-400">
-                        Last decision: {flag.lastDecision}
-                        {flag.triageNote ? ` · ${flag.triageNote}` : ""}
-                      </p>
-                    ) : null}
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <button
-                        className={adminButtonGhostClass}
-                        onClick={() => primeTriageFromFlag(flag)}
-                        type="button"
-                      >
-                        Use in triage
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-            <div className="mt-3 max-h-64 overflow-y-auto">
-              <JsonView value={agentRiskSnapshot} />
-            </div>
-            <div className="mt-4 grid gap-3 border-t border-slate-800 pt-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <p className="text-xs font-semibold text-slate-300">
-                  Triage flag
-                </p>
-                <label className={adminLabelClass}>
-                  flag id
-                  <input
-                    className={adminInputClass}
-                    onChange={(event) =>
-                      setTriageFlagId(event.currentTarget.value)
-                    }
-                    value={triageFlagId}
-                  />
-                </label>
-                <label className={adminLabelClass}>
-                  action
-                  <select
-                    className={adminInputClass}
-                    onChange={(event) =>
-                      setTriageAction(
-                        event.currentTarget.value as typeof triageAction,
-                      )
-                    }
-                    value={triageAction}
-                  >
-                    <option value="resolve">resolve</option>
-                    <option value="reopen">reopen</option>
-                    <option value="escalate_strike">escalate_strike</option>
-                    <option value="restrict_user">restrict_user</option>
-                  </select>
-                </label>
-                <label className={adminLabelClass}>
-                  target user id (strike / restrict)
-                  <input
-                    className={adminInputClass}
-                    onChange={(event) =>
-                      setTriageTargetUserId(event.currentTarget.value)
-                    }
-                    value={triageTargetUserId}
-                  />
-                </label>
-                <label className={adminLabelClass}>
-                  reason (optional)
-                  <input
-                    className={adminInputClass}
-                    onChange={(event) =>
-                      setTriageReason(event.currentTarget.value)
-                    }
-                    value={triageReason}
-                  />
-                </label>
-                <button
-                  className={adminButtonClass}
-                  onClick={() => {
-                    triageAgentRiskFlag().catch(() => {});
-                  }}
-                  type="button"
-                >
-                  Apply triage
-                </button>
-              </div>
-              <div className="space-y-2">
-                <p className="text-xs font-semibold text-slate-300">
-                  Assign flag
-                </p>
-                <label className={adminLabelClass}>
-                  flag id
-                  <input
-                    className={adminInputClass}
-                    onChange={(event) =>
-                      setAssignFlagId(event.currentTarget.value)
-                    }
-                    value={assignFlagId}
-                  />
-                </label>
-                <label className={adminLabelClass}>
-                  assignee user id
-                  <input
-                    className={adminInputClass}
-                    onChange={(event) =>
-                      setAssigneeUserId(event.currentTarget.value)
-                    }
-                    value={assigneeUserId}
-                  />
-                </label>
-                <label className={adminLabelClass}>
-                  reason (optional)
-                  <input
-                    className={adminInputClass}
-                    onChange={(event) =>
-                      setAssignReason(event.currentTarget.value)
-                    }
-                    value={assignReason}
-                  />
-                </label>
-                <button
-                  className={adminButtonClass}
-                  onClick={() => {
-                    assignAgentRiskFlag().catch(() => {});
-                  }}
-                  type="button"
-                >
-                  Record assignment
-                </button>
-              </div>
-            </div>
-          </Panel>
-        </section>
+        <ModerationTab
+          adminButtonClass={adminButtonClass}
+          adminButtonGhostClass={adminButtonGhostClass}
+          adminInputClass={adminInputClass}
+          adminLabelClass={adminLabelClass}
+          agentRiskDecisionQuery={moderation.agentRiskDecisionQuery}
+          agentRiskItems={moderation.agentRiskItems}
+          agentRiskLimit={moderation.agentRiskLimit}
+          agentRiskSnapshot={moderation.agentRiskSnapshot}
+          agentRiskStatusQuery={moderation.agentRiskStatusQuery}
+          assignAgentRiskFlag={moderation.assignAgentRiskFlag}
+          assignFlagId={moderation.assignFlagId}
+          assignReason={moderation.assignReason}
+          assigneeUserId={moderation.assigneeUserId}
+          auditLogLimit={moderation.auditLogLimit}
+          auditLogSnapshot={moderation.auditLogSnapshot}
+          blockedUserId={moderation.blockedUserId}
+          blockerUserId={moderation.blockerUserId}
+          createBlock={moderation.createBlock}
+          createReport={moderation.createReport}
+          loadAgentRiskFlags={moderation.loadAgentRiskFlags}
+          loadAuditLogs={moderation.loadAuditLogs}
+          loadModerationQueue={moderation.loadModerationQueue}
+          loadModerationSettings={moderation.loadModerationSettings}
+          loadModerationSummary={moderation.loadModerationSummary}
+          moderationQueueEntityTypeQuery={
+            moderation.moderationQueueEntityTypeQuery
+          }
+          moderationQueueItems={moderation.moderationQueueItems}
+          moderationQueueLimit={moderation.moderationQueueLimit}
+          moderationQueueReasonQuery={moderation.moderationQueueReasonQuery}
+          moderationQueueSnapshot={moderation.moderationQueueSnapshot}
+          moderationQueueStatusQuery={moderation.moderationQueueStatusQuery}
+          moderationSettingsSnapshot={moderation.moderationSettingsSnapshot}
+          moderationSnapshot={moderation.moderationSnapshot}
+          moderationSummarySnapshot={moderation.moderationSummarySnapshot}
+          primeTriageFromFlag={moderation.primeTriageFromFlag}
+          reportDetails={moderation.reportDetails}
+          reportReason={moderation.reportReason}
+          reporterUserId={moderation.reporterUserId}
+          setAgentRiskDecisionQuery={moderation.setAgentRiskDecisionQuery}
+          setAgentRiskLimit={moderation.setAgentRiskLimit}
+          setAgentRiskStatusQuery={moderation.setAgentRiskStatusQuery}
+          setAssignFlagId={moderation.setAssignFlagId}
+          setAssignReason={moderation.setAssignReason}
+          setAssigneeUserId={moderation.setAssigneeUserId}
+          setAuditLogLimit={moderation.setAuditLogLimit}
+          setBlockedUserId={moderation.setBlockedUserId}
+          setBlockerUserId={moderation.setBlockerUserId}
+          setModerationQueueEntityTypeQuery={
+            moderation.setModerationQueueEntityTypeQuery
+          }
+          setModerationQueueLimit={moderation.setModerationQueueLimit}
+          setModerationQueueReasonQuery={
+            moderation.setModerationQueueReasonQuery
+          }
+          setModerationQueueSnapshot={moderation.setModerationQueueSnapshot}
+          setModerationQueueStatusQuery={
+            moderation.setModerationQueueStatusQuery
+          }
+          setReportDetails={moderation.setReportDetails}
+          setReportReason={moderation.setReportReason}
+          setReporterUserId={moderation.setReporterUserId}
+          setTargetUserId={moderation.setTargetUserId}
+          setTriageAction={moderation.setTriageAction}
+          setTriageFlagId={moderation.setTriageFlagId}
+          setTriageReason={moderation.setTriageReason}
+          setTriageTargetUserId={moderation.setTriageTargetUserId}
+          targetUserId={moderation.targetUserId}
+          triageAction={moderation.triageAction}
+          triageAgentRiskFlag={moderation.triageAgentRiskFlag}
+          triageFlagId={moderation.triageFlagId}
+          triageReason={moderation.triageReason}
+          triageTargetUserId={moderation.triageTargetUserId}
+        />
       ) : null}
 
       {activeTab === "personalization" ? (
-        <section className="mt-4 space-y-4">
-          <Panel
-            subtitle="Inspect profile graph and explain evaluation gates in order."
-            title="Personalization Inspector"
-          >
-            <label className={adminLabelClass}>
-              user id
-              <input
-                className={adminInputClass}
-                onChange={(event) => setUserId(event.currentTarget.value)}
-                value={userId}
-              />
-            </label>
-
-            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {Object.entries(policyFlags).map(([flag, enabled]) => (
-                <label
-                  className="flex items-center gap-2 rounded-xl border border-slate-700 bg-night px-3 py-2 text-xs text-slate-200"
-                  key={flag}
-                >
-                  <input
-                    checked={enabled}
-                    onChange={(event) =>
-                      setPolicyFlags((current) => ({
-                        ...current,
-                        [flag]: event.currentTarget.checked,
-                      }))
-                    }
-                    type="checkbox"
-                  />
-                  {flag}
-                </label>
-              ))}
-            </div>
-
-            <label className={`${adminLabelClass} mt-3`}>
-              policy context (json object)
-              <textarea
-                className={`${adminInputClass} min-h-24`}
-                onChange={(event) =>
-                  setPolicyContextInput(event.currentTarget.value)
-                }
-                value={policyContextInput}
-              />
-            </label>
-
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                className={adminButtonClass}
-                onClick={inspectLifeGraph}
-                type="button"
-              >
-                Inspect life graph
-              </button>
-              <button
-                className={adminButtonGhostClass}
-                onClick={explainPolicy}
-                type="button"
-              >
-                Explain policy
-              </button>
-              <button
-                className={adminButtonGhostClass}
-                onClick={resetLearnedMemory}
-                type="button"
-              >
-                Reset learned memory
-              </button>
-            </div>
-          </Panel>
-
-          <div className="grid gap-4 lg:grid-cols-3">
-            <Panel title="Life Graph Snapshot">
-              <JsonView value={lifeGraphSnapshot} />
-            </Panel>
-            <Panel title="Policy Explanation">
-              <JsonView value={policyExplainSnapshot} />
-            </Panel>
-            <Panel title="Memory Reset Result">
-              <JsonView value={memoryResetSnapshot} />
-            </Panel>
-          </div>
-        </section>
+        <PersonalizationTab
+          adminButtonClass={adminButtonClass}
+          adminButtonGhostClass={adminButtonGhostClass}
+          adminInputClass={adminInputClass}
+          adminLabelClass={adminLabelClass}
+          explainPolicy={explainPolicy}
+          inspectLifeGraph={inspectLifeGraph}
+          lifeGraphSnapshot={lifeGraphSnapshot}
+          memoryResetSnapshot={memoryResetSnapshot}
+          policyContextInput={policyContextInput}
+          policyExplainSnapshot={policyExplainSnapshot}
+          policyFlags={policyFlags}
+          resetLearnedMemory={resetLearnedMemory}
+          setPolicyContextInput={setPolicyContextInput}
+          setPolicyFlags={setPolicyFlags}
+          setUserId={setUserId}
+          userId={userId}
+        />
       ) : null}
 
       {activeTab === "agent" ? (
-        <section className="mt-4 space-y-4">
-          <Panel
-            subtitle="Investigate agent-thread history, append test events, and observe SSE in real time."
-            title="Agent Traces"
-          >
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className={adminLabelClass}>
-                thread id
-                <input
-                  className={adminInputClass}
-                  onChange={(event) => setThreadId(event.currentTarget.value)}
-                  value={threadId}
-                />
-              </label>
-              <label className={adminLabelClass}>
-                acting user id
-                <input
-                  className={adminInputClass}
-                  onChange={(event) =>
-                    setActingUserId(event.currentTarget.value)
-                  }
-                  value={actingUserId}
-                />
-              </label>
-            </div>
-
-            <label className={`${adminLabelClass} mt-3`}>
-              inject message
-              <textarea
-                className={`${adminInputClass} min-h-24`}
-                onChange={(event) => setAgentMessage(event.currentTarget.value)}
-                value={agentMessage}
-              />
-            </label>
-
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                className={adminButtonGhostClass}
-                onClick={() => {
-                  void loadPrimaryAgentThreadFromSession();
-                }}
-                type="button"
-              >
-                Load my thread id
-              </button>
-              <button
-                className={adminButtonClass}
-                onClick={inspectAgentThread}
-                type="button"
-              >
-                Inspect trace
-              </button>
-              <button
-                className={adminButtonGhostClass}
-                onClick={postAgentMessage}
-                type="button"
-              >
-                Insert thread message
-              </button>
-              <button
-                className={adminButtonClass}
-                onClick={runAgenticRespond}
-                type="button"
-              >
-                Run agentic respond
-              </button>
-              <button
-                className={adminButtonGhostClass}
-                onClick={startAgentStream}
-                type="button"
-              >
-                Start live stream
-              </button>
-              <button
-                className={adminButtonGhostClass}
-                onClick={stopAgentStream}
-                type="button"
-              >
-                Stop stream
-              </button>
-              <button
-                className={adminButtonGhostClass}
-                onClick={() => setStreamEvents([])}
-                type="button"
-              >
-                Clear stream log
-              </button>
-              <span className="rounded-full border border-slate-700 px-3 py-2 text-xs text-slate-200">
-                stream: {streamStatus}
-              </span>
-            </div>
-          </Panel>
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Panel title="Thread Messages">
-              <JsonView value={agentTraceSnapshot} />
-            </Panel>
-            <Panel title="Live Stream Events">
-              {streamEvents.length === 0 ? (
-                <p className="text-sm text-ash">
-                  No stream events captured. Start stream to begin tracing.
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {streamEvents.map((event) => (
-                    <article
-                      className="rounded-xl border border-slate-700 bg-night px-3 py-2"
-                      key={event.id}
-                    >
-                      <p className="text-xs text-ash">
-                        {event.at} · {event.kind}
-                      </p>
-                      <pre className="mt-1 max-h-28 overflow-auto text-xs text-slate-200">
-                        {JSON.stringify(event.payload, null, 2)}
-                      </pre>
-                    </article>
-                  ))}
-                </div>
-              )}
-            </Panel>
-          </div>
-        </section>
+        <AgentTab
+          actingUserId={actingUserId}
+          adminButtonClass={adminButtonClass}
+          adminButtonGhostClass={adminButtonGhostClass}
+          adminInputClass={adminInputClass}
+          adminLabelClass={adminLabelClass}
+          agentMessage={agentMessage}
+          agentTraceSnapshot={agentTraceSnapshot}
+          inspectAgentThread={inspectAgentThread}
+          loadPrimaryAgentThreadFromSession={loadPrimaryAgentThreadFromSession}
+          postAgentMessage={postAgentMessage}
+          runAgenticRespond={runAgenticRespond}
+          setActingUserId={setActingUserId}
+          setAgentMessage={setAgentMessage}
+          setStreamEvents={setStreamEvents}
+          setThreadId={setThreadId}
+          startAgentStream={startAgentStream}
+          stopAgentStream={stopAgentStream}
+          streamEvents={streamEvents}
+          streamStatus={streamStatus}
+          threadId={threadId}
+        />
       ) : null}
     </AdminShell>
   );

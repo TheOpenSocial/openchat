@@ -61,12 +61,11 @@ export function AdminShell({
   const activeNav = navItems.find((item) => item.id === activeId);
 
   return (
-    <div className="flex min-h-screen w-full">
-      {/* Mobile drawer backdrop */}
+    <div className="flex min-h-screen w-full bg-background">
       {sidebarOpen ? (
         <button
           aria-label="Close navigation"
-          className="fixed inset-0 z-40 bg-black/60 md:hidden"
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
           onClick={() => setSidebarOpen(false)}
           type="button"
         />
@@ -74,25 +73,25 @@ export function AdminShell({
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex w-60 flex-col border-r border-white/10 bg-black/55 shadow-xl backdrop-blur-xl transition-transform duration-200 md:static md:z-0 md:translate-x-0 md:shadow-none",
+          "fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-border bg-card/96 backdrop-blur transition-transform duration-200 md:static md:z-0 md:translate-x-0",
           sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
         )}
       >
         <div className="flex items-center gap-3 border-b border-border px-4 py-4">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-black/50 p-1.5 shadow-inner shadow-black/20">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-background p-1.5">
             <img
               alt=""
-              className="h-8 w-8"
-              height={32}
+              className="h-7 w-7"
+              height={28}
               src="/brand/logo.svg"
-              width={32}
+              width={28}
             />
           </div>
           <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-              OpenSocial
+            <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
+              OPENSOCIAL
             </p>
-            <p className="truncate font-[var(--font-heading)] text-base font-semibold tracking-tight text-foreground">
+            <p className="truncate font-[var(--font-heading)] text-sm font-semibold tracking-tight text-foreground">
               Admin
             </p>
           </div>
@@ -100,7 +99,7 @@ export function AdminShell({
 
         <nav
           aria-label="Workbench sections"
-          className="flex flex-1 flex-col gap-0.5 p-3"
+          className="flex flex-1 flex-col gap-1 p-2.5"
         >
           {navItems.map((item) => {
             const NavIcon = adminNavIconFor(item.id);
@@ -108,8 +107,8 @@ export function AdminShell({
             return (
               <Button
                 className={cn(
-                  "justify-start gap-3 font-normal",
-                  active && "bg-primary/10 text-foreground hover:bg-primary/15",
+                  "justify-start gap-3 rounded-xl font-normal",
+                  active && "bg-muted font-medium text-foreground shadow-sm",
                 )}
                 key={item.id}
                 onClick={() => {
@@ -122,7 +121,7 @@ export function AdminShell({
                   aria-hidden
                   className={cn(
                     "h-4 w-4 shrink-0",
-                    active ? "text-primary" : "text-muted-foreground",
+                    active ? "text-foreground" : "text-muted-foreground",
                   )}
                   strokeWidth={2}
                 />
@@ -140,24 +139,24 @@ export function AdminShell({
       </aside>
 
       <div className="flex min-h-screen min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 border-b border-primary/20 bg-background/90 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/75 md:px-6">
+        <header className="sticky top-0 z-30 border-b border-border bg-background/92 px-4 py-3 backdrop-blur md:px-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="flex min-w-0 flex-1 items-start gap-3">
               <Button
-                className="shrink-0 border-white/10 bg-black/30 md:hidden"
+                className="shrink-0 md:hidden"
                 onClick={() => setSidebarOpen((open) => !open)}
                 size="icon"
                 type="button"
                 variant="outline"
               >
-                <PanelLeft className="h-4 w-4 text-primary" />
+                <PanelLeft className="h-4 w-4" />
                 <span className="sr-only">Toggle navigation</span>
               </Button>
               <div className="min-w-0">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
                   {subtitle}
                 </p>
-                <h1 className="font-[var(--font-heading)] text-2xl font-semibold tracking-tight text-ink md:text-3xl">
+                <h1 className="font-[var(--font-heading)] text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
                   {title}
                 </h1>
                 {activeNav ? (
@@ -207,13 +206,13 @@ export function AdminShell({
                 orientation="vertical"
               />
               <Button
-                className="gap-2 border-white/10 bg-black/25 hover:bg-black/40"
+                className="gap-2"
                 onClick={onSignOut}
                 size="sm"
                 type="button"
                 variant="outline"
               >
-                <LogOut className="h-4 w-4 text-primary/90" />
+                <LogOut className="h-4 w-4" />
                 {signOutLabel}
               </Button>
             </div>

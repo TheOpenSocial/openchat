@@ -19,6 +19,7 @@ export interface GlobalRules {
   modality: "online" | "offline" | "either";
   languagePreferences: string[];
   countryPreferences: string[];
+  timezone: string;
   requireVerifiedUsers: boolean;
   notificationMode: "immediate" | "digest" | "quiet";
   agentAutonomy: "manual" | "suggest_only" | "auto_non_risky";
@@ -80,6 +81,7 @@ const GLOBAL_RULE_DEFAULTS: GlobalRules = {
   modality: "either",
   languagePreferences: [],
   countryPreferences: [],
+  timezone: "UTC",
   requireVerifiedUsers: false,
   notificationMode: "immediate",
   agentAutonomy: "suggest_only",
@@ -93,6 +95,7 @@ const GLOBAL_RULE_PREF_KEYS: Record<keyof GlobalRules, string> = {
   modality: "global_rules_modality",
   languagePreferences: "global_rules_language_preferences",
   countryPreferences: "global_rules_country_preferences",
+  timezone: "global_rules_timezone",
   requireVerifiedUsers: "global_rules_require_verified_users",
   notificationMode: "global_rules_notification_mode",
   agentAutonomy: "global_rules_agent_autonomy",
@@ -259,6 +262,9 @@ export class PersonalizationService {
         this.readStringArrayValue(
           byKey.get(GLOBAL_RULE_PREF_KEYS.countryPreferences),
         ) ?? GLOBAL_RULE_DEFAULTS.countryPreferences,
+      timezone:
+        this.readStringValue(byKey.get(GLOBAL_RULE_PREF_KEYS.timezone)) ??
+        GLOBAL_RULE_DEFAULTS.timezone,
       requireVerifiedUsers:
         this.readBooleanValue(
           byKey.get(GLOBAL_RULE_PREF_KEYS.requireVerifiedUsers),
@@ -1430,6 +1436,10 @@ export class PersonalizationService {
 
   private readBooleanValue(value: unknown): boolean | null {
     return typeof value === "boolean" ? value : null;
+  }
+
+  private readStringValue(value: unknown): string | null {
+    return typeof value === "string" && value.trim().length > 0 ? value : null;
   }
 
   private readStringArrayValue(value: unknown): string[] | null {

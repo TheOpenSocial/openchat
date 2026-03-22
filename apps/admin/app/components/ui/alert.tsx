@@ -4,14 +4,14 @@ import * as React from "react";
 import { cn } from "@/app/lib/cn";
 
 const alertVariants = cva(
-  "relative w-full rounded-xl border px-3.5 py-2.5 text-sm leading-snug shadow-sm shadow-black/20 [&_svg]:absolute [&_svg]:left-4 [&_svg]:top-4 [&_svg]:text-foreground [&_svg~*]:pl-7",
+  "relative w-full rounded-lg border px-3.5 py-2.5 text-sm leading-snug [&_svg]:absolute [&_svg]:left-4 [&_svg]:top-4 [&_svg]:text-foreground [&_svg~*]:pl-7",
   {
     variants: {
       variant: {
-        default: "border-sky-500/45 bg-sky-500/12 text-sky-100",
-        success: "border-emerald-500/45 bg-emerald-500/12 text-emerald-100",
+        default: "border-border bg-muted text-foreground",
+        success: "border-border bg-muted text-foreground",
         destructive:
-          "border-rose-500/45 bg-rose-500/12 text-rose-100 [&_svg]:text-rose-100",
+          "border-destructive/50 bg-destructive/15 text-foreground [&_svg]:text-foreground",
       },
     },
     defaultVariants: {

@@ -48,7 +48,7 @@ function CallbackContent() {
           sessionId: result.sessionId,
         };
         saveStoredSession(session);
-        router.replace("/");
+        router.replace("/home");
       } catch (err) {
         if (!cancelled) {
           setMessage(

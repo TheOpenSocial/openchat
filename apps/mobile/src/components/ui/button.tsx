@@ -9,7 +9,7 @@ import { cn } from "../../lib/cn";
 const buttonVariants = cva("items-center justify-center rounded-2xl px-4", {
   variants: {
     variant: {
-      default: "border border-accent/90 bg-accent",
+      default: "border border-white/90 bg-white",
       secondary: "border border-hairline bg-surface",
       outline: "border border-hairline bg-surfaceMuted/80",
     },
@@ -30,7 +30,7 @@ const buttonVariants = cva("items-center justify-center rounded-2xl px-4", {
 const buttonTextVariants = cva("font-semibold", {
   variants: {
     variant: {
-      default: "text-white",
+      default: "text-[#0d0d0d]",
       secondary: "text-ink",
       outline: "text-ink",
     },
@@ -73,7 +73,7 @@ export function Button({
       ? {
           color:
             variant === "default"
-              ? "rgba(255,255,255,0.22)"
+              ? "rgba(13,13,13,0.12)"
               : "rgba(255,255,255,0.08)",
           borderless: false,
         }

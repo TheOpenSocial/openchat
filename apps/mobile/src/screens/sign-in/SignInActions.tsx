@@ -9,10 +9,12 @@ import {
   Text,
 } from "react-native";
 
+import { type AppLocale, t } from "../../i18n/strings";
 import { signInTheme } from "./sign-in-theme";
 
 type SignInActionsProps = {
   designPreviewMode: boolean;
+  locale: AppLocale;
   loading: boolean;
   oauthLoading: boolean;
   allowE2EBypass: boolean;
@@ -24,6 +26,7 @@ type SignInActionsProps = {
 export function SignInActions({
   allowE2EBypass,
   designPreviewMode,
+  locale,
   loading,
   oauthLoading,
   onE2EBypassPress,
@@ -66,7 +69,7 @@ export function SignInActions({
       {designPreviewMode ? (
         <PrimaryChromeButton
           disabled={loading}
-          label="Continue"
+          label={t("authContinuePreview", locale)}
           loading={loading}
           onPress={onPreviewPress}
           testID="auth-design-preview-button"
@@ -74,7 +77,7 @@ export function SignInActions({
       ) : (
         <PrimaryChromeButton
           disabled={busy}
-          label="Continue with Google"
+          label={t("authContinueWithGoogle", locale)}
           loading={busy}
           onPress={onGooglePress}
           testID="auth-google-button"
@@ -83,8 +86,8 @@ export function SignInActions({
 
       <Text style={styles.footnote}>
         {designPreviewMode
-          ? "Preview data only. Nothing syncs."
-          : "Opens in your browser, then returns here."}
+          ? t("authPreviewFootnote", locale)
+          : t("authBrowserFootnote", locale)}
       </Text>
 
       {!designPreviewMode && allowE2EBypass ? (
@@ -98,7 +101,7 @@ export function SignInActions({
           ]}
           testID="auth-e2e-bypass-button"
         >
-          <Text style={styles.ghostLabel}>E2E bypass</Text>
+          <Text style={styles.ghostLabel}>{t("authE2eBypass", locale)}</Text>
         </Pressable>
       ) : null}
     </Animated.View>

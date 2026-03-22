@@ -12,15 +12,20 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AnimatedScreen } from "../components/AnimatedScreen";
 import { AppToastHost } from "../components/AppToastHost";
 import { LoadingState } from "../components/LoadingState";
+import { type AppLocale, t } from "../i18n/strings";
 import {
   DESIGN_MOCK_AUTH_CODE,
   DESIGN_MOCK_PROFILE,
   DESIGN_MOCK_SESSION,
 } from "../mocks/design-fixtures";
+import {
+  draftStateToUserProfileDraft,
+  type OnboardingDraftState,
+} from "../onboarding/onboarding-model";
+import { OnboardingFlow } from "../onboarding/OnboardingFlow";
 import { MobileSession, UserProfileDraft } from "../types";
 import { AuthScreen } from "./AuthScreen";
 import type { HomeScreenProps } from "./HomeScreen";
-import { OnboardingScreen } from "./OnboardingScreen";
 import { WelcomeScreen } from "./WelcomeScreen";
 
 const HomeScreen: LazyExoticComponent<FC<HomeScreenProps>> = lazy(() =>
@@ -31,15 +36,16 @@ type DesignMockStage = "welcome" | "auth" | "onboarding" | "home";
 
 export function DesignMockApp() {
   const [stage, setStage] = useState<DesignMockStage>("welcome");
+  const [locale] = useState<AppLocale>("en");
   const [authError, setAuthError] = useState<string | null>(null);
   const [onboardingError, setOnboardingError] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
   const [onboardingLoading, setOnboardingLoading] = useState(false);
   const [session, setSession] = useState<MobileSession | null>(null);
-  const [displayName, setDisplayName] = useState(
-    DESIGN_MOCK_PROFILE.displayName,
-  );
   const [profile, setProfile] = useState<UserProfileDraft>(DESIGN_MOCK_PROFILE);
+  const [homeAgentSeedMessage, setHomeAgentSeedMessage] = useState<
+    string | null
+  >(null);
 
   const stageKey = useMemo(() => stage, [stage]);
 
@@ -49,28 +55,30 @@ export function DesignMockApp() {
     try {
       if (code === DESIGN_MOCK_AUTH_CODE) {
         setSession({ ...DESIGN_MOCK_SESSION });
-        setDisplayName(DESIGN_MOCK_SESSION.displayName);
         setProfile({ ...DESIGN_MOCK_PROFILE });
         setStage("onboarding");
         return;
       }
-      setAuthError(
-        "In design preview, use “Continue with preview profile” on the sign-in screen.",
-      );
+      setAuthError(t("designPreviewUsePreviewProfile", locale));
     } finally {
       setAuthLoading(false);
     }
   };
 
-  const handleOnboardingComplete = async (draft: UserProfileDraft) => {
+  const handleOnboardingComplete = async (
+    state: OnboardingDraftState,
+    meta: { firstIntentText: string | null },
+  ) => {
     if (!session) {
-      setOnboardingError("Missing preview session.");
+      setOnboardingError(t("designPreviewMissingSession", locale));
       return;
     }
     setOnboardingLoading(true);
     setOnboardingError(null);
     try {
+      const draft = draftStateToUserProfileDraft(state);
       setProfile(draft);
+      setHomeAgentSeedMessage(meta.firstIntentText?.trim() || null);
       setStage("home");
     } finally {
       setOnboardingLoading(false);
@@ -91,27 +99,38 @@ export function DesignMockApp() {
         <AuthScreen
           designPreviewMode
           errorMessage={authError}
+          locale={locale}
           loading={authLoading}
           onAuthenticated={handleAuthenticate}
         />
       ) : (
         <AnimatedScreen screenKey={stageKey}>
           {stage === "welcome" ? (
-            <WelcomeScreen onContinue={() => setStage("auth")} />
+            <WelcomeScreen
+              locale={locale}
+              onContinue={() => setStage("auth")}
+            />
           ) : null}
           {stage === "onboarding" && session ? (
-            <OnboardingScreen
-              defaultName={displayName}
+            <OnboardingFlow
               errorMessage={onboardingError}
+              locale={locale}
               loading={onboardingLoading}
-              onComplete={handleOnboardingComplete}
+              onSubmit={handleOnboardingComplete}
+              session={session}
             />
           ) : null}
           {stage === "home" && session ? (
-            <Suspense fallback={<LoadingState label="Loading your space…" />}>
+            <Suspense
+              fallback={<LoadingState label={t("loadingYourSpace", locale)} />}
+            >
               <HomeScreen
                 designMock
+                initialAgentMessage={homeAgentSeedMessage}
                 initialProfile={profile}
+                onInitialAgentMessageConsumed={() =>
+                  setHomeAgentSeedMessage(null)
+                }
                 onProfileUpdated={setProfile}
                 onResetSession={handleResetSession}
                 session={session}

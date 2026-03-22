@@ -12,6 +12,7 @@ export { HomeTabBar } from "./HomeTabBar";
 export { InlineNotice } from "./InlineNotice";
 export { LoadingState } from "./LoadingState";
 export { MessageComposer } from "./MessageComposer";
+export { PremiumSplashOverlay } from "./PremiumSplashOverlay";
 export { PrimaryButton } from "./PrimaryButton";
 export { VoiceMicButton } from "./VoiceMicButton";
 export { WelcomeBackdrop } from "./WelcomeBackdrop";

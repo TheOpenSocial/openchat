@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Space_Grotesk, Source_Sans_3 } from "next/font/google";
 import type { ReactNode } from "react";
 
+import { AppSessionProvider } from "@/src/features/app-shell/app-session";
+
 import "./globals.css";
 
 const headingFont = Space_Grotesk({
@@ -30,7 +32,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html className={`${headingFont.variable} ${bodyFont.variable}`} lang="en">
       <body className="font-[var(--font-body)] text-ink antialiased">
-        {children}
+        <AppSessionProvider>{children}</AppSessionProvider>
       </body>
     </html>
   );

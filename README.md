@@ -7,7 +7,7 @@ This folder is the agent handoff pack for building the product from zero to prod
 2. `01_product_prd.md`
 3. `02_core_concepts.md`
 4. `03_user_flows.md`
-5. `04_design_system.md`
+5. `DESIGN.md`
 6. `05_system_architecture.md`
 7. `06_ai_agent_architecture.md`
 8. `07_matching_and_routing.md`
@@ -27,6 +27,10 @@ This folder is the agent handoff pack for building the product from zero to prod
 22. `21_implementation_plan.md`
 23. `22_repo_structure_and_coding_standards.md`
 24. `99_references.md`
+
+## Frontend design source of truth
+- `DESIGN.md` is the canonical implementation-facing design reference for web and admin
+- `04_design.md` and `04_design_system.md` remain as legacy spec context
 
 ## Product one-liner
 Users express what they want to do or talk about in natural language, and the system routes them to relevant people in real time through explicit, opt-in human connection.

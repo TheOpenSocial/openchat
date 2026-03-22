@@ -38,7 +38,7 @@ export function PrimaryButton({
         variant={variantMap[variant]}
       >
         <ActivityIndicator
-          color={variant === "primary" ? "#ffffff" : appTheme.colors.ink}
+          color={variant === "primary" ? "#0d0d0d" : appTheme.colors.ink}
         />
       </Button>
     );

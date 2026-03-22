@@ -3,13 +3,18 @@ import { Animated, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { PrimaryButton } from "../components/PrimaryButton";
+import { type AppLocale, t } from "../i18n/strings";
 import { appTheme } from "../theme";
 
 interface WelcomeScreenProps {
   onContinue: () => void;
+  locale?: AppLocale;
 }
 
-export function WelcomeScreen({ onContinue }: WelcomeScreenProps) {
+export function WelcomeScreen({
+  locale = "en",
+  onContinue,
+}: WelcomeScreenProps) {
   const pulse = useRef(new Animated.Value(0.45)).current;
 
   useEffect(() => {
@@ -39,7 +44,7 @@ export function WelcomeScreen({ onContinue }: WelcomeScreenProps) {
       <View className="mb-10 flex-row items-center justify-between">
         <View className="rounded-full border border-hairline bg-surfaceMuted/80 px-3 py-1">
           <Text className="text-[11px] font-semibold uppercase tracking-widest text-muted">
-            Design preview
+            {t("designPreviewBadge", locale)}
           </Text>
         </View>
         <Animated.View
@@ -56,16 +61,15 @@ export function WelcomeScreen({ onContinue }: WelcomeScreenProps) {
           OpenSocial
         </Text>
         <Text className="mb-8 max-w-[340px] text-[16px] leading-7 text-muted">
-          Explore the full mobile shell—home, discover, inbox, chats, and
-          profile—with realistic mock data. No API or account required.
+          {t("designPreviewWelcomeBody", locale)}
         </Text>
         <PrimaryButton
-          label="Explore the app"
+          label={t("designPreviewExploreApp", locale)}
           onPress={onContinue}
           testID="design-welcome-continue"
         />
         <Text className="mt-4 text-center text-[12px] text-muted/90">
-          Preview mode · data stays on this device only
+          {t("designPreviewFootnote", locale)}
         </Text>
       </View>
     </SafeAreaView>

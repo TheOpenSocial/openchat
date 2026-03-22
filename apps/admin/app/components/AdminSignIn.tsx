@@ -1,13 +1,15 @@
 "use client";
 
-import { ShieldCheck } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/app/components/ui/button";
-
-/** Same still as mobile `WelcomeBackdrop` fallback (Unsplash, app docs). */
-const SIGN_IN_BACKDROP_STILL =
-  "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&w=1800&q=85";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/app/components/ui/card";
 
 export function AdminSignIn({
   onGoogleSignIn,
@@ -19,55 +21,36 @@ export function AdminSignIn({
   const [busy, setBusy] = useState(false);
 
   return (
-    <main className="relative isolate min-h-screen overflow-hidden bg-black text-white">
-      {/* Backdrop layers — aligned with mobile auth: still + bottom-heavy scrim */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 bg-cover bg-center opacity-[0.22] saturate-[0.85]"
-        style={{ backgroundImage: `url('${SIGN_IN_BACKDROP_STILL}')` }}
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/35 via-black/55 to-black/95"
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_90%_60%_at_50%_-10%,rgba(245,158,11,0.12),transparent_55%)]"
-      />
-
-      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-md flex-col justify-end px-6 pb-14 pt-16 sm:justify-center sm:px-8 sm:pb-16">
-        <div className="text-center">
-          <div className="mx-auto flex w-fit rounded-3xl border border-white/25 bg-black p-3 shadow-lg shadow-black/40">
-            <img
-              alt="OpenSocial"
-              className="h-14 w-14"
-              height={56}
-              src="/brand/logo.svg"
-              width={56}
-            />
-          </div>
-          <p className="mt-4 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/55">
-            OpenSocial
-          </p>
-          <h1 className="mt-6 font-[var(--font-heading)] text-[clamp(1.65rem,6vw,1.85rem)] font-semibold leading-[1.12] tracking-tight text-white">
-            Operator console
-          </h1>
-          <p className="mx-auto mt-2.5 flex max-w-sm items-center justify-center gap-2 text-[15px] leading-relaxed text-white/75">
-            <ShieldCheck
-              aria-hidden
-              className="h-4 w-4 shrink-0 text-primary/90"
-              strokeWidth={2}
-            />
-            <span>
-              Sign in with Google. Only approved accounts can continue.
-            </span>
-          </p>
+    <main className="flex min-h-screen flex-col items-center justify-center bg-background px-4 py-12">
+      <div className="mb-8 text-center">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-border bg-card/90 shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
+          <img
+            alt=""
+            className="h-8 w-8"
+            height={32}
+            src="/brand/logo.svg"
+            width={32}
+          />
         </div>
+        <p className="mt-6 text-xs font-medium uppercase tracking-widest text-muted-foreground">
+          OPENSOCIAL
+        </p>
+        <h1 className="mt-2 font-[var(--font-heading)] text-2xl font-semibold tracking-tight text-foreground">
+          Operator console
+        </h1>
+      </div>
 
-        <div className="mt-10 space-y-4">
+      <Card className="w-full max-w-sm border-border bg-card/95 shadow-[0_20px_48px_rgba(0,0,0,0.24)]">
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-base">Sign in</CardTitle>
+          <CardDescription>
+            Continue with Google. Only approved accounts can access the console.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
           {errorText ? (
             <p
-              className="rounded-2xl border border-rose-500/35 bg-rose-950/40 px-4 py-3 text-center text-sm text-rose-100"
+              className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-foreground"
               role="alert"
             >
               {errorText}
@@ -75,7 +58,7 @@ export function AdminSignIn({
           ) : null}
 
           <Button
-            className="h-12 w-full gap-3 rounded-full border-0 bg-white text-[15px] font-medium text-[#0d0d0d] shadow-md transition-[transform,box-shadow] hover:bg-white hover:shadow-lg active:scale-[0.99]"
+            className="w-full gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
             disabled={busy}
             onClick={async () => {
               setBusy(true);
@@ -90,11 +73,8 @@ export function AdminSignIn({
             <GoogleMark />
             Continue with Google
           </Button>
-          <p className="text-center text-[11px] leading-relaxed text-white/55">
-            Google opens in this window, then you return to the console.
-          </p>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </main>
   );
 }

@@ -1,7 +1,7 @@
 export function AppLoading({ label = "Loading…" }: { label?: string }) {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-5 bg-black px-4 text-white">
-      <div className="rounded-2xl border border-white/20 bg-black/60 p-2 shadow-lg shadow-black/40">
+    <main className="flex min-h-screen flex-col items-center justify-center gap-5 bg-background px-4 text-foreground">
+      <div className="rounded-lg border border-border bg-card p-2">
         <img
           alt=""
           className="h-10 w-10"
@@ -12,10 +12,10 @@ export function AppLoading({ label = "Loading…" }: { label?: string }) {
       </div>
       <div
         aria-label={label}
-        className="h-9 w-9 motion-safe:animate-spin rounded-full border-2 border-white/20 border-t-primary"
+        className="h-8 w-8 motion-safe:animate-spin rounded-full border-2 border-muted border-t-foreground"
         role="progressbar"
       />
-      <p className="text-sm text-white/55">{label}</p>
+      <p className="text-sm text-muted-foreground">{label}</p>
     </main>
   );
 }

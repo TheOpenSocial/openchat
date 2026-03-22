@@ -5,6 +5,47 @@ import { PrismaService } from "../database/prisma.service.js";
 export class SearchService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async topicSuggestions(rawQuery: string, limit = 12) {
+    const query = rawQuery.trim().toLowerCase();
+    const cappedLimit = Math.min(Math.max(limit, 1), 24);
+
+    const [topics, interests] = await Promise.all([
+      this.prisma.userTopic.findMany({
+        where: query
+          ? { normalizedLabel: { contains: query, mode: "insensitive" } }
+          : undefined,
+        take: query ? 160 : 320,
+        select: { normalizedLabel: true },
+      }),
+      this.prisma.userInterest.findMany({
+        where: query
+          ? { normalizedLabel: { contains: query, mode: "insensitive" } }
+          : undefined,
+        take: query ? 160 : 320,
+        select: { normalizedLabel: true },
+      }),
+    ]);
+
+    return Array.from(
+      this.countLabels([
+        ...topics.map((row) => row.normalizedLabel),
+        ...interests.map((row) => row.normalizedLabel),
+      ]).entries(),
+    )
+      .map(([label, count]) => ({
+        label,
+        count,
+        score: this.clamp(0.35 + count / 10),
+      }))
+      .sort((a, b) => {
+        if (b.count !== a.count) {
+          return b.count - a.count;
+        }
+        return a.label.localeCompare(b.label);
+      })
+      .slice(0, cappedLimit);
+  }
+
   async search(userId: string, rawQuery: string, limit = 6) {
     const query = rawQuery.trim();
     const normalized = query.toLowerCase();
