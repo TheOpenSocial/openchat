@@ -968,6 +968,34 @@ export class AgentConversationService {
             output: documents,
           };
         }
+        case "availability.lookup": {
+          if (!this.agentOutcomeToolsService) {
+            return {
+              role: call.role,
+              tool: call.tool,
+              status: "failed",
+              reason: "agent_outcome_tools_unavailable",
+            };
+          }
+          const candidateUserIds = Array.isArray(call.input.candidateUserIds)
+            ? call.input.candidateUserIds.filter(
+                (value): value is string =>
+                  typeof value === "string" && value.trim().length > 0,
+              )
+            : [];
+          const result = await this.agentOutcomeToolsService.lookupAvailability(
+            {
+              userId,
+              candidateUserIds,
+            },
+          );
+          return {
+            role: call.role,
+            tool: call.tool,
+            status: "executed",
+            output: result,
+          };
+        }
         case "candidate.search": {
           if (!this.agentOutcomeToolsService) {
             return {
@@ -994,6 +1022,16 @@ export class AgentConversationService {
             traceId,
             text,
             take: this.readIntInRange(call.input.take, 1, 10, 5),
+            widenOnScarcity:
+              typeof call.input.widenOnScarcity === "boolean"
+                ? call.input.widenOnScarcity
+                : true,
+            scarcityThreshold: this.readIntInRange(
+              call.input.scarcityThreshold,
+              1,
+              10,
+              2,
+            ),
             parsedIntent: this.coerceParsedIntent(call.input.parsedIntent),
           });
           return {
