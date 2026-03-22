@@ -66,6 +66,9 @@ jobs:
           REGISTRY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REDIRECT_URI: https://api.opensocial.so/api/auth/google/callback
         run: |
           set -euo pipefail
           chmod +x scripts/deploy-staging.sh

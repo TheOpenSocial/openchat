@@ -73,6 +73,9 @@ REMOTE_SCRIPT
 
 sync_remote_env_var "OPENAI_API_KEY" "${OPENAI_API_KEY:-}"
 sync_remote_env_var "DATABASE_URL" "${DATABASE_URL:-}"
+sync_remote_env_var "GOOGLE_CLIENT_ID" "${GOOGLE_CLIENT_ID:-}"
+sync_remote_env_var "GOOGLE_CLIENT_SECRET" "${GOOGLE_CLIENT_SECRET:-}"
+sync_remote_env_var "GOOGLE_REDIRECT_URI" "${GOOGLE_REDIRECT_URI:-}"
 sync_remote_env_var "API_IMAGE" "${API_IMAGE:-}"
 sync_remote_env_var "ADMIN_IMAGE" "${ADMIN_IMAGE:-}"
 sync_remote_env_var "WEB_IMAGE" "${WEB_IMAGE:-}"
