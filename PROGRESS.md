@@ -1459,3 +1459,34 @@ This section maps the conceptual product surface in [USE_CASES.md](/Users/crucib
 - [x] `M-04` Add moderator notes / assignee state as first-class persisted fields instead of audit-log-only metadata.
 - [x] `M-05` Add moderation analytics slices for false positives, repeat offenders, and SLA/triage latency.
 - [ ] `M-06` Add staging/prod moderation drill covering report -> flag -> triage -> enforcement -> audit verification.
+
+### 35.10 Agent Outcome Execution Lane
+
+- [x] `AO-01` Add bounded outcome tools for candidate search, intent persistence, memory writes, conversation start, and follow-up scheduling.
+- [x] `AO-02` Ground planner/runtime responses in structured onboarding + profile + preference + memory context instead of UI branching.
+- [x] `AO-03` Add bounded group execution tools for `circle.search`, `group.plan`, and `intro.send_request`.
+- [x] `AO-04` Add request lifecycle tools for `intro.accept`, `intro.reject`, and `intro.retract`.
+- [x] `AO-05` Add circle lifecycle tools for `circle.create` and `circle.join`.
+- [x] `AO-06` Add richer execution-memory writes for accepted/rejected/joined outcomes so the agent learns from real social outcomes, not just messages.
+- [ ] `AO-07` Add planner guidance + tests for choosing between 1:1 intros, group plans, circles, and follow-up scheduling based on user state and result scarcity.
+- [x] `AO-08` Add admin/debug visibility for tool-issued social actions (`intent.persist`, `intro.*`, `circle.*`, `group.plan`, `followup.schedule`) in workflow/audit surfaces.
+
+**Acceptance criteria**
+- The agent can move from intent understanding to concrete social execution without leaving the bounded tool model.
+- 1:1, group, circle, and follow-up outcomes all route through real backend domain services rather than ad hoc writes.
+- Execution actions remain explainable, auditable, and policy-gated.
+
+### 35.11 Agent Outcome Hardening Lane
+
+- [ ] `AH-01` Add `availability.lookup` / active-now eligibility tooling so intros and group plans respect real-time availability instead of intent text alone.
+- [ ] `AH-02` Add scarcity-aware widening tools so the agent can progressively relax constraints before giving up on candidate or circle search.
+- [ ] `AH-03` Add consented `profile.patch` / preference-update tooling so the agent can turn explicit user corrections into durable defaults.
+- [ ] `AH-04` Add execution reconciliation for tool-created outcomes so cancelled requests, expired follow-ups, and failed group formation feed back into agent memory and UI state.
+- [ ] `AH-05` Add outcome telemetry + eval coverage for tool-issued social actions, including acceptance rate, circle join conversion, and follow-up usefulness.
+- [ ] `AH-06` Add operator replay/debug tooling for blocked or failed social actions so admins can inspect why the planner chose a path and where it stopped.
+- [ ] `AH-07` Add production smoke coverage for real-user end-to-end social execution: intent -> candidate search -> intro or circle outcome -> audit trace.
+
+**Acceptance criteria**
+- The execution layer adapts when good matches are scarce instead of stalling on the first attempt.
+- Explicit user feedback can upgrade profile defaults and future agent plans without brittle UI-only logic.
+- Operators can inspect, replay, and measure social execution quality in production.

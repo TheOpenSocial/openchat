@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { AgentModule } from "../agent/agent.module.js";
 import { IntentsModule } from "../intents/intents.module.js";
 import { LaunchControlsModule } from "../launch-controls/launch-controls.module.js";
@@ -11,7 +11,7 @@ import { RecurringCirclesService } from "./recurring-circles.service.js";
     LaunchControlsModule,
     NotificationsModule,
     IntentsModule,
-    AgentModule,
+    forwardRef(() => AgentModule),
   ],
   providers: [RecurringCirclesService],
   controllers: [RecurringCirclesController],

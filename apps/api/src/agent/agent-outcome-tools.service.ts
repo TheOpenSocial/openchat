@@ -7,9 +7,11 @@ import { OpenAIClient } from "@opensocial/openai";
 import type { z } from "zod";
 import { AgentService } from "./agent.service.js";
 import { DiscoveryService } from "../discovery/discovery.service.js";
+import { InboxService } from "../inbox/inbox.service.js";
 import { IntentsService } from "../intents/intents.service.js";
 import { MatchingService } from "../matching/matching.service.js";
 import { PersonalizationService } from "../personalization/personalization.service.js";
+import { RecurringCirclesService } from "../recurring-circles/recurring-circles.service.js";
 import { ScheduledTasksService } from "../scheduled-tasks/scheduled-tasks.service.js";
 
 type ScheduledTaskCreateBody = z.infer<typeof scheduledTaskCreateBodySchema>;
@@ -27,9 +29,13 @@ export class AgentOutcomeToolsService {
     @Optional()
     private readonly discoveryService?: DiscoveryService,
     @Optional()
+    private readonly inboxService?: InboxService,
+    @Optional()
     private readonly matchingService?: MatchingService,
     @Optional()
     private readonly personalizationService?: PersonalizationService,
+    @Optional()
+    private readonly recurringCirclesService?: RecurringCirclesService,
     @Optional()
     private readonly scheduledTasksService?: ScheduledTasksService,
   ) {}
@@ -174,6 +180,115 @@ export class AgentOutcomeToolsService {
     };
   }
 
+  async acceptIntro(input: { requestId: string; actorUserId: string }) {
+    if (!this.inboxService) {
+      return { accepted: false, reason: "inbox_service_unavailable" };
+    }
+    const result = await this.inboxService.updateStatus(
+      input.requestId,
+      "accepted",
+      input.actorUserId,
+    );
+    await this.recordExecutionMemory(input.actorUserId, {
+      summary:
+        "Accepted a social intro request and opened the path to a real connection.",
+      activities: ["accepted intro"],
+      people:
+        typeof result.request.senderUserId === "string"
+          ? [result.request.senderUserId]
+          : [],
+      highSuccessPeople:
+        typeof result.request.senderUserId === "string"
+          ? [result.request.senderUserId]
+          : [],
+      context: {
+        source: "agent_outcome_tool",
+        outcome: "intro_accepted",
+        requestId: result.request.id,
+        status: result.request.status,
+        intentId:
+          "intentId" in result.request
+            ? (result.request.intentId ?? null)
+            : null,
+      },
+    });
+    return {
+      accepted: true,
+      requestId: result.request.id,
+      status: result.request.status,
+      queued: Boolean("queued" in result && result.queued),
+    };
+  }
+
+  async rejectIntro(input: { requestId: string; actorUserId: string }) {
+    if (!this.inboxService) {
+      return { rejected: false, reason: "inbox_service_unavailable" };
+    }
+    const result = await this.inboxService.updateStatus(
+      input.requestId,
+      "rejected",
+      input.actorUserId,
+    );
+    await this.recordExecutionMemory(input.actorUserId, {
+      summary:
+        "Declined a social intro request because it was not the right fit right now.",
+      activities: ["declined intro"],
+      people:
+        typeof result.request.senderUserId === "string"
+          ? [result.request.senderUserId]
+          : [],
+      context: {
+        source: "agent_outcome_tool",
+        outcome: "intro_rejected",
+        requestId: result.request.id,
+        status: result.request.status,
+        intentId:
+          "intentId" in result.request
+            ? (result.request.intentId ?? null)
+            : null,
+      },
+    });
+    return {
+      rejected: true,
+      requestId: result.request.id,
+      status: result.request.status,
+    };
+  }
+
+  async retractIntro(input: { requestId: string; actorUserId: string }) {
+    if (!this.inboxService) {
+      return { retracted: false, reason: "inbox_service_unavailable" };
+    }
+    const result = await this.inboxService.cancelByOriginator(
+      input.requestId,
+      input.actorUserId,
+    );
+    await this.recordExecutionMemory(input.actorUserId, {
+      summary:
+        "Retracted a pending social intro request to keep outreach aligned with the latest intent.",
+      activities: ["retracted intro"],
+      people:
+        typeof result.request.recipientUserId === "string"
+          ? [result.request.recipientUserId]
+          : [],
+      context: {
+        source: "agent_outcome_tool",
+        outcome: "intro_retracted",
+        requestId: result.request.id,
+        status: result.request.status,
+        intentId:
+          "intentId" in result.request
+            ? (result.request.intentId ?? null)
+            : null,
+      },
+    });
+    return {
+      retracted: true,
+      requestId: result.request.id,
+      status: result.request.status,
+    };
+  }
+
   async startConversation(input: {
     userId: string;
     title?: string;
@@ -196,6 +311,110 @@ export class AgentOutcomeToolsService {
       threadId: thread.id,
       title: thread.title,
       createdAt: thread.createdAt.toISOString(),
+    };
+  }
+
+  async createCircle(input: {
+    userId: string;
+    title: string;
+    description?: string;
+    topicTags?: string[];
+    targetSize?: number;
+    kickoffPrompt?: string;
+    timezone?: string;
+  }) {
+    if (!this.recurringCirclesService) {
+      return {
+        created: false,
+        reason: "recurring_circles_service_unavailable",
+      };
+    }
+
+    const title = this.normalizeTitle(input.title);
+    if (!title) {
+      return { created: false, reason: "missing_circle_title" };
+    }
+    const timezone = this.normalizeTimezone(input.timezone);
+    const circle = await this.recurringCirclesService.createCircle(
+      input.userId,
+      {
+        title,
+        description: input.description?.trim() || undefined,
+        visibility: "private",
+        topicTags: (input.topicTags ?? [])
+          .map((tag) => tag.trim())
+          .filter((tag) => tag.length > 0)
+          .slice(0, 8),
+        targetSize: Math.min(Math.max(input.targetSize ?? 4, 2), 8),
+        cadence: {
+          kind: "weekly",
+          days: [this.dayKeyForDate(new Date())],
+          hour: 18,
+          minute: 0,
+          timezone,
+          intervalWeeks: 1,
+        },
+        kickoffPrompt: input.kickoffPrompt?.trim() || undefined,
+      },
+    );
+    await this.recordExecutionMemory(input.userId, {
+      summary: `Created a recurring circle "${circle.title}" to turn social intent into a repeatable group outcome.`,
+      topics: input.topicTags,
+      activities: ["created circle"],
+      context: {
+        source: "agent_outcome_tool",
+        outcome: "circle_created",
+        circleId: circle.id,
+        title: circle.title,
+        targetSize: Math.min(Math.max(input.targetSize ?? 4, 2), 8),
+      },
+    });
+
+    return {
+      created: true,
+      circleId: circle.id,
+      title: circle.title,
+      nextSessionAt: circle.nextSessionAt?.toISOString() ?? null,
+    };
+  }
+
+  async joinCircle(input: {
+    circleId: string;
+    ownerUserId: string;
+    userId: string;
+    role?: "member" | "admin";
+  }) {
+    if (!this.recurringCirclesService) {
+      return { joined: false, reason: "recurring_circles_service_unavailable" };
+    }
+
+    const member = await this.recurringCirclesService.addMember(
+      input.circleId,
+      input.ownerUserId,
+      {
+        userId: input.userId,
+        role: input.role ?? "member",
+      },
+    );
+    await this.recordExecutionMemory(input.userId, {
+      summary:
+        "Joined a recurring circle to turn the current social goal into an ongoing group connection.",
+      activities: ["joined circle"],
+      people: [input.ownerUserId],
+      context: {
+        source: "agent_outcome_tool",
+        outcome: "circle_joined",
+        circleId: member.circleId,
+        role: member.role,
+      },
+    });
+
+    return {
+      joined: true,
+      circleId: member.circleId,
+      userId: member.userId,
+      status: member.status,
+      role: member.role,
     };
   }
 
@@ -384,5 +603,98 @@ export class AgentOutcomeToolsService {
   private dayKeyForDate(date: Date) {
     const dayKeys = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
     return dayKeys[date.getUTCDay()];
+  }
+
+  private async recordExecutionMemory(
+    userId: string,
+    input: {
+      summary: string;
+      topics?: string[];
+      activities?: string[];
+      people?: string[];
+      highSuccessPeople?: string[];
+      context?: Record<string, unknown>;
+    },
+  ) {
+    if (!this.personalizationService) {
+      return;
+    }
+
+    const summary = input.summary.trim().slice(0, 1_000);
+    if (!summary) {
+      return;
+    }
+
+    await this.personalizationService.storeInteractionSummary(userId, {
+      summary,
+      safe: true,
+      context: input.context,
+    });
+
+    const updates: Array<Promise<unknown>> = [];
+
+    for (const topic of this.uniqueNormalized(input.topics, 6)) {
+      updates.push(
+        this.personalizationService.recordBehaviorSignal(userId, {
+          edgeType: "recently_engaged_with",
+          targetNode: { nodeType: "topic", label: topic },
+          signalStrength: 0.3,
+          feedbackType: "agent_outcome_topic",
+          context: input.context,
+        }),
+      );
+    }
+
+    for (const activity of this.uniqueNormalized(input.activities, 6)) {
+      updates.push(
+        this.personalizationService.recordBehaviorSignal(userId, {
+          edgeType: "recently_engaged_with",
+          targetNode: { nodeType: "activity", label: activity },
+          signalStrength: 0.28,
+          feedbackType: "agent_outcome_activity",
+          context: input.context,
+        }),
+      );
+    }
+
+    for (const personUserId of this.uniqueNormalized(input.people, 4)) {
+      updates.push(
+        this.personalizationService.recordBehaviorSignal(userId, {
+          edgeType: "recently_engaged_with",
+          targetNode: { nodeType: "person", label: `user:${personUserId}` },
+          signalStrength: 0.22,
+          feedbackType: "agent_outcome_person",
+          context: input.context,
+        }),
+      );
+    }
+
+    for (const personUserId of this.uniqueNormalized(
+      input.highSuccessPeople,
+      4,
+    )) {
+      updates.push(
+        this.personalizationService.recordBehaviorSignal(userId, {
+          edgeType: "high_success_with",
+          targetNode: { nodeType: "person", label: `user:${personUserId}` },
+          signalStrength: 0.5,
+          feedbackType: "agent_outcome_high_success_person",
+          context: input.context,
+        }),
+      );
+    }
+
+    await Promise.all(updates);
+    await this.personalizationService.refreshPreferenceMemoryDocument(userId);
+  }
+
+  private uniqueNormalized(values: string[] | undefined, limit: number) {
+    return Array.from(
+      new Set(
+        (values ?? [])
+          .map((value) => value.trim())
+          .filter((value) => value.length > 0),
+      ),
+    ).slice(0, limit);
   }
 }
