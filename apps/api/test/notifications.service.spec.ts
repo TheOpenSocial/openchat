@@ -57,6 +57,83 @@ describe("NotificationsService", () => {
     vi.useRealTimers();
   });
 
+  it("uses the user's configured timezone when evaluating quiet hours", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-21T14:30:00.000Z"));
+    const prisma: any = {
+      notification: {
+        findFirst: vi.fn().mockResolvedValue(null),
+        create: vi
+          .fn()
+          .mockResolvedValue({ id: "notif-tz-1", channel: "digest" }),
+      },
+      userPreference: {
+        findMany: vi.fn().mockResolvedValue([
+          { key: "quiet_hours_start", value: 22 },
+          { key: "quiet_hours_end", value: 6 },
+          { key: "global_rules_timezone", value: "Asia/Tokyo" },
+        ]),
+      },
+      userAvailabilityWindow: {
+        findFirst: vi.fn(),
+      },
+    };
+
+    const service = new NotificationsService(prisma);
+    await service.createInAppNotification(
+      "user-1",
+      NotificationType.AGENT_UPDATE,
+      "Timezone-aware quiet hours",
+    );
+
+    expect(prisma.notification.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ channel: "digest" }),
+      }),
+    );
+    expect(prisma.userAvailabilityWindow.findFirst).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it("falls back to availability window timezone when no explicit rule timezone exists", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-21T14:30:00.000Z"));
+    const prisma: any = {
+      notification: {
+        findFirst: vi.fn().mockResolvedValue(null),
+        create: vi
+          .fn()
+          .mockResolvedValue({ id: "notif-tz-2", channel: "digest" }),
+      },
+      userPreference: {
+        findMany: vi.fn().mockResolvedValue([
+          { key: "quiet_hours_start", value: 22 },
+          { key: "quiet_hours_end", value: 6 },
+        ]),
+      },
+      userAvailabilityWindow: {
+        findFirst: vi.fn().mockResolvedValue({
+          timezone: "Asia/Tokyo",
+        }),
+      },
+    };
+
+    const service = new NotificationsService(prisma);
+    await service.createInAppNotification(
+      "user-1",
+      NotificationType.AGENT_UPDATE,
+      "Availability timezone fallback",
+    );
+
+    expect(prisma.notification.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ channel: "digest" }),
+      }),
+    );
+    expect(prisma.userAvailabilityWindow.findFirst).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+  });
+
   it("builds and sends digest summary notification", async () => {
     const prisma: any = {
       intent: {

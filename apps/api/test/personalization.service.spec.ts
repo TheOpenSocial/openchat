@@ -321,6 +321,7 @@ describe("PersonalizationService", () => {
       notificationMode: "immediate",
       agentAutonomy: "suggest_only",
       memoryMode: "standard",
+      timezone: "UTC",
     });
   });
 
@@ -337,6 +338,7 @@ describe("PersonalizationService", () => {
       notificationMode: "digest",
       agentAutonomy: "manual",
       memoryMode: "minimal",
+      timezone: "America/Argentina/Buenos_Aires",
     };
 
     const prisma: any = {
@@ -374,6 +376,7 @@ describe("PersonalizationService", () => {
           },
           { key: "global_rules_agent_autonomy", value: expected.agentAutonomy },
           { key: "global_rules_memory_mode", value: expected.memoryMode },
+          { key: "global_rules_timezone", value: expected.timezone },
         ]),
       },
       lifeGraphNode: {
