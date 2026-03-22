@@ -335,6 +335,15 @@ export class PersonalizationService {
     return this.getGlobalRules(userId);
   }
 
+  async patchGlobalRules(userId: string, patch: Partial<GlobalRules>) {
+    const current = await this.getGlobalRules(userId);
+    const merged: GlobalRules = {
+      ...current,
+      ...patch,
+    };
+    return this.setGlobalRules(userId, merged);
+  }
+
   async upsertLifeGraphNodes(userId: string, nodes: LifeGraphNodeInput[]) {
     const deduped = this.deduplicateNodes(nodes);
     const materialized = [];

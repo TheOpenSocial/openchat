@@ -1322,6 +1322,30 @@ export class AgentConversationService {
             output: result,
           };
         }
+        case "profile.patch": {
+          if (!this.agentOutcomeToolsService) {
+            return {
+              role: call.role,
+              tool: call.tool,
+              status: "failed",
+              reason: "agent_outcome_tools_unavailable",
+            };
+          }
+          const result = await this.agentOutcomeToolsService.patchProfile({
+            userId,
+            consentGranted: call.input.consentGranted === true,
+            consentSource:
+              this.readString(call.input.consentSource) ?? undefined,
+            profile: this.coerceProfilePatch(call.input.profile),
+            globalRules: this.coerceGlobalRulesPatch(call.input.globalRules),
+          });
+          return {
+            role: call.role,
+            tool: call.tool,
+            status: "executed",
+            output: result,
+          };
+        }
         case "conversation.start": {
           if (!this.agentOutcomeToolsService) {
             return {
@@ -1893,6 +1917,7 @@ export class AgentConversationService {
       tool === "intro.retract" ||
       tool === "circle.create" ||
       tool === "circle.join" ||
+      tool === "profile.patch" ||
       tool === "memory.write" ||
       tool === "followup.schedule" ||
       tool === "workflow.write" ||
@@ -1966,6 +1991,7 @@ export class AgentConversationService {
       tool === "intro.retract" ||
       tool === "circle.create" ||
       tool === "circle.join" ||
+      tool === "profile.patch" ||
       tool === "followup.schedule"
     );
   }
@@ -2016,6 +2042,10 @@ export class AgentConversationService {
         return typeof output.circleId === "string"
           ? `Joined recurring circle ${output.circleId}.`
           : "Joined a recurring circle.";
+      case "profile.patch":
+        return output.patched === true
+          ? "Saved updated profile defaults for future planning."
+          : "Profile patch was not applied.";
       case "followup.schedule":
         return typeof output.taskId === "string"
           ? `Scheduled a follow-up task (${output.taskId}).`
@@ -2043,6 +2073,8 @@ export class AgentConversationService {
       "queued",
       "nextRunAt",
       "nextSessionAt",
+      "patched",
+      "consentSource",
       "joined",
       "created",
       "planned",
@@ -2270,6 +2302,123 @@ export class AgentConversationService {
       timingConstraints: this.readStringArray(record.timingConstraints),
       skillConstraints: this.readStringArray(record.skillConstraints),
       vibeConstraints: this.readStringArray(record.vibeConstraints),
+    };
+  }
+
+  private coerceProfilePatch(value: unknown):
+    | {
+        displayName?: string;
+        bio?: string;
+        city?: string;
+        country?: string;
+        visibility?: "public" | "limited" | "private";
+        availabilityMode?:
+          | "now"
+          | "later_today"
+          | "flexible"
+          | "away"
+          | "invisible";
+      }
+    | undefined {
+    const record = this.coerceRecord(value);
+    if (!record) {
+      return undefined;
+    }
+    const visibility = this.readString(record.visibility);
+    const availabilityMode = this.readString(record.availabilityMode);
+    return {
+      displayName: this.readString(record.displayName) ?? undefined,
+      bio: this.readString(record.bio) ?? undefined,
+      city: this.readString(record.city) ?? undefined,
+      country: this.readString(record.country) ?? undefined,
+      visibility:
+        visibility === "public" ||
+        visibility === "limited" ||
+        visibility === "private"
+          ? visibility
+          : undefined,
+      availabilityMode:
+        availabilityMode === "now" ||
+        availabilityMode === "later_today" ||
+        availabilityMode === "flexible" ||
+        availabilityMode === "away" ||
+        availabilityMode === "invisible"
+          ? availabilityMode
+          : undefined,
+    };
+  }
+
+  private coerceGlobalRulesPatch(value: unknown):
+    | Partial<{
+        whoCanContact: "anyone" | "verified_only" | "trusted_only";
+        reachable: "always" | "available_only" | "do_not_disturb";
+        intentMode: "one_to_one" | "group" | "balanced";
+        modality: "online" | "offline" | "either";
+        languagePreferences: string[];
+        requireVerifiedUsers: boolean;
+        notificationMode: "immediate" | "digest" | "quiet";
+        agentAutonomy: "manual" | "suggest_only" | "auto_non_risky";
+        memoryMode: "minimal" | "standard" | "extended";
+      }>
+    | undefined {
+    const record = this.coerceRecord(value);
+    if (!record) {
+      return undefined;
+    }
+    const whoCanContact = this.readString(record.whoCanContact);
+    const reachable = this.readString(record.reachable);
+    const intentMode = this.readString(record.intentMode);
+    const modality = this.readString(record.modality);
+    const notificationMode = this.readString(record.notificationMode);
+    const agentAutonomy = this.readString(record.agentAutonomy);
+    const memoryMode = this.readString(record.memoryMode);
+
+    return {
+      whoCanContact:
+        whoCanContact === "anyone" ||
+        whoCanContact === "verified_only" ||
+        whoCanContact === "trusted_only"
+          ? whoCanContact
+          : undefined,
+      reachable:
+        reachable === "always" ||
+        reachable === "available_only" ||
+        reachable === "do_not_disturb"
+          ? reachable
+          : undefined,
+      intentMode:
+        intentMode === "one_to_one" ||
+        intentMode === "group" ||
+        intentMode === "balanced"
+          ? intentMode
+          : undefined,
+      modality:
+        modality === "online" || modality === "offline" || modality === "either"
+          ? modality
+          : undefined,
+      languagePreferences: this.readStringArray(record.languagePreferences),
+      requireVerifiedUsers:
+        typeof record.requireVerifiedUsers === "boolean"
+          ? record.requireVerifiedUsers
+          : undefined,
+      notificationMode:
+        notificationMode === "immediate" ||
+        notificationMode === "digest" ||
+        notificationMode === "quiet"
+          ? notificationMode
+          : undefined,
+      agentAutonomy:
+        agentAutonomy === "manual" ||
+        agentAutonomy === "suggest_only" ||
+        agentAutonomy === "auto_non_risky"
+          ? agentAutonomy
+          : undefined,
+      memoryMode:
+        memoryMode === "minimal" ||
+        memoryMode === "standard" ||
+        memoryMode === "extended"
+          ? memoryMode
+          : undefined,
     };
   }
 

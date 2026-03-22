@@ -11,6 +11,7 @@ import { InboxService } from "../inbox/inbox.service.js";
 import { IntentsService } from "../intents/intents.service.js";
 import { MatchingService } from "../matching/matching.service.js";
 import { PersonalizationService } from "../personalization/personalization.service.js";
+import { ProfilesService } from "../profiles/profiles.service.js";
 import { RecurringCirclesService } from "../recurring-circles/recurring-circles.service.js";
 import { ScheduledTasksService } from "../scheduled-tasks/scheduled-tasks.service.js";
 
@@ -34,6 +35,8 @@ export class AgentOutcomeToolsService {
     private readonly matchingService?: MatchingService,
     @Optional()
     private readonly personalizationService?: PersonalizationService,
+    @Optional()
+    private readonly profilesService?: ProfilesService,
     @Optional()
     private readonly recurringCirclesService?: RecurringCirclesService,
     @Optional()
@@ -479,6 +482,114 @@ export class AgentOutcomeToolsService {
       userId: member.userId,
       status: member.status,
       role: member.role,
+    };
+  }
+
+  async patchProfile(input: {
+    userId: string;
+    consentGranted: boolean;
+    consentSource?: string;
+    profile?: {
+      displayName?: string;
+      bio?: string;
+      city?: string;
+      country?: string;
+      visibility?: "public" | "limited" | "private";
+      availabilityMode?:
+        | "now"
+        | "later_today"
+        | "flexible"
+        | "away"
+        | "invisible";
+    };
+    globalRules?: Partial<{
+      whoCanContact: "anyone" | "verified_only" | "trusted_only";
+      reachable: "always" | "available_only" | "do_not_disturb";
+      intentMode: "one_to_one" | "group" | "balanced";
+      modality: "online" | "offline" | "either";
+      languagePreferences: string[];
+      requireVerifiedUsers: boolean;
+      notificationMode: "immediate" | "digest" | "quiet";
+      agentAutonomy: "manual" | "suggest_only" | "auto_non_risky";
+      memoryMode: "minimal" | "standard" | "extended";
+    }>;
+  }) {
+    if (!input.consentGranted) {
+      return {
+        patched: false,
+        reason: "consent_required",
+      };
+    }
+
+    const profilePatch =
+      input.profile && Object.keys(input.profile).length > 0
+        ? input.profile
+        : null;
+    const globalRulesPatch =
+      input.globalRules && Object.keys(input.globalRules).length > 0
+        ? input.globalRules
+        : null;
+
+    if (!profilePatch && !globalRulesPatch) {
+      return {
+        patched: false,
+        reason: "empty_profile_patch",
+      };
+    }
+
+    const profileResult =
+      profilePatch && this.profilesService
+        ? await this.profilesService.applyAgentProfilePatch(
+            input.userId,
+            profilePatch,
+          )
+        : null;
+    const globalRulesResult =
+      globalRulesPatch && this.personalizationService
+        ? await this.personalizationService.patchGlobalRules(
+            input.userId,
+            globalRulesPatch,
+          )
+        : null;
+
+    if (
+      (profilePatch && !profileResult && !this.profilesService) ||
+      (globalRulesPatch && !globalRulesResult && !this.personalizationService)
+    ) {
+      return {
+        patched: false,
+        reason: "profile_patch_services_unavailable",
+      };
+    }
+
+    if (profilePatch && this.personalizationService) {
+      await this.personalizationService.refreshProfileSummaryDocument?.(
+        input.userId,
+      );
+    }
+
+    if (this.personalizationService) {
+      await this.recordExecutionMemory(input.userId, {
+        summary:
+          "Confirmed and saved updated profile defaults for future social planning.",
+        activities: ["updated defaults"],
+        context: {
+          source: "agent_outcome_tool",
+          outcome: "profile_patch_applied",
+          consentSource: input.consentSource ?? null,
+          profileFields: profilePatch ? Object.keys(profilePatch) : [],
+          globalRuleFields: globalRulesPatch
+            ? Object.keys(globalRulesPatch)
+            : [],
+        },
+      });
+    }
+
+    return {
+      patched: true,
+      consentSource: input.consentSource ?? null,
+      profile: profileResult,
+      globalRules: globalRulesResult,
     };
   }
 

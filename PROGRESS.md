@@ -1480,7 +1480,7 @@ This section maps the conceptual product surface in [USE_CASES.md](/Users/crucib
 
 - [x] `AH-01` Add `availability.lookup` / active-now eligibility tooling so intros and group plans respect real-time availability instead of intent text alone.
 - [x] `AH-02` Add scarcity-aware widening tools so the agent can progressively relax constraints before giving up on candidate or circle search.
-- [ ] `AH-03` Add consented `profile.patch` / preference-update tooling so the agent can turn explicit user corrections into durable defaults.
+- [x] `AH-03` Add consented `profile.patch` / preference-update tooling so the agent can turn explicit user corrections into durable defaults.
 - [ ] `AH-04` Add execution reconciliation for tool-created outcomes so cancelled requests, expired follow-ups, and failed group formation feed back into agent memory and UI state.
 - [ ] `AH-05` Add outcome telemetry + eval coverage for tool-issued social actions, including acceptance rate, circle join conversion, and follow-up usefulness.
 - [ ] `AH-06` Add operator replay/debug tooling for blocked or failed social actions so admins can inspect why the planner chose a path and where it stopped.
