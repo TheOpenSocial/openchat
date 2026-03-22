@@ -6,6 +6,7 @@ import { AgentService } from "../../agent/agent.service.js";
 import { recordQueueJobSkipped } from "../../common/ops-metrics.js";
 import { runInTraceSpan } from "../../common/tracing.js";
 import { PrismaService } from "../../database/prisma.service.js";
+import { ExecutionReconciliationService } from "../../execution-reconciliation/execution-reconciliation.service.js";
 import { NotificationsService } from "../../notifications/notifications.service.js";
 import { DeadLetterService } from "../dead-letter.service.js";
 import { extractJobTraceId, logJobProcessing } from "../job-logging.js";
@@ -20,6 +21,7 @@ export class AsyncAgentFollowupConsumer extends WorkerHost {
     private readonly prisma: PrismaService,
     private readonly agentService: AgentService,
     private readonly notificationsService: NotificationsService,
+    private readonly executionReconciliationService: ExecutionReconciliationService,
     private readonly deadLetterService: DeadLetterService,
   ) {
     super();
@@ -137,6 +139,16 @@ export class AsyncAgentFollowupConsumer extends WorkerHost {
           !intent ||
           ["cancelled", "expired", "connected"].includes(intent.status)
         ) {
+          if (intent) {
+            await this.executionReconciliationService.recordIntentTerminalState(
+              {
+                userId: intent.userId,
+                intentId: intent.id,
+                status: intent.status as "cancelled" | "expired" | "connected",
+                source: "jobs.async_agent_followup",
+              },
+            );
+          }
           recordQueueJobSkipped("notification");
           this.logger.log(
             JSON.stringify({

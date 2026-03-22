@@ -469,6 +469,9 @@ describe("Agentic communication E2E flow", () => {
       prisma,
       notificationsService,
       personalizationService,
+      {
+        recordRequestOutcome: vi.fn().mockResolvedValue(undefined),
+      } as any,
       connectionSetupQueue,
     );
     const connectionSetupService = new ConnectionSetupService(
@@ -479,6 +482,9 @@ describe("Agentic communication E2E flow", () => {
       personalizationService,
       matchingService,
       agentService,
+      {
+        recordGroupFormationStalled: vi.fn().mockResolvedValue(undefined),
+      } as any,
       launchControlsService,
     );
     const connectionSetupConsumer = new ConnectionSetupConsumer(
@@ -489,6 +495,9 @@ describe("Agentic communication E2E flow", () => {
       prisma,
       agentService,
       notificationsService,
+      {
+        recordIntentTerminalState: vi.fn().mockResolvedValue(undefined),
+      } as any,
       deadLetterService,
     );
 

@@ -21,6 +21,7 @@ import { AgentService } from "../agent/agent.service.js";
 import { computeNextWeeklyOccurrence } from "../common/timezone-scheduling.js";
 import { PrismaService } from "../database/prisma.service.js";
 import { DiscoveryService } from "../discovery/discovery.service.js";
+import { ExecutionReconciliationService } from "../execution-reconciliation/execution-reconciliation.service.js";
 import { LaunchControlsService } from "../launch-controls/launch-controls.service.js";
 import { NotificationsService } from "../notifications/notifications.service.js";
 
@@ -60,6 +61,8 @@ export class ScheduledTasksService {
     private readonly notificationsService?: NotificationsService,
     @Optional()
     private readonly agentService?: AgentService,
+    @Optional()
+    private readonly executionReconciliationService?: ExecutionReconciliationService,
     @Optional()
     private readonly launchControlsService?: LaunchControlsService,
   ) {}
@@ -606,6 +609,16 @@ export class ScheduledTasksService {
   }
 
   private async finishRunAsSkipped(runId: string, reason: string) {
+    const run = this.executionReconciliationService
+      ? await this.prisma.scheduledTaskRun.findUnique({
+          where: { id: runId },
+          select: {
+            id: true,
+            userId: true,
+            scheduledTaskId: true,
+          },
+        })
+      : null;
     await this.prisma.scheduledTaskRun.update({
       where: { id: runId },
       data: {
@@ -614,6 +627,15 @@ export class ScheduledTasksService {
         finishedAt: new Date(),
       },
     });
+    if (run && this.executionReconciliationService) {
+      await this.executionReconciliationService.recordScheduledTaskSkipped({
+        userId: run.userId,
+        scheduledTaskId: run.scheduledTaskId,
+        scheduledTaskRunId: run.id,
+        reason,
+        source: "scheduled_tasks.finish_run_skipped",
+      });
+    }
     return { runId, status: "skipped" as const, reason };
   }
 

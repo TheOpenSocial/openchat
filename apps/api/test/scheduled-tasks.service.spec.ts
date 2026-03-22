@@ -30,6 +30,9 @@ describe("ScheduledTasksService", () => {
     const launchControls: any = {
       assertActionAllowed: vi.fn().mockResolvedValue(undefined),
     };
+    const reconciliation: any = {
+      recordScheduledTaskSkipped: vi.fn().mockResolvedValue(undefined),
+    };
 
     const service = new ScheduledTasksService(
       prisma,
@@ -37,6 +40,7 @@ describe("ScheduledTasksService", () => {
       undefined,
       undefined,
       undefined,
+      reconciliation,
       launchControls,
     );
 
@@ -228,6 +232,9 @@ describe("ScheduledTasksService", () => {
     const launchControls: any = {
       assertActionAllowed: vi.fn().mockResolvedValue(undefined),
     };
+    const reconciliation: any = {
+      recordScheduledTaskSkipped: vi.fn().mockResolvedValue(undefined),
+    };
 
     const service = new ScheduledTasksService(
       prisma,
@@ -235,6 +242,7 @@ describe("ScheduledTasksService", () => {
       discovery,
       notifications,
       agent,
+      reconciliation,
       launchControls,
     );
     const result = await service.runQueuedTask({

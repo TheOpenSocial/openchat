@@ -36,6 +36,9 @@ function createService(
     ({
       emitRequestUpdated: vi.fn(),
     } as any);
+  const executionReconciliationService: any = {
+    recordRequestOutcome: vi.fn().mockResolvedValue(undefined),
+  };
 
   return {
     prisma,
@@ -43,10 +46,12 @@ function createService(
     queue,
     personalizationService,
     realtimeEventsService,
+    executionReconciliationService,
     service: new InboxService(
       prisma,
       notificationsService,
       personalizationService,
+      executionReconciliationService,
       queue,
       undefined,
       realtimeEventsService,
@@ -62,6 +67,7 @@ describe("InboxService", () => {
       personalizationService,
       notificationsService,
       realtimeEventsService,
+      executionReconciliationService,
     } = createService({
       prisma: {
         intentRequest: {
@@ -114,6 +120,9 @@ describe("InboxService", () => {
       },
     );
     expect(notificationsService.createInAppNotification).not.toHaveBeenCalled();
+    expect(
+      executionReconciliationService.recordRequestOutcome,
+    ).not.toHaveBeenCalled();
   });
 
   it("hides snoozed pending requests until snooze window expires", async () => {

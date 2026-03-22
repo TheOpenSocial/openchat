@@ -2,6 +2,7 @@ import { BullModule } from "@nestjs/bullmq";
 import { Module } from "@nestjs/common";
 import { AgentModule } from "../agent/agent.module.js";
 import { ConnectionsModule } from "../connections/connections.module.js";
+import { ExecutionReconciliationModule } from "../execution-reconciliation/execution-reconciliation.module.js";
 import { IntentsModule } from "../intents/intents.module.js";
 import { NotificationsModule } from "../notifications/notifications.module.js";
 import { ProfilesModule } from "../profiles/profiles.module.js";
@@ -35,6 +36,7 @@ export const JOB_QUEUE_NAMES = [
     BullModule.registerQueue(...JOB_QUEUE_NAMES.map((name) => ({ name }))),
     IntentsModule,
     ConnectionsModule,
+    ExecutionReconciliationModule,
     ProfilesModule,
     AgentModule,
     NotificationsModule,
