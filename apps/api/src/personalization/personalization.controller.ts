@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   Optional,
   Param,
   Post,
@@ -20,6 +21,8 @@ import {
 import { ok } from "../common/api-response.js";
 import { ActorUserId } from "../common/actor-user-id.decorator.js";
 import { assertActorOwnsUser } from "../common/auth-context.js";
+import { readIdempotencyKeyHeader } from "../common/idempotency.js";
+import { ClientMutationService } from "../database/client-mutation.service.js";
 import { LaunchControlsService } from "../launch-controls/launch-controls.service.js";
 import { parseRequestPayload } from "../common/validation.js";
 import {
@@ -31,6 +34,7 @@ import {
 export class PersonalizationController {
   constructor(
     private readonly personalizationService: PersonalizationService,
+    private readonly clientMutationService: ClientMutationService,
     @Optional()
     private readonly launchControlsService?: LaunchControlsService,
   ) {}
@@ -50,6 +54,7 @@ export class PersonalizationController {
     @Param("userId") userIdParam: string,
     @Body() body: unknown,
     @ActorUserId() actorUserId: string,
+    @Headers("idempotency-key") idempotencyKeyHeader?: string,
   ) {
     const userId = this.parseOwnedUserId(userIdParam, actorUserId);
     await this.assertPersonalizationEnabled(userId);
@@ -61,7 +66,13 @@ export class PersonalizationController {
       timezone: rawPayload.timezone ?? "UTC",
     };
     return ok(
-      await this.personalizationService.setGlobalRules(userId, payload),
+      await this.clientMutationService.run({
+        userId,
+        scope: "personalization.global_rules",
+        idempotencyKey: readIdempotencyKeyHeader(idempotencyKeyHeader),
+        handler: () =>
+          this.personalizationService.setGlobalRules(userId, payload),
+      }),
     );
   }
 

@@ -1340,8 +1340,10 @@ export function HomeScreen({
         session.userId,
         rawText,
         session.accessToken,
-        { signal: controller.signal },
-        agentThreadId ?? undefined,
+        {
+          signal: controller.signal,
+          agentThreadId: agentThreadId ?? undefined,
+        },
       );
 
       intentAbortRef.current = null;

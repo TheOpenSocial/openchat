@@ -2,6 +2,45 @@ import { ForbiddenException } from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
 import { AgentController } from "../src/agent/agent.controller.js";
 
+function createController(overrides?: {
+  agentService?: Record<string, unknown>;
+  agentConversationService?: Record<string, unknown>;
+  clientMutationService?: Record<string, unknown>;
+}) {
+  const agentService: any = {
+    findPrimaryThreadSummaryForUser: vi.fn(),
+    assertThreadOwnership: vi.fn().mockResolvedValue(undefined),
+    subscribeToThread: vi.fn(),
+    unsubscribeFromThread: vi.fn(),
+    listThreadMessages: vi.fn(),
+    createUserMessage: vi.fn(),
+    ...(overrides?.agentService ?? {}),
+  };
+  const agentConversationService: any = {
+    runAgenticTurn: vi.fn(),
+    listPlanCheckpoints: vi.fn(),
+    resolvePlanCheckpoint: vi.fn(),
+    ...(overrides?.agentConversationService ?? {}),
+  };
+  const clientMutationService: any = {
+    run: vi.fn(async ({ handler }: { handler: () => Promise<unknown> }) =>
+      handler(),
+    ),
+    ...(overrides?.clientMutationService ?? {}),
+  };
+
+  return {
+    agentService,
+    agentConversationService,
+    clientMutationService,
+    controller: new AgentController(
+      agentService,
+      agentConversationService,
+      clientMutationService,
+    ),
+  };
+}
+
 describe("AgentController", () => {
   it("returns primary thread summary for me/summary", async () => {
     const userId = "22222222-2222-4222-8222-222222222222";
@@ -11,22 +50,11 @@ describe("AgentController", () => {
       createdAt: new Date("2025-01-01T00:00:00.000Z"),
     };
 
-    const agentService: any = {
-      findPrimaryThreadSummaryForUser: vi.fn().mockResolvedValue(summary),
-      assertThreadOwnership: vi.fn(),
-      subscribeToThread: vi.fn(),
-      unsubscribeFromThread: vi.fn(),
-      listThreadMessages: vi.fn(),
-      createUserMessage: vi.fn(),
-    };
-    const agentConversationService: any = {
-      runAgenticTurn: vi.fn(),
-    };
-
-    const controller = new AgentController(
-      agentService,
-      agentConversationService,
-    );
+    const { controller, agentService } = createController({
+      agentService: {
+        findPrimaryThreadSummaryForUser: vi.fn().mockResolvedValue(summary),
+      },
+    });
 
     const result = await controller.getMyThreadSummary(userId);
 
@@ -41,37 +69,32 @@ describe("AgentController", () => {
     const threadId = "11111111-1111-4111-8111-111111111111";
     const userId = "22222222-2222-4222-8222-222222222222";
 
-    const agentService: any = {
-      assertThreadOwnership: vi.fn().mockResolvedValue(undefined),
-      subscribeToThread: vi.fn(),
-      unsubscribeFromThread: vi.fn(),
-      listThreadMessages: vi.fn(),
-      createUserMessage: vi.fn(),
-    };
-    const agentConversationService: any = {
-      runAgenticTurn: vi.fn().mockResolvedValue({
-        traceId: "trace-agentic-respond",
-        userMessageId: "user-msg",
-        agentMessageId: "agent-msg",
-        plan: {
-          specialists: ["intent_parser"],
-          toolCalls: [],
-          responseGoal: "clarify one constraint",
-        },
-        toolResults: [],
-        specialistNotes: [
-          {
-            role: "intent_parser",
-            status: "executed",
-          },
-        ],
-      }),
-    };
-
-    const controller = new AgentController(
+    const {
+      controller,
       agentService,
       agentConversationService,
-    );
+      clientMutationService,
+    } = createController({
+      agentConversationService: {
+        runAgenticTurn: vi.fn().mockResolvedValue({
+          traceId: "trace-agentic-respond",
+          userMessageId: "user-msg",
+          agentMessageId: "agent-msg",
+          plan: {
+            specialists: ["intent_parser"],
+            toolCalls: [],
+            responseGoal: "clarify one constraint",
+          },
+          toolResults: [],
+          specialistNotes: [
+            {
+              role: "intent_parser",
+              status: "executed",
+            },
+          ],
+        }),
+      },
+    });
 
     const result = await controller.respond(
       threadId,
@@ -87,6 +110,12 @@ describe("AgentController", () => {
       threadId,
       userId,
     );
+    expect(clientMutationService.run).toHaveBeenCalledWith({
+      userId,
+      scope: "agent.respond",
+      idempotencyKey: undefined,
+      handler: expect.any(Function),
+    });
     expect(agentConversationService.runAgenticTurn).toHaveBeenCalledWith({
       threadId,
       userId,
@@ -107,26 +136,47 @@ describe("AgentController", () => {
     });
   });
 
+  it("passes idempotency key through respond endpoint", async () => {
+    const threadId = "11111111-1111-4111-8111-111111111111";
+    const userId = "22222222-2222-4222-8222-222222222222";
+
+    const { controller, clientMutationService } = createController({
+      agentConversationService: {
+        runAgenticTurn: vi.fn().mockResolvedValue({
+          traceId: "trace-idempotent",
+          userMessageId: "user-msg",
+          agentMessageId: "agent-msg",
+          plan: {},
+          toolResults: [],
+          specialistNotes: [],
+        }),
+      },
+    });
+
+    await controller.respond(
+      threadId,
+      {
+        userId,
+        content: "try again safely",
+      },
+      userId,
+      "mobile-outbox-1",
+    );
+
+    expect(clientMutationService.run).toHaveBeenCalledWith({
+      userId,
+      scope: "agent.respond",
+      idempotencyKey: "mobile-outbox-1",
+      handler: expect.any(Function),
+    });
+  });
+
   it("rejects respond when payload user does not match authenticated actor", async () => {
     const threadId = "11111111-1111-4111-8111-111111111111";
     const actorUserId = "22222222-2222-4222-8222-222222222222";
     const differentUserId = "33333333-3333-4333-8333-333333333333";
 
-    const agentService: any = {
-      assertThreadOwnership: vi.fn().mockResolvedValue(undefined),
-      subscribeToThread: vi.fn(),
-      unsubscribeFromThread: vi.fn(),
-      listThreadMessages: vi.fn(),
-      createUserMessage: vi.fn(),
-    };
-    const agentConversationService: any = {
-      runAgenticTurn: vi.fn(),
-    };
-
-    const controller = new AgentController(
-      agentService,
-      agentConversationService,
-    );
+    const { controller, agentConversationService } = createController();
 
     await expect(
       controller.respond(
@@ -146,36 +196,27 @@ describe("AgentController", () => {
     const threadId = "11111111-1111-4111-8111-111111111111";
     const userId = "22222222-2222-4222-8222-222222222222";
 
-    const agentService: any = {
-      assertThreadOwnership: vi.fn().mockResolvedValue(undefined),
-      subscribeToThread: vi.fn(),
-      unsubscribeFromThread: vi.fn(),
-      listThreadMessages: vi.fn(),
-      createUserMessage: vi.fn(),
-    };
-    const agentConversationService: any = {
-      runAgenticTurn: vi.fn().mockResolvedValue({
-        traceId: "trace-agentic-stream",
-        userMessageId: "user-msg",
-        agentMessageId: "agent-msg",
-        plan: {
-          specialists: ["intent_parser"],
-          toolCalls: [],
-          responseGoal: "stream",
+    const { controller, agentConversationService, clientMutationService } =
+      createController({
+        agentConversationService: {
+          runAgenticTurn: vi.fn().mockResolvedValue({
+            traceId: "trace-agentic-stream",
+            userMessageId: "user-msg",
+            agentMessageId: "agent-msg",
+            plan: {
+              specialists: ["intent_parser"],
+              toolCalls: [],
+              responseGoal: "stream",
+            },
+            toolResults: [],
+            specialistNotes: [],
+            streaming: {
+              responseTokenStreamed: true,
+              chunkCount: 3,
+            },
+          }),
         },
-        toolResults: [],
-        specialistNotes: [],
-        streaming: {
-          responseTokenStreamed: true,
-          chunkCount: 3,
-        },
-      }),
-    };
-
-    const controller = new AgentController(
-      agentService,
-      agentConversationService,
-    );
+      });
 
     await controller.respondStream(
       threadId,
@@ -187,6 +228,12 @@ describe("AgentController", () => {
       userId,
     );
 
+    expect(clientMutationService.run).toHaveBeenCalledWith({
+      userId,
+      scope: "agent.respond_stream",
+      idempotencyKey: undefined,
+      handler: expect.any(Function),
+    });
     expect(agentConversationService.runAgenticTurn).toHaveBeenCalledWith({
       threadId,
       userId,
@@ -202,32 +249,22 @@ describe("AgentController", () => {
     const threadId = "11111111-1111-4111-8111-111111111111";
     const userId = "22222222-2222-4222-8222-222222222222";
 
-    const agentService: any = {
-      assertThreadOwnership: vi.fn().mockResolvedValue(undefined),
-      subscribeToThread: vi.fn(),
-      unsubscribeFromThread: vi.fn(),
-      listThreadMessages: vi.fn(),
-      createUserMessage: vi.fn(),
-    };
-    const agentConversationService: any = {
-      runAgenticTurn: vi.fn().mockResolvedValue({
-        traceId: "trace-agentic-multimodal",
-        userMessageId: "user-msg",
-        agentMessageId: "agent-msg",
-        plan: {
-          specialists: [],
-          toolCalls: [],
-          responseGoal: null,
-        },
-        toolResults: [],
-        specialistNotes: [],
-      }),
-    };
-
-    const controller = new AgentController(
-      agentService,
-      agentConversationService,
-    );
+    const { controller, agentConversationService } = createController({
+      agentConversationService: {
+        runAgenticTurn: vi.fn().mockResolvedValue({
+          traceId: "trace-agentic-multimodal",
+          userMessageId: "user-msg",
+          agentMessageId: "agent-msg",
+          plan: {
+            specialists: [],
+            toolCalls: [],
+            responseGoal: null,
+          },
+          toolResults: [],
+          specialistNotes: [],
+        }),
+      },
+    });
 
     await controller.respond(
       threadId,
@@ -266,27 +303,18 @@ describe("AgentController", () => {
     const checkpointId = "44444444-4444-4444-8444-444444444444";
     const userId = "22222222-2222-4222-8222-222222222222";
 
-    const agentService: any = {
-      assertThreadOwnership: vi.fn().mockResolvedValue(undefined),
-      subscribeToThread: vi.fn(),
-      unsubscribeFromThread: vi.fn(),
-      listThreadMessages: vi.fn(),
-      createUserMessage: vi.fn(),
-    };
-    const agentConversationService: any = {
-      runAgenticTurn: vi.fn(),
-      listPlanCheckpoints: vi
-        .fn()
-        .mockResolvedValue([{ id: checkpointId, threadId, status: "pending" }]),
-      resolvePlanCheckpoint: vi
-        .fn()
-        .mockResolvedValue({ id: checkpointId, status: "approved" }),
-    };
-
-    const controller = new AgentController(
-      agentService,
-      agentConversationService,
-    );
+    const { controller, agentConversationService } = createController({
+      agentConversationService: {
+        listPlanCheckpoints: vi
+          .fn()
+          .mockResolvedValue([
+            { id: checkpointId, threadId, status: "pending" },
+          ]),
+        resolvePlanCheckpoint: vi
+          .fn()
+          .mockResolvedValue({ id: checkpointId, status: "approved" }),
+      },
+    });
 
     const listResult = await controller.listPlanCheckpoints(
       threadId,

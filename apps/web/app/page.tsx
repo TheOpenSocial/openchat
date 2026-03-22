@@ -859,8 +859,9 @@ function ProductionWebPage() {
         session.userId,
         text,
         session.accessToken,
-        undefined,
-        agentThreadId ?? undefined,
+        {
+          agentThreadId: agentThreadId ?? undefined,
+        },
       );
       setAgentTimeline((current) => [
         ...current,

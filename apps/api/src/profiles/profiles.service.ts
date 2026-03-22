@@ -145,6 +145,15 @@ export class ProfilesService {
         onboardingState: completion.onboardingState,
       },
     });
+    const normalizedDisplayName = payload.displayName?.trim();
+    if (normalizedDisplayName) {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          displayName: normalizedDisplayName.slice(0, 120),
+        },
+      });
+    }
     if (
       (existing?.onboardingState ?? "not_started") !== "complete" &&
       completion.onboardingState === "complete"

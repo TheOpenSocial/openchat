@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Post, Put } from "@nestjs/common";
+import { Headers } from "@nestjs/common";
 import {
   profileAvailabilityWindowsBodySchema,
   profileIntentTypePreferenceBodySchema,
@@ -13,12 +14,17 @@ import {
 import { ok } from "../common/api-response.js";
 import { ActorUserId } from "../common/actor-user-id.decorator.js";
 import { assertActorOwnsUser } from "../common/auth-context.js";
+import { readIdempotencyKeyHeader } from "../common/idempotency.js";
+import { ClientMutationService } from "../database/client-mutation.service.js";
 import { parseRequestPayload } from "../common/validation.js";
 import { ProfilesService } from "./profiles.service.js";
 
 @Controller("profiles")
 export class ProfilesController {
-  constructor(private readonly profilesService: ProfilesService) {}
+  constructor(
+    private readonly profilesService: ProfilesService,
+    private readonly clientMutationService: ClientMutationService,
+  ) {}
 
   @Get(":userId/completion")
   async getProfileCompletion(
@@ -216,10 +222,18 @@ export class ProfilesController {
     @Param("userId") userIdParam: string,
     @Body() body: unknown,
     @ActorUserId() actorUserId: string,
+    @Headers("idempotency-key") idempotencyKeyHeader?: string,
   ) {
     const userId = this.parseOwnedUserId(userIdParam, actorUserId);
     const payload = parseRequestPayload(profileUpdateBodySchema, body);
-    return ok(await this.profilesService.upsertProfile(userId, payload));
+    return ok(
+      await this.clientMutationService.run({
+        userId,
+        scope: "profile.update",
+        idempotencyKey: readIdempotencyKeyHeader(idempotencyKeyHeader),
+        handler: () => this.profilesService.upsertProfile(userId, payload),
+      }),
+    );
   }
 
   private parseOwnedUserId(userIdParam: string, actorUserId: string) {

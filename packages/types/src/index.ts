@@ -232,6 +232,7 @@ export const authRevokeAllSessionsBodySchema = z.object({
 });
 
 export const profileUpdateBodySchema = z.object({
+  displayName: z.string().min(1).max(120).optional(),
   bio: z.string().max(500).optional(),
   city: z.string().max(120).optional(),
   country: z.string().max(120).optional(),
