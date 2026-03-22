@@ -68,6 +68,36 @@ describe("Deployment pipeline artifacts", () => {
     );
   });
 
+  it("passes Google OAuth secrets into deploy/rollback jobs", () => {
+    expect(stagingWorkflow).toContain(
+      "GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}",
+    );
+    expect(stagingWorkflow).toContain(
+      "GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}",
+    );
+    expect(productionWorkflow).toContain(
+      "GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}",
+    );
+    expect(productionWorkflow).toContain(
+      "GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}",
+    );
+    expect(rollbackWorkflow).toContain(
+      "GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}",
+    );
+    expect(rollbackWorkflow).toContain(
+      "GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}",
+    );
+    expect(stagingWorkflow).toContain(
+      "GOOGLE_REDIRECT_URI: https://api.opensocial.so/api/auth/google/callback",
+    );
+    expect(productionWorkflow).toContain(
+      "GOOGLE_REDIRECT_URI: https://api.opensocial.so/api/auth/google/callback",
+    );
+    expect(rollbackWorkflow).toContain(
+      "GOOGLE_REDIRECT_URI: https://api.opensocial.so/api/auth/google/callback",
+    );
+  });
+
   it("runs database migrations during deploy", () => {
     expect(
       hasAny(stagingScript, ["pnpm db:migrate", "prisma:migrate:deploy"]),
@@ -104,5 +134,31 @@ describe("Deployment pipeline artifacts", () => {
     expect(stagingScript).toContain('sync_remote_env_var "DATABASE_URL"');
     expect(productionScript).toContain('sync_remote_env_var "DATABASE_URL"');
     expect(rollbackScript).toContain('sync_remote_env_var "DATABASE_URL"');
+  });
+
+  it("syncs Google OAuth env into runtime env file before compose deploy", () => {
+    expect(stagingScript).toContain('sync_remote_env_var "GOOGLE_CLIENT_ID"');
+    expect(stagingScript).toContain(
+      'sync_remote_env_var "GOOGLE_CLIENT_SECRET"',
+    );
+    expect(stagingScript).toContain(
+      'sync_remote_env_var "GOOGLE_REDIRECT_URI"',
+    );
+    expect(productionScript).toContain(
+      'sync_remote_env_var "GOOGLE_CLIENT_ID"',
+    );
+    expect(productionScript).toContain(
+      'sync_remote_env_var "GOOGLE_CLIENT_SECRET"',
+    );
+    expect(productionScript).toContain(
+      'sync_remote_env_var "GOOGLE_REDIRECT_URI"',
+    );
+    expect(rollbackScript).toContain('sync_remote_env_var "GOOGLE_CLIENT_ID"');
+    expect(rollbackScript).toContain(
+      'sync_remote_env_var "GOOGLE_CLIENT_SECRET"',
+    );
+    expect(rollbackScript).toContain(
+      'sync_remote_env_var "GOOGLE_REDIRECT_URI"',
+    );
   });
 });
