@@ -40,6 +40,7 @@ describe("OpenAIClient", () => {
 
       expect(client.getModelPolicy()).toEqual({
         intent_parsing: "model-default",
+        onboarding_inference: "model-default",
         follow_up_question: "model-follow-up",
         suggestion_generation: "model-default",
         ranking_explanation: "model-default",
@@ -78,10 +79,10 @@ describe("OpenAIClient", () => {
       "suggestion_generation.v1",
     );
     expect(client.getPromptVersion("conversation_planning")).toBe(
-      "conversation_planning.v1",
+      "conversation_planning.v6",
     );
     expect(client.getPromptVersion("conversation_response")).toBe(
-      "conversation_response.v1",
+      "conversation_response.v2",
     );
   });
 

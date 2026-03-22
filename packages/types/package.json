@@ -4,7 +4,19 @@
   "private": true,
   "type": "module",
   "main": "dist/index.js",
-  "types": "src/index.ts",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./agent-transcript": {
+      "types": "./dist/agent-transcript.d.ts",
+      "import": "./dist/agent-transcript.js",
+      "default": "./dist/agent-transcript.js"
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",

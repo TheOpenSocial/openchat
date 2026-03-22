@@ -138,6 +138,9 @@ jobs:
       - name: Generate Prisma Client
         run: pnpm --filter @opensocial/api prisma:generate
 
+      - name: Build shared backend packages
+        run: pnpm --filter @opensocial/types build && pnpm --filter @opensocial/openai build
+
       - name: Lint (API lane)
         run: pnpm turbo run lint --filter=@opensocial/api...
 

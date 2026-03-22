@@ -4,7 +4,34 @@
   "private": true,
   "type": "module",
   "main": "dist/index.js",
-  "types": "src/index.ts",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./agents": {
+      "types": "./dist/agents.d.ts",
+      "import": "./dist/agents.js",
+      "default": "./dist/agents.js"
+    },
+    "./failure-replay": {
+      "types": "./dist/failure-replay.d.ts",
+      "import": "./dist/failure-replay.js",
+      "default": "./dist/failure-replay.js"
+    },
+    "./golden-intent-dataset": {
+      "types": "./dist/golden-intent-dataset.d.ts",
+      "import": "./dist/golden-intent-dataset.js",
+      "default": "./dist/golden-intent-dataset.js"
+    },
+    "./prompts": {
+      "types": "./dist/prompts.d.ts",
+      "import": "./dist/prompts.js",
+      "default": "./dist/prompts.js"
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
