@@ -532,7 +532,6 @@ export class MatchingService {
       availabilityWindowRows,
     );
 
-    const requester = usersById.get(requesterUserId);
     const requesterWindows =
       availabilityWindowsByUser.get(requesterUserId) ?? [];
 

@@ -1,6 +1,7 @@
 dist
 dist-*
 apps/mobile/dist-*
+apps/mobile/ios/**
 node_modules
 .codex-pipeline
 coverage
