@@ -1234,6 +1234,34 @@ export class OpenAIClient {
       normalized.includes("small group") ||
       normalized.includes("circle") ||
       normalized.includes("people to join");
+    const looksLikeCircleCreation =
+      normalized.includes("create a circle") ||
+      normalized.includes("start a circle") ||
+      normalized.includes("make a circle") ||
+      normalized.includes("host a group");
+    const looksLikeCircleJoin =
+      normalized.includes("join a circle") ||
+      normalized.includes("join this circle") ||
+      normalized.includes("add me to the circle");
+    const looksLikeIntroAcceptance =
+      normalized.includes("accept that intro") ||
+      normalized.includes("accept the intro") ||
+      normalized.includes("say yes to that request");
+    const looksLikeIntroRejection =
+      normalized.includes("reject that intro") ||
+      normalized.includes("decline the intro") ||
+      normalized.includes("say no to that request");
+    const looksLikeIntroRetraction =
+      normalized.includes("cancel that intro") ||
+      normalized.includes("retract that intro") ||
+      normalized.includes("pull back that request");
+    const looksLikeScarcity =
+      normalized.includes("nobody") ||
+      normalized.includes("no one") ||
+      normalized.includes("noone") ||
+      normalized.includes("nothing yet") ||
+      normalized.includes("not finding anyone") ||
+      normalized.includes("no matches");
 
     return conversationPlanSchema.parse({
       specialists: [
@@ -1298,6 +1326,56 @@ export class OpenAIClient {
               },
             ]
           : []),
+        ...(looksLikeCircleCreation
+          ? [
+              {
+                role: "manager" as const,
+                tool: "circle.create" as const,
+                input: {
+                  title: "New recurring circle",
+                  kickoffPrompt: userMessage.slice(0, 240),
+                },
+              },
+            ]
+          : []),
+        ...(looksLikeCircleJoin
+          ? [
+              {
+                role: "manager" as const,
+                tool: "circle.search" as const,
+                input: {
+                  limit: 3,
+                },
+              },
+            ]
+          : []),
+        ...(looksLikeIntroAcceptance
+          ? [
+              {
+                role: "manager" as const,
+                tool: "workflow.read" as const,
+                input: { maxMessages: 16 },
+              },
+            ]
+          : []),
+        ...(looksLikeIntroRejection
+          ? [
+              {
+                role: "manager" as const,
+                tool: "workflow.read" as const,
+                input: { maxMessages: 16 },
+              },
+            ]
+          : []),
+        ...(looksLikeIntroRetraction
+          ? [
+              {
+                role: "manager" as const,
+                tool: "workflow.read" as const,
+                input: { maxMessages: 16 },
+              },
+            ]
+          : []),
         ...(looksLikeReminder
           ? [
               {
@@ -1305,6 +1383,25 @@ export class OpenAIClient {
                 tool: "followup.schedule" as const,
                 input: {
                   title: "Follow up on this social goal",
+                  summary: userMessage.slice(0, 240),
+                },
+              },
+            ]
+          : []),
+        ...(looksLikeScarcity && !looksLikeGroup
+          ? [
+              {
+                role: "manager" as const,
+                tool: "circle.search" as const,
+                input: {
+                  limit: 3,
+                },
+              },
+              {
+                role: "manager" as const,
+                tool: "followup.schedule" as const,
+                input: {
+                  title: "Retry this social search later",
                   summary: userMessage.slice(0, 240),
                 },
               },

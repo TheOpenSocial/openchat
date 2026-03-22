@@ -1129,6 +1129,161 @@ export class AgentConversationService {
             output: result,
           };
         }
+        case "intro.accept": {
+          if (!this.agentOutcomeToolsService) {
+            return {
+              role: call.role,
+              tool: call.tool,
+              status: "failed",
+              reason: "agent_outcome_tools_unavailable",
+            };
+          }
+          const requestId = this.readString(call.input.requestId);
+          if (!requestId) {
+            return {
+              role: call.role,
+              tool: call.tool,
+              status: "failed",
+              reason: "missing_request_id",
+            };
+          }
+          const result = await this.agentOutcomeToolsService.acceptIntro({
+            requestId,
+            actorUserId: userId,
+          });
+          return {
+            role: call.role,
+            tool: call.tool,
+            status: "executed",
+            output: result,
+          };
+        }
+        case "intro.reject": {
+          if (!this.agentOutcomeToolsService) {
+            return {
+              role: call.role,
+              tool: call.tool,
+              status: "failed",
+              reason: "agent_outcome_tools_unavailable",
+            };
+          }
+          const requestId = this.readString(call.input.requestId);
+          if (!requestId) {
+            return {
+              role: call.role,
+              tool: call.tool,
+              status: "failed",
+              reason: "missing_request_id",
+            };
+          }
+          const result = await this.agentOutcomeToolsService.rejectIntro({
+            requestId,
+            actorUserId: userId,
+          });
+          return {
+            role: call.role,
+            tool: call.tool,
+            status: "executed",
+            output: result,
+          };
+        }
+        case "intro.retract": {
+          if (!this.agentOutcomeToolsService) {
+            return {
+              role: call.role,
+              tool: call.tool,
+              status: "failed",
+              reason: "agent_outcome_tools_unavailable",
+            };
+          }
+          const requestId = this.readString(call.input.requestId);
+          if (!requestId) {
+            return {
+              role: call.role,
+              tool: call.tool,
+              status: "failed",
+              reason: "missing_request_id",
+            };
+          }
+          const result = await this.agentOutcomeToolsService.retractIntro({
+            requestId,
+            actorUserId: userId,
+          });
+          return {
+            role: call.role,
+            tool: call.tool,
+            status: "executed",
+            output: result,
+          };
+        }
+        case "circle.create": {
+          if (!this.agentOutcomeToolsService) {
+            return {
+              role: call.role,
+              tool: call.tool,
+              status: "failed",
+              reason: "agent_outcome_tools_unavailable",
+            };
+          }
+          const title = this.readString(call.input.title);
+          if (!title) {
+            return {
+              role: call.role,
+              tool: call.tool,
+              status: "failed",
+              reason: "missing_circle_title",
+            };
+          }
+          const result = await this.agentOutcomeToolsService.createCircle({
+            userId,
+            title,
+            description: this.readString(call.input.description) ?? undefined,
+            kickoffPrompt:
+              this.readString(call.input.kickoffPrompt) ?? undefined,
+            topicTags: this.readStringArray(call.input.topicTags),
+            targetSize: this.readIntInRange(call.input.targetSize, 2, 8, 4),
+            timezone: this.readString(call.input.timezone) ?? undefined,
+          });
+          return {
+            role: call.role,
+            tool: call.tool,
+            status: "executed",
+            output: result,
+          };
+        }
+        case "circle.join": {
+          if (!this.agentOutcomeToolsService) {
+            return {
+              role: call.role,
+              tool: call.tool,
+              status: "failed",
+              reason: "agent_outcome_tools_unavailable",
+            };
+          }
+          const circleId = this.readString(call.input.circleId);
+          const ownerUserId = this.readString(call.input.ownerUserId);
+          if (!circleId || !ownerUserId) {
+            return {
+              role: call.role,
+              tool: call.tool,
+              status: "failed",
+              reason: "missing_circle_join_fields",
+            };
+          }
+          const result = await this.agentOutcomeToolsService.joinCircle({
+            circleId,
+            ownerUserId,
+            userId,
+            role:
+              this.readString(call.input.role) === "admin" ? "admin" : "member",
+          });
+          return {
+            role: call.role,
+            tool: call.tool,
+            status: "executed",
+            output: result,
+          };
+        }
         case "conversation.start": {
           if (!this.agentOutcomeToolsService) {
             return {
@@ -1380,6 +1535,13 @@ export class AgentConversationService {
         reason: toolResult.reason,
       },
     );
+    await this.recordToolActionVisibility({
+      threadId,
+      userId: input.userId,
+      traceId: input.traceId,
+      call,
+      toolResult,
+    });
     return toolResult;
   }
 
@@ -1688,11 +1850,177 @@ export class AgentConversationService {
       tool === "group.plan" ||
       tool === "intent.persist" ||
       tool === "intro.send_request" ||
+      tool === "intro.accept" ||
+      tool === "intro.reject" ||
+      tool === "intro.retract" ||
+      tool === "circle.create" ||
+      tool === "circle.join" ||
       tool === "memory.write" ||
       tool === "followup.schedule" ||
       tool === "workflow.write" ||
       tool === "notification.compose"
     );
+  }
+
+  private async recordToolActionVisibility(input: {
+    threadId: string;
+    userId: string;
+    traceId: string;
+    call: ConversationToolCall;
+    toolResult: ConversationToolResult;
+  }) {
+    if (!this.isVisibleSocialActionTool(input.call.tool)) {
+      return;
+    }
+
+    const actionSummary = this.buildToolActionSummary(
+      input.call.tool,
+      input.toolResult,
+    );
+
+    if (actionSummary) {
+      await this.agentService.appendWorkflowUpdate(
+        input.threadId,
+        actionSummary,
+        {
+          category: "agent_tool_action",
+          traceId: input.traceId,
+          role: input.call.role,
+          tool: input.call.tool,
+          status: input.toolResult.status,
+          output: this.compactToolActionOutput(input.toolResult.output),
+        },
+      );
+    }
+
+    if (!this.prisma.auditLog?.create) {
+      return;
+    }
+
+    await this.prisma.auditLog.create({
+      data: {
+        actorUserId: input.userId,
+        actorType: "user",
+        action: "agent.tool_action_executed",
+        entityType: "agent_thread",
+        entityId: input.threadId,
+        metadata: {
+          traceId: input.traceId,
+          role: input.call.role,
+          tool: input.call.tool,
+          status: input.toolResult.status,
+          reason: input.toolResult.reason ?? null,
+          input: input.call.input,
+          output: this.compactToolActionOutput(input.toolResult.output),
+          summary: actionSummary,
+        } as Prisma.InputJsonValue,
+      },
+    });
+  }
+
+  private isVisibleSocialActionTool(tool: AgentTool) {
+    return (
+      tool === "intent.persist" ||
+      tool === "group.plan" ||
+      tool === "intro.send_request" ||
+      tool === "intro.accept" ||
+      tool === "intro.reject" ||
+      tool === "intro.retract" ||
+      tool === "circle.create" ||
+      tool === "circle.join" ||
+      tool === "followup.schedule"
+    );
+  }
+
+  private buildToolActionSummary(
+    tool: AgentTool,
+    result: ConversationToolResult,
+  ) {
+    if (result.status !== "executed") {
+      return `Social action ${tool} ${result.status}.`;
+    }
+
+    const output =
+      result.output && typeof result.output === "object"
+        ? (result.output as Record<string, unknown>)
+        : {};
+
+    switch (tool) {
+      case "intent.persist":
+        return typeof output.intentId === "string"
+          ? `Saved a social intent for follow-through (${output.intentId}).`
+          : "Saved a social intent for follow-through.";
+      case "group.plan":
+        return typeof output.groupSizeTarget === "number"
+          ? `Created a group plan targeting ${output.groupSizeTarget} people.`
+          : "Created a group plan for this social goal.";
+      case "intro.send_request":
+        return typeof output.requestId === "string"
+          ? `Sent an intro request (${output.requestId}).`
+          : "Sent an intro request.";
+      case "intro.accept":
+        return typeof output.requestId === "string"
+          ? `Accepted an intro request (${output.requestId}).`
+          : "Accepted an intro request.";
+      case "intro.reject":
+        return typeof output.requestId === "string"
+          ? `Rejected an intro request (${output.requestId}).`
+          : "Rejected an intro request.";
+      case "intro.retract":
+        return typeof output.requestId === "string"
+          ? `Retracted a pending intro request (${output.requestId}).`
+          : "Retracted a pending intro request.";
+      case "circle.create":
+        return typeof output.title === "string"
+          ? `Created the recurring circle "${output.title}".`
+          : "Created a recurring circle.";
+      case "circle.join":
+        return typeof output.circleId === "string"
+          ? `Joined recurring circle ${output.circleId}.`
+          : "Joined a recurring circle.";
+      case "followup.schedule":
+        return typeof output.taskId === "string"
+          ? `Scheduled a follow-up task (${output.taskId}).`
+          : "Scheduled a follow-up task.";
+      default:
+        return `Completed social action ${tool}.`;
+    }
+  }
+
+  private compactToolActionOutput(output: unknown) {
+    if (!output || typeof output !== "object") {
+      return output ?? null;
+    }
+
+    const record = output as Record<string, unknown>;
+    const allowedKeys = [
+      "intentId",
+      "requestId",
+      "circleId",
+      "taskId",
+      "threadId",
+      "title",
+      "status",
+      "groupSizeTarget",
+      "queued",
+      "nextRunAt",
+      "nextSessionAt",
+      "joined",
+      "created",
+      "planned",
+      "persisted",
+      "sent",
+      "accepted",
+      "rejected",
+      "retracted",
+      "scheduled",
+    ];
+    return allowedKeys.reduce<Record<string, unknown>>((acc, key) => {
+      if (record[key] !== undefined) {
+        acc[key] = record[key];
+      }
+      return acc;
+    }, {});
   }
 
   private assessRiskGate(input: {

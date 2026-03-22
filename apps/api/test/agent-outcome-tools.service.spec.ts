@@ -6,6 +6,7 @@ describe("AgentOutcomeToolsService", () => {
     const agentService: any = {};
     const intentsService: any = {};
     const discoveryService: any = {};
+    const inboxService: any = {};
     const matchingService: any = {
       retrieveCandidates: vi.fn().mockResolvedValue([
         {
@@ -22,8 +23,10 @@ describe("AgentOutcomeToolsService", () => {
       agentService,
       intentsService,
       discoveryService,
+      inboxService,
       matchingService,
       personalizationService,
+      undefined,
       scheduledTasksService,
     );
 
@@ -85,6 +88,27 @@ describe("AgentOutcomeToolsService", () => {
         groups: [{ title: "Founders circle", score: 0.82 }],
       }),
     };
+    const inboxService: any = {
+      updateStatus: vi.fn().mockResolvedValue({
+        request: {
+          id: "request-1",
+          status: "accepted",
+          senderUserId: "user-3",
+          recipientUserId: "user-1",
+          intentId: "intent-group-1",
+        },
+        queued: true,
+      }),
+      cancelByOriginator: vi.fn().mockResolvedValue({
+        request: {
+          id: "request-2",
+          status: "cancelled",
+          senderUserId: "user-1",
+          recipientUserId: "user-4",
+          intentId: "intent-group-1",
+        },
+      }),
+    };
     const matchingService: any = {};
     const personalizationService: any = {
       storeInteractionSummary: vi.fn().mockResolvedValue({
@@ -101,13 +125,28 @@ describe("AgentOutcomeToolsService", () => {
         status: "active",
       }),
     };
+    const recurringCirclesService: any = {
+      createCircle: vi.fn().mockResolvedValue({
+        id: "circle-1",
+        title: "Design circle",
+        nextSessionAt: new Date("2026-03-29T21:00:00.000Z"),
+      }),
+      addMember: vi.fn().mockResolvedValue({
+        circleId: "circle-1",
+        userId: "user-2",
+        status: "active",
+        role: "member",
+      }),
+    };
 
     const service = new AgentOutcomeToolsService(
       agentService,
       intentsService,
       discoveryService,
+      inboxService,
       matchingService,
       personalizationService,
+      recurringCirclesService,
       scheduledTasksService,
     );
 
@@ -144,6 +183,24 @@ describe("AgentOutcomeToolsService", () => {
       recipientUserId: "candidate-1",
       traceId: "trace-1",
       threadId: "thread-1",
+    });
+    const accepted = await service.acceptIntro({
+      requestId: "request-1",
+      actorUserId: "user-1",
+    });
+    const retracted = await service.retractIntro({
+      requestId: "request-2",
+      actorUserId: "user-1",
+    });
+    const circle = await service.createCircle({
+      userId: "user-1",
+      title: "Design circle",
+      topicTags: ["design", "founders"],
+    });
+    const joined = await service.joinCircle({
+      circleId: "circle-1",
+      ownerUserId: "owner-1",
+      userId: "user-2",
     });
 
     expect(circles).toEqual(
@@ -186,6 +243,77 @@ describe("AgentOutcomeToolsService", () => {
       expect.objectContaining({
         sent: true,
         requestId: "request-1",
+      }),
+    );
+    expect(accepted).toEqual(
+      expect.objectContaining({
+        accepted: true,
+        requestId: "request-1",
+      }),
+    );
+    expect(retracted).toEqual(
+      expect.objectContaining({
+        retracted: true,
+        requestId: "request-2",
+      }),
+    );
+    expect(circle).toEqual(
+      expect.objectContaining({
+        created: true,
+        circleId: "circle-1",
+      }),
+    );
+    expect(joined).toEqual(
+      expect.objectContaining({
+        joined: true,
+        circleId: "circle-1",
+        userId: "user-2",
+      }),
+    );
+    expect(personalizationService.storeInteractionSummary).toHaveBeenCalledWith(
+      "user-1",
+      expect.objectContaining({
+        summary: expect.stringContaining("Accepted a social intro request"),
+        safe: true,
+        context: expect.objectContaining({
+          outcome: "intro_accepted",
+          requestId: "request-1",
+        }),
+      }),
+    );
+    expect(personalizationService.storeInteractionSummary).toHaveBeenCalledWith(
+      "user-1",
+      expect.objectContaining({
+        summary: expect.stringContaining(
+          'Created a recurring circle "Design circle"',
+        ),
+        safe: true,
+        context: expect.objectContaining({
+          outcome: "circle_created",
+          circleId: "circle-1",
+        }),
+      }),
+    );
+    expect(personalizationService.storeInteractionSummary).toHaveBeenCalledWith(
+      "user-2",
+      expect.objectContaining({
+        summary: expect.stringContaining("Joined a recurring circle"),
+        safe: true,
+        context: expect.objectContaining({
+          outcome: "circle_joined",
+          circleId: "circle-1",
+        }),
+      }),
+    );
+    expect(personalizationService.recordBehaviorSignal).toHaveBeenCalledWith(
+      "user-1",
+      expect.objectContaining({
+        edgeType: "high_success_with",
+        targetNode: {
+          nodeType: "person",
+          label: "user:user-3",
+        },
+        feedbackType: "agent_outcome_high_success_person",
       }),
     );
   });

@@ -59,9 +59,9 @@ const promptRegistry: Record<OpenAIRoutingTask, PromptDefinition> = {
   },
   conversation_planning: {
     task: "conversation_planning",
-    version: "conversation_planning.v4",
+    version: "conversation_planning.v6",
     instructions:
-      "Plan one bounded agentic turn as strict JSON with specialists, toolCalls, and responseGoal. Use provided socialContext, onboarding freshness, preferences, and memory to decide the next best action. Available tools include intent.parse, personalization.retrieve, candidate.search, circle.search, group.plan, intent.persist, intro.send_request, conversation.start, memory.write, followup.schedule, notification.compose, moderation.review, workflow.read, and workflow.write. Prefer minimal safe steps and only use world-action tools when they move the user toward a concrete social outcome.",
+      "Plan one bounded agentic turn as strict JSON with specialists, toolCalls, and responseGoal. Use provided socialContext, onboarding freshness, preferences, memory, and any visible scarcity signals to decide the next best action. Available tools include intent.parse, personalization.retrieve, candidate.search, circle.search, group.plan, intent.persist, intro.send_request, intro.accept, intro.reject, intro.retract, circle.create, circle.join, conversation.start, memory.write, followup.schedule, notification.compose, moderation.review, workflow.read, and workflow.write. Prefer minimal safe steps and only use world-action tools when they move the user toward a concrete social outcome. Favor this ladder: clarify intent only when meaning is still ambiguous, search or persist when the user is exploring, send or manage intros when a direct 1:1 path exists, create or join circles when group energy is explicit or search is sparse, and schedule follow-up when timing is the real blocker.",
   },
   conversation_response: {
     task: "conversation_response",

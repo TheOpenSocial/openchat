@@ -169,6 +169,35 @@ function createServiceHarness() {
       requestId: "request-1",
       status: "pending",
     }),
+    acceptIntro: vi.fn().mockResolvedValue({
+      accepted: true,
+      requestId: "request-1",
+      status: "accepted",
+      queued: true,
+    }),
+    rejectIntro: vi.fn().mockResolvedValue({
+      rejected: true,
+      requestId: "request-2",
+      status: "rejected",
+    }),
+    retractIntro: vi.fn().mockResolvedValue({
+      retracted: true,
+      requestId: "request-3",
+      status: "cancelled",
+    }),
+    createCircle: vi.fn().mockResolvedValue({
+      created: true,
+      circleId: "circle-1",
+      title: "Founders circle",
+      nextSessionAt: new Date("2026-03-23T21:00:00.000Z").toISOString(),
+    }),
+    joinCircle: vi.fn().mockResolvedValue({
+      joined: true,
+      circleId: "circle-1",
+      userId: IDS.userId,
+      status: "active",
+      role: "member",
+    }),
     startConversation: vi.fn().mockResolvedValue({
       threadId: "thread-2",
       title: "Tennis tonight",
@@ -364,6 +393,91 @@ describe("AgentConversationService", () => {
     expect(agentService.createAgentMessage).toHaveBeenCalledWith(
       IDS.threadId,
       "I can still help. Share time, mode, and group size preference.",
+    );
+  });
+
+  it("records social tool actions in workflow and audit surfaces", async () => {
+    const { service, agentService, openai, prisma } = createServiceHarness();
+
+    openai.planConversationTurn.mockResolvedValueOnce({
+      specialists: ["intent_parser"],
+      toolCalls: [
+        {
+          role: "manager",
+          tool: "intent.persist",
+          input: {
+            text: "Find someone to talk design with tonight",
+          },
+        },
+        {
+          role: "manager",
+          tool: "followup.schedule",
+          input: {
+            title: "Design follow-up",
+            summary: "Retry this design social goal tomorrow.",
+          },
+        },
+      ],
+      responseGoal: "move toward a concrete social next step",
+    });
+    openai.composeConversationResponse.mockResolvedValueOnce(
+      "I saved that goal and set a follow-up so we keep momentum.",
+    );
+
+    await service.runAgenticTurn({
+      threadId: IDS.threadId,
+      userId: IDS.userId,
+      content: "Find someone to talk design with tonight",
+      traceId: "trace-agentic-audit",
+    });
+
+    expect(agentService.appendWorkflowUpdate).toHaveBeenCalledWith(
+      IDS.threadId,
+      "Saved a social intent for follow-through (intent-1).",
+      expect.objectContaining({
+        category: "agent_tool_action",
+        traceId: "trace-agentic-audit",
+        tool: "intent.persist",
+      }),
+    );
+    expect(agentService.appendWorkflowUpdate).toHaveBeenCalledWith(
+      IDS.threadId,
+      "Scheduled a follow-up task (task-1).",
+      expect.objectContaining({
+        category: "agent_tool_action",
+        traceId: "trace-agentic-audit",
+        tool: "followup.schedule",
+      }),
+    );
+    expect(prisma.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: "agent.tool_action_executed",
+          entityType: "agent_thread",
+          entityId: IDS.threadId,
+          metadata: expect.objectContaining({
+            traceId: "trace-agentic-audit",
+            tool: "intent.persist",
+            status: "executed",
+            summary: "Saved a social intent for follow-through (intent-1).",
+          }),
+        }),
+      }),
+    );
+    expect(prisma.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: "agent.tool_action_executed",
+          entityType: "agent_thread",
+          entityId: IDS.threadId,
+          metadata: expect.objectContaining({
+            traceId: "trace-agentic-audit",
+            tool: "followup.schedule",
+            status: "executed",
+            summary: "Scheduled a follow-up task (task-1).",
+          }),
+        }),
+      }),
     );
   });
 
