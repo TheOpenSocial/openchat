@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { OpenAIClient, requiresHumanApproval } from "@opensocial/openai";
+import { AnalyticsService } from "../analytics/analytics.service.js";
 
 interface EvalScenarioResult {
   id: string;
@@ -13,6 +14,8 @@ interface EvalScenarioResult {
 export class AgenticEvalsService {
   private readonly evalOpenAI = new OpenAIClient({ apiKey: "" });
 
+  constructor(private readonly analyticsService: AnalyticsService) {}
+
   async runSnapshot() {
     const scenarios: EvalScenarioResult[] = await Promise.all([
       this.evalPlanningBounds(),
@@ -20,6 +23,7 @@ export class AgenticEvalsService {
       this.evalModerationFallback(),
       this.evalHumanApprovalPolicy(),
       this.evalFailureCapture(),
+      this.evalSocialOutcomeTelemetry(),
     ]);
 
     const passed = scenarios.filter((scenario) => scenario.passed).length;
@@ -145,6 +149,33 @@ export class AgenticEvalsService {
       details: passed
         ? `Captured ${failures.length} intent failure event(s).`
         : "No failure event was captured for guarded fallback path.",
+    };
+  }
+
+  private async evalSocialOutcomeTelemetry(): Promise<EvalScenarioResult> {
+    const snapshot = await this.analyticsService.getAgentOutcomeMetrics({
+      days: 14,
+      followupEngagementHours: 24,
+    });
+    const acceptanceRate = snapshot.introRequestAcceptance.acceptanceRate;
+    const circleConversionRate = snapshot.circleJoinConversion.conversionRate;
+    const followupUsefulnessRate = snapshot.followupUsefulness.usefulnessRate;
+    const ratesAreBounded = [
+      acceptanceRate,
+      circleConversionRate,
+      followupUsefulnessRate,
+    ].every((value) => value === null || (value >= 0 && value <= 1));
+    const toolCoverage = snapshot.toolAttempts.length >= 3;
+    const passed = ratesAreBounded && toolCoverage;
+
+    return {
+      id: "social_outcome_telemetry",
+      title: "Social outcome telemetry stays queryable and numerically bounded",
+      passed,
+      score: passed ? 1 : 0,
+      details: passed
+        ? `Tracked ${snapshot.summary.totalActions} social action event(s) across ${snapshot.toolAttempts.length} tool bucket(s).`
+        : "Outcome telemetry snapshot is missing tool coverage or contains invalid rate bounds.",
     };
   }
 }

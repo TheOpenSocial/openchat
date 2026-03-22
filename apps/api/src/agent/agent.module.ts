@@ -1,4 +1,5 @@
 import { Module, forwardRef } from "@nestjs/common";
+import { AnalyticsModule } from "../analytics/analytics.module.js";
 import { DiscoveryModule } from "../discovery/discovery.module.js";
 import { InboxModule } from "../inbox/inbox.module.js";
 import { IntentsModule } from "../intents/intents.module.js";
@@ -15,6 +16,7 @@ import { AgentService } from "./agent.service.js";
 
 @Module({
   imports: [
+    AnalyticsModule,
     ModerationModule,
     MatchingModule,
     PersonalizationModule,

@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { AnalyticsModule } from "../analytics/analytics.module.js";
 import { ChatsModule } from "../chats/chats.module.js";
 import { DatabaseModule } from "../database/database.module.js";
 import { IntentsModule } from "../intents/intents.module.js";
@@ -13,6 +14,7 @@ import { AdminController } from "./admin.controller.js";
 @Module({
   imports: [
     JobsModule,
+    AnalyticsModule,
     DatabaseModule,
     IntentsModule,
     ModerationModule,

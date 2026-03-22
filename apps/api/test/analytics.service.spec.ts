@@ -160,4 +160,138 @@ describe("AnalyticsService", () => {
     expect(prisma.userPreference.create).toHaveBeenCalledTimes(3);
     expect(prisma.auditLog.create).toHaveBeenCalledTimes(3);
   });
+
+  it("computes agent outcome metrics from social action telemetry", async () => {
+    const now = new Date("2026-03-22T12:00:00.000Z");
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+
+    const prisma: any = {
+      auditLog: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: "evt-1",
+            actorUserId: "user-1",
+            entityType: "agent_thread",
+            entityId: "thread-1",
+            createdAt: new Date("2026-03-21T10:00:00.000Z"),
+            metadata: {
+              eventType: "agent_social_action",
+              properties: {
+                tool: "intro.send_request",
+                status: "executed",
+                requestId: "request-1",
+                sent: true,
+              },
+            },
+          },
+          {
+            id: "evt-2",
+            actorUserId: "user-1",
+            entityType: "agent_thread",
+            entityId: "thread-1",
+            createdAt: new Date("2026-03-21T11:00:00.000Z"),
+            metadata: {
+              eventType: "circle.join",
+              properties: {},
+            },
+          },
+          {
+            id: "evt-3",
+            actorUserId: "user-1",
+            entityType: "agent_thread",
+            entityId: "thread-1",
+            createdAt: new Date("2026-03-21T11:05:00.000Z"),
+            metadata: {
+              eventType: "agent_social_action",
+              properties: {
+                tool: "circle.join",
+                status: "executed",
+                joined: true,
+                circleId: "circle-1",
+              },
+            },
+          },
+          {
+            id: "evt-4",
+            actorUserId: "user-1",
+            entityType: "agent_thread",
+            entityId: "thread-1",
+            createdAt: new Date("2026-03-21T12:00:00.000Z"),
+            metadata: {
+              eventType: "agent_social_action",
+              properties: {
+                tool: "followup.schedule",
+                status: "executed",
+                taskId: "task-1",
+                scheduled: true,
+              },
+            },
+          },
+          {
+            id: "evt-5",
+            actorUserId: "user-1",
+            entityType: "intent",
+            entityId: "intent-1",
+            createdAt: new Date("2026-03-21T13:00:00.000Z"),
+            metadata: {
+              eventType: "intent_created",
+              properties: {
+                source: "followup",
+              },
+            },
+          },
+        ]),
+      },
+      intentRequest: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: "request-1",
+            status: "accepted",
+          },
+        ]),
+      },
+      scheduledTaskRun: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: "run-1",
+            scheduledTaskId: "task-1",
+            userId: "user-1",
+            status: "completed",
+            triggeredAt: new Date("2026-03-21T12:30:00.000Z"),
+            finishedAt: new Date("2026-03-21T12:31:00.000Z"),
+          },
+        ]),
+      },
+    };
+
+    const service = new AnalyticsService(prisma);
+    const result = await service.getAgentOutcomeMetrics({ days: 30 });
+
+    expect(result.summary.totalActions).toBe(3);
+    expect(result.introRequestAcceptance).toEqual(
+      expect.objectContaining({
+        attempted: 1,
+        accepted: 1,
+        acceptanceRate: 1,
+      }),
+    );
+    expect(result.circleJoinConversion).toEqual(
+      expect.objectContaining({
+        attempted: 1,
+        converted: 1,
+        conversionRate: 1,
+      }),
+    );
+    expect(result.followupUsefulness).toEqual(
+      expect.objectContaining({
+        scheduled: 1,
+        completedRuns: 1,
+        engagedRuns: 1,
+        usefulnessRate: 1,
+      }),
+    );
+
+    vi.useRealTimers();
+  });
 });

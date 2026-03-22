@@ -143,6 +143,12 @@ function createServiceHarness() {
     setJson: vi.fn().mockResolvedValue(undefined),
     delete: vi.fn().mockResolvedValue(undefined),
   };
+  const analyticsService: any = {
+    trackEvent: vi.fn().mockResolvedValue({
+      recorded: true,
+      eventType: "agent_social_action",
+    }),
+  };
 
   const agentOutcomeToolsService: any = {
     lookupAvailability: vi.fn().mockResolvedValue({
@@ -244,6 +250,7 @@ function createServiceHarness() {
     prisma,
     agentService,
     appCacheService,
+    analyticsService,
     moderationService,
     agentOutcomeToolsService,
   );
@@ -289,6 +296,7 @@ function createServiceHarness() {
     openai,
     moderationService,
     appCacheService,
+    analyticsService,
     agentOutcomeToolsService,
   };
 }
@@ -421,7 +429,8 @@ describe("AgentConversationService", () => {
   });
 
   it("records social tool actions in workflow and audit surfaces", async () => {
-    const { service, agentService, openai, prisma } = createServiceHarness();
+    const { service, agentService, openai, prisma, analyticsService } =
+      createServiceHarness();
 
     openai.planConversationTurn.mockResolvedValueOnce({
       specialists: ["intent_parser"],
@@ -488,6 +497,17 @@ describe("AgentConversationService", () => {
         }),
       }),
     );
+    expect(analyticsService.trackEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "agent_social_action",
+        actorUserId: IDS.userId,
+        properties: expect.objectContaining({
+          tool: "intent.persist",
+          status: "executed",
+          intentId: "intent-1",
+        }),
+      }),
+    );
     expect(prisma.auditLog.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -500,6 +520,18 @@ describe("AgentConversationService", () => {
             status: "executed",
             summary: "Scheduled a follow-up task (task-1).",
           }),
+        }),
+      }),
+    );
+    expect(analyticsService.trackEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "agent_social_action",
+        actorUserId: IDS.userId,
+        properties: expect.objectContaining({
+          tool: "followup.schedule",
+          status: "executed",
+          taskId: "task-1",
+          scheduled: true,
         }),
       }),
     );
