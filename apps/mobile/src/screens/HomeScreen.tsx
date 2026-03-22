@@ -5,6 +5,7 @@ import {
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -23,6 +24,8 @@ import {
   DiscoveryInboxSuggestionsResponse,
   PassiveDiscoveryResponse,
   PendingIntentsSummaryResponse,
+  PrimaryProfilePhoto,
+  ProfilePhotoRecord,
   RecurringCircleRecord,
   RecurringCircleSessionRecord,
   SavedSearchRecord,
@@ -188,6 +191,10 @@ export function HomeScreen({
     useState<UserProfileDraft>(initialProfile);
   const [pushToken, setPushToken] = useState<string | null>(null);
   const [pushEnabled, setPushEnabled] = useState(false);
+  const [primaryProfilePhoto, setPrimaryProfilePhoto] =
+    useState<PrimaryProfilePhoto | null>(null);
+  const [latestProfilePhoto, setLatestProfilePhoto] =
+    useState<ProfilePhotoRecord | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [recurringCircles, setRecurringCircles] = useState<
     RecurringCircleRecord[]
@@ -403,10 +410,13 @@ export function HomeScreen({
     const bootstrap = async () => {
       setProfileLoading(true);
       try {
-        const [globalRules, trust] = await Promise.all([
-          api.getGlobalRules(session.userId, session.accessToken),
-          api.getTrustProfile(session.userId, session.accessToken),
-        ]);
+        const [globalRules, trust, primaryPhoto, profilePhotos] =
+          await Promise.all([
+            api.getGlobalRules(session.userId, session.accessToken),
+            api.getTrustProfile(session.userId, session.accessToken),
+            api.getPrimaryProfilePhoto(session.userId, session.accessToken),
+            api.listProfilePhotos(session.userId, session.accessToken),
+          ]);
 
         const notificationMode =
           globalRules.notificationMode === "digest" ? "digest" : "live";
@@ -417,6 +427,10 @@ export function HomeScreen({
 
         if (mounted) {
           setProfileDraft(nextProfile);
+          setPrimaryProfilePhoto(primaryPhoto);
+          setLatestProfilePhoto(
+            profilePhotos.find((photo) => photo.status !== "replaced") ?? null,
+          );
           setTrustSummary(
             `badge: ${String(trust.verificationBadge ?? "unknown")} · reputation: ${String(
               trust.reputationScore ?? "n/a",
@@ -2302,6 +2316,8 @@ export function HomeScreen({
           ) : null}
           {activeTab === "profile" ? (
             <ProfileTab
+              primaryProfilePhoto={primaryProfilePhoto}
+              latestProfilePhoto={latestProfilePhoto}
               loading={profileLoading}
               profile={profileDraft}
               pushEnabled={pushEnabled}
@@ -2797,6 +2813,8 @@ function ChatsTab({
 
 interface ProfileTabProps {
   profile: UserProfileDraft;
+  primaryProfilePhoto: PrimaryProfilePhoto | null;
+  latestProfilePhoto: ProfilePhotoRecord | null;
   trustSummary: string;
   telemetrySummary: TelemetrySummary | null;
   pushEnabled: boolean;
@@ -2853,6 +2871,7 @@ interface ProfileTabProps {
 
 function ProfileTab({
   loading,
+  latestProfilePhoto,
   onNotificationModeChange,
   onSaveSettings,
   onSendDigestNow,
@@ -2900,7 +2919,30 @@ function ProfileTab({
   onCreateSavedSearch,
   onCreateAutomation,
   onRunAutomationNow,
+  primaryProfilePhoto,
 }: ProfileTabProps) {
+  const photoStatus =
+    latestProfilePhoto?.status === "processing" ||
+    latestProfilePhoto?.status === "pending_upload" ||
+    latestProfilePhoto?.status === "pending"
+      ? "Processing"
+      : latestProfilePhoto?.status === "pending_review"
+        ? "Under review"
+        : latestProfilePhoto?.status === "approved"
+          ? "Approved"
+          : primaryProfilePhoto?.kind === "uploaded"
+            ? "Approved"
+            : "Generated";
+
+  const photoStatusCopy =
+    photoStatus === "Processing"
+      ? "Your photo is uploading and being prepared."
+      : photoStatus === "Under review"
+        ? "Your photo is uploaded and waiting on safety review."
+        : photoStatus === "Approved"
+          ? "This is the image people will see first."
+          : "Using your generated fallback avatar for now.";
+
   return (
     <ScrollView
       contentContainerStyle={{
@@ -2909,6 +2951,43 @@ function ProfileTab({
         gap: 12,
       }}
     >
+      <SurfaceCard>
+        <Text className="mb-3 text-base font-semibold text-ink">
+          Profile photo
+        </Text>
+        <View className="flex-row items-center gap-4">
+          {primaryProfilePhoto ? (
+            <Image
+              source={{
+                uri:
+                  primaryProfilePhoto.thumbUrl ??
+                  primaryProfilePhoto.originalUrl,
+              }}
+              style={{ width: 72, height: 72, borderRadius: 24 }}
+            />
+          ) : (
+            <View className="h-[72px] w-[72px] items-center justify-center rounded-[24px] bg-surface">
+              <Text className="text-lg font-semibold text-ink">
+                {profile.displayName.trim().slice(0, 1).toUpperCase() || "O"}
+              </Text>
+            </View>
+          )}
+          <View className="flex-1">
+            <Text className="text-sm font-semibold text-ink">
+              {photoStatus}
+            </Text>
+            <Text className="mt-1 text-xs leading-5 text-muted">
+              {photoStatusCopy}
+            </Text>
+            {latestProfilePhoto?.status ? (
+              <Text className="mt-2 text-[11px] uppercase tracking-[0.16em] text-muted">
+                latest status: {latestProfilePhoto.status}
+              </Text>
+            ) : null}
+          </View>
+        </View>
+      </SurfaceCard>
+
       <SurfaceCard>
         <Text className="mb-2 text-base font-semibold text-ink">Interests</Text>
         <View className="flex-row flex-wrap gap-2">

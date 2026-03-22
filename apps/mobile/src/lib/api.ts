@@ -86,6 +86,15 @@ export interface PrimaryProfilePhoto {
   thumbUrl?: string | null;
 }
 
+export interface ProfilePhotoRecord {
+  id: string;
+  userId: string;
+  originalUrl: string;
+  thumbUrl: string | null;
+  status: string;
+  createdAt: string;
+}
+
 export interface InboxRequestRecord {
   id: string;
   intentId: string;
@@ -757,6 +766,14 @@ export const api = {
     return request<PrimaryProfilePhoto>(
       "GET",
       `/profiles/${userId}/photo`,
+      undefined,
+      accessToken,
+    );
+  },
+  listProfilePhotos(userId: string, accessToken?: string) {
+    return request<ProfilePhotoRecord[]>(
+      "GET",
+      `/profiles/${userId}/photos`,
       undefined,
       accessToken,
     );

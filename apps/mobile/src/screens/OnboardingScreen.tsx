@@ -22,6 +22,7 @@ import { AnimatedScreen } from "../components/AnimatedScreen";
 import { ChoiceChip } from "../components/ChoiceChip";
 import { InlineNotice } from "../components/InlineNotice";
 import { PrimaryButton } from "../components/PrimaryButton";
+import { hapticImpact, hapticSelection } from "../lib/haptics";
 import { pickProfilePhoto } from "../lib/profile-photo-upload";
 import {
   loadOnboardingDraft,
@@ -326,6 +327,7 @@ export function OnboardingScreen({
     value: string,
     setter: Dispatch<SetStateAction<string[]>>,
   ) => {
+    hapticSelection();
     setter((current) =>
       current.includes(value)
         ? current.filter((item) => item !== value)
@@ -338,6 +340,7 @@ export function OnboardingScreen({
     if (!label) {
       return;
     }
+    hapticSelection();
     setInterests((current) =>
       current.some((item) => item.toLowerCase() === label.toLowerCase())
         ? current
@@ -347,6 +350,7 @@ export function OnboardingScreen({
   };
 
   const handleBack = () => {
+    hapticSelection();
     setStepIndex((current) => Math.max(0, current - 1));
   };
 
@@ -374,15 +378,18 @@ export function OnboardingScreen({
       if (!canContinue) {
         return;
       }
+      hapticImpact();
       setStepIndex((current) => Math.min(steps.length - 1, current + 1));
       return;
     }
 
+    hapticImpact();
     await onComplete(buildDraft(firstIntentText.trim() || null));
   };
 
   const handleSkipIntent = async () => {
     setLocalError(null);
+    hapticSelection();
     await onComplete(buildDraft(null));
   };
 
@@ -392,6 +399,7 @@ export function OnboardingScreen({
     try {
       const nextPhoto = await pickProfilePhoto();
       if (nextPhoto) {
+        hapticImpact();
         setProfilePhoto(nextPhoto);
       }
     } catch (error) {
