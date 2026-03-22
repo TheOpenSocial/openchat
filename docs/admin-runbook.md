@@ -26,6 +26,7 @@
 
 4. Moderation backlog
 - `GET /api/admin/moderation/queue`
+- `pnpm moderation:drill` for end-to-end operator verification in staging/prod
 
 ## Core operations
 - Replay intent workflow: `POST /api/admin/intents/:intentId/replay`
@@ -34,6 +35,12 @@
 - Repair chat flow: `POST /api/admin/chats/:chatId/repair`
 - Deactivate account: `POST /api/admin/users/:userId/deactivate`
 - Restrict account: `POST /api/admin/users/:userId/restrict`
+
+## Moderation drill
+- Default command: `pnpm moderation:drill`
+- Safe default: resolves a flag without applying enforcement unless you set `MODERATION_DRILL_ACTION` to `restrict_user` or `escalate_strike`.
+- Use `MODERATION_DRILL_EXISTING_FLAG_ID` when you want to validate triage/audit behavior without creating a new report.
+- For a full synthetic flow, provide a reporter session and target user so the drill can create a report and verify the generated moderation flag appears in the admin queue.
 
 ## Launch controls
 - View: `GET /api/admin/launch-controls`

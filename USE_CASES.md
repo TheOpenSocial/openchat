@@ -312,7 +312,7 @@ These are conceptually important and should remain visible:
 - live staging/production validation of all documented flows, not just local and mocked verification
 - deployment hardening so required runtime dependencies cannot be omitted silently
 - deeper end-to-end verification for recurring automation/circle flows against a real deployed environment
-- richer moderation operations ergonomics: queue ownership, reviewer notes, enforcement explainability, and triage SLA visibility
+- live moderation-drill execution in staging/production to verify report -> triage -> enforcement -> audit flows end to end
 - broader real-user/manual QA for continuity, memory explanations, and moderation edge cases
 
 ## Source Alignment

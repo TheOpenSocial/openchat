@@ -33,6 +33,26 @@ Optional automation (incident/readiness verification):
   - `INCIDENT_VERIFY_RUNBOOK_FILES` (comma-separated file list override)
 - The script verifies health, `ops/alerts`, `ops/metrics`, launch controls, queue visibility, and runbook-path presence; exits non-zero on readiness failures.
 
+Optional automation (moderation drill):
+- Command: `pnpm moderation:drill`
+- Use this to verify the full moderation operator loop in a deployed environment: report -> flag visibility -> assignment -> triage -> audit trail -> optional enforcement verification.
+- Required env when creating a fresh report:
+  - `SMOKE_BASE_URL`
+  - `SMOKE_ADMIN_USER_ID`
+  - `SMOKE_ADMIN_ROLE`
+  - `MODERATION_DRILL_REPORTER_USER_ID`
+  - `MODERATION_DRILL_ACCESS_TOKEN`
+  - `MODERATION_DRILL_TARGET_USER_ID`
+- Optional env:
+  - `SMOKE_ADMIN_API_KEY`
+  - `SMOKE_ACCESS_TOKEN`
+  - `MODERATION_DRILL_EXISTING_FLAG_ID` (skip report creation and start from an existing flag)
+  - `MODERATION_DRILL_ENTITY_TYPE` / `MODERATION_DRILL_ENTITY_ID` (defaults to `user` / target user)
+  - `MODERATION_DRILL_ASSIGN_TO_USER_ID`
+  - `MODERATION_DRILL_ACTION` (`resolve` by default; `restrict_user` and `escalate_strike` verify enforcement paths)
+  - `MODERATION_DRILL_TRIAGE_REASON`, `MODERATION_DRILL_ASSIGN_REASON`, `MODERATION_DRILL_STRIKE_REASON`
+- Safety default: the drill defaults to `MODERATION_DRILL_ACTION=resolve`, so it is non-destructive unless you explicitly opt into enforcement verification.
+
 ## 1) Environment and Health
 - [ ] `GET /api/health` returns success.
 - [ ] `GET /api/admin/health` returns success with valid admin headers.
@@ -84,3 +104,4 @@ Cross-check with `PROGRESS.md` §31 before promoting to production:
 - [ ] Launch controls: feature flags and kill switches exercised in staging (`GET /api/admin/launch-controls`, toggles verified).
 - [ ] Cohort / invite-only: if enabled, non-cohort denial tested.
 - [ ] Frontend smoke: mobile Maestro critical path (local-mode) and/or web design-mock Playwright (`pnpm --filter @opensocial/web test:e2e`) green on a release candidate build; optional manual pass of **Home → Chats → Profile** on staging web/mobile against live API.
+- [ ] Moderation drill executed in a deployed environment with `pnpm moderation:drill`; verify queue visibility, assignment, triage, audit trail, and any selected enforcement path.
