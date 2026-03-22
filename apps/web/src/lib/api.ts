@@ -269,6 +269,7 @@ type RetryMode = "none" | "transient";
 type RequestOptions = {
   signal?: AbortSignal;
   retryMode?: RetryMode;
+  headers?: Record<string, string>;
 };
 
 export const API_BASE_URL = webEnv.apiBaseUrl;
@@ -538,6 +539,7 @@ async function request<T>(
       headers: {
         "content-type": "application/json",
         ...(token ? { authorization: `Bearer ${token}` } : {}),
+        ...(requestOptions?.headers ?? {}),
       },
       body: body ? JSON.stringify(body) : undefined,
       signal: requestOptions?.signal,
@@ -587,6 +589,7 @@ async function requestNullable<T>(
       headers: {
         "content-type": "application/json",
         ...(token ? { authorization: `Bearer ${token}` } : {}),
+        ...(requestOptions?.headers ?? {}),
       },
       signal: requestOptions?.signal,
     });
@@ -714,14 +717,20 @@ export const api = {
   updateProfile(
     userId: string,
     payload: {
+      displayName?: string;
       bio?: string;
       city?: string;
       country?: string;
       visibility?: "public" | "limited" | "private";
     },
     accessToken?: string,
+    options?: { idempotencyKey?: string },
   ) {
-    return request("PUT", `/profiles/${userId}`, payload, accessToken);
+    return request("PUT", `/profiles/${userId}`, payload, accessToken, {
+      ...(options?.idempotencyKey
+        ? { headers: { "idempotency-key": options.idempotencyKey } }
+        : {}),
+    });
   },
   replaceInterests(
     userId: string,
@@ -783,12 +792,18 @@ export const api = {
       memoryMode: "minimal" | "standard" | "extended";
     },
     accessToken?: string,
+    options?: { idempotencyKey?: string },
   ) {
     return request(
       "PUT",
       `/personalization/${userId}/rules/global`,
       payload,
       accessToken,
+      {
+        ...(options?.idempotencyKey
+          ? { headers: { "idempotency-key": options.idempotencyKey } }
+          : {}),
+      },
     );
   },
   getGlobalRules(userId: string, accessToken?: string) {
@@ -907,8 +922,11 @@ export const api = {
     userId: string,
     rawText: string,
     accessToken?: string,
-    fetchOpts?: { signal?: AbortSignal },
-    agentThreadId?: string,
+    options?: {
+      signal?: AbortSignal;
+      agentThreadId?: string;
+      idempotencyKey?: string;
+    },
   ) {
     return request<Record<string, unknown>>(
       "POST",
@@ -916,10 +934,17 @@ export const api = {
       {
         userId,
         rawText,
-        ...(agentThreadId ? { agentThreadId } : {}),
+        ...(options?.agentThreadId
+          ? { agentThreadId: options.agentThreadId }
+          : {}),
       },
       accessToken,
-      fetchOpts,
+      {
+        signal: options?.signal,
+        ...(options?.idempotencyKey
+          ? { headers: { "idempotency-key": options.idempotencyKey } }
+          : {}),
+      },
     );
   },
   createIntentFromAgentMessage(
@@ -927,7 +952,11 @@ export const api = {
     userId: string,
     content: string,
     accessToken?: string,
-    options?: { allowDecomposition?: boolean; maxIntents?: number },
+    options?: {
+      allowDecomposition?: boolean;
+      maxIntents?: number;
+      idempotencyKey?: string;
+    },
   ) {
     return request<AgentMessageIntentResult>(
       "POST",
@@ -944,6 +973,11 @@ export const api = {
           : {}),
       },
       accessToken,
+      {
+        ...(options?.idempotencyKey
+          ? { headers: { "idempotency-key": options.idempotencyKey } }
+          : {}),
+      },
     );
   },
   summarizePendingIntents(
@@ -989,7 +1023,7 @@ export const api = {
     userId: string,
     content: string,
     accessToken?: string,
-    fetchOpts?: { signal?: AbortSignal },
+    fetchOpts?: { signal?: AbortSignal; idempotencyKey?: string },
     extras?: {
       voiceTranscript?: string;
       attachments?: Array<
@@ -1012,7 +1046,12 @@ export const api = {
           : {}),
       },
       accessToken,
-      fetchOpts,
+      {
+        signal: fetchOpts?.signal,
+        ...(fetchOpts?.idempotencyKey
+          ? { headers: { "idempotency-key": fetchOpts.idempotencyKey } }
+          : {}),
+      },
     );
   },
   agentThreadRespondStream(
@@ -1028,6 +1067,7 @@ export const api = {
         | { kind: "image_url"; url: string; caption?: string }
         | { kind: "file_ref"; fileId: string; caption?: string }
       >;
+      idempotencyKey?: string;
     },
   ) {
     return request<AgenticTurnResult>(
@@ -1045,7 +1085,12 @@ export const api = {
           : {}),
       },
       accessToken,
-      { signal: options?.signal },
+      {
+        signal: options?.signal,
+        ...(options?.idempotencyKey
+          ? { headers: { "idempotency-key": options.idempotencyKey } }
+          : {}),
+      },
     );
   },
   moderationAssess(

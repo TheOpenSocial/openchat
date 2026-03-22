@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   Optional,
   Param,
   Patch,
@@ -22,13 +23,16 @@ import { ok } from "../common/api-response.js";
 import { ActorUserId } from "../common/actor-user-id.decorator.js";
 import { assertActorOwnsUser } from "../common/auth-context.js";
 import { LaunchControlsService } from "../launch-controls/launch-controls.service.js";
+import { readIdempotencyKeyHeader } from "../common/idempotency.js";
 import { parseRequestPayload } from "../common/validation.js";
+import { ClientMutationService } from "../database/client-mutation.service.js";
 import { IntentsService } from "./intents.service.js";
 
 @Controller("intents")
 export class IntentsController {
   constructor(
     private readonly intentsService: IntentsService,
+    private readonly clientMutationService: ClientMutationService,
     @Optional()
     private readonly launchControlsService?: LaunchControlsService,
   ) {}
@@ -37,6 +41,7 @@ export class IntentsController {
   async createIntent(
     @Body() body: unknown,
     @ActorUserId() actorUserId: string,
+    @Headers("idempotency-key") idempotencyKeyHeader?: string,
   ) {
     const payload = parseRequestPayload(createIntentBodySchema, body);
     assertActorOwnsUser(
@@ -51,12 +56,18 @@ export class IntentsController {
       );
     }
     return ok(
-      await this.intentsService.createIntent(
-        payload.userId,
-        payload.rawText,
-        randomUUID(),
-        payload.agentThreadId,
-      ),
+      await this.clientMutationService.run({
+        userId: payload.userId,
+        scope: "intent.create",
+        idempotencyKey: readIdempotencyKeyHeader(idempotencyKeyHeader),
+        handler: () =>
+          this.intentsService.createIntent(
+            payload.userId,
+            payload.rawText,
+            randomUUID(),
+            payload.agentThreadId,
+          ),
+      }),
     );
   }
 
@@ -64,6 +75,7 @@ export class IntentsController {
   async createIntentFromAgent(
     @Body() body: unknown,
     @ActorUserId() actorUserId: string,
+    @Headers("idempotency-key") idempotencyKeyHeader?: string,
   ) {
     const payload = parseRequestPayload(
       createIntentFromAgentMessageBodySchema,
@@ -81,15 +93,21 @@ export class IntentsController {
       );
     }
     return ok(
-      await this.intentsService.createIntentFromAgentMessage(
-        payload.threadId,
-        payload.userId,
-        payload.content,
-        {
-          allowDecomposition: payload.allowDecomposition,
-          maxIntents: payload.maxIntents,
-        },
-      ),
+      await this.clientMutationService.run({
+        userId: payload.userId,
+        scope: "intent.create_from_agent",
+        idempotencyKey: readIdempotencyKeyHeader(idempotencyKeyHeader),
+        handler: () =>
+          this.intentsService.createIntentFromAgentMessage(
+            payload.threadId,
+            payload.userId,
+            payload.content,
+            {
+              allowDecomposition: payload.allowDecomposition,
+              maxIntents: payload.maxIntents,
+            },
+          ),
+      }),
     );
   }
 

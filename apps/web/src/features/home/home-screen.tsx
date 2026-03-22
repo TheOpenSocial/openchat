@@ -281,8 +281,9 @@ export function HomeScreen() {
           session.userId,
           text,
           session.accessToken,
-          undefined,
-          threadId ?? undefined,
+          {
+            agentThreadId: threadId ?? undefined,
+          },
         );
         setTimeline((current) => [
           ...current,

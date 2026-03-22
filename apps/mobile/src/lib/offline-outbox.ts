@@ -292,7 +292,7 @@ export async function processOfflineOutbox(input: {
             input.userId,
             item.payload.text,
             input.accessToken,
-            undefined,
+            { idempotencyKey: item.id },
             {
               ...(item.payload.voiceTranscript
                 ? { voiceTranscript: item.payload.voiceTranscript }
@@ -310,6 +310,7 @@ export async function processOfflineOutbox(input: {
             item.payload.text,
             input.accessToken,
             {
+              idempotencyKey: item.id,
               ...(typeof item.payload.allowDecomposition === "boolean"
                 ? { allowDecomposition: item.payload.allowDecomposition }
                 : {}),
@@ -324,6 +325,7 @@ export async function processOfflineOutbox(input: {
             input.userId,
             item.payload.text,
             input.accessToken,
+            { idempotencyKey: item.id },
           );
         }
       } else {
@@ -336,6 +338,7 @@ export async function processOfflineOutbox(input: {
             visibility: item.payload.visibility,
           },
           input.accessToken,
+          { idempotencyKey: item.id },
         );
 
         await Promise.all([
@@ -361,6 +364,7 @@ export async function processOfflineOutbox(input: {
             input.userId,
             item.payload.globalRules,
             input.accessToken,
+            { idempotencyKey: item.id },
           ),
         ]);
 

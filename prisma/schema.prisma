@@ -59,66 +59,66 @@ enum AvailabilityMode {
 }
 
 model User {
-  id              String      @id @default(uuid()) @db.Uuid
-  email           String?     @unique
-  googleSubjectId String?     @unique @map("google_subject_id")
-  displayName     String      @map("display_name")
-  username        String?     @unique
-  locale          String      @default("en")
-  timezone        String      @default("UTC")
-  status          UserStatus  @default(active)
-  createdAt       DateTime    @default(now()) @map("created_at")
-  updatedAt       DateTime    @updatedAt @map("updated_at")
-  profile         UserProfile?
-  inferredPreferences InferredPreference[]
-  explicitPreferences ExplicitPreference[]
-  preferenceFeedbackEvents PreferenceFeedbackEvent[]
-  sessions        UserSession[]
-  scheduledTasks  ScheduledTask[]
-  scheduledTaskRuns ScheduledTaskRun[]
-  savedSearches   SavedSearch[]
-  ownedRecurringCircles RecurringCircle[] @relation("RecurringCircleOwner")
+  id                         String                    @id @default(uuid()) @db.Uuid
+  email                      String?                   @unique
+  googleSubjectId            String?                   @unique @map("google_subject_id")
+  displayName                String                    @map("display_name")
+  username                   String?                   @unique
+  locale                     String                    @default("en")
+  timezone                   String                    @default("UTC")
+  status                     UserStatus                @default(active)
+  createdAt                  DateTime                  @default(now()) @map("created_at")
+  updatedAt                  DateTime                  @updatedAt @map("updated_at")
+  profile                    UserProfile?
+  inferredPreferences        InferredPreference[]
+  explicitPreferences        ExplicitPreference[]
+  preferenceFeedbackEvents   PreferenceFeedbackEvent[]
+  sessions                   UserSession[]
+  scheduledTasks             ScheduledTask[]
+  scheduledTaskRuns          ScheduledTaskRun[]
+  savedSearches              SavedSearch[]
+  ownedRecurringCircles      RecurringCircle[]         @relation("RecurringCircleOwner")
   recurringCircleMemberships RecurringCircleMember[]
 
   @@map("users")
 }
 
 model UserProfile {
-  userId            String           @id @db.Uuid @map("user_id")
-  bio               String?
-  city              String?
-  country           String?
-  visibility        String           @default("public")
-  onboardingState   String           @default("not_started") @map("onboarding_state")
-  availabilityMode  AvailabilityMode @default(flexible) @map("availability_mode")
-  trustScore        Decimal          @default(0.0) @db.Decimal(5, 2) @map("trust_score")
-  moderationState   ModerationState  @default(clean) @map("moderation_state")
-  lastActiveAt      DateTime?        @map("last_active_at")
-  createdAt         DateTime         @default(now()) @map("created_at")
-  updatedAt         DateTime         @updatedAt @map("updated_at")
-  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  interests         UserInterest[]
-  topics            UserTopic[]
+  userId              String                   @id @map("user_id") @db.Uuid
+  bio                 String?
+  city                String?
+  country             String?
+  visibility          String                   @default("public")
+  onboardingState     String                   @default("not_started") @map("onboarding_state")
+  availabilityMode    AvailabilityMode         @default(flexible) @map("availability_mode")
+  trustScore          Decimal                  @default(0.0) @map("trust_score") @db.Decimal(5, 2)
+  moderationState     ModerationState          @default(clean) @map("moderation_state")
+  lastActiveAt        DateTime?                @map("last_active_at")
+  createdAt           DateTime                 @default(now()) @map("created_at")
+  updatedAt           DateTime                 @updatedAt @map("updated_at")
+  user                User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  interests           UserInterest[]
+  topics              UserTopic[]
   availabilityWindows UserAvailabilityWindow[]
 
   @@map("user_profiles")
 }
 
 model UserSession {
-  id               String   @id @default(uuid()) @db.Uuid
-  userId           String   @db.Uuid @map("user_id")
-  deviceId         String?  @map("device_id")
-  deviceName       String?  @map("device_name")
-  userAgent        String?  @map("user_agent")
-  ipAddress        String?  @map("ip_address")
-  refreshTokenHash String   @map("refresh_token_hash")
-  status           String   @default("active")
-  expiresAt        DateTime @map("expires_at")
-  lastUsedAt       DateTime @default(now()) @map("last_used_at")
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  deviceId         String?   @map("device_id")
+  deviceName       String?   @map("device_name")
+  userAgent        String?   @map("user_agent")
+  ipAddress        String?   @map("ip_address")
+  refreshTokenHash String    @map("refresh_token_hash")
+  status           String    @default("active")
+  expiresAt        DateTime  @map("expires_at")
+  lastUsedAt       DateTime  @default(now()) @map("last_used_at")
   revokedAt        DateTime? @map("revoked_at")
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
-  user             User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, status, lastUsedAt])
   @@index([expiresAt, status])
@@ -127,7 +127,7 @@ model UserSession {
 
 model UserProfileImage {
   id          String   @id @default(uuid()) @db.Uuid
-  userId      String   @db.Uuid @map("user_id")
+  userId      String   @map("user_id") @db.Uuid
   originalUrl String   @map("original_url")
   thumbUrl    String?  @map("thumb_url")
   status      String   @default("pending")
@@ -138,14 +138,14 @@ model UserProfileImage {
 }
 
 model UserInterest {
-  id              String   @id @default(uuid()) @db.Uuid
-  userId          String   @db.Uuid @map("user_id")
+  id              String      @id @default(uuid()) @db.Uuid
+  userId          String      @map("user_id") @db.Uuid
   kind            String
   label           String
-  normalizedLabel String   @map("normalized_label")
-  weight          Decimal  @default(1.0) @db.Decimal(4, 2)
-  source          String   @default("user")
-  createdAt       DateTime @default(now()) @map("created_at")
+  normalizedLabel String      @map("normalized_label")
+  weight          Decimal     @default(1.0) @db.Decimal(4, 2)
+  source          String      @default("user")
+  createdAt       DateTime    @default(now()) @map("created_at")
   userProfile     UserProfile @relation(fields: [userId], references: [userId], onDelete: Cascade)
 
   @@index([userId, kind])
@@ -153,14 +153,14 @@ model UserInterest {
 }
 
 model UserTopic {
-  id               String   @id @default(uuid()) @db.Uuid
-  userId           String   @db.Uuid @map("user_id")
-  label            String
-  normalizedLabel  String   @map("normalized_label")
-  weight           Decimal  @default(1.0) @db.Decimal(4, 2)
-  source           String   @default("user")
-  createdAt        DateTime @default(now()) @map("created_at")
-  userProfile      UserProfile @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  id              String      @id @default(uuid()) @db.Uuid
+  userId          String      @map("user_id") @db.Uuid
+  label           String
+  normalizedLabel String      @map("normalized_label")
+  weight          Decimal     @default(1.0) @db.Decimal(4, 2)
+  source          String      @default("user")
+  createdAt       DateTime    @default(now()) @map("created_at")
+  userProfile     UserProfile @relation(fields: [userId], references: [userId], onDelete: Cascade)
 
   @@unique([userId, normalizedLabel])
   @@index([userId, normalizedLabel])
@@ -168,15 +168,15 @@ model UserTopic {
 }
 
 model UserAvailabilityWindow {
-  id          String   @id @default(uuid()) @db.Uuid
-  userId      String   @db.Uuid @map("user_id")
-  dayOfWeek   Int      @map("day_of_week")
-  startMinute Int      @map("start_minute")
-  endMinute   Int      @map("end_minute")
-  mode        String   @default("available")
+  id          String      @id @default(uuid()) @db.Uuid
+  userId      String      @map("user_id") @db.Uuid
+  dayOfWeek   Int         @map("day_of_week")
+  startMinute Int         @map("start_minute")
+  endMinute   Int         @map("end_minute")
+  mode        String      @default("available")
   timezone    String?
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
   userProfile UserProfile @relation(fields: [userId], references: [userId], onDelete: Cascade)
 
   @@index([userId, dayOfWeek])
@@ -185,12 +185,12 @@ model UserAvailabilityWindow {
 }
 
 model UserPreference {
-  id         String   @id @default(uuid()) @db.Uuid
-  userId     String   @db.Uuid @map("user_id")
-  key        String
-  value      Json
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  key       String
+  value     Json
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([userId, key])
   @@map("user_preferences")
@@ -198,14 +198,14 @@ model UserPreference {
 
 model InferredPreference {
   id            String   @id @default(uuid()) @db.Uuid
-  userId        String   @db.Uuid @map("user_id")
+  userId        String   @map("user_id") @db.Uuid
   preferenceKey String   @map("preference_key")
   value         Json
   confidence    Decimal  @db.Decimal(4, 3)
   sourceSignal  String   @map("source_signal")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
-  user          User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, preferenceKey])
   @@map("inferred_preferences")
@@ -213,54 +213,54 @@ model InferredPreference {
 
 model ExplicitPreference {
   id            String   @id @default(uuid()) @db.Uuid
-  userId        String   @db.Uuid @map("user_id")
+  userId        String   @map("user_id") @db.Uuid
   scope         String
   preferenceKey String   @map("preference_key")
   value         Json
   source        String   @default("user")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
-  user          User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, scope, preferenceKey])
   @@map("explicit_preferences")
 }
 
 model PreferenceFeedbackEvent {
-  id            String   @id @default(uuid()) @db.Uuid
-  userId        String   @db.Uuid @map("user_id")
-  preferenceKey String   @map("preference_key")
-  feedbackType  String   @map("feedback_type")
-  signalStrength Decimal @db.Decimal(4, 3) @map("signal_strength")
-  context       Json?
-  createdAt     DateTime @default(now()) @map("created_at")
-  user          User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  preferenceKey  String   @map("preference_key")
+  feedbackType   String   @map("feedback_type")
+  signalStrength Decimal  @map("signal_strength") @db.Decimal(4, 3)
+  context        Json?
+  createdAt      DateTime @default(now()) @map("created_at")
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, preferenceKey, createdAt])
   @@map("preference_feedback_events")
 }
 
 model UserRule {
-  id         String   @id @default(uuid()) @db.Uuid
-  userId     String   @db.Uuid @map("user_id")
-  scope      String
-  ruleType   String   @map("rule_type")
-  payload    Json
-  priority   Int
-  isActive   Boolean  @default(true) @map("is_active")
-  createdAt  DateTime @default(now()) @map("created_at")
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  scope     String
+  ruleType  String   @map("rule_type")
+  payload   Json
+  priority  Int
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@index([userId, isActive])
   @@map("user_rules")
 }
 
 model AgentThread {
-  id         String   @id @default(uuid()) @db.Uuid
-  userId     String   @db.Uuid @map("user_id")
-  title      String?
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
-  messages   AgentMessage[]
+  id              String                @id @default(uuid()) @db.Uuid
+  userId          String                @map("user_id") @db.Uuid
+  title           String?
+  createdAt       DateTime              @default(now()) @map("created_at")
+  updatedAt       DateTime              @updatedAt @map("updated_at")
+  messages        AgentMessage[]
   planCheckpoints AgentPlanCheckpoint[]
 
   @@index([userId, createdAt])
@@ -268,13 +268,13 @@ model AgentThread {
 }
 
 model AgentMessage {
-  id              String   @id @default(uuid()) @db.Uuid
-  threadId        String   @db.Uuid @map("thread_id")
-  createdByUserId String?  @db.Uuid @map("created_by_user_id")
+  id              String      @id @default(uuid()) @db.Uuid
+  threadId        String      @map("thread_id") @db.Uuid
+  createdByUserId String?     @map("created_by_user_id") @db.Uuid
   role            String
   content         String
   metadata        Json?
-  createdAt       DateTime @default(now()) @map("created_at")
+  createdAt       DateTime    @default(now()) @map("created_at")
   thread          AgentThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
 
   @@index([threadId, createdAt])
@@ -282,21 +282,21 @@ model AgentMessage {
 }
 
 model AgentPlanCheckpoint {
-  id               String   @id @default(uuid()) @db.Uuid
-  threadId         String   @db.Uuid @map("thread_id")
-  userId           String   @db.Uuid @map("user_id")
-  traceId          String   @map("trace_id")
-  requestedByRole  String   @map("requested_by_role")
+  id               String      @id @default(uuid()) @db.Uuid
+  threadId         String      @map("thread_id") @db.Uuid
+  userId           String      @map("user_id") @db.Uuid
+  traceId          String      @map("trace_id")
+  requestedByRole  String      @map("requested_by_role")
   tool             String
-  actionType       String   @map("action_type")
-  riskLevel        String   @map("risk_level")
-  status           String   @default("pending")
-  requestMetadata  Json?    @map("request_metadata")
-  decisionReason   String?  @map("decision_reason")
-  resolvedByUserId String?  @db.Uuid @map("resolved_by_user_id")
-  resolvedAt       DateTime? @map("resolved_at")
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
+  actionType       String      @map("action_type")
+  riskLevel        String      @map("risk_level")
+  status           String      @default("pending")
+  requestMetadata  Json?       @map("request_metadata")
+  decisionReason   String?     @map("decision_reason")
+  resolvedByUserId String?     @map("resolved_by_user_id") @db.Uuid
+  resolvedAt       DateTime?   @map("resolved_at")
+  createdAt        DateTime    @default(now()) @map("created_at")
+  updatedAt        DateTime    @updatedAt @map("updated_at")
   thread           AgentThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
 
   @@index([threadId, status, createdAt])
@@ -305,43 +305,43 @@ model AgentPlanCheckpoint {
 }
 
 model Intent {
-  id           String      @id @default(uuid()) @db.Uuid
-  userId       String      @db.Uuid @map("user_id")
-  rawText      String      @map("raw_text")
+  id           String          @id @default(uuid()) @db.Uuid
+  userId       String          @map("user_id") @db.Uuid
+  rawText      String          @map("raw_text")
   status       IntentStatus
-  parsedIntent Json?       @map("parsed_intent")
-  confidence   Decimal?    @db.Decimal(4, 3)
+  parsedIntent Json?           @map("parsed_intent")
+  confidence   Decimal?        @db.Decimal(4, 3)
   safetyState  ModerationState @default(clean) @map("safety_state")
-  createdAt    DateTime    @default(now()) @map("created_at")
-  updatedAt    DateTime    @updatedAt @map("updated_at")
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
 
   @@index([userId, status])
   @@map("intents")
 }
 
 model IntentCandidate {
-  id               String   @id @default(uuid()) @db.Uuid
-  intentId         String   @db.Uuid @map("intent_id")
-  candidateUserId  String   @db.Uuid @map("candidate_user_id")
-  score            Decimal  @db.Decimal(6, 5)
-  rationale        Json?
-  createdAt        DateTime @default(now()) @map("created_at")
+  id              String   @id @default(uuid()) @db.Uuid
+  intentId        String   @map("intent_id") @db.Uuid
+  candidateUserId String   @map("candidate_user_id") @db.Uuid
+  score           Decimal  @db.Decimal(6, 5)
+  rationale       Json?
+  createdAt       DateTime @default(now()) @map("created_at")
 
   @@index([intentId, score])
   @@map("intent_candidates")
 }
 
 model IntentRequest {
-  id              String       @id @default(uuid()) @db.Uuid
-  intentId         String       @db.Uuid @map("intent_id")
-  senderUserId     String       @db.Uuid @map("sender_user_id")
-  recipientUserId  String       @db.Uuid @map("recipient_user_id")
-  status           RequestStatus @default(pending)
-  wave             Int          @default(1)
-  relevanceFeatures Json?       @map("relevance_features")
-  sentAt           DateTime     @default(now()) @map("sent_at")
-  respondedAt      DateTime?    @map("responded_at")
-  expiresAt        DateTime?    @map("expires_at")
+  id                String        @id @default(uuid()) @db.Uuid
+  intentId          String        @map("intent_id") @db.Uuid
+  senderUserId      String        @map("sender_user_id") @db.Uuid
+  recipientUserId   String        @map("recipient_user_id") @db.Uuid
+  status            RequestStatus @default(pending)
+  wave              Int           @default(1)
+  relevanceFeatures Json?         @map("relevance_features")
+  sentAt            DateTime      @default(now()) @map("sent_at")
+  respondedAt       DateTime?     @map("responded_at")
+  expiresAt         DateTime?     @map("expires_at")
 
   @@index([recipientUserId, status])
   @@index([intentId, status])
@@ -349,23 +349,23 @@ model IntentRequest {
 }
 
 model RequestResponse {
-  id         String   @id @default(uuid()) @db.Uuid
-  requestId  String   @db.Uuid @map("request_id")
-  userId     String   @db.Uuid @map("user_id")
-  action     String
-  createdAt  DateTime @default(now()) @map("created_at")
+  id        String   @id @default(uuid()) @db.Uuid
+  requestId String   @map("request_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  action    String
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@index([requestId])
   @@map("request_responses")
 }
 
 model Connection {
-  id              String         @id @default(uuid()) @db.Uuid
+  id              String                  @id @default(uuid()) @db.Uuid
   type            ConnectionType
-  originIntentId  String?        @db.Uuid @map("origin_intent_id")
-  createdByUserId String         @db.Uuid @map("created_by_user_id")
-  status          String         @default("active")
-  createdAt       DateTime       @default(now()) @map("created_at")
+  originIntentId  String?                 @map("origin_intent_id") @db.Uuid
+  createdByUserId String                  @map("created_by_user_id") @db.Uuid
+  status          String                  @default("active")
+  createdAt       DateTime                @default(now()) @map("created_at")
   participants    ConnectionParticipant[]
   chats           Chat[]
 
@@ -373,24 +373,24 @@ model Connection {
 }
 
 model ConnectionParticipant {
-  id            String   @id @default(uuid()) @db.Uuid
-  connectionId  String   @db.Uuid @map("connection_id")
-  userId        String   @db.Uuid @map("user_id")
-  role          String   @default("member")
-  joinedAt      DateTime @default(now()) @map("joined_at")
-  leftAt        DateTime? @map("left_at")
-  connection    Connection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  id           String     @id @default(uuid()) @db.Uuid
+  connectionId String     @map("connection_id") @db.Uuid
+  userId       String     @map("user_id") @db.Uuid
+  role         String     @default("member")
+  joinedAt     DateTime   @default(now()) @map("joined_at")
+  leftAt       DateTime?  @map("left_at")
+  connection   Connection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
 
   @@index([connectionId, userId])
   @@map("connection_participants")
 }
 
 model Chat {
-  id           String   @id @default(uuid()) @db.Uuid
-  connectionId String   @db.Uuid @map("connection_id")
+  id           String        @id @default(uuid()) @db.Uuid
+  connectionId String        @map("connection_id") @db.Uuid
   type         ChatType
-  createdAt    DateTime @default(now()) @map("created_at")
-  connection   Connection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  createdAt    DateTime      @default(now()) @map("created_at")
+  connection   Connection    @relation(fields: [connectionId], references: [id], onDelete: Cascade)
   messages     ChatMessage[]
 
   @@index([connectionId])
@@ -398,38 +398,38 @@ model Chat {
 }
 
 model ChatMembership {
-  id         String   @id @default(uuid()) @db.Uuid
-  chatId      String  @db.Uuid @map("chat_id")
-  userId      String  @db.Uuid @map("user_id")
-  joinedAt    DateTime @default(now()) @map("joined_at")
+  id       String   @id @default(uuid()) @db.Uuid
+  chatId   String   @map("chat_id") @db.Uuid
+  userId   String   @map("user_id") @db.Uuid
+  joinedAt DateTime @default(now()) @map("joined_at")
 
   @@index([chatId, userId])
   @@map("chat_memberships")
 }
 
 model ChatMessage {
-  id            String   @id @default(uuid()) @db.Uuid
-  chatId         String  @db.Uuid @map("chat_id")
-  senderUserId   String  @db.Uuid @map("sender_user_id")
-  body           String
-  moderationState ModerationState @default(clean) @map("moderation_state")
-  createdAt      DateTime @default(now()) @map("created_at")
-  chat           Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
-  receipts       MessageReceipt[]
+  id              String           @id @default(uuid()) @db.Uuid
+  chatId          String           @map("chat_id") @db.Uuid
+  senderUserId    String           @map("sender_user_id") @db.Uuid
+  body            String
+  moderationState ModerationState  @default(clean) @map("moderation_state")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  chat            Chat             @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  receipts        MessageReceipt[]
 
   @@index([chatId, createdAt])
   @@map("chat_messages")
 }
 
 model ChatMessageArchive {
-  id               String   @id @default(uuid()) @db.Uuid
-  sourceMessageId  String   @unique @db.Uuid @map("source_message_id")
-  chatId           String   @db.Uuid @map("chat_id")
-  senderUserId     String   @db.Uuid @map("sender_user_id")
-  body             String
-  moderationState  ModerationState @map("moderation_state")
-  originalCreatedAt DateTime @map("original_created_at")
-  archivedAt       DateTime @default(now()) @map("archived_at")
+  id                String          @id @default(uuid()) @db.Uuid
+  sourceMessageId   String          @unique @map("source_message_id") @db.Uuid
+  chatId            String          @map("chat_id") @db.Uuid
+  senderUserId      String          @map("sender_user_id") @db.Uuid
+  body              String
+  moderationState   ModerationState @map("moderation_state")
+  originalCreatedAt DateTime        @map("original_created_at")
+  archivedAt        DateTime        @default(now()) @map("archived_at")
 
   @@index([chatId, originalCreatedAt])
   @@index([archivedAt])
@@ -437,11 +437,11 @@ model ChatMessageArchive {
 }
 
 model MessageReceipt {
-  id          String   @id @default(uuid()) @db.Uuid
-  messageId   String   @db.Uuid @map("message_id")
-  userId      String   @db.Uuid @map("user_id")
-  deliveredAt DateTime? @map("delivered_at")
-  readAt      DateTime? @map("read_at")
+  id          String      @id @default(uuid()) @db.Uuid
+  messageId   String      @map("message_id") @db.Uuid
+  userId      String      @map("user_id") @db.Uuid
+  deliveredAt DateTime?   @map("delivered_at")
+  readAt      DateTime?   @map("read_at")
   message     ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
 
   @@index([messageId, userId])
@@ -450,7 +450,7 @@ model MessageReceipt {
 
 model Notification {
   id              String   @id @default(uuid()) @db.Uuid
-  recipientUserId String   @db.Uuid @map("recipient_user_id")
+  recipientUserId String   @map("recipient_user_id") @db.Uuid
   type            String
   body            String
   channel         String   @default("in_app")
@@ -462,19 +462,19 @@ model Notification {
 }
 
 model ModerationFlag {
-  id                 String    @id @default(uuid()) @db.Uuid
-  entityType         String    @map("entity_type")
-  entityId           String    @db.Uuid @map("entity_id")
-  reason             String
-  status             String    @default("open")
-  assigneeUserId     String?   @db.Uuid @map("assignee_user_id")
-  assignmentNote     String?   @map("assignment_note")
-  assignedAt         DateTime? @map("assigned_at")
-  lastDecision       String?   @map("last_decision")
-  triageNote         String?   @map("triage_note")
-  triagedByAdminUserId String? @db.Uuid @map("triaged_by_admin_user_id")
-  triagedAt          DateTime? @map("triaged_at")
-  createdAt          DateTime  @default(now()) @map("created_at")
+  id                   String    @id @default(uuid()) @db.Uuid
+  entityType           String    @map("entity_type")
+  entityId             String    @map("entity_id") @db.Uuid
+  reason               String
+  status               String    @default("open")
+  assigneeUserId       String?   @map("assignee_user_id") @db.Uuid
+  assignmentNote       String?   @map("assignment_note")
+  assignedAt           DateTime? @map("assigned_at")
+  lastDecision         String?   @map("last_decision")
+  triageNote           String?   @map("triage_note")
+  triagedByAdminUserId String?   @map("triaged_by_admin_user_id") @db.Uuid
+  triagedAt            DateTime? @map("triaged_at")
+  createdAt            DateTime  @default(now()) @map("created_at")
 
   @@index([entityType, status])
   @@index([assigneeUserId, status])
@@ -483,8 +483,8 @@ model ModerationFlag {
 
 model UserReport {
   id             String   @id @default(uuid()) @db.Uuid
-  reporterUserId String   @db.Uuid @map("reporter_user_id")
-  targetUserId   String?  @db.Uuid @map("target_user_id")
+  reporterUserId String   @map("reporter_user_id") @db.Uuid
+  targetUserId   String?  @map("target_user_id") @db.Uuid
   reason         String
   details        String?
   status         String   @default("open")
@@ -496,8 +496,8 @@ model UserReport {
 
 model Block {
   id            String   @id @default(uuid()) @db.Uuid
-  blockerUserId String   @db.Uuid @map("blocker_user_id")
-  blockedUserId String   @db.Uuid @map("blocked_user_id")
+  blockerUserId String   @map("blocker_user_id") @db.Uuid
+  blockedUserId String   @map("blocked_user_id") @db.Uuid
   createdAt     DateTime @default(now()) @map("created_at")
 
   @@unique([blockerUserId, blockedUserId])
@@ -505,14 +505,14 @@ model Block {
 }
 
 model AuditLog {
-  id         String   @id @default(uuid()) @db.Uuid
-  actorUserId String? @db.Uuid @map("actor_user_id")
-  actorType  String   @map("actor_type")
-  action     String
-  entityType String   @map("entity_type")
-  entityId   String?  @db.Uuid @map("entity_id")
-  metadata   Json?
-  createdAt  DateTime @default(now()) @map("created_at")
+  id          String   @id @default(uuid()) @db.Uuid
+  actorUserId String?  @map("actor_user_id") @db.Uuid
+  actorType   String   @map("actor_type")
+  action      String
+  entityType  String   @map("entity_type")
+  entityId    String?  @map("entity_id") @db.Uuid
+  metadata    Json?
+  createdAt   DateTime @default(now()) @map("created_at")
 
   @@index([entityType, createdAt])
   @@map("audit_logs")
@@ -520,12 +520,12 @@ model AuditLog {
 
 model AuditLogArchive {
   id                String   @id @default(uuid()) @db.Uuid
-  sourceAuditLogId  String   @unique @db.Uuid @map("source_audit_log_id")
-  actorUserId       String?  @db.Uuid @map("actor_user_id")
+  sourceAuditLogId  String   @unique @map("source_audit_log_id") @db.Uuid
+  actorUserId       String?  @map("actor_user_id") @db.Uuid
   actorType         String   @map("actor_type")
   action            String
   entityType        String   @map("entity_type")
-  entityId          String?  @db.Uuid @map("entity_id")
+  entityId          String?  @map("entity_id") @db.Uuid
   metadata          Json?
   originalCreatedAt DateTime @map("original_created_at")
   archivedAt        DateTime @default(now()) @map("archived_at")
@@ -536,24 +536,41 @@ model AuditLogArchive {
 }
 
 model OutboxEvent {
-  id           String   @id @default(uuid()) @db.Uuid
-  aggregateType String  @map("aggregate_type")
-  aggregateId  String   @db.Uuid @map("aggregate_id")
-  eventType    String   @map("event_type")
-  payload      Json
-  publishedAt  DateTime? @map("published_at")
-  createdAt    DateTime @default(now()) @map("created_at")
+  id            String    @id @default(uuid()) @db.Uuid
+  aggregateType String    @map("aggregate_type")
+  aggregateId   String    @map("aggregate_id") @db.Uuid
+  eventType     String    @map("event_type")
+  payload       Json
+  publishedAt   DateTime? @map("published_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
 
   @@index([publishedAt])
   @@map("outbox_events")
 }
 
+model ClientMutation {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  scope          String
+  idempotencyKey String   @map("idempotency_key")
+  status         String   @default("processing")
+  responseBody   Json?    @map("response_body")
+  errorCode      String?  @map("error_code")
+  errorMessage   String?  @map("error_message")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, scope, idempotencyKey])
+  @@index([status, updatedAt])
+  @@map("client_mutations")
+}
+
 model AdminAction {
   id          String   @id @default(uuid()) @db.Uuid
-  adminUserId String   @db.Uuid @map("admin_user_id")
+  adminUserId String   @map("admin_user_id") @db.Uuid
   action      String
   entityType  String   @map("entity_type")
-  entityId    String?  @db.Uuid @map("entity_id")
+  entityId    String?  @map("entity_id") @db.Uuid
   metadata    Json?
   createdAt   DateTime @default(now()) @map("created_at")
 
@@ -562,11 +579,11 @@ model AdminAction {
 }
 
 model LifeGraphNode {
-  id         String   @id @default(uuid()) @db.Uuid
-  userId     String   @db.Uuid @map("user_id")
-  nodeType   String   @map("node_type")
-  label      String
-  createdAt  DateTime @default(now()) @map("created_at")
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  nodeType  String   @map("node_type")
+  label     String
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@index([userId, nodeType])
   @@map("life_graph_nodes")
@@ -574,72 +591,72 @@ model LifeGraphNode {
 
 model LifeGraphEdge {
   id           String   @id @default(uuid()) @db.Uuid
-  userId        String  @db.Uuid @map("user_id")
-  sourceNodeId  String  @db.Uuid @map("source_node_id")
-  targetNodeId  String  @db.Uuid @map("target_node_id")
-  edgeType      String  @map("edge_type")
-  weight        Decimal @db.Decimal(5, 4)
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  userId       String   @map("user_id") @db.Uuid
+  sourceNodeId String   @map("source_node_id") @db.Uuid
+  targetNodeId String   @map("target_node_id") @db.Uuid
+  edgeType     String   @map("edge_type")
+  weight       Decimal  @db.Decimal(5, 4)
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
   @@index([userId, edgeType])
   @@map("life_graph_edges")
 }
 
 model RetrievalDocument {
-  id         String   @id @default(uuid()) @db.Uuid
-  userId     String   @db.Uuid @map("user_id")
-  docType    String   @map("doc_type")
-  content    String
-  createdAt  DateTime @default(now()) @map("created_at")
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  docType   String   @map("doc_type")
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@index([userId, docType])
   @@map("retrieval_documents")
 }
 
 model RetrievalChunk {
-  id           String   @id @default(uuid()) @db.Uuid
-  documentId   String   @db.Uuid @map("document_id")
-  chunkIndex   Int      @map("chunk_index")
-  content      String
-  tokenCount   Int      @map("token_count")
-  createdAt    DateTime @default(now()) @map("created_at")
+  id         String   @id @default(uuid()) @db.Uuid
+  documentId String   @map("document_id") @db.Uuid
+  chunkIndex Int      @map("chunk_index")
+  content    String
+  tokenCount Int      @map("token_count")
+  createdAt  DateTime @default(now()) @map("created_at")
 
   @@index([documentId, chunkIndex])
   @@map("retrieval_chunks")
 }
 
 model Embedding {
-  id           String   @id @default(uuid()) @db.Uuid
-  ownerType    String   @map("owner_type")
-  ownerId      String   @db.Uuid @map("owner_id")
-  embeddingType String  @map("embedding_type")
-  model        String
-  vector       Unsupported("vector(1536)")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id            String                      @id @default(uuid()) @db.Uuid
+  ownerType     String                      @map("owner_type")
+  ownerId       String                      @map("owner_id") @db.Uuid
+  embeddingType String                      @map("embedding_type")
+  model         String
+  vector        Unsupported("vector(1536)")
+  createdAt     DateTime                    @default(now()) @map("created_at")
+  updatedAt     DateTime                    @updatedAt @map("updated_at")
 
   @@index([ownerType, ownerId])
   @@map("embeddings")
 }
 
 model ScheduledTask {
-  id                String   @id @default(uuid()) @db.Uuid
-  userId            String   @db.Uuid @map("user_id")
+  id                String             @id @default(uuid()) @db.Uuid
+  userId            String             @map("user_id") @db.Uuid
   title             String
   description       String?
-  taskType          String   @map("task_type")
-  status            String   @default("active")
-  scheduleType      String   @map("schedule_type")
-  scheduleConfig    Json     @map("schedule_config")
-  taskConfig        Json     @map("task_config")
-  lastRunAt         DateTime? @map("last_run_at")
-  nextRunAt         DateTime? @map("next_run_at")
-  lastSuccessAt     DateTime? @map("last_success_at")
-  lastFailureAt     DateTime? @map("last_failure_at")
-  lastFailureReason String?   @map("last_failure_reason")
-  createdAt         DateTime  @default(now()) @map("created_at")
-  updatedAt         DateTime  @updatedAt @map("updated_at")
-  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskType          String             @map("task_type")
+  status            String             @default("active")
+  scheduleType      String             @map("schedule_type")
+  scheduleConfig    Json               @map("schedule_config")
+  taskConfig        Json               @map("task_config")
+  lastRunAt         DateTime?          @map("last_run_at")
+  nextRunAt         DateTime?          @map("next_run_at")
+  lastSuccessAt     DateTime?          @map("last_success_at")
+  lastFailureAt     DateTime?          @map("last_failure_at")
+  lastFailureReason String?            @map("last_failure_reason")
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   runs              ScheduledTaskRun[]
 
   @@index([userId, status])
@@ -648,23 +665,23 @@ model ScheduledTask {
 }
 
 model ScheduledTaskRun {
-  id                   String   @id @default(uuid()) @db.Uuid
-  scheduledTaskId      String   @db.Uuid @map("scheduled_task_id")
-  userId               String   @db.Uuid @map("user_id")
-  status               String
-  triggeredAt          DateTime @default(now()) @map("triggered_at")
-  startedAt            DateTime? @map("started_at")
-  finishedAt           DateTime? @map("finished_at")
-  traceId              String?  @db.Uuid @map("trace_id")
-  resultSummary        String?  @map("result_summary")
-  resultPayload        Json?    @map("result_payload")
-  skipReason           String?  @map("skip_reason")
-  failureReason        String?  @map("failure_reason")
-  createdNotificationId String? @db.Uuid @map("created_notification_id")
-  createdAgentMessageId String? @db.Uuid @map("created_agent_message_id")
-  createdAt            DateTime @default(now()) @map("created_at")
-  task                 ScheduledTask @relation(fields: [scheduledTaskId], references: [id], onDelete: Cascade)
-  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                    String        @id @default(uuid()) @db.Uuid
+  scheduledTaskId       String        @map("scheduled_task_id") @db.Uuid
+  userId                String        @map("user_id") @db.Uuid
+  status                String
+  triggeredAt           DateTime      @default(now()) @map("triggered_at")
+  startedAt             DateTime?     @map("started_at")
+  finishedAt            DateTime?     @map("finished_at")
+  traceId               String?       @map("trace_id") @db.Uuid
+  resultSummary         String?       @map("result_summary")
+  resultPayload         Json?         @map("result_payload")
+  skipReason            String?       @map("skip_reason")
+  failureReason         String?       @map("failure_reason")
+  createdNotificationId String?       @map("created_notification_id") @db.Uuid
+  createdAgentMessageId String?       @map("created_agent_message_id") @db.Uuid
+  createdAt             DateTime      @default(now()) @map("created_at")
+  task                  ScheduledTask @relation(fields: [scheduledTaskId], references: [id], onDelete: Cascade)
+  user                  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([scheduledTaskId, triggeredAt])
   @@index([userId, triggeredAt])
@@ -673,7 +690,7 @@ model ScheduledTaskRun {
 
 model SavedSearch {
   id          String   @id @default(uuid()) @db.Uuid
-  userId      String   @db.Uuid @map("user_id")
+  userId      String   @map("user_id") @db.Uuid
   title       String
   searchType  String   @map("search_type")
   queryConfig Json     @map("query_config")
@@ -686,24 +703,24 @@ model SavedSearch {
 }
 
 model RecurringCircle {
-  id                String   @id @default(uuid()) @db.Uuid
-  ownerUserId       String   @db.Uuid @map("owner_user_id")
+  id                String                   @id @default(uuid()) @db.Uuid
+  ownerUserId       String                   @map("owner_user_id") @db.Uuid
   title             String
   description       String?
-  status            String   @default("active")
-  visibility        String   @default("invite_only")
-  topicTags         Json?    @map("topic_tags")
-  targetSize        Int?     @map("target_size")
-  cadenceType       String   @map("cadence_type")
-  cadenceConfig     Json     @map("cadence_config")
-  kickoffPrompt     String?  @map("kickoff_prompt")
-  lastSessionAt     DateTime? @map("last_session_at")
-  nextSessionAt     DateTime? @map("next_session_at")
-  lastFailureAt     DateTime? @map("last_failure_at")
-  lastFailureReason String?   @map("last_failure_reason")
-  createdAt         DateTime  @default(now()) @map("created_at")
-  updatedAt         DateTime  @updatedAt @map("updated_at")
-  owner             User      @relation("RecurringCircleOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  status            String                   @default("active")
+  visibility        String                   @default("invite_only")
+  topicTags         Json?                    @map("topic_tags")
+  targetSize        Int?                     @map("target_size")
+  cadenceType       String                   @map("cadence_type")
+  cadenceConfig     Json                     @map("cadence_config")
+  kickoffPrompt     String?                  @map("kickoff_prompt")
+  lastSessionAt     DateTime?                @map("last_session_at")
+  nextSessionAt     DateTime?                @map("next_session_at")
+  lastFailureAt     DateTime?                @map("last_failure_at")
+  lastFailureReason String?                  @map("last_failure_reason")
+  createdAt         DateTime                 @default(now()) @map("created_at")
+  updatedAt         DateTime                 @updatedAt @map("updated_at")
+  owner             User                     @relation("RecurringCircleOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
   members           RecurringCircleMember[]
   sessions          RecurringCircleSession[]
 
@@ -713,18 +730,18 @@ model RecurringCircle {
 }
 
 model RecurringCircleMember {
-  id            String   @id @default(uuid()) @db.Uuid
-  circleId      String   @db.Uuid @map("circle_id")
-  userId        String   @db.Uuid @map("user_id")
-  role          String   @default("member")
-  status        String   @default("active")
-  invitedByUserId String? @db.Uuid @map("invited_by_user_id")
-  joinedAt      DateTime? @map("joined_at")
-  leftAt        DateTime? @map("left_at")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
-  circle        RecurringCircle @relation(fields: [circleId], references: [id], onDelete: Cascade)
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id              String          @id @default(uuid()) @db.Uuid
+  circleId        String          @map("circle_id") @db.Uuid
+  userId          String          @map("user_id") @db.Uuid
+  role            String          @default("member")
+  status          String          @default("active")
+  invitedByUserId String?         @map("invited_by_user_id") @db.Uuid
+  joinedAt        DateTime?       @map("joined_at")
+  leftAt          DateTime?       @map("left_at")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  circle          RecurringCircle @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([circleId, userId])
   @@index([userId, status])
@@ -733,16 +750,16 @@ model RecurringCircleMember {
 }
 
 model RecurringCircleSession {
-  id                String   @id @default(uuid()) @db.Uuid
-  circleId          String   @db.Uuid @map("circle_id")
-  scheduledFor      DateTime @map("scheduled_for")
-  status            String   @default("scheduled")
-  generatedIntentId String?  @db.Uuid @map("generated_intent_id")
+  id                String          @id @default(uuid()) @db.Uuid
+  circleId          String          @map("circle_id") @db.Uuid
+  scheduledFor      DateTime        @map("scheduled_for")
+  status            String          @default("scheduled")
+  generatedIntentId String?         @map("generated_intent_id") @db.Uuid
   summary           String?
-  startedAt         DateTime? @map("started_at")
-  endedAt           DateTime? @map("ended_at")
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  startedAt         DateTime?       @map("started_at")
+  endedAt           DateTime?       @map("ended_at")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
   circle            RecurringCircle @relation(fields: [circleId], references: [id], onDelete: Cascade)
 
   @@index([circleId, scheduledFor])

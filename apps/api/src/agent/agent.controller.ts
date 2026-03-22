@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   MessageEvent,
   Param,
   Post,
@@ -19,7 +20,9 @@ import { Observable, fromEventPattern, map } from "rxjs";
 import { ok } from "../common/api-response.js";
 import { ActorUserId } from "../common/actor-user-id.decorator.js";
 import { assertActorOwnsUser } from "../common/auth-context.js";
+import { readIdempotencyKeyHeader } from "../common/idempotency.js";
 import { parseRequestPayload } from "../common/validation.js";
+import { ClientMutationService } from "../database/client-mutation.service.js";
 import { AgentConversationService } from "./agent-conversation.service.js";
 import { AgentService } from "./agent.service.js";
 
@@ -28,6 +31,7 @@ export class AgentController {
   constructor(
     private readonly agentService: AgentService,
     private readonly agentConversationService: AgentConversationService,
+    private readonly clientMutationService: ClientMutationService,
   ) {}
 
   /** Static path must stay ahead of `:threadId/*` routes. */
@@ -101,6 +105,7 @@ export class AgentController {
     @Param("threadId") threadIdParam: string,
     @Body() body: unknown,
     @ActorUserId() actorUserId: string,
+    @Headers("idempotency-key") idempotencyKeyHeader?: string,
   ) {
     const threadId = parseRequestPayload(uuidSchema, threadIdParam);
     const payload = parseRequestPayload(agentThreadRespondBodySchema, body);
@@ -111,14 +116,20 @@ export class AgentController {
       "agent response user does not match authenticated user",
     );
 
-    const result = await this.agentConversationService.runAgenticTurn({
-      threadId,
+    const result = await this.clientMutationService.run({
       userId: payload.userId,
-      content: payload.content,
-      traceId: payload.traceId,
-      streamResponseTokens: payload.streamResponseTokens,
-      voiceTranscript: payload.voiceTranscript,
-      attachments: payload.attachments,
+      scope: "agent.respond",
+      idempotencyKey: readIdempotencyKeyHeader(idempotencyKeyHeader),
+      handler: () =>
+        this.agentConversationService.runAgenticTurn({
+          threadId,
+          userId: payload.userId,
+          content: payload.content,
+          traceId: payload.traceId,
+          streamResponseTokens: payload.streamResponseTokens,
+          voiceTranscript: payload.voiceTranscript,
+          attachments: payload.attachments,
+        }),
     });
 
     return ok(result, result.traceId);
@@ -129,6 +140,7 @@ export class AgentController {
     @Param("threadId") threadIdParam: string,
     @Body() body: unknown,
     @ActorUserId() actorUserId: string,
+    @Headers("idempotency-key") idempotencyKeyHeader?: string,
   ) {
     const threadId = parseRequestPayload(uuidSchema, threadIdParam);
     const payload = parseRequestPayload(agentThreadRespondBodySchema, body);
@@ -139,14 +151,20 @@ export class AgentController {
       "agent response user does not match authenticated user",
     );
 
-    const result = await this.agentConversationService.runAgenticTurn({
-      threadId,
+    const result = await this.clientMutationService.run({
       userId: payload.userId,
-      content: payload.content,
-      traceId: payload.traceId,
-      streamResponseTokens: true,
-      voiceTranscript: payload.voiceTranscript,
-      attachments: payload.attachments,
+      scope: "agent.respond_stream",
+      idempotencyKey: readIdempotencyKeyHeader(idempotencyKeyHeader),
+      handler: () =>
+        this.agentConversationService.runAgenticTurn({
+          threadId,
+          userId: payload.userId,
+          content: payload.content,
+          traceId: payload.traceId,
+          streamResponseTokens: true,
+          voiceTranscript: payload.voiceTranscript,
+          attachments: payload.attachments,
+        }),
     });
 
     return ok(result, result.traceId);

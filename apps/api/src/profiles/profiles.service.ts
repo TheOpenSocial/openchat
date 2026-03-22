@@ -21,6 +21,7 @@ import { MatchingService } from "../matching/matching.service.js";
 import { NotificationsService } from "../notifications/notifications.service.js";
 
 type ProfileUpdatePayload = {
+  displayName?: string;
   bio?: string;
   city?: string;
   country?: string;
@@ -129,6 +130,15 @@ export class ProfilesService {
         onboardingState: completion.onboardingState,
       },
     });
+    const normalizedDisplayName = payload.displayName?.trim();
+    if (normalizedDisplayName) {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          displayName: normalizedDisplayName.slice(0, 120),
+        },
+      });
+    }
     if (
       (existing?.onboardingState ?? "not_started") !== "complete" &&
       completion.onboardingState === "complete"

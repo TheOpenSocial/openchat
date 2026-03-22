@@ -29,6 +29,7 @@ type RetryMode = "none" | "transient";
 type RequestOptions = {
   signal?: AbortSignal;
   retryMode?: RetryMode;
+  headers?: Record<string, string>;
 };
 
 export interface SessionTokens {
@@ -245,6 +246,12 @@ export interface SearchSnapshotResponse {
     nextSessionAt: string | null;
     score: number;
   }>;
+}
+
+export interface TopicSuggestionRecord {
+  label: string;
+  count: number;
+  score: number;
 }
 
 export interface DiscoveryUserSuggestion {
@@ -706,6 +713,7 @@ async function request<T>(
       headers: {
         "content-type": "application/json",
         ...(token ? { authorization: `Bearer ${token}` } : {}),
+        ...(requestOptions?.headers ?? {}),
       },
       body: body ? JSON.stringify(body) : undefined,
       signal: requestOptions?.signal,
@@ -748,6 +756,7 @@ async function requestNullable<T>(
   path: string,
   accessToken?: string,
   query?: Record<string, RequestQueryValue>,
+  requestOptions?: RequestOptions,
 ): Promise<T | null> {
   const pathWithQuery = buildPathWithQuery(path, query);
   const doRequest = (token?: string) =>
@@ -756,17 +765,25 @@ async function requestNullable<T>(
       headers: {
         "content-type": "application/json",
         ...(token ? { authorization: `Bearer ${token}` } : {}),
+        ...(requestOptions?.headers ?? {}),
       },
+      signal: requestOptions?.signal,
     });
 
-  let response = await performRequestWithRetry("GET", () =>
-    doRequest(accessToken),
+  let response = await performRequestWithRetry(
+    "GET",
+    () => doRequest(accessToken),
+    requestOptions?.signal,
+    requestOptions?.retryMode,
   );
   if (response.status === 401 && accessToken) {
     try {
       const refreshed = await refreshSessionTokens();
-      response = await performRequestWithRetry("GET", () =>
-        doRequest(refreshed.accessToken),
+      response = await performRequestWithRetry(
+        "GET",
+        () => doRequest(refreshed.accessToken),
+        requestOptions?.signal,
+        requestOptions?.retryMode,
       );
     } catch {
       throw new ApiRequestError({
@@ -865,14 +882,27 @@ export const api = {
   updateProfile(
     userId: string,
     payload: {
+      displayName?: string;
       bio?: string;
       city?: string;
       country?: string;
       visibility?: "public" | "limited" | "private";
     },
     accessToken?: string,
+    options?: { idempotencyKey?: string },
   ) {
-    return request("PUT", `/profiles/${userId}`, payload, accessToken);
+    return request(
+      "PUT",
+      `/profiles/${userId}`,
+      payload,
+      accessToken,
+      undefined,
+      {
+        ...(options?.idempotencyKey
+          ? { headers: { "idempotency-key": options.idempotencyKey } }
+          : {}),
+      },
+    );
   },
   createProfilePhotoUploadIntent(
     userId: string,
@@ -934,6 +964,19 @@ export const api = {
       "PUT",
       `/profiles/${userId}/topics`,
       { topics },
+      accessToken,
+    );
+  },
+  getTopicSuggestions(
+    userId: string,
+    q: string,
+    limit = 12,
+    accessToken?: string,
+  ) {
+    return request<TopicSuggestionRecord[]>(
+      "GET",
+      `/search/${userId}/topic-suggestions?q=${encodeURIComponent(q)}&limit=${limit}`,
+      undefined,
       accessToken,
     );
   },
@@ -1044,12 +1087,19 @@ export const api = {
       memoryMode: "minimal" | "standard" | "extended";
     },
     accessToken?: string,
+    options?: { idempotencyKey?: string },
   ) {
     return request(
       "PUT",
       `/personalization/${userId}/rules/global`,
       payload,
       accessToken,
+      undefined,
+      {
+        ...(options?.idempotencyKey
+          ? { headers: { "idempotency-key": options.idempotencyKey } }
+          : {}),
+      },
     );
   },
   listPendingRequests(userId: string, accessToken?: string) {
@@ -1080,8 +1130,11 @@ export const api = {
     userId: string,
     rawText: string,
     accessToken?: string,
-    fetchOptions?: { signal?: AbortSignal },
-    agentThreadId?: string,
+    options?: {
+      signal?: AbortSignal;
+      agentThreadId?: string;
+      idempotencyKey?: string;
+    },
   ) {
     return request<Record<string, unknown>>(
       "POST",
@@ -1089,11 +1142,18 @@ export const api = {
       {
         userId,
         rawText,
-        ...(agentThreadId ? { agentThreadId } : {}),
+        ...(options?.agentThreadId
+          ? { agentThreadId: options.agentThreadId }
+          : {}),
       },
       accessToken,
       undefined,
-      fetchOptions,
+      {
+        signal: options?.signal,
+        ...(options?.idempotencyKey
+          ? { headers: { "idempotency-key": options.idempotencyKey } }
+          : {}),
+      },
     );
   },
   createIntentFromAgentMessage(
@@ -1101,7 +1161,11 @@ export const api = {
     userId: string,
     content: string,
     accessToken?: string,
-    options?: { allowDecomposition?: boolean; maxIntents?: number },
+    options?: {
+      allowDecomposition?: boolean;
+      maxIntents?: number;
+      idempotencyKey?: string;
+    },
   ) {
     return request<AgentMessageIntentResult>(
       "POST",
@@ -1118,6 +1182,12 @@ export const api = {
           : {}),
       },
       accessToken,
+      undefined,
+      {
+        ...(options?.idempotencyKey
+          ? { headers: { "idempotency-key": options.idempotencyKey } }
+          : {}),
+      },
     );
   },
   getMyAgentThreadSummary(accessToken?: string) {
@@ -1140,7 +1210,7 @@ export const api = {
     userId: string,
     content: string,
     accessToken?: string,
-    fetchOptions?: { signal?: AbortSignal },
+    fetchOptions?: { signal?: AbortSignal; idempotencyKey?: string },
     extras?: {
       voiceTranscript?: string;
       attachments?: Array<
@@ -1164,7 +1234,12 @@ export const api = {
       },
       accessToken,
       undefined,
-      fetchOptions,
+      {
+        signal: fetchOptions?.signal,
+        ...(fetchOptions?.idempotencyKey
+          ? { headers: { "idempotency-key": fetchOptions.idempotencyKey } }
+          : {}),
+      },
     );
   },
   agentThreadRespondStream(
@@ -1180,6 +1255,7 @@ export const api = {
         | { kind: "image_url"; url: string; caption?: string }
         | { kind: "file_ref"; fileId: string; caption?: string }
       >;
+      idempotencyKey?: string;
     },
   ) {
     return request<AgenticTurnResult>(
@@ -1198,7 +1274,12 @@ export const api = {
       },
       accessToken,
       undefined,
-      { signal: options?.signal },
+      {
+        signal: options?.signal,
+        ...(options?.idempotencyKey
+          ? { headers: { "idempotency-key": options.idempotencyKey } }
+          : {}),
+      },
     );
   },
   summarizePendingIntents(
