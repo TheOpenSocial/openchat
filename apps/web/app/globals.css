@@ -37,10 +37,20 @@ body {
   min-height: 100vh;
   color: hsl(var(--foreground));
   background:
-    radial-gradient(circle at 10% 8%, rgba(56, 109, 179, 0.18) 0%, transparent 34%),
-    radial-gradient(circle at 82% 14%, rgba(236, 179, 86, 0.14) 0%, transparent 30%),
+    radial-gradient(
+      circle at 10% 8%,
+      rgba(56, 109, 179, 0.18) 0%,
+      transparent 34%
+    ),
+    radial-gradient(
+      circle at 82% 14%,
+      rgba(236, 179, 86, 0.14) 0%,
+      transparent 30%
+    ),
     linear-gradient(180deg, #0b101b 0%, #090d15 42%, #080b12 100%);
-  font-feature-settings: "ss01" on, "cv11" on;
+  font-feature-settings:
+    "ss01" on,
+    "cv11" on;
 }
 
 body::before {

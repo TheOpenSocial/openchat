@@ -1,5 +1,3 @@
-import { JsonView } from "@/app/components/JsonView";
-import { Panel } from "@/app/components/Panel";
 import { ModerationAgentRiskPanel } from "./ModerationAgentRiskPanel";
 import { ModerationOperationsPanels } from "./ModerationOperationsPanels";
 import { ModerationSummaryPanel } from "./ModerationSummaryPanel";

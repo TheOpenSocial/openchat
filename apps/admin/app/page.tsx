@@ -8,9 +8,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { AdminShell } from "./components/AdminShell";
 import { AdminSignIn } from "./components/AdminSignIn";
 import { AppLoading } from "./components/AppLoading";
-import { JsonView } from "./components/JsonView";
 import { Notice } from "./components/Notice";
-import { Panel } from "./components/Panel";
 import { AgentTab } from "./components/workbench/AgentTab";
 import { ChatsTab } from "./components/workbench/ChatsTab";
 import { IntentsTab } from "./components/workbench/IntentsTab";
@@ -18,7 +16,6 @@ import { ModerationTab } from "./components/workbench/ModerationTab";
 import { OverviewTab } from "./components/workbench/OverviewTab";
 import { PersonalizationTab } from "./components/workbench/PersonalizationTab";
 import { UserInspectorTab } from "./components/workbench/UserInspectorTab";
-import { type ModerationFlagRow } from "./components/workbench/moderation-shared";
 import { useModerationWorkbench } from "./components/workbench/useModerationWorkbench";
 import {
   clearAdminSession,
