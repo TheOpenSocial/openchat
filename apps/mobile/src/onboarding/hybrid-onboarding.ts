@@ -9,6 +9,7 @@ export interface HybridInferenceResult {
   draft: OnboardingDraftState;
   summary: string;
   persona: string;
+  followUpQuestion: string;
 }
 
 function inferredMeta(
@@ -87,6 +88,74 @@ function summaryFromDraft(draft: OnboardingDraftState) {
     .trim();
 }
 
+function followUpQuestionFromDraft(draft: OnboardingDraftState): string {
+  const goalsLowSignal =
+    draft.onboardingGoals.length === 0 ||
+    draft.inferenceMeta.goals.needsConfirmation ||
+    draft.inferenceMeta.goals.confidence < 0.6;
+  if (goalsLowSignal) {
+    return "What are you hoping to do first?";
+  }
+
+  const interestsLowSignal =
+    draft.interests.length < 2 ||
+    draft.inferenceMeta.interests.needsConfirmation ||
+    draft.inferenceMeta.interests.confidence < 0.6;
+  if (interestsLowSignal) {
+    return "What are you most into right now?";
+  }
+
+  const locationLowSignal =
+    (!draft.area.trim() && !draft.country.trim()) ||
+    draft.inferenceMeta.location.needsConfirmation ||
+    draft.inferenceMeta.location.confidence < 0.6;
+  if (locationLowSignal) {
+    return "Where should we anchor this?";
+  }
+
+  const formatLowSignal =
+    draft.preferredFormat === "both" ||
+    draft.inferenceMeta.format.needsConfirmation ||
+    draft.inferenceMeta.format.confidence < 0.7;
+  if (formatLowSignal) {
+    return "Do you want this to lean 1:1, small groups, or both?";
+  }
+
+  const modeLowSignal =
+    draft.preferredMode === "both" ||
+    draft.inferenceMeta.mode.needsConfirmation ||
+    draft.inferenceMeta.mode.confidence < 0.7;
+  if (modeLowSignal) {
+    return "Should this be online, in person, or both?";
+  }
+
+  const styleLowSignal =
+    draft.preferredStyle === "Chill" ||
+    draft.inferenceMeta.style.needsConfirmation ||
+    draft.inferenceMeta.style.confidence < 0.7;
+  if (styleLowSignal) {
+    return "Should this feel chilled, planned, or spontaneous?";
+  }
+
+  const availabilityLowSignal =
+    draft.preferredAvailability === "Flexible" ||
+    draft.inferenceMeta.availability.needsConfirmation ||
+    draft.inferenceMeta.availability.confidence < 0.7;
+  if (availabilityLowSignal) {
+    return "When are you usually open?";
+  }
+
+  const firstIntentLowSignal =
+    !draft.firstIntentText.trim() ||
+    draft.inferenceMeta.firstIntent.needsConfirmation ||
+    draft.inferenceMeta.firstIntent.confidence < 0.7;
+  if (firstIntentLowSignal) {
+    return "What should we help you do first?";
+  }
+
+  return "";
+}
+
 export async function inferHybridOnboarding(
   current: OnboardingDraftState,
   expression: string,
@@ -131,11 +200,17 @@ export async function inferHybridOnboarding(
     persona: inferredMeta(0.64, true),
   };
 
+  const followUpQuestion = followUpQuestionFromDraft({
+    ...nextDraft,
+    inferenceMeta,
+  });
+
   const hydrated: OnboardingDraftState = {
     ...nextDraft,
     persona,
     personaSummary: summary,
     inferenceMeta,
+    followUpQuestion,
   };
 
   await new Promise((resolve) => setTimeout(resolve, 650));
@@ -144,5 +219,6 @@ export async function inferHybridOnboarding(
     draft: hydrated,
     persona,
     summary,
+    followUpQuestion,
   };
 }

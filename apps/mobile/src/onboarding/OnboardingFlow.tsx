@@ -279,6 +279,14 @@ export function OnboardingFlow({
 
   const stepIndex = draft.stepIndex;
   const progress = (stepIndex + 1) / ONBOARDING_STEP_COUNT;
+  const followUpQuestion = draft.followUpQuestion.trim();
+  const hasFollowUpQuestion = followUpQuestion.length > 0;
+  const voiceActionLabel = hasFollowUpQuestion
+    ? t("onboardingHybridAnswerVoice", locale)
+    : t("onboardingHybridPrimaryVoice", locale);
+  const voiceHint = hasFollowUpQuestion
+    ? t("onboardingHybridFollowUpVoiceHint", locale)
+    : t("onboardingIntakeVoiceHint", locale);
 
   useEffect(() => {
     Animated.timing(progressAnim, {
@@ -357,19 +365,43 @@ export function OnboardingFlow({
     ).slice(0, 6);
   }, [draft.country]);
 
-  const summaryLabels = useMemo(
+  const trustSignals = useMemo(
     () =>
       [
-        ...draft.interests.slice(0, 3),
-        draft.preferredFormat === "group"
-          ? "Small groups"
-          : draft.preferredFormat === "one_to_one"
-            ? "1:1"
-            : "1:1 + groups",
-        draft.preferredAvailability,
-        draft.area || draft.country,
-      ].filter(Boolean) as string[],
-    [draft],
+        {
+          label: t("onboardingPersonaSignalGoals", locale),
+          value: draft.onboardingGoals.length
+            ? draft.onboardingGoals.slice(0, 2).join(" · ")
+            : "Add a couple of goals",
+          meta: draft.inferenceMeta.goals,
+        },
+        {
+          label: t("onboardingPersonaSignalInterests", locale),
+          value: draft.interests.length
+            ? draft.interests.slice(0, 3).join(" · ")
+            : "Add a few interests",
+          meta: draft.inferenceMeta.interests,
+        },
+        {
+          label: t("onboardingPersonaSignalFormat", locale),
+          value:
+            draft.preferredFormat === "one_to_one"
+              ? "1:1"
+              : draft.preferredFormat === "group"
+                ? "Small groups"
+                : "1:1 + groups",
+          meta: draft.inferenceMeta.format,
+        },
+        {
+          label: t("onboardingPersonaSignalLocation", locale),
+          value:
+            [draft.area.trim(), draft.country.trim()]
+              .filter(Boolean)
+              .join(" · ") || "Add a location",
+          meta: draft.inferenceMeta.location,
+        },
+      ] as const,
+    [draft, locale],
   );
 
   const runInference = useCallback(
@@ -378,9 +410,15 @@ export function OnboardingFlow({
       if (!message || processing) {
         return;
       }
+      const transcript = hasFollowUpQuestion
+        ? `${draft.onboardingIntakeText.trim()}\n\nFollow-up question: ${followUpQuestion}\nAnswer: ${message}`.trim()
+        : message;
       setProcessing(true);
       setExpressionDraft(message);
-      patch({ onboardingIntakeText: message });
+      patch({
+        onboardingIntakeText: transcript,
+        followUpQuestion: hasFollowUpQuestion ? followUpQuestion : "",
+      });
       try {
         let inferred = null as Awaited<
           ReturnType<typeof inferHybridOnboarding>
@@ -388,13 +426,13 @@ export function OnboardingFlow({
         try {
           const server = await api.inferOnboarding(
             session.userId,
-            message,
+            transcript,
             session.accessToken,
           );
           inferred = {
             draft: {
               ...draft,
-              onboardingIntakeText: server.transcript,
+              onboardingIntakeText: transcript,
               onboardingGoals: server.goals,
               interests: server.interests,
               preferredAvailability: server.availability,
@@ -406,13 +444,15 @@ export function OnboardingFlow({
               firstIntentText: server.firstIntent,
               persona: server.persona,
               personaSummary: server.summary,
+              followUpQuestion: server.followUpQuestion?.trim() ?? "",
               inferenceMeta: server.inferenceMeta,
             },
             persona: server.persona,
             summary: server.summary,
+            followUpQuestion: server.followUpQuestion?.trim() ?? "",
           };
         } catch {
-          inferred = await inferHybridOnboarding(draft, message);
+          inferred = await inferHybridOnboarding(draft, transcript);
         }
 
         if (!inferred) {
@@ -424,15 +464,20 @@ export function OnboardingFlow({
           stepIndex: current.stepIndex,
         }));
         hapticSelection();
-        animateStep(1);
+        if (!inferred.followUpQuestion.trim()) {
+          animateStep(1);
+        }
       } finally {
         setProcessing(false);
       }
     },
     [
       animateStep,
+      draft.onboardingIntakeText,
       draft,
       expressionDraft,
+      followUpQuestion,
+      hasFollowUpQuestion,
       patch,
       processing,
       session.accessToken,
@@ -548,18 +593,36 @@ export function OnboardingFlow({
                 {t("onboardingHybridTitle", locale)}
               </Text>
               <Text className="mt-4 max-w-[320px] text-center text-[16px] leading-[24px] text-white/52">
-                {t("onboardingHybridSubtitle", locale)}
+                {hasFollowUpQuestion
+                  ? t("onboardingHybridFollowUpSubtitle", locale)
+                  : t("onboardingHybridSubtitle", locale)}
               </Text>
             </View>
 
             <View className="mt-8 rounded-[26px] border border-white/[0.08] bg-white/[0.025] px-5 py-5">
-              <Text className="text-[11px] font-medium uppercase tracking-[0.16em] text-white/30">
-                Example
-              </Text>
-              <Text className="mt-3 text-[15px] leading-[24px] text-white/56">
-                “I want to meet people who are into design and good
-                conversations.”
-              </Text>
+              {hasFollowUpQuestion ? (
+                <>
+                  <Text className="text-[11px] font-medium uppercase tracking-[0.16em] text-white/30">
+                    {t("onboardingHybridFollowUpTitle", locale)}
+                  </Text>
+                  <Text className="mt-3 text-[18px] leading-[28px] text-white/82">
+                    {followUpQuestion}
+                  </Text>
+                  <Text className="mt-3 text-[14px] leading-[22px] text-white/42">
+                    {t("onboardingHybridFollowUpHint", locale)}
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Text className="text-[11px] font-medium uppercase tracking-[0.16em] text-white/30">
+                    Example
+                  </Text>
+                  <Text className="mt-3 text-[15px] leading-[24px] text-white/56">
+                    “I want to meet people who are into design and good
+                    conversations.”
+                  </Text>
+                </>
+              )}
             </View>
           </View>
         </ScrollView>
@@ -778,61 +841,67 @@ export function OnboardingFlow({
             <Text className="text-[12px] font-medium uppercase tracking-[0.16em] text-white/32">
               Persona
             </Text>
-            <Text className="mt-3 text-[34px] font-semibold leading-[38px] tracking-tight text-white">
+            <Text className="mt-3 text-[30px] font-semibold leading-[34px] tracking-tight text-white">
               {draft.persona || "Explorer"}
             </Text>
-            <Text className="mt-4 text-[16px] leading-[25px] text-white/62">
+            <Text className="mt-3 text-[15px] leading-[24px] text-white/60">
               {draft.personaSummary ||
                 "You have clear intent and enough signal for us to shape your social setup."}
             </Text>
-            <View className="mt-5 self-start rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5">
-              <Text className="text-[12px] font-medium text-white/58">
-                {metaLabel(
-                  draft.inferenceMeta.persona.confidence,
-                  draft.inferenceMeta.persona.needsConfirmation,
-                )}
+            <View className="mt-4 flex-row flex-wrap items-center gap-2">
+              <View className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1.25">
+                <Text className="text-[11px] font-medium text-white/56">
+                  {metaLabel(
+                    draft.inferenceMeta.persona.confidence,
+                    draft.inferenceMeta.persona.needsConfirmation,
+                  )}
+                </Text>
+              </View>
+              <Text className="text-[11px] leading-[16px] text-white/28">
+                {t("onboardingPersonaEditHint", locale)}
               </Text>
             </View>
           </View>
 
-          {summaryLabels.length > 0 ? (
-            <View className="mt-8 flex-row flex-wrap gap-2">
-              {summaryLabels.map((label) => (
+          <View className="mt-6 rounded-[26px] border border-white/[0.06] bg-white/[0.025] px-5 py-5">
+            <View className="flex-row items-center justify-between">
+              <Text className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/28">
+                {t("onboardingPersonaSignalTitle", locale)}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => animateStep(1)}
+              >
+                <Text className="text-[11px] font-medium text-white/38">
+                  {t("onboardingPersonaEdit", locale)}
+                </Text>
+              </Pressable>
+            </View>
+            <View className="mt-2 divide-y divide-white/[0.06]">
+              {trustSignals.map((signal) => (
                 <View
-                  key={label}
-                  className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5"
+                  key={signal.label}
+                  className="flex-row items-start justify-between gap-4 py-2.5"
                 >
-                  <Text className="text-[12px] font-medium text-white/60">
-                    {label}
-                  </Text>
+                  <View className="flex-1 gap-1">
+                    <Text className="text-[11px] uppercase tracking-[0.14em] text-white/28">
+                      {signal.label}
+                    </Text>
+                    <Text className="text-[14px] leading-[21px] text-white/70">
+                      {signal.value}
+                    </Text>
+                  </View>
+                  <View className="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1">
+                    <Text className="text-[10px] font-medium text-white/40">
+                      {metaLabel(
+                        signal.meta.confidence,
+                        signal.meta.needsConfirmation,
+                      )}
+                    </Text>
+                  </View>
                 </View>
               ))}
             </View>
-          ) : null}
-
-          <View className="mt-8 gap-3">
-            {(
-              [
-                { label: "Goals", meta: draft.inferenceMeta.goals },
-                { label: "Interests", meta: draft.inferenceMeta.interests },
-                { label: "Format", meta: draft.inferenceMeta.format },
-                {
-                  label: "Availability",
-                  meta: draft.inferenceMeta.availability,
-                },
-                { label: "Location", meta: draft.inferenceMeta.location },
-              ] as const
-            ).map(({ label, meta }) => (
-              <View
-                key={label}
-                className="flex-row items-center justify-between border-b border-white/[0.06] py-2"
-              >
-                <Text className="text-[14px] text-white/56">{label}</Text>
-                <Text className="text-[12px] font-medium text-white/34">
-                  {metaLabel(meta.confidence, meta.needsConfirmation)}
-                </Text>
-              </View>
-            ))}
           </View>
         </ScrollView>
       ) : null}
@@ -1026,11 +1095,7 @@ export function OnboardingFlow({
     stepIndex === 0 ? (
       <View className="gap-4">
         <View className="items-center justify-center" style={{ minHeight: 34 }}>
-          <Text className="text-[12px] text-white/32">
-            {voiceListening
-              ? t("onboardingIntakeVoiceHint", locale)
-              : t("onboardingIntakeVoiceHint", locale)}
-          </Text>
+          <Text className="text-[12px] text-white/32">{voiceHint}</Text>
           {!speechRecognitionAvailable() ? (
             <Text className="mt-2 max-w-[280px] text-center text-[12px] leading-[18px] text-white/28">
               {t("onboardingEntryVoiceUnavailable", locale)}
@@ -1041,13 +1106,13 @@ export function OnboardingFlow({
         <View className="items-center">
           <VoiceMicButton
             accessibilityLabelActive={t("onboardingEntryListening", locale)}
-            accessibilityLabelIdle={t("onboardingHybridPrimaryVoice", locale)}
+            accessibilityLabelIdle={voiceActionLabel}
             activeLabel={t("onboardingEntryListening", locale)}
             className="w-full rounded-full border border-white/10 bg-white px-5 py-4"
             iconColorActive="#0d0d0d"
             iconColorIdle="#0d0d0d"
             iconSize={20}
-            label={t("onboardingHybridPrimaryVoice", locale)}
+            label={voiceActionLabel}
             onFinalTranscript={(text) => {
               setVoiceListening(false);
               setVoiceLevel(-2);
@@ -1094,7 +1159,10 @@ export function OnboardingFlow({
         <Pressable
           accessibilityRole="button"
           className="items-center py-2"
-          onPress={() => animateStep(1)}
+          onPress={() => {
+            patch({ followUpQuestion: "" });
+            animateStep(1);
+          }}
         >
           <Text className="text-[14px] text-white/36">
             {t("onboardingHybridManual", locale)}
@@ -1227,12 +1295,12 @@ function metaLabel(confidence: number, needsConfirmation: boolean) {
     return "Review";
   }
   if (confidence >= 0.8) {
-    return "Strong signal";
+    return "Confirmed";
   }
   if (confidence >= 0.6) {
     return "Likely";
   }
-  return "Light signal";
+  return "Light";
 }
 
 const layout = StyleSheet.create({

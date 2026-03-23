@@ -107,6 +107,7 @@ export function defaultInferenceMeta(): OnboardingInferenceMeta {
 export interface OnboardingDraftState {
   stepIndex: number;
   onboardingIntakeText: string;
+  followUpQuestion: string;
   persona: string;
   personaSummary: string;
   inferenceMeta: OnboardingInferenceMeta;
@@ -132,6 +133,7 @@ export function defaultOnboardingState(
   return {
     stepIndex: 0,
     onboardingIntakeText: "",
+    followUpQuestion: "",
     persona: "",
     personaSummary: "",
     inferenceMeta: defaultInferenceMeta(),
@@ -178,6 +180,10 @@ export function mergeLoadedDraft(
       typeof partial.onboardingIntakeText === "string"
         ? partial.onboardingIntakeText
         : base.onboardingIntakeText,
+    followUpQuestion:
+      typeof partial.followUpQuestion === "string"
+        ? partial.followUpQuestion
+        : base.followUpQuestion,
     persona:
       typeof partial.persona === "string" ? partial.persona : base.persona,
     personaSummary:
