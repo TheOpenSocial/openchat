@@ -1,0 +1,55 @@
+name: Benchmark Onboarding
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Benchmark mode"
+        required: false
+        default: "both"
+        type: choice
+        options:
+          - both
+          - fast
+          - rich
+      runs:
+        description: "Number of runs per mode"
+        required: false
+        default: "20"
+        type: string
+      url:
+        description: "Probe endpoint URL"
+        required: false
+        default: "https://api.opensocial.so/onboarding/probe"
+        type: string
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.7.1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run onboarding benchmark
+        env:
+          ONBOARDING_BENCH_URL: ${{ inputs.url }}
+          ONBOARDING_PROBE_TOKEN: ${{ secrets.ONBOARDING_PROBE_TOKEN }}
+          ONBOARDING_BENCH_MODE: ${{ inputs.mode }}
+          ONBOARDING_BENCH_RUNS: ${{ inputs.runs }}
+          ONBOARDING_BENCH_TIMEOUT_MS: "20000"
+        run: pnpm benchmark:onboarding
