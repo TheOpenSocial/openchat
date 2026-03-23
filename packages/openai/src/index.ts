@@ -648,7 +648,7 @@ export class OpenAIClient {
           }),
         });
 
-        const text = response.output_text?.trim();
+        const text = this.extractResponseText(response);
         if (!text) {
           console.warn(
             `[openai:onboarding-fast] empty output provider=${this.providerName} traceId=${traceId} model=${model} durationMs=${Date.now() - startedAt}`,
@@ -858,7 +858,7 @@ export class OpenAIClient {
           }),
         });
 
-        const text = response.output_text?.trim();
+        const text = this.extractResponseText(response);
         if (!text) {
           this.captureFailure({
             task: "ranking_explanation",
