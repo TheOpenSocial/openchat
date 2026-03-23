@@ -492,6 +492,29 @@ export const onboardingInferBodySchema = z.object({
   transcript: z.string().min(1).max(4_000),
 });
 
+export const onboardingActivationPlanBodySchema = z.object({
+  userId: uuidSchema,
+  firstIntentText: z.string().min(1).max(800).optional(),
+  summary: z.string().min(1).max(1_200).optional(),
+  persona: z.string().min(1).max(120).optional(),
+  goals: z.array(z.string().min(1).max(120)).max(8).optional(),
+  interests: z.array(z.string().min(1).max(120)).max(12).optional(),
+  city: z.string().max(120).optional(),
+  country: z.string().max(120).optional(),
+  socialMode: z.enum(["one_to_one", "group", "either"]).optional(),
+});
+
+export const onboardingActivationPlanResponseSchema = z.object({
+  state: z.enum(["idle", "pending", "ready", "failed"]),
+  source: z.enum(["llm", "fallback"]),
+  summary: z.string().min(1),
+  recommendedAction: z.object({
+    kind: z.enum(["agent_thread_seed", "intent_create"]),
+    label: z.string().min(1),
+    text: z.string().min(1),
+  }),
+});
+
 export const onboardingQuickInferResponseSchema = z.object({
   transcript: z.string().min(1),
   interests: z.array(z.string().min(1)).max(8).default([]),

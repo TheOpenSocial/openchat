@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable, Logger } from "@nestjs/common";
 import { OpenAIClient } from "@opensocial/openai";
 import {
+  onboardingActivationPlanBodySchema,
+  onboardingActivationPlanResponseSchema,
   onboardingInferResponseSchema,
   onboardingQuickInferResponseSchema,
 } from "@opensocial/types";
@@ -11,6 +13,12 @@ import { recordOnboardingInferenceMetric } from "../common/ops-metrics.js";
 type OnboardingInferResponse = z.infer<typeof onboardingInferResponseSchema>;
 type OnboardingQuickInferResponse = z.infer<
   typeof onboardingQuickInferResponseSchema
+>;
+type OnboardingActivationPlanInput = z.infer<
+  typeof onboardingActivationPlanBodySchema
+>;
+type OnboardingActivationPlanResponse = z.infer<
+  typeof onboardingActivationPlanResponseSchema
 >;
 
 @Injectable()
@@ -225,6 +233,57 @@ export class OnboardingService {
     return this.buildRichFallback(raw);
   }
 
+  async buildActivationPlan(
+    input: OnboardingActivationPlanInput,
+  ): Promise<OnboardingActivationPlanResponse> {
+    const transcript = this.buildActivationPlanTranscript(input);
+    const traceId = randomUUID();
+    const startedAt = Date.now();
+    if (!transcript) {
+      return this.buildActivationFallbackPlan(input, "missing_context");
+    }
+
+    const selectedFastModel = this.pickModelCandidate(
+      traceId,
+      this.fastModelCandidates,
+    );
+    const fastClient = this.resolveClient(
+      "onboarding_fast_pass",
+      selectedFastModel,
+      this.fastOpenaiByModel,
+      this.fastOpenai,
+      this.onboardingQuickTimeoutMs,
+    );
+    const llmInferred = await fastClient.inferOnboardingQuick(
+      transcript,
+      traceId,
+    );
+    const durationMs = Date.now() - startedAt;
+    if (llmInferred?.firstIntent?.trim()) {
+      const recommendationText = llmInferred.firstIntent.trim();
+      this.logger.log(
+        `onboarding activation plan ready traceId=${traceId} model=${selectedFastModel} durationMs=${durationMs} source=llm`,
+      );
+      return {
+        state: "ready",
+        source: "llm",
+        summary:
+          llmInferred.summary?.trim() ||
+          "We prepared your first step based on what you shared.",
+        recommendedAction: {
+          kind: "agent_thread_seed",
+          label: "Start with this",
+          text: recommendationText,
+        },
+      };
+    }
+
+    this.logger.warn(
+      `onboarding activation plan fallback traceId=${traceId} model=${selectedFastModel} durationMs=${durationMs} reason=llm_unavailable`,
+    );
+    return this.buildActivationFallbackPlan(input, "llm_unavailable");
+  }
+
   private parseModelCandidates(
     value: string | undefined,
     defaultModel: string | undefined,
@@ -371,6 +430,57 @@ export class OnboardingService {
     return transcript.length > 160
       ? `${transcript.slice(0, 157).trimEnd()}...`
       : transcript;
+  }
+
+  private buildActivationPlanTranscript(
+    input: OnboardingActivationPlanInput,
+  ): string {
+    const chunks = [
+      input.firstIntentText?.trim() ?? "",
+      input.summary?.trim() ?? "",
+      input.persona?.trim() ? `Persona: ${input.persona.trim()}` : "",
+      input.goals?.length ? `Goals: ${input.goals.join(", ")}.` : "",
+      input.interests?.length
+        ? `Interests: ${input.interests.join(", ")}.`
+        : "",
+      input.city?.trim() ? `City: ${input.city.trim()}.` : "",
+      input.country?.trim() ? `Country: ${input.country.trim()}.` : "",
+      input.socialMode ? `Preferred mode: ${input.socialMode}.` : "",
+    ]
+      .map((value) => value.trim())
+      .filter((value) => value.length > 0);
+    return chunks.join(" ").slice(0, 2000).trim();
+  }
+
+  private buildActivationFallbackPlan(
+    input: OnboardingActivationPlanInput,
+    reason: "missing_context" | "llm_unavailable",
+  ): OnboardingActivationPlanResponse {
+    const interests = (input.interests ?? []).slice(0, 3);
+    const location = [input.city?.trim() ?? "", input.country?.trim() ?? ""]
+      .filter((part) => part.length > 0)
+      .join(", ");
+    const focus =
+      interests.length > 0 ? interests.join(", ") : "new social plans";
+    const where = location ? ` in ${location}` : "";
+    const seed =
+      input.firstIntentText?.trim() ||
+      `Help me find my best first social step around ${focus}${where}.`;
+    const summary =
+      reason === "missing_context"
+        ? "We prepared a clean first step to get you started."
+        : "We prepared a reliable first step while we refine your setup.";
+
+    return {
+      state: "ready",
+      source: "fallback",
+      summary,
+      recommendedAction: {
+        kind: "agent_thread_seed",
+        label: "Start with this",
+        text: seed,
+      },
+    };
   }
 
   private extractInterests(transcript: string): string[] {

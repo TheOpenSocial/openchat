@@ -8,7 +8,10 @@ import {
   UnauthorizedException,
   Headers,
 } from "@nestjs/common";
-import { onboardingInferBodySchema } from "@opensocial/types";
+import {
+  onboardingActivationPlanBodySchema,
+  onboardingInferBodySchema,
+} from "@opensocial/types";
 import { z } from "zod";
 import { PublicRoute } from "../auth/public-route.decorator.js";
 import { ok } from "../common/api-response.js";
@@ -74,6 +77,29 @@ export class OnboardingController {
         payload.transcript,
       ),
     );
+  }
+
+  @Post("activation-plan")
+  async activationPlan(
+    @Body() body: unknown,
+    @ActorUserId() actorUserId: string,
+  ) {
+    const payload = parseRequestPayload(
+      onboardingActivationPlanBodySchema,
+      body,
+    );
+    assertActorOwnsUser(
+      actorUserId,
+      payload.userId,
+      "onboarding target does not match authenticated user",
+    );
+    if (this.launchControlsService) {
+      await this.launchControlsService.assertActionAllowed(
+        "discovery",
+        payload.userId,
+      );
+    }
+    return ok(await this.onboardingService.buildActivationPlan(payload));
   }
 
   @PublicRoute()

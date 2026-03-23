@@ -1404,7 +1404,7 @@ Production rollout is approved only when:
 - [ ] `TP-12` Release readiness package: publish a concise launch runbook including known limits, fallback behavior, monitoring links, kill switches, and first-24h incident response owner map.
 - [~] `TP-13` Post-onboarding activation trigger contract: run one deterministic activation handoff immediately after persona confirmation/profile persistence and return typed activation state (`idle|pending|ready|failed`) plus first recommended action.
 - [~] `TP-14` Mobile/web activation handoff UX: route users from onboarding completion into actionable activation state (not empty home), with resilient resume after background/relaunch and explicit loading/ready/error states.
-- [ ] `TP-15` Starter intent bootstrap pipeline: generate/persist a safe first activation recommendation from onboarding outputs (persona/goals/interests/language) with deterministic fallback for weak model output.
+- [~] `TP-15` Starter intent bootstrap pipeline: generate/persist a safe first activation recommendation from onboarding outputs (persona/goals/interests/language) with deterministic fallback for weak model output.
 - [ ] `TP-16` One-tap activation execution path: execute first recommended action directly after onboarding with backend idempotency, optimistic UX, and recoverable failure handling.
 - [ ] `TP-17` Activation funnel telemetry and guardrails: instrument onboarding-complete -> activation-ready -> first-action-succeeded funnel with alert thresholds for activation failure and cold-start latency regressions.
 

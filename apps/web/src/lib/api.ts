@@ -32,6 +32,17 @@ export interface ProfileCompletion {
   };
 }
 
+export interface OnboardingActivationPlanResponse {
+  state: "idle" | "pending" | "ready" | "failed";
+  source: "llm" | "fallback";
+  summary: string;
+  recommendedAction: {
+    kind: "agent_thread_seed" | "intent_create";
+    label: string;
+    text: string;
+  };
+}
+
 export interface InboxRequestRecord {
   id: string;
   intentId: string;
@@ -804,6 +815,27 @@ export const api = {
           ? { headers: { "idempotency-key": options.idempotencyKey } }
           : {}),
       },
+    );
+  },
+  createOnboardingActivationPlan(
+    userId: string,
+    payload: {
+      firstIntentText?: string;
+      summary?: string;
+      persona?: string;
+      goals?: string[];
+      interests?: string[];
+      city?: string;
+      country?: string;
+      socialMode?: "one_to_one" | "group" | "either";
+    },
+    accessToken?: string,
+  ) {
+    return request<OnboardingActivationPlanResponse>(
+      "POST",
+      "/onboarding/activation-plan",
+      { userId, ...payload },
+      accessToken,
     );
   },
   getGlobalRules(userId: string, accessToken?: string) {

@@ -296,6 +296,17 @@ export interface OnboardingQuickInferenceResult {
   followUpQuestion?: string;
 }
 
+export interface OnboardingActivationPlanResponse {
+  state: "idle" | "pending" | "ready" | "failed";
+  source: "llm" | "fallback";
+  summary: string;
+  recommendedAction: {
+    kind: "agent_thread_seed" | "intent_create";
+    label: string;
+    text: string;
+  };
+}
+
 export interface DiscoveryUserSuggestion {
   userId: string;
   displayName: string;
@@ -1039,6 +1050,27 @@ export const api = {
       "POST",
       "/onboarding/infer-fast",
       { userId, transcript },
+      accessToken,
+    );
+  },
+  createOnboardingActivationPlan(
+    userId: string,
+    payload: {
+      firstIntentText?: string;
+      summary?: string;
+      persona?: string;
+      goals?: string[];
+      interests?: string[];
+      city?: string;
+      country?: string;
+      socialMode?: "one_to_one" | "group" | "either";
+    },
+    accessToken?: string,
+  ) {
+    return request<OnboardingActivationPlanResponse>(
+      "POST",
+      "/onboarding/activation-plan",
+      { userId, ...payload },
       accessToken,
     );
   },

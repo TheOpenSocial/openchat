@@ -414,7 +414,25 @@ export function AppSessionProvider({ children }: { children: ReactNode }) {
     setBanner(null);
     try {
       await saveProfile();
-      const seed = buildOnboardingCarryoverSeed(profileDraft);
+      let seed = buildOnboardingCarryoverSeed(profileDraft);
+      if (session && !webEnv.designMock) {
+        try {
+          const activationPlan = await api.createOnboardingActivationPlan(
+            session.userId,
+            {
+              summary: profileDraft.bio.trim() || undefined,
+              interests: profileDraft.interests,
+              city: profileDraft.city.trim() || undefined,
+              country: profileDraft.country.trim() || undefined,
+              socialMode: profileDraft.socialMode,
+            },
+            session.accessToken,
+          );
+          seed = activationPlan.recommendedAction.text.trim() || seed;
+        } catch {
+          // Keep deterministic fallback seed when backend activation planning is unavailable.
+        }
+      }
       if (seed && session) {
         const nextSession = {
           ...session,
