@@ -7,7 +7,7 @@ test.describe("Web design mock critical path", () => {
     await page.goto("/");
 
     await expect(
-      page.getByRole("heading", { name: "Explore the app" }),
+      page.getByRole("heading", { name: "Explore the routed shell" }),
     ).toBeVisible();
 
     await page.getByTestId("web-design-preview-signin").click();
@@ -16,39 +16,27 @@ test.describe("Web design mock critical path", () => {
     ).toBeVisible();
 
     await page.getByTestId("web-onboarding-continue").click();
-    await expect(page.getByRole("heading", { name: "Home" })).toBeVisible();
+    await expect(page.locator("h1", { hasText: "Home" })).toBeVisible();
 
-    await page.getByRole("link", { name: "Requests" }).click();
-    await expect(
-      page.getByRole("heading", { name: "Requests", exact: true }),
-    ).toBeVisible();
+    await page.getByRole("link", { name: "Requests", exact: true }).click();
+    await expect(page.locator("h1", { hasText: "Requests" })).toBeVisible();
 
-    await page.getByRole("link", { name: "Chats" }).click();
-    await expect(
-      page.getByRole("heading", { name: "Chats", exact: true }),
-    ).toBeVisible();
+    await page.getByRole("link", { name: "Chats", exact: true }).click();
+    await expect(page.locator("h1", { hasText: "Chats" })).toBeVisible();
 
-    await page.getByRole("link", { name: "Discover" }).click();
-    await expect(
-      page.getByRole("heading", { name: "Discover", exact: true }),
-    ).toBeVisible();
+    await page.getByRole("link", { name: "Discover", exact: true }).click();
+    await expect(page.locator("h1", { hasText: "Discover" })).toBeVisible();
 
-    await page.getByRole("link", { name: "Circles" }).click();
-    await expect(
-      page.getByRole("heading", { name: "Circles", exact: true }),
-    ).toBeVisible();
+    await page.getByRole("link", { name: "Circles", exact: true }).click();
+    await expect(page.locator("h1", { hasText: "Circles" })).toBeVisible();
 
-    await page.getByRole("link", { name: "Automations" }).click();
-    await expect(
-      page.getByRole("heading", { name: "Automations", exact: true }),
-    ).toBeVisible();
+    await page.getByRole("link", { name: "Automations", exact: true }).click();
+    await expect(page.locator("h1", { hasText: "Automations" })).toBeVisible();
 
-    await page.getByRole("link", { name: "Profile" }).click();
-    await expect(
-      page.getByRole("heading", { name: "Profile", exact: true }),
-    ).toBeVisible();
+    await page.getByRole("link", { name: "Profile", exact: true }).click();
+    await expect(page.locator("h1", { hasText: "Profile" })).toBeVisible();
 
-    await page.getByRole("link", { name: "Home" }).click();
+    await page.getByRole("link", { name: "Home", exact: true }).click();
     await page
       .getByTestId("web-agent-intent-input")
       .fill("Playwright smoke intent");
