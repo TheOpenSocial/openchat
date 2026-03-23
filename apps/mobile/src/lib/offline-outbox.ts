@@ -174,6 +174,7 @@ export async function queueOfflineComposerSend(input: {
   mode: "chat" | "intent";
   threadId: string | null;
   text: string;
+  idempotencyKey?: string;
   voiceTranscript?: string;
   attachments?: Array<
     | { kind: "image_url"; url: string; caption?: string }
@@ -183,7 +184,7 @@ export async function queueOfflineComposerSend(input: {
   maxIntents?: number;
 }) {
   return upsertOutboxItem({
-    id: createId(),
+    id: input.idempotencyKey ?? createId(),
     userId: input.userId,
     kind: "composer_send",
     dedupeKey: buildComposerDedupeKey(input),

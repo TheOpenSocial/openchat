@@ -127,6 +127,20 @@ function parseOptionalImageAttachmentUrl(raw: string) {
   }
 }
 
+function stableHash36(input: string) {
+  let hash = 2166136261;
+  for (let i = 0; i < input.length; i += 1) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function buildOnboardingCarryoverIdempotencyKey(userId: string, seed: string) {
+  const normalized = seed.trim().toLowerCase().replace(/\s+/g, " ");
+  return `onboarding-carryover:${userId}:${stableHash36(normalized)}`;
+}
+
 const tabLabels: Record<HomeTab, TranslationKey> = {
   home: "homeTabHome",
   chats: "homeTabChats",
@@ -163,6 +177,10 @@ export function HomeScreen({
   const [draftIntentText, setDraftIntentText] = useState("");
   const [agentImageUrlDraft, setAgentImageUrlDraft] = useState("");
   const [onboardingCarryoverSeed, setOnboardingCarryoverSeed] = useState("");
+  const [
+    onboardingCarryoverIdempotencyKey,
+    setOnboardingCarryoverIdempotencyKey,
+  ] = useState<string | null>(null);
   const [onboardingCarryoverState, setOnboardingCarryoverState] =
     useState<OnboardingCarryoverState>(null);
   const [sendingIntent, setSendingIntent] = useState(false);
@@ -1290,6 +1308,7 @@ export function HomeScreen({
   const sendIntent = async (
     messageOverride?: string,
     options?: {
+      idempotencyKey?: string;
       onOutcome?: (outcome: IntentSendOutcome) => void;
     },
   ) => {
@@ -1305,6 +1324,9 @@ export function HomeScreen({
       setAgentImageUrlDraft("");
     }
     const timelineIdBase = Date.now().toString(36);
+    const requestIdempotencyKey =
+      options?.idempotencyKey ??
+      `composer-send:${session.userId}:${timelineIdBase}`;
     const workflowMessageId = `workflow_${timelineIdBase}`;
     const useAgentChat =
       agentComposerMode === "chat" &&
@@ -1349,6 +1371,7 @@ export function HomeScreen({
         mode: agentComposerMode,
         threadId: agentThreadId ?? null,
         text: rawText,
+        idempotencyKey: requestIdempotencyKey,
         ...(agentVoiceTranscriptRef.current?.trim()
           ? { voiceTranscript: agentVoiceTranscriptRef.current.trim() }
           : {}),
@@ -1440,6 +1463,7 @@ export function HomeScreen({
             {
               signal: controller.signal,
               traceId,
+              idempotencyKey: requestIdempotencyKey,
               ...(voiceLine ? { voiceTranscript: voiceLine } : {}),
               ...(imageExtras?.length ? { attachments: imageExtras } : {}),
             },
@@ -1471,6 +1495,7 @@ export function HomeScreen({
           {
             allowDecomposition: decomposeIntent,
             maxIntents: decomposeMaxIntents,
+            idempotencyKey: requestIdempotencyKey,
           },
         );
         const primaryIntentId =
@@ -1508,6 +1533,7 @@ export function HomeScreen({
         {
           signal: controller.signal,
           agentThreadId: agentThreadId ?? undefined,
+          idempotencyKey: requestIdempotencyKey,
         },
       );
 
@@ -1553,6 +1579,7 @@ export function HomeScreen({
           mode: agentComposerMode,
           threadId: agentThreadId ?? null,
           text: rawText,
+          idempotencyKey: requestIdempotencyKey,
           ...(agentVoiceTranscriptRef.current?.trim()
             ? { voiceTranscript: agentVoiceTranscriptRef.current.trim() }
             : {}),
@@ -1609,11 +1636,17 @@ export function HomeScreen({
     }
     onboardingSeedHandledRef.current = true;
     setOnboardingCarryoverSeed(seed);
+    setOnboardingCarryoverIdempotencyKey(
+      buildOnboardingCarryoverIdempotencyKey(session.userId, seed),
+    );
     setOnboardingCarryoverState("ready");
-  }, [initialAgentMessage, onInitialAgentMessageConsumed]);
+  }, [initialAgentMessage, onInitialAgentMessageConsumed, session.userId]);
 
   const executeOnboardingCarryover = async () => {
     const seed = onboardingCarryoverSeed.trim();
+    const idempotencyKey =
+      onboardingCarryoverIdempotencyKey ??
+      buildOnboardingCarryoverIdempotencyKey(session.userId, seed);
     if (!seed || sendingIntent) {
       return;
     }
@@ -1626,6 +1659,7 @@ export function HomeScreen({
 
     setOnboardingCarryoverState("processing");
     await sendIntent(seed, {
+      idempotencyKey,
       onOutcome: (outcome) => {
         const elapsedMs = Math.max(0, Date.now() - startedAt);
         if (outcome === "sent") {
@@ -1638,6 +1672,7 @@ export function HomeScreen({
             },
           ).catch(() => {});
           setOnboardingCarryoverSeed("");
+          setOnboardingCarryoverIdempotencyKey(null);
           setOnboardingCarryoverState(null);
           onInitialAgentMessageConsumed?.();
           return;
