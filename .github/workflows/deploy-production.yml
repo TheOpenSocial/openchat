@@ -34,29 +34,57 @@ jobs:
     concurrency:
       group: deploy-production
       cancel-in-progress: false
+    env:
+      LOCAL_DEPLOY: "1"
+      DEPLOY_PATH: /opt/opensocial
+      REMOTE_ENV_FILE: .env.production
+      DEPLOY_MODE: ${{ inputs.deploy_mode }}
+      API_IMAGE: ${{ inputs.api_image }}
+      ADMIN_IMAGE: ${{ inputs.admin_image }}
+      WEB_IMAGE: ${{ inputs.web_image }}
+      REGISTRY_HOST: ghcr.io
+      REGISTRY_USERNAME: ${{ secrets.GHCR_USERNAME }}
+      REGISTRY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      GOOGLE_REDIRECT_URI: https://api.opensocial.so/api/auth/google/callback
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Deploy to production
+      - name: Sync deploy workspace
         shell: bash
-        env:
-          LOCAL_DEPLOY: "1"
-          DEPLOY_PATH: /opt/opensocial
-          REMOTE_ENV_FILE: .env.production
-          DEPLOY_MODE: ${{ inputs.deploy_mode }}
-          API_IMAGE: ${{ inputs.api_image }}
-          ADMIN_IMAGE: ${{ inputs.admin_image }}
-          WEB_IMAGE: ${{ inputs.web_image }}
-          REGISTRY_HOST: ghcr.io
-          REGISTRY_USERNAME: ${{ secrets.GHCR_USERNAME }}
-          REGISTRY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
-          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-          GOOGLE_REDIRECT_URI: https://api.opensocial.so/api/auth/google/callback
         run: |
           set -euo pipefail
           chmod +x scripts/deploy-production.sh
-          ./scripts/deploy-production.sh
+          DEPLOY_PHASE=sync ./scripts/deploy-production.sh
+
+      - name: Pull or build services
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x scripts/deploy-production.sh
+          DEPLOY_PHASE=pull-or-build ./scripts/deploy-production.sh
+
+      - name: Run API migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x scripts/deploy-production.sh
+          DEPLOY_PHASE=migrate ./scripts/deploy-production.sh
+
+      - name: Start production services
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x scripts/deploy-production.sh
+          DEPLOY_PHASE=up ./scripts/deploy-production.sh
+
+      - name: Show service status
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x scripts/deploy-production.sh
+          DEPLOY_PHASE=ps ./scripts/deploy-production.sh

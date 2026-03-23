@@ -6,6 +6,7 @@ LOCAL_DEPLOY="${LOCAL_DEPLOY:-0}"
 DEPLOY_PATH="${DEPLOY_PATH:-/opt/opensocial}"
 REMOTE_ENV_FILE="${REMOTE_ENV_FILE:-.env.production}"
 DEPLOY_MODE="${DEPLOY_MODE:-build}"
+DEPLOY_PHASE="${DEPLOY_PHASE:-all}"
 API_IMAGE="${API_IMAGE:-}"
 ADMIN_IMAGE="${ADMIN_IMAGE:-}"
 WEB_IMAGE="${WEB_IMAGE:-}"
@@ -85,21 +86,11 @@ env_file.write_text("\n".join(lines) + "\n")
 PY
 }
 
-run_deploy_commands() {
-  if [[ "$DEPLOY_MODE" == "images" ]]; then
-    if [[ -n "$REGISTRY_USERNAME" && -n "$REGISTRY_PASSWORD" ]]; then
-      printf "%s" "$REGISTRY_PASSWORD" | docker login "$REGISTRY_HOST" --username "$REGISTRY_USERNAME" --password-stdin
-    fi
-    docker compose -f docker-compose.prod.yml --env-file "$REMOTE_ENV_FILE" pull api admin web
-  else
-    COMPOSE_BAKE=true docker compose -f docker-compose.prod.yml --env-file "$REMOTE_ENV_FILE" build api admin web
-  fi
-  docker compose -f docker-compose.prod.yml --env-file "$REMOTE_ENV_FILE" run --rm --entrypoint sh api -lc "corepack enable && pnpm --filter @opensocial/api prisma:migrate:deploy"
-  docker compose -f docker-compose.prod.yml --env-file "$REMOTE_ENV_FILE" up -d nginx api admin web valkey
-  docker compose -f docker-compose.prod.yml --env-file "$REMOTE_ENV_FILE" ps
+compose_cmd() {
+  docker compose -f docker-compose.prod.yml --env-file "$REMOTE_ENV_FILE" "$@"
 }
 
-if [[ "$LOCAL_DEPLOY" == "1" ]]; then
+sync_local_checkout() {
   mkdir -p "$DEPLOY_PATH"
   rsync -a --delete \
     --exclude ".git" \
@@ -116,8 +107,65 @@ if [[ "$LOCAL_DEPLOY" == "1" ]]; then
   sync_local_env_var "API_IMAGE" "${API_IMAGE:-}"
   sync_local_env_var "ADMIN_IMAGE" "${ADMIN_IMAGE:-}"
   sync_local_env_var "WEB_IMAGE" "${WEB_IMAGE:-}"
+}
+
+run_pull_or_build() {
+  if [[ "$DEPLOY_MODE" == "images" ]]; then
+    if [[ -n "$REGISTRY_USERNAME" && -n "$REGISTRY_PASSWORD" ]]; then
+      printf "%s" "$REGISTRY_PASSWORD" | docker login "$REGISTRY_HOST" --username "$REGISTRY_USERNAME" --password-stdin
+    fi
+    compose_cmd pull api admin web
+  else
+    COMPOSE_BAKE=true compose_cmd build api admin web
+  fi
+}
+
+run_migrate() {
+  compose_cmd run --rm --entrypoint sh api -lc "corepack enable && pnpm --filter @opensocial/api prisma:migrate:deploy"
+}
+
+run_up() {
+  compose_cmd up -d nginx api admin web valkey
+}
+
+run_ps() {
+  compose_cmd ps
+}
+
+run_phase() {
+  case "$DEPLOY_PHASE" in
+    sync)
+      sync_local_checkout
+      ;;
+    pull-or-build)
+      run_pull_or_build
+      ;;
+    migrate)
+      run_migrate
+      ;;
+    up)
+      run_up
+      ;;
+    ps)
+      run_ps
+      ;;
+    all)
+      sync_local_checkout
+      run_pull_or_build
+      run_migrate
+      run_up
+      run_ps
+      ;;
+    *)
+      echo "Unknown DEPLOY_PHASE: $DEPLOY_PHASE" >&2
+      exit 1
+      ;;
+  esac
+}
+
+if [[ "$LOCAL_DEPLOY" == "1" ]]; then
   cd "$DEPLOY_PATH"
-  run_deploy_commands
+  run_phase
   exit 0
 fi
 
