@@ -192,6 +192,8 @@ const catalogs = {
       "Your thread is starting from what you already said.",
     openChatOnboardingCarryoverQueued:
       "Your first intent is saved and will send as soon as you’re back online.",
+    openChatOnboardingCarryoverStartNow: "Start from this",
+    openChatOnboardingCarryoverRetry: "Try sending now",
     openChatSuggestions: "Suggestions",
     openChatActionOpenChats: "Open chats",
     openChatActionWiden: "Widen search",
@@ -522,6 +524,8 @@ const catalogs = {
       "Tu hilo empieza desde lo que ya dijiste.",
     openChatOnboardingCarryoverQueued:
       "Tu primer intent quedó guardado y se enviará cuando vuelvas a estar online.",
+    openChatOnboardingCarryoverStartNow: "Empezar desde esto",
+    openChatOnboardingCarryoverRetry: "Intentar enviar ahora",
     openChatSuggestions: "Sugerencias",
     openChatActionOpenChats: "Abrir chats",
     openChatActionWiden: "Ampliar búsqueda",

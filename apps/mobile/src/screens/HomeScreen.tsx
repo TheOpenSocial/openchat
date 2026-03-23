@@ -107,6 +107,8 @@ export interface HomeScreenProps {
   onInitialAgentMessageConsumed?: () => void;
 }
 
+type IntentSendOutcome = "sent" | "queued" | "failed" | "aborted";
+
 type LocalChatThread = StoredChatThread;
 
 function parseOptionalImageAttachmentUrl(raw: string) {
@@ -1285,7 +1287,12 @@ export function HomeScreen({
     [designMock, recordTelemetry, session.accessToken, session.userId],
   );
 
-  const sendIntent = async (messageOverride?: string) => {
+  const sendIntent = async (
+    messageOverride?: string,
+    options?: {
+      onOutcome?: (outcome: IntentSendOutcome) => void;
+    },
+  ) => {
     const rawText = (messageOverride ?? draftIntentText).trim();
     if (!rawText || sendingIntent) {
       return;
@@ -1368,6 +1375,7 @@ export function HomeScreen({
         text: "Queued offline. We’ll send it automatically when internet returns.",
       });
       setSendingIntent(false);
+      options?.onOutcome?.("queued");
       return;
     }
 
@@ -1392,6 +1400,7 @@ export function HomeScreen({
           textLength: rawText.length,
         });
         hapticImpact();
+        options?.onOutcome?.("sent");
         return;
       }
 
@@ -1449,6 +1458,7 @@ export function HomeScreen({
         recordTelemetry("agent_turn_completed", {
           textLength: rawText.length,
         });
+        options?.onOutcome?.("sent");
         return;
       }
 
@@ -1487,6 +1497,7 @@ export function HomeScreen({
           void trackRequestSentForIntent(primaryIntentId);
         }
         hapticImpact();
+        options?.onOutcome?.("sent");
         return;
       }
 
@@ -1519,6 +1530,7 @@ export function HomeScreen({
       if (intentId) {
         void trackRequestSentForIntent(intentId);
       }
+      options?.onOutcome?.("sent");
     } catch (error) {
       const aborted = error instanceof Error && error.name === "AbortError";
       if (aborted) {
@@ -1531,6 +1543,7 @@ export function HomeScreen({
               body: "Stopped.",
             }),
         );
+        options?.onOutcome?.("aborted");
         return;
       }
 
@@ -1565,6 +1578,7 @@ export function HomeScreen({
           tone: "info",
           text: "Network issue detected. Your message is queued and will retry automatically.",
         });
+        options?.onOutcome?.("queued");
         return;
       }
 
@@ -1576,6 +1590,7 @@ export function HomeScreen({
           body: `I could not submit that intent right now. ${String(error)}`,
         },
       ]);
+      options?.onOutcome?.("failed");
     } finally {
       intentAbortRef.current = null;
       setSendingIntent(false);
@@ -1592,181 +1607,39 @@ export function HomeScreen({
     if (onboardingSeedHandledRef.current) {
       return;
     }
-    setOnboardingCarryoverSeed(seed);
-
-    if (!skipNetwork && !designMock && !enableE2ELocalMode && !netOnline) {
-      onboardingSeedHandledRef.current = true;
-      setOnboardingCarryoverState("queued");
-      void queueOfflineComposerSend({
-        userId: session.userId,
-        mode: "chat",
-        threadId: agentThreadId ?? null,
-        text: seed,
-      }).then(() => refreshPendingOutboxCount().catch(() => {}));
-      onInitialAgentMessageConsumed();
-      setBanner({
-        tone: "info",
-        text: "Your first intent is queued offline and will send automatically when internet returns.",
-      });
-      return;
-    }
-
-    if (designMock || enableE2ELocalMode || skipNetwork) {
-      onboardingSeedHandledRef.current = true;
-      setOnboardingCarryoverState("ready");
-      if (designMock && seed) {
-        setAgentTimeline((current) => [
-          ...current,
-          { id: `user_onboarding_seed`, role: "user", body: seed },
-          {
-            id: `agent_onboarding_seed`,
-            role: "agent",
-            body: "Got it. I'm looking for people who fit that.",
-          },
-        ]);
-      }
-      onInitialAgentMessageConsumed();
-      return;
-    }
-
-    if (agentThreadLoading) {
-      return;
-    }
-
-    if (!agentThreadId) {
-      onboardingSeedHandledRef.current = true;
-      setOnboardingCarryoverState(null);
-      onInitialAgentMessageConsumed();
-      setBanner({
-        tone: "error",
-        text: "Could not open your agent thread yet. Try sending from the composer below.",
-      });
-      return;
-    }
-
     onboardingSeedHandledRef.current = true;
+    setOnboardingCarryoverSeed(seed);
+    setOnboardingCarryoverState("ready");
+  }, [initialAgentMessage, onInitialAgentMessageConsumed]);
+
+  const executeOnboardingCarryover = async () => {
+    const seed = onboardingCarryoverSeed.trim();
+    if (!seed || sendingIntent) {
+      return;
+    }
+
     setOnboardingCarryoverState("processing");
-    const timelineIdBase = Date.now().toString(36);
-    const workflowMessageId = `workflow_${timelineIdBase}`;
-    const streamingId = `agent_stream_${timelineIdBase}`;
-    const workflowBody = t("agentWorkflowThinking", locale);
-    const rawText = seed;
-
-    setAgentTimeline((current) => [
-      ...current,
-      { id: `user_${timelineIdBase}`, role: "user", body: rawText },
-      { id: workflowMessageId, role: "workflow", body: workflowBody },
-      { id: streamingId, role: "agent" as const, body: "" },
-    ]);
-
-    const controller = new AbortController();
-    intentAbortRef.current = controller;
-    const traceId =
-      globalThis.crypto?.randomUUID?.() ??
-      `trace-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
-
-    void (async () => {
-      try {
-        const sse = openAgentThreadSse(
-          buildAgentThreadStreamUrl(agentThreadId, session.accessToken),
-          (msg) => {
-            const delta = extractResponseTokenDelta(msg, traceId);
-            if (delta === null) {
-              return;
-            }
-            setAgentTimeline((current) =>
-              current.map((row) =>
-                row.id === streamingId
-                  ? { ...row, body: row.body + delta }
-                  : row,
-              ),
-            );
-          },
-        );
-        try {
-          await api.agentThreadRespondStream(
-            agentThreadId,
-            session.userId,
-            rawText,
-            session.accessToken,
-            { signal: controller.signal, traceId },
-          );
-        } finally {
-          sse.close();
-        }
-        const messages = await api.listAgentThreadMessages(
-          agentThreadId,
-          session.accessToken,
-        );
-        setAgentTimeline(agentThreadMessagesToTranscript(messages));
-        setOnboardingCarryoverState("ready");
-        hapticImpact();
-        recordTelemetry("agent_turn_completed", {
-          textLength: rawText.length,
-        });
-      } catch (error) {
-        if (isOfflineApiError(error) || isRetryableApiError(error)) {
-          await queueOfflineComposerSend({
-            userId: session.userId,
-            mode: "chat",
-            threadId: agentThreadId,
-            text: rawText,
-          });
-          await refreshPendingOutboxCount().catch(() => {});
-          setOnboardingCarryoverState("queued");
-          setAgentTimeline((current) => [
-            ...current,
-            {
-              id: `agent_queue_${timelineIdBase}`,
-              role: "agent",
-              body: "Your first intent is queued and will retry automatically.",
-            },
-          ]);
+    await sendIntent(seed, {
+      onOutcome: (outcome) => {
+        if (outcome === "sent") {
+          setOnboardingCarryoverSeed("");
+          setOnboardingCarryoverState(null);
+          onInitialAgentMessageConsumed?.();
           return;
         }
-        setOnboardingCarryoverState(null);
-        setAgentTimeline((current) => [
-          ...current,
-          {
-            id: `agent_error_${timelineIdBase}`,
-            role: "error",
-            body: `Could not send your first intent. ${String(error)}`,
-          },
-        ]);
-      } finally {
-        intentAbortRef.current = null;
-        onInitialAgentMessageConsumed();
-      }
-    })();
-  }, [
-    agentThreadId,
-    agentThreadLoading,
-    designMock,
-    enableE2ELocalMode,
-    initialAgentMessage,
-    locale,
-    netOnline,
-    onInitialAgentMessageConsumed,
-    session.accessToken,
-    session.userId,
-    skipNetwork,
-  ]);
-
-  useEffect(() => {
-    if (onboardingCarryoverState !== "ready") {
-      return;
-    }
-    const timer = setTimeout(() => {
-      setOnboardingCarryoverState((current) => {
-        if (current !== "ready") {
-          return current;
+        if (outcome === "queued") {
+          setOnboardingCarryoverState("queued");
+          onInitialAgentMessageConsumed?.();
+          return;
         }
-        setOnboardingCarryoverSeed("");
-        return null;
-      });
-    }, 4200);
-    return () => clearTimeout(timer);
-  }, [onboardingCarryoverState]);
+        if (outcome === "aborted") {
+          setOnboardingCarryoverState("ready");
+          return;
+        }
+        setOnboardingCarryoverState("ready");
+      },
+    });
+  };
 
   const reportUser = async (
     targetUserId: string,
@@ -2699,6 +2572,7 @@ export function HomeScreen({
               }
               onAgentImageUrlChange={setAgentImageUrlDraft}
               onComposerModeChange={setAgentComposerMode}
+              onExecuteOnboardingCarryover={executeOnboardingCarryover}
               onDecomposeIntentChange={setDecomposeIntent}
               onDecomposeMaxIntentsChange={setDecomposeMaxIntents}
               onOpenChatsTab={() => setActiveTab("chats")}

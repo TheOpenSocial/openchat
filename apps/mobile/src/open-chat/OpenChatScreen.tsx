@@ -56,6 +56,7 @@ export type OpenChatScreenProps = {
     seed: string;
     state: "processing" | "queued" | "ready";
   } | null;
+  onExecuteOnboardingCarryover?: () => void;
 };
 
 export function OpenChatScreen({
@@ -82,6 +83,7 @@ export function OpenChatScreen({
   setDraftMessage,
   threadLoading,
   onboardingCarryover = null,
+  onExecuteOnboardingCarryover,
 }: OpenChatScreenProps) {
   const [toolsOpen, setToolsOpen] = useState(false);
   const inlineChips = useMemo(
@@ -197,6 +199,28 @@ export function OpenChatScreen({
                 ? t("openChatOnboardingCarryoverQueued", locale)
                 : t("openChatOnboardingCarryoverReady", locale)}
           </Text>
+          {onboardingCarryover.state === "ready" ? (
+            <Pressable
+              className="mt-3 self-start rounded-full border border-white/15 bg-white/[0.06] px-3.5 py-2 active:opacity-80"
+              disabled={sending}
+              onPress={onExecuteOnboardingCarryover}
+            >
+              <Text className="text-[12px] font-semibold tracking-[0.01em] text-white/92">
+                {t("openChatOnboardingCarryoverStartNow", locale)}
+              </Text>
+            </Pressable>
+          ) : null}
+          {onboardingCarryover.state === "queued" ? (
+            <Pressable
+              className="mt-3 self-start rounded-full border border-white/15 bg-white/[0.06] px-3.5 py-2 active:opacity-80"
+              disabled={sending}
+              onPress={onExecuteOnboardingCarryover}
+            >
+              <Text className="text-[12px] font-semibold tracking-[0.01em] text-white/92">
+                {t("openChatOnboardingCarryoverRetry", locale)}
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
 
