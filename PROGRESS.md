@@ -24,6 +24,7 @@ It is organized as a production-grade build checklist with:
 Last verified: 2026-03-20
 
 ## Implementation Notes
+- 2026-03-23: Advanced `TP-08` session continuity by fixing client refresh handling in mobile/web API layers: refresh `5xx`/transient failures now remain retryable (no forced sign-out), and `401` request retry paths only emit `auth_expired` on hard refresh failure, reducing false “session expired” interruptions during temporary backend/network instability.
 - 2026-03-23: Completed `TP-17` guardrail thresholds by extending `GET /api/admin/ops/alerts` with onboarding activation execution alerts from `client_mutations` (`failure_rate`, `processing_rate`, `avg_completion_latency`) and env-tunable thresholds, plus regression coverage in `admin.controller.spec.ts`.
 - 2026-03-23: Continued `TP-17` with backend/admin visibility by adding `GET /api/admin/ops/onboarding-activation` (server-side snapshot from `client_mutations` onboarding carryover executions) plus an Overview panel action in `apps/admin` to refresh/render activation health counters and rates.
 - 2026-03-23: Continued `TP-17` mobile guardrails by adding activation-health threshold messaging in Profile telemetry (`healthy|watch|critical|no_data`) so onboarding-first-action regressions surface immediately without inspecting raw counters.

@@ -509,9 +509,13 @@ async function refreshSessionTokens(): Promise<SessionTokens> {
 
     const envelope = await readEnvelope<SessionTokens>(response);
     if (!response.ok || !envelope.success || envelope.data == null) {
-      throw new Error(
-        envelope.error?.message ?? "Could not refresh authenticated session.",
-      );
+      throw new ApiRequestError({
+        message:
+          envelope.error?.message ?? "Could not refresh authenticated session.",
+        code: envelope.error?.code ?? "auth_refresh_failed",
+        statusCode: response.status,
+        transient: shouldRetryStatus(response.status),
+      });
     }
 
     const refreshed = envelope.data;
@@ -571,7 +575,10 @@ async function request<T>(
         requestOptions?.signal,
         requestOptions?.retryMode,
       );
-    } catch {
+    } catch (error) {
+      if (isRetryableApiError(error)) {
+        throw error;
+      }
       throw new ApiRequestError({
         message: "Session expired. Sign in again.",
         code: "auth_expired",
@@ -618,7 +625,10 @@ async function requestNullable<T>(
         () => doRequest(refreshed.accessToken),
         requestOptions?.signal,
       );
-    } catch {
+    } catch (error) {
+      if (isRetryableApiError(error)) {
+        throw error;
+      }
       throw new ApiRequestError({
         message: "Session expired. Sign in again.",
         code: "auth_expired",
