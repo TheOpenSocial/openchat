@@ -101,6 +101,7 @@ export function DesignMockApp() {
           ) : null}
           {stage === "onboarding" && session ? (
             <OnboardingScreen
+              accessToken={session.accessToken}
               userId={session.userId}
               defaultName={displayName}
               errorMessage={onboardingError}

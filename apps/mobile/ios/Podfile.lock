@@ -62,6 +62,8 @@ PODS:
     - ExpoModulesCore
   - ExpoHaptics (55.0.9):
     - ExpoModulesCore
+  - ExpoImagePicker (55.0.13):
+    - ExpoModulesCore
   - ExpoKeepAwake (55.0.4):
     - ExpoModulesCore
   - ExpoLinearGradient (55.0.9):
@@ -2143,6 +2145,7 @@ DEPENDENCIES:
   - "ExpoFileSystem (from `../../../node_modules/.pnpm/expo-file-system@55.0.11_expo@55.0.8_react-native@0.84.1_@babel+core@7.29.0_@react-nati_e2cb5998a7fbdfb00b9bf7c8065485b8/node_modules/expo-file-system/ios`)"
   - "ExpoFont (from `../../../node_modules/.pnpm/expo-font@55.0.4_expo@55.0.8_react-native@0.84.1_@babel+core@7.29.0_@react-native+metro_1266c2ac90386d93085a45a5ce1881f9/node_modules/expo-font/ios`)"
   - "ExpoHaptics (from `../../../node_modules/.pnpm/expo-haptics@55.0.9_expo@55.0.8/node_modules/expo-haptics/ios`)"
+  - "ExpoImagePicker (from `../../../node_modules/.pnpm/expo-image-picker@55.0.13_expo@55.0.8/node_modules/expo-image-picker/ios`)"
   - "ExpoKeepAwake (from `../../../node_modules/.pnpm/expo-keep-awake@55.0.4_expo@55.0.8_react@19.2.3/node_modules/expo-keep-awake/ios`)"
   - "ExpoLinearGradient (from `../../../node_modules/.pnpm/expo-linear-gradient@55.0.9_expo@55.0.8_react-native@0.84.1_@babel+core@7.29.0_@react-n_1931219394303bc9d811e593f5c2f22e/node_modules/expo-linear-gradient/ios`)"
   - "ExpoLinking (from `../../../node_modules/.pnpm/expo-linking@55.0.8_expo@55.0.8_react-native@0.84.1_@babel+core@7.29.0_@react-native+me_e603514390da0982af14a41c3f808291/node_modules/expo-linking/ios`)"
@@ -2253,6 +2256,8 @@ EXTERNAL SOURCES:
     :path: "../../../node_modules/.pnpm/expo-font@55.0.4_expo@55.0.8_react-native@0.84.1_@babel+core@7.29.0_@react-native+metro_1266c2ac90386d93085a45a5ce1881f9/node_modules/expo-font/ios"
   ExpoHaptics:
     :path: "../../../node_modules/.pnpm/expo-haptics@55.0.9_expo@55.0.8/node_modules/expo-haptics/ios"
+  ExpoImagePicker:
+    :path: "../../../node_modules/.pnpm/expo-image-picker@55.0.13_expo@55.0.8/node_modules/expo-image-picker/ios"
   ExpoKeepAwake:
     :path: "../../../node_modules/.pnpm/expo-keep-awake@55.0.4_expo@55.0.8_react@19.2.3/node_modules/expo-keep-awake/ios"
   ExpoLinearGradient:
@@ -2440,6 +2445,7 @@ SPEC CHECKSUMS:
   ExpoFileSystem: ccbe192dde132e6e97bedcd51018a1642f4fa01c
   ExpoFont: 1aa465cf9f8ac6b670405becba8b15473581b2dd
   ExpoHaptics: bc44f72943e785c2fdb912738a3665142569472d
+  ExpoImagePicker: 4463c7e793d904553fb832f7568e306fd7544bc9
   ExpoKeepAwake: 7f3b28c361c37389b18841bb52a58003b39fcb33
   ExpoLinearGradient: 2e52067758a25f9b51e3fc3f4077851c0756c81c
   ExpoLinking: 65631933a0bedad33a592bfd2ab9fce0f14e5737

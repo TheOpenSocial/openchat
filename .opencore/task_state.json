@@ -1,0 +1,21 @@
+{
+  "ts": "2026-03-22T20:25:43-03:00",
+  "model": "gpt-5.3-codex",
+  "active_run": null,
+  "questions_open": 0,
+  "supervisor": {
+    "tasks": {},
+    "updated_at": null
+  },
+  "tasks": [],
+  "summary": {
+    "total": 0,
+    "done": 0,
+    "in_progress": 0,
+    "rework": 0,
+    "blocked": 0,
+    "cooldown": 0,
+    "escalated": 0,
+    "pending": 0
+  }
+}

@@ -494,6 +494,7 @@ function ProductionApp() {
         <AnimatedScreen screenKey={stageKey}>
           {stage === "onboarding" && session ? (
             <OnboardingScreen
+              accessToken={session.accessToken}
               userId={session.userId}
               defaultName={displayName}
               errorMessage={onboardingError}

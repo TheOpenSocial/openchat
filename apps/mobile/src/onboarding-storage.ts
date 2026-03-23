@@ -7,9 +7,13 @@ import type {
   OnboardingStyle,
   ProfilePhotoDraft,
 } from "./types";
+import type { OnboardingInferenceResult } from "./lib/api";
 
 export interface StoredOnboardingDraft {
-  stepIndex: number;
+  stageIndex: number;
+  transcript: string;
+  followUpAnswer: string;
+  inference: OnboardingInferenceResult | null;
   goals: string[];
   interests: string[];
   availability: OnboardingAvailability;
@@ -23,7 +27,7 @@ export interface StoredOnboardingDraft {
   profilePhoto: ProfilePhotoDraft | null;
 }
 
-const VERSION = "v1";
+const VERSION = "v2";
 
 function draftKey(userId: string) {
   return `opensocial.mobile.onboarding.${VERSION}.${userId}`;

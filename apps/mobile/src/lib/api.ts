@@ -63,6 +63,39 @@ export interface ProfileCompletion {
   };
 }
 
+export interface OnboardingInferenceFieldMeta {
+  source: "voice" | "manual" | "inferred";
+  confidence: number;
+  needsConfirmation: boolean;
+}
+
+export interface OnboardingInferenceResult {
+  transcript: string;
+  interests: string[];
+  goals: string[];
+  mode: "social" | "dating" | "both";
+  format: "one_to_one" | "small_groups" | "both";
+  style: "Chill" | "Spontaneous" | "Planned" | "Focused" | "Outgoing";
+  availability: "Right now" | "Evenings" | "Weekends" | "Flexible";
+  area: string;
+  country: string;
+  summary: string;
+  persona: string;
+  firstIntent: string;
+  followUpQuestion?: string;
+  inferenceMeta: {
+    goals: OnboardingInferenceFieldMeta;
+    interests: OnboardingInferenceFieldMeta;
+    format: OnboardingInferenceFieldMeta;
+    mode: OnboardingInferenceFieldMeta;
+    style: OnboardingInferenceFieldMeta;
+    availability: OnboardingInferenceFieldMeta;
+    location: OnboardingInferenceFieldMeta;
+    firstIntent: OnboardingInferenceFieldMeta;
+    persona: OnboardingInferenceFieldMeta;
+  };
+}
+
 export interface ProfilePhotoUploadIntent {
   imageId: string;
   storageKey: string;
@@ -904,6 +937,17 @@ export const api = {
       "GET",
       `/profiles/${userId}/completion`,
       undefined,
+      accessToken,
+    );
+  },
+  inferOnboarding(userId: string, transcript: string, accessToken?: string) {
+    return request<OnboardingInferenceResult>(
+      "POST",
+      "/onboarding/infer",
+      {
+        userId,
+        transcript,
+      },
       accessToken,
     );
   },

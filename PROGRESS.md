@@ -23,6 +23,39 @@ It is organized as a production-grade build checklist with:
 
 Last verified: 2026-03-20
 
+## Top Priority Now
+
+### TP-01 Mobile onboarding agentic follow-up flow
+- [x] Use backend `followUpQuestion` in the mobile voice-first onboarding path so the system asks one smart next question instead of relying only on refinement screens
+- [x] Tighten the transition from inferred persona/label state into manual refinement so it feels calm and native on device
+- [x] Improve persona/summary trust language so onboarding feels like “the system understood me” rather than “a profile was generated”
+- [x] Add a lightweight “what I understood” confirmation surface driven by backend confidence / `needsConfirmation`
+
+**Acceptance criteria**
+- First voice input can lead into at least one backend-generated follow-up question when confidence is low
+- The user can still move into manual refinement without abrupt layout or keyboard jumps
+- Persona/summary copy is product-quality and trust-building in English and Spanish
+
+### TP-02 Mobile onboarding device polish
+- [ ] Run a real-device QA and polish pass for onboarding on iPhone-sized screens
+- [~] Fix any remaining keyboard dismissal, focus, spacing, scroll, and transition rough edges in the new hybrid onboarding flow
+- [ ] Verify dictation, transcript review, confidence-driven review, and session-refresh continuity all feel calm and reliable
+
+**Acceptance criteria**
+- Onboarding feels stable on device across voice start, transcript handoff, refinement, and confirm steps
+- Keyboard handling and bottom actions are polished across short and tall screens
+- No known “blink”, stuck keyboard, or abrupt stage-swap issues remain in the primary onboarding flow
+
+### TP-03 Admin decomposition round 2
+- [ ] Continue reducing orchestration weight in [apps/admin/app/page.tsx](/Users/cruciblelabs/Documents/openchat/apps/admin/app/page.tsx) by moving remaining domain state and action clusters into focused hooks/components
+- [ ] Decompose the heaviest remaining workbench domains beyond tab extraction, especially areas still carrying inline orchestration logic
+- [ ] Preserve current behavior while improving screen-level scalability and consistency
+
+**Acceptance criteria**
+- [apps/admin/app/page.tsx](/Users/cruciblelabs/Documents/openchat/apps/admin/app/page.tsx) trends toward screen orchestration only, not domain ownership
+- Remaining heavy admin domains are easier to evolve without copying local inline patterns
+- Admin typecheck and existing CI gates stay green
+
 ## Implementation Notes
 - 2026-03-22: Shipped the first real client resilience slice across mobile + web. Added bounded transient retry/backoff and typed offline/transient API errors in both client API layers, mobile persistent offline outbox + replay for composer sends and profile/settings writes, reconnect-triggered agent-thread refresh, pending queued-action UX on mobile, and offline-aware bootstrap/auth restoration on both clients using cached completion state.
 - 2026-03-22: Closed the replay-safety gap with a durable backend `client_mutations` ledger, `Idempotency-Key` handling on intent/profile/global-rules/agent respond endpoints, and stable outbox item ids forwarded from mobile replay paths so reconnects and app restarts do not duplicate core mutations.
