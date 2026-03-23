@@ -47,6 +47,8 @@ const catalogs = {
     onboardingHybridTypeInstead: "Type instead",
     onboardingHybridManual: "Or set it up manually",
     onboardingHybridProcessing: "Got it. Let me understand this.",
+    onboardingHybridCapturedTitle: "You said",
+    onboardingHybridCapturedHint: "We’re shaping the next step from this.",
     onboardingHybridFollowUpVoiceHint: "Speak your answer.",
     onboardingHybridFollowUpTitle: "One more thing",
     onboardingHybridFollowUpSubtitle:
@@ -345,6 +347,9 @@ const catalogs = {
     onboardingHybridTypeInstead: "Escribir en su lugar",
     onboardingHybridManual: "O configurarlo manualmente",
     onboardingHybridProcessing: "Entendido. Déjame comprenderlo.",
+    onboardingHybridCapturedTitle: "Dijiste",
+    onboardingHybridCapturedHint:
+      "Estamos armando el siguiente paso desde esto.",
     onboardingHybridFollowUpVoiceHint: "Responde con tu voz.",
     onboardingHybridFollowUpTitle: "Una cosa más",
     onboardingHybridFollowUpSubtitle:

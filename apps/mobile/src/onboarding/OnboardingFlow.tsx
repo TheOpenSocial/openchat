@@ -121,6 +121,43 @@ function Section({
   );
 }
 
+function StepHeading({ title, subtitle }: { title: string; subtitle: string }) {
+  return (
+    <View className="items-center gap-3">
+      <Text className="text-center text-[30px] font-semibold leading-[34px] tracking-tight text-white">
+        {title}
+      </Text>
+      <Text className="max-w-[320px] text-center text-[15px] leading-[23px] text-white/52">
+        {subtitle}
+      </Text>
+    </View>
+  );
+}
+
+function SurfaceCard({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <View
+      className={`rounded-[24px] border border-white/[0.06] bg-white/[0.02] px-5 py-5 ${className}`}
+    >
+      {children}
+    </View>
+  );
+}
+
+function MetaPill({ children }: { children: React.ReactNode }) {
+  return (
+    <View className="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1">
+      <Text className="text-[10px] font-medium text-white/42">{children}</Text>
+    </View>
+  );
+}
+
 export function OnboardingFlow({
   session,
   errorMessage,
@@ -135,6 +172,7 @@ export function OnboardingFlow({
   const [processing, setProcessing] = useState(false);
   const [voiceListening, setVoiceListening] = useState(false);
   const [voiceLevel, setVoiceLevel] = useState(-2);
+  const [lastSpokenTurn, setLastSpokenTurn] = useState("");
   const [topicQuery] = useState("");
   const [topicSuggestions, setTopicSuggestions] = useState<string[]>([]);
   const [countryFocused, setCountryFocused] = useState(false);
@@ -414,6 +452,7 @@ export function OnboardingFlow({
         ? `${draft.onboardingIntakeText.trim()}\n\nFollow-up question: ${followUpQuestion}\nAnswer: ${message}`.trim()
         : message;
       setProcessing(true);
+      setLastSpokenTurn(message);
       setExpressionDraft(message);
       patch({
         onboardingIntakeText: transcript,
@@ -547,13 +586,13 @@ export function OnboardingFlow({
           style={layout.scroll}
         >
           <View>
-            <View className="items-center pt-6">
+            <View className="items-center pt-4">
               <Text className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/28">
                 OpenSocial
               </Text>
-              <View className="mt-10 h-[248px] w-[248px] items-center justify-center">
+              <View className="mt-8 h-[220px] w-[220px] items-center justify-center">
                 <Animated.View
-                  className="absolute h-[210px] w-[210px] rounded-full border border-white/[0.08]"
+                  className="absolute h-[192px] w-[192px] rounded-full border border-white/[0.08]"
                   style={{
                     opacity: ripple.interpolate({
                       inputRange: [0, 1],
@@ -570,45 +609,54 @@ export function OnboardingFlow({
                   }}
                 />
                 <Animated.View
-                  className="absolute h-[220px] w-[220px] rounded-full bg-white/[0.02]"
+                  className="absolute h-[200px] w-[200px] rounded-full bg-white/[0.02]"
                   style={{
                     opacity: systemOpacity,
                     transform: [{ scale: systemScale }],
                   }}
                 />
                 <Animated.View
-                  className="absolute h-[220px] w-[220px] items-center justify-center"
+                  className="absolute h-[200px] w-[200px] items-center justify-center"
                   style={{
                     opacity: systemOpacity,
                     transform: [{ scale: systemScale }],
                   }}
                 >
-                  <SystemBlobAnimation
-                    lottieRef={lottieRef}
-                    size={layout.systemAnimation.width as number}
-                  />
+                  <SystemBlobAnimation lottieRef={lottieRef} size={188} />
                 </Animated.View>
               </View>
-              <Text className="mt-10 text-center text-[34px] font-semibold leading-[38px] tracking-tight text-white">
+              <Text className="mt-8 text-center text-[32px] font-semibold leading-[36px] tracking-tight text-white">
                 {t("onboardingHybridTitle", locale)}
               </Text>
-              <Text className="mt-4 max-w-[320px] text-center text-[16px] leading-[24px] text-white/52">
+              <Text className="mt-4 max-w-[300px] text-center text-[15px] leading-[23px] text-white/50">
                 {hasFollowUpQuestion
                   ? t("onboardingHybridFollowUpSubtitle", locale)
                   : t("onboardingHybridSubtitle", locale)}
               </Text>
             </View>
 
-            <View className="mt-8 rounded-[26px] border border-white/[0.08] bg-white/[0.025] px-5 py-5">
-              {hasFollowUpQuestion ? (
+            <View className="mt-8 rounded-[24px] border border-white/[0.06] bg-white/[0.02] px-5 py-4">
+              {processing && lastSpokenTurn.trim().length > 0 ? (
+                <>
+                  <Text className="text-[11px] font-medium uppercase tracking-[0.16em] text-white/30">
+                    {t("onboardingHybridCapturedTitle", locale)}
+                  </Text>
+                  <Text className="mt-3 text-[17px] leading-[27px] text-white/80">
+                    "{lastSpokenTurn.trim()}"
+                  </Text>
+                  <Text className="mt-2 text-[13px] leading-[21px] text-white/40">
+                    {t("onboardingHybridCapturedHint", locale)}
+                  </Text>
+                </>
+              ) : hasFollowUpQuestion ? (
                 <>
                   <Text className="text-[11px] font-medium uppercase tracking-[0.16em] text-white/30">
                     {t("onboardingHybridFollowUpTitle", locale)}
                   </Text>
-                  <Text className="mt-3 text-[18px] leading-[28px] text-white/82">
+                  <Text className="mt-3 text-[17px] leading-[27px] text-white/80">
                     {followUpQuestion}
                   </Text>
-                  <Text className="mt-3 text-[14px] leading-[22px] text-white/42">
+                  <Text className="mt-2 text-[13px] leading-[21px] text-white/40">
                     {t("onboardingHybridFollowUpHint", locale)}
                   </Text>
                 </>
@@ -617,7 +665,7 @@ export function OnboardingFlow({
                   <Text className="text-[11px] font-medium uppercase tracking-[0.16em] text-white/30">
                     Example
                   </Text>
-                  <Text className="mt-3 text-[15px] leading-[24px] text-white/56">
+                  <Text className="mt-3 text-[14px] leading-[23px] text-white/54">
                     “I want to meet people who are into design and good
                     conversations.”
                   </Text>
@@ -635,188 +683,196 @@ export function OnboardingFlow({
           showsVerticalScrollIndicator={false}
           style={layout.scroll}
         >
-          <View className="gap-3">
-            <Text className="text-[32px] font-semibold leading-tight tracking-tight text-white">
-              {t("onboardingRefineTitle", locale)}
-            </Text>
-            <Text className="text-[16px] leading-[24px] text-white/55">
-              {t("onboardingRefineSubtitle", locale)}
-            </Text>
-          </View>
+          <View style={layout.stepColumn}>
+            <StepHeading
+              subtitle={t("onboardingRefineSubtitle", locale)}
+              title={t("onboardingRefineTitle", locale)}
+            />
 
-          <View className="mt-8 gap-7">
-            <Section title="Interests">
-              {filteredTopics.map((label) => (
-                <Chip
-                  key={label}
-                  label={label}
-                  onPress={() => {
-                    hapticSelection();
-                    patch({
-                      interests: toggleString(draft.interests, label),
-                      inferenceMeta: {
-                        ...draft.inferenceMeta,
-                        interests: {
-                          source: "manual",
-                          confidence: 1,
-                          needsConfirmation: false,
-                        },
-                      },
-                    });
-                  }}
-                  selected={draft.interests.includes(label)}
-                  testID={`onboarding-topic-${slugLabel(label)}`}
-                />
-              ))}
-            </Section>
-
-            <Section title="Mode">
-              {["Social", "Dating", "Both"].map((label) => {
-                const selected =
-                  label === "Social"
-                    ? draft.onboardingGoals.includes("Meet people") &&
-                      !draft.onboardingGoals.includes("Dating")
-                    : label === "Dating"
-                      ? draft.onboardingGoals.includes("Dating") &&
-                        !draft.onboardingGoals.includes("Meet people")
-                      : draft.onboardingGoals.includes("Meet people") &&
-                        draft.onboardingGoals.includes("Dating");
-                return (
-                  <Chip
-                    key={label}
-                    label={label}
-                    onPress={() => {
-                      hapticSelection();
-                      if (label === "Social") {
+            <View className="mt-8 gap-4">
+              <SurfaceCard>
+                <Section title="Interests">
+                  {filteredTopics.map((label) => (
+                    <Chip
+                      key={label}
+                      label={label}
+                      onPress={() => {
+                        hapticSelection();
                         patch({
-                          onboardingGoals: uniqueGoals(
-                            draft.onboardingGoals
-                              .filter((goal) => goal !== "Dating")
-                              .concat("Meet people"),
-                          ),
+                          interests: toggleString(draft.interests, label),
                           inferenceMeta: {
                             ...draft.inferenceMeta,
-                            goals: {
+                            interests: {
                               source: "manual",
                               confidence: 1,
                               needsConfirmation: false,
                             },
                           },
                         });
-                        return;
-                      }
-                      if (label === "Dating") {
+                      }}
+                      selected={draft.interests.includes(label)}
+                      testID={`onboarding-topic-${slugLabel(label)}`}
+                    />
+                  ))}
+                </Section>
+              </SurfaceCard>
+
+              <SurfaceCard className="gap-6">
+                <Section title="Mode">
+                  {["Social", "Dating", "Both"].map((label) => {
+                    const selected =
+                      label === "Social"
+                        ? draft.onboardingGoals.includes("Meet people") &&
+                          !draft.onboardingGoals.includes("Dating")
+                        : label === "Dating"
+                          ? draft.onboardingGoals.includes("Dating") &&
+                            !draft.onboardingGoals.includes("Meet people")
+                          : draft.onboardingGoals.includes("Meet people") &&
+                            draft.onboardingGoals.includes("Dating");
+                    return (
+                      <Chip
+                        key={label}
+                        label={label}
+                        onPress={() => {
+                          hapticSelection();
+                          if (label === "Social") {
+                            patch({
+                              onboardingGoals: uniqueGoals(
+                                draft.onboardingGoals
+                                  .filter((goal) => goal !== "Dating")
+                                  .concat("Meet people"),
+                              ),
+                              inferenceMeta: {
+                                ...draft.inferenceMeta,
+                                goals: {
+                                  source: "manual",
+                                  confidence: 1,
+                                  needsConfirmation: false,
+                                },
+                              },
+                            });
+                            return;
+                          }
+                          if (label === "Dating") {
+                            patch({
+                              onboardingGoals: uniqueGoals(
+                                draft.onboardingGoals
+                                  .filter((goal) => goal !== "Meet people")
+                                  .concat("Dating"),
+                              ),
+                              inferenceMeta: {
+                                ...draft.inferenceMeta,
+                                goals: {
+                                  source: "manual",
+                                  confidence: 1,
+                                  needsConfirmation: false,
+                                },
+                              },
+                            });
+                            return;
+                          }
+                          patch({
+                            onboardingGoals: uniqueGoals(
+                              draft.onboardingGoals.concat([
+                                "Meet people",
+                                "Dating",
+                              ]),
+                            ),
+                            inferenceMeta: {
+                              ...draft.inferenceMeta,
+                              goals: {
+                                source: "manual",
+                                confidence: 1,
+                                needsConfirmation: false,
+                              },
+                            },
+                          });
+                        }}
+                        selected={selected}
+                      />
+                    );
+                  })}
+                </Section>
+
+                <View className="h-px bg-white/[0.06]" />
+
+                <Section title="Format">
+                  {CONNECT_FORMAT_OPTIONS.map((option) => (
+                    <Chip
+                      key={option.id}
+                      label={option.label}
+                      onPress={() => {
+                        hapticSelection();
                         patch({
-                          onboardingGoals: uniqueGoals(
-                            draft.onboardingGoals
-                              .filter((goal) => goal !== "Meet people")
-                              .concat("Dating"),
-                          ),
+                          preferredFormat: option.id,
                           inferenceMeta: {
                             ...draft.inferenceMeta,
-                            goals: {
+                            format: {
                               source: "manual",
                               confidence: 1,
                               needsConfirmation: false,
                             },
                           },
                         });
-                        return;
-                      }
-                      patch({
-                        onboardingGoals: uniqueGoals(
-                          draft.onboardingGoals.concat([
-                            "Meet people",
-                            "Dating",
-                          ]),
-                        ),
-                        inferenceMeta: {
-                          ...draft.inferenceMeta,
-                          goals: {
-                            source: "manual",
-                            confidence: 1,
-                            needsConfirmation: false,
+                      }}
+                      selected={draft.preferredFormat === option.id}
+                    />
+                  ))}
+                </Section>
+
+                <View className="h-px bg-white/[0.06]" />
+
+                <Section title="Style">
+                  {STYLE_OPTIONS.map((label) => (
+                    <Chip
+                      key={label}
+                      label={label}
+                      onPress={() => {
+                        hapticSelection();
+                        patch({
+                          preferredStyle: label,
+                          inferenceMeta: {
+                            ...draft.inferenceMeta,
+                            style: {
+                              source: "manual",
+                              confidence: 1,
+                              needsConfirmation: false,
+                            },
                           },
-                        },
-                      });
-                    }}
-                    selected={selected}
-                  />
-                );
-              })}
-            </Section>
+                        });
+                      }}
+                      selected={draft.preferredStyle === label}
+                    />
+                  ))}
+                </Section>
 
-            <Section title="Format">
-              {CONNECT_FORMAT_OPTIONS.map((option) => (
-                <Chip
-                  key={option.id}
-                  label={option.label}
-                  onPress={() => {
-                    hapticSelection();
-                    patch({
-                      preferredFormat: option.id,
-                      inferenceMeta: {
-                        ...draft.inferenceMeta,
-                        format: {
-                          source: "manual",
-                          confidence: 1,
-                          needsConfirmation: false,
-                        },
-                      },
-                    });
-                  }}
-                  selected={draft.preferredFormat === option.id}
-                />
-              ))}
-            </Section>
+                <View className="h-px bg-white/[0.06]" />
 
-            <Section title="Style">
-              {STYLE_OPTIONS.map((label) => (
-                <Chip
-                  key={label}
-                  label={label}
-                  onPress={() => {
-                    hapticSelection();
-                    patch({
-                      preferredStyle: label,
-                      inferenceMeta: {
-                        ...draft.inferenceMeta,
-                        style: {
-                          source: "manual",
-                          confidence: 1,
-                          needsConfirmation: false,
-                        },
-                      },
-                    });
-                  }}
-                  selected={draft.preferredStyle === label}
-                />
-              ))}
-            </Section>
-
-            <Section title="Availability">
-              {AVAILABILITY_OPTIONS.map((label) => (
-                <Chip
-                  key={label}
-                  label={label}
-                  onPress={() => {
-                    hapticSelection();
-                    patch({
-                      preferredAvailability: label,
-                      inferenceMeta: {
-                        ...draft.inferenceMeta,
-                        availability: {
-                          source: "manual",
-                          confidence: 1,
-                          needsConfirmation: false,
-                        },
-                      },
-                    });
-                  }}
-                  selected={draft.preferredAvailability === label}
-                />
-              ))}
-            </Section>
+                <Section title="Availability">
+                  {AVAILABILITY_OPTIONS.map((label) => (
+                    <Chip
+                      key={label}
+                      label={label}
+                      onPress={() => {
+                        hapticSelection();
+                        patch({
+                          preferredAvailability: label,
+                          inferenceMeta: {
+                            ...draft.inferenceMeta,
+                            availability: {
+                              source: "manual",
+                              confidence: 1,
+                              needsConfirmation: false,
+                            },
+                          },
+                        });
+                      }}
+                      selected={draft.preferredAvailability === label}
+                    />
+                  ))}
+                </Section>
+              </SurfaceCard>
+            </View>
           </View>
         </ScrollView>
       ) : null}
@@ -828,80 +884,76 @@ export function OnboardingFlow({
           showsVerticalScrollIndicator={false}
           style={layout.scroll}
         >
-          <View className="gap-3">
-            <Text className="text-[32px] font-semibold leading-tight tracking-tight text-white">
-              {t("onboardingPersonaTitle", locale)}
-            </Text>
-            <Text className="text-[16px] leading-[24px] text-white/55">
-              {t("onboardingPersonaSubtitle", locale)}
-            </Text>
-          </View>
+          <View style={layout.stepColumn}>
+            <StepHeading
+              subtitle={t("onboardingPersonaSubtitle", locale)}
+              title={t("onboardingPersonaTitle", locale)}
+            />
 
-          <View className="mt-10 rounded-[30px] border border-white/[0.08] bg-white/[0.035] px-6 py-7">
-            <Text className="text-[12px] font-medium uppercase tracking-[0.16em] text-white/32">
-              Persona
-            </Text>
-            <Text className="mt-3 text-[30px] font-semibold leading-[34px] tracking-tight text-white">
-              {draft.persona || "Explorer"}
-            </Text>
-            <Text className="mt-3 text-[15px] leading-[24px] text-white/60">
-              {draft.personaSummary ||
-                "You have clear intent and enough signal for us to shape your social setup."}
-            </Text>
-            <View className="mt-4 flex-row flex-wrap items-center gap-2">
-              <View className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1.25">
-                <Text className="text-[11px] font-medium text-white/56">
+            <SurfaceCard className="mt-8 items-center">
+              <Text className="text-[11px] font-medium uppercase tracking-[0.16em] text-white/30">
+                Persona
+              </Text>
+              <Text className="mt-3 text-center text-[28px] font-semibold leading-[32px] tracking-tight text-white">
+                {draft.persona || "Explorer"}
+              </Text>
+              <Text className="mt-3 max-w-[310px] text-center text-[15px] leading-[24px] text-white/58">
+                {draft.personaSummary ||
+                  "You have clear intent and enough signal for us to shape your social setup."}
+              </Text>
+              <View className="mt-4 flex-row flex-wrap items-center justify-center gap-2">
+                <MetaPill>
                   {metaLabel(
                     draft.inferenceMeta.persona.confidence,
                     draft.inferenceMeta.persona.needsConfirmation,
                   )}
+                </MetaPill>
+                <Text className="text-[11px] leading-[16px] text-white/28">
+                  {t("onboardingPersonaEditHint", locale)}
                 </Text>
               </View>
-              <Text className="text-[11px] leading-[16px] text-white/28">
-                {t("onboardingPersonaEditHint", locale)}
-              </Text>
-            </View>
-          </View>
+            </SurfaceCard>
 
-          <View className="mt-6 rounded-[26px] border border-white/[0.06] bg-white/[0.025] px-5 py-5">
-            <View className="flex-row items-center justify-between">
-              <Text className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/28">
-                {t("onboardingPersonaSignalTitle", locale)}
-              </Text>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => animateStep(1)}
-              >
-                <Text className="text-[11px] font-medium text-white/38">
-                  {t("onboardingPersonaEdit", locale)}
+            <SurfaceCard className="mt-4">
+              <View className="flex-row items-center justify-between">
+                <Text className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/28">
+                  {t("onboardingPersonaSignalTitle", locale)}
                 </Text>
-              </Pressable>
-            </View>
-            <View className="mt-2 divide-y divide-white/[0.06]">
-              {trustSignals.map((signal) => (
-                <View
-                  key={signal.label}
-                  className="flex-row items-start justify-between gap-4 py-2.5"
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => animateStep(1)}
                 >
-                  <View className="flex-1 gap-1">
-                    <Text className="text-[11px] uppercase tracking-[0.14em] text-white/28">
-                      {signal.label}
-                    </Text>
-                    <Text className="text-[14px] leading-[21px] text-white/70">
-                      {signal.value}
-                    </Text>
+                  <Text className="text-[11px] font-medium text-white/38">
+                    {t("onboardingPersonaEdit", locale)}
+                  </Text>
+                </Pressable>
+              </View>
+              <View className="mt-3 gap-0">
+                {trustSignals.map((signal, index) => (
+                  <View key={signal.label}>
+                    {index > 0 ? (
+                      <View className="h-px bg-white/[0.06]" />
+                    ) : null}
+                    <View className="flex-row items-start justify-between gap-4 py-3">
+                      <View className="flex-1 gap-1">
+                        <Text className="text-[11px] uppercase tracking-[0.14em] text-white/28">
+                          {signal.label}
+                        </Text>
+                        <Text className="text-[14px] leading-[21px] text-white/70">
+                          {signal.value}
+                        </Text>
+                      </View>
+                      <MetaPill>
+                        {metaLabel(
+                          signal.meta.confidence,
+                          signal.meta.needsConfirmation,
+                        )}
+                      </MetaPill>
+                    </View>
                   </View>
-                  <View className="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1">
-                    <Text className="text-[10px] font-medium text-white/40">
-                      {metaLabel(
-                        signal.meta.confidence,
-                        signal.meta.needsConfirmation,
-                      )}
-                    </Text>
-                  </View>
-                </View>
-              ))}
-            </View>
+                ))}
+              </View>
+            </SurfaceCard>
           </View>
         </ScrollView>
       ) : null}
@@ -914,19 +966,15 @@ export function OnboardingFlow({
           style={layout.scroll}
         >
           <View style={layout.profileStepColumn}>
-            <View className="gap-3">
-              <Text className="text-[32px] font-semibold leading-tight tracking-tight text-white">
-                {t("onboardingProfileOptionalTitle", locale)}
-              </Text>
-              <Text className="text-[16px] leading-[24px] text-white/55">
-                {t("onboardingProfileOptionalSubtitle", locale)}
-              </Text>
-            </View>
+            <StepHeading
+              subtitle={t("onboardingProfileOptionalSubtitle", locale)}
+              title={t("onboardingProfileOptionalTitle", locale)}
+            />
 
-            <View style={layout.profileIdentity}>
+            <SurfaceCard className="mt-8 items-center">
               <Pressable
-                accessibilityLabel={t("onboardingProfilePhotoLabel", locale)}
                 accessibilityHint={t("onboardingProfilePhotoHint", locale)}
+                accessibilityLabel={t("onboardingProfilePhotoLabel", locale)}
                 className="h-[88px] w-[88px] items-center justify-center overflow-hidden rounded-full border border-white/15 bg-white/[0.06]"
                 onPress={pickPhoto}
               >
@@ -962,84 +1010,60 @@ export function OnboardingFlow({
                   ) : null}
                 </View>
               </View>
-            </View>
+            </SurfaceCard>
 
-            <View style={layout.profileFields}>
-              <CalmTextField
-                autoCapitalize="words"
-                label={t("onboardingProfileNameLabel", locale)}
-                onChangeText={(text) =>
-                  patch({
-                    displayName: text,
-                    inferenceMeta: {
-                      ...draft.inferenceMeta,
-                      persona: {
-                        ...draft.inferenceMeta.persona,
-                        needsConfirmation: false,
-                      },
-                    },
-                  })
-                }
-                placeholder={t("onboardingProfileNamePlaceholder", locale)}
-                returnKeyType="next"
-                testID="onboarding-display-name"
-                value={draft.displayName}
-              />
-
-              <CalmTextField
-                helperText={t("onboardingProfileBioHelper", locale)}
-                label={t("onboardingProfileBioLabel", locale)}
-                multiline
-                onChangeText={(text) =>
-                  patch({
-                    shortBio: text,
-                    inferenceMeta: {
-                      ...draft.inferenceMeta,
-                      firstIntent: {
-                        source: "manual",
-                        confidence: 1,
-                        needsConfirmation: false,
-                      },
-                    },
-                  })
-                }
-                placeholder={t("onboardingProfileBioPlaceholder", locale)}
-                scrollEnabled={false}
-                testID="onboarding-bio-input"
-                value={draft.shortBio}
-              />
-
-              <CalmTextField
-                autoCapitalize="words"
-                label={t("onboardingProfileAreaLabel", locale)}
-                onChangeText={(text) =>
-                  patch({
-                    area: text,
-                    inferenceMeta: {
-                      ...draft.inferenceMeta,
-                      location: {
-                        source: "manual",
-                        confidence: 1,
-                        needsConfirmation: false,
-                      },
-                    },
-                  })
-                }
-                placeholder={t("onboardingProfileAreaPlaceholder", locale)}
-                returnKeyType="next"
-                testID="onboarding-area-input"
-                value={draft.area}
-              />
-
-              <View className="gap-2">
+            <SurfaceCard className="mt-4">
+              <View style={layout.profileFields}>
                 <CalmTextField
                   autoCapitalize="words"
-                  helperText={t("onboardingProfileCountryHelper", locale)}
-                  label={t("onboardingProfileCountryLabel", locale)}
-                  onBlur={() => setCountryFocused(false)}
+                  label={t("onboardingProfileNameLabel", locale)}
                   onChangeText={(text) =>
                     patch({
-                      country: text,
+                      displayName: text,
+                      inferenceMeta: {
+                        ...draft.inferenceMeta,
+                        persona: {
+                          ...draft.inferenceMeta.persona,
+                          needsConfirmation: false,
+                        },
+                      },
+                    })
+                  }
+                  placeholder={t("onboardingProfileNamePlaceholder", locale)}
+                  returnKeyType="next"
+                  testID="onboarding-display-name"
+                  value={draft.displayName}
+                />
+
+                <CalmTextField
+                  helperText={t("onboardingProfileBioHelper", locale)}
+                  label={t("onboardingProfileBioLabel", locale)}
+                  multiline
+                  onChangeText={(text) =>
+                    patch({
+                      shortBio: text,
+                      inferenceMeta: {
+                        ...draft.inferenceMeta,
+                        firstIntent: {
+                          source: "manual",
+                          confidence: 1,
+                          needsConfirmation: false,
+                        },
+                      },
+                    })
+                  }
+                  placeholder={t("onboardingProfileBioPlaceholder", locale)}
+                  scrollEnabled={false}
+                  testID="onboarding-bio-input"
+                  value={draft.shortBio}
+                />
+
+                <CalmTextField
+                  autoCapitalize="words"
+                  label={t("onboardingProfileAreaLabel", locale)}
+                  onChangeText={(text) =>
+                    patch({
+                      area: text,
                       inferenceMeta: {
                         ...draft.inferenceMeta,
                         location: {
@@ -1050,41 +1074,70 @@ export function OnboardingFlow({
                       },
                     })
                   }
-                  onFocus={() => setCountryFocused(true)}
-                  placeholder={t("onboardingProfileCountryPlaceholder", locale)}
-                  testID="onboarding-country-input"
-                  value={draft.country}
+                  placeholder={t("onboardingProfileAreaPlaceholder", locale)}
+                  returnKeyType="next"
+                  testID="onboarding-area-input"
+                  value={draft.area}
                 />
-                {countryFocused || draft.country.trim().length > 0 ? (
-                  <View className="flex-row flex-wrap gap-2">
-                    {countrySuggestions.map((country) => (
-                      <Pressable
-                        key={country}
-                        className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5"
-                        onPress={() => {
-                          patch({
-                            country,
-                            inferenceMeta: {
-                              ...draft.inferenceMeta,
-                              location: {
-                                source: "manual",
-                                confidence: 1,
-                                needsConfirmation: false,
+
+                <View className="gap-2">
+                  <CalmTextField
+                    autoCapitalize="words"
+                    helperText={t("onboardingProfileCountryHelper", locale)}
+                    label={t("onboardingProfileCountryLabel", locale)}
+                    onBlur={() => setCountryFocused(false)}
+                    onChangeText={(text) =>
+                      patch({
+                        country: text,
+                        inferenceMeta: {
+                          ...draft.inferenceMeta,
+                          location: {
+                            source: "manual",
+                            confidence: 1,
+                            needsConfirmation: false,
+                          },
+                        },
+                      })
+                    }
+                    onFocus={() => setCountryFocused(true)}
+                    placeholder={t(
+                      "onboardingProfileCountryPlaceholder",
+                      locale,
+                    )}
+                    testID="onboarding-country-input"
+                    value={draft.country}
+                  />
+                  {countryFocused || draft.country.trim().length > 0 ? (
+                    <View className="flex-row flex-wrap gap-2">
+                      {countrySuggestions.map((country) => (
+                        <Pressable
+                          key={country}
+                          className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5"
+                          onPress={() => {
+                            patch({
+                              country,
+                              inferenceMeta: {
+                                ...draft.inferenceMeta,
+                                location: {
+                                  source: "manual",
+                                  confidence: 1,
+                                  needsConfirmation: false,
+                                },
                               },
-                            },
-                          });
-                          setCountryFocused(false);
-                        }}
-                      >
-                        <Text className="text-[12px] font-medium text-white/60">
-                          {country}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                ) : null}
+                            });
+                            setCountryFocused(false);
+                          }}
+                        >
+                          <Text className="text-[12px] font-medium text-white/60">
+                            {country}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  ) : null}
+                </View>
               </View>
-            </View>
+            </SurfaceCard>
           </View>
         </ScrollView>
       ) : null}
@@ -1093,13 +1146,14 @@ export function OnboardingFlow({
 
   const footer =
     stepIndex === 0 ? (
-      <View className="gap-4">
-        <View className="items-center justify-center" style={{ minHeight: 34 }}>
-          <Text className="text-[12px] text-white/32">{voiceHint}</Text>
+      <View className="gap-3">
+        <View className="items-center justify-center" style={{ minHeight: 24 }}>
           {!speechRecognitionAvailable() ? (
-            <Text className="mt-2 max-w-[280px] text-center text-[12px] leading-[18px] text-white/28">
+            <Text className="max-w-[280px] text-center text-[12px] leading-[18px] text-white/28">
               {t("onboardingEntryVoiceUnavailable", locale)}
             </Text>
+          ) : hasFollowUpQuestion ? (
+            <Text className="text-[12px] text-white/28">{voiceHint}</Text>
           ) : null}
         </View>
 
@@ -1108,10 +1162,10 @@ export function OnboardingFlow({
             accessibilityLabelActive={t("onboardingEntryListening", locale)}
             accessibilityLabelIdle={voiceActionLabel}
             activeLabel={t("onboardingEntryListening", locale)}
-            className="w-full rounded-full border border-white/10 bg-white px-5 py-4"
+            className="w-full rounded-full border border-white/10 bg-white px-5"
             iconColorActive="#0d0d0d"
             iconColorIdle="#0d0d0d"
-            iconSize={20}
+            iconSize={18}
             label={voiceActionLabel}
             onFinalTranscript={(text) => {
               setVoiceListening(false);
@@ -1128,7 +1182,7 @@ export function OnboardingFlow({
         <Animated.View
           className="items-center px-3 py-1"
           style={{
-            minHeight: 52,
+            minHeight: 44,
             opacity: processingOpacity,
             transform: [
               {
@@ -1140,7 +1194,7 @@ export function OnboardingFlow({
             ],
           }}
         >
-          <View className="flex-row items-center gap-3 rounded-full border border-white/[0.08] bg-white/[0.03] px-4 py-2.5">
+          <View className="flex-row items-center gap-3 rounded-full border border-white/[0.06] bg-white/[0.025] px-4 py-2">
             {processing ? (
               <>
                 <PremiumSpinner />
@@ -1323,16 +1377,16 @@ const layout = StyleSheet.create({
     paddingBottom: 28,
     paddingTop: 18,
   },
+  stepColumn: {
+    width: "100%",
+    maxWidth: 420,
+    alignSelf: "center",
+  },
   expressionContent: {
     flexGrow: 1,
     paddingHorizontal: 28,
     paddingBottom: 40,
     paddingTop: 12,
-  },
-  systemAnimation: {
-    width: 244,
-    height: 244,
-    opacity: 0.72,
   },
   profileStepContent: {
     paddingHorizontal: 20,
@@ -1344,11 +1398,6 @@ const layout = StyleSheet.create({
     maxWidth: 420,
     alignSelf: "center",
     gap: 18,
-  },
-  profileIdentity: {
-    alignItems: "center",
-    paddingTop: 4,
-    paddingBottom: 2,
   },
   profileFields: {
     gap: 16,

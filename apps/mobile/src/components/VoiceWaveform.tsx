@@ -109,19 +109,19 @@ export function VoiceWaveform({
       importantForAccessibility="no-hide-descendants"
       style={{
         alignItems: "center",
-        height: 46,
+        height: 22,
         justifyContent: "center",
-        width: 220,
+        width: 40,
       }}
     >
       <Animated.View
         style={{
           backgroundColor: "rgba(13,13,13,0.08)",
           borderRadius: 999,
-          height: 32,
+          height: 16,
           opacity: halo.interpolate({
             inputRange: [0, 1],
-            outputRange: [0.18, 0.32],
+            outputRange: [0.1, 0.2],
           }),
           position: "absolute",
           transform: [
@@ -138,7 +138,7 @@ export function VoiceWaveform({
               }),
             },
           ],
-          width: 96,
+          width: 30,
         }}
       />
       <View
@@ -147,15 +147,15 @@ export function VoiceWaveform({
           borderRadius: 999,
           height: 1,
           position: "absolute",
-          width: 196,
+          width: 34,
         }}
       />
       <View
         style={{
           alignItems: "center",
           flexDirection: "row",
-          gap: 4,
-          height: 40,
+          gap: 2,
+          height: 22,
           justifyContent: "center",
         }}
       >
@@ -178,10 +178,10 @@ export function VoiceWaveform({
                 borderRadius: 999,
                 height: animatedLevel.interpolate({
                   inputRange: [0, 1],
-                  outputRange: [5, 30],
+                  outputRange: [4, 16],
                 }),
                 opacity,
-                width: index % 2 === 0 ? 3 : 2.5,
+                width: index % 2 === 0 ? 2.5 : 2,
               }}
             />
           );

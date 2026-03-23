@@ -165,7 +165,7 @@ export function VoiceMicButtonImpl({
       accessibilityState={{ selected: listening }}
       className={cn(
         label
-          ? "mb-0 flex-row items-center justify-center gap-2 rounded-full px-5 py-4"
+          ? "mb-0 h-14 flex-row items-center justify-center rounded-full px-5"
           : "mb-1 h-9 w-9 items-center justify-center rounded-full",
         listening ? "bg-accentMuted" : "bg-transparent",
         className,
@@ -182,39 +182,50 @@ export function VoiceMicButtonImpl({
       })}
       testID="composer-voice-button"
     >
-      <Ionicons
-        color={listening ? iconColorActive : iconColorIdle}
-        name={listening ? "mic" : "mic-outline"}
-        size={iconSize}
-      />
       {label ? (
-        <View className="flex-1 flex-row items-center justify-center">
+        <View className="flex-1 flex-row items-center justify-between">
+          <View className="w-8 items-start">
+            <Ionicons
+              color={listening ? iconColorActive : iconColorIdle}
+              name={listening ? "mic" : "mic-outline"}
+              size={iconSize}
+            />
+          </View>
+          <View className="flex-1 items-center px-2">
+            <Animated.Text
+              className="text-[15px] font-medium"
+              numberOfLines={1}
+              style={{
+                color: listening ? iconColorActive : iconColorIdle,
+                opacity: labelOpacity,
+              }}
+            >
+              {listening ? (activeLabel ?? label) : label}
+            </Animated.Text>
+          </View>
           {showLiveIndicator ? (
             <Animated.View
-              className="mr-2"
+              className="items-end"
               style={{
                 opacity: indicatorOpacity,
-                width: 44,
+                width: 40,
               }}
             >
               <VoiceWaveform
-                bars={13}
+                bars={11}
                 level={liveLevel}
                 listening={listening}
               />
             </Animated.View>
           ) : null}
-          <Animated.Text
-            className="text-[15px] font-medium"
-            style={{
-              color: listening ? iconColorActive : iconColorIdle,
-              opacity: labelOpacity,
-            }}
-          >
-            {listening ? (activeLabel ?? label) : label}
-          </Animated.Text>
         </View>
-      ) : null}
+      ) : (
+        <Ionicons
+          color={listening ? iconColorActive : iconColorIdle}
+          name={listening ? "mic" : "mic-outline"}
+          size={iconSize}
+        />
+      )}
     </Pressable>
   );
 }
