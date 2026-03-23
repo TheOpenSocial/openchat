@@ -108,12 +108,10 @@ export class OnboardingService {
       return llmInferred;
     }
 
-    this.logger.error(
-      `onboarding fast inference unavailable traceId=${traceId} durationMs=${durationMs}`,
+    this.logger.warn(
+      `onboarding fast inference unavailable, using fallback traceId=${traceId} durationMs=${durationMs}`,
     );
-    throw new ServiceUnavailableException(
-      "onboarding fast inference unavailable",
-    );
+    return this.buildQuickFallback(raw);
   }
 
   async inferFromTranscript(
@@ -142,11 +140,143 @@ export class OnboardingService {
       return llmInferred;
     }
 
-    this.logger.error(
-      `onboarding inference unavailable traceId=${traceId} durationMs=${durationMs}`,
+    this.logger.warn(
+      `onboarding inference unavailable, using fallback traceId=${traceId} durationMs=${durationMs}`,
     );
-    throw new ServiceUnavailableException(
-      "onboarding llm inference unavailable",
-    );
+    return this.buildRichFallback(raw);
+  }
+
+  private buildQuickFallback(transcript: string): OnboardingQuickInferResponse {
+    const compact = transcript.trim();
+    return {
+      transcript: compact,
+      interests: this.extractInterests(compact).slice(0, 8),
+      goals: this.extractGoals(compact).slice(0, 6),
+      summary: this.buildSummary(compact),
+      firstIntent: compact,
+      followUpQuestion:
+        "What kind of people or plans would feel perfect for your first week?",
+    };
+  }
+
+  private buildRichFallback(transcript: string): OnboardingInferResponse {
+    const compact = transcript.trim();
+    return {
+      transcript: compact,
+      interests: this.extractInterests(compact).slice(0, 12),
+      goals: this.extractGoals(compact).slice(0, 8),
+      mode: "social",
+      format: "small_groups",
+      style: "Chill",
+      availability: "Flexible",
+      area: "",
+      country: "",
+      summary: this.buildSummary(compact),
+      persona: "Connector",
+      firstIntent: compact,
+      followUpQuestion:
+        "Should we prioritize local meetups, 1:1 chats, or activity-based groups first?",
+      inferenceMeta: {
+        goals: {
+          source: "inferred",
+          confidence: 0.45,
+          needsConfirmation: true,
+        },
+        interests: {
+          source: "inferred",
+          confidence: 0.45,
+          needsConfirmation: true,
+        },
+        format: {
+          source: "inferred",
+          confidence: 0.35,
+          needsConfirmation: true,
+        },
+        mode: { source: "inferred", confidence: 0.35, needsConfirmation: true },
+        style: {
+          source: "inferred",
+          confidence: 0.35,
+          needsConfirmation: true,
+        },
+        availability: {
+          source: "inferred",
+          confidence: 0.35,
+          needsConfirmation: true,
+        },
+        location: {
+          source: "inferred",
+          confidence: 0.2,
+          needsConfirmation: true,
+        },
+        firstIntent: {
+          source: "voice",
+          confidence: 0.9,
+          needsConfirmation: false,
+        },
+        persona: {
+          source: "inferred",
+          confidence: 0.4,
+          needsConfirmation: true,
+        },
+      },
+    };
+  }
+
+  private buildSummary(transcript: string): string {
+    return transcript.length > 160
+      ? `${transcript.slice(0, 157).trimEnd()}...`
+      : transcript;
+  }
+
+  private extractInterests(transcript: string): string[] {
+    const lower = transcript.toLowerCase();
+    const catalog: Array<{ key: string; terms: string[] }> = [
+      { key: "design", terms: ["design", "ux", "ui"] },
+      { key: "football", terms: ["football", "soccer", "futbol"] },
+      { key: "gaming", terms: ["game", "gaming", "apex"] },
+      { key: "startups", terms: ["startup", "founder", "build"] },
+      { key: "technology", terms: ["tech", "technology", "ai"] },
+      { key: "music", terms: ["music", "concert"] },
+      { key: "fitness", terms: ["fitness", "gym", "workout"] },
+      { key: "coffee", terms: ["coffee", "cafe"] },
+      { key: "books", terms: ["books", "reading"] },
+      { key: "travel", terms: ["travel", "trip"] },
+    ];
+
+    const matched = catalog
+      .filter((entry) => entry.terms.some((term) => lower.includes(term)))
+      .map((entry) => entry.key);
+
+    return matched.length ? matched : ["social"];
+  }
+
+  private extractGoals(transcript: string): string[] {
+    const lower = transcript.toLowerCase();
+    const goals = new Set<string>();
+    if (
+      lower.includes("meet") ||
+      lower.includes("friends") ||
+      lower.includes("people")
+    ) {
+      goals.add("meet people");
+    }
+    if (
+      lower.includes("plan") ||
+      lower.includes("weekend") ||
+      lower.includes("hang")
+    ) {
+      goals.add("make plans");
+    }
+    if (
+      lower.includes("date") ||
+      lower.includes("relationship") ||
+      lower.includes("romantic")
+    ) {
+      goals.add("dating");
+    }
+    if (!goals.size) {
+      goals.add("discover connections");
+    }
+    return [...goals];
   }
 }
