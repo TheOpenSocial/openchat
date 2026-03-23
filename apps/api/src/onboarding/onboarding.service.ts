@@ -111,6 +111,7 @@ export class OnboardingService {
   async inferQuickFromTranscript(
     _userId: string,
     transcript: string,
+    options?: { modelOverride?: string },
   ): Promise<OnboardingQuickInferResponse> {
     const raw = transcript.trim();
     if (!raw) {
@@ -123,12 +124,17 @@ export class OnboardingService {
       `onboarding fast inference started traceId=${traceId} transcriptChars=${raw.length} timeoutMs=${this.onboardingQuickTimeoutMs}`,
     );
 
-    const selectedFastModel = this.pickModelCandidate(
-      traceId,
-      this.fastModelCandidates,
+    const requestedModel = options?.modelOverride?.trim();
+    const selectedFastModel =
+      requestedModel ||
+      this.pickModelCandidate(traceId, this.fastModelCandidates);
+    const fastClient = this.resolveClient(
+      "onboarding_fast_pass",
+      selectedFastModel,
+      this.fastOpenaiByModel,
+      this.fastOpenai,
+      this.onboardingQuickTimeoutMs,
     );
-    const fastClient =
-      this.fastOpenaiByModel.get(selectedFastModel) ?? this.fastOpenai;
     const llmInferred = await fastClient.inferOnboardingQuick(raw, traceId);
     const durationMs = Date.now() - startedAt;
 
@@ -149,6 +155,7 @@ export class OnboardingService {
   async inferFromTranscript(
     _userId: string,
     transcript: string,
+    options?: { modelOverride?: string },
   ): Promise<OnboardingInferResponse> {
     const raw = transcript.trim();
     if (!raw) {
@@ -161,12 +168,17 @@ export class OnboardingService {
       `onboarding inference started traceId=${traceId} transcriptChars=${raw.length} timeoutMs=${this.onboardingRichTimeoutMs}`,
     );
 
-    const selectedRichModel = this.pickModelCandidate(
-      traceId,
-      this.richModelCandidates,
+    const requestedModel = options?.modelOverride?.trim();
+    const selectedRichModel =
+      requestedModel ||
+      this.pickModelCandidate(traceId, this.richModelCandidates);
+    const richClient = this.resolveClient(
+      "onboarding_inference",
+      selectedRichModel,
+      this.richOpenaiByModel,
+      this.richOpenai,
+      this.onboardingRichTimeoutMs,
     );
-    const richClient =
-      this.richOpenaiByModel.get(selectedRichModel) ?? this.richOpenai;
     const llmInferred = await richClient.inferOnboarding(raw, traceId);
     const durationMs = Date.now() - startedAt;
 
@@ -229,6 +241,25 @@ export class OnboardingService {
       timeoutMs: options.timeoutMs,
       maxRetries: 0,
     });
+  }
+
+  private resolveClient(
+    task: "onboarding_fast_pass" | "onboarding_inference",
+    model: string,
+    cache: Map<string, OpenAIClient>,
+    fallback: OpenAIClient,
+    timeoutMs: number,
+  ): OpenAIClient {
+    const cached = cache.get(model);
+    if (cached) {
+      return cached;
+    }
+    if (!process.env.ONBOARDING_LLM_BASE_URL) {
+      return fallback;
+    }
+    const client = this.createOnboardingClient(task, model, { timeoutMs });
+    cache.set(model, client);
+    return client;
   }
 
   private buildQuickFallback(transcript: string): OnboardingQuickInferResponse {

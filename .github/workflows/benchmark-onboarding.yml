@@ -17,6 +17,11 @@ on:
         required: false
         default: "20"
         type: string
+      model:
+        description: "Optional exact model override for probe"
+        required: false
+        default: ""
+        type: string
       url:
         description: "Probe endpoint URL"
         required: false
@@ -51,6 +56,7 @@ jobs:
           ONBOARDING_PROBE_TOKEN: ${{ secrets.ONBOARDING_PROBE_TOKEN }}
           ONBOARDING_BENCH_MODE: ${{ inputs.mode }}
           ONBOARDING_BENCH_RUNS: ${{ inputs.runs }}
+          ONBOARDING_BENCH_MODEL: ${{ inputs.model }}
           ONBOARDING_BENCH_TIMEOUT_MS: "20000"
           ONBOARDING_BENCH_DELAY_MS: "350"
         run: pnpm benchmark:onboarding

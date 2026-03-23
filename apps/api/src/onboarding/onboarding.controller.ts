@@ -21,6 +21,7 @@ import { OnboardingService } from "./onboarding.service.js";
 const onboardingProbeBodySchema = z.object({
   transcript: z.string().min(1),
   mode: z.enum(["fast", "rich"]).optional(),
+  model: z.string().min(1).max(120).optional(),
 });
 
 @Controller("onboarding")
@@ -86,20 +87,24 @@ export class OnboardingController {
     const payload = parseRequestPayload(onboardingProbeBodySchema, body);
     const mode = payload.mode ?? "fast";
     const startedAt = Date.now();
+    const modelOverride = payload.model?.trim() || undefined;
 
     const result =
       mode === "rich"
         ? await this.onboardingService.inferFromTranscript(
             "onboarding-probe",
             payload.transcript,
+            { modelOverride },
           )
         : await this.onboardingService.inferQuickFromTranscript(
             "onboarding-probe",
             payload.transcript,
+            { modelOverride },
           );
 
     return ok({
       mode,
+      model: modelOverride ?? null,
       durationMs: Date.now() - startedAt,
       result,
     });

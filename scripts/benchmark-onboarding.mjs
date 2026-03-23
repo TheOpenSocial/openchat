@@ -10,6 +10,7 @@
  * Optional env:
  * - ONBOARDING_BENCH_RUNS (default: 12)
  * - ONBOARDING_BENCH_MODE (fast|rich|both, default: both)
+ * - ONBOARDING_BENCH_MODEL (optional exact model override for probe)
  * - ONBOARDING_BENCH_TIMEOUT_MS (default: 20000)
  */
 
@@ -17,6 +18,7 @@ const url = process.env.ONBOARDING_BENCH_URL?.trim();
 const token = process.env.ONBOARDING_PROBE_TOKEN?.trim();
 const runs = Number(process.env.ONBOARDING_BENCH_RUNS ?? 12);
 const mode = (process.env.ONBOARDING_BENCH_MODE ?? "both").trim();
+const modelOverride = process.env.ONBOARDING_BENCH_MODEL?.trim() || "";
 const timeoutMs = Number(process.env.ONBOARDING_BENCH_TIMEOUT_MS ?? 20_000);
 const delayMs = Number(process.env.ONBOARDING_BENCH_DELAY_MS ?? 350);
 
@@ -64,6 +66,7 @@ async function runOne(selectedMode, transcript, index) {
       body: JSON.stringify({
         transcript,
         mode: selectedMode,
+        ...(modelOverride ? { model: modelOverride } : {}),
       }),
       signal: controller.signal,
     });
@@ -138,7 +141,7 @@ function printModeSummary(selectedMode, results) {
 
 async function main() {
   console.log(
-    `benchmark starting url=${url} runs=${runs} mode=${mode} timeoutMs=${timeoutMs} delayMs=${delayMs}`,
+    `benchmark starting url=${url} runs=${runs} mode=${mode} model=${modelOverride || "default"} timeoutMs=${timeoutMs} delayMs=${delayMs}`,
   );
   const all = [];
   for (const selectedMode of modes) {
