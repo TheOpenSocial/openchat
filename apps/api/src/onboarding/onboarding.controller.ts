@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   ForbiddenException,
+  Get,
   Optional,
   Post,
   UnauthorizedException,
@@ -80,16 +81,7 @@ export class OnboardingController {
     @Body() body: unknown,
     @Headers("x-onboarding-probe-token") providedToken?: string,
   ) {
-    const expectedToken = process.env.ONBOARDING_PROBE_TOKEN?.trim();
-    if (!expectedToken) {
-      throw new ForbiddenException("onboarding probe is disabled");
-    }
-    if (!providedToken?.trim()) {
-      throw new UnauthorizedException("missing onboarding probe token");
-    }
-    if (providedToken.trim() !== expectedToken) {
-      throw new UnauthorizedException("invalid onboarding probe token");
-    }
+    this.assertProbeAuthorized(providedToken);
 
     const payload = parseRequestPayload(onboardingProbeBodySchema, body);
     const mode = payload.mode ?? "fast";
@@ -111,5 +103,58 @@ export class OnboardingController {
       durationMs: Date.now() - startedAt,
       result,
     });
+  }
+
+  @PublicRoute()
+  @Get("probe-config")
+  async probeConfig(
+    @Headers("x-onboarding-probe-token") providedToken?: string,
+  ) {
+    this.assertProbeAuthorized(providedToken);
+    const baseUrl = process.env.ONBOARDING_LLM_BASE_URL?.trim() || null;
+    const provider = process.env.ONBOARDING_LLM_PROVIDER?.trim() || "openai";
+    const fastModel =
+      process.env.ONBOARDING_LLM_FAST_MODEL?.trim() ||
+      process.env.ONBOARDING_LLM_MODEL?.trim() ||
+      null;
+    const richModel =
+      process.env.ONBOARDING_LLM_RICH_MODEL?.trim() ||
+      process.env.ONBOARDING_LLM_MODEL?.trim() ||
+      null;
+    const timeoutMs = Number(process.env.ONBOARDING_LLM_TIMEOUT_MS ?? 4_000);
+    const richTimeoutMs = Number(
+      process.env.ONBOARDING_LLM_RICH_TIMEOUT_MS ?? 15_000,
+    );
+
+    return ok({
+      provider,
+      baseUrl,
+      fastModel,
+      richModel,
+      timeoutMs,
+      richTimeoutMs,
+      hasApiKey: Boolean(
+        process.env.ONBOARDING_LLM_API_KEY?.trim() ||
+        process.env.OPENAI_API_KEY?.trim(),
+      ),
+      apiKeyPrefix: (
+        process.env.ONBOARDING_LLM_API_KEY?.trim() ||
+        process.env.OPENAI_API_KEY?.trim() ||
+        ""
+      ).slice(0, 6),
+    });
+  }
+
+  private assertProbeAuthorized(providedToken?: string) {
+    const expectedToken = process.env.ONBOARDING_PROBE_TOKEN?.trim();
+    if (!expectedToken) {
+      throw new ForbiddenException("onboarding probe is disabled");
+    }
+    if (!providedToken?.trim()) {
+      throw new UnauthorizedException("missing onboarding probe token");
+    }
+    if (providedToken.trim() !== expectedToken) {
+      throw new UnauthorizedException("invalid onboarding probe token");
+    }
   }
 }
