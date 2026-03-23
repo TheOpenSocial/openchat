@@ -153,6 +153,12 @@ const tabDescriptions: Record<HomeTab, TranslationKey> = {
   profile: "homeTabProfileDescription",
 };
 const MOBILE_LOCALE_STORAGE_KEY = "opensocial.mobile.locale.v1";
+const ONBOARDING_CARRYOVER_STORAGE_KEY_PREFIX =
+  "opensocial.mobile.onboarding.carryover.v1";
+
+function onboardingCarryoverStorageKey(userId: string) {
+  return `${ONBOARDING_CARRYOVER_STORAGE_KEY_PREFIX}.${userId}`;
+}
 
 export function HomeScreen({
   designMock = false,
@@ -284,6 +290,7 @@ export function HomeScreen({
   const localTypingStopTimeoutRef = useRef<ReturnType<
     typeof setTimeout
   > | null>(null);
+  const onboardingSeedHandledRef = useRef(false);
   const typingClearTimersRef = useRef<
     Map<string, ReturnType<typeof setTimeout>>
   >(new Map());
@@ -309,6 +316,83 @@ export function HomeScreen({
   useEffect(() => {
     AsyncStorage.setItem(MOBILE_LOCALE_STORAGE_KEY, locale).catch(() => {});
   }, [locale]);
+
+  useEffect(() => {
+    if (designMock || enableE2ELocalMode) {
+      return;
+    }
+    if (initialAgentMessage?.trim()) {
+      return;
+    }
+    let mounted = true;
+    AsyncStorage.getItem(onboardingCarryoverStorageKey(session.userId))
+      .then((raw) => {
+        if (!mounted || !raw || onboardingSeedHandledRef.current) {
+          return;
+        }
+        try {
+          const parsed = JSON.parse(raw) as {
+            seed?: string;
+            state?: "processing" | "queued" | "ready";
+            idempotencyKey?: string;
+          };
+          const seed = parsed.seed?.trim();
+          const idempotencyKey = parsed.idempotencyKey?.trim();
+          if (!seed || !idempotencyKey) {
+            return;
+          }
+          onboardingSeedHandledRef.current = true;
+          setOnboardingCarryoverSeed(seed);
+          setOnboardingCarryoverIdempotencyKey(idempotencyKey);
+          if (parsed.state === "queued") {
+            setOnboardingCarryoverState("queued");
+            return;
+          }
+          setOnboardingCarryoverState("ready");
+          if (parsed.state === "processing") {
+            setBanner({
+              tone: "info",
+              text: "We restored your first activation step. Tap to resume.",
+            });
+          }
+        } catch {
+          // Ignore malformed persisted carryover payloads.
+        }
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, [designMock, enableE2ELocalMode, initialAgentMessage, session.userId]);
+
+  useEffect(() => {
+    const seed = onboardingCarryoverSeed.trim();
+    const idempotencyKey = onboardingCarryoverIdempotencyKey?.trim();
+    if (!seed || !onboardingCarryoverState || !idempotencyKey) {
+      AsyncStorage.removeItem(
+        onboardingCarryoverStorageKey(session.userId),
+      ).catch(() => {});
+      return;
+    }
+    const persistedState =
+      onboardingCarryoverState === "processing"
+        ? "ready"
+        : onboardingCarryoverState;
+    AsyncStorage.setItem(
+      onboardingCarryoverStorageKey(session.userId),
+      JSON.stringify({
+        seed,
+        state: persistedState,
+        idempotencyKey,
+        updatedAt: new Date().toISOString(),
+      }),
+    ).catch(() => {});
+  }, [
+    onboardingCarryoverIdempotencyKey,
+    onboardingCarryoverSeed,
+    onboardingCarryoverState,
+    session.userId,
+  ]);
   const trackedRequestSentIntentsRef = useRef<Set<string>>(new Set());
   const [agentComposerMode, setAgentComposerMode] = useState<"chat" | "intent">(
     "chat",
@@ -1623,8 +1707,6 @@ export function HomeScreen({
       setSendingIntent(false);
     }
   };
-
-  const onboardingSeedHandledRef = useRef(false);
 
   useEffect(() => {
     const seed = initialAgentMessage?.trim();
