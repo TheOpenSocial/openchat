@@ -252,6 +252,52 @@ export class OpenAIClient {
     return getPromptDefinition(task).version;
   }
 
+  private extractResponseText(response: {
+    output_text?: string | null;
+    output?: unknown[];
+  }): string | null {
+    const direct = response.output_text?.trim();
+    if (direct) {
+      return direct;
+    }
+
+    const blocks = Array.isArray(response.output) ? response.output : [];
+    const textParts: string[] = [];
+
+    for (const block of blocks) {
+      const candidate = block as {
+        type?: string;
+        content?: unknown[];
+        summary?: unknown[];
+      };
+
+      if (candidate?.type === "message" && Array.isArray(candidate.content)) {
+        for (const item of candidate.content as Array<{
+          type?: string;
+          text?: unknown;
+        }>) {
+          if (item?.type === "output_text" && typeof item.text === "string") {
+            textParts.push(item.text);
+          }
+        }
+      }
+
+      if (candidate?.type === "reasoning" && Array.isArray(candidate.summary)) {
+        for (const item of candidate.summary as Array<{
+          type?: string;
+          text?: unknown;
+        }>) {
+          if (item?.type === "summary_text" && typeof item.text === "string") {
+            textParts.push(item.text);
+          }
+        }
+      }
+    }
+
+    const combined = textParts.join("\n").trim();
+    return combined || null;
+  }
+
   getBudgetGuardrailState(): OpenAIBudgetGuardrailSnapshot {
     return this.toBudgetSnapshot();
   }
@@ -408,7 +454,7 @@ export class OpenAIClient {
           }),
         });
 
-        const text = response.output_text?.trim();
+        const text = this.extractResponseText(response);
         if (!text) {
           this.captureFailure({
             task: "intent_parsing",
@@ -495,7 +541,7 @@ export class OpenAIClient {
           }),
         });
 
-        const text = response.output_text?.trim();
+        const text = this.extractResponseText(response);
         if (!text) {
           console.warn(
             `[openai:onboarding] empty output provider=${this.providerName} traceId=${traceId} model=${model} durationMs=${Date.now() - startedAt}`,
