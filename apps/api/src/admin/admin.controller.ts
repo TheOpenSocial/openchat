@@ -325,7 +325,8 @@ export class AdminController {
           ]
         : []),
       ...(runtime.onboardingInference.calls >= onboardingMinCallsThreshold &&
-      runtime.onboardingInference.fallbackRate >= onboardingFallbackRateThreshold
+      runtime.onboardingInference.fallbackRate >=
+        onboardingFallbackRateThreshold
         ? [
             {
               key: "onboarding_fallback_spike",
@@ -382,6 +383,97 @@ export class AdminController {
         status: alerts.length === 0 ? "healthy" : "degraded",
         criticalCount,
         warningCount,
+      },
+    });
+  }
+
+  @Get("ops/onboarding-activation")
+  async onboardingActivationSnapshot(
+    @Headers("x-admin-user-id") adminUserIdHeader?: string,
+    @Headers("x-admin-role") adminRoleHeader?: string,
+    @Query("hours") hoursParam?: string,
+  ) {
+    const admin = this.parseAdminContext(adminUserIdHeader, adminRoleHeader, [
+      "admin",
+      "support",
+      "moderator",
+    ]);
+    const hours = this.normalizeWindowHours(hoursParam);
+    const windowStart = new Date(Date.now() - hours * 60 * 60_000);
+
+    const rows = this.prisma.clientMutation?.findMany
+      ? await this.prisma.clientMutation.findMany({
+          where: {
+            scope: "intent.create_from_agent",
+            idempotencyKey: {
+              startsWith: "onboarding-carryover:",
+            },
+            createdAt: {
+              gte: windowStart,
+            },
+          },
+          select: {
+            status: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+          orderBy: {
+            createdAt: "desc",
+          },
+          take: 5000,
+        })
+      : [];
+
+    const started = rows.length;
+    const succeeded = rows.filter((row) => row.status === "completed").length;
+    const failed = rows.filter((row) => row.status === "failed").length;
+    const processing = rows.filter((row) => row.status === "processing").length;
+    const fallbackQueuedLike = processing;
+    const completionSeconds = rows
+      .filter((row) => row.status === "completed")
+      .map((row) =>
+        Math.max(0, (row.updatedAt.getTime() - row.createdAt.getTime()) / 1000),
+      );
+    const avgCompletionSeconds =
+      completionSeconds.length === 0
+        ? null
+        : completionSeconds.reduce((sum, current) => sum + current, 0) /
+          completionSeconds.length;
+
+    await this.adminAuditService.recordAction({
+      adminUserId: admin.adminUserId,
+      role: admin.role,
+      action: "admin.ops_onboarding_activation_view",
+      entityType: "ops_metrics",
+      metadata: {
+        windowHours: hours,
+        rows: started,
+      },
+    });
+
+    return ok({
+      generatedAt: new Date().toISOString(),
+      window: {
+        hours,
+        start: windowStart.toISOString(),
+        end: new Date().toISOString(),
+      },
+      counters: {
+        started,
+        succeeded,
+        failed,
+        processing,
+      },
+      metrics: {
+        successRate: started === 0 ? null : succeeded / started,
+        failureRate: started === 0 ? null : failed / started,
+        processingRate: started === 0 ? null : processing / started,
+        avgCompletionSeconds,
+      },
+      notes: {
+        queuedApproximation: fallbackQueuedLike,
+        queuedApproximationReason:
+          "server-side snapshot infers queued-like pressure from in-flight processing mutations",
       },
     });
   }
@@ -2159,6 +2251,17 @@ export class AdminController {
       return false;
     }
     return fallback;
+  }
+
+  private normalizeWindowHours(rawHours: string | undefined) {
+    if (!rawHours) {
+      return 24;
+    }
+    const parsed = Number(rawHours);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return 24;
+    }
+    return Math.min(Math.max(Math.floor(parsed), 1), 24 * 14);
   }
 
   private readJsonObject(

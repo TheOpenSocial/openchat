@@ -18,6 +18,24 @@ interface DebugHistoryRow {
   success: boolean;
 }
 
+interface OnboardingActivationSnapshot {
+  window: {
+    hours: number;
+  };
+  counters: {
+    started: number;
+    succeeded: number;
+    failed: number;
+    processing: number;
+  };
+  metrics: {
+    successRate: number | null;
+    failureRate: number | null;
+    processingRate: number | null;
+    avgCompletionSeconds: number | null;
+  };
+}
+
 export function OverviewTab({
   adminButtonClass,
   adminButtonGhostClass,
@@ -33,11 +51,13 @@ export function OverviewTab({
   debugResponse,
   deadLetters,
   health,
+  onboardingActivationSnapshot,
   relayCount,
   threadId,
   userId,
   executeDebugQuery,
   loadDeadLetters,
+  loadOnboardingActivationSnapshot,
   relayOutbox,
   replayDeadLetter,
   setAdminRole,
@@ -63,11 +83,13 @@ export function OverviewTab({
   debugResponse: unknown;
   deadLetters: DeadLetterRow[];
   health: string;
+  onboardingActivationSnapshot: OnboardingActivationSnapshot | null;
   relayCount: number | null;
   threadId: string;
   userId: string;
   executeDebugQuery: () => Promise<unknown>;
   loadDeadLetters: () => Promise<unknown>;
+  loadOnboardingActivationSnapshot: () => Promise<unknown>;
   relayOutbox: () => Promise<unknown>;
   replayDeadLetter: (id: string) => Promise<unknown>;
   setAdminRole: (value: "admin" | "support" | "moderator") => void;
@@ -161,6 +183,48 @@ export function OverviewTab({
           </label>
         </Panel>
       </div>
+
+      <Panel
+        subtitle="Server-side onboarding first-activation execution snapshot."
+        title="Onboarding Activation Health"
+      >
+        <div className="flex flex-wrap gap-2">
+          <button
+            className={adminButtonClass}
+            onClick={loadOnboardingActivationSnapshot}
+            type="button"
+          >
+            Refresh activation snapshot
+          </button>
+        </div>
+        {!onboardingActivationSnapshot ? (
+          <p className="mt-3 text-sm text-muted-foreground">
+            No activation snapshot loaded yet.
+          </p>
+        ) : (
+          <div className="mt-3 space-y-1 text-xs text-muted-foreground">
+            <p>
+              window: last {onboardingActivationSnapshot.window.hours}h ·
+              started: {onboardingActivationSnapshot.counters.started} ·
+              succeeded: {onboardingActivationSnapshot.counters.succeeded} ·
+              failed: {onboardingActivationSnapshot.counters.failed} ·
+              processing: {onboardingActivationSnapshot.counters.processing}
+            </p>
+            <p>
+              success:{" "}
+              {formatRate(onboardingActivationSnapshot.metrics.successRate)} ·
+              failure:{" "}
+              {formatRate(onboardingActivationSnapshot.metrics.failureRate)} ·
+              processing:{" "}
+              {formatRate(onboardingActivationSnapshot.metrics.processingRate)}{" "}
+              · avg completion:{" "}
+              {formatSeconds(
+                onboardingActivationSnapshot.metrics.avgCompletionSeconds,
+              )}
+            </p>
+          </div>
+        )}
+      </Panel>
 
       <Panel
         subtitle="Replay failed jobs without touching Redis manually."
@@ -335,4 +399,18 @@ export function OverviewTab({
       </div>
     </section>
   );
+}
+
+function formatRate(value: number | null) {
+  if (value == null) {
+    return "n/a";
+  }
+  return `${Math.round(value * 100)}%`;
+}
+
+function formatSeconds(value: number | null) {
+  if (value == null) {
+    return "n/a";
+  }
+  return `${Math.round(value)}s`;
 }

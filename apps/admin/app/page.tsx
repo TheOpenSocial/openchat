@@ -78,6 +78,26 @@ interface DebugHistoryRow {
   success: boolean;
 }
 
+interface OnboardingActivationSnapshot {
+  window: {
+    hours: number;
+    start: string;
+    end: string;
+  };
+  counters: {
+    started: number;
+    succeeded: number;
+    failed: number;
+    processing: number;
+  };
+  metrics: {
+    successRate: number | null;
+    failureRate: number | null;
+    processingRate: number | null;
+    avgCompletionSeconds: number | null;
+  };
+}
+
 const DEFAULT_UUID = "00000000-0000-0000-0000-000000000000";
 const STREAM_EVENT_LIMIT = 60;
 const DEBUG_HISTORY_LIMIT = 20;
@@ -215,6 +235,8 @@ function AdminHomeContent() {
 
   const [health, setHealth] = useState("checking...");
   const [relayCount, setRelayCount] = useState<number | null>(null);
+  const [onboardingActivationSnapshot, setOnboardingActivationSnapshot] =
+    useState<OnboardingActivationSnapshot | null>(null);
   const [deadLetters, setDeadLetters] = useState<DeadLetterRow[]>([]);
   const [adminUserId, setAdminUserId] = useState(DEFAULT_UUID);
   const [adminRole, setAdminRole] = useState<"admin" | "support" | "moderator">(
@@ -608,6 +630,23 @@ function AdminHomeContent() {
         }),
       (result) => `Outbox relay processed ${result.processedCount} event(s).`,
       (result) => setRelayCount(result.processedCount),
+    );
+
+  const loadOnboardingActivationSnapshot = () =>
+    runAction(
+      "Load onboarding activation snapshot",
+      () =>
+        requestApi<OnboardingActivationSnapshot>(
+          "GET",
+          "/admin/ops/onboarding-activation",
+          {
+            query: {
+              hours: 24,
+            },
+          },
+        ),
+      "Onboarding activation snapshot refreshed.",
+      (snapshot) => setOnboardingActivationSnapshot(snapshot),
     );
 
   const inspectUser = () =>
@@ -1387,8 +1426,10 @@ function AdminHomeContent() {
           executeDebugQuery={executeDebugQuery}
           health={health}
           loadDeadLetters={loadDeadLetters}
+          loadOnboardingActivationSnapshot={loadOnboardingActivationSnapshot}
           relayCount={relayCount}
           relayOutbox={relayOutbox}
+          onboardingActivationSnapshot={onboardingActivationSnapshot}
           replayDeadLetter={replayDeadLetter}
           setAdminRole={setAdminRole}
           setAdminUserId={setAdminUserId}

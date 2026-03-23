@@ -128,6 +128,9 @@ function createController(overrides: Partial<Record<string, any>> = {}) {
     notification: {
       count: vi.fn().mockResolvedValue(0),
     },
+    clientMutation: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
   };
   const intentsService = overrides.intentsService ?? {
     retryIntent: vi.fn().mockResolvedValue({ status: "queued" }),
@@ -1098,6 +1101,67 @@ describe("AdminController", () => {
     expect(adminAuditService.recordAction).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "admin.ops_metrics_view",
+      }),
+    );
+  });
+
+  it("returns onboarding activation ops snapshot from client mutations", async () => {
+    const { controller, adminAuditService, prisma } = createController({
+      prisma: {
+        clientMutation: {
+          findMany: vi.fn().mockResolvedValue([
+            {
+              status: "completed",
+              createdAt: new Date("2026-03-23T12:00:00.000Z"),
+              updatedAt: new Date("2026-03-23T12:00:04.000Z"),
+            },
+            {
+              status: "failed",
+              createdAt: new Date("2026-03-23T12:01:00.000Z"),
+              updatedAt: new Date("2026-03-23T12:01:03.000Z"),
+            },
+            {
+              status: "processing",
+              createdAt: new Date("2026-03-23T12:02:00.000Z"),
+              updatedAt: new Date("2026-03-23T12:02:00.000Z"),
+            },
+          ]),
+        },
+      },
+    });
+
+    const result = await controller.onboardingActivationSnapshot(
+      ADMIN_USER_ID,
+      "support",
+      "24",
+    );
+    const payload = result.data as {
+      counters: {
+        started: number;
+        succeeded: number;
+        failed: number;
+        processing: number;
+      };
+      metrics: {
+        successRate: number | null;
+        failureRate: number | null;
+        processingRate: number | null;
+      };
+    };
+
+    expect(prisma.clientMutation.findMany).toHaveBeenCalled();
+    expect(payload.counters).toEqual({
+      started: 3,
+      succeeded: 1,
+      failed: 1,
+      processing: 1,
+    });
+    expect(payload.metrics.successRate).toBeCloseTo(1 / 3);
+    expect(payload.metrics.failureRate).toBeCloseTo(1 / 3);
+    expect(payload.metrics.processingRate).toBeCloseTo(1 / 3);
+    expect(adminAuditService.recordAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "admin.ops_onboarding_activation_view",
       }),
     );
   });
