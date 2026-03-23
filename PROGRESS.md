@@ -1386,6 +1386,21 @@ Production rollout is approved only when:
 - [ ] `F-06` Add onboarding onboarding voice feedback UI so users see the soundwave/voice-level visual while recording.
 - [x] `D-01` Keep dependency currency cadence (`pnpm deps:outdated`) and upgrade latest runtime/security-safe versions by lane.
 
+### 34.4.1 Automated Pipeline Bootstrap Task Queue (Priority)
+
+- [~] `TP-01` Mobile onboarding transition smoothness: remove layout-shift between expression/refinement/result screens, lock CTA/footer positioning, and keep animations under dropped-frame budget on low-end devices.
+- [~] `TP-02` Onboarding loading experience polish: finalize premium loading copy/motion states (recording -> processing -> understanding -> ready) with deterministic timing and no confusing/technical wording.
+- [~] `TP-03` Onboarding inference reliability hardening: keep `infer-fast` and `infer` paths non-failing under provider latency/format variance (timeouts, malformed JSON, empty output) and return safe structured fallback responses.
+- [ ] `TP-04` LLM response quality upgrade (launch profile): tune prompts + schema guarantees so rich inference returns stable persona/summary quality (not generic) for 20+ realistic voice transcripts in EN/ES smoke set.
+- [ ] `TP-05` Provider strategy and routing: define and validate fast/rich model policy (`ONBOARDING_LLM_FAST_MODEL`, `ONBOARDING_LLM_RICH_MODEL`, timeout budgets) with measurable p95 latency and quality acceptance gates.
+- [~] `TP-06` Deploy/env parity for onboarding AI: ensure staging/production/rollback always sync all onboarding env vars (`*_MODEL`, `*_FAST_MODEL`, `*_RICH_MODEL`, `*_TIMEOUT_MS`, `*_RICH_TIMEOUT_MS`, probe token) with regression tests.
+- [ ] `TP-07` Observability for onboarding inference: add structured logs/metrics dashboard (success rate, timeout rate, fallback rate, model/provider latency histogram) and alert thresholds for degradation.
+- [ ] `TP-08` Session continuity bugfix: eliminate `session expired` interruptions by validating refresh-token path across mobile/web (token rotation, retry-on-401 once, forced logout only on hard refresh failure) with E2E coverage.
+- [ ] `TP-09` Onboarding end-to-end contract tests: add API + client integration tests for voice-first flow from transcript capture through persona confirmation and profile persistence.
+- [ ] `TP-10` Security clean-up before launch: rotate temporary debug/probe secrets, retain protected probe endpoints for ops, and verify no sensitive tokens are present in git history/docs/log output.
+- [ ] `TP-11` Launch smoke matrix: run deterministic smoke checks for web/mobile/admin + API on staging and production with explicit pass/fail checklist and rollback criteria.
+- [ ] `TP-12` Release readiness package: publish a concise launch runbook including known limits, fallback behavior, monitoring links, kill switches, and first-24h incident response owner map.
+
 ---
 
 ## 35. Comprehensive Use-Case Coverage Board

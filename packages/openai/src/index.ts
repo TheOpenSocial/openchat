@@ -276,7 +276,10 @@ export class OpenAIClient {
           type?: string;
           text?: unknown;
         }>) {
-          if (item?.type === "output_text" && typeof item.text === "string") {
+          if (
+            (item?.type === "output_text" || item?.type === "text") &&
+            typeof item.text === "string"
+          ) {
             textParts.push(item.text);
           }
         }
@@ -296,6 +299,59 @@ export class OpenAIClient {
 
     const combined = textParts.join("\n").trim();
     return combined || null;
+  }
+
+  private extractFirstJsonObject(text: string): string | null {
+    const source = text.trim();
+    if (!source) {
+      return null;
+    }
+
+    // Fast path: already pure JSON object.
+    if (source.startsWith("{") && source.endsWith("}")) {
+      return source;
+    }
+
+    let depth = 0;
+    let start = -1;
+    let inString = false;
+    let escaped = false;
+
+    for (let index = 0; index < source.length; index += 1) {
+      const char = source[index];
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (char === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (char === '"') {
+        inString = !inString;
+        continue;
+      }
+      if (inString) {
+        continue;
+      }
+
+      if (char === "{") {
+        if (depth === 0) {
+          start = index;
+        }
+        depth += 1;
+        continue;
+      }
+
+      if (char === "}" && depth > 0) {
+        depth -= 1;
+        if (depth === 0 && start >= 0) {
+          return source.slice(start, index + 1).trim();
+        }
+      }
+    }
+
+    return null;
   }
 
   getBudgetGuardrailState(): OpenAIBudgetGuardrailSnapshot {
@@ -571,6 +627,20 @@ export class OpenAIClient {
           );
           return parsed;
         } catch (error) {
+          const extractedJson = this.extractFirstJsonObject(normalizedText);
+          if (extractedJson) {
+            try {
+              const recovered = onboardingInferResponseSchema.parse(
+                JSON.parse(extractedJson),
+              );
+              console.log(
+                `[openai:onboarding] recovered_json provider=${this.providerName} traceId=${traceId} model=${model} durationMs=${Date.now() - startedAt}`,
+              );
+              return recovered;
+            } catch {
+              // Keep existing error handling below.
+            }
+          }
           console.warn(
             `[openai:onboarding] schema parse failed provider=${this.providerName} traceId=${traceId} model=${model} durationMs=${Date.now() - startedAt} error=${error instanceof Error ? error.message : "parse_error"}`,
           );
@@ -678,6 +748,20 @@ export class OpenAIClient {
           );
           return parsed;
         } catch (error) {
+          const extractedJson = this.extractFirstJsonObject(normalizedText);
+          if (extractedJson) {
+            try {
+              const recovered = onboardingQuickInferResponseSchema.parse(
+                JSON.parse(extractedJson),
+              );
+              console.log(
+                `[openai:onboarding-fast] recovered_json provider=${this.providerName} traceId=${traceId} model=${model} durationMs=${Date.now() - startedAt}`,
+              );
+              return recovered;
+            } catch {
+              // Keep existing error handling below.
+            }
+          }
           console.warn(
             `[openai:onboarding-fast] schema parse failed provider=${this.providerName} traceId=${traceId} model=${model} durationMs=${Date.now() - startedAt} error=${error instanceof Error ? error.message : "parse_error"}`,
           );

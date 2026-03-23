@@ -46,14 +46,18 @@ const catalogs = {
     onboardingHybridAnswerVoice: "Answer by voice",
     onboardingHybridTypeInstead: "Type instead",
     onboardingHybridManual: "Or set it up manually",
-    onboardingHybridProcessing: "We're shaping your first setup.",
-    onboardingHybridProcessingTitle: "Finding your starting point",
+    onboardingHybridProcessing:
+      "Building your starting profile from what you shared.",
+    onboardingHybridProcessingTitle: "Setting things up",
     onboardingHybridProcessingLabel: "Preparing",
-    onboardingHybridProcessingInline: "Finding your starting point",
-    onboardingHybridProcessingHint: "This first pass can take a moment.",
-    onboardingHybridProcessingWordOne: "Pulling out the strongest signals.",
-    onboardingHybridProcessingWordTwo: "Finding the right fit.",
-    onboardingHybridProcessingWordThree: "Almost ready.",
+    onboardingHybridProcessingInline: "Setting things up",
+    onboardingHybridProcessingHint: "This takes a few seconds.",
+    onboardingHybridProcessingWordOne: "Understanding your intent.",
+    onboardingHybridProcessingWordTwo: "Mapping your best starting point.",
+    onboardingHybridProcessingWordThree: "Preparing your next step.",
+    onboardingHybridExampleLabel: "Example",
+    onboardingHybridExampleText:
+      "“Looking for people nearby to share good conversations this week.”",
     onboardingHybridCapturedTitle: "You said",
     onboardingHybridCapturedHint: "We’re using this to shape the next step.",
     onboardingHybridFollowUpVoiceHint: "Speak your answer.",
@@ -64,10 +68,10 @@ const catalogs = {
       "Answer naturally. We’ll keep shaping this around you.",
     onboardingInferenceUnavailableTitle: "We couldn’t finish that read",
     onboardingInferenceUnavailableBody:
-      "Please try again. We couldn’t shape your setup from that voice note yet.",
+      "Please try again. We weren’t able to process that voice note yet.",
     onboardingRefinementUnavailableTitle: "We couldn’t refresh that yet",
     onboardingRefinementUnavailableBody:
-      "Please try again. We couldn’t update what we understood just yet.",
+      "Please try again. We weren’t able to update this yet.",
     onboardingRefineTitle: "Refine your setup",
     onboardingRefineSubtitle:
       "Sharpen the parts that matter most before we lock this in.",
@@ -371,15 +375,17 @@ const catalogs = {
     onboardingHybridTypeInstead: "Escribir en su lugar",
     onboardingHybridManual: "O configurarlo manualmente",
     onboardingHybridProcessing:
-      "Estamos dando forma a tu primera configuración.",
-    onboardingHybridProcessingTitle: "Encontrando tu punto de partida",
+      "Estamos armando tu perfil inicial con lo que compartiste.",
+    onboardingHybridProcessingTitle: "Dejándolo listo",
     onboardingHybridProcessingLabel: "Preparando",
-    onboardingHybridProcessingInline: "Encontrando tu punto de partida",
-    onboardingHybridProcessingHint:
-      "Esta primera pasada puede tardar un momento.",
-    onboardingHybridProcessingWordOne: "Sacando las señales más fuertes.",
-    onboardingHybridProcessingWordTwo: "Buscando el mejor encaje.",
-    onboardingHybridProcessingWordThree: "Ya casi está.",
+    onboardingHybridProcessingInline: "Dejándolo listo",
+    onboardingHybridProcessingHint: "Esto tarda solo unos segundos.",
+    onboardingHybridProcessingWordOne: "Entendiendo tu intención.",
+    onboardingHybridProcessingWordTwo: "Armando tu mejor punto de inicio.",
+    onboardingHybridProcessingWordThree: "Preparando el siguiente paso.",
+    onboardingHybridExampleLabel: "Ejemplo",
+    onboardingHybridExampleText:
+      "“Quiero conocer gente cerca para tener buenas charlas esta semana.”",
     onboardingHybridCapturedTitle: "Dijiste",
     onboardingHybridCapturedHint:
       "Estamos usando esto para dar forma al siguiente paso.",
@@ -391,10 +397,10 @@ const catalogs = {
       "Responde de forma natural. Seguiremos armándolo contigo.",
     onboardingInferenceUnavailableTitle: "No pudimos terminar esa lectura",
     onboardingInferenceUnavailableBody:
-      "Inténtalo de nuevo. Todavía no pudimos armar tu configuración con esa nota de voz.",
+      "Inténtalo de nuevo. No pudimos procesar esa nota de voz todavía.",
     onboardingRefinementUnavailableTitle: "No pudimos actualizar eso todavía",
     onboardingRefinementUnavailableBody:
-      "Inténtalo de nuevo. Todavía no pudimos actualizar lo que entendimos.",
+      "Inténtalo de nuevo. Todavía no pudimos actualizar esto.",
     onboardingRefineTitle: "Refina tu configuración",
     onboardingRefineSubtitle:
       "Afina las partes que más importan antes de dejar esto listo.",

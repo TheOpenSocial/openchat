@@ -813,7 +813,10 @@ export function OnboardingFlow({
               </Text>
             </View>
 
-            <View className="mt-8 rounded-[24px] border border-white/[0.06] bg-white/[0.02] px-5 py-4">
+            <View
+              className="mt-8 rounded-[24px] border border-white/[0.06] bg-white/[0.02] px-5 py-4"
+              style={layout.expressionSignalCard}
+            >
               {processing && lastSpokenTurn.trim().length > 0 ? (
                 <>
                   <Text className="text-[11px] font-medium uppercase tracking-[0.16em] text-white/30">
@@ -844,11 +847,10 @@ export function OnboardingFlow({
               ) : (
                 <>
                   <Text className="text-[11px] font-medium uppercase tracking-[0.16em] text-white/30">
-                    Example
+                    {t("onboardingHybridExampleLabel", locale)}
                   </Text>
                   <Text className="mt-3 text-[14px] leading-[23px] text-white/54">
-                    “I want to meet people who are into design and good
-                    conversations.”
+                    {t("onboardingHybridExampleText", locale)}
                   </Text>
                 </>
               )}
@@ -1418,10 +1420,34 @@ export function OnboardingFlow({
             },
           ]}
         >
-          <View style={layout.inferOverlayInner}>
+          <Animated.View
+            style={[
+              layout.inferOverlayInner,
+              {
+                opacity: inferOverlayOpacity.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.6, 1],
+                }),
+                transform: [
+                  {
+                    translateY: inferOverlayOpacity.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [10, 0],
+                    }),
+                  },
+                  {
+                    scale: inferOverlayOpacity.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.985, 1],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
             <View className="items-center">
               <View className="h-[204px] w-[204px] items-center justify-center">
-                <View className="absolute h-[184px] w-[184px] rounded-full border border-white/[0.08] bg-white/[0.015]" />
+                <View className="absolute h-[184px] w-[184px] rounded-full border border-white/[0.08] bg-white/[0.02]" />
                 <SystemBlobAnimation size={180} />
               </View>
             </View>
@@ -1432,7 +1458,7 @@ export function OnboardingFlow({
               <Text className="max-w-[316px] text-center text-[16px] leading-[24px] text-white/54">
                 {t("onboardingHybridProcessing", locale)}
               </Text>
-              <Text className="max-w-[300px] text-center text-[13px] leading-[21px] text-white/34">
+              <Text className="max-w-[300px] text-center text-[13px] leading-[21px] text-white/48">
                 {processingPhrases[processingPhraseIndex]}
               </Text>
             </View>
@@ -1443,7 +1469,7 @@ export function OnboardingFlow({
                 </Text>
               ) : null}
             </View>
-          </View>
+          </Animated.View>
         </Animated.View>
       </KeyboardAvoidingView>
 
@@ -1593,6 +1619,9 @@ const layout = StyleSheet.create({
     paddingBottom: 40,
     paddingTop: 12,
   },
+  expressionSignalCard: {
+    minHeight: 160,
+  },
   profileStepContent: {
     paddingHorizontal: 20,
     paddingBottom: 28,
@@ -1608,7 +1637,7 @@ const layout = StyleSheet.create({
     gap: 16,
   },
   inferOverlay: {
-    backgroundColor: "rgba(5,5,6,0.96)",
+    backgroundColor: "#050506",
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 28,
