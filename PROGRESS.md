@@ -24,6 +24,7 @@ It is organized as a production-grade build checklist with:
 Last verified: 2026-03-20
 
 ## Implementation Notes
+- 2026-03-23: Advanced `TP-17` on mobile by instrumenting onboarding activation funnel telemetry events (`onboarding_activation_ready|started|succeeded|queued|failed`) across onboarding completion (`App.tsx`) and one-tap carryover execution (`HomeScreen.tsx`) including elapsed-time properties for latency/failure monitoring.
 - 2026-03-23: Continued `TP-02`/`TP-03` onboarding launch hardening. Polished mobile onboarding processing copy/states (EN/ES) and reduced expression-step layout shift with a fixed signal-card height. Hardened OpenAI onboarding parsing to recover JSON payloads embedded in mixed model output (`output_text`/`text` blocks + first-object extraction), then deployed to production (`93a4566`). Live probe confirms stable success responses (`fast` ~1.7s, `rich` ~22.5s with non-failing fallback path), so reliability improved while rich-latency tuning remains an open launch item.
 - 2026-03-23: Advanced `TP-05` model routing/timeout tuning in production by moving rich onboarding inference to `ministral-3:14b` with `ONBOARDING_LLM_RICH_TIMEOUT_MS=8000` (keeping fast on `ministral-3:3b` and `4000ms`). Post-deploy probe verification shows strong latency improvement (`fast` ~1.6s, `rich` ~2.2s) with stable `201` responses.
 - 2026-03-22: Logged TP-01 in the mobile onboarding transition queue to address first-to-second onboarding page smoothness on low-end/low-frame-rate devices before continuing subsequent onboarding polish.
@@ -1406,7 +1407,7 @@ Production rollout is approved only when:
 - [~] `TP-14` Mobile/web activation handoff UX: route users from onboarding completion into actionable activation state (not empty home), with resilient resume after background/relaunch and explicit loading/ready/error states.
 - [~] `TP-15` Starter intent bootstrap pipeline: generate/persist a safe first activation recommendation from onboarding outputs (persona/goals/interests/language) with deterministic fallback for weak model output.
 - [ ] `TP-16` One-tap activation execution path: execute first recommended action directly after onboarding with backend idempotency, optimistic UX, and recoverable failure handling.
-- [ ] `TP-17` Activation funnel telemetry and guardrails: instrument onboarding-complete -> activation-ready -> first-action-succeeded funnel with alert thresholds for activation failure and cold-start latency regressions.
+- [~] `TP-17` Activation funnel telemetry and guardrails: instrument onboarding-complete -> activation-ready -> first-action-succeeded funnel with alert thresholds for activation failure and cold-start latency regressions.
 
 ---
 
