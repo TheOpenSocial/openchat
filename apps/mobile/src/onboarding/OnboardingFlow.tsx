@@ -1,6 +1,5 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as ImagePicker from "expo-image-picker";
-import LottieView from "lottie-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
@@ -20,6 +19,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { CalmTextField } from "../components/CalmTextField";
 import { InlineNotice } from "../components/InlineNotice";
 import { PrimaryButton } from "../components/PrimaryButton";
+import { SystemBlobAnimation } from "../components/SystemBlobAnimation";
 import { VoiceMicButton } from "../components/VoiceMicButton";
 import { type AppLocale, t } from "../i18n/strings";
 import { api } from "../lib/api";
@@ -33,15 +33,12 @@ import {
   CONNECT_FORMAT_OPTIONS,
   defaultOnboardingState,
   mergeLoadedDraft,
-  ONBOARDING_GOAL_OPTIONS,
   ONBOARDING_STEP_COUNT,
   ONBOARDING_TOPIC_SUGGESTIONS,
   STYLE_OPTIONS,
   type OnboardingDraftState,
 } from "./onboarding-model";
 import { loadOnboardingDraft, saveOnboardingDraft } from "./onboarding-storage";
-
-const systemAnimation = require("../../assets/brand/gradient-blob.json");
 
 export interface OnboardingFlowProps {
   session: MobileSession;
@@ -136,7 +133,7 @@ export function OnboardingFlow({
   const [expressionDraft, setExpressionDraft] = useState("");
   const [processing, setProcessing] = useState(false);
   const [voiceListening, setVoiceListening] = useState(false);
-  const [topicQuery, setTopicQuery] = useState("");
+  const [topicQuery] = useState("");
   const [topicSuggestions, setTopicSuggestions] = useState<string[]>([]);
   const [countryFocused, setCountryFocused] = useState(false);
   const fade = useRef(new Animated.Value(1)).current;
@@ -147,7 +144,9 @@ export function OnboardingFlow({
   const ripple = useRef(new Animated.Value(0)).current;
   const systemScale = useRef(new Animated.Value(1)).current;
   const systemOpacity = useRef(new Animated.Value(0.82)).current;
-  const lottieRef = useRef<LottieView | null>(null);
+  const lottieRef = useRef<{ pause?: () => void; play?: () => void } | null>(
+    null,
+  );
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const patch = useCallback((partial: Partial<OnboardingDraftState>) => {
@@ -259,9 +258,9 @@ export function OnboardingFlow({
     ]).start();
 
     if (voiceListening) {
-      lottieRef.current?.pause();
+      lottieRef.current?.pause?.();
     } else {
-      lottieRef.current?.play();
+      lottieRef.current?.play?.();
     }
   }, [systemOpacity, systemScale, voiceListening]);
 
@@ -526,12 +525,9 @@ export function OnboardingFlow({
                     transform: [{ scale: systemScale }],
                   }}
                 >
-                  <LottieView
-                    ref={lottieRef}
-                    autoPlay
-                    loop
-                    source={systemAnimation}
-                    style={layout.systemAnimation}
+                  <SystemBlobAnimation
+                    lottieRef={lottieRef}
+                    size={layout.systemAnimation.width as number}
                   />
                 </Animated.View>
               </View>

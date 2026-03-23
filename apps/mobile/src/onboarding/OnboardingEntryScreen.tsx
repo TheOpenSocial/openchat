@@ -2,13 +2,12 @@ import { Image, Pressable, Text, View } from "react-native";
 import { useEffect, useRef } from "react";
 import { Animated, Easing } from "react-native";
 
+import logoAsset from "../../assets/brand/logo.png";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { VoiceMicButton } from "../components/VoiceMicButton";
 import { type AppLocale, t } from "../i18n/strings";
 import { speechRecognitionAvailable } from "../lib/speech-recognition-available";
 import { appTheme } from "../theme";
-
-const logoAsset = require("../../assets/brand/logo.png");
 
 interface OnboardingEntryScreenProps {
   locale: AppLocale;

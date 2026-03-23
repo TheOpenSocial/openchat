@@ -11,9 +11,13 @@ export function VoiceMicButton(props: VoiceMicButtonImplProps) {
     return null;
   }
 
-  const { VoiceMicButtonImpl } =
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Metro resolves .tsx; avoids loading expo-speech when unavailable.
-    require("./VoiceMicButtonImpl") as typeof import("./VoiceMicButtonImpl");
+  try {
+    const { VoiceMicButtonImpl } =
+      // eslint-disable-next-line @typescript-eslint/no-require-imports -- Metro resolves .tsx; avoids loading expo-speech when unavailable.
+      require("./VoiceMicButtonImpl") as typeof import("./VoiceMicButtonImpl");
 
-  return <VoiceMicButtonImpl {...props} />;
+    return <VoiceMicButtonImpl {...props} />;
+  } catch {
+    return null;
+  }
 }
