@@ -158,6 +158,8 @@ export function OpenChatScreen({
   const showOnboardingCarryover =
     onboardingCarryover != null &&
     (phase === "empty" || phase === "active" || !userActive);
+  const carryoverProcessing =
+    showOnboardingCarryover && onboardingCarryover?.state === "processing";
 
   useEffect(() => {
     if (Platform.OS === "android") {
@@ -215,7 +217,7 @@ export function OpenChatScreen({
                   size="small"
                 />
                 <Text className="text-[12px] font-medium text-white/70">
-                  {t("openChatOnboardingCarryoverProcessing", locale)}
+                  {t("openChatOnboardingCarryoverProcessingInline", locale)}
                 </Text>
               </View>
             ) : null}
@@ -253,6 +255,17 @@ export function OpenChatScreen({
               <ThreadMessage body={message.body} role={message.role} />
             )}
           />
+        </View>
+      ) : carryoverProcessing ? (
+        <View className="min-h-0 flex-1 items-center justify-center py-8">
+          <View className="w-full max-w-[320px] rounded-[24px] border border-white/[0.06] bg-white/[0.02] px-5 py-5">
+            <Text className="text-center text-[20px] font-semibold tracking-tight text-white/94">
+              {t("openChatOnboardingHandoffTitle", locale)}
+            </Text>
+            <Text className="mt-2 text-center text-[14px] leading-[21px] text-white/52">
+              {t("openChatOnboardingHandoffSubtitle", locale)}
+            </Text>
+          </View>
         </View>
       ) : (
         <View className="min-h-0 flex-1 justify-center py-8">

@@ -194,6 +194,10 @@ const catalogs = {
       "Your first intent is saved and will send as soon as you’re back online.",
     openChatOnboardingCarryoverStartNow: "Start from this",
     openChatOnboardingCarryoverRetry: "Try sending now",
+    openChatOnboardingCarryoverProcessingInline: "Starting your thread…",
+    openChatOnboardingHandoffTitle: "Starting your thread",
+    openChatOnboardingHandoffSubtitle:
+      "We’re turning your onboarding signal into your first conversation.",
     openChatSuggestions: "Suggestions",
     openChatActionOpenChats: "Open chats",
     openChatActionWiden: "Widen search",
@@ -526,6 +530,10 @@ const catalogs = {
       "Tu primer intent quedó guardado y se enviará cuando vuelvas a estar online.",
     openChatOnboardingCarryoverStartNow: "Empezar desde esto",
     openChatOnboardingCarryoverRetry: "Intentar enviar ahora",
+    openChatOnboardingCarryoverProcessingInline: "Iniciando tu hilo…",
+    openChatOnboardingHandoffTitle: "Iniciando tu hilo",
+    openChatOnboardingHandoffSubtitle:
+      "Estamos convirtiendo tu señal de onboarding en tu primera conversación.",
     openChatSuggestions: "Sugerencias",
     openChatActionOpenChats: "Abrir chats",
     openChatActionWiden: "Ampliar búsqueda",
