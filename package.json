@@ -28,6 +28,7 @@
     "settings:sync:prod": "node scripts/sync-settings.mjs --env production",
     "brand:generate": "node scripts/generate-brand-assets.mjs",
     "staging:smoke:api": "node scripts/staging-smoke-api.mjs",
+    "benchmark:onboarding": "node scripts/benchmark-onboarding.mjs",
     "staging:verify:incident": "node scripts/staging-incident-verify.mjs",
     "moderation:drill": "node scripts/moderation-drill.mjs",
     "jarvis": "bash scripts/jarvis-ios.sh",
