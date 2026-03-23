@@ -111,13 +111,26 @@ sync_local_checkout() {
 
 run_pull_or_build() {
   if [[ "$DEPLOY_MODE" == "images" ]]; then
-    if [[ -n "$REGISTRY_USERNAME" && -n "$REGISTRY_PASSWORD" ]]; then
-      printf "%s" "$REGISTRY_PASSWORD" | docker login "$REGISTRY_HOST" --username "$REGISTRY_USERNAME" --password-stdin
-    fi
-    compose_cmd pull api admin web
+    run_registry_login
+    run_pull_service api
+    run_pull_service admin
+    run_pull_service web
   else
     COMPOSE_BAKE=true compose_cmd build api admin web
   fi
+}
+
+run_registry_login() {
+  if [[ -n "$REGISTRY_USERNAME" && -n "$REGISTRY_PASSWORD" ]]; then
+    printf "%s" "$REGISTRY_PASSWORD" | docker login "$REGISTRY_HOST" --username "$REGISTRY_USERNAME" --password-stdin
+  else
+    echo "Registry credentials not provided; skipping docker login."
+  fi
+}
+
+run_pull_service() {
+  local service="$1"
+  compose_cmd pull "$service"
 }
 
 run_migrate() {
@@ -139,6 +152,18 @@ run_phase() {
       ;;
     pull-or-build)
       run_pull_or_build
+      ;;
+    registry-login)
+      run_registry_login
+      ;;
+    pull-api)
+      run_pull_service api
+      ;;
+    pull-admin)
+      run_pull_service admin
+      ;;
+    pull-web)
+      run_pull_service web
       ;;
     migrate)
       run_migrate

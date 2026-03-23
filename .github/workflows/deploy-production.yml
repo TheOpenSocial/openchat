@@ -61,7 +61,40 @@ jobs:
           chmod +x scripts/deploy-production.sh
           DEPLOY_PHASE=sync ./scripts/deploy-production.sh
 
-      - name: Pull or build services
+      - name: Registry login
+        if: ${{ inputs.deploy_mode == 'images' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x scripts/deploy-production.sh
+          DEPLOY_PHASE=registry-login ./scripts/deploy-production.sh
+
+      - name: Pull API image
+        if: ${{ inputs.deploy_mode == 'images' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x scripts/deploy-production.sh
+          DEPLOY_PHASE=pull-api ./scripts/deploy-production.sh
+
+      - name: Pull admin image
+        if: ${{ inputs.deploy_mode == 'images' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x scripts/deploy-production.sh
+          DEPLOY_PHASE=pull-admin ./scripts/deploy-production.sh
+
+      - name: Pull web image
+        if: ${{ inputs.deploy_mode == 'images' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x scripts/deploy-production.sh
+          DEPLOY_PHASE=pull-web ./scripts/deploy-production.sh
+
+      - name: Build services
+        if: ${{ inputs.deploy_mode != 'images' }}
         shell: bash
         run: |
           set -euo pipefail
