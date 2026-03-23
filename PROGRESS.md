@@ -24,6 +24,7 @@ It is organized as a production-grade build checklist with:
 Last verified: 2026-03-20
 
 ## Implementation Notes
+- 2026-03-23: Continued `TP-17` mobile guardrails by adding activation-health threshold messaging in Profile telemetry (`healthy|watch|critical|no_data`) so onboarding-first-action regressions surface immediately without inspecting raw counters.
 - 2026-03-23: Advanced `TP-17` mobile guardrails by extending local telemetry summaries with onboarding activation funnel counters/rates (`ready|started|succeeded|queued|failed`, success/queue/failure rates, avg completion seconds) and surfacing them in Profile telemetry for real-time activation-health visibility.
 - 2026-03-23: Closed `TP-16` by adding backend replay-safety verification for onboarding activation mutations in `apps/api/test/client-mutation.service.spec.ts` (`intent.create_from_agent` scope), asserting same idempotency key replays return cached response and do not execute the handler twice.
 - 2026-03-23: Extended `TP-16` mobile carryover UX resilience with persisted activation handoff state (`seed`, `idempotencyKey`, `state`) in local storage, including safe restore on relaunch/background and resume messaging when prior processing was interrupted.

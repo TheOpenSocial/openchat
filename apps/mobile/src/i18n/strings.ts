@@ -313,6 +313,14 @@ const catalogs = {
     profileTelemetrySyncMetrics: "sync failure: {failure} · repeat: {repeat}",
     profileTelemetryActivationMetrics:
       "activation ready: {ready} · started: {started} · success: {success} · queued: {queued} · failed: {failed} · avg completion: {avg} · success rate: {successRate}",
+    profileActivationHealthNoData:
+      "Activation health: collecting enough signal from first activations.",
+    profileActivationHealthHealthy:
+      "Activation health: strong. Most users complete first activation successfully.",
+    profileActivationHealthWatch:
+      "Activation health: watch. Queueing or retries are elevated.",
+    profileActivationHealthCritical:
+      "Activation health: critical. First activation failures are elevated.",
     profileSaveSettings: "Save settings",
     profileRequestDigestNow: "Request digest now",
     profileSignOut: "Sign out",
@@ -657,6 +665,14 @@ const catalogs = {
       "fallo de sync: {failure} · repetición: {repeat}",
     profileTelemetryActivationMetrics:
       "activación lista: {ready} · iniciada: {started} · éxito: {success} · en cola: {queued} · fallo: {failed} · promedio: {avg} · tasa éxito: {successRate}",
+    profileActivationHealthNoData:
+      "Salud de activación: reuniendo suficiente señal de primeras activaciones.",
+    profileActivationHealthHealthy:
+      "Salud de activación: sólida. La mayoría completa bien la primera activación.",
+    profileActivationHealthWatch:
+      "Salud de activación: observar. La cola o los reintentos están elevados.",
+    profileActivationHealthCritical:
+      "Salud de activación: crítica. Los fallos de primera activación están elevados.",
     profileSaveSettings: "Guardar ajustes",
     profileRequestDigestNow: "Pedir resumen ahora",
     profileSignOut: "Cerrar sesión",

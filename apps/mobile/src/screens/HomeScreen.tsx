@@ -3234,6 +3234,42 @@ function ProfileTab({
   onCreateAutomation,
   onRunAutomationNow,
 }: ProfileTabProps) {
+  const activationStarted =
+    telemetrySummary?.counters.onboardingActivationStarted ?? 0;
+  const activationSuccessRate =
+    telemetrySummary?.metrics.activationSuccessRate ?? null;
+  const activationQueuedRate =
+    telemetrySummary?.metrics.activationQueuedRate ?? null;
+  const activationFailureRate =
+    telemetrySummary?.metrics.activationFailureRate ?? null;
+  const activationHealthNotice =
+    activationStarted === 0
+      ? {
+          tone: "info" as const,
+          text: t("profileActivationHealthNoData", locale),
+        }
+      : activationSuccessRate != null &&
+          activationSuccessRate >= 0.8 &&
+          (activationFailureRate ?? 0) <= 0.1
+        ? {
+            tone: "success" as const,
+            text: t("profileActivationHealthHealthy", locale),
+          }
+        : activationFailureRate != null && activationFailureRate >= 0.2
+          ? {
+              tone: "error" as const,
+              text: t("profileActivationHealthCritical", locale),
+            }
+          : activationQueuedRate != null && activationQueuedRate >= 0.4
+            ? {
+                tone: "info" as const,
+                text: t("profileActivationHealthWatch", locale),
+              }
+            : {
+                tone: "info" as const,
+                text: t("profileActivationHealthWatch", locale),
+              };
+
   return (
     <ScrollView
       contentContainerStyle={{
@@ -3689,6 +3725,12 @@ function ProfileTab({
         <Text className="mb-2 text-base font-semibold text-ink">
           {t("profileLocalTelemetry", locale)}
         </Text>
+        <View className="mb-2">
+          <InlineNotice
+            text={activationHealthNotice.text}
+            tone={activationHealthNotice.tone}
+          />
+        </View>
         <Text className="text-xs text-muted">
           {t("profileEvents", locale, {
             count: telemetrySummary?.totalEvents ?? 0,
