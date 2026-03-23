@@ -1618,24 +1618,65 @@ export function HomeScreen({
       return;
     }
 
+    const startedAt = Date.now();
+    void trackTelemetryEvent(session.userId, "onboarding_activation_started", {
+      source: "home_carryover",
+      seedLength: seed.length,
+    }).catch(() => {});
+
     setOnboardingCarryoverState("processing");
     await sendIntent(seed, {
       onOutcome: (outcome) => {
+        const elapsedMs = Math.max(0, Date.now() - startedAt);
         if (outcome === "sent") {
+          void trackTelemetryEvent(
+            session.userId,
+            "onboarding_activation_succeeded",
+            {
+              source: "home_carryover",
+              elapsedMs,
+            },
+          ).catch(() => {});
           setOnboardingCarryoverSeed("");
           setOnboardingCarryoverState(null);
           onInitialAgentMessageConsumed?.();
           return;
         }
         if (outcome === "queued") {
+          void trackTelemetryEvent(
+            session.userId,
+            "onboarding_activation_queued",
+            {
+              source: "home_carryover",
+              elapsedMs,
+            },
+          ).catch(() => {});
           setOnboardingCarryoverState("queued");
           onInitialAgentMessageConsumed?.();
           return;
         }
         if (outcome === "aborted") {
+          void trackTelemetryEvent(
+            session.userId,
+            "onboarding_activation_failed",
+            {
+              source: "home_carryover",
+              reason: "aborted",
+              elapsedMs,
+            },
+          ).catch(() => {});
           setOnboardingCarryoverState("ready");
           return;
         }
+        void trackTelemetryEvent(
+          session.userId,
+          "onboarding_activation_failed",
+          {
+            source: "home_carryover",
+            reason: "send_failed",
+            elapsedMs,
+          },
+        ).catch(() => {});
         setOnboardingCarryoverState("ready");
       },
     });

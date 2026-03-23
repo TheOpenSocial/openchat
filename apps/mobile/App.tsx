@@ -392,6 +392,16 @@ function ProductionApp() {
         goalsCount: state.onboardingGoals.length,
         hadFirstIntent: Boolean(meta.firstIntentText?.trim()),
       }).catch(() => {});
+      if (meta.firstIntentText?.trim()) {
+        void trackTelemetryEvent(
+          session.userId,
+          "onboarding_activation_ready",
+          {
+            source: "onboarding_complete",
+            seedLength: meta.firstIntentText.trim().length,
+          },
+        ).catch(() => {});
+      }
     };
 
     try {
