@@ -321,7 +321,6 @@ describe("PersonalizationService", () => {
       notificationMode: "immediate",
       agentAutonomy: "suggest_only",
       memoryMode: "standard",
-      timezone: "UTC",
     });
   });
 
@@ -338,7 +337,6 @@ describe("PersonalizationService", () => {
       notificationMode: "digest",
       agentAutonomy: "manual",
       memoryMode: "minimal",
-      timezone: "America/Argentina/Buenos_Aires",
     };
 
     const prisma: any = {

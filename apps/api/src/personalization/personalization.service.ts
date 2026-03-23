@@ -262,9 +262,6 @@ export class PersonalizationService {
         this.readStringArrayValue(
           byKey.get(GLOBAL_RULE_PREF_KEYS.countryPreferences),
         ) ?? GLOBAL_RULE_DEFAULTS.countryPreferences,
-      timezone:
-        this.readStringValue(byKey.get(GLOBAL_RULE_PREF_KEYS.timezone)) ??
-        GLOBAL_RULE_DEFAULTS.timezone,
       requireVerifiedUsers:
         this.readBooleanValue(
           byKey.get(GLOBAL_RULE_PREF_KEYS.requireVerifiedUsers),

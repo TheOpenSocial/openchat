@@ -295,7 +295,6 @@ export const globalRulesBodySchema = z.object({
   modality: z.enum(["online", "offline", "either"]),
   languagePreferences: z.array(z.string().min(2).max(32)).max(10),
   countryPreferences: z.array(z.string().min(2).max(120)).max(10),
-  timezone: z.string().min(1).max(128),
   requireVerifiedUsers: z.boolean(),
   notificationMode: z.enum(["immediate", "digest", "quiet"]),
   agentAutonomy: z.enum(["manual", "suggest_only", "auto_non_risky"]),
