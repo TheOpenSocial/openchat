@@ -52,6 +52,10 @@ export type OpenChatScreenProps = {
   pendingIntentSummary: PendingIntentsSummaryResponse | null;
   onOpenChatsTab: () => void;
   e2eSubmitOnReturn?: boolean;
+  onboardingCarryover?: {
+    seed: string;
+    state: "processing" | "queued" | "ready";
+  } | null;
 };
 
 export function OpenChatScreen({
@@ -77,6 +81,7 @@ export function OpenChatScreen({
   sending,
   setDraftMessage,
   threadLoading,
+  onboardingCarryover = null,
 }: OpenChatScreenProps) {
   const [toolsOpen, setToolsOpen] = useState(false);
   const inlineChips = useMemo(
@@ -147,6 +152,9 @@ export function OpenChatScreen({
 
   const intentLen = draftMessage.trim().length;
   const canSend = intentLen > 0 && !sending;
+  const showOnboardingCarryover =
+    onboardingCarryover != null &&
+    (phase === "empty" || phase === "active" || !userActive);
 
   const onThreadAction = (id: string) => {
     hapticSelection();
@@ -173,6 +181,24 @@ export function OpenChatScreen({
       <OpenChatHeader locale={locale} showPresence={!userActive} />
 
       <ThreadContextStrip hint={progressHint} phase={phase} />
+
+      {showOnboardingCarryover ? (
+        <View className="mb-3 mt-2 rounded-[22px] border border-white/[0.06] bg-white/[0.025] px-4 py-4">
+          <Text className="text-[11px] font-medium uppercase tracking-[0.14em] text-white/30">
+            {t("openChatOnboardingCarryoverTitle", locale)}
+          </Text>
+          <Text className="mt-2 text-[15px] leading-[23px] text-white/78">
+            "{onboardingCarryover.seed}"
+          </Text>
+          <Text className="mt-2 text-[13px] leading-[20px] text-white/42">
+            {onboardingCarryover.state === "processing"
+              ? t("openChatOnboardingCarryoverProcessing", locale)
+              : onboardingCarryover.state === "queued"
+                ? t("openChatOnboardingCarryoverQueued", locale)
+                : t("openChatOnboardingCarryoverReady", locale)}
+          </Text>
+        </View>
+      ) : null}
 
       {userActive ? (
         <View className="min-h-0 flex-1">

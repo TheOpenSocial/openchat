@@ -164,6 +164,13 @@ const catalogs = {
     openChatEmptyTitle: "What do you want to do?",
     openChatEmptySubtitle:
       "Start with anything. A topic, a plan, or someone you want to meet.",
+    openChatOnboardingCarryoverTitle: "Picked up from onboarding",
+    openChatOnboardingCarryoverProcessing:
+      "We’re carrying your first intent into your thread.",
+    openChatOnboardingCarryoverReady:
+      "Your thread is starting from what you already said.",
+    openChatOnboardingCarryoverQueued:
+      "Your first intent is saved and will send as soon as you’re back online.",
     openChatSuggestions: "Suggestions",
     openChatActionOpenChats: "Open chats",
     openChatActionWiden: "Widen search",
@@ -466,6 +473,13 @@ const catalogs = {
     openChatEmptyTitle: "¿Qué quieres hacer?",
     openChatEmptySubtitle:
       "Empieza con cualquier cosa. Un tema, un plan o alguien que quieras conocer.",
+    openChatOnboardingCarryoverTitle: "Traído desde onboarding",
+    openChatOnboardingCarryoverProcessing:
+      "Estamos llevando tu primer intent a tu hilo.",
+    openChatOnboardingCarryoverReady:
+      "Tu hilo empieza desde lo que ya dijiste.",
+    openChatOnboardingCarryoverQueued:
+      "Tu primer intent quedó guardado y se enviará cuando vuelvas a estar online.",
     openChatSuggestions: "Sugerencias",
     openChatActionOpenChats: "Abrir chats",
     openChatActionWiden: "Ampliar búsqueda",

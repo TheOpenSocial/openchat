@@ -151,6 +151,7 @@ export function HomeScreen({
   onResetSession,
   session,
 }: HomeScreenProps) {
+  type OnboardingCarryoverState = "processing" | "queued" | "ready" | null;
   const [locale, setLocale] = useState<AppLocale>("en");
   const enableE2ELocalMode =
     process.env.EXPO_PUBLIC_ENABLE_E2E_LOCAL_MODE === "1";
@@ -161,6 +162,9 @@ export function HomeScreen({
   const agentVoiceTranscriptRef = useRef<string | null>(null);
   const [draftIntentText, setDraftIntentText] = useState("");
   const [agentImageUrlDraft, setAgentImageUrlDraft] = useState("");
+  const [onboardingCarryoverSeed, setOnboardingCarryoverSeed] = useState("");
+  const [onboardingCarryoverState, setOnboardingCarryoverState] =
+    useState<OnboardingCarryoverState>(null);
   const [sendingIntent, setSendingIntent] = useState(false);
   const [decomposeIntent, setDecomposeIntent] = useState(true);
   const [decomposeMaxIntents, setDecomposeMaxIntents] = useState(3);
@@ -1587,9 +1591,11 @@ export function HomeScreen({
     if (onboardingSeedHandledRef.current) {
       return;
     }
+    setOnboardingCarryoverSeed(seed);
 
     if (!skipNetwork && !designMock && !enableE2ELocalMode && !netOnline) {
       onboardingSeedHandledRef.current = true;
+      setOnboardingCarryoverState("queued");
       void queueOfflineComposerSend({
         userId: session.userId,
         mode: "chat",
@@ -1606,6 +1612,7 @@ export function HomeScreen({
 
     if (designMock || enableE2ELocalMode || skipNetwork) {
       onboardingSeedHandledRef.current = true;
+      setOnboardingCarryoverState("ready");
       if (designMock && seed) {
         setAgentTimeline((current) => [
           ...current,
@@ -1627,6 +1634,7 @@ export function HomeScreen({
 
     if (!agentThreadId) {
       onboardingSeedHandledRef.current = true;
+      setOnboardingCarryoverState(null);
       onInitialAgentMessageConsumed();
       setBanner({
         tone: "error",
@@ -1636,6 +1644,7 @@ export function HomeScreen({
     }
 
     onboardingSeedHandledRef.current = true;
+    setOnboardingCarryoverState("processing");
     const timelineIdBase = Date.now().toString(36);
     const workflowMessageId = `workflow_${timelineIdBase}`;
     const streamingId = `agent_stream_${timelineIdBase}`;
@@ -1689,6 +1698,7 @@ export function HomeScreen({
           session.accessToken,
         );
         setAgentTimeline(agentThreadMessagesToTranscript(messages));
+        setOnboardingCarryoverState("ready");
         hapticImpact();
         recordTelemetry("agent_turn_completed", {
           textLength: rawText.length,
@@ -1702,6 +1712,7 @@ export function HomeScreen({
             text: rawText,
           });
           await refreshPendingOutboxCount().catch(() => {});
+          setOnboardingCarryoverState("queued");
           setAgentTimeline((current) => [
             ...current,
             {
@@ -1712,6 +1723,7 @@ export function HomeScreen({
           ]);
           return;
         }
+        setOnboardingCarryoverState(null);
         setAgentTimeline((current) => [
           ...current,
           {
@@ -1738,6 +1750,22 @@ export function HomeScreen({
     session.userId,
     skipNetwork,
   ]);
+
+  useEffect(() => {
+    if (onboardingCarryoverState !== "ready") {
+      return;
+    }
+    const timer = setTimeout(() => {
+      setOnboardingCarryoverState((current) => {
+        if (current !== "ready") {
+          return current;
+        }
+        setOnboardingCarryoverSeed("");
+        return null;
+      });
+    }, 4200);
+    return () => clearTimeout(timer);
+  }, [onboardingCarryoverState]);
 
   const reportUser = async (
     targetUserId: string,
@@ -2655,6 +2683,14 @@ export function HomeScreen({
               e2eSubmitOnReturn={enableE2ELocalMode}
               locale={locale}
               messages={agentTimeline}
+              onboardingCarryover={
+                onboardingCarryoverSeed && onboardingCarryoverState
+                  ? {
+                      seed: onboardingCarryoverSeed,
+                      state: onboardingCarryoverState,
+                    }
+                  : null
+              }
               onAgentImageUrlChange={setAgentImageUrlDraft}
               onComposerModeChange={setAgentComposerMode}
               onDecomposeIntentChange={setDecomposeIntent}
