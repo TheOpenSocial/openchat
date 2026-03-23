@@ -506,8 +506,15 @@ export class OpenAIClient {
           return null;
         }
 
+        const normalizedText = text
+          .replace(/^```(?:json)?\s*/i, "")
+          .replace(/\s*```$/, "")
+          .trim();
+
         try {
-          const parsed = onboardingInferResponseSchema.parse(JSON.parse(text));
+          const parsed = onboardingInferResponseSchema.parse(
+            JSON.parse(normalizedText),
+          );
           console.log(
             `[openai:onboarding] success provider=${this.providerName} traceId=${traceId} model=${model} durationMs=${Date.now() - startedAt} hasPersona=${Boolean(parsed.persona)} hasFollowUp=${Boolean(parsed.followUpQuestion?.trim())}`,
           );
