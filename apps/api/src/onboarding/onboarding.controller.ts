@@ -36,4 +36,26 @@ export class OnboardingController {
       ),
     );
   }
+
+  @Post("infer-fast")
+  async inferFast(@Body() body: unknown, @ActorUserId() actorUserId: string) {
+    const payload = parseRequestPayload(onboardingInferBodySchema, body);
+    assertActorOwnsUser(
+      actorUserId,
+      payload.userId,
+      "onboarding target does not match authenticated user",
+    );
+    if (this.launchControlsService) {
+      await this.launchControlsService.assertActionAllowed(
+        "discovery",
+        payload.userId,
+      );
+    }
+    return ok(
+      await this.onboardingService.inferQuickFromTranscript(
+        payload.userId,
+        payload.transcript,
+      ),
+    );
+  }
 }

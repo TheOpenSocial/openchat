@@ -220,6 +220,7 @@ export function OnboardingFlow({
   const [expressionDraft, setExpressionDraft] = useState("");
   const [processing, setProcessing] = useState(false);
   const [refiningPersona, setRefiningPersona] = useState(false);
+  const [backgroundHydrating, setBackgroundHydrating] = useState(false);
   const [voiceListening, setVoiceListening] = useState(false);
   const [voiceLevel, setVoiceLevel] = useState(-2);
   const [lastSpokenTurn, setLastSpokenTurn] = useState("");
@@ -246,6 +247,68 @@ export function OnboardingFlow({
   const patch = useCallback((partial: Partial<OnboardingDraftState>) => {
     setDraft((d) => ({ ...d, ...partial }));
   }, []);
+
+  const applyRichInference = useCallback(
+    (
+      transcript: string,
+      server: Awaited<ReturnType<typeof api.inferOnboarding>>,
+      options?: { stepIndex?: number },
+    ) => {
+      setDraft((current) => ({
+        ...current,
+        onboardingIntakeText: transcript,
+        onboardingGoals: server.goals,
+        interests: server.interests,
+        preferredAvailability: server.availability,
+        preferredFormat:
+          server.format === "small_groups" ? "group" : server.format,
+        preferredStyle: server.style,
+        area: server.area,
+        country: server.country,
+        firstIntentText: server.firstIntent,
+        persona: server.persona,
+        personaSummary: server.summary,
+        followUpQuestion: server.followUpQuestion?.trim() ?? "",
+        inferenceMeta: server.inferenceMeta,
+        stepIndex: options?.stepIndex ?? current.stepIndex,
+      }));
+    },
+    [],
+  );
+
+  const hydrateRichInference = useCallback(
+    async (transcript: string, options?: { silent?: boolean }) => {
+      if (!options?.silent) {
+        setRefiningPersona(true);
+      } else {
+        setBackgroundHydrating(true);
+      }
+      try {
+        const server = await api.inferOnboarding(
+          session.userId,
+          transcript,
+          session.accessToken,
+        );
+        applyRichInference(transcript, server);
+      } catch (error) {
+        console.warn("onboarding rich inference failed", error);
+        if (!options?.silent) {
+          Alert.alert(
+            t("onboardingRefinementUnavailableTitle", locale),
+            t("onboardingRefinementUnavailableBody", locale),
+            [{ text: "OK" }],
+          );
+        }
+      } finally {
+        if (!options?.silent) {
+          setRefiningPersona(false);
+        } else {
+          setBackgroundHydrating(false);
+        }
+      }
+    },
+    [applyRichInference, locale, session.accessToken, session.userId],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -561,7 +624,7 @@ export function OnboardingFlow({
         followUpQuestion: hasFollowUpQuestion ? followUpQuestion : "",
       });
       try {
-        const server = await api.inferOnboarding(
+        const server = await api.inferOnboardingQuick(
           session.userId,
           transcript,
           session.accessToken,
@@ -571,22 +634,15 @@ export function OnboardingFlow({
           onboardingIntakeText: transcript,
           onboardingGoals: server.goals,
           interests: server.interests,
-          preferredAvailability: server.availability,
-          preferredFormat:
-            server.format === "small_groups" ? "group" : server.format,
-          preferredStyle: server.style,
-          area: server.area,
-          country: server.country,
           firstIntentText: server.firstIntent,
-          persona: server.persona,
           personaSummary: server.summary,
           followUpQuestion: server.followUpQuestion?.trim() ?? "",
-          inferenceMeta: server.inferenceMeta,
           stepIndex: current.stepIndex,
         }));
         hapticSelection();
         if (!(server.followUpQuestion?.trim() ?? "")) {
           animateStep(1);
+          void hydrateRichInference(transcript, { silent: true });
         }
       } catch (error) {
         console.warn("onboarding inference failed", error);
@@ -609,6 +665,7 @@ export function OnboardingFlow({
       locale,
       patch,
       processing,
+      hydrateRichInference,
       session.accessToken,
       session.userId,
     ],
@@ -664,42 +721,9 @@ export function OnboardingFlow({
       .filter(Boolean)
       .join("\n");
 
-    setRefiningPersona(true);
-    try {
-      const server = await api.inferOnboarding(
-        session.userId,
-        transcript,
-        session.accessToken,
-      );
-
-      patch({
-        onboardingIntakeText: transcript,
-        onboardingGoals: server.goals,
-        interests: server.interests,
-        preferredAvailability: server.availability,
-        preferredFormat:
-          server.format === "small_groups" ? "group" : server.format,
-        preferredStyle: server.style,
-        area: server.area,
-        country: server.country,
-        firstIntentText: server.firstIntent,
-        persona: server.persona,
-        personaSummary: server.summary,
-        followUpQuestion: server.followUpQuestion?.trim() ?? "",
-        inferenceMeta: server.inferenceMeta,
-      });
-      hapticSelection();
-      animateStep(2);
-    } catch (error) {
-      console.warn("onboarding refinement failed", error);
-      Alert.alert(
-        t("onboardingRefinementUnavailableTitle", locale),
-        t("onboardingRefinementUnavailableBody", locale),
-        [{ text: "OK" }],
-      );
-    } finally {
-      setRefiningPersona(false);
-    }
+    await hydrateRichInference(transcript);
+    hapticSelection();
+    animateStep(2);
   }, [
     animateStep,
     draft.area,
@@ -707,10 +731,8 @@ export function OnboardingFlow({
     draft.interests,
     draft.onboardingGoals,
     draft.onboardingIntakeText,
-    patch,
+    hydrateRichInference,
     refiningPersona,
-    session.accessToken,
-    session.userId,
   ]);
 
   const finishWithIntent = useCallback(async () => {
@@ -847,6 +869,14 @@ export function OnboardingFlow({
               subtitle={t("onboardingRefineSubtitle", locale)}
               title={t("onboardingRefineTitle", locale)}
             />
+
+            {backgroundHydrating ? (
+              <View className="mt-6 items-center">
+                <Text className="text-center text-[12px] leading-[18px] text-white/34">
+                  We’re shaping a richer read in the background.
+                </Text>
+              </View>
+            ) : null}
 
             <View className="mt-8 gap-4">
               <SurfaceCard>

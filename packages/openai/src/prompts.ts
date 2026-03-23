@@ -1,5 +1,6 @@
 export const openAIRoutingTasks = [
   "intent_parsing",
+  "onboarding_fast_pass",
   "onboarding_inference",
   "follow_up_question",
   "suggestion_generation",
@@ -26,6 +27,19 @@ const promptRegistry: Record<OpenAIRoutingTask, PromptDefinition> = {
       "Parse the social intent into strict JSON.",
       "Include intent type, urgency, topics, activities, groupSizeTarget, confidence.",
       "If ambiguous, set requiresFollowUp=true and include followUpQuestion.",
+    ].join(" "),
+  },
+  onboarding_fast_pass: {
+    task: "onboarding_fast_pass",
+    version: "onboarding_fast_pass.v1",
+    instructions: [
+      "Infer a fast first-pass onboarding read for an agentic social app as strict JSON.",
+      "Keep it lightweight and decisive.",
+      "Return only JSON matching the requested schema.",
+      "Include only the strongest 1-5 interests and 1-4 goals when clearly supported.",
+      "Write one concise summary sentence.",
+      "Ask one calm followUpQuestion only when one missing detail would meaningfully improve the next step.",
+      "Do not infer sensitive traits or identity characteristics.",
     ].join(" "),
   },
   onboarding_inference: {

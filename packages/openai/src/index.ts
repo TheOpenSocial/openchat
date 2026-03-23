@@ -3,6 +3,7 @@ import {
   IntentUrgency,
   intentPayloadSchema,
   onboardingInferResponseSchema,
+  onboardingQuickInferResponseSchema,
 } from "@opensocial/types";
 import { SpanStatusCode, context, trace } from "@opentelemetry/api";
 import OpenAI from "openai";
@@ -83,6 +84,9 @@ export type ConversationPlan = z.infer<typeof conversationPlanSchema>;
 export type ParsedOnboardingInference = z.infer<
   typeof onboardingInferResponseSchema
 >;
+export type ParsedOnboardingQuickInference = z.infer<
+  typeof onboardingQuickInferResponseSchema
+>;
 
 export interface OpenAIClientOptions {
   apiKey: string;
@@ -129,6 +133,7 @@ let openAIClientInstanceCounter = 0;
 
 const DEFAULT_MODEL_BY_TASK: Record<OpenAIRoutingTask, string> = {
   intent_parsing: "gpt-4.1-mini",
+  onboarding_fast_pass: "gpt-4.1-mini",
   onboarding_inference: "gpt-4.1-mini",
   follow_up_question: "gpt-4.1-mini",
   suggestion_generation: "gpt-4.1-mini",
@@ -542,6 +547,113 @@ export class OpenAIClient {
         );
         this.captureFailure({
           task: "onboarding_inference",
+          traceId,
+          model,
+          promptVersion: prompt.version,
+          reason: "request_failed",
+          inputPayload: rawText,
+          errorMessage:
+            error instanceof Error ? error.message : "request_failed_unknown",
+        });
+        return null;
+      }
+    });
+  }
+
+  async inferOnboardingQuick(
+    rawText: string,
+    traceId: string,
+  ): Promise<ParsedOnboardingQuickInference | null> {
+    return this.runWithOpenAISpan("onboarding_fast_pass", traceId, async () => {
+      const startedAt = Date.now();
+      if (this.detectPromptInjection(rawText)) {
+        console.warn(
+          `[openai:onboarding-fast] prompt injection detected provider=${this.providerName} traceId=${traceId} durationMs=${Date.now() - startedAt}`,
+        );
+        this.captureFailure({
+          task: "onboarding_fast_pass",
+          traceId,
+          model: this.getModelForTask("onboarding_fast_pass"),
+          promptVersion: getPromptDefinition("onboarding_fast_pass").version,
+          reason: "prompt_injection_detected",
+          inputPayload: rawText,
+        });
+        return null;
+      }
+
+      if (!this.apiEnabled) {
+        console.warn(
+          `[openai:onboarding-fast] api disabled provider=${this.providerName} traceId=${traceId} durationMs=${Date.now() - startedAt}`,
+        );
+        return null;
+      }
+
+      const prompt = getPromptDefinition("onboarding_fast_pass");
+      const model = this.getModelForTask("onboarding_fast_pass");
+
+      try {
+        const response = await this.client.responses.create({
+          model,
+          instructions: prompt.instructions,
+          input: rawText,
+          metadata: this.createTraceMetadata(traceId, "onboarding_fast_pass", {
+            feature: "onboarding_fast_pass",
+            promptVersion: prompt.version,
+          }),
+        });
+
+        const text = response.output_text?.trim();
+        if (!text) {
+          console.warn(
+            `[openai:onboarding-fast] empty output provider=${this.providerName} traceId=${traceId} model=${model} durationMs=${Date.now() - startedAt}`,
+          );
+          this.captureFailure({
+            task: "onboarding_fast_pass",
+            traceId,
+            model,
+            promptVersion: prompt.version,
+            reason: "empty_output",
+            inputPayload: rawText,
+          });
+          return null;
+        }
+
+        const normalizedText = text
+          .replace(/^```(?:json)?\s*/i, "")
+          .replace(/\s*```$/, "")
+          .trim();
+
+        try {
+          const parsed = onboardingQuickInferResponseSchema.parse(
+            JSON.parse(normalizedText),
+          );
+          console.log(
+            `[openai:onboarding-fast] success provider=${this.providerName} traceId=${traceId} model=${model} durationMs=${Date.now() - startedAt} hasFollowUp=${Boolean(parsed.followUpQuestion?.trim())}`,
+          );
+          return parsed;
+        } catch (error) {
+          console.warn(
+            `[openai:onboarding-fast] schema parse failed provider=${this.providerName} traceId=${traceId} model=${model} durationMs=${Date.now() - startedAt} error=${error instanceof Error ? error.message : "parse_error"}`,
+          );
+          this.captureFailure({
+            task: "onboarding_fast_pass",
+            traceId,
+            model,
+            promptVersion: prompt.version,
+            reason: "schema_parse_failed",
+            inputPayload: rawText,
+            responseText: text,
+            errorMessage:
+              error instanceof Error ? error.message : "parse_error",
+          });
+          return null;
+        }
+      } catch (error) {
+        console.error(
+          `[openai:onboarding-fast] request failed provider=${this.providerName} traceId=${traceId} model=${model} durationMs=${Date.now() - startedAt} error=${error instanceof Error ? error.message : "request_failed_unknown"}`,
+        );
+        this.captureFailure({
+          task: "onboarding_fast_pass",
           traceId,
           model,
           promptVersion: prompt.version,

@@ -492,6 +492,15 @@ export const onboardingInferBodySchema = z.object({
   transcript: z.string().min(1).max(4_000),
 });
 
+export const onboardingQuickInferResponseSchema = z.object({
+  transcript: z.string().min(1),
+  interests: z.array(z.string().min(1)).max(8).default([]),
+  goals: z.array(z.string().min(1)).max(6).default([]),
+  summary: z.string().min(1),
+  firstIntent: z.string().min(1),
+  followUpQuestion: z.string().optional(),
+});
+
 export const onboardingInferResponseSchema = z.object({
   transcript: z.string().min(1),
   interests: z.array(z.string().min(1)).max(12),

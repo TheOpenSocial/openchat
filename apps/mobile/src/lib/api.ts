@@ -287,6 +287,15 @@ export interface OnboardingInferenceResult {
   };
 }
 
+export interface OnboardingQuickInferenceResult {
+  transcript: string;
+  interests: string[];
+  goals: string[];
+  summary: string;
+  firstIntent: string;
+  followUpQuestion?: string;
+}
+
 export interface DiscoveryUserSuggestion {
   userId: string;
   displayName: string;
@@ -1017,6 +1026,18 @@ export const api = {
     return request<OnboardingInferenceResult>(
       "POST",
       "/onboarding/infer",
+      { userId, transcript },
+      accessToken,
+    );
+  },
+  inferOnboardingQuick(
+    userId: string,
+    transcript: string,
+    accessToken?: string,
+  ) {
+    return request<OnboardingQuickInferenceResult>(
+      "POST",
+      "/onboarding/infer-fast",
       { userId, transcript },
       accessToken,
     );
