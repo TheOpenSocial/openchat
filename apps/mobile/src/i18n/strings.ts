@@ -311,6 +311,8 @@ const catalogs = {
     profileTelemetryNotificationMetrics:
       "notification→open: {open} · moderation incidence: {incidence}",
     profileTelemetrySyncMetrics: "sync failure: {failure} · repeat: {repeat}",
+    profileTelemetryActivationMetrics:
+      "activation ready: {ready} · started: {started} · success: {success} · queued: {queued} · failed: {failed} · avg completion: {avg} · success rate: {successRate}",
     profileSaveSettings: "Save settings",
     profileRequestDigestNow: "Request digest now",
     profileSignOut: "Sign out",
@@ -653,6 +655,8 @@ const catalogs = {
       "notificación→apertura: {open} · incidencia de moderación: {incidence}",
     profileTelemetrySyncMetrics:
       "fallo de sync: {failure} · repetición: {repeat}",
+    profileTelemetryActivationMetrics:
+      "activación lista: {ready} · iniciada: {started} · éxito: {success} · en cola: {queued} · fallo: {failed} · promedio: {avg} · tasa éxito: {successRate}",
     profileSaveSettings: "Guardar ajustes",
     profileRequestDigestNow: "Pedir resumen ahora",
     profileSignOut: "Cerrar sesión",

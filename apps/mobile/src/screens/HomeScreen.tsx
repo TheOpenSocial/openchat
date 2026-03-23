@@ -3761,6 +3761,23 @@ function ProfileTab({
             ),
           })}
         </Text>
+        <Text className="text-xs text-muted">
+          {t("profileTelemetryActivationMetrics", locale, {
+            ready: telemetrySummary?.counters.onboardingActivationReady ?? 0,
+            started:
+              telemetrySummary?.counters.onboardingActivationStarted ?? 0,
+            success:
+              telemetrySummary?.counters.onboardingActivationSucceeded ?? 0,
+            queued: telemetrySummary?.counters.onboardingActivationQueued ?? 0,
+            failed: telemetrySummary?.counters.onboardingActivationFailed ?? 0,
+            avg: formatMetricSeconds(
+              telemetrySummary?.metrics.avgActivationCompletionSeconds ?? null,
+            ),
+            successRate: formatMetricRate(
+              telemetrySummary?.metrics.activationSuccessRate ?? null,
+            ),
+          })}
+        </Text>
       </SurfaceCard>
 
       <PrimaryButton

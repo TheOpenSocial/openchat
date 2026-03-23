@@ -264,6 +264,11 @@ export const DESIGN_MOCK_TELEMETRY_SUMMARY: TelemetrySummary = {
   counters: {
     authEvents: 1,
     onboardingCompleted: 1,
+    onboardingActivationReady: 1,
+    onboardingActivationStarted: 1,
+    onboardingActivationSucceeded: 1,
+    onboardingActivationQueued: 0,
+    onboardingActivationFailed: 0,
     intentsCreated: 6,
     agentTurnsCompleted: 2,
     requestsSent: 5,
@@ -292,5 +297,9 @@ export const DESIGN_MOCK_TELEMETRY_SUMMARY: TelemetrySummary = {
     moderationIncidentRate: 0.01,
     repeatConnectionRate: 0.34,
     syncFailureRate: 0,
+    activationSuccessRate: 1,
+    activationQueuedRate: 0,
+    activationFailureRate: 0,
+    avgActivationCompletionSeconds: 3,
   },
 };

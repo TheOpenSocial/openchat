@@ -46,6 +46,11 @@ export interface TelemetrySummary {
   counters: {
     authEvents: number;
     onboardingCompleted: number;
+    onboardingActivationReady: number;
+    onboardingActivationStarted: number;
+    onboardingActivationSucceeded: number;
+    onboardingActivationQueued: number;
+    onboardingActivationFailed: number;
     intentsCreated: number;
     agentTurnsCompleted: number;
     requestsSent: number;
@@ -74,6 +79,10 @@ export interface TelemetrySummary {
     moderationIncidentRate: number | null;
     repeatConnectionRate: number | null;
     syncFailureRate: number | null;
+    activationSuccessRate: number | null;
+    activationQueuedRate: number | null;
+    activationFailureRate: number | null;
+    avgActivationCompletionSeconds: number | null;
   };
 }
 
@@ -251,6 +260,11 @@ export async function getTelemetrySummary(
   const counters = {
     authEvents: 0,
     onboardingCompleted: 0,
+    onboardingActivationReady: 0,
+    onboardingActivationStarted: 0,
+    onboardingActivationSucceeded: 0,
+    onboardingActivationQueued: 0,
+    onboardingActivationFailed: 0,
     intentsCreated: 0,
     agentTurnsCompleted: 0,
     requestsSent: 0,
@@ -281,6 +295,26 @@ export async function getTelemetrySummary(
     }
     if (event.name === "onboarding_completed") {
       counters.onboardingCompleted += 1;
+      continue;
+    }
+    if (event.name === "onboarding_activation_ready") {
+      counters.onboardingActivationReady += 1;
+      continue;
+    }
+    if (event.name === "onboarding_activation_started") {
+      counters.onboardingActivationStarted += 1;
+      continue;
+    }
+    if (event.name === "onboarding_activation_succeeded") {
+      counters.onboardingActivationSucceeded += 1;
+      continue;
+    }
+    if (event.name === "onboarding_activation_queued") {
+      counters.onboardingActivationQueued += 1;
+      continue;
+    }
+    if (event.name === "onboarding_activation_failed") {
+      counters.onboardingActivationFailed += 1;
       continue;
     }
     if (event.name === "intent_created") {
@@ -420,6 +454,50 @@ export async function getTelemetrySummary(
     counters.syncRuns > 0
       ? Number((counters.syncFailures / counters.syncRuns).toFixed(3))
       : null;
+  const activationSuccessRate =
+    counters.onboardingActivationStarted > 0
+      ? Number(
+          (
+            counters.onboardingActivationSucceeded /
+            counters.onboardingActivationStarted
+          ).toFixed(3),
+        )
+      : null;
+  const activationQueuedRate =
+    counters.onboardingActivationStarted > 0
+      ? Number(
+          (
+            counters.onboardingActivationQueued /
+            counters.onboardingActivationStarted
+          ).toFixed(3),
+        )
+      : null;
+  const activationFailureRate =
+    counters.onboardingActivationStarted > 0
+      ? Number(
+          (
+            counters.onboardingActivationFailed /
+            counters.onboardingActivationStarted
+          ).toFixed(3),
+        )
+      : null;
+
+  const activationCompletionEvents = events.filter(
+    (event) => event.name === "onboarding_activation_succeeded",
+  );
+  const activationCompletionDurationsSeconds = activationCompletionEvents
+    .map((event) => readEventNumberProperty(event, "elapsedMs"))
+    .filter((value): value is number => value != null && value >= 0)
+    .map((value) => Math.round(value / 1000));
+  const avgActivationCompletionSeconds =
+    activationCompletionDurationsSeconds.length > 0
+      ? Math.round(
+          activationCompletionDurationsSeconds.reduce(
+            (sum, current) => sum + current,
+            0,
+          ) / activationCompletionDurationsSeconds.length,
+        )
+      : null;
 
   return {
     totalEvents: events.length,
@@ -434,6 +512,10 @@ export async function getTelemetrySummary(
       moderationIncidentRate,
       repeatConnectionRate,
       syncFailureRate,
+      activationSuccessRate,
+      activationQueuedRate,
+      activationFailureRate,
+      avgActivationCompletionSeconds,
     },
   };
 }
