@@ -86,11 +86,13 @@ export type ParsedOnboardingInference = z.infer<
 
 export interface OpenAIClientOptions {
   apiKey: string;
+  baseURL?: string;
   defaultModel?: string;
   timeoutMs?: number;
   maxRetries?: number;
   modelRouting?: Partial<Record<OpenAIRoutingTask, string>>;
   failureStore?: OpenAIFailureStore;
+  providerName?: string;
 }
 
 interface OpenAIBudgetPolicy {
@@ -156,6 +158,7 @@ export class OpenAIClient {
   private readonly failureStore: OpenAIFailureStore;
   private readonly tracer = trace.getTracer("@opensocial/openai");
   private readonly instanceId: string;
+  private readonly providerName: string;
   private readonly budgetPolicy: OpenAIBudgetPolicy;
   private readonly budgetRuntime: OpenAIBudgetRuntimeState = {
     consecutiveFailures: 0,
@@ -167,6 +170,7 @@ export class OpenAIClient {
   constructor(options: OpenAIClientOptions) {
     this.client = new OpenAI({
       apiKey: options.apiKey,
+      baseURL: options.baseURL,
       timeout: options.timeoutMs ?? 15_000,
       maxRetries: options.maxRetries ?? 3,
     });
@@ -187,9 +191,10 @@ export class OpenAIClient {
       {} as Record<OpenAIRoutingTask, string>,
     );
 
-    this.apiEnabled = Boolean(options.apiKey);
+    this.apiEnabled = Boolean(options.apiKey || options.baseURL);
     this.failureStore = options.failureStore ?? new OpenAIFailureStore();
     this.instanceId = `openai-client-${++openAIClientInstanceCounter}`;
+    this.providerName = options.providerName ?? "openai";
     this.budgetPolicy = {
       maxResponseChars: this.readNumberEnv(
         "OPENAI_RESPONSE_MAX_OUTPUT_CHARS",
@@ -451,7 +456,7 @@ export class OpenAIClient {
       const startedAt = Date.now();
       if (this.detectPromptInjection(rawText)) {
         console.warn(
-          `[openai:onboarding] prompt injection detected traceId=${traceId} durationMs=${Date.now() - startedAt}`,
+          `[openai:onboarding] prompt injection detected provider=${this.providerName} traceId=${traceId} durationMs=${Date.now() - startedAt}`,
         );
         this.captureFailure({
           task: "onboarding_inference",
@@ -466,7 +471,7 @@ export class OpenAIClient {
 
       if (!this.apiEnabled) {
         console.warn(
-          `[openai:onboarding] api disabled traceId=${traceId} durationMs=${Date.now() - startedAt}`,
+          `[openai:onboarding] api disabled provider=${this.providerName} traceId=${traceId} durationMs=${Date.now() - startedAt}`,
         );
         return null;
       }
@@ -488,7 +493,7 @@ export class OpenAIClient {
         const text = response.output_text?.trim();
         if (!text) {
           console.warn(
-            `[openai:onboarding] empty output traceId=${traceId} model=${model} durationMs=${Date.now() - startedAt}`,
+            `[openai:onboarding] empty output provider=${this.providerName} traceId=${traceId} model=${model} durationMs=${Date.now() - startedAt}`,
           );
           this.captureFailure({
             task: "onboarding_inference",
@@ -504,12 +509,12 @@ export class OpenAIClient {
         try {
           const parsed = onboardingInferResponseSchema.parse(JSON.parse(text));
           console.log(
-            `[openai:onboarding] success traceId=${traceId} model=${model} durationMs=${Date.now() - startedAt} hasPersona=${Boolean(parsed.persona)} hasFollowUp=${Boolean(parsed.followUpQuestion?.trim())}`,
+            `[openai:onboarding] success provider=${this.providerName} traceId=${traceId} model=${model} durationMs=${Date.now() - startedAt} hasPersona=${Boolean(parsed.persona)} hasFollowUp=${Boolean(parsed.followUpQuestion?.trim())}`,
           );
           return parsed;
         } catch (error) {
           console.warn(
-            `[openai:onboarding] schema parse failed traceId=${traceId} model=${model} durationMs=${Date.now() - startedAt} error=${error instanceof Error ? error.message : "parse_error"}`,
+            `[openai:onboarding] schema parse failed provider=${this.providerName} traceId=${traceId} model=${model} durationMs=${Date.now() - startedAt} error=${error instanceof Error ? error.message : "parse_error"}`,
           );
           this.captureFailure({
             task: "onboarding_inference",
@@ -526,7 +531,7 @@ export class OpenAIClient {
         }
       } catch (error) {
         console.error(
-          `[openai:onboarding] request failed traceId=${traceId} model=${model} durationMs=${Date.now() - startedAt} error=${error instanceof Error ? error.message : "request_failed_unknown"}`,
+          `[openai:onboarding] request failed provider=${this.providerName} traceId=${traceId} model=${model} durationMs=${Date.now() - startedAt} error=${error instanceof Error ? error.message : "request_failed_unknown"}`,
         );
         this.captureFailure({
           task: "onboarding_inference",

@@ -63,6 +63,10 @@ REMOTE_SCRIPT
 }
 
 sync_remote_env_var "OPENAI_API_KEY" "${OPENAI_API_KEY:-}"
+sync_remote_env_var "ONBOARDING_LLM_PROVIDER" "${ONBOARDING_LLM_PROVIDER:-}"
+sync_remote_env_var "ONBOARDING_LLM_BASE_URL" "${ONBOARDING_LLM_BASE_URL:-}"
+sync_remote_env_var "ONBOARDING_LLM_API_KEY" "${ONBOARDING_LLM_API_KEY:-}"
+sync_remote_env_var "ONBOARDING_LLM_MODEL" "${ONBOARDING_LLM_MODEL:-}"
 sync_remote_env_var "DATABASE_URL" "${DATABASE_URL:-}"
 sync_remote_env_var "GOOGLE_CLIENT_ID" "${GOOGLE_CLIENT_ID:-}"
 sync_remote_env_var "GOOGLE_CLIENT_SECRET" "${GOOGLE_CLIENT_SECRET:-}"

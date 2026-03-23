@@ -56,6 +56,45 @@ describe("Deployment pipeline artifacts", () => {
     );
   });
 
+  it("passes onboarding LLM provider env into deploy/rollback jobs", () => {
+    expect(stagingWorkflow).toContain(
+      "ONBOARDING_LLM_PROVIDER: ${{ secrets.ONBOARDING_LLM_PROVIDER }}",
+    );
+    expect(stagingWorkflow).toContain(
+      "ONBOARDING_LLM_BASE_URL: ${{ secrets.ONBOARDING_LLM_BASE_URL }}",
+    );
+    expect(stagingWorkflow).toContain(
+      "ONBOARDING_LLM_API_KEY: ${{ secrets.ONBOARDING_LLM_API_KEY }}",
+    );
+    expect(stagingWorkflow).toContain(
+      "ONBOARDING_LLM_MODEL: ${{ secrets.ONBOARDING_LLM_MODEL }}",
+    );
+    expect(productionWorkflow).toContain(
+      "ONBOARDING_LLM_PROVIDER: ${{ secrets.ONBOARDING_LLM_PROVIDER }}",
+    );
+    expect(productionWorkflow).toContain(
+      "ONBOARDING_LLM_BASE_URL: ${{ secrets.ONBOARDING_LLM_BASE_URL }}",
+    );
+    expect(productionWorkflow).toContain(
+      "ONBOARDING_LLM_API_KEY: ${{ secrets.ONBOARDING_LLM_API_KEY }}",
+    );
+    expect(productionWorkflow).toContain(
+      "ONBOARDING_LLM_MODEL: ${{ secrets.ONBOARDING_LLM_MODEL }}",
+    );
+    expect(rollbackWorkflow).toContain(
+      "ONBOARDING_LLM_PROVIDER: ${{ secrets.ONBOARDING_LLM_PROVIDER }}",
+    );
+    expect(rollbackWorkflow).toContain(
+      "ONBOARDING_LLM_BASE_URL: ${{ secrets.ONBOARDING_LLM_BASE_URL }}",
+    );
+    expect(rollbackWorkflow).toContain(
+      "ONBOARDING_LLM_API_KEY: ${{ secrets.ONBOARDING_LLM_API_KEY }}",
+    );
+    expect(rollbackWorkflow).toContain(
+      "ONBOARDING_LLM_MODEL: ${{ secrets.ONBOARDING_LLM_MODEL }}",
+    );
+  });
+
   it("passes DATABASE_URL secret from GitHub Actions into deploy/rollback jobs", () => {
     expect(stagingWorkflow).toContain(
       "DATABASE_URL: ${{ secrets.DATABASE_URL }}",
@@ -128,6 +167,45 @@ describe("Deployment pipeline artifacts", () => {
     expect(stagingScript).toContain('sync_remote_env_var "OPENAI_API_KEY"');
     expect(productionScript).toContain('sync_remote_env_var "OPENAI_API_KEY"');
     expect(rollbackScript).toContain('sync_remote_env_var "OPENAI_API_KEY"');
+  });
+
+  it("syncs onboarding LLM env into runtime env file before compose deploy", () => {
+    expect(stagingScript).toContain(
+      'sync_remote_env_var "ONBOARDING_LLM_PROVIDER"',
+    );
+    expect(stagingScript).toContain(
+      'sync_remote_env_var "ONBOARDING_LLM_BASE_URL"',
+    );
+    expect(stagingScript).toContain(
+      'sync_remote_env_var "ONBOARDING_LLM_API_KEY"',
+    );
+    expect(stagingScript).toContain(
+      'sync_remote_env_var "ONBOARDING_LLM_MODEL"',
+    );
+    expect(productionScript).toContain(
+      'sync_remote_env_var "ONBOARDING_LLM_PROVIDER"',
+    );
+    expect(productionScript).toContain(
+      'sync_remote_env_var "ONBOARDING_LLM_BASE_URL"',
+    );
+    expect(productionScript).toContain(
+      'sync_remote_env_var "ONBOARDING_LLM_API_KEY"',
+    );
+    expect(productionScript).toContain(
+      'sync_remote_env_var "ONBOARDING_LLM_MODEL"',
+    );
+    expect(rollbackScript).toContain(
+      'sync_remote_env_var "ONBOARDING_LLM_PROVIDER"',
+    );
+    expect(rollbackScript).toContain(
+      'sync_remote_env_var "ONBOARDING_LLM_BASE_URL"',
+    );
+    expect(rollbackScript).toContain(
+      'sync_remote_env_var "ONBOARDING_LLM_API_KEY"',
+    );
+    expect(rollbackScript).toContain(
+      'sync_remote_env_var "ONBOARDING_LLM_MODEL"',
+    );
   });
 
   it("syncs DATABASE_URL into runtime env file before compose deploy", () => {
