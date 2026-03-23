@@ -72,6 +72,9 @@ describe("Deployment pipeline artifacts", () => {
     expect(stagingWorkflow).toContain(
       "ONBOARDING_LLM_TIMEOUT_MS: ${{ secrets.ONBOARDING_LLM_TIMEOUT_MS }}",
     );
+    expect(stagingWorkflow).toContain(
+      "ONBOARDING_PROBE_TOKEN: ${{ secrets.ONBOARDING_PROBE_TOKEN }}",
+    );
     expect(productionWorkflow).toContain(
       "ONBOARDING_LLM_PROVIDER: ${{ secrets.ONBOARDING_LLM_PROVIDER }}",
     );
@@ -87,6 +90,9 @@ describe("Deployment pipeline artifacts", () => {
     expect(productionWorkflow).toContain(
       "ONBOARDING_LLM_TIMEOUT_MS: ${{ secrets.ONBOARDING_LLM_TIMEOUT_MS }}",
     );
+    expect(productionWorkflow).toContain(
+      "ONBOARDING_PROBE_TOKEN: ${{ secrets.ONBOARDING_PROBE_TOKEN }}",
+    );
     expect(rollbackWorkflow).toContain(
       "ONBOARDING_LLM_PROVIDER: ${{ secrets.ONBOARDING_LLM_PROVIDER }}",
     );
@@ -101,6 +107,9 @@ describe("Deployment pipeline artifacts", () => {
     );
     expect(rollbackWorkflow).toContain(
       "ONBOARDING_LLM_TIMEOUT_MS: ${{ secrets.ONBOARDING_LLM_TIMEOUT_MS }}",
+    );
+    expect(rollbackWorkflow).toContain(
+      "ONBOARDING_PROBE_TOKEN: ${{ secrets.ONBOARDING_PROBE_TOKEN }}",
     );
   });
 
@@ -194,6 +203,9 @@ describe("Deployment pipeline artifacts", () => {
     expect(stagingScript).toContain(
       'sync_remote_env_var "ONBOARDING_LLM_TIMEOUT_MS"',
     );
+    expect(stagingScript).toContain(
+      'sync_remote_env_var "ONBOARDING_PROBE_TOKEN"',
+    );
     expect(productionScript).toContain(
       'sync_remote_env_var "ONBOARDING_LLM_PROVIDER"',
     );
@@ -209,6 +221,9 @@ describe("Deployment pipeline artifacts", () => {
     expect(productionScript).toContain(
       'sync_remote_env_var "ONBOARDING_LLM_TIMEOUT_MS"',
     );
+    expect(productionScript).toContain(
+      'sync_remote_env_var "ONBOARDING_PROBE_TOKEN"',
+    );
     expect(rollbackScript).toContain(
       'sync_remote_env_var "ONBOARDING_LLM_PROVIDER"',
     );
@@ -223,6 +238,9 @@ describe("Deployment pipeline artifacts", () => {
     );
     expect(rollbackScript).toContain(
       'sync_remote_env_var "ONBOARDING_LLM_TIMEOUT_MS"',
+    );
+    expect(rollbackScript).toContain(
+      'sync_remote_env_var "ONBOARDING_PROBE_TOKEN"',
     );
   });
 
