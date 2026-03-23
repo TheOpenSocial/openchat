@@ -20,7 +20,7 @@ on:
       url:
         description: "Probe endpoint URL"
         required: false
-        default: "https://api.opensocial.so/onboarding/probe"
+        default: "https://api.opensocial.so/api/onboarding/probe"
         type: string
 
 jobs:
@@ -52,4 +52,5 @@ jobs:
           ONBOARDING_BENCH_MODE: ${{ inputs.mode }}
           ONBOARDING_BENCH_RUNS: ${{ inputs.runs }}
           ONBOARDING_BENCH_TIMEOUT_MS: "20000"
+          ONBOARDING_BENCH_DELAY_MS: "350"
         run: pnpm benchmark:onboarding

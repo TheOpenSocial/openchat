@@ -4,7 +4,7 @@
  * Benchmarks onboarding probe latency/quality across fast and rich modes.
  *
  * Required env:
- * - ONBOARDING_BENCH_URL (example: https://api.opensocial.app/onboarding/probe)
+ * - ONBOARDING_BENCH_URL (example: https://api.opensocial.app/api/onboarding/probe)
  * - ONBOARDING_PROBE_TOKEN
  *
  * Optional env:
@@ -18,6 +18,7 @@ const token = process.env.ONBOARDING_PROBE_TOKEN?.trim();
 const runs = Number(process.env.ONBOARDING_BENCH_RUNS ?? 12);
 const mode = (process.env.ONBOARDING_BENCH_MODE ?? "both").trim();
 const timeoutMs = Number(process.env.ONBOARDING_BENCH_TIMEOUT_MS ?? 20_000);
+const delayMs = Number(process.env.ONBOARDING_BENCH_DELAY_MS ?? 350);
 
 if (!url) {
   console.error("Missing ONBOARDING_BENCH_URL");
@@ -137,7 +138,7 @@ function printModeSummary(selectedMode, results) {
 
 async function main() {
   console.log(
-    `benchmark starting url=${url} runs=${runs} mode=${mode} timeoutMs=${timeoutMs}`,
+    `benchmark starting url=${url} runs=${runs} mode=${mode} timeoutMs=${timeoutMs} delayMs=${delayMs}`,
   );
   const all = [];
   for (const selectedMode of modes) {
@@ -152,6 +153,9 @@ async function main() {
       process.stdout.write(
         `[${selectedMode}] run=${i + 1}/${runs} ${status} ${ms}ms\r`,
       );
+      if (delayMs > 0 && i < runs - 1) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
     }
     process.stdout.write("\n");
     printModeSummary(selectedMode, modeResults);
@@ -164,4 +168,3 @@ main().catch((error) => {
   console.error(error);
   process.exit(1);
 });
-
