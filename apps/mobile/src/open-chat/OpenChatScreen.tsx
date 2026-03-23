@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   LayoutAnimation,
   Platform,
   Pressable,
@@ -158,6 +159,13 @@ export function OpenChatScreen({
     onboardingCarryover != null &&
     (phase === "empty" || phase === "active" || !userActive);
 
+  useEffect(() => {
+    if (Platform.OS === "android") {
+      UIManager.setLayoutAnimationEnabledExperimental?.(true);
+    }
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+  }, [showOnboardingCarryover, onboardingCarryover?.state]);
+
   const onThreadAction = (id: string) => {
     hapticSelection();
     switch (id) {
@@ -199,28 +207,41 @@ export function OpenChatScreen({
                 ? t("openChatOnboardingCarryoverQueued", locale)
                 : t("openChatOnboardingCarryoverReady", locale)}
           </Text>
-          {onboardingCarryover.state === "ready" ? (
-            <Pressable
-              className="mt-3 self-start rounded-full border border-white/15 bg-white/[0.06] px-3.5 py-2 active:opacity-80"
-              disabled={sending}
-              onPress={onExecuteOnboardingCarryover}
-            >
-              <Text className="text-[12px] font-semibold tracking-[0.01em] text-white/92">
-                {t("openChatOnboardingCarryoverStartNow", locale)}
-              </Text>
-            </Pressable>
-          ) : null}
-          {onboardingCarryover.state === "queued" ? (
-            <Pressable
-              className="mt-3 self-start rounded-full border border-white/15 bg-white/[0.06] px-3.5 py-2 active:opacity-80"
-              disabled={sending}
-              onPress={onExecuteOnboardingCarryover}
-            >
-              <Text className="text-[12px] font-semibold tracking-[0.01em] text-white/92">
-                {t("openChatOnboardingCarryoverRetry", locale)}
-              </Text>
-            </Pressable>
-          ) : null}
+          <View className="mt-3 min-h-[34px] flex-row items-center">
+            {onboardingCarryover.state === "processing" ? (
+              <View className="flex-row items-center gap-2">
+                <ActivityIndicator
+                  color="rgba(255,255,255,0.72)"
+                  size="small"
+                />
+                <Text className="text-[12px] font-medium text-white/70">
+                  {t("openChatOnboardingCarryoverProcessing", locale)}
+                </Text>
+              </View>
+            ) : null}
+            {onboardingCarryover.state === "ready" ? (
+              <Pressable
+                className="self-start rounded-full border border-white/15 bg-white/[0.06] px-3.5 py-2 active:opacity-80"
+                disabled={sending}
+                onPress={onExecuteOnboardingCarryover}
+              >
+                <Text className="text-[12px] font-semibold tracking-[0.01em] text-white/92">
+                  {t("openChatOnboardingCarryoverStartNow", locale)}
+                </Text>
+              </Pressable>
+            ) : null}
+            {onboardingCarryover.state === "queued" ? (
+              <Pressable
+                className="self-start rounded-full border border-white/15 bg-white/[0.06] px-3.5 py-2 active:opacity-80"
+                disabled={sending}
+                onPress={onExecuteOnboardingCarryover}
+              >
+                <Text className="text-[12px] font-semibold tracking-[0.01em] text-white/92">
+                  {t("openChatOnboardingCarryoverRetry", locale)}
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
         </View>
       ) : null}
 
