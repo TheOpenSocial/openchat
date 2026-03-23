@@ -448,7 +448,11 @@ export class OpenAIClient {
     traceId: string,
   ): Promise<ParsedOnboardingInference | null> {
     return this.runWithOpenAISpan("onboarding_inference", traceId, async () => {
+      const startedAt = Date.now();
       if (this.detectPromptInjection(rawText)) {
+        console.warn(
+          `[openai:onboarding] prompt injection detected traceId=${traceId} durationMs=${Date.now() - startedAt}`,
+        );
         this.captureFailure({
           task: "onboarding_inference",
           traceId,
@@ -461,6 +465,9 @@ export class OpenAIClient {
       }
 
       if (!this.apiEnabled) {
+        console.warn(
+          `[openai:onboarding] api disabled traceId=${traceId} durationMs=${Date.now() - startedAt}`,
+        );
         return null;
       }
 
@@ -480,6 +487,9 @@ export class OpenAIClient {
 
         const text = response.output_text?.trim();
         if (!text) {
+          console.warn(
+            `[openai:onboarding] empty output traceId=${traceId} model=${model} durationMs=${Date.now() - startedAt}`,
+          );
           this.captureFailure({
             task: "onboarding_inference",
             traceId,
@@ -492,8 +502,15 @@ export class OpenAIClient {
         }
 
         try {
-          return onboardingInferResponseSchema.parse(JSON.parse(text));
+          const parsed = onboardingInferResponseSchema.parse(JSON.parse(text));
+          console.log(
+            `[openai:onboarding] success traceId=${traceId} model=${model} durationMs=${Date.now() - startedAt} hasPersona=${Boolean(parsed.persona)} hasFollowUp=${Boolean(parsed.followUpQuestion?.trim())}`,
+          );
+          return parsed;
         } catch (error) {
+          console.warn(
+            `[openai:onboarding] schema parse failed traceId=${traceId} model=${model} durationMs=${Date.now() - startedAt} error=${error instanceof Error ? error.message : "parse_error"}`,
+          );
           this.captureFailure({
             task: "onboarding_inference",
             traceId,
@@ -508,6 +525,9 @@ export class OpenAIClient {
           return null;
         }
       } catch (error) {
+        console.error(
+          `[openai:onboarding] request failed traceId=${traceId} model=${model} durationMs=${Date.now() - startedAt} error=${error instanceof Error ? error.message : "request_failed_unknown"}`,
+        );
         this.captureFailure({
           task: "onboarding_inference",
           traceId,
