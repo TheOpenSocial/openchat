@@ -1250,6 +1250,25 @@ describe("AdminController", () => {
       prisma: {
         auditLog: { count: vi.fn().mockResolvedValue(2) },
         moderationFlag: { count: vi.fn().mockResolvedValue(180) },
+        clientMutation: {
+          findMany: vi.fn().mockResolvedValue([
+            ...Array.from({ length: 6 }, () => ({
+              status: "failed",
+              createdAt: new Date("2026-03-23T12:00:00.000Z"),
+              updatedAt: new Date("2026-03-23T12:00:04.000Z"),
+            })),
+            ...Array.from({ length: 3 }, () => ({
+              status: "processing",
+              createdAt: new Date("2026-03-23T12:00:00.000Z"),
+              updatedAt: new Date("2026-03-23T12:00:00.000Z"),
+            })),
+            ...Array.from({ length: 3 }, () => ({
+              status: "completed",
+              createdAt: new Date("2026-03-23T12:00:00.000Z"),
+              updatedAt: new Date("2026-03-23T12:00:12.000Z"),
+            })),
+          ]),
+        },
       },
     });
 
@@ -1268,6 +1287,13 @@ describe("AdminController", () => {
         expect.objectContaining({ key: "moderation_backlog_high" }),
         expect.objectContaining({ key: "onboarding_fallback_spike" }),
         expect.objectContaining({ key: "onboarding_rich_latency_high" }),
+        expect.objectContaining({ key: "onboarding_activation_failure_high" }),
+        expect.objectContaining({
+          key: "onboarding_activation_processing_high",
+        }),
+        expect.objectContaining({
+          key: "onboarding_activation_latency_high",
+        }),
       ]),
     );
     expect(adminAuditService.recordAction).toHaveBeenCalledWith(

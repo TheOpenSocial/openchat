@@ -227,6 +227,71 @@ export class AdminController {
       process.env.ALERT_ONBOARDING_MIN_CALLS_THRESHOLD,
       10,
     );
+    const onboardingActivationFailureRateThreshold = this.parseThreshold(
+      process.env.ALERT_ONBOARDING_ACTIVATION_FAILURE_RATE_THRESHOLD,
+      0.25,
+    );
+    const onboardingActivationProcessingRateThreshold = this.parseThreshold(
+      process.env.ALERT_ONBOARDING_ACTIVATION_PROCESSING_RATE_THRESHOLD,
+      0.2,
+    );
+    const onboardingActivationMinStartedThreshold = this.parseThreshold(
+      process.env.ALERT_ONBOARDING_ACTIVATION_MIN_STARTED_THRESHOLD,
+      8,
+    );
+
+    const activationRows = this.prisma.clientMutation?.findMany
+      ? await this.prisma.clientMutation.findMany({
+          where: {
+            scope: "intent.create_from_agent",
+            idempotencyKey: {
+              startsWith: "onboarding-carryover:",
+            },
+            createdAt: {
+              gte: new Date(Date.now() - 24 * 60 * 60_000),
+            },
+          },
+          select: {
+            status: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+          take: 5000,
+        })
+      : [];
+    const onboardingActivationStarted = activationRows.length;
+    const onboardingActivationFailed = activationRows.filter(
+      (row) => row.status === "failed",
+    ).length;
+    const onboardingActivationProcessing = activationRows.filter(
+      (row) => row.status === "processing",
+    ).length;
+    const onboardingActivationFailureRate =
+      onboardingActivationStarted === 0
+        ? 0
+        : onboardingActivationFailed / onboardingActivationStarted;
+    const onboardingActivationProcessingRate =
+      onboardingActivationStarted === 0
+        ? 0
+        : onboardingActivationProcessing / onboardingActivationStarted;
+    const onboardingActivationAvgCompletionSecondsThreshold =
+      this.parseThreshold(
+        process.env
+          .ALERT_ONBOARDING_ACTIVATION_AVG_COMPLETION_SECONDS_THRESHOLD,
+        8,
+      );
+    const onboardingActivationCompletionDurations = activationRows
+      .filter((row) => row.status === "completed")
+      .map((row) =>
+        Math.max(0, (row.updatedAt.getTime() - row.createdAt.getTime()) / 1000),
+      );
+    const onboardingActivationAvgCompletionSeconds =
+      onboardingActivationCompletionDurations.length === 0
+        ? null
+        : onboardingActivationCompletionDurations.reduce(
+            (sum, current) => sum + current,
+            0,
+          ) / onboardingActivationCompletionDurations.length;
 
     const queueBacklogAlerts = queueStates
       .filter((queue) => queue.available && queue.counts)
@@ -356,6 +421,57 @@ export class AdminController {
           threshold: onboardingRichP95LatencyThresholdMs,
           calls: mode.calls,
         })),
+      ...(onboardingActivationStarted >=
+        onboardingActivationMinStartedThreshold &&
+      onboardingActivationFailureRate >=
+        onboardingActivationFailureRateThreshold
+        ? [
+            {
+              key: "onboarding_activation_failure_high",
+              status: "triggered" as const,
+              severity: "warning" as const,
+              message: `Onboarding activation failure rate is elevated (${onboardingActivationFailureRate.toFixed(2)} over ${onboardingActivationStarted} executions).`,
+              value: onboardingActivationFailureRate,
+              threshold: onboardingActivationFailureRateThreshold,
+              started: onboardingActivationStarted,
+              failed: onboardingActivationFailed,
+            },
+          ]
+        : []),
+      ...(onboardingActivationStarted >=
+        onboardingActivationMinStartedThreshold &&
+      onboardingActivationProcessingRate >=
+        onboardingActivationProcessingRateThreshold
+        ? [
+            {
+              key: "onboarding_activation_processing_high",
+              status: "triggered" as const,
+              severity: "warning" as const,
+              message: `Onboarding activation processing rate is elevated (${onboardingActivationProcessingRate.toFixed(2)} over ${onboardingActivationStarted} executions).`,
+              value: onboardingActivationProcessingRate,
+              threshold: onboardingActivationProcessingRateThreshold,
+              started: onboardingActivationStarted,
+              processing: onboardingActivationProcessing,
+            },
+          ]
+        : []),
+      ...(onboardingActivationStarted >=
+        onboardingActivationMinStartedThreshold &&
+      onboardingActivationAvgCompletionSeconds != null &&
+      onboardingActivationAvgCompletionSeconds >=
+        onboardingActivationAvgCompletionSecondsThreshold
+        ? [
+            {
+              key: "onboarding_activation_latency_high",
+              status: "triggered" as const,
+              severity: "warning" as const,
+              message: `Onboarding activation completion latency is elevated (${Math.round(onboardingActivationAvgCompletionSeconds)}s average).`,
+              value: onboardingActivationAvgCompletionSeconds,
+              threshold: onboardingActivationAvgCompletionSecondsThreshold,
+              started: onboardingActivationStarted,
+            },
+          ]
+        : []),
     ];
 
     await this.adminAuditService.recordAction({
@@ -383,6 +499,12 @@ export class AdminController {
         status: alerts.length === 0 ? "healthy" : "degraded",
         criticalCount,
         warningCount,
+        onboardingActivation: {
+          started: onboardingActivationStarted,
+          failureRate: onboardingActivationFailureRate,
+          processingRate: onboardingActivationProcessingRate,
+          avgCompletionSeconds: onboardingActivationAvgCompletionSeconds,
+        },
       },
     });
   }
