@@ -14,6 +14,10 @@ type OnboardingInferResponse = z.infer<typeof onboardingInferResponseSchema>;
 @Injectable()
 export class OnboardingService {
   private readonly logger = new Logger(OnboardingService.name);
+  private readonly onboardingTimeoutMs = Math.max(
+    1_000,
+    Number(process.env.ONBOARDING_LLM_TIMEOUT_MS ?? 4_000) || 4_000,
+  );
   private readonly openai = new OpenAIClient(
     process.env.ONBOARDING_LLM_BASE_URL
       ? {
@@ -29,10 +33,22 @@ export class OnboardingService {
                 onboarding_inference: process.env.ONBOARDING_LLM_MODEL,
               }
             : undefined,
+          timeoutMs:
+            Math.max(
+              1_000,
+              Number(process.env.ONBOARDING_LLM_TIMEOUT_MS ?? 4_000) || 4_000,
+            ) || 4_000,
+          maxRetries: 0,
         }
       : {
           apiKey: process.env.OPENAI_API_KEY ?? "",
           providerName: "openai",
+          timeoutMs:
+            Math.max(
+              1_000,
+              Number(process.env.ONBOARDING_LLM_TIMEOUT_MS ?? 4_000) || 4_000,
+            ) || 4_000,
+          maxRetries: 0,
         },
   );
 
@@ -48,7 +64,7 @@ export class OnboardingService {
     const traceId = randomUUID();
     const startedAt = Date.now();
     this.logger.log(
-      `onboarding inference started traceId=${traceId} transcriptChars=${raw.length}`,
+      `onboarding inference started traceId=${traceId} transcriptChars=${raw.length} timeoutMs=${this.onboardingTimeoutMs}`,
     );
 
     const llmInferred = await this.openai.inferOnboarding(raw, traceId);
