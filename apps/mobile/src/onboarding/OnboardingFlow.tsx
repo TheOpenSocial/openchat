@@ -590,9 +590,10 @@ export function OnboardingFlow({
           animateStep(1);
         }
       } catch (error) {
+        console.warn("onboarding inference failed", error);
         Alert.alert(
-          "Onboarding unavailable",
-          `We couldn't interpret that yet. ${String(error)}`,
+          t("onboardingInferenceUnavailableTitle", locale),
+          t("onboardingInferenceUnavailableBody", locale),
           [{ text: "OK" }],
         );
       } finally {
@@ -691,9 +692,10 @@ export function OnboardingFlow({
       hapticSelection();
       animateStep(2);
     } catch (error) {
+      console.warn("onboarding refinement failed", error);
       Alert.alert(
-        "Refinement unavailable",
-        `We couldn't refresh what we understood. ${String(error)}`,
+        t("onboardingRefinementUnavailableTitle", locale),
+        t("onboardingRefinementUnavailableBody", locale),
         [{ text: "OK" }],
       );
     } finally {
