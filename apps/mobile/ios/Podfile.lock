@@ -106,8 +106,6 @@ PODS:
     - ExpoModulesCore
   - ExpoSpeechRecognition (3.1.2):
     - ExpoModulesCore
-  - ExpoSplashScreen (55.0.12):
-    - ExpoModulesCore
   - ExpoVideo (55.0.11):
     - ExpoModulesCore
   - ExpoWebBrowser (55.0.10):
@@ -2176,11 +2174,10 @@ DEPENDENCIES:
   - "ExpoLinearGradient (from `../../../node_modules/.pnpm/expo-linear-gradient@55.0.9_expo@55.0.8_react-native@0.84.1_@babel+core@7.29.0_@react-n_1931219394303bc9d811e593f5c2f22e/node_modules/expo-linear-gradient/ios`)"
   - "ExpoLinking (from `../../../node_modules/.pnpm/expo-linking@55.0.8_expo@55.0.8_react-native@0.84.1_@babel+core@7.29.0_@react-native+me_e603514390da0982af14a41c3f808291/node_modules/expo-linking/ios`)"
   - "ExpoLogBox (from `../../../node_modules/.pnpm/@expo+log-box@55.0.7_@expo+dom-webview@55.0.3_expo@55.0.8_react-native@0.84.1_@babel+co_c44543d39d694ecaa425d7faed46e9c7/node_modules/@expo/log-box`)"
-  - "ExpoModulesCore (from `../../../node_modules/.pnpm/expo-modules-core@55.0.17_patch_hash=85d16df82b283b009c2157cf249795d746a6306c73a609751b_6223b12c026d5af1d58b68aa60a849c0/node_modules/expo-modules-core`)"
-  - "ExpoModulesJSI (from `../../../node_modules/.pnpm/expo-modules-core@55.0.17_patch_hash=85d16df82b283b009c2157cf249795d746a6306c73a609751b_6223b12c026d5af1d58b68aa60a849c0/node_modules/expo-modules-core`)"
+  - "ExpoModulesCore (from `../../../node_modules/.pnpm/expo-modules-core@55.0.17_patch_hash=102afd83ec9e724e51134661fadf4c87af5af431ba7e76540b_fe81e5bf072f24b693ecfb6d5e8007d0/node_modules/expo-modules-core`)"
+  - "ExpoModulesJSI (from `../../../node_modules/.pnpm/expo-modules-core@55.0.17_patch_hash=102afd83ec9e724e51134661fadf4c87af5af431ba7e76540b_fe81e5bf072f24b693ecfb6d5e8007d0/node_modules/expo-modules-core`)"
   - "ExpoNotifications (from `../../../node_modules/.pnpm/expo-notifications@55.0.13_expo@55.0.8_react-native@0.84.1_@babel+core@7.29.0_@react-na_2347319c122c36a7c3a65443ff3c52b8/node_modules/expo-notifications/ios`)"
   - "ExpoSpeechRecognition (from `../../../node_modules/.pnpm/expo-speech-recognition@3.1.2_expo@55.0.8_react-native@0.84.1_@babel+core@7.29.0_@react_c6361dbc577678568a629d401c01c1bf/node_modules/expo-speech-recognition/ios`)"
-  - "ExpoSplashScreen (from `../../../node_modules/.pnpm/expo-splash-screen@55.0.12_expo@55.0.8_typescript@5.9.3/node_modules/expo-splash-screen/ios`)"
   - "ExpoVideo (from `../../../node_modules/.pnpm/expo-video@55.0.11_expo@55.0.8_react-native@0.84.1_@babel+core@7.29.0_@react-native+met_f2c307d176d9f2e14a6d011527a5a810/node_modules/expo-video/ios`)"
   - "ExpoWebBrowser (from `../../../node_modules/.pnpm/expo-web-browser@55.0.10_expo@55.0.8_react-native@0.84.1_@babel+core@7.29.0_@react-nati_f641468eff32c68b41f3b0a63550fd6c/node_modules/expo-web-browser/ios`)"
   - "FBLazyVector (from `../../../node_modules/.pnpm/react-native@0.84.1_@babel+core@7.29.0_@react-native+metro-config@0.84.1_@babel+core@7._79162df336668a7ab8e14703ae8c9b8f/node_modules/react-native/Libraries/FBLazyVector`)"
@@ -2299,15 +2296,13 @@ EXTERNAL SOURCES:
   ExpoLogBox:
     :path: "../../../node_modules/.pnpm/@expo+log-box@55.0.7_@expo+dom-webview@55.0.3_expo@55.0.8_react-native@0.84.1_@babel+co_c44543d39d694ecaa425d7faed46e9c7/node_modules/@expo/log-box"
   ExpoModulesCore:
-    :path: "../../../node_modules/.pnpm/expo-modules-core@55.0.17_patch_hash=85d16df82b283b009c2157cf249795d746a6306c73a609751b_6223b12c026d5af1d58b68aa60a849c0/node_modules/expo-modules-core"
+    :path: "../../../node_modules/.pnpm/expo-modules-core@55.0.17_patch_hash=102afd83ec9e724e51134661fadf4c87af5af431ba7e76540b_fe81e5bf072f24b693ecfb6d5e8007d0/node_modules/expo-modules-core"
   ExpoModulesJSI:
-    :path: "../../../node_modules/.pnpm/expo-modules-core@55.0.17_patch_hash=85d16df82b283b009c2157cf249795d746a6306c73a609751b_6223b12c026d5af1d58b68aa60a849c0/node_modules/expo-modules-core"
+    :path: "../../../node_modules/.pnpm/expo-modules-core@55.0.17_patch_hash=102afd83ec9e724e51134661fadf4c87af5af431ba7e76540b_fe81e5bf072f24b693ecfb6d5e8007d0/node_modules/expo-modules-core"
   ExpoNotifications:
     :path: "../../../node_modules/.pnpm/expo-notifications@55.0.13_expo@55.0.8_react-native@0.84.1_@babel+core@7.29.0_@react-na_2347319c122c36a7c3a65443ff3c52b8/node_modules/expo-notifications/ios"
   ExpoSpeechRecognition:
     :path: "../../../node_modules/.pnpm/expo-speech-recognition@3.1.2_expo@55.0.8_react-native@0.84.1_@babel+core@7.29.0_@react_c6361dbc577678568a629d401c01c1bf/node_modules/expo-speech-recognition/ios"
-  ExpoSplashScreen:
-    :path: "../../../node_modules/.pnpm/expo-splash-screen@55.0.12_expo@55.0.8_typescript@5.9.3/node_modules/expo-splash-screen/ios"
   ExpoVideo:
     :path: "../../../node_modules/.pnpm/expo-video@55.0.11_expo@55.0.8_react-native@0.84.1_@babel+core@7.29.0_@react-native+met_f2c307d176d9f2e14a6d011527a5a810/node_modules/expo-video/ios"
   ExpoWebBrowser:
@@ -2490,7 +2485,6 @@ SPEC CHECKSUMS:
   ExpoModulesJSI: 7345645083e98be9c33c10027601aff2e445ba72
   ExpoNotifications: 6936e06a76246e881fcf862ef8b31079d957e092
   ExpoSpeechRecognition: 3e416e568451e62678e8085469bcaff557b0b2b9
-  ExpoSplashScreen: 755302759fbcf4af56b8ad5fb76e535dcf812f91
   ExpoVideo: ba3b3de16404dd6affe10e04c1856dc05a8cc600
   ExpoWebBrowser: 04fdc3b0619d6708f931a9d0f8850903cc38d896
   FBLazyVector: e97c19a5a442429d1988f182a1940fb08df514da

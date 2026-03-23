@@ -24,6 +24,7 @@ It is organized as a production-grade build checklist with:
 Last verified: 2026-03-20
 
 ## Implementation Notes
+- 2026-03-22: Logged TP-01 in the mobile onboarding transition queue to address first-to-second onboarding page smoothness on low-end/low-frame-rate devices before continuing subsequent onboarding polish.
 - 2026-03-22: Shipped the first real client resilience slice across mobile + web. Added bounded transient retry/backoff and typed offline/transient API errors in both client API layers, mobile persistent offline outbox + replay for composer sends and profile/settings writes, reconnect-triggered agent-thread refresh, pending queued-action UX on mobile, and offline-aware bootstrap/auth restoration on both clients using cached completion state.
 - 2026-03-22: Closed the replay-safety gap with a durable backend `client_mutations` ledger, `Idempotency-Key` handling on intent/profile/global-rules/agent respond endpoints, and stable outbox item ids forwarded from mobile replay paths so reconnects and app restarts do not duplicate core mutations.
 - 2026-03-22: Audited client connectivity resilience. Web/mobile already detect online/offline state and block intent/chat sends while offline, and auth refresh uses an in-flight guard, but there is not yet a first-class client outbox, transient retry/backoff policy, or resumable SSE/chat sync recovery layer. Added a dedicated pending lane to track offline/retry hardening before broader mobile/web scale-up.
@@ -1381,6 +1382,8 @@ Production rollout is approved only when:
 - [x] `F-03` Admin moderation operations UI over risk flags + audit logs.
 - [x] `F-04` Shared i18n productionization across all clients.
 - [x] `F-05` Client JWT refresh/session continuity: implement automatic `POST /auth/refresh` handling on access-token expiry (401), retry original request once, rotate stored session tokens, and force sign-out on refresh failure across mobile/web/admin clients.
+- [~] (TP-01) Smooth the mobile onboarding navigation between page 1 and page 2 with a consistent transition so the screen changes are fluid on low-end devices.
+- [ ] `F-06` Add onboarding onboarding voice feedback UI so users see the soundwave/voice-level visual while recording.
 - [x] `D-01` Keep dependency currency cadence (`pnpm deps:outdated`) and upgrade latest runtime/security-safe versions by lane.
 
 ---

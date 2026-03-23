@@ -3,16 +3,19 @@ import {
   useSpeechRecognitionEvent,
 } from "expo-speech-recognition";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { useCallback, useState } from "react";
-import { Alert, Pressable, Text } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Animated } from "react-native";
+import { Alert, Pressable, View } from "react-native";
 
 import { cn } from "../lib/cn";
 import { appTheme } from "../theme";
+import { VoiceWaveform } from "./VoiceWaveform";
 
 export interface VoiceMicButtonImplProps {
   disabled?: boolean;
   onFinalTranscript: (text: string) => void;
   onListeningChange?: (listening: boolean) => void;
+  onVolumeChange?: (level: number) => void;
   voiceEnabled?: boolean;
   className?: string;
   iconSize?: number;
@@ -22,6 +25,8 @@ export interface VoiceMicButtonImplProps {
   activeLabel?: string;
   iconColorIdle?: string;
   iconColorActive?: string;
+  liveLevel?: number;
+  showLiveIndicator?: boolean;
 }
 
 export function VoiceMicButtonImpl({
@@ -34,11 +39,16 @@ export function VoiceMicButtonImpl({
   iconColorIdle = appTheme.colors.muted,
   iconSize = 22,
   label,
+  liveLevel = -2,
   onFinalTranscript,
   onListeningChange,
+  onVolumeChange,
+  showLiveIndicator = false,
   voiceEnabled = true,
 }: VoiceMicButtonImplProps) {
   const [listening, setListening] = useState(false);
+  const indicatorOpacity = useRef(new Animated.Value(0)).current;
+  const labelOpacity = useRef(new Animated.Value(1)).current;
 
   const updateListening = useCallback(
     (next: boolean) => {
@@ -47,6 +57,22 @@ export function VoiceMicButtonImpl({
     },
     [onListeningChange],
   );
+
+  useEffect(() => {
+    Animated.timing(indicatorOpacity, {
+      toValue: listening && showLiveIndicator ? 1 : 0,
+      duration: listening ? 140 : 180,
+      useNativeDriver: true,
+    }).start();
+  }, [indicatorOpacity, listening, showLiveIndicator]);
+
+  useEffect(() => {
+    Animated.timing(labelOpacity, {
+      toValue: listening ? 0.9 : 1,
+      duration: listening ? 140 : 180,
+      useNativeDriver: true,
+    }).start();
+  }, [labelOpacity, listening]);
 
   useSpeechRecognitionEvent("result", (event) => {
     const line = event.results[0]?.transcript?.trim();
@@ -65,11 +91,17 @@ export function VoiceMicButtonImpl({
   });
 
   useSpeechRecognitionEvent("error", () => {
+    onVolumeChange?.(-2);
     updateListening(false);
   });
 
   useSpeechRecognitionEvent("end", () => {
+    onVolumeChange?.(-2);
     updateListening(false);
+  });
+
+  useSpeechRecognitionEvent("volumechange", (event) => {
+    onVolumeChange?.(event.value);
   });
 
   const toggle = useCallback(async () => {
@@ -82,6 +114,7 @@ export function VoiceMicButtonImpl({
       } catch {
         /* ignore */
       }
+      onVolumeChange?.(-2);
       updateListening(false);
       return;
     }
@@ -103,8 +136,13 @@ export function VoiceMicButtonImpl({
         continuous: false,
         interimResults: true,
         lang: "en-US",
+        volumeChangeEventOptions: {
+          enabled: true,
+          intervalMillis: 90,
+        },
       });
     } catch {
+      onVolumeChange?.(-2);
       updateListening(false);
       Alert.alert(
         "Voice input unavailable",
@@ -112,7 +150,7 @@ export function VoiceMicButtonImpl({
         [{ text: "OK" }],
       );
     }
-  }, [disabled, listening, updateListening, voiceEnabled]);
+  }, [disabled, listening, onVolumeChange, updateListening, voiceEnabled]);
 
   if (!voiceEnabled) {
     return null;
@@ -127,14 +165,21 @@ export function VoiceMicButtonImpl({
       accessibilityState={{ selected: listening }}
       className={cn(
         label
-          ? "mb-0 flex-row items-center justify-center gap-2 rounded-full px-5 py-4 active:opacity-85"
-          : "mb-1 h-9 w-9 items-center justify-center rounded-full active:opacity-85",
+          ? "mb-0 flex-row items-center justify-center gap-2 rounded-full px-5 py-4"
+          : "mb-1 h-9 w-9 items-center justify-center rounded-full",
         listening ? "bg-accentMuted" : "bg-transparent",
         className,
       )}
       disabled={disabled}
       hitSlop={8}
       onPress={() => void toggle()}
+      style={({ pressed }) => ({
+        transform: [
+          {
+            scale: pressed && !disabled ? (listening ? 0.985 : 0.975) : 1,
+          },
+        ],
+      })}
       testID="composer-voice-button"
     >
       <Ionicons
@@ -143,14 +188,32 @@ export function VoiceMicButtonImpl({
         size={iconSize}
       />
       {label ? (
-        <Text
-          className="text-[15px] font-medium"
-          style={{
-            color: listening ? iconColorActive : iconColorIdle,
-          }}
-        >
-          {listening ? (activeLabel ?? label) : label}
-        </Text>
+        <View className="flex-1 flex-row items-center justify-center">
+          {showLiveIndicator ? (
+            <Animated.View
+              className="mr-2"
+              style={{
+                opacity: indicatorOpacity,
+                width: 44,
+              }}
+            >
+              <VoiceWaveform
+                bars={13}
+                level={liveLevel}
+                listening={listening}
+              />
+            </Animated.View>
+          ) : null}
+          <Animated.Text
+            className="text-[15px] font-medium"
+            style={{
+              color: listening ? iconColorActive : iconColorIdle,
+              opacity: labelOpacity,
+            }}
+          >
+            {listening ? (activeLabel ?? label) : label}
+          </Animated.Text>
+        </View>
       ) : null}
     </Pressable>
   );

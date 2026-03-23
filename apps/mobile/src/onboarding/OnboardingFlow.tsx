@@ -19,6 +19,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { CalmTextField } from "../components/CalmTextField";
 import { InlineNotice } from "../components/InlineNotice";
 import { PrimaryButton } from "../components/PrimaryButton";
+import { PremiumSpinner } from "../components/PremiumSpinner";
 import { SystemBlobAnimation } from "../components/SystemBlobAnimation";
 import { VoiceMicButton } from "../components/VoiceMicButton";
 import { type AppLocale, t } from "../i18n/strings";
@@ -133,6 +134,7 @@ export function OnboardingFlow({
   const [expressionDraft, setExpressionDraft] = useState("");
   const [processing, setProcessing] = useState(false);
   const [voiceListening, setVoiceListening] = useState(false);
+  const [voiceLevel, setVoiceLevel] = useState(-2);
   const [topicQuery] = useState("");
   const [topicSuggestions, setTopicSuggestions] = useState<string[]>([]);
   const [countryFocused, setCountryFocused] = useState(false);
@@ -144,6 +146,7 @@ export function OnboardingFlow({
   const ripple = useRef(new Animated.Value(0)).current;
   const systemScale = useRef(new Animated.Value(1)).current;
   const systemOpacity = useRef(new Animated.Value(0.82)).current;
+  const processingOpacity = useRef(new Animated.Value(0)).current;
   const lottieRef = useRef<{ pause?: () => void; play?: () => void } | null>(
     null,
   );
@@ -221,6 +224,7 @@ export function OnboardingFlow({
 
   useEffect(() => {
     if (!voiceListening) {
+      setVoiceLevel(-2);
       ripple.stopAnimation();
       ripple.setValue(0);
       return;
@@ -264,6 +268,15 @@ export function OnboardingFlow({
     }
   }, [systemOpacity, systemScale, voiceListening]);
 
+  useEffect(() => {
+    Animated.timing(processingOpacity, {
+      toValue: processing ? 1 : 0,
+      duration: processing ? 170 : 220,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [processing, processingOpacity]);
+
   const stepIndex = draft.stepIndex;
   const progress = (stepIndex + 1) / ONBOARDING_STEP_COUNT;
 
@@ -281,31 +294,31 @@ export function OnboardingFlow({
       Animated.parallel([
         Animated.timing(fade, {
           toValue: 0,
-          duration: 210,
+          duration: 180,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }),
         Animated.timing(translateY, {
-          toValue: 6,
-          duration: 210,
+          toValue: 3,
+          duration: 180,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }),
       ]).start(() => {
         patch({ stepIndex: next });
         fade.setValue(0);
-        translateY.setValue(10);
+        translateY.setValue(4);
         requestAnimationFrame(() => {
           Animated.parallel([
             Animated.timing(fade, {
               toValue: 1,
-              duration: 320,
+              duration: 280,
               easing: Easing.out(Easing.cubic),
               useNativeDriver: true,
             }),
             Animated.timing(translateY, {
               toValue: 0,
-              duration: 320,
+              duration: 280,
               easing: Easing.out(Easing.cubic),
               useNativeDriver: true,
             }),
@@ -1012,10 +1025,10 @@ export function OnboardingFlow({
   const footer =
     stepIndex === 0 ? (
       <View className="gap-4">
-        <View className="items-center">
-          <Text className="text-[13px] text-white/40">
+        <View className="items-center justify-center" style={{ minHeight: 34 }}>
+          <Text className="text-[12px] text-white/32">
             {voiceListening
-              ? t("onboardingEntryListening", locale)
+              ? t("onboardingIntakeVoiceHint", locale)
               : t("onboardingIntakeVoiceHint", locale)}
           </Text>
           {!speechRecognitionAvailable() ? (
@@ -1037,19 +1050,46 @@ export function OnboardingFlow({
             label={t("onboardingHybridPrimaryVoice", locale)}
             onFinalTranscript={(text) => {
               setVoiceListening(false);
+              setVoiceLevel(-2);
               void runInference(text);
             }}
             onListeningChange={setVoiceListening}
+            onVolumeChange={setVoiceLevel}
+            liveLevel={voiceLevel}
+            showLiveIndicator
           />
         </View>
 
-        {processing ? (
-          <View className="items-center px-3 py-1">
-            <Text className="text-center text-[14px] leading-[22px] text-white/48">
-              {t("onboardingHybridProcessing", locale)}
-            </Text>
+        <Animated.View
+          className="items-center px-3 py-1"
+          style={{
+            minHeight: 52,
+            opacity: processingOpacity,
+            transform: [
+              {
+                translateY: processingOpacity.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [4, 0],
+                }),
+              },
+            ],
+          }}
+        >
+          <View className="flex-row items-center gap-3 rounded-full border border-white/[0.08] bg-white/[0.03] px-4 py-2.5">
+            {processing ? (
+              <>
+                <PremiumSpinner />
+                <Text className="text-center text-[14px] leading-[22px] text-white/56">
+                  {t("onboardingHybridProcessing", locale)}
+                </Text>
+              </>
+            ) : (
+              <Text className="text-center text-[14px] leading-[22px] text-transparent">
+                {t("onboardingHybridProcessing", locale)}
+              </Text>
+            )}
           </View>
-        ) : null}
+        </Animated.View>
 
         <Pressable
           accessibilityRole="button"

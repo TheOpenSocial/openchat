@@ -35,6 +35,8 @@ const catalogs = {
       "Speak once, and we’ll start shaping your onboarding around what matters.",
     onboardingEntryManual: "Continue manually",
     onboardingEntryListening: "Listening",
+    onboardingEntryWaitingForVoice: "Waiting for your voice",
+    onboardingEntryVoiceDetected: "Voice detected",
     onboardingEntryVoiceUnavailable:
       "Voice requires a dev build with speech recognition enabled.",
     onboardingHybridTitle: "Start with intent.",
@@ -318,6 +320,8 @@ const catalogs = {
       "Habla una vez y empezaremos a armar tu onboarding alrededor de lo que importa.",
     onboardingEntryManual: "Continuar manualmente",
     onboardingEntryListening: "Escuchando",
+    onboardingEntryWaitingForVoice: "Esperando tu voz",
+    onboardingEntryVoiceDetected: "Voz detectada",
     onboardingEntryVoiceUnavailable:
       "La voz requiere un dev build con reconocimiento activado.",
     onboardingHybridTitle: "Empieza con intención.",
