@@ -1,17 +1,9 @@
 import { StatusBar } from "expo-status-bar";
-import {
-  lazy,
-  type LazyExoticComponent,
-  type FC,
-  Suspense,
-  useMemo,
-  useState,
-} from "react";
+import { useMemo, useState } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { AnimatedScreen } from "../components/AnimatedScreen";
 import { AppToastHost } from "../components/AppToastHost";
-import { LoadingState } from "../components/LoadingState";
 import { type AppLocale, t } from "../i18n/strings";
 import {
   DESIGN_MOCK_AUTH_CODE,
@@ -25,12 +17,8 @@ import {
 import { OnboardingFlow } from "../onboarding/OnboardingFlow";
 import { MobileSession, UserProfileDraft } from "../types";
 import { AuthScreen } from "./AuthScreen";
-import type { HomeScreenProps } from "./HomeScreen";
+import { HomeScreen } from "./HomeScreen";
 import { WelcomeScreen } from "./WelcomeScreen";
-
-const HomeScreen: LazyExoticComponent<FC<HomeScreenProps>> = lazy(() =>
-  import("./HomeScreen").then((m) => ({ default: m.HomeScreen })),
-);
 
 type DesignMockStage = "welcome" | "auth" | "onboarding" | "home";
 
@@ -121,21 +109,15 @@ export function DesignMockApp() {
             />
           ) : null}
           {stage === "home" && session ? (
-            <Suspense
-              fallback={<LoadingState label={t("loadingYourSpace", locale)} />}
-            >
-              <HomeScreen
-                designMock
-                initialAgentMessage={homeAgentSeedMessage}
-                initialProfile={profile}
-                onInitialAgentMessageConsumed={() =>
-                  setHomeAgentSeedMessage(null)
-                }
-                onProfileUpdated={setProfile}
-                onResetSession={handleResetSession}
-                session={session}
-              />
-            </Suspense>
+            <HomeScreen
+              designMock
+              initialAgentMessage={homeAgentSeedMessage}
+              initialProfile={profile}
+              onInitialAgentMessageConsumed={() => setHomeAgentSeedMessage(null)}
+              onProfileUpdated={setProfile}
+              onResetSession={handleResetSession}
+              session={session}
+            />
           ) : null}
         </AnimatedScreen>
       )}

@@ -177,7 +177,7 @@ export function OpenChatScreen({
   };
 
   return (
-    <View className="min-h-0 flex-1 bg-[#060607] px-4 pb-1 pt-1">
+    <View className="min-h-0 flex-1 bg-[#060607] px-4 pb-1 pt-2">
       <OpenChatHeader locale={locale} showPresence={!userActive} />
 
       <ThreadContextStrip hint={progressHint} phase={phase} />
@@ -210,14 +210,14 @@ export function OpenChatScreen({
           />
         </View>
       ) : (
-        <View className="min-h-0 flex-1 justify-center py-6">
-          <Text className="text-center text-[26px] font-semibold tracking-tight text-white">
+        <View className="min-h-0 flex-1 justify-center py-8">
+          <Text className="text-center text-[28px] font-semibold tracking-tight text-white">
             {t("openChatEmptyTitle", locale)}
           </Text>
-          <Text className="mt-3 text-center text-[15px] leading-[22px] text-white/48">
+          <Text className="mt-3 max-w-[280px] self-center text-center text-[15px] leading-[22px] text-white/44">
             {t("openChatEmptySubtitle", locale)}
           </Text>
-          <View className="mt-8">
+          <View className="mt-9">
             <StarterPrompts
               onPick={(text) => {
                 setDraftMessage(text);
@@ -228,18 +228,18 @@ export function OpenChatScreen({
       )}
 
       {userActive && messages.length <= 6 ? (
-        <View className="mb-2 mt-1">
-          <Text className="mb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-white/32">
+        <View className="mb-2 mt-2">
+          <Text className="mb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-white/28">
             {t("openChatSuggestions", locale)}
           </Text>
           <View className="flex-row flex-wrap gap-2">
             {inlineChips.map((c) => (
               <Pressable
-                className="rounded-full border border-white/[0.09] bg-white/[0.04] px-3 py-1.5"
+                className="rounded-full border border-white/[0.07] bg-white/[0.025] px-3 py-1.5"
                 key={c.label}
                 onPress={() => setDraftMessage(c.body)}
               >
-                <Text className="text-[12px] font-medium text-white/55">
+                <Text className="text-[12px] font-medium text-white/50">
                   {c.label}
                 </Text>
               </Pressable>
@@ -250,7 +250,7 @@ export function OpenChatScreen({
 
       <ThreadActionPills actions={threadActions} onAction={onThreadAction} />
 
-      <View className="flex-shrink-0 border-t border-white/[0.07] pt-3">
+      <View className="flex-shrink-0 border-t border-white/[0.06] pt-3">
         <AgentIntentToolbar
           canRegenerate={canRegenerate}
           loading={sending}
@@ -262,7 +262,7 @@ export function OpenChatScreen({
           className="mb-2 mt-1 self-start py-1"
           onPress={() => setToolsOpen((o) => !o)}
         >
-          <Text className="text-[12px] text-white/35">
+          <Text className="text-[12px] text-white/28">
             {toolsOpen
               ? t("openChatHideOptions", locale)
               : t("openChatMoreOptions", locale)}
@@ -300,7 +300,7 @@ export function OpenChatScreen({
                 : t("agentComposerHintIntent", locale)}
             </Text>
             {composerMode === "intent" ? (
-              <View className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2">
+              <View className="rounded-[22px] border border-white/[0.08] bg-white/[0.025] px-3 py-2.5">
                 <Pressable
                   className="mb-2 flex-row items-center justify-between"
                   onPress={() => onDecomposeIntentChange(!decomposeIntent)}
@@ -362,7 +362,7 @@ export function OpenChatScreen({
           sending={sending}
           value={draftMessage}
         />
-        <Text className="mt-1.5 text-right text-[11px] text-white/28">
+        <Text className="mt-1.5 text-right text-[11px] text-white/24">
           {intentLen}/2000
         </Text>
       </View>

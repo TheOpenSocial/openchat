@@ -53,10 +53,6 @@ import {
   type TelemetrySummary,
 } from "../lib/telemetry";
 import {
-  fireLocalNotification,
-  registerForPushNotificationsAsync,
-} from "../lib/notifications";
-import {
   createRealtimeSession,
   type RealtimeConnectionState,
   type RealtimeSession,
@@ -155,6 +151,8 @@ export function HomeScreen({
   const [locale, setLocale] = useState<AppLocale>("en");
   const enableE2ELocalMode =
     process.env.EXPO_PUBLIC_ENABLE_E2E_LOCAL_MODE === "1";
+  const enablePushNotifications =
+    process.env.EXPO_PUBLIC_ENABLE_PUSH_NOTIFICATIONS === "1";
   const skipNetwork = designMock;
   const [activeTab, setActiveTab] = useState<HomeTab>("home");
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -718,11 +716,14 @@ export function HomeScreen({
   }, [activeTab, selectedExplainedIntentId, session.accessToken, skipNetwork]);
 
   useEffect(() => {
-    if (skipNetwork) {
+    if (skipNetwork || !enablePushNotifications) {
       return;
     }
     let mounted = true;
-    registerForPushNotificationsAsync()
+    void import("../lib/notifications")
+      .then((notifications) =>
+        notifications.registerForPushNotificationsAsync(),
+      )
       .then((result) => {
         if (!mounted) {
           return;
@@ -741,7 +742,7 @@ export function HomeScreen({
     return () => {
       mounted = false;
     };
-  }, [skipNetwork]);
+  }, [enablePushNotifications, skipNetwork]);
 
   useEffect(() => {
     if (skipNetwork) {
@@ -2259,14 +2260,19 @@ export function HomeScreen({
         return;
       }
       await api.sendDigest(session.userId, session.accessToken);
-      await fireLocalNotification(
-        "Digest queued",
-        "A digest notification was created for your account.",
-      );
+      if (enablePushNotifications) {
+        const notifications = await import("../lib/notifications");
+        await notifications.fireLocalNotification(
+          "Digest queued",
+          "A digest notification was created for your account.",
+        );
+      }
       recordTelemetry("digest_requested");
-      recordTelemetry("notification_local_fired", {
-        type: "digest_requested",
-      });
+      if (enablePushNotifications) {
+        recordTelemetry("notification_local_fired", {
+          type: "digest_requested",
+        });
+      }
       setBanner({
         tone: "success",
         text: "Digest request sent.",
@@ -2884,63 +2890,75 @@ function ChatsTab({
 
   return (
     <View className="min-h-0 flex-1 px-5 py-4">
-      <View className="mb-2 rounded-2xl border border-hairline/80 bg-surfaceMuted/70 px-3 py-2">
-        <Text
-          className={`text-[12px] font-medium ${
-            realtimeState === "connected"
-              ? "text-accent"
+      <View className="mb-3 flex-row items-center gap-2 px-1">
+        <View className="rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1">
+          <Text
+            className={`text-[10px] font-semibold uppercase tracking-[0.14em] ${
+              realtimeState === "connected"
+                ? "text-white/62"
+                : realtimeState === "connecting"
+                  ? "text-white/46"
+                  : "text-white/34"
+            }`}
+          >
+            {realtimeState === "connected"
+              ? t("chatsRealtimeLive", locale)
               : realtimeState === "connecting"
-                ? "text-ink"
-                : "text-muted"
-          }`}
+                ? t("chatsRealtimeConnecting", locale)
+                : t("chatsRealtimeOffline", locale)}
+          </Text>
+        </View>
+        <Text
+          className="text-[12px] leading-[18px] text-white/34"
+          numberOfLines={2}
         >
-          {realtimeState === "connected"
-            ? t("chatsRealtimeLive", locale)
-            : realtimeState === "connecting"
-              ? t("chatsRealtimeConnecting", locale)
-              : t("chatsRealtimeOffline", locale)}
+          {selectedChat
+            ? formatThreadSummary(selectedChat)
+            : t("chatsEmptyDescription", locale)}
         </Text>
       </View>
-      <View className="mb-3 flex-row gap-2">
-        <ChoiceChip
-          label={t("chatsDm", locale)}
-          onPress={() => onChatTypeChange("dm")}
-          selected={chatCreationType === "dm"}
-          testID="chat-type-dm-chip"
-        />
-        <ChoiceChip
-          label={t("chatsGroup", locale)}
-          onPress={() => onChatTypeChange("group")}
-          selected={chatCreationType === "group"}
-          testID="chat-type-group-chip"
-        />
-      </View>
-      <View className="mb-3 flex-row gap-2">
-        <View className="flex-1">
-          <PrimaryButton
-            label={
-              chatCreationType === "group"
-                ? t("chatsCreateGroupSandbox", locale)
-                : t("chatsCreateChatSandbox", locale)
-            }
-            loading={creatingChat}
-            onPress={onCreateChat}
-            testID="chat-create-button"
-            variant="secondary"
+      <View className="mb-4 gap-3">
+        <View className="flex-row gap-2">
+          <ChoiceChip
+            label={t("chatsDm", locale)}
+            onPress={() => onChatTypeChange("dm")}
+            selected={chatCreationType === "dm"}
+            testID="chat-type-dm-chip"
+          />
+          <ChoiceChip
+            label={t("chatsGroup", locale)}
+            onPress={() => onChatTypeChange("group")}
+            selected={chatCreationType === "group"}
+            testID="chat-type-group-chip"
           />
         </View>
-        <View className="flex-1">
-          <PrimaryButton
-            label={
-              syncingNow
-                ? t("chatsSyncingNow", locale)
-                : t("chatsSyncNow", locale)
-            }
-            loading={syncingNow}
-            onPress={onSyncNow}
-            testID="chat-sync-button"
-            variant="ghost"
-          />
+        <View className="flex-row gap-2">
+          <View className="flex-1">
+            <PrimaryButton
+              label={
+                chatCreationType === "group"
+                  ? t("chatsCreateGroupSandbox", locale)
+                  : t("chatsCreateChatSandbox", locale)
+              }
+              loading={creatingChat}
+              onPress={onCreateChat}
+              testID="chat-create-button"
+              variant="secondary"
+            />
+          </View>
+          <View className="flex-1">
+            <PrimaryButton
+              label={
+                syncingNow
+                  ? t("chatsSyncingNow", locale)
+                  : t("chatsSyncNow", locale)
+              }
+              loading={syncingNow}
+              onPress={onSyncNow}
+              testID="chat-sync-button"
+              variant="ghost"
+            />
+          </View>
         </View>
       </View>
 
@@ -2950,13 +2968,13 @@ function ChatsTab({
           description={t("chatsEmptyDescription", locale)}
         />
       ) : (
-        <ScrollView className="mb-3 max-h-44">
+        <ScrollView className="mb-4 max-h-44">
           {threads.map((thread, index) => (
             <Pressable
-              className={`mb-2 rounded-2xl border px-3 py-3 ${
+              className={`mb-2 rounded-[22px] border px-4 py-3.5 ${
                 selectedChat?.id === thread.id
-                  ? "border-accent/45 bg-accentMuted"
-                  : "border-hairline bg-surfaceMuted/80"
+                  ? "border-white/[0.14] bg-white/[0.08]"
+                  : "border-white/[0.06] bg-white/[0.03]"
               }`}
               key={thread.id}
               onPress={() => onOpenChat(thread.id)}
@@ -2964,18 +2982,18 @@ function ChatsTab({
                 index === 0 ? "chat-thread-latest" : `chat-thread-${thread.id}`
               }
             >
-              <Text className="text-[14px] font-semibold text-ink">
+              <Text className="text-[14px] font-semibold text-white/88">
                 {thread.title}
               </Text>
               <View className="mt-1 flex-row items-center justify-between">
-                <Text className="text-[11px] text-muted">
+                <Text className="text-[11px] text-white/34">
                   {thread.messages.length} message
                   {thread.messages.length === 1 ? "" : "s"} ·{" "}
                   {formatThreadSummary(thread)}
                 </Text>
                 {thread.unreadCount > 0 ? (
-                  <View className="rounded-full bg-accentMuted px-2 py-1">
-                    <Text className="text-[10px] font-semibold text-accent">
+                  <View className="rounded-full border border-white/[0.08] bg-white px-2 py-1">
+                    <Text className="text-[10px] font-semibold text-[#0d0d0d]">
                       {t("chatsUnread", locale, { count: thread.unreadCount })}
                     </Text>
                   </View>
@@ -2987,15 +3005,15 @@ function ChatsTab({
       )}
 
       {selectedChat ? (
-        <SurfaceCard className="min-h-0 flex-1 p-3">
-          <Text className="mb-2 flex-shrink-0 text-[15px] font-semibold text-ink">
+        <SurfaceCard className="min-h-0 flex-1 p-4">
+          <Text className="mb-1 flex-shrink-0 text-[17px] font-semibold text-ink">
             {selectedChat.title}
           </Text>
-          <Text className="mb-2 text-[11px] text-muted">
+          <Text className="mb-3 text-[11px] text-muted">
             {formatThreadSummary(selectedChat)}
           </Text>
           {moderationTargetUserId ? (
-            <View className="mb-2 flex-row gap-2">
+            <View className="mb-3 flex-row gap-2">
               <View className="flex-1">
                 <PrimaryButton
                   label={t("chatsReportUser", locale)}
@@ -3189,12 +3207,15 @@ function ProfileTab({
       contentContainerStyle={{
         paddingHorizontal: 20,
         paddingVertical: 16,
-        gap: 12,
+        gap: 14,
       }}
     >
       <SurfaceCard>
-        <Text className="mb-2 text-base font-semibold text-ink">
+        <Text className="mb-1 text-[18px] font-semibold tracking-tight text-ink">
           {t("profileInterests", locale)}
+        </Text>
+        <Text className="mb-3 text-[12px] leading-[18px] text-muted">
+          Interests shape who the system prioritizes around you.
         </Text>
         <View className="flex-row flex-wrap gap-2">
           {profile.interests.map((interest) => (
@@ -3206,8 +3227,11 @@ function ProfileTab({
       </SurfaceCard>
 
       <SurfaceCard>
-        <Text className="mb-2 text-base font-semibold text-ink">
+        <Text className="mb-1 text-[18px] font-semibold tracking-tight text-ink">
           {t("localeLabel", locale)}
+        </Text>
+        <Text className="mb-3 text-[12px] leading-[18px] text-muted">
+          Choose how the app speaks to you.
         </Text>
         <View className="flex-row flex-wrap gap-2">
           <ChoiceChip
@@ -3224,8 +3248,11 @@ function ProfileTab({
       </SurfaceCard>
 
       <SurfaceCard>
-        <Text className="mb-2 text-base font-semibold text-ink">
+        <Text className="mb-1 text-[18px] font-semibold tracking-tight text-ink">
           {t("profileDefaultSocialMode", locale)}
+        </Text>
+        <Text className="mb-3 text-[12px] leading-[18px] text-muted">
+          This sets the default tone for new agent matching.
         </Text>
         <View className="flex-row flex-wrap gap-2">
           <ChoiceChip
@@ -3247,8 +3274,11 @@ function ProfileTab({
       </SurfaceCard>
 
       <SurfaceCard>
-        <Text className="mb-2 text-base font-semibold text-ink">
+        <Text className="mb-1 text-[18px] font-semibold tracking-tight text-ink">
           {t("profileNotifications", locale)}
+        </Text>
+        <Text className="mb-3 text-[12px] leading-[18px] text-muted">
+          Control how quickly OpenSocial reaches back out.
         </Text>
         <View className="mb-3 flex-row flex-wrap gap-2">
           <ChoiceChip
@@ -3279,328 +3309,347 @@ function ProfileTab({
       </SurfaceCard>
 
       <SurfaceCard>
-        <Text className="text-sm text-muted">
+        <Text className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted">
           {t("profileTrustSummary", locale)}
         </Text>
-        <Text className="mt-1 text-sm text-ink">{trustSummary}</Text>
+        <Text className="mt-2 text-[14px] leading-[21px] text-ink">
+          {trustSummary}
+        </Text>
       </SurfaceCard>
 
-      <SurfaceCard>
-        <View className="mb-2 flex-row items-center justify-between">
-          <Text className="text-base font-semibold text-ink">
-            {t("profileDiscoverySnapshot", locale)}
+      <SurfaceCard className="gap-5">
+        <View>
+          <View className="mb-2 flex-row items-center justify-between">
+            <Text className="text-[18px] font-semibold tracking-tight text-ink">
+              {t("profileDiscoverySnapshot", locale)}
+            </Text>
+            <PrimaryButton
+              label={
+                discoveryBusy
+                  ? t("profileRefreshing", locale)
+                  : t("commonRefresh", locale)
+              }
+              onPress={onRefreshDiscovery}
+              variant="ghost"
+            />
+          </View>
+          <Text className="text-xs text-muted">
+            {t("profileTonightReconnects", locale, {
+              tonight: passiveDiscovery?.tonight.suggestions.length ?? 0,
+              reconnects: passiveDiscovery?.reconnects.reconnects.length ?? 0,
+            })}
+          </Text>
+          <View className="mt-2 rounded-xl border border-border bg-surface p-2">
+            {passiveDiscovery?.tonight.suggestions.length ? (
+              passiveDiscovery.tonight.suggestions
+                .slice(0, 3)
+                .map((suggestion) => (
+                  <Text
+                    className="mb-1 text-xs text-ink"
+                    key={suggestion.userId}
+                  >
+                    {suggestion.displayName} ·{" "}
+                    {Math.round(suggestion.score * 100)}%
+                  </Text>
+                ))
+            ) : (
+              <Text className="text-xs text-muted">
+                {t("profileNoTonightSuggestions", locale)}
+              </Text>
+            )}
+          </View>
+          <View className="mt-2">
+            <PrimaryButton
+              label={t("profilePublishToAgent", locale)}
+              onPress={onPublishDiscoveryToAgent}
+              variant="secondary"
+            />
+          </View>
+        </View>
+
+        <View className="h-px bg-border" />
+
+        <View>
+          <Text className="mb-2 text-[18px] font-semibold tracking-tight text-ink">
+            {t("profileContinuityReconnect", locale)}
+          </Text>
+          <Text className="text-xs text-muted">
+            {t("profilePendingRequestSuggestions", locale, {
+              count: inboxSuggestions?.pendingRequestCount ?? 0,
+            })}
+          </Text>
+          <View className="mt-2 rounded-xl border border-border bg-surface p-2">
+            {inboxSuggestions?.suggestions.length ? (
+              inboxSuggestions.suggestions.slice(0, 4).map((suggestion) => (
+                <Text
+                  className="mb-1 text-xs text-ink"
+                  key={`${suggestion.title}-${suggestion.reason}`}
+                >
+                  {suggestion.title}
+                </Text>
+              ))
+            ) : (
+              <Text className="text-xs text-muted">
+                {t("profileNoReconnectSuggestions", locale)}
+              </Text>
+            )}
+          </View>
+        </View>
+
+        <View className="h-px bg-border" />
+
+        <View>
+          <Text className="mb-2 text-[18px] font-semibold tracking-tight text-ink">
+            {t("profileWhyThisRoutingResult", locale)}
+          </Text>
+          {pendingIntentSummary?.intents.length ? (
+            <>
+              <View className="mb-2 flex-row flex-wrap gap-2">
+                {pendingIntentSummary.intents.slice(0, 5).map((intent) => (
+                  <ChoiceChip
+                    key={intent.intentId}
+                    label={intent.rawText.slice(0, 18)}
+                    onPress={() => onSelectExplainedIntent(intent.intentId)}
+                    selected={selectedExplainedIntentId === intent.intentId}
+                  />
+                ))}
+              </View>
+              <Text className="text-xs text-muted">
+                {userIntentExplanation?.summary ??
+                  t("profileLoadingExplanation", locale)}
+              </Text>
+              {userIntentExplanation?.factors.length ? (
+                <View className="mt-2 rounded-xl border border-border bg-surface p-2">
+                  {userIntentExplanation.factors.map((factor) => (
+                    <Text className="mb-1 text-xs text-ink" key={factor}>
+                      {factor}
+                    </Text>
+                  ))}
+                </View>
+              ) : null}
+            </>
+          ) : (
+            <Text className="text-xs text-muted">
+              {t("profileNoIntentsToExplain", locale)}
+            </Text>
+          )}
+        </View>
+      </SurfaceCard>
+
+      <SurfaceCard className="gap-5">
+        <View>
+          <Text className="mb-2 text-[18px] font-semibold tracking-tight text-ink">
+            {t("commonSearch", locale)}
+          </Text>
+          <CalmTextField
+            autoCapitalize="none"
+            autoCorrect={false}
+            containerClassName="mb-2"
+            inputClassName="text-[14px]"
+            onChangeText={onSearchQueryChange}
+            placeholder={t("profileSearchPlaceholder", locale)}
+            value={searchQuery}
+          />
+          <PrimaryButton
+            label={
+              searchBusy
+                ? t("profileSearching", locale)
+                : t("commonSearch", locale)
+            }
+            onPress={onRunSearch}
+            variant="secondary"
+          />
+          {searchSnapshot ? (
+            <Text className="mt-2 text-xs text-muted">
+              {t("profileSearchCounts", locale, {
+                users: searchSnapshot.users.length,
+                topics: searchSnapshot.topics.length,
+                activities: searchSnapshot.activities.length,
+                groups: searchSnapshot.groups.length,
+              })}
+            </Text>
+          ) : null}
+        </View>
+
+        <View className="h-px bg-border" />
+
+        <View>
+          <Text className="mb-2 text-[18px] font-semibold tracking-tight text-ink">
+            {t("profileMemoryControls", locale)}
           </Text>
           <PrimaryButton
             label={
-              discoveryBusy
+              memoryBusy
                 ? t("profileRefreshing", locale)
-                : t("commonRefresh", locale)
+                : t("profileRefreshMemorySnapshot", locale)
             }
-            onPress={onRefreshDiscovery}
-            variant="ghost"
-          />
-        </View>
-        <Text className="text-xs text-muted">
-          {t("profileTonightReconnects", locale, {
-            tonight: passiveDiscovery?.tonight.suggestions.length ?? 0,
-            reconnects: passiveDiscovery?.reconnects.reconnects.length ?? 0,
-          })}
-        </Text>
-        <View className="mt-2 rounded-xl border border-border bg-surface p-2">
-          {passiveDiscovery?.tonight.suggestions.length ? (
-            passiveDiscovery.tonight.suggestions
-              .slice(0, 3)
-              .map((suggestion) => (
-                <Text className="mb-1 text-xs text-ink" key={suggestion.userId}>
-                  {suggestion.displayName} ·{" "}
-                  {Math.round(suggestion.score * 100)}%
-                </Text>
-              ))
-          ) : (
-            <Text className="text-xs text-muted">
-              {t("profileNoTonightSuggestions", locale)}
-            </Text>
-          )}
-        </View>
-        <View className="mt-2">
-          <PrimaryButton
-            label={t("profilePublishToAgent", locale)}
-            onPress={onPublishDiscoveryToAgent}
+            onPress={onRefreshMemory}
             variant="secondary"
           />
-        </View>
-      </SurfaceCard>
-
-      <SurfaceCard>
-        <Text className="mb-2 text-base font-semibold text-ink">
-          {t("profileContinuityReconnect", locale)}
-        </Text>
-        <Text className="text-xs text-muted">
-          {t("profilePendingRequestSuggestions", locale, {
-            count: inboxSuggestions?.pendingRequestCount ?? 0,
-          })}
-        </Text>
-        <View className="mt-2 rounded-xl border border-border bg-surface p-2">
-          {inboxSuggestions?.suggestions.length ? (
-            inboxSuggestions.suggestions.slice(0, 4).map((suggestion) => (
-              <Text
-                className="mb-1 text-xs text-ink"
-                key={`${suggestion.title}-${suggestion.reason}`}
-              >
-                {suggestion.title}
-              </Text>
-            ))
-          ) : (
-            <Text className="text-xs text-muted">
-              {t("profileNoReconnectSuggestions", locale)}
-            </Text>
-          )}
-        </View>
-      </SurfaceCard>
-
-      <SurfaceCard>
-        <Text className="mb-2 text-base font-semibold text-ink">
-          {t("profileWhyThisRoutingResult", locale)}
-        </Text>
-        {pendingIntentSummary?.intents.length ? (
-          <>
-            <View className="mb-2 flex-row flex-wrap gap-2">
-              {pendingIntentSummary.intents.slice(0, 5).map((intent) => (
-                <ChoiceChip
-                  key={intent.intentId}
-                  label={intent.rawText.slice(0, 18)}
-                  onPress={() => onSelectExplainedIntent(intent.intentId)}
-                  selected={selectedExplainedIntentId === intent.intentId}
-                />
-              ))}
-            </View>
-            <Text className="text-xs text-muted">
-              {userIntentExplanation?.summary ??
-                t("profileLoadingExplanation", locale)}
-            </Text>
-            {userIntentExplanation?.factors.length ? (
-              <View className="mt-2 rounded-xl border border-border bg-surface p-2">
-                {userIntentExplanation.factors.map((factor) => (
-                  <Text className="mb-1 text-xs text-ink" key={factor}>
-                    {factor}
-                  </Text>
-                ))}
-              </View>
-            ) : null}
-          </>
-        ) : (
-          <Text className="text-xs text-muted">
-            {t("profileNoIntentsToExplain", locale)}
-          </Text>
-        )}
-      </SurfaceCard>
-
-      <SurfaceCard>
-        <Text className="mb-2 text-base font-semibold text-ink">
-          {t("commonSearch", locale)}
-        </Text>
-        <CalmTextField
-          autoCapitalize="none"
-          autoCorrect={false}
-          containerClassName="mb-2"
-          inputClassName="text-[14px]"
-          onChangeText={onSearchQueryChange}
-          placeholder={t("profileSearchPlaceholder", locale)}
-          value={searchQuery}
-        />
-        <PrimaryButton
-          label={
-            searchBusy
-              ? t("profileSearching", locale)
-              : t("commonSearch", locale)
-          }
-          onPress={onRunSearch}
-          variant="secondary"
-        />
-        {searchSnapshot ? (
+          <View className="mt-2">
+            <PrimaryButton
+              label={t("profileResetLearnedMemory", locale)}
+              onPress={onResetLearnedMemory}
+              variant="ghost"
+            />
+          </View>
           <Text className="mt-2 text-xs text-muted">
-            {t("profileSearchCounts", locale, {
-              users: searchSnapshot.users.length,
-              topics: searchSnapshot.topics.length,
-              activities: searchSnapshot.activities.length,
-              groups: searchSnapshot.groups.length,
+            {t("profileMemoryLoaded", locale, {
+              lifeGraph: memorySnapshot.lifeGraph
+                ? t("profileYes", locale)
+                : t("profileNo", locale),
+              retrieval: memorySnapshot.retrieval
+                ? t("profileYes", locale)
+                : t("profileNo", locale),
             })}
           </Text>
-        ) : null}
+        </View>
       </SurfaceCard>
 
-      <SurfaceCard>
-        <Text className="mb-2 text-base font-semibold text-ink">
-          {t("profileMemoryControls", locale)}
-        </Text>
-        <PrimaryButton
-          label={
-            memoryBusy
-              ? t("profileRefreshing", locale)
-              : t("profileRefreshMemorySnapshot", locale)
-          }
-          onPress={onRefreshMemory}
-          variant="secondary"
-        />
-        <View className="mt-2">
-          <PrimaryButton
-            label={t("profileResetLearnedMemory", locale)}
-            onPress={onResetLearnedMemory}
-            variant="ghost"
-          />
-        </View>
-        <Text className="mt-2 text-xs text-muted">
-          {t("profileMemoryLoaded", locale, {
-            lifeGraph: memorySnapshot.lifeGraph
-              ? t("profileYes", locale)
-              : t("profileNo", locale),
-            retrieval: memorySnapshot.retrieval
-              ? t("profileYes", locale)
-              : t("profileNo", locale),
-          })}
-        </Text>
-      </SurfaceCard>
-
-      <SurfaceCard>
-        <Text className="mb-2 text-base font-semibold text-ink">
-          {t("profileAutomations", locale)}
-        </Text>
-        <Text className="text-xs text-muted">
-          {t("profileAutomationsBody", locale)}
-        </Text>
-        <View className="mt-2 flex-row flex-wrap gap-2">
-          <PrimaryButton
-            label={t("profileNewSavedSearch", locale)}
-            onPress={onCreateSavedSearch}
-            variant="ghost"
-            disabled={automationsBusy}
-          />
-          <PrimaryButton
-            label={t("profileNewAutomation", locale)}
-            onPress={onCreateAutomation}
-            variant="ghost"
-            disabled={automationsBusy}
-          />
-          <PrimaryButton
-            label={t("profileRunNow", locale)}
-            onPress={onRunAutomationNow}
-            variant="secondary"
-            disabled={!selectedScheduledTaskId}
-          />
-        </View>
-        <Text className="mt-2 text-xs text-muted">
-          {t("profileSavedSearchesTasks", locale, {
-            searches: savedSearches.length,
-            tasks: scheduledTasks.length,
-          })}
-        </Text>
-        {scheduledTasks.length ? (
-          <View className="mt-2 gap-2">
-            {scheduledTasks.slice(0, 4).map((task) => (
-              <Pressable
-                className={`rounded-xl border px-3 py-2 ${
-                  selectedScheduledTaskId === task.id
-                    ? "border-primary bg-primary/10"
-                    : "border-border bg-surface"
-                }`}
-                key={task.id}
-                onPress={() => onSelectScheduledTask(task.id)}
-              >
-                <Text className="text-xs font-semibold text-ink">
-                  {task.title}
-                </Text>
-                <Text className="mt-1 text-[11px] text-muted">
-                  {task.taskType} · {task.status}
-                </Text>
-              </Pressable>
-            ))}
+      <SurfaceCard className="gap-5">
+        <View>
+          <Text className="mb-2 text-[18px] font-semibold tracking-tight text-ink">
+            {t("profileAutomations", locale)}
+          </Text>
+          <Text className="text-xs text-muted">
+            {t("profileAutomationsBody", locale)}
+          </Text>
+          <View className="mt-2 flex-row flex-wrap gap-2">
+            <PrimaryButton
+              label={t("profileNewSavedSearch", locale)}
+              onPress={onCreateSavedSearch}
+              variant="ghost"
+              disabled={automationsBusy}
+            />
+            <PrimaryButton
+              label={t("profileNewAutomation", locale)}
+              onPress={onCreateAutomation}
+              variant="ghost"
+              disabled={automationsBusy}
+            />
+            <PrimaryButton
+              label={t("profileRunNow", locale)}
+              onPress={onRunAutomationNow}
+              variant="secondary"
+              disabled={!selectedScheduledTaskId}
+            />
           </View>
-        ) : null}
-        {selectedScheduledTaskId ? (
+          <Text className="mt-2 text-xs text-muted">
+            {t("profileSavedSearchesTasks", locale, {
+              searches: savedSearches.length,
+              tasks: scheduledTasks.length,
+            })}
+          </Text>
+          {scheduledTasks.length ? (
+            <View className="mt-2 gap-2">
+              {scheduledTasks.slice(0, 4).map((task) => (
+                <Pressable
+                  className={`rounded-xl border px-3 py-2 ${
+                    selectedScheduledTaskId === task.id
+                      ? "border-primary bg-primary/10"
+                      : "border-border bg-surface"
+                  }`}
+                  key={task.id}
+                  onPress={() => onSelectScheduledTask(task.id)}
+                >
+                  <Text className="text-xs font-semibold text-ink">
+                    {task.title}
+                  </Text>
+                  <Text className="mt-1 text-[11px] text-muted">
+                    {task.taskType} · {task.status}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+          {selectedScheduledTaskId ? (
+            <View className="mt-2 rounded-xl border border-border bg-surface p-2">
+              {scheduledTaskRuns.length === 0 ? (
+                <Text className="text-xs text-muted">
+                  {t("profileNoRunsYet", locale)}
+                </Text>
+              ) : (
+                scheduledTaskRuns.map((run) => (
+                  <Text className="mb-1 text-xs text-ink" key={run.id}>
+                    {formatRelativeTime(run.triggeredAt)} · {run.status}
+                  </Text>
+                ))
+              )}
+            </View>
+          ) : null}
+        </View>
+
+        <View className="h-px bg-border" />
+
+        <View>
+          <View className="mb-2 flex-row items-center justify-between">
+            <Text className="text-[18px] font-semibold tracking-tight text-ink">
+              {t("profileRecurringCircles", locale)}
+            </Text>
+            <PrimaryButton
+              label={t("profileNew", locale)}
+              onPress={onCreateCircle}
+              variant="ghost"
+            />
+          </View>
+          {circlesBusy ? (
+            <Text className="text-xs text-muted">
+              {t("profileLoadingCircles", locale)}
+            </Text>
+          ) : circles.length === 0 ? (
+            <Text className="text-xs text-muted">
+              {t("profileNoCircles", locale)}
+            </Text>
+          ) : (
+            <View className="gap-2">
+              {circles.map((circle) => (
+                <Pressable
+                  className={`rounded-xl border px-3 py-2 ${
+                    selectedCircleId === circle.id
+                      ? "border-primary bg-primary/10"
+                      : "border-border bg-surface"
+                  }`}
+                  key={circle.id}
+                  onPress={() => onSelectCircle(circle.id)}
+                >
+                  <Text className="text-xs font-semibold text-ink">
+                    {circle.title}
+                  </Text>
+                  <Text className="mt-1 text-[11px] text-muted">
+                    {circle.status} · next{" "}
+                    {circle.nextSessionAt
+                      ? formatRelativeTime(circle.nextSessionAt)
+                      : t("profileNextScheduled", locale)}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+          <View className="mt-3 flex-row items-center justify-between">
+            <Text className="text-xs text-muted">
+              {selectedCircleTitle ?? t("profileSelectCircle", locale)}
+            </Text>
+            <PrimaryButton
+              label={t("profileOpenNow", locale)}
+              onPress={onRunCircleSessionNow}
+              variant="secondary"
+              disabled={!selectedCircleId}
+            />
+          </View>
           <View className="mt-2 rounded-xl border border-border bg-surface p-2">
-            {scheduledTaskRuns.length === 0 ? (
+            {circleSessions.length === 0 ? (
               <Text className="text-xs text-muted">
-                {t("profileNoRunsYet", locale)}
+                {t("profileNoRecentSessions", locale)}
               </Text>
             ) : (
-              scheduledTaskRuns.map((run) => (
-                <Text className="mb-1 text-xs text-ink" key={run.id}>
-                  {formatRelativeTime(run.triggeredAt)} · {run.status}
+              circleSessions.map((sessionItem) => (
+                <Text className="mb-1 text-xs text-ink" key={sessionItem.id}>
+                  {formatRelativeTime(sessionItem.scheduledFor)} ·{" "}
+                  {sessionItem.status}
                 </Text>
               ))
             )}
           </View>
-        ) : null}
-      </SurfaceCard>
-
-      <SurfaceCard>
-        <View className="mb-2 flex-row items-center justify-between">
-          <Text className="text-base font-semibold text-ink">
-            {t("profileRecurringCircles", locale)}
-          </Text>
-          <PrimaryButton
-            label={t("profileNew", locale)}
-            onPress={onCreateCircle}
-            variant="ghost"
-          />
-        </View>
-        {circlesBusy ? (
-          <Text className="text-xs text-muted">
-            {t("profileLoadingCircles", locale)}
-          </Text>
-        ) : circles.length === 0 ? (
-          <Text className="text-xs text-muted">
-            {t("profileNoCircles", locale)}
-          </Text>
-        ) : (
-          <View className="gap-2">
-            {circles.map((circle) => (
-              <Pressable
-                className={`rounded-xl border px-3 py-2 ${
-                  selectedCircleId === circle.id
-                    ? "border-primary bg-primary/10"
-                    : "border-border bg-surface"
-                }`}
-                key={circle.id}
-                onPress={() => onSelectCircle(circle.id)}
-              >
-                <Text className="text-xs font-semibold text-ink">
-                  {circle.title}
-                </Text>
-                <Text className="mt-1 text-[11px] text-muted">
-                  {circle.status} · next{" "}
-                  {circle.nextSessionAt
-                    ? formatRelativeTime(circle.nextSessionAt)
-                    : t("profileNextScheduled", locale)}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
-        <View className="mt-3 flex-row items-center justify-between">
-          <Text className="text-xs text-muted">
-            {selectedCircleTitle ?? t("profileSelectCircle", locale)}
-          </Text>
-          <PrimaryButton
-            label={t("profileOpenNow", locale)}
-            onPress={onRunCircleSessionNow}
-            variant="secondary"
-            disabled={!selectedCircleId}
-          />
-        </View>
-        <View className="mt-2 rounded-xl border border-border bg-surface p-2">
-          {circleSessions.length === 0 ? (
-            <Text className="text-xs text-muted">
-              {t("profileNoRecentSessions", locale)}
-            </Text>
-          ) : (
-            circleSessions.map((sessionItem) => (
-              <Text className="mb-1 text-xs text-ink" key={sessionItem.id}>
-                {formatRelativeTime(sessionItem.scheduledFor)} ·{" "}
-                {sessionItem.status}
-              </Text>
-            ))
-          )}
         </View>
       </SurfaceCard>
 

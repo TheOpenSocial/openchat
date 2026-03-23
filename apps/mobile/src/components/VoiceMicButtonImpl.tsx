@@ -9,25 +9,8 @@ import { Alert, Pressable, View } from "react-native";
 
 import { cn } from "../lib/cn";
 import { appTheme } from "../theme";
+import type { VoiceMicButtonProps } from "./VoiceMicButton.types";
 import { VoiceWaveform } from "./VoiceWaveform";
-
-export interface VoiceMicButtonImplProps {
-  disabled?: boolean;
-  onFinalTranscript: (text: string) => void;
-  onListeningChange?: (listening: boolean) => void;
-  onVolumeChange?: (level: number) => void;
-  voiceEnabled?: boolean;
-  className?: string;
-  iconSize?: number;
-  accessibilityLabelIdle?: string;
-  accessibilityLabelActive?: string;
-  label?: string;
-  activeLabel?: string;
-  iconColorIdle?: string;
-  iconColorActive?: string;
-  liveLevel?: number;
-  showLiveIndicator?: boolean;
-}
 
 export function VoiceMicButtonImpl({
   activeLabel,
@@ -45,7 +28,7 @@ export function VoiceMicButtonImpl({
   onVolumeChange,
   showLiveIndicator = false,
   voiceEnabled = true,
-}: VoiceMicButtonImplProps) {
+}: VoiceMicButtonProps) {
   const [listening, setListening] = useState(false);
   const indicatorOpacity = useRef(new Animated.Value(0)).current;
   const labelOpacity = useRef(new Animated.Value(1)).current;

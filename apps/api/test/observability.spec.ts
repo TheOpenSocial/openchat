@@ -5,6 +5,7 @@ import {
   recordHttpRequestMetric,
   recordNotificationDispatch,
   recordNotificationOpened,
+  recordOnboardingInferenceMetric,
   recordOpenAIMetric,
   recordQueueJobFailure,
   recordQueueJobProcessing,
@@ -83,6 +84,20 @@ describe("Observability helpers", () => {
       ok: true,
       estimatedCostUsd: 0.002,
     });
+    recordOnboardingInferenceMetric({
+      mode: "fast",
+      model: "ministral-3:14b",
+      durationMs: 1200,
+      unavailable: false,
+      fallback: false,
+    });
+    recordOnboardingInferenceMetric({
+      mode: "rich",
+      model: "gpt-oss:20b",
+      durationMs: 2200,
+      unavailable: true,
+      fallback: true,
+    });
 
     const snapshot = getOpsRuntimeMetricsSnapshot();
     expect(snapshot.http.requestCount).toBe(2);
@@ -105,6 +120,14 @@ describe("Observability helpers", () => {
         operation: "intent_parsing",
         calls: 1,
       }),
+    );
+    expect(snapshot.onboardingInference.calls).toBe(2);
+    expect(snapshot.onboardingInference.fallbacks).toBe(1);
+    expect(snapshot.onboardingInference.byMode).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ mode: "fast", calls: 1 }),
+        expect.objectContaining({ mode: "rich", calls: 1 }),
+      ]),
     );
   });
 

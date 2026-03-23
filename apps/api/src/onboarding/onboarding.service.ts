@@ -6,6 +6,7 @@ import {
 } from "@opensocial/types";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { recordOnboardingInferenceMetric } from "../common/ops-metrics.js";
 
 type OnboardingInferResponse = z.infer<typeof onboardingInferResponseSchema>;
 type OnboardingQuickInferResponse = z.infer<
@@ -143,12 +144,26 @@ export class OnboardingService {
       this.logger[level](
         `onboarding fast inference completed traceId=${traceId} model=${selectedFastModel} durationMs=${durationMs} followUp=${Boolean(llmInferred.followUpQuestion?.trim())} summaryChars=${llmInferred.summary?.length ?? 0} interestsCount=${llmInferred.interests?.length ?? 0}`,
       );
+      recordOnboardingInferenceMetric({
+        mode: "fast",
+        model: selectedFastModel,
+        durationMs,
+        unavailable: false,
+        fallback: false,
+      });
       return llmInferred;
     }
 
     this.logger.warn(
       `onboarding fast inference unavailable, using fallback traceId=${traceId} model=${selectedFastModel} durationMs=${durationMs}`,
     );
+    recordOnboardingInferenceMetric({
+      mode: "fast",
+      model: selectedFastModel,
+      durationMs,
+      unavailable: true,
+      fallback: true,
+    });
     return this.buildQuickFallback(raw);
   }
 
@@ -187,12 +202,26 @@ export class OnboardingService {
       this.logger[level](
         `onboarding inference completed traceId=${traceId} model=${selectedRichModel} durationMs=${durationMs} persona="${llmInferred.persona}" followUp=${Boolean(llmInferred.followUpQuestion?.trim())} interestsCount=${llmInferred.interests?.length ?? 0} goalsCount=${llmInferred.goals?.length ?? 0}`,
       );
+      recordOnboardingInferenceMetric({
+        mode: "rich",
+        model: selectedRichModel,
+        durationMs,
+        unavailable: false,
+        fallback: false,
+      });
       return llmInferred;
     }
 
     this.logger.warn(
       `onboarding inference unavailable, using fallback traceId=${traceId} model=${selectedRichModel} durationMs=${durationMs}`,
     );
+    recordOnboardingInferenceMetric({
+      mode: "rich",
+      model: selectedRichModel,
+      durationMs,
+      unavailable: true,
+      fallback: true,
+    });
     return this.buildRichFallback(raw);
   }
 

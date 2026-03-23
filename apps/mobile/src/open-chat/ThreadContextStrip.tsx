@@ -26,16 +26,18 @@ export function ThreadContextStrip({ hint, phase }: ThreadContextStripProps) {
   }
 
   return (
-    <View className="mb-2 rounded-xl border border-white/[0.06] bg-white/[0.03] px-3 py-2">
+    <View className="mb-2 mt-1 flex-row items-center gap-2 px-1">
       {label ? (
-        <Text className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40">
-          {label}
-        </Text>
+        <View className="rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1">
+          <Text className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/34">
+            {label}
+          </Text>
+        </View>
       ) : null}
       {hint ? (
         <Text
-          className={`text-[13px] leading-[18px] text-white/55 ${label ? "mt-1" : ""}`}
-          numberOfLines={3}
+          className="min-w-0 flex-1 text-[12px] leading-[18px] text-white/38"
+          numberOfLines={2}
         >
           {hint}
         </Text>

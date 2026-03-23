@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { AdminController } from "../src/admin/admin.controller.js";
 import {
   recordHttpRequestMetric,
+  recordOnboardingInferenceMetric,
   recordOpenAIMetric,
   recordQueueJobFailure,
   recordQueueJobProcessing,
@@ -1049,6 +1050,13 @@ describe("AdminController", () => {
       latencyMs: 210,
       ok: true,
     });
+    recordOnboardingInferenceMetric({
+      mode: "fast",
+      model: "ministral-3:14b",
+      durationMs: 1100,
+      unavailable: false,
+      fallback: false,
+    });
 
     const { controller, adminAuditService } = createController({
       prisma: {
@@ -1071,6 +1079,7 @@ describe("AdminController", () => {
       dbLatency: { pingMs: number | null };
       moderationRates: { reports24h: number };
       pushDeliverySuccess: { pushSent24h: number; pushRead24h: number };
+      onboardingInference: { calls: number };
     };
 
     expect(payload.apiLatency.avgMs).toBeGreaterThan(0);
@@ -1085,6 +1094,7 @@ describe("AdminController", () => {
     expect(payload.moderationRates.reports24h).toBe(2);
     expect(payload.pushDeliverySuccess.pushSent24h).toBe(10);
     expect(payload.pushDeliverySuccess.pushRead24h).toBe(4);
+    expect(payload.onboardingInference.calls).toBe(1);
     expect(adminAuditService.recordAction).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "admin.ops_metrics_view",
@@ -1144,6 +1154,15 @@ describe("AdminController", () => {
         ok: index % 2 === 0,
       });
     }
+    for (let index = 0; index < 12; index += 1) {
+      recordOnboardingInferenceMetric({
+        mode: "rich",
+        model: "gpt-oss:20b",
+        durationMs: 7_000,
+        unavailable: false,
+        fallback: index % 2 === 0,
+      });
+    }
 
     const queue = {
       getJobCounts: vi.fn().mockResolvedValue({
@@ -1183,6 +1202,8 @@ describe("AdminController", () => {
         expect.objectContaining({ key: "queue_backlog_high" }),
         expect.objectContaining({ key: "openai_error_spike" }),
         expect.objectContaining({ key: "moderation_backlog_high" }),
+        expect.objectContaining({ key: "onboarding_fallback_spike" }),
+        expect.objectContaining({ key: "onboarding_rich_latency_high" }),
       ]),
     );
     expect(adminAuditService.recordAction).toHaveBeenCalledWith(

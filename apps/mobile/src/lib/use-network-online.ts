@@ -17,30 +17,44 @@ export function useNetworkOnline(skip: boolean): boolean {
     let cancelled = false;
 
     void (async () => {
-      await waitForNativeRuntimeReady();
-      if (cancelled) {
-        return;
-      }
-      const NetInfo = (await import("@react-native-community/netinfo")).default;
-
-      const apply = (
-        connected: boolean | null,
-        reachable: boolean | null,
-      ): void => {
-        if (connected === false || reachable === false) {
-          setOnline(false);
+      try {
+        await waitForNativeRuntimeReady();
+        if (cancelled) {
           return;
         }
-        setOnline(true);
-      };
+        const NetInfo =
+          (await import("@react-native-community/netinfo")).default;
 
-      unsubscribe = NetInfo.addEventListener((state) => {
-        apply(state.isConnected, state.isInternetReachable);
-      });
+        const apply = (
+          connected: boolean | null,
+          reachable: boolean | null,
+        ): void => {
+          if (connected === false || reachable === false) {
+            setOnline(false);
+            return;
+          }
+          setOnline(true);
+        };
 
-      void NetInfo.fetch().then((state) => {
-        apply(state.isConnected, state.isInternetReachable);
-      });
+        unsubscribe = NetInfo.addEventListener((state) => {
+          apply(state.isConnected, state.isInternetReachable);
+        });
+
+        void NetInfo.fetch()
+          .then((state) => {
+            apply(state.isConnected, state.isInternetReachable);
+          })
+          .catch(() => {
+            if (!cancelled) {
+              setOnline(true);
+            }
+          });
+      } catch {
+        if (!cancelled) {
+          // If the native NetInfo module is unavailable in this runtime, keep the UI usable.
+          setOnline(true);
+        }
+      }
     })();
 
     return () => {

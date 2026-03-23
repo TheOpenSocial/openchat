@@ -20,6 +20,13 @@ interface OpenAIOperationState {
   totalEstimatedCostUsd: number;
 }
 
+interface OnboardingInferenceState {
+  calls: number;
+  unavailable: number;
+  fallbacks: number;
+  latencyMs: Histogram;
+}
+
 const DEFAULT_HISTOGRAM_SAMPLE_SIZE = 500;
 
 const state = {
@@ -52,6 +59,14 @@ const state = {
   notifications: {
     pushDispatched: 0,
     pushOpened: 0,
+  },
+  onboardingInference: {
+    calls: 0,
+    unavailable: 0,
+    fallbacks: 0,
+    latencyMs: createHistogram(),
+    byMode: new Map<string, OnboardingInferenceState>(),
+    byModel: new Map<string, OnboardingInferenceState>(),
   },
 };
 
@@ -153,6 +168,35 @@ export function recordNotificationOpened(channel: string) {
   }
 }
 
+export function recordOnboardingInferenceMetric(input: {
+  mode: "fast" | "rich";
+  model: string;
+  durationMs: number;
+  unavailable: boolean;
+  fallback: boolean;
+}) {
+  const normalizedModel = input.model.trim() || "unknown";
+  const modeState = ensureOnboardingInferenceState(
+    state.onboardingInference.byMode,
+    input.mode,
+  );
+  const modelState = ensureOnboardingInferenceState(
+    state.onboardingInference.byModel,
+    normalizedModel,
+  );
+  const targets = [state.onboardingInference, modeState, modelState];
+  for (const target of targets) {
+    target.calls += 1;
+    if (input.unavailable) {
+      target.unavailable += 1;
+    }
+    if (input.fallback) {
+      target.fallbacks += 1;
+    }
+    recordHistogramSample(target.latencyMs, input.durationMs);
+  }
+}
+
 export function getOpsRuntimeMetricsSnapshot() {
   const httpRequestCount = state.http.latencyMs.count;
   const queueMetrics = Array.from(state.queues.entries()).map(
@@ -233,6 +277,48 @@ export function getOpsRuntimeMetricsSnapshot() {
           ? 0
           : state.notifications.pushOpened / state.notifications.pushDispatched,
     },
+    onboardingInference: {
+      calls: state.onboardingInference.calls,
+      unavailable: state.onboardingInference.unavailable,
+      unavailableRate:
+        state.onboardingInference.calls === 0
+          ? 0
+          : state.onboardingInference.unavailable / state.onboardingInference.calls,
+      fallbacks: state.onboardingInference.fallbacks,
+      fallbackRate:
+        state.onboardingInference.calls === 0
+          ? 0
+          : state.onboardingInference.fallbacks / state.onboardingInference.calls,
+      latencyMs: summarizeHistogram(state.onboardingInference.latencyMs),
+      byMode: Array.from(state.onboardingInference.byMode.entries()).map(
+        ([mode, modeState]) => ({
+          mode,
+          calls: modeState.calls,
+          unavailable: modeState.unavailable,
+          unavailableRate:
+            modeState.calls === 0 ? 0 : modeState.unavailable / modeState.calls,
+          fallbacks: modeState.fallbacks,
+          fallbackRate:
+            modeState.calls === 0 ? 0 : modeState.fallbacks / modeState.calls,
+          latencyMs: summarizeHistogram(modeState.latencyMs),
+        }),
+      ),
+      byModel: Array.from(state.onboardingInference.byModel.entries()).map(
+        ([model, modelState]) => ({
+          model,
+          calls: modelState.calls,
+          unavailable: modelState.unavailable,
+          unavailableRate:
+            modelState.calls === 0
+              ? 0
+              : modelState.unavailable / modelState.calls,
+          fallbacks: modelState.fallbacks,
+          fallbackRate:
+            modelState.calls === 0 ? 0 : modelState.fallbacks / modelState.calls,
+          latencyMs: summarizeHistogram(modelState.latencyMs),
+        }),
+      ),
+    },
   };
 }
 
@@ -259,6 +345,12 @@ export function resetOpsRuntimeMetrics() {
   state.openai.byOperation.clear();
   state.notifications.pushDispatched = 0;
   state.notifications.pushOpened = 0;
+  state.onboardingInference.calls = 0;
+  state.onboardingInference.unavailable = 0;
+  state.onboardingInference.fallbacks = 0;
+  state.onboardingInference.latencyMs = createHistogram();
+  state.onboardingInference.byMode.clear();
+  state.onboardingInference.byModel.clear();
 }
 
 function createHistogram(
@@ -344,5 +436,23 @@ function ensureOpenAIOperationState(
     totalEstimatedCostUsd: 0,
   };
   state.openai.byOperation.set(operationName, created);
+  return created;
+}
+
+function ensureOnboardingInferenceState(
+  target: Map<string, OnboardingInferenceState>,
+  key: string,
+): OnboardingInferenceState {
+  const existing = target.get(key);
+  if (existing) {
+    return existing;
+  }
+  const created: OnboardingInferenceState = {
+    calls: 0,
+    unavailable: 0,
+    fallbacks: 0,
+    latencyMs: createHistogram(),
+  };
+  target.set(key, created);
   return created;
 }

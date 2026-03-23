@@ -10,6 +10,7 @@ interface AnimatedScreenProps extends PropsWithChildren {
 export function AnimatedScreen({ children, screenKey }: AnimatedScreenProps) {
   const [reduceMotion, setReduceMotion] = useState(false);
   const translateY = useRef(new Animated.Value(10)).current;
+  const opacity = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     AccessibilityInfo.isReduceMotionEnabled()
@@ -29,21 +30,30 @@ export function AnimatedScreen({ children, screenKey }: AnimatedScreenProps) {
   useEffect(() => {
     if (reduceMotion) {
       translateY.setValue(0);
+      opacity.setValue(1);
       return;
     }
 
     translateY.setValue(10);
+    opacity.setValue(0.72);
 
     const easing = Easing.out(Easing.cubic);
     const duration = appTheme.motion.screenEnterMs;
-    // No opacity fade: expo-video native surface often ignores parent opacity, so UI looked gone.
-    Animated.timing(translateY, {
-      toValue: 0,
-      duration,
-      easing,
-      useNativeDriver: true,
-    }).start();
-  }, [reduceMotion, screenKey, translateY]);
+    Animated.parallel([
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration,
+        easing,
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: Math.max(180, duration - 20),
+        easing,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [opacity, reduceMotion, screenKey, translateY]);
 
   if (reduceMotion) {
     return <View className="flex-1">{children}</View>;
@@ -53,6 +63,7 @@ export function AnimatedScreen({ children, screenKey }: AnimatedScreenProps) {
     <Animated.View
       style={{
         flex: 1,
+        opacity,
         transform: [{ translateY }],
       }}
     >

@@ -150,6 +150,7 @@ export class AdminController {
         pushReadRate24h,
         runtimePushOpenRate: runtime.notifications.pushOpenRate,
       },
+      onboardingInference: runtime.onboardingInference,
     });
   }
 
@@ -213,6 +214,18 @@ export class AdminController {
     const moderationBacklogThreshold = this.parseThreshold(
       process.env.ALERT_MODERATION_BACKLOG_THRESHOLD,
       150,
+    );
+    const onboardingFallbackRateThreshold = this.parseThreshold(
+      process.env.ALERT_ONBOARDING_FALLBACK_RATE_THRESHOLD,
+      0.2,
+    );
+    const onboardingRichP95LatencyThresholdMs = this.parseThreshold(
+      process.env.ALERT_ONBOARDING_RICH_P95_LATENCY_THRESHOLD_MS,
+      6_000,
+    );
+    const onboardingMinCallsThreshold = this.parseThreshold(
+      process.env.ALERT_ONBOARDING_MIN_CALLS_THRESHOLD,
+      10,
     );
 
     const queueBacklogAlerts = queueStates
@@ -311,6 +324,37 @@ export class AdminController {
             },
           ]
         : []),
+      ...(runtime.onboardingInference.calls >= onboardingMinCallsThreshold &&
+      runtime.onboardingInference.fallbackRate >= onboardingFallbackRateThreshold
+        ? [
+            {
+              key: "onboarding_fallback_spike",
+              status: "triggered" as const,
+              severity: "warning" as const,
+              message: `Onboarding fallback rate is elevated (${runtime.onboardingInference.fallbackRate.toFixed(2)} over ${runtime.onboardingInference.calls} calls).`,
+              value: runtime.onboardingInference.fallbackRate,
+              threshold: onboardingFallbackRateThreshold,
+              calls: runtime.onboardingInference.calls,
+            },
+          ]
+        : []),
+      ...runtime.onboardingInference.byMode
+        .filter(
+          (mode) =>
+            mode.mode === "rich" &&
+            mode.calls >= onboardingMinCallsThreshold &&
+            mode.latencyMs.p95Ms >= onboardingRichP95LatencyThresholdMs,
+        )
+        .map((mode) => ({
+          key: "onboarding_rich_latency_high",
+          status: "triggered" as const,
+          severity: "warning" as const,
+          message: `Onboarding rich latency p95 is elevated (${Math.round(mode.latencyMs.p95Ms)}ms over ${mode.calls} calls).`,
+          mode: mode.mode,
+          value: mode.latencyMs.p95Ms,
+          threshold: onboardingRichP95LatencyThresholdMs,
+          calls: mode.calls,
+        })),
     ];
 
     await this.adminAuditService.recordAction({

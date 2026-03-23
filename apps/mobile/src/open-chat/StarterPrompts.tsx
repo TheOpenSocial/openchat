@@ -1,7 +1,5 @@
 import { Pressable, Text, View } from "react-native";
 
-import { appTheme } from "../theme";
-
 const STARTERS: Array<{ label: string; body: string }> = [
   {
     label: "Talk about something",
@@ -31,24 +29,25 @@ type StarterPromptsProps = {
 
 export function StarterPrompts({ onPick }: StarterPromptsProps) {
   return (
-    <View className="gap-3">
+    <View className="gap-2.5">
       {STARTERS.map((row) => (
         <Pressable
           accessibilityHint="Uses this as your first message"
           accessibilityLabel={row.label}
           accessibilityRole="button"
-          className="rounded-2xl border border-white/[0.08] bg-white/[0.04] px-4 py-3.5 active:bg-white/[0.07]"
+          className="rounded-[22px] border border-white/[0.06] bg-white/[0.02] px-4 py-3.5"
           key={row.label}
           onPress={() => onPick(row.body)}
           style={({ pressed }) => ({
-            opacity: pressed ? appTheme.motion.pressOpacity : 1,
+            opacity: 1,
+            transform: [{ scale: pressed ? 0.988 : 1 }],
           })}
         >
-          <Text className="text-[15px] font-medium text-white/92">
+          <Text className="text-[15px] font-medium text-white/88">
             {row.label}
           </Text>
           <Text
-            className="mt-1 text-[13px] leading-[18px] text-white/42"
+            className="mt-1.5 text-[13px] leading-[19px] text-white/38"
             numberOfLines={2}
           >
             {row.body}

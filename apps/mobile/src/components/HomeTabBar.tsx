@@ -49,32 +49,32 @@ interface HomeTabBarProps {
 
 export function HomeTabBar({ activeTab, locale, onChange }: HomeTabBarProps) {
   const insets = useSafeAreaInsets();
-  const bottomPad = Math.max(insets.bottom, 10);
+  const bottomPad = Math.max(insets.bottom, 12);
 
   return (
     <View
-      className="border-t border-hairline/60 bg-surfaceMuted/98"
+      className="border-t border-white/[0.06] bg-[#070708]"
       style={{
         paddingBottom: bottomPad,
         ...Platform.select({
           ios: {
             shadowColor: "#000",
             shadowOffset: { width: 0, height: -2 },
-            shadowOpacity: 0.22,
-            shadowRadius: 8,
+            shadowOpacity: 0.16,
+            shadowRadius: 12,
           },
-          android: { elevation: 10 },
+          android: { elevation: 8 },
         }),
       }}
     >
-      <View className="flex-row items-stretch justify-between gap-0.5 px-1 pt-1.5">
+      <View className="flex-row items-stretch justify-between gap-1 px-2 pt-2">
         {TAB_ORDER.map((tabKey) => {
           const active = tabKey === activeTab;
           const meta = TAB_META[tabKey];
           const iconName = active ? meta.iconActive : meta.iconIdle;
           const iconColor = active
-            ? appTheme.colors.accent
-            : appTheme.colors.muted;
+            ? appTheme.colors.ink
+            : "rgba(255,255,255,0.34)";
 
           return (
             <Pressable
@@ -84,12 +84,12 @@ export function HomeTabBar({ activeTab, locale, onChange }: HomeTabBarProps) {
               accessibilityState={{ selected: active }}
               android_ripple={
                 Platform.OS === "android"
-                  ? { color: "rgba(255,255,255,0.08)", borderless: true }
+                  ? { color: "rgba(255,255,255,0.06)", borderless: true }
                   : undefined
               }
               className={cn(
-                "min-w-0 flex-1 items-center rounded-2xl py-2",
-                active ? "bg-surface/90" : "bg-transparent",
+                "min-w-0 flex-1 items-center rounded-[18px] py-2.5",
+                active ? "bg-white" : "bg-transparent",
               )}
               key={tabKey}
               onPress={() => onChange(tabKey)}
@@ -100,18 +100,19 @@ export function HomeTabBar({ activeTab, locale, onChange }: HomeTabBarProps) {
               <View
                 collapsable={false}
                 pointerEvents="none"
+                className="items-center"
                 testID={`home-tab-${tabKey}`}
               >
                 <Ionicons
                   color={iconColor}
                   name={iconName}
-                  size={active ? 24 : 22}
-                  style={{ marginBottom: 3 }}
+                  size={active ? 22 : 21}
+                  style={{ marginBottom: 4 }}
                 />
                 <Text
                   className={cn(
-                    "text-[10px] font-semibold tracking-wide",
-                    active ? "text-accent" : "text-muted",
+                    "text-[10px] font-semibold tracking-[0.02em]",
+                    active ? "text-[#0d0d0d]" : "text-white/36",
                   )}
                   numberOfLines={1}
                 >

@@ -25,18 +25,18 @@ export function AppTopBar({
   return (
     <View
       className={cn(
-        "border-b border-hairline/70 bg-canvas px-4",
-        compact ? "pb-2.5 pt-1" : "pb-4 pt-2",
+        "bg-canvas px-4",
+        compact ? "pb-2 pt-1" : "pb-3.5 pt-2",
       )}
     >
-      <View className="flex-row items-start justify-between gap-2">
-        <View className="min-w-0 flex-1 flex-row items-start gap-2">
+      <View className="flex-row items-start justify-between gap-3">
+        <View className="min-w-0 flex-1 flex-row items-start gap-2.5">
           {leading ? <View className="mt-0.5 shrink-0">{leading}</View> : null}
           <View className="min-w-0 flex-1">
             <Text
               className={cn(
                 "font-semibold tracking-tight text-ink",
-                compact ? "text-[17px]" : "text-[20px]",
+                compact ? "text-[19px]" : "text-[22px]",
               )}
               numberOfLines={1}
             >
@@ -44,7 +44,7 @@ export function AppTopBar({
             </Text>
             {showSubtitle ? (
               <Text
-                className="mt-1.5 text-[13px] leading-[20px] text-muted"
+                className="mt-1.5 max-w-[260px] text-[13px] leading-[19px] text-muted/90"
                 numberOfLines={2}
               >
                 {subtitle}
@@ -53,7 +53,9 @@ export function AppTopBar({
           </View>
         </View>
         {trailing ? (
-          <View className="max-w-[40%] shrink-0 items-end">{trailing}</View>
+          <View className="max-w-[40%] shrink-0 items-end pt-0.5">
+            {trailing}
+          </View>
         ) : null}
       </View>
     </View>

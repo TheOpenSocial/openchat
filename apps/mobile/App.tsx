@@ -3,10 +3,6 @@ import "./global.css";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { StatusBar } from "expo-status-bar";
 import {
-  lazy,
-  type LazyExoticComponent,
-  type FC,
-  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -17,7 +13,6 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { AnimatedScreen } from "./src/components/AnimatedScreen";
 import { AppToastHost } from "./src/components/AppToastHost";
-import { LoadingState } from "./src/components/LoadingState";
 import { PremiumSplashOverlay } from "./src/components/PremiumSplashOverlay";
 import { StageCurtain } from "./src/components/StageCurtain";
 import { type AppLocale, supportedLocales, t } from "./src/i18n/strings";
@@ -45,18 +40,9 @@ import {
 import { clearOnboardingDraft } from "./src/onboarding/onboarding-storage";
 import { OnboardingFlow } from "./src/onboarding/OnboardingFlow";
 import { AuthScreen } from "./src/screens/AuthScreen";
-import type { HomeScreenProps } from "./src/screens/HomeScreen";
+import { DesignMockApp } from "./src/screens/DesignMockApp";
+import { HomeScreen } from "./src/screens/HomeScreen";
 import { AppStage, MobileSession, UserProfileDraft } from "./src/types";
-
-const HomeScreen: LazyExoticComponent<FC<HomeScreenProps>> = lazy(() =>
-  import("./src/screens/HomeScreen").then((m) => ({ default: m.HomeScreen })),
-);
-
-const DesignMockApp: LazyExoticComponent<FC> = lazy(() =>
-  import("./src/screens/DesignMockApp").then((m) => ({
-    default: m.DesignMockApp,
-  })),
-);
 
 const designMockApp =
   process.env.EXPO_PUBLIC_DESIGN_MOCK === "1" ||
@@ -566,18 +552,14 @@ function ProductionApp() {
             />
           ) : null}
           {stage === "home" && session ? (
-            <Suspense
-              fallback={<LoadingState label={t("loadingYourSpace", locale)} />}
-            >
-              <HomeScreen
-                initialAgentMessage={homeAgentSeedMessage}
-                initialProfile={profile}
-                onInitialAgentMessageConsumed={handleInitialAgentSeedConsumed}
-                onProfileUpdated={setProfile}
-                onResetSession={handleResetSession}
-                session={session}
-              />
-            </Suspense>
+            <HomeScreen
+              initialAgentMessage={homeAgentSeedMessage}
+              initialProfile={profile}
+              onInitialAgentMessageConsumed={handleInitialAgentSeedConsumed}
+              onProfileUpdated={setProfile}
+              onResetSession={handleResetSession}
+              session={session}
+            />
           ) : null}
         </AnimatedScreen>
       ) : null}
@@ -595,11 +577,7 @@ function ProductionApp() {
 
 export default function App() {
   if (designMockApp) {
-    return (
-      <Suspense fallback={<LoadingState label={t("loadingDesignPreview")} />}>
-        <DesignMockApp />
-      </Suspense>
-    );
+    return <DesignMockApp />;
   }
   return <ProductionApp />;
 }
