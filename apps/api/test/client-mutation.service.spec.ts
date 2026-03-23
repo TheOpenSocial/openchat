@@ -72,6 +72,43 @@ describe("ClientMutationService", () => {
     expect(handler).toHaveBeenCalledTimes(1);
   });
 
+  it("deduplicates onboarding activation replays for intent.create_from_agent scope", async () => {
+    const { prisma } = createPrismaMock();
+    const service = new ClientMutationService(prisma);
+    const handler = vi.fn().mockResolvedValue({
+      intentId: "intent-activation-1",
+      intentIds: ["intent-activation-1"],
+      intentCount: 1,
+    });
+
+    const idempotencyKey = "onboarding-carryover:user-1:activation-intent-hash";
+
+    const first = await service.run({
+      userId: "user-1",
+      scope: "intent.create_from_agent",
+      idempotencyKey,
+      handler,
+    });
+    const second = await service.run({
+      userId: "user-1",
+      scope: "intent.create_from_agent",
+      idempotencyKey,
+      handler,
+    });
+
+    expect(first).toEqual({
+      intentId: "intent-activation-1",
+      intentIds: ["intent-activation-1"],
+      intentCount: 1,
+    });
+    expect(second).toEqual({
+      intentId: "intent-activation-1",
+      intentIds: ["intent-activation-1"],
+      intentCount: 1,
+    });
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
   it("allows retry after a failed mutation attempt", async () => {
     const { prisma } = createPrismaMock();
     const service = new ClientMutationService(prisma);

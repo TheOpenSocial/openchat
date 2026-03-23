@@ -24,6 +24,7 @@ It is organized as a production-grade build checklist with:
 Last verified: 2026-03-20
 
 ## Implementation Notes
+- 2026-03-23: Closed `TP-16` by adding backend replay-safety verification for onboarding activation mutations in `apps/api/test/client-mutation.service.spec.ts` (`intent.create_from_agent` scope), asserting same idempotency key replays return cached response and do not execute the handler twice.
 - 2026-03-23: Extended `TP-16` mobile carryover UX resilience with persisted activation handoff state (`seed`, `idempotencyKey`, `state`) in local storage, including safe restore on relaunch/background and resume messaging when prior processing was interrupted.
 - 2026-03-23: Advanced `TP-16` mobile execution resilience by threading deterministic idempotency keys through onboarding carryover send paths (`agent respond stream`, `intents/from-agent`, and direct `intents`) and offline outbox replay, preventing duplicate first-action activation on transient network failures/retries.
 - 2026-03-23: Advanced `TP-17` on mobile by instrumenting onboarding activation funnel telemetry events (`onboarding_activation_ready|started|succeeded|queued|failed`) across onboarding completion (`App.tsx`) and one-tap carryover execution (`HomeScreen.tsx`) including elapsed-time properties for latency/failure monitoring.
@@ -1408,7 +1409,7 @@ Production rollout is approved only when:
 - [~] `TP-13` Post-onboarding activation trigger contract: run one deterministic activation handoff immediately after persona confirmation/profile persistence and return typed activation state (`idle|pending|ready|failed`) plus first recommended action.
 - [~] `TP-14` Mobile/web activation handoff UX: route users from onboarding completion into actionable activation state (not empty home), with resilient resume after background/relaunch and explicit loading/ready/error states.
 - [~] `TP-15` Starter intent bootstrap pipeline: generate/persist a safe first activation recommendation from onboarding outputs (persona/goals/interests/language) with deterministic fallback for weak model output.
-- [~] `TP-16` One-tap activation execution path: execute first recommended action directly after onboarding with backend idempotency, optimistic UX, and recoverable failure handling.
+- [x] `TP-16` One-tap activation execution path: execute first recommended action directly after onboarding with backend idempotency, optimistic UX, and recoverable failure handling.
 - [~] `TP-17` Activation funnel telemetry and guardrails: instrument onboarding-complete -> activation-ready -> first-action-succeeded funnel with alert thresholds for activation failure and cold-start latency regressions.
 
 ---
