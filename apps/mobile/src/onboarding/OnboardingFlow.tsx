@@ -22,7 +22,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { CalmTextField } from "../components/CalmTextField";
 import { InlineNotice } from "../components/InlineNotice";
 import { PrimaryButton } from "../components/PrimaryButton";
-import { PremiumSpinner } from "../components/PremiumSpinner";
 import { SystemBlobAnimation } from "../components/SystemBlobAnimation";
 import { VoiceMicButton } from "../components/VoiceMicButton";
 import { type AppLocale, t } from "../i18n/strings";
@@ -796,14 +795,11 @@ export function OnboardingFlow({
               {processing && lastSpokenTurn.trim().length > 0 ? (
                 <>
                   <Text className="text-[11px] font-medium uppercase tracking-[0.16em] text-white/30">
-                    {t("onboardingHybridProcessingTitle", locale)}
+                    {t("onboardingHybridProcessingLabel", locale)}
                   </Text>
-                  <View className="mt-3 flex-row items-center gap-2">
-                    <PremiumSpinner />
-                    <Text className="text-[13px] leading-[20px] text-white/42">
-                      {t("onboardingHybridProcessing", locale)}
-                    </Text>
-                  </View>
+                  <Text className="mt-3 text-[13px] leading-[20px] text-white/42">
+                    {t("onboardingHybridProcessing", locale)}
+                  </Text>
                   <Text className="mt-3 text-[17px] leading-[27px] text-white/80">
                     "{lastSpokenTurn.trim()}"
                   </Text>
@@ -1242,15 +1238,12 @@ export function OnboardingFlow({
         >
           <View className="flex-row items-center gap-3 rounded-full border border-white/[0.06] bg-white/[0.025] px-4 py-2">
             {processing ? (
-              <>
-                <PremiumSpinner />
-                <Text className="text-center text-[14px] leading-[22px] text-white/56">
-                  {t("onboardingHybridProcessing", locale)}
-                </Text>
-              </>
+              <Text className="text-center text-[14px] leading-[22px] text-white/56">
+                {t("onboardingHybridProcessingInline", locale)}
+              </Text>
             ) : (
               <Text className="text-center text-[14px] leading-[22px] text-transparent">
-                {t("onboardingHybridProcessing", locale)}
+                {t("onboardingHybridProcessingInline", locale)}
               </Text>
             )}
           </View>
@@ -1397,23 +1390,25 @@ export function OnboardingFlow({
         >
           <View style={layout.inferOverlayInner}>
             <View className="items-center">
-              <View className="h-[220px] w-[220px] items-center justify-center">
-                <View className="absolute h-[196px] w-[196px] rounded-full border border-white/[0.08] bg-white/[0.015]" />
-                <SystemBlobAnimation size={192} />
+              <View className="h-[204px] w-[204px] items-center justify-center">
+                <View className="absolute h-[184px] w-[184px] rounded-full border border-white/[0.08] bg-white/[0.015]" />
+                <SystemBlobAnimation size={180} />
               </View>
             </View>
             <View className="items-center gap-3">
-              <Text className="text-center text-[34px] font-semibold leading-[38px] tracking-tight text-white">
-                Agentic
+              <Text className="text-center text-[32px] font-semibold leading-[36px] tracking-tight text-white">
+                {t("onboardingHybridProcessingTitle", locale)}
               </Text>
-              <Text className="max-w-[320px] text-center text-[15px] leading-[23px] text-white/44">
+              <Text className="max-w-[316px] text-center text-[16px] leading-[24px] text-white/54">
+                {t("onboardingHybridProcessing", locale)}
+              </Text>
+              <Text className="max-w-[300px] text-center text-[13px] leading-[21px] text-white/34">
                 {processingPhrases[processingPhraseIndex]}
               </Text>
             </View>
-            <View className="items-center gap-3">
-              <PremiumSpinner />
+            <View className="items-center gap-2">
               {lastSpokenTurn.trim().length > 0 ? (
-                <Text className="max-w-[320px] text-center text-[14px] leading-[22px] text-white/30">
+                <Text className="max-w-[292px] text-center text-[13px] leading-[21px] text-white/24">
                   "{lastSpokenTurn.trim()}"
                 </Text>
               ) : null}
@@ -1587,11 +1582,13 @@ const layout = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 28,
+    paddingTop: 24,
+    paddingBottom: 40,
   },
   inferOverlayInner: {
     width: "100%",
-    maxWidth: 360,
+    maxWidth: 344,
     alignItems: "center",
-    gap: 28,
+    gap: 36,
   },
 });
