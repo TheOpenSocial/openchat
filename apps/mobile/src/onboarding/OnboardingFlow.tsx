@@ -5,13 +5,16 @@ import {
   Alert,
   Animated,
   Easing,
+  FlatList,
   Image,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -28,15 +31,12 @@ import { hapticSelection } from "../lib/haptics";
 import { speechRecognitionAvailable } from "../lib/speech-recognition-available";
 import type { MobileSession } from "../types";
 import { COUNTRY_OPTIONS, guessCountryFromLocale } from "./country-options";
-import { inferHybridOnboarding } from "./hybrid-onboarding";
 import {
-  AVAILABILITY_OPTIONS,
-  CONNECT_FORMAT_OPTIONS,
   defaultOnboardingState,
   mergeLoadedDraft,
+  ONBOARDING_GOAL_OPTIONS,
   ONBOARDING_STEP_COUNT,
   ONBOARDING_TOPIC_SUGGESTIONS,
-  STYLE_OPTIONS,
   type OnboardingDraftState,
 } from "./onboarding-model";
 import { loadOnboardingDraft, saveOnboardingDraft } from "./onboarding-storage";
@@ -64,6 +64,14 @@ function slugLabel(label: string) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
+}
+
+function normalizeSearchValue(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
 }
 
 function toggleString(list: string[], value: string) {
@@ -158,6 +166,48 @@ function MetaPill({ children }: { children: React.ReactNode }) {
   );
 }
 
+function SelectorField({
+  label,
+  value,
+  placeholder,
+  onPress,
+}: {
+  label: string;
+  value: string;
+  placeholder: string;
+  onPress: () => void;
+}) {
+  return (
+    <View className="gap-1.5">
+      <Text className="text-[12px] font-medium text-white/45">{label}</Text>
+      <Pressable
+        accessibilityRole="button"
+        className="overflow-hidden rounded-[22px] border border-white/10 bg-white/[0.06] px-4 py-3"
+        onPress={onPress}
+        style={({ pressed }) => ({
+          transform: [{ scale: pressed ? 0.995 : 1 }],
+        })}
+      >
+        <View className="flex-row items-center justify-between gap-3">
+          <Text
+            className={`flex-1 text-[15px] leading-[22px] ${
+              value.trim() ? "text-white" : "text-white/35"
+            }`}
+            numberOfLines={1}
+          >
+            {value.trim() || placeholder}
+          </Text>
+          <Ionicons
+            color="rgba(255,255,255,0.32)"
+            name="chevron-down"
+            size={18}
+          />
+        </View>
+      </Pressable>
+    </View>
+  );
+}
+
 export function OnboardingFlow({
   session,
   errorMessage,
@@ -170,12 +220,15 @@ export function OnboardingFlow({
   );
   const [expressionDraft, setExpressionDraft] = useState("");
   const [processing, setProcessing] = useState(false);
+  const [refiningPersona, setRefiningPersona] = useState(false);
   const [voiceListening, setVoiceListening] = useState(false);
   const [voiceLevel, setVoiceLevel] = useState(-2);
   const [lastSpokenTurn, setLastSpokenTurn] = useState("");
   const [topicQuery] = useState("");
   const [topicSuggestions, setTopicSuggestions] = useState<string[]>([]);
-  const [countryFocused, setCountryFocused] = useState(false);
+  const [countrySelectorOpen, setCountrySelectorOpen] = useState(false);
+  const [countryQuery, setCountryQuery] = useState("");
+  const [processingPhraseIndex, setProcessingPhraseIndex] = useState(0);
   const fade = useRef(new Animated.Value(1)).current;
   const translateY = useRef(new Animated.Value(0)).current;
   const progressAnim = useRef(
@@ -185,6 +238,7 @@ export function OnboardingFlow({
   const systemScale = useRef(new Animated.Value(1)).current;
   const systemOpacity = useRef(new Animated.Value(0.82)).current;
   const processingOpacity = useRef(new Animated.Value(0)).current;
+  const inferOverlayOpacity = useRef(new Animated.Value(0)).current;
   const lottieRef = useRef<{ pause?: () => void; play?: () => void } | null>(
     null,
   );
@@ -315,6 +369,41 @@ export function OnboardingFlow({
     }).start();
   }, [processing, processingOpacity]);
 
+  const inferOverlayVisible = processing || refiningPersona;
+
+  useEffect(() => {
+    Animated.timing(inferOverlayOpacity, {
+      toValue: inferOverlayVisible ? 1 : 0,
+      duration: inferOverlayVisible ? 180 : 220,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [inferOverlayOpacity, inferOverlayVisible]);
+
+  const processingPhrases = useMemo(
+    () => [
+      t("onboardingHybridProcessingWordOne", locale),
+      t("onboardingHybridProcessingWordTwo", locale),
+      t("onboardingHybridProcessingWordThree", locale),
+    ],
+    [locale],
+  );
+
+  useEffect(() => {
+    if (!inferOverlayVisible) {
+      setProcessingPhraseIndex(0);
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setProcessingPhraseIndex((current) =>
+        current === processingPhrases.length - 1 ? 0 : current + 1,
+      );
+    }, 2400);
+
+    return () => clearInterval(interval);
+  }, [inferOverlayVisible, processingPhrases.length]);
+
   const stepIndex = draft.stepIndex;
   const progress = (stepIndex + 1) / ONBOARDING_STEP_COUNT;
   const followUpQuestion = draft.followUpQuestion.trim();
@@ -394,14 +483,28 @@ export function OnboardingFlow({
   }, [topicQuery, topicSuggestions]);
 
   const countrySuggestions = useMemo(() => {
-    const query = draft.country.trim().toLowerCase();
+    const query = normalizeSearchValue(countryQuery || draft.country);
     if (!query) {
-      return COUNTRY_OPTIONS.slice(0, 6);
+      return COUNTRY_OPTIONS;
     }
-    return COUNTRY_OPTIONS.filter((country) =>
-      country.toLowerCase().includes(query),
-    ).slice(0, 6);
-  }, [draft.country]);
+
+    return COUNTRY_OPTIONS.map((country) => {
+      const haystack = normalizeSearchValue(country);
+      const startsWith = haystack.startsWith(query);
+      const includes = haystack.includes(query);
+      return {
+        country,
+        rank: startsWith ? 0 : includes ? 1 : 2,
+      };
+    })
+      .filter((entry) => entry.rank < 2)
+      .sort((left, right) =>
+        left.rank === right.rank
+          ? left.country.localeCompare(right.country, "en")
+          : left.rank - right.rank,
+      )
+      .map((entry) => entry.country);
+  }, [countryQuery, draft.country]);
 
   const trustSignals = useMemo(
     () =>
@@ -459,53 +562,39 @@ export function OnboardingFlow({
         followUpQuestion: hasFollowUpQuestion ? followUpQuestion : "",
       });
       try {
-        let inferred = null as Awaited<
-          ReturnType<typeof inferHybridOnboarding>
-        > | null;
-        try {
-          const server = await api.inferOnboarding(
-            session.userId,
-            transcript,
-            session.accessToken,
-          );
-          inferred = {
-            draft: {
-              ...draft,
-              onboardingIntakeText: transcript,
-              onboardingGoals: server.goals,
-              interests: server.interests,
-              preferredAvailability: server.availability,
-              preferredFormat:
-                server.format === "small_groups" ? "group" : server.format,
-              preferredStyle: server.style,
-              area: server.area,
-              country: server.country,
-              firstIntentText: server.firstIntent,
-              persona: server.persona,
-              personaSummary: server.summary,
-              followUpQuestion: server.followUpQuestion?.trim() ?? "",
-              inferenceMeta: server.inferenceMeta,
-            },
-            persona: server.persona,
-            summary: server.summary,
-            followUpQuestion: server.followUpQuestion?.trim() ?? "",
-          };
-        } catch {
-          inferred = await inferHybridOnboarding(draft, transcript);
-        }
-
-        if (!inferred) {
-          return;
-        }
+        const server = await api.inferOnboarding(
+          session.userId,
+          transcript,
+          session.accessToken,
+        );
         setDraft((current) => ({
           ...current,
-          ...inferred.draft,
+          onboardingIntakeText: transcript,
+          onboardingGoals: server.goals,
+          interests: server.interests,
+          preferredAvailability: server.availability,
+          preferredFormat:
+            server.format === "small_groups" ? "group" : server.format,
+          preferredStyle: server.style,
+          area: server.area,
+          country: server.country,
+          firstIntentText: server.firstIntent,
+          persona: server.persona,
+          personaSummary: server.summary,
+          followUpQuestion: server.followUpQuestion?.trim() ?? "",
+          inferenceMeta: server.inferenceMeta,
           stepIndex: current.stepIndex,
         }));
         hapticSelection();
-        if (!inferred.followUpQuestion.trim()) {
+        if (!(server.followUpQuestion?.trim() ?? "")) {
           animateStep(1);
         }
+      } catch (error) {
+        Alert.alert(
+          "Onboarding unavailable",
+          `We couldn't interpret that yet. ${String(error)}`,
+          [{ text: "OK" }],
+        );
       } finally {
         setProcessing(false);
       }
@@ -517,6 +606,7 @@ export function OnboardingFlow({
       expressionDraft,
       followUpQuestion,
       hasFollowUpQuestion,
+      locale,
       patch,
       processing,
       session.accessToken,
@@ -556,6 +646,71 @@ export function OnboardingFlow({
       profilePhotoFileSize: null,
     });
   }, [patch]);
+
+  const refreshPersonaFromRefinement = useCallback(async () => {
+    if (refiningPersona) {
+      return;
+    }
+
+    const transcript = [
+      draft.onboardingIntakeText.trim(),
+      draft.onboardingGoals.length
+        ? `Goals: ${draft.onboardingGoals.join(", ")}.`
+        : "",
+      draft.interests.length ? `Interests: ${draft.interests.join(", ")}.` : "",
+      draft.area.trim() ? `Area: ${draft.area.trim()}.` : "",
+      draft.country.trim() ? `Country: ${draft.country.trim()}.` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    setRefiningPersona(true);
+    try {
+      const server = await api.inferOnboarding(
+        session.userId,
+        transcript,
+        session.accessToken,
+      );
+
+      patch({
+        onboardingIntakeText: transcript,
+        onboardingGoals: server.goals,
+        interests: server.interests,
+        preferredAvailability: server.availability,
+        preferredFormat:
+          server.format === "small_groups" ? "group" : server.format,
+        preferredStyle: server.style,
+        area: server.area,
+        country: server.country,
+        firstIntentText: server.firstIntent,
+        persona: server.persona,
+        personaSummary: server.summary,
+        followUpQuestion: server.followUpQuestion?.trim() ?? "",
+        inferenceMeta: server.inferenceMeta,
+      });
+      hapticSelection();
+      animateStep(2);
+    } catch (error) {
+      Alert.alert(
+        "Refinement unavailable",
+        `We couldn't refresh what we understood. ${String(error)}`,
+        [{ text: "OK" }],
+      );
+    } finally {
+      setRefiningPersona(false);
+    }
+  }, [
+    animateStep,
+    draft.area,
+    draft.country,
+    draft.interests,
+    draft.onboardingGoals,
+    draft.onboardingIntakeText,
+    patch,
+    refiningPersona,
+    session.accessToken,
+    session.userId,
+  ]);
 
   const finishWithIntent = useCallback(async () => {
     await onSubmit(draft, {
@@ -639,13 +794,19 @@ export function OnboardingFlow({
               {processing && lastSpokenTurn.trim().length > 0 ? (
                 <>
                   <Text className="text-[11px] font-medium uppercase tracking-[0.16em] text-white/30">
-                    {t("onboardingHybridCapturedTitle", locale)}
+                    {t("onboardingHybridProcessingTitle", locale)}
                   </Text>
+                  <View className="mt-3 flex-row items-center gap-2">
+                    <PremiumSpinner />
+                    <Text className="text-[13px] leading-[20px] text-white/42">
+                      {t("onboardingHybridProcessing", locale)}
+                    </Text>
+                  </View>
                   <Text className="mt-3 text-[17px] leading-[27px] text-white/80">
                     "{lastSpokenTurn.trim()}"
                   </Text>
                   <Text className="mt-2 text-[13px] leading-[21px] text-white/40">
-                    {t("onboardingHybridCapturedHint", locale)}
+                    {t("onboardingHybridProcessingHint", locale)}
                   </Text>
                 </>
               ) : hasFollowUpQuestion ? (
@@ -691,6 +852,10 @@ export function OnboardingFlow({
 
             <View className="mt-8 gap-4">
               <SurfaceCard>
+                <Text className="mb-3 text-[12px] leading-[18px] text-white/42">
+                  Add a few topics you want OpenSocial to prioritize first. We
+                  can tune the rest as the system learns what works for you.
+                </Text>
                 <Section title="Interests">
                   {filteredTopics.map((label) => (
                     <Chip
@@ -717,123 +882,26 @@ export function OnboardingFlow({
                 </Section>
               </SurfaceCard>
 
-              <SurfaceCard className="gap-6">
-                <Section title="Mode">
-                  {["Social", "Dating", "Both"].map((label) => {
-                    const selected =
-                      label === "Social"
-                        ? draft.onboardingGoals.includes("Meet people") &&
-                          !draft.onboardingGoals.includes("Dating")
-                        : label === "Dating"
-                          ? draft.onboardingGoals.includes("Dating") &&
-                            !draft.onboardingGoals.includes("Meet people")
-                          : draft.onboardingGoals.includes("Meet people") &&
-                            draft.onboardingGoals.includes("Dating");
-                    return (
-                      <Chip
-                        key={label}
-                        label={label}
-                        onPress={() => {
-                          hapticSelection();
-                          if (label === "Social") {
-                            patch({
-                              onboardingGoals: uniqueGoals(
-                                draft.onboardingGoals
-                                  .filter((goal) => goal !== "Dating")
-                                  .concat("Meet people"),
-                              ),
-                              inferenceMeta: {
-                                ...draft.inferenceMeta,
-                                goals: {
-                                  source: "manual",
-                                  confidence: 1,
-                                  needsConfirmation: false,
-                                },
-                              },
-                            });
-                            return;
-                          }
-                          if (label === "Dating") {
-                            patch({
-                              onboardingGoals: uniqueGoals(
-                                draft.onboardingGoals
-                                  .filter((goal) => goal !== "Meet people")
-                                  .concat("Dating"),
-                              ),
-                              inferenceMeta: {
-                                ...draft.inferenceMeta,
-                                goals: {
-                                  source: "manual",
-                                  confidence: 1,
-                                  needsConfirmation: false,
-                                },
-                              },
-                            });
-                            return;
-                          }
-                          patch({
-                            onboardingGoals: uniqueGoals(
-                              draft.onboardingGoals.concat([
-                                "Meet people",
-                                "Dating",
-                              ]),
-                            ),
-                            inferenceMeta: {
-                              ...draft.inferenceMeta,
-                              goals: {
-                                source: "manual",
-                                confidence: 1,
-                                needsConfirmation: false,
-                              },
-                            },
-                          });
-                        }}
-                        selected={selected}
-                      />
-                    );
-                  })}
-                </Section>
-
-                <View className="h-px bg-white/[0.06]" />
-
-                <Section title="Format">
-                  {CONNECT_FORMAT_OPTIONS.map((option) => (
-                    <Chip
-                      key={option.id}
-                      label={option.label}
-                      onPress={() => {
-                        hapticSelection();
-                        patch({
-                          preferredFormat: option.id,
-                          inferenceMeta: {
-                            ...draft.inferenceMeta,
-                            format: {
-                              source: "manual",
-                              confidence: 1,
-                              needsConfirmation: false,
-                            },
-                          },
-                        });
-                      }}
-                      selected={draft.preferredFormat === option.id}
-                    />
-                  ))}
-                </Section>
-
-                <View className="h-px bg-white/[0.06]" />
-
-                <Section title="Style">
-                  {STYLE_OPTIONS.map((label) => (
+              <SurfaceCard>
+                <Text className="mb-3 text-[12px] leading-[18px] text-white/42">
+                  Sharpen the outcome you want first. This helps the system
+                  craft a stronger read of your intent and persona.
+                </Text>
+                <Section title="Goals">
+                  {ONBOARDING_GOAL_OPTIONS.map((label) => (
                     <Chip
                       key={label}
                       label={label}
                       onPress={() => {
                         hapticSelection();
                         patch({
-                          preferredStyle: label,
+                          onboardingGoals: toggleString(
+                            draft.onboardingGoals,
+                            label,
+                          ),
                           inferenceMeta: {
                             ...draft.inferenceMeta,
-                            style: {
+                            goals: {
                               source: "manual",
                               confidence: 1,
                               needsConfirmation: false,
@@ -841,36 +909,50 @@ export function OnboardingFlow({
                           },
                         });
                       }}
-                      selected={draft.preferredStyle === label}
+                      selected={draft.onboardingGoals.includes(label)}
                     />
                   ))}
                 </Section>
+              </SurfaceCard>
 
-                <View className="h-px bg-white/[0.06]" />
-
-                <Section title="Availability">
-                  {AVAILABILITY_OPTIONS.map((label) => (
-                    <Chip
-                      key={label}
-                      label={label}
-                      onPress={() => {
-                        hapticSelection();
-                        patch({
-                          preferredAvailability: label,
-                          inferenceMeta: {
-                            ...draft.inferenceMeta,
-                            availability: {
-                              source: "manual",
-                              confidence: 1,
-                              needsConfirmation: false,
-                            },
+              <SurfaceCard>
+                <Text className="mb-3 text-[12px] leading-[18px] text-white/42">
+                  Add a light location anchor if place matters for this.
+                </Text>
+                <View className="gap-3">
+                  <CalmTextField
+                    autoCapitalize="words"
+                    label={t("onboardingProfileAreaLabel", locale)}
+                    onChangeText={(text) =>
+                      patch({
+                        area: text,
+                        inferenceMeta: {
+                          ...draft.inferenceMeta,
+                          location: {
+                            source: "manual",
+                            confidence: 1,
+                            needsConfirmation: false,
                           },
-                        });
-                      }}
-                      selected={draft.preferredAvailability === label}
-                    />
-                  ))}
-                </Section>
+                        },
+                      })
+                    }
+                    placeholder={t("onboardingProfileAreaPlaceholder", locale)}
+                    returnKeyType="next"
+                    value={draft.area}
+                  />
+                  <SelectorField
+                    label={t("onboardingProfileCountryLabel", locale)}
+                    onPress={() => {
+                      setCountryQuery(draft.country);
+                      setCountrySelectorOpen(true);
+                    }}
+                    placeholder={t(
+                      "onboardingProfileCountryPlaceholder",
+                      locale,
+                    )}
+                    value={draft.country}
+                  />
+                </View>
               </SurfaceCard>
             </View>
           </View>
@@ -891,17 +973,17 @@ export function OnboardingFlow({
             />
 
             <SurfaceCard className="mt-8 items-center">
-              <Text className="text-[11px] font-medium uppercase tracking-[0.16em] text-white/30">
+              <Text className="text-[11px] font-medium uppercase tracking-[0.16em] text-white/24">
                 Persona
               </Text>
-              <Text className="mt-3 text-center text-[28px] font-semibold leading-[32px] tracking-tight text-white">
+              <Text className="mt-4 text-center text-[30px] font-semibold leading-[34px] tracking-tight text-white">
                 {draft.persona || "Explorer"}
               </Text>
-              <Text className="mt-3 max-w-[310px] text-center text-[15px] leading-[24px] text-white/58">
+              <Text className="mt-4 max-w-[316px] text-center text-[15px] leading-[24px] text-white/54">
                 {draft.personaSummary ||
                   "You have clear intent and enough signal for us to shape your social setup."}
               </Text>
-              <View className="mt-4 flex-row flex-wrap items-center justify-center gap-2">
+              <View className="mt-5 flex-row flex-wrap items-center justify-center gap-2">
                 <MetaPill>
                   {metaLabel(
                     draft.inferenceMeta.persona.confidence,
@@ -916,7 +998,7 @@ export function OnboardingFlow({
 
             <SurfaceCard className="mt-4">
               <View className="flex-row items-center justify-between">
-                <Text className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/28">
+                <Text className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/24">
                   {t("onboardingPersonaSignalTitle", locale)}
                 </Text>
                 <Pressable
@@ -934,12 +1016,12 @@ export function OnboardingFlow({
                     {index > 0 ? (
                       <View className="h-px bg-white/[0.06]" />
                     ) : null}
-                    <View className="flex-row items-start justify-between gap-4 py-3">
+                    <View className="flex-row items-start justify-between gap-4 py-3.5">
                       <View className="flex-1 gap-1">
-                        <Text className="text-[11px] uppercase tracking-[0.14em] text-white/28">
+                        <Text className="text-[11px] uppercase tracking-[0.14em] text-white/24">
                           {signal.label}
                         </Text>
-                        <Text className="text-[14px] leading-[21px] text-white/70">
+                        <Text className="text-[14px] leading-[21px] text-white/66">
                           {signal.value}
                         </Text>
                       </View>
@@ -1081,60 +1163,21 @@ export function OnboardingFlow({
                 />
 
                 <View className="gap-2">
-                  <CalmTextField
-                    autoCapitalize="words"
-                    helperText={t("onboardingProfileCountryHelper", locale)}
+                  <SelectorField
                     label={t("onboardingProfileCountryLabel", locale)}
-                    onBlur={() => setCountryFocused(false)}
-                    onChangeText={(text) =>
-                      patch({
-                        country: text,
-                        inferenceMeta: {
-                          ...draft.inferenceMeta,
-                          location: {
-                            source: "manual",
-                            confidence: 1,
-                            needsConfirmation: false,
-                          },
-                        },
-                      })
-                    }
-                    onFocus={() => setCountryFocused(true)}
+                    onPress={() => {
+                      setCountryQuery(draft.country);
+                      setCountrySelectorOpen(true);
+                    }}
                     placeholder={t(
                       "onboardingProfileCountryPlaceholder",
                       locale,
                     )}
-                    testID="onboarding-country-input"
                     value={draft.country}
                   />
-                  {countryFocused || draft.country.trim().length > 0 ? (
-                    <View className="flex-row flex-wrap gap-2">
-                      {countrySuggestions.map((country) => (
-                        <Pressable
-                          key={country}
-                          className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5"
-                          onPress={() => {
-                            patch({
-                              country,
-                              inferenceMeta: {
-                                ...draft.inferenceMeta,
-                                location: {
-                                  source: "manual",
-                                  confidence: 1,
-                                  needsConfirmation: false,
-                                },
-                              },
-                            });
-                            setCountryFocused(false);
-                          }}
-                        >
-                          <Text className="text-[12px] font-medium text-white/60">
-                            {country}
-                          </Text>
-                        </Pressable>
-                      ))}
-                    </View>
-                  ) : null}
+                  <Text className="text-[12px] leading-[18px] text-white/30">
+                    {t("onboardingProfileCountryHelper", locale)}
+                  </Text>
                 </View>
               </View>
             </SurfaceCard>
@@ -1163,6 +1206,7 @@ export function OnboardingFlow({
             accessibilityLabelIdle={voiceActionLabel}
             activeLabel={t("onboardingEntryListening", locale)}
             className="w-full rounded-full border border-white/10 bg-white px-5"
+            disabled={processing}
             iconColorActive="#0d0d0d"
             iconColorIdle="#0d0d0d"
             iconSize={18}
@@ -1213,22 +1257,25 @@ export function OnboardingFlow({
         <Pressable
           accessibilityRole="button"
           className="items-center py-2"
+          disabled={processing}
           onPress={() => {
             patch({ followUpQuestion: "" });
             animateStep(1);
           }}
         >
-          <Text className="text-[14px] text-white/36">
+          <Text
+            className={`text-[14px] ${processing ? "text-white/20" : "text-white/36"}`}
+          >
             {t("onboardingHybridManual", locale)}
           </Text>
         </Pressable>
       </View>
     ) : stepIndex === 1 ? (
       <PrimaryButton
-        disabled={loading}
+        disabled={loading || refiningPersona}
         label={t("onboardingContinue", locale)}
-        loading={loading}
-        onPress={() => animateStep(2)}
+        loading={loading || refiningPersona}
+        onPress={() => void refreshPersonaFromRefinement()}
         testID="onboarding-refine-continue"
       />
     ) : stepIndex === 2 ? (
@@ -1335,13 +1382,144 @@ export function OnboardingFlow({
             {footer}
           </View>
         ) : null}
+
+        <Animated.View
+          pointerEvents={inferOverlayVisible ? "auto" : "none"}
+          style={[
+            StyleSheet.absoluteFillObject,
+            layout.inferOverlay,
+            {
+              opacity: inferOverlayOpacity,
+            },
+          ]}
+        >
+          <View style={layout.inferOverlayInner}>
+            <View className="items-center">
+              <View className="h-[220px] w-[220px] items-center justify-center">
+                <View className="absolute h-[196px] w-[196px] rounded-full border border-white/[0.08] bg-white/[0.015]" />
+                <SystemBlobAnimation size={192} />
+              </View>
+            </View>
+            <View className="items-center gap-3">
+              <Text className="text-center text-[34px] font-semibold leading-[38px] tracking-tight text-white">
+                Agentic
+              </Text>
+              <Text className="max-w-[320px] text-center text-[15px] leading-[23px] text-white/44">
+                {processingPhrases[processingPhraseIndex]}
+              </Text>
+            </View>
+            <View className="items-center gap-3">
+              <PremiumSpinner />
+              {lastSpokenTurn.trim().length > 0 ? (
+                <Text className="max-w-[320px] text-center text-[14px] leading-[22px] text-white/30">
+                  "{lastSpokenTurn.trim()}"
+                </Text>
+              ) : null}
+            </View>
+          </View>
+        </Animated.View>
       </KeyboardAvoidingView>
+
+      <Modal
+        animationType="slide"
+        onRequestClose={() => setCountrySelectorOpen(false)}
+        transparent
+        visible={countrySelectorOpen}
+      >
+        <View className="flex-1 justify-end bg-black/72 px-3 pb-3">
+          <View className="max-h-[78%] rounded-[30px] border border-white/[0.08] bg-[#0b0b0c] px-5 pb-5 pt-4">
+            <View className="mb-4 items-center gap-3">
+              <View className="h-1.5 w-12 rounded-full bg-white/12" />
+              <View className="w-full flex-row items-center justify-between">
+                <View className="gap-1">
+                  <Text className="text-[18px] font-semibold tracking-tight text-white">
+                    {t("onboardingProfileCountryLabel", locale)}
+                  </Text>
+                  <Text className="text-[13px] leading-[18px] text-white/38">
+                    {t("onboardingCountrySelectorHint", locale)}
+                  </Text>
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  hitSlop={10}
+                  onPress={() => setCountrySelectorOpen(false)}
+                >
+                  <Ionicons
+                    color="rgba(255,255,255,0.46)"
+                    name="close"
+                    size={22}
+                  />
+                </Pressable>
+              </View>
+            </View>
+
+            <View className="mb-3 flex-row items-center gap-3 overflow-hidden rounded-[22px] border border-white/[0.08] bg-white/[0.04] px-4 py-3">
+              <Ionicons
+                color="rgba(255,255,255,0.28)"
+                name="search"
+                size={16}
+              />
+              <TextInput
+                autoCapitalize="words"
+                autoCorrect={false}
+                className="flex-1 text-[15px] leading-[22px] text-white"
+                onChangeText={setCountryQuery}
+                placeholder={t("commonSearch", locale)}
+                placeholderTextColor="rgba(255,255,255,0.28)"
+                returnKeyType="search"
+                selectionColor="rgba(255,255,255,0.75)"
+                value={countryQuery}
+              />
+            </View>
+
+            <FlatList
+              data={countrySuggestions}
+              initialNumToRender={20}
+              keyboardShouldPersistTaps="handled"
+              keyExtractor={(country) => country}
+              renderItem={({ item: country }) => (
+                <Pressable
+                  className="flex-row items-center justify-between px-1 py-3.5"
+                  onPress={() => {
+                    patch({
+                      country,
+                      inferenceMeta: {
+                        ...draft.inferenceMeta,
+                        location: {
+                          source: "manual",
+                          confidence: 1,
+                          needsConfirmation: false,
+                        },
+                      },
+                    });
+                    setCountrySelectorOpen(false);
+                  }}
+                >
+                  <Text className="text-[16px] text-white/86">{country}</Text>
+                  {draft.country === country ? (
+                    <Ionicons
+                      color="rgba(255,255,255,0.72)"
+                      name="checkmark"
+                      size={18}
+                    />
+                  ) : null}
+                </Pressable>
+              )}
+              ItemSeparatorComponent={() => (
+                <View className="h-px bg-white/[0.05]" />
+              )}
+              ListEmptyComponent={
+                <Text className="px-1 py-3 text-[13px] text-white/36">
+                  {t("onboardingCountrySelectorEmpty", locale)}
+                </Text>
+              }
+              showsVerticalScrollIndicator={false}
+            />
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
-}
-
-function uniqueGoals(goals: string[]) {
-  return [...new Set(goals)];
 }
 
 function metaLabel(confidence: number, needsConfirmation: boolean) {
@@ -1401,5 +1579,17 @@ const layout = StyleSheet.create({
   },
   profileFields: {
     gap: 16,
+  },
+  inferOverlay: {
+    backgroundColor: "rgba(5,5,6,0.96)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 28,
+  },
+  inferOverlayInner: {
+    width: "100%",
+    maxWidth: 360,
+    alignItems: "center",
+    gap: 28,
   },
 });

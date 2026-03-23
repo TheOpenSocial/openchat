@@ -47,6 +47,13 @@ const catalogs = {
     onboardingHybridTypeInstead: "Type instead",
     onboardingHybridManual: "Or set it up manually",
     onboardingHybridProcessing: "Got it. Let me understand this.",
+    onboardingHybridProcessingTitle: "Understanding",
+    onboardingHybridProcessingHint:
+      "We’re turning what you said into your first setup.",
+    onboardingHybridProcessingWordOne: "Agentic is listening.",
+    onboardingHybridProcessingWordTwo: "Agentic is shaping your profile.",
+    onboardingHybridProcessingWordThree:
+      "Agentic is preparing your first read.",
     onboardingHybridCapturedTitle: "You said",
     onboardingHybridCapturedHint: "We’re shaping the next step from this.",
     onboardingHybridFollowUpVoiceHint: "Speak your answer.",
@@ -56,9 +63,11 @@ const catalogs = {
     onboardingHybridFollowUpHint:
       "Answer naturally. We’ll keep shaping this around you.",
     onboardingRefineTitle: "Refine your setup",
-    onboardingRefineSubtitle: "Adjust anything we might have missed.",
+    onboardingRefineSubtitle:
+      "Sharpen the parts that matter most before we lock this in.",
     onboardingPersonaTitle: "What we understood.",
-    onboardingPersonaSubtitle: "A quick check before we continue.",
+    onboardingPersonaSubtitle:
+      "This is the shape your setup is taking from what you shared.",
     onboardingPersonaEdit: "Refine details",
     onboardingPersonaEditHint: "Adjust anything that feels off.",
     onboardingPersonaSignalTitle: "Signal snapshot",
@@ -69,6 +78,8 @@ const catalogs = {
     onboardingProfileOptionalTitle: "Add a profile (optional)",
     onboardingProfileOptionalSubtitle:
       "A few basics help people feel comfortable saying yes.",
+    onboardingCountrySelectorEmpty: "No countries found.",
+    onboardingCountrySelectorHint: "Search or scroll the full list.",
     onboardingStepOneTitle: "Agentic, for you.",
     onboardingStepOneSubtitle:
       "Tell us what you want to do, talk about, or explore.",
@@ -354,6 +365,13 @@ const catalogs = {
     onboardingHybridTypeInstead: "Escribir en su lugar",
     onboardingHybridManual: "O configurarlo manualmente",
     onboardingHybridProcessing: "Entendido. Déjame comprenderlo.",
+    onboardingHybridProcessingTitle: "Comprendiendo",
+    onboardingHybridProcessingHint:
+      "Estamos convirtiendo lo que dijiste en tu primera configuración.",
+    onboardingHybridProcessingWordOne: "Agentic está escuchando.",
+    onboardingHybridProcessingWordTwo: "Agentic está dando forma a tu perfil.",
+    onboardingHybridProcessingWordThree:
+      "Agentic está preparando su primera lectura.",
     onboardingHybridCapturedTitle: "Dijiste",
     onboardingHybridCapturedHint:
       "Estamos armando el siguiente paso desde esto.",
@@ -364,9 +382,11 @@ const catalogs = {
     onboardingHybridFollowUpHint:
       "Responde de forma natural. Seguiremos armándolo contigo.",
     onboardingRefineTitle: "Refina tu configuración",
-    onboardingRefineSubtitle: "Ajusta cualquier cosa que se nos haya escapado.",
+    onboardingRefineSubtitle:
+      "Afina las partes que más importan antes de dejar esto listo.",
     onboardingPersonaTitle: "Lo que entendimos.",
-    onboardingPersonaSubtitle: "Una verificación rápida antes de seguir.",
+    onboardingPersonaSubtitle:
+      "Esta es la forma que está tomando tu configuración a partir de lo que compartiste.",
     onboardingPersonaEdit: "Refinar detalles",
     onboardingPersonaEditHint: "Ajusta cualquier cosa que no encaje.",
     onboardingPersonaSignalTitle: "Resumen de señales",
@@ -377,6 +397,8 @@ const catalogs = {
     onboardingProfileOptionalTitle: "Agrega un perfil (opcional)",
     onboardingProfileOptionalSubtitle:
       "Algunos datos básicos ayudan a que otros se sientan cómodos diciendo que sí.",
+    onboardingCountrySelectorEmpty: "No encontramos países.",
+    onboardingCountrySelectorHint: "Busca o recorre la lista completa.",
     onboardingStepOneTitle: "Agéntico, para ti.",
     onboardingStepOneSubtitle:
       "Cuéntanos qué quieres hacer, hablar o explorar.",
