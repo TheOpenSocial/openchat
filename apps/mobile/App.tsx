@@ -2,17 +2,12 @@ import "./global.css";
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { StatusBar } from "expo-status-bar";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { AnimatedScreen } from "./src/components/AnimatedScreen";
 import { AppToastHost } from "./src/components/AppToastHost";
+import { LoadingState } from "./src/components/LoadingState";
 import { PremiumSplashOverlay } from "./src/components/PremiumSplashOverlay";
 import { StageCurtain } from "./src/components/StageCurtain";
 import { type AppLocale, supportedLocales, t } from "./src/i18n/strings";
@@ -41,7 +36,6 @@ import { clearOnboardingDraft } from "./src/onboarding/onboarding-storage";
 import { OnboardingFlow } from "./src/onboarding/OnboardingFlow";
 import { AuthScreen } from "./src/screens/AuthScreen";
 import { DesignMockApp } from "./src/screens/DesignMockApp";
-import { HomeScreen } from "./src/screens/HomeScreen";
 import { AppStage, MobileSession, UserProfileDraft } from "./src/types";
 
 const designMockApp =
@@ -374,7 +368,7 @@ function ProductionApp() {
         refreshToken: session.refreshToken,
         sessionId: session.sessionId,
         profileCompleted: true,
-        onboardingState: "completed",
+        onboardingState: "complete",
       });
       setSession((prev) =>
         prev
@@ -551,16 +545,29 @@ function ProductionApp() {
               session={session}
             />
           ) : null}
-          {stage === "home" && session ? (
-            <HomeScreen
-              initialAgentMessage={homeAgentSeedMessage}
-              initialProfile={profile}
-              onInitialAgentMessageConsumed={handleInitialAgentSeedConsumed}
-              onProfileUpdated={setProfile}
-              onResetSession={handleResetSession}
-              session={session}
-            />
-          ) : null}
+          {stage === "home" && session
+            ? (() => {
+                try {
+                  const { HomeScreen } =
+                    // eslint-disable-next-line @typescript-eslint/no-require-imports
+                    require("./src/screens/HomeScreen") as typeof import("./src/screens/HomeScreen");
+                  return (
+                    <HomeScreen
+                      initialAgentMessage={homeAgentSeedMessage}
+                      initialProfile={profile}
+                      onInitialAgentMessageConsumed={
+                        handleInitialAgentSeedConsumed
+                      }
+                      onProfileUpdated={setProfile}
+                      onResetSession={handleResetSession}
+                      session={session}
+                    />
+                  );
+                } catch {
+                  return <LoadingState label={t("loadingYourSpace", locale)} />;
+                }
+              })()
+            : null}
         </AnimatedScreen>
       ) : null}
       <StageCurtain visible={stageCurtainVisible} />

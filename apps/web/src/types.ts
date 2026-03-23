@@ -15,6 +15,7 @@ export interface WebSession {
   sessionId: string;
   profileCompleted?: boolean;
   onboardingState?: string | null;
+  onboardingCarryoverSeed?: string | null;
 }
 
 export interface UserProfileDraft {

@@ -1396,12 +1396,17 @@ Production rollout is approved only when:
 - [ ] `TP-04` LLM response quality upgrade (launch profile): tune prompts + schema guarantees so rich inference returns stable persona/summary quality (not generic) for 20+ realistic voice transcripts in EN/ES smoke set.
 - [~] `TP-05` Provider strategy and routing: define and validate fast/rich model policy (`ONBOARDING_LLM_FAST_MODEL`, `ONBOARDING_LLM_RICH_MODEL`, timeout budgets) with measurable p95 latency and quality acceptance gates.
 - [~] `TP-06` Deploy/env parity for onboarding AI: ensure staging/production/rollback always sync all onboarding env vars (`*_MODEL`, `*_FAST_MODEL`, `*_RICH_MODEL`, `*_TIMEOUT_MS`, `*_RICH_TIMEOUT_MS`, probe token) with regression tests.
-- [ ] `TP-07` Observability for onboarding inference: add structured logs/metrics dashboard (success rate, timeout rate, fallback rate, model/provider latency histogram) and alert thresholds for degradation.
+- [~] `TP-07` Observability for onboarding inference: add structured logs/metrics dashboard (success rate, timeout rate, fallback rate, model/provider latency histogram) and alert thresholds for degradation.
 - [ ] `TP-08` Session continuity bugfix: eliminate `session expired` interruptions by validating refresh-token path across mobile/web (token rotation, retry-on-401 once, forced logout only on hard refresh failure) with E2E coverage.
 - [ ] `TP-09` Onboarding end-to-end contract tests: add API + client integration tests for voice-first flow from transcript capture through persona confirmation and profile persistence.
 - [ ] `TP-10` Security clean-up before launch: rotate temporary debug/probe secrets, retain protected probe endpoints for ops, and verify no sensitive tokens are present in git history/docs/log output.
 - [ ] `TP-11` Launch smoke matrix: run deterministic smoke checks for web/mobile/admin + API on staging and production with explicit pass/fail checklist and rollback criteria.
 - [ ] `TP-12` Release readiness package: publish a concise launch runbook including known limits, fallback behavior, monitoring links, kill switches, and first-24h incident response owner map.
+- [~] `TP-13` Post-onboarding activation trigger contract: run one deterministic activation handoff immediately after persona confirmation/profile persistence and return typed activation state (`idle|pending|ready|failed`) plus first recommended action.
+- [~] `TP-14` Mobile/web activation handoff UX: route users from onboarding completion into actionable activation state (not empty home), with resilient resume after background/relaunch and explicit loading/ready/error states.
+- [ ] `TP-15` Starter intent bootstrap pipeline: generate/persist a safe first activation recommendation from onboarding outputs (persona/goals/interests/language) with deterministic fallback for weak model output.
+- [ ] `TP-16` One-tap activation execution path: execute first recommended action directly after onboarding with backend idempotency, optimistic UX, and recoverable failure handling.
+- [ ] `TP-17` Activation funnel telemetry and guardrails: instrument onboarding-complete -> activation-ready -> first-action-succeeded funnel with alert thresholds for activation failure and cold-start latency regressions.
 
 ---
 

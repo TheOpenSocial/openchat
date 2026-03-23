@@ -50,12 +50,14 @@ type AppSessionContextValue = {
   profileDraft: UserProfileDraft;
   profilePhotoUrl: string | null;
   session: WebSession | null;
+  onboardingCarryoverSeed: string | null;
   setBanner: Dispatch<SetStateAction<Banner | null>>;
   setLocale: Dispatch<SetStateAction<AppLocale>>;
   setProfileDraft: Dispatch<SetStateAction<UserProfileDraft>>;
   completeOnboarding: () => Promise<"/home">;
   restoreProfileData: () => Promise<void>;
   saveProfileSettings: () => Promise<void>;
+  consumeOnboardingCarryoverSeed: () => void;
   signInWithDemoCode: (code?: string) => Promise<"/onboarding" | "/home">;
   signInWithPreview: () => Promise<"/onboarding">;
   signOut: () => void;
@@ -89,6 +91,9 @@ export function AppSessionProvider({ children }: { children: ReactNode }) {
   const [isOnline, setIsOnline] = useState(true);
   const [authLoading, setAuthLoading] = useState(false);
   const [onboardingLoading, setOnboardingLoading] = useState(false);
+  const [onboardingCarryoverSeed, setOnboardingCarryoverSeed] = useState<
+    string | null
+  >(null);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -206,6 +211,7 @@ export function AppSessionProvider({ children }: { children: ReactNode }) {
         );
         const cached = stored;
         setSession(stored);
+        setOnboardingCarryoverSeed(stored.onboardingCarryoverSeed ?? null);
         setProfileComplete(completion.completed);
         setProfileDraft((current) => ({
           ...current,
@@ -223,6 +229,7 @@ export function AppSessionProvider({ children }: { children: ReactNode }) {
         ) {
           const cached = stored;
           setSession(cached);
+          setOnboardingCarryoverSeed(cached.onboardingCarryoverSeed ?? null);
           setProfileComplete(Boolean(cached.profileCompleted));
           setProfileDraft((current) => ({
             ...current,
@@ -407,11 +414,36 @@ export function AppSessionProvider({ children }: { children: ReactNode }) {
     setBanner(null);
     try {
       await saveProfile();
+      const seed = buildOnboardingCarryoverSeed(profileDraft);
+      if (seed && session) {
+        const nextSession = {
+          ...session,
+          onboardingCarryoverSeed: seed,
+        };
+        setSession(nextSession);
+        setOnboardingCarryoverSeed(seed);
+        saveStoredSession(nextSession);
+      }
       setBanner({ tone: "success", text: "Onboarding saved." });
       return "/home" as const;
     } finally {
       setOnboardingLoading(false);
     }
+  };
+
+  const consumeOnboardingCarryoverSeed = () => {
+    setOnboardingCarryoverSeed(null);
+    setSession((current) => {
+      if (!current) {
+        return current;
+      }
+      const next = {
+        ...current,
+        onboardingCarryoverSeed: null,
+      };
+      saveStoredSession(next);
+      return next;
+    });
   };
 
   const saveProfileSettings = async () => {
@@ -488,10 +520,12 @@ export function AppSessionProvider({ children }: { children: ReactNode }) {
       profileDraft,
       profilePhotoUrl,
       session,
+      onboardingCarryoverSeed,
       setBanner,
       setLocale,
       setProfileDraft,
       completeOnboarding,
+      consumeOnboardingCarryoverSeed,
       restoreProfileData,
       saveProfileSettings,
       signInWithDemoCode,
@@ -519,6 +553,22 @@ export function AppSessionProvider({ children }: { children: ReactNode }) {
       {children}
     </AppSessionContext.Provider>
   );
+}
+
+function buildOnboardingCarryoverSeed(profile: UserProfileDraft) {
+  const interests = profile.interests
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 3);
+  const where = [profile.city.trim(), profile.country.trim()]
+    .filter(Boolean)
+    .join(", ");
+  const interestsText =
+    interests.length > 0 ? interests.join(", ") : "meaningful social plans";
+  if (where) {
+    return `I just finished onboarding. Help me find my best first social step around ${interestsText} in ${where}.`;
+  }
+  return `I just finished onboarding. Help me find my best first social step around ${interestsText}.`;
 }
 
 export function useAppSession() {

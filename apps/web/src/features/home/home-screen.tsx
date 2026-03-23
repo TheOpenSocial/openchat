@@ -6,7 +6,7 @@ import {
   type AgentTranscriptRow,
 } from "@opensocial/types";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { ChatBubble } from "@/src/components/ChatBubble";
 import {
@@ -46,8 +46,15 @@ function parseOptionalImageAttachmentUrl(raw: string) {
 }
 
 export function HomeScreen() {
-  const { isDesignMock, isOnline, locale, session, setBanner } =
-    useAppSession();
+  const {
+    isDesignMock,
+    isOnline,
+    locale,
+    session,
+    setBanner,
+    onboardingCarryoverSeed,
+    consumeOnboardingCarryoverSeed,
+  } = useAppSession();
   const [threadLoading, setThreadLoading] = useState(false);
   const [threadId, setThreadId] = useState<string | null>(null);
   const [timeline, setTimeline] = useState<AgentTranscriptRow[]>([
@@ -67,6 +74,7 @@ export function HomeScreen() {
   const [pendingSummary, setPendingSummary] = useState<Awaited<
     ReturnType<typeof api.summarizePendingIntents>
   > | null>(null);
+  const onboardingSeedHandledRef = useRef(false);
 
   useEffect(() => {
     if (!session) {
@@ -146,6 +154,103 @@ export function HomeScreen() {
       cancelled = true;
     };
   }, [isDesignMock, isOnline, session, setBanner]);
+
+  useEffect(() => {
+    if (isDesignMock || !isOnline || !session) {
+      return;
+    }
+    const seed = onboardingCarryoverSeed?.trim() ?? "";
+    if (!seed || !threadId || onboardingSeedHandledRef.current) {
+      return;
+    }
+
+    onboardingSeedHandledRef.current = true;
+    const marker = Date.now().toString(36);
+    setTimeline((current) => [
+      ...current,
+      { id: `user_onboarding_seed_${marker}`, role: "user", body: seed },
+      {
+        id: `workflow_onboarding_seed_${marker}`,
+        role: "workflow",
+        body: t("agentWorkflowThinking", locale),
+      },
+    ]);
+
+    let cancelled = false;
+    const run = async () => {
+      const traceId = crypto.randomUUID();
+      const streamingId = `agent_onboarding_seed_${marker}`;
+      setTimeline((current) => [
+        ...current,
+        { id: streamingId, role: "agent", body: "" },
+      ]);
+
+      const sse = openAgentThreadSse(
+        buildAgentThreadStreamUrl(threadId, session.accessToken),
+        (message) => {
+          const delta = extractResponseTokenDelta(message, traceId);
+          if (delta === null || cancelled) {
+            return;
+          }
+          setTimeline((current) =>
+            current.map((row) =>
+              row.id === streamingId ? { ...row, body: row.body + delta } : row,
+            ),
+          );
+        },
+      );
+
+      try {
+        await api.agentThreadRespondStream(
+          threadId,
+          session.userId,
+          seed,
+          session.accessToken,
+          { traceId },
+        );
+      } catch (error) {
+        if (!cancelled) {
+          setBanner({
+            tone: "error",
+            text: `Could not run onboarding activation: ${String(error)}`,
+          });
+        }
+      } finally {
+        sse.close();
+      }
+
+      try {
+        const [messages, pending] = await Promise.all([
+          api.listAgentThreadMessages(threadId, session.accessToken),
+          api.summarizePendingIntents(session.userId, 6, session.accessToken),
+        ]);
+        if (!cancelled) {
+          setTimeline(agentThreadMessagesToTranscript(messages));
+          setPendingSummary(pending);
+        }
+      } catch {
+        // Keep streamed state as-is when hydration refresh fails.
+      } finally {
+        if (!cancelled) {
+          consumeOnboardingCarryoverSeed();
+        }
+      }
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    consumeOnboardingCarryoverSeed,
+    isDesignMock,
+    isOnline,
+    locale,
+    onboardingCarryoverSeed,
+    session,
+    setBanner,
+    threadId,
+  ]);
 
   const acceptedCount = useMemo(
     () =>
