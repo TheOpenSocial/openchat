@@ -41,6 +41,7 @@ describe("OpenAIClient", () => {
       expect(client.getModelPolicy()).toEqual({
         intent_parsing: "model-default",
         onboarding_inference: "model-default",
+        onboarding_fast_pass: "model-default",
         follow_up_question: "model-follow-up",
         suggestion_generation: "model-default",
         ranking_explanation: "model-default",
