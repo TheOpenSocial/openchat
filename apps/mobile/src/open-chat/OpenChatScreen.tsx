@@ -16,17 +16,19 @@ import type { PendingIntentsSummaryResponse } from "../lib/api";
 import { hapticSelection } from "../lib/haptics";
 import type { AppLocale } from "../i18n/strings";
 import { t } from "../i18n/strings";
+import type { TelemetryEventName } from "../lib/telemetry";
 import type { AgentTimelineMessage } from "../types";
+import type { HomeRuntimeViewModel } from "../screens/home/domain/types";
 import { OpenChatComposer } from "./OpenChatComposer";
 import { OpenChatHeader } from "./OpenChatHeader";
 import { StarterPrompts } from "./StarterPrompts";
-import { ThreadActionPills, type ThreadActionSpec } from "./ThreadActionPills";
-import { ThreadContextStrip } from "./ThreadContextStrip";
 import { ThreadMessage } from "./ThreadMessage";
+import { ThreadStatusTransition } from "./ThreadStatusTransition";
+import { useThreadRuntimePresentation } from "./useThreadRuntimePresentation";
 import {
-  compactProgressHint,
-  deriveThreadPhase,
+  deriveThreadRuntimeModel,
   hasUserTurn,
+  type ThreadRuntimeState,
 } from "./thread-types";
 
 export type OpenChatScreenProps = {
@@ -50,13 +52,18 @@ export type OpenChatScreenProps = {
   onDecomposeIntentChange: (value: boolean) => void;
   onDecomposeMaxIntentsChange: (value: number) => void;
   pendingIntentSummary: PendingIntentsSummaryResponse | null;
-  onOpenChatsTab: () => void;
   e2eSubmitOnReturn?: boolean;
   onboardingCarryover?: {
     seed: string;
     state: "processing" | "queued" | "ready";
   } | null;
   onExecuteOnboardingCarryover?: () => void;
+  composerBottomOffset?: number;
+  onRuntimeTelemetry?: (
+    name: TelemetryEventName,
+    properties?: Record<string, unknown>,
+  ) => void;
+  runtimeViewModel?: HomeRuntimeViewModel;
 };
 
 export function OpenChatScreen({
@@ -73,7 +80,6 @@ export function OpenChatScreen({
   onComposerModeChange,
   onDecomposeIntentChange,
   onDecomposeMaxIntentsChange,
-  onOpenChatsTab,
   onRegenerate,
   onSend,
   onStop,
@@ -84,6 +90,9 @@ export function OpenChatScreen({
   threadLoading,
   onboardingCarryover = null,
   onExecuteOnboardingCarryover,
+  composerBottomOffset = 0,
+  onRuntimeTelemetry,
+  runtimeViewModel,
 }: OpenChatScreenProps) {
   void agentImageUrl;
   void canRegenerate;
@@ -97,27 +106,6 @@ export function OpenChatScreen({
   void onRegenerate;
   void onStop;
   const transcriptRef = useRef<FlatList<AgentTimelineMessage> | null>(null);
-  const inlineChips = useMemo(
-    () => [
-      {
-        label: "Talk about something",
-        body: "I want to talk about something on my mind.",
-      },
-      {
-        label: "Find people for tonight",
-        body: "Find people who are free tonight.",
-      },
-      {
-        label: "Meet someone new",
-        body: "I want to meet someone new around a shared interest.",
-      },
-      {
-        label: "Start a group",
-        body: "I want to start a small group around something I care about.",
-      },
-    ],
-    [],
-  );
   const userActive = hasUserTurn(messages);
   const filteredMessages = useMemo(() => {
     const DEBUG_PATTERNS = [
@@ -134,52 +122,39 @@ export function OpenChatScreen({
     });
   }, [messages]);
 
-  const latestUserIntent = useMemo(() => {
-    for (let i = filteredMessages.length - 1; i >= 0; i -= 1) {
-      const row = filteredMessages[i];
-      if (row.role === "user" && row.body.trim().length > 0) {
-        return row.body.trim();
-      }
+  const rawRuntime = useMemo(() => {
+    const derived = deriveThreadRuntimeModel(
+      filteredMessages,
+      pendingIntentSummary,
+      sending,
+      threadLoading,
+    );
+    if (!runtimeViewModel) {
+      return derived;
     }
-    return null;
-  }, [filteredMessages]);
-
-  const progressHint = useMemo(
-    () => compactProgressHint(pendingIntentSummary),
-    [pendingIntentSummary],
-  );
-
-  const phase = deriveThreadPhase(
+    const nextState: ThreadRuntimeState =
+      runtimeViewModel.state === "error" ? "idle" : runtimeViewModel.state;
+    return {
+      ...derived,
+      state: nextState,
+      contextLabel: runtimeViewModel.contextLabel,
+      hint: runtimeViewModel.hint,
+      thinkingLabel: runtimeViewModel.thinkingLabel,
+    };
+  }, [
     filteredMessages,
     pendingIntentSummary,
+    runtimeViewModel,
     sending,
     threadLoading,
-  );
+  ]);
 
-  const threadActions = useMemo((): ThreadActionSpec[] => {
-    const seen = new Set<string>();
-    const out: ThreadActionSpec[] = [];
-    const push = (a: ThreadActionSpec) => {
-      if (seen.has(a.id)) return;
-      seen.add(a.id);
-      out.push(a);
-    };
+  const runtime = useThreadRuntimePresentation({
+    onRuntimeTelemetry,
+    rawRuntime,
+  });
 
-    let accepted = 0;
-    for (const row of pendingIntentSummary?.intents ?? []) {
-      accepted += row.requests.accepted;
-    }
-
-    if (accepted >= 1) {
-      push({ id: "open_chats", label: t("openChatActionOpenChats", locale) });
-    }
-    if (phase === "active" || phase === "partial" || phase === "no_match") {
-      push({ id: "widen", label: t("openChatActionWiden", locale) });
-      push({ id: "one_to_one", label: t("openChatActionOneToOne", locale) });
-      push({ id: "groups_ok", label: t("openChatActionGroupsOk", locale) });
-    }
-    return out;
-  }, [locale, pendingIntentSummary, phase]);
+  const phase = runtime.phase;
 
   useEffect(() => {
     if (Platform.OS === "android") {
@@ -188,8 +163,8 @@ export function OpenChatScreen({
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
   }, [filteredMessages.length]);
 
-  const intentLen = draftMessage.trim().length;
-  const canSend = intentLen > 0 && !sending;
+  const canSend =
+    runtimeViewModel?.canSend ?? (draftMessage.trim().length > 0 && !sending);
   const showOnboardingCarryover =
     onboardingCarryover != null &&
     (phase === "empty" || phase === "active" || !userActive);
@@ -215,26 +190,6 @@ export function OpenChatScreen({
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
   }, [showOnboardingCarryover, onboardingCarryover?.state]);
 
-  const onThreadAction = (id: string) => {
-    hapticSelection();
-    switch (id) {
-      case "open_chats":
-        onOpenChatsTab();
-        return;
-      case "widen":
-        void onSend("Widen the search for my latest intent.");
-        return;
-      case "one_to_one":
-        void onSend("Keep matching 1:1 only for this.");
-        return;
-      case "groups_ok":
-        void onSend("Open this to small groups, not only 1:1.");
-        return;
-      default:
-        return;
-    }
-  };
-
   const onComposerLayout = (event: LayoutChangeEvent) => {
     const nextHeight = Math.ceil(event.nativeEvent.layout.height);
     if (Math.abs(nextHeight - composerOverlayHeight) > 2) {
@@ -245,20 +200,12 @@ export function OpenChatScreen({
   return (
     <View className="min-h-0 flex-1 bg-[#050506] px-5 pt-3">
       <OpenChatHeader locale={locale} showPresence={!userActive} />
-      {latestUserIntent ? (
-        <View className="mb-2 mt-1 rounded-2xl border border-white/[0.06] bg-white/[0.03] px-3 py-2.5">
-          <Text className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/36">
-            Current intent
-          </Text>
-          <Text
-            className="mt-1 text-[14px] leading-[20px] text-white/78"
-            numberOfLines={2}
-          >
-            {latestUserIntent}
-          </Text>
-        </View>
-      ) : null}
-      <ThreadContextStrip hint={progressHint} phase={phase} />
+      <ThreadStatusTransition
+        contextLabel={runtime.contextLabel}
+        hint={runtime.hint}
+        showThinking={hasUserTurn(filteredMessages)}
+        thinkingLabel={runtime.thinkingLabel}
+      />
 
       {showOnboardingCarryover ? (
         <View className="mb-4 mt-1 border-l border-white/[0.08] pl-4">
@@ -355,30 +302,11 @@ export function OpenChatScreen({
         </View>
       )}
 
-      {hasUserTurn(filteredMessages) && filteredMessages.length <= 6 ? (
-        <View className="mb-3 mt-1">
-          <Text className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/24">
-            Suggestions
-          </Text>
-          <View className="flex-row flex-wrap gap-2">
-            {inlineChips.map((c) => (
-              <Pressable
-                className="rounded-full border border-white/[0.07] bg-white/[0.025] px-3 py-1.5"
-                key={c.label}
-                onPress={() => setDraftMessage(c.body)}
-              >
-                <Text className="text-[12px] font-medium text-white/56">
-                  {c.label}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        </View>
-      ) : null}
-
-      <ThreadActionPills actions={threadActions} onAction={onThreadAction} />
       {!atBottom && pendingUpdates > 0 ? (
-        <View className="absolute bottom-[192px] self-center">
+        <View
+          className="absolute self-center"
+          style={{ bottom: composerBottomOffset + 134 }}
+        >
           <Pressable
             accessibilityLabel="Jump to latest update"
             accessibilityRole="button"
@@ -400,7 +328,7 @@ export function OpenChatScreen({
         className="absolute"
         onLayout={onComposerLayout}
         pointerEvents="box-none"
-        style={{ bottom: 30, left: 5, right: 5 }}
+        style={{ bottom: 15, left: 5, right: 5 }}
       >
         <OpenChatComposer
           canSend={canSend}
