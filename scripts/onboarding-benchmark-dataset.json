@@ -1,0 +1,122 @@
+[
+  {
+    "id": "en-01",
+    "locale": "en",
+    "transcript": "I moved to a new city and want to meet thoughtful people for coffee and design chats on weekends."
+  },
+  {
+    "id": "en-02",
+    "locale": "en",
+    "transcript": "Looking for football games after work and small groups that plan consistently, not random chats."
+  },
+  {
+    "id": "en-03",
+    "locale": "en",
+    "transcript": "I am into startups and AI and want one-on-one conversations with people building real products."
+  },
+  {
+    "id": "en-04",
+    "locale": "en",
+    "transcript": "I prefer spontaneous social plans tonight, maybe live music and meeting outgoing people."
+  },
+  {
+    "id": "en-05",
+    "locale": "en",
+    "transcript": "I like calm plans, bookstores, and deep conversations with people who enjoy ideas."
+  },
+  {
+    "id": "en-06",
+    "locale": "en",
+    "transcript": "I want to find tennis partners in my area and maybe build a recurring group for evenings."
+  },
+  {
+    "id": "en-07",
+    "locale": "en",
+    "transcript": "I am here mostly for dating but in a respectful way, I prefer planned one-on-one meetings."
+  },
+  {
+    "id": "en-08",
+    "locale": "en",
+    "transcript": "I want social and dating both, mostly small groups first, then maybe one-on-one if we click."
+  },
+  {
+    "id": "en-09",
+    "locale": "en",
+    "transcript": "I am a remote worker and free in the mornings; I want accountability circles for fitness."
+  },
+  {
+    "id": "en-10",
+    "locale": "en",
+    "transcript": "I want to reconnect with people who like photography walks and chill weekend plans."
+  },
+  {
+    "id": "en-11",
+    "locale": "en",
+    "transcript": "I feel shy in large spaces, prefer 1:1 introductions and gradual social exposure."
+  },
+  {
+    "id": "en-12",
+    "locale": "en",
+    "transcript": "I am into gaming nights, especially co-op shooters, and want people online now."
+  },
+  {
+    "id": "es-01",
+    "locale": "es",
+    "transcript": "Me mudé hace poco y quiero conocer gente tranquila para tomar café y hablar de diseño los fines de semana."
+  },
+  {
+    "id": "es-02",
+    "locale": "es",
+    "transcript": "Busco jugar fútbol por la tarde y armar planes con grupos chicos que sean constantes."
+  },
+  {
+    "id": "es-03",
+    "locale": "es",
+    "transcript": "Me gustan las startups y la IA, prefiero conversaciones uno a uno con personas que construyen productos."
+  },
+  {
+    "id": "es-04",
+    "locale": "es",
+    "transcript": "Quiero planes espontáneos hoy, música en vivo y conocer gente sociable."
+  },
+  {
+    "id": "es-05",
+    "locale": "es",
+    "transcript": "Prefiero planes tranquilos, librerías y charlas profundas con gente reflexiva."
+  },
+  {
+    "id": "es-06",
+    "locale": "es",
+    "transcript": "Quiero encontrar compañeros para tenis en mi zona y quizás crear un grupo recurrente por las noches."
+  },
+  {
+    "id": "es-07",
+    "locale": "es",
+    "transcript": "Estoy acá más para dating, pero con respeto; prefiero encuentros planificados de a dos."
+  },
+  {
+    "id": "es-08",
+    "locale": "es",
+    "transcript": "Me interesa lo social y también dating, primero grupos chicos y después uno a uno si hay conexión."
+  },
+  {
+    "id": "es-09",
+    "locale": "es",
+    "transcript": "Trabajo remoto y estoy libre por la mañana; busco círculos de hábitos para entrenar."
+  },
+  {
+    "id": "es-10",
+    "locale": "es",
+    "transcript": "Quiero retomar actividades de fotografía y planes tranquilos el fin de semana."
+  },
+  {
+    "id": "es-11",
+    "locale": "es",
+    "transcript": "Soy tímido en grupos grandes, prefiero introducciones uno a uno e ir de a poco."
+  },
+  {
+    "id": "es-12",
+    "locale": "es",
+    "transcript": "Me gustan las noches de gaming, sobre todo cooperativo, y quiero conectar con gente ahora."
+  }
+]
