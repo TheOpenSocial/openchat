@@ -2,97 +2,54 @@ import {
   agentThreadMessagesToTranscript,
   extractResponseTokenDelta,
 } from "@opensocial/types";
-import Ionicons from "@expo/vector-icons/Ionicons";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-} from "react-native";
+import { Keyboard, KeyboardAvoidingView, Platform, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
 import {
   api,
   buildAgentThreadStreamUrl,
   ChatMessageRecord,
-  DiscoveryInboxSuggestionsResponse,
-  PassiveDiscoveryResponse,
   PendingIntentsSummaryResponse,
-  RecurringCircleRecord,
-  RecurringCircleSessionRecord,
-  SavedSearchRecord,
-  ScheduledTaskRecord,
-  ScheduledTaskRunRecord,
-  SearchSnapshotResponse,
-  UserIntentExplanation,
   isOfflineApiError,
   isRetryableApiError,
 } from "../lib/api";
 import { openAgentThreadSse } from "../lib/agent-thread-sse";
+import { type AppLocale, supportedLocales, t } from "../i18n/strings";
 import {
-  type AppLocale,
-  supportedLocales,
-  t,
-  type TranslationKey,
-} from "../i18n/strings";
-import {
-  clearStoredChats,
   loadStoredChats,
   saveStoredChats,
   type StoredChatThread,
 } from "../lib/chat-storage";
-import {
-  clearTelemetryEvents,
-  getTelemetrySummary,
-  trackTelemetryEvent,
-  type TelemetryEventName,
-  type TelemetrySummary,
-} from "../lib/telemetry";
-import {
-  createRealtimeSession,
-  type RealtimeConnectionState,
-  type RealtimeSession,
-} from "../lib/realtime";
+import { trackTelemetryEvent, type TelemetryEventName } from "../lib/telemetry";
+import { createRealtimeSession, type RealtimeSession } from "../lib/realtime";
 import { AnimatedScreen } from "../components/AnimatedScreen";
-import { AppDrawer } from "../components/AppDrawer";
-import { AppTopBar } from "../components/AppTopBar";
-import { CalmTextField } from "../components/CalmTextField";
-import { ChatBubble } from "../components/ChatBubble";
-import { ChatTranscriptList } from "../components/ChatTranscriptList";
-import { ChoiceChip } from "../components/ChoiceChip";
-import { EmptyState } from "../components/EmptyState";
-import { HomeTabBar } from "../components/HomeTabBar";
+import { AppShell } from "../components/AppShell";
+import { DevOrb } from "../components/DevOrb";
 import { InlineNotice } from "../components/InlineNotice";
-import { MessageComposer } from "../components/MessageComposer";
-import { PrimaryButton } from "../components/PrimaryButton";
-import { SurfaceCard } from "../components/SurfaceCard";
 import { hapticImpact, hapticSelection } from "../lib/haptics";
 import {
-  clearOfflineOutbox,
   loadOfflineOutbox,
   processOfflineOutbox,
   queueOfflineComposerSend,
-  queueOfflineProfileSave,
 } from "../lib/offline-outbox";
 import { useNetworkOnline } from "../lib/use-network-online";
 import { usePrimaryAgentThread } from "../lib/use-primary-agent-thread";
 import {
   DESIGN_MOCK_AGENT_TIMELINE,
   DESIGN_MOCK_CHATS,
-  DESIGN_MOCK_TELEMETRY_SUMMARY,
 } from "../mocks/design-fixtures";
-import { OpenChatScreen } from "../open-chat/OpenChatScreen";
-import { appTheme } from "../theme";
-import {
-  type AgentTimelineMessage,
-  HomeTab,
-  MobileSession,
-  UserProfileDraft,
-} from "../types";
+import { MobileSession, UserProfileDraft } from "../types";
+import { HomeAgentThreadScreen } from "./HomeAgentThreadScreen";
+import { ProfileScreen } from "./ProfileScreen";
+import { ChatsListScreen } from "./ChatsListScreen";
+import { useHomeShellStore } from "../store/home-shell-store";
+import { useHomeThreadStore } from "../store/home-thread-store";
+import { useChatsStore } from "../store/chats-store";
 
 export interface HomeScreenProps {
   session: MobileSession;
@@ -109,7 +66,15 @@ export interface HomeScreenProps {
 
 type IntentSendOutcome = "sent" | "queued" | "failed" | "aborted";
 
-type LocalChatThread = StoredChatThread;
+type LocalDeliveryStatus = "sending" | "queued" | "failed";
+
+type LocalChatMessageRecord = ChatMessageRecord & {
+  deliveryStatus?: LocalDeliveryStatus;
+};
+
+type LocalChatThread = Omit<StoredChatThread, "messages"> & {
+  messages: LocalChatMessageRecord[];
+};
 
 function parseOptionalImageAttachmentUrl(raw: string) {
   const trimmed = raw.trim();
@@ -141,17 +106,6 @@ function buildOnboardingCarryoverIdempotencyKey(userId: string, seed: string) {
   return `onboarding-carryover:${userId}:${stableHash36(normalized)}`;
 }
 
-const tabLabels: Record<HomeTab, TranslationKey> = {
-  home: "homeTabHome",
-  chats: "homeTabChats",
-  profile: "homeTabProfile",
-};
-
-const tabDescriptions: Record<HomeTab, TranslationKey> = {
-  home: "homeTabHomeDescription",
-  chats: "homeTabChatsDescription",
-  profile: "homeTabProfileDescription",
-};
 const MOBILE_LOCALE_STORAGE_KEY = "opensocial.mobile.locale.v1";
 const ONBOARDING_CARRYOVER_STORAGE_KEY_PREFIX =
   "opensocial.mobile.onboarding.carryover.v1";
@@ -169,31 +123,117 @@ export function HomeScreen({
   onResetSession,
   session,
 }: HomeScreenProps) {
-  type OnboardingCarryoverState = "processing" | "queued" | "ready" | null;
+  void initialProfile;
+  void onProfileUpdated;
+  void onResetSession;
+  const insets = useSafeAreaInsets();
   const [locale, setLocale] = useState<AppLocale>("en");
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const enableE2ELocalMode =
     process.env.EXPO_PUBLIC_ENABLE_E2E_LOCAL_MODE === "1";
-  const enablePushNotifications =
-    process.env.EXPO_PUBLIC_ENABLE_PUSH_NOTIFICATIONS === "1";
   const skipNetwork = designMock;
-  const [activeTab, setActiveTab] = useState<HomeTab>("home");
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const activeTab = useHomeShellStore((store) => store.activeTab);
+  const setActiveTab = useHomeShellStore((store) => store.setActiveTab);
   const intentAbortRef = useRef<AbortController | null>(null);
   const agentVoiceTranscriptRef = useRef<string | null>(null);
-  const [draftIntentText, setDraftIntentText] = useState("");
-  const [agentImageUrlDraft, setAgentImageUrlDraft] = useState("");
-  const [onboardingCarryoverSeed, setOnboardingCarryoverSeed] = useState("");
-  const [
-    onboardingCarryoverIdempotencyKey,
-    setOnboardingCarryoverIdempotencyKey,
-  ] = useState<string | null>(null);
-  const [onboardingCarryoverState, setOnboardingCarryoverState] =
-    useState<OnboardingCarryoverState>(null);
-  const [sendingIntent, setSendingIntent] = useState(false);
-  const [decomposeIntent, setDecomposeIntent] = useState(true);
-  const [decomposeMaxIntents, setDecomposeMaxIntents] = useState(3);
-  const [agentTimeline, setAgentTimeline] = useState<AgentTimelineMessage[]>(
-    () =>
+  const draftIntentText = useHomeThreadStore((store) => store.draftIntentText);
+  const setDraftIntentText = useHomeThreadStore(
+    (store) => store.setDraftIntentText,
+  );
+  const agentImageUrlDraft = useHomeThreadStore(
+    (store) => store.agentImageUrlDraft,
+  );
+  const setAgentImageUrlDraft = useHomeThreadStore(
+    (store) => store.setAgentImageUrlDraft,
+  );
+  const onboardingCarryoverSeed = useHomeThreadStore(
+    (store) => store.onboardingCarryoverSeed,
+  );
+  const setOnboardingCarryoverSeed = useHomeThreadStore(
+    (store) => store.setOnboardingCarryoverSeed,
+  );
+  const onboardingCarryoverIdempotencyKey = useHomeThreadStore(
+    (store) => store.onboardingCarryoverIdempotencyKey,
+  );
+  const setOnboardingCarryoverIdempotencyKey = useHomeThreadStore(
+    (store) => store.setOnboardingCarryoverIdempotencyKey,
+  );
+  const onboardingCarryoverState = useHomeThreadStore(
+    (store) => store.onboardingCarryoverState,
+  );
+  const setOnboardingCarryoverState = useHomeThreadStore(
+    (store) => store.setOnboardingCarryoverState,
+  );
+  const sendingIntent = useHomeThreadStore((store) => store.sendingIntent);
+  const setSendingIntent = useHomeThreadStore(
+    (store) => store.setSendingIntent,
+  );
+  const decomposeIntent = useHomeThreadStore((store) => store.decomposeIntent);
+  const setDecomposeIntent = useHomeThreadStore(
+    (store) => store.setDecomposeIntent,
+  );
+  const decomposeMaxIntents = useHomeThreadStore(
+    (store) => store.decomposeMaxIntents,
+  );
+  const setDecomposeMaxIntents = useHomeThreadStore(
+    (store) => store.setDecomposeMaxIntents,
+  );
+  const agentTimeline = useHomeThreadStore((store) => store.agentTimeline);
+  const setAgentTimeline = useHomeThreadStore(
+    (store) => store.setAgentTimeline,
+  );
+  const banner = useHomeShellStore((store) => store.banner);
+  const setBanner = useHomeShellStore((store) => store.setBanner);
+  const chats = useChatsStore((store) => store.chats);
+  const setChats = useChatsStore((store) => store.setChats);
+  const selectedChatId = useChatsStore((store) => store.selectedChatId);
+  const setSelectedChatId = useChatsStore((store) => store.setSelectedChatId);
+  const draftChatMessage = useHomeShellStore((store) => store.draftChatMessage);
+  const setDraftChatMessage = useHomeShellStore(
+    (store) => store.setDraftChatMessage,
+  );
+  const sendingChatMessage = useChatsStore((store) => store.sendingChatMessage);
+  const setSendingChatMessage = useChatsStore(
+    (store) => store.setSendingChatMessage,
+  );
+  const newChatType = useChatsStore((store) => store.newChatType);
+  const setNewChatType = useChatsStore((store) => store.setNewChatType);
+  const devOrbOpen = useHomeShellStore((store) => store.devOrbOpen);
+  const setDevOrbOpen = useHomeShellStore((store) => store.setDevOrbOpen);
+  const devOrbUnlocked = useHomeShellStore((store) => store.devOrbUnlocked);
+  const setDevOrbUnlocked = useHomeShellStore(
+    (store) => store.setDevOrbUnlocked,
+  );
+  const syncingChats = useChatsStore((store) => store.syncingChats);
+  const setSyncingChats = useChatsStore((store) => store.setSyncingChats);
+  const pendingOutboxCount = useChatsStore((store) => store.pendingOutboxCount);
+  const setPendingOutboxCount = useChatsStore(
+    (store) => store.setPendingOutboxCount,
+  );
+  const chatStorageReady = useChatsStore((store) => store.chatStorageReady);
+  const setChatStorageReady = useChatsStore(
+    (store) => store.setChatStorageReady,
+  );
+  const visibleBanner = banner?.tone === "error" ? null : banner;
+  const realtimeState = useChatsStore((store) => store.realtimeState);
+  const setRealtimeState = useChatsStore((store) => store.setRealtimeState);
+  const typingUsersByChat = useChatsStore((store) => store.typingUsersByChat);
+  const setTypingUsersByChat = useChatsStore(
+    (store) => store.setTypingUsersByChat,
+  );
+  const [pendingIntentSummary, setPendingIntentSummary] =
+    useState<PendingIntentsSummaryResponse | null>(null);
+  const [, setSelectedExplainedIntentId] = useState<string | null>(null);
+  const homeLayoutDebug = false;
+  const bottomComposerInset = Math.max(insets.bottom, 12);
+  const composerBottomInset = keyboardVisible ? 0 : bottomComposerInset;
+  const shellContentBottomInset =
+    activeTab === "profile" ? composerBottomInset : 0;
+  const showDevOrb = __DEV__ || process.env.EXPO_PUBLIC_ENABLE_DEV_ORB === "1";
+  const DEV_ORB_UNLOCK_WINDOW_MS = 10 * 60 * 1000;
+
+  useEffect(() => {
+    setAgentTimeline(
       designMock
         ? [...DESIGN_MOCK_AGENT_TIMELINE]
         : [
@@ -203,85 +243,34 @@ export function HomeScreen({
               body: t("homeAgentSeedPrompt", "en"),
             },
           ],
-  );
-  const [banner, setBanner] = useState<{
-    tone: "info" | "error" | "success";
-    text: string;
-  } | null>(null);
-  const [chats, setChats] = useState<LocalChatThread[]>(() =>
-    designMock ? [...DESIGN_MOCK_CHATS] : [],
-  );
-  const [selectedChatId, setSelectedChatId] = useState<string | null>(() =>
-    designMock && DESIGN_MOCK_CHATS[0] ? DESIGN_MOCK_CHATS[0].id : null,
-  );
-  const [draftChatMessage, setDraftChatMessage] = useState("");
-  const [sendingChatMessage, setSendingChatMessage] = useState(false);
-  const [newChatType, setNewChatType] = useState<"dm" | "group">("dm");
-  const [creatingChat, setCreatingChat] = useState(false);
-  const [syncingChats, setSyncingChats] = useState<Record<string, boolean>>({});
-  const [syncingAllChats, setSyncingAllChats] = useState(false);
-  const [pendingOutboxCount, setPendingOutboxCount] = useState(0);
-  const [chatStorageReady, setChatStorageReady] = useState(() => designMock);
-  const [realtimeState, setRealtimeState] = useState<RealtimeConnectionState>(
-    () => (designMock ? "connected" : "offline"),
-  );
-  const [typingUsersByChat, setTypingUsersByChat] = useState<
-    Record<string, string[]>
-  >({});
-  const [profileDraft, setProfileDraft] =
-    useState<UserProfileDraft>(initialProfile);
-  const [pushToken, setPushToken] = useState<string | null>(null);
-  const [pushEnabled, setPushEnabled] = useState(false);
-  const [profileLoading, setProfileLoading] = useState(false);
-  const [recurringCircles, setRecurringCircles] = useState<
-    RecurringCircleRecord[]
-  >([]);
-  const [selectedCircleId, setSelectedCircleId] = useState<string | null>(null);
-  const [recurringSessions, setRecurringSessions] = useState<
-    RecurringCircleSessionRecord[]
-  >([]);
-  const [recurringBusy, setRecurringBusy] = useState(false);
-  const [passiveDiscovery, setPassiveDiscovery] =
-    useState<PassiveDiscoveryResponse | null>(null);
-  const [inboxSuggestions, setInboxSuggestions] =
-    useState<DiscoveryInboxSuggestionsResponse | null>(null);
-  const [pendingIntentSummary, setPendingIntentSummary] =
-    useState<PendingIntentsSummaryResponse | null>(null);
-  const [selectedExplainedIntentId, setSelectedExplainedIntentId] = useState<
-    string | null
-  >(null);
-  const [userIntentExplanation, setUserIntentExplanation] =
-    useState<UserIntentExplanation | null>(null);
-  const [discoveryBusy, setDiscoveryBusy] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchSnapshot, setSearchSnapshot] =
-    useState<SearchSnapshotResponse | null>(null);
-  const [searchBusy, setSearchBusy] = useState(false);
-  const [memoryBusy, setMemoryBusy] = useState(false);
-  const [memorySnapshot, setMemorySnapshot] = useState<{
-    lifeGraph: Record<string, unknown> | null;
-    retrieval: Record<string, unknown> | null;
-  }>({ lifeGraph: null, retrieval: null });
-  const [savedSearches, setSavedSearches] = useState<SavedSearchRecord[]>([]);
-  const [scheduledTasks, setScheduledTasks] = useState<ScheduledTaskRecord[]>(
-    [],
-  );
-  const [selectedScheduledTaskId, setSelectedScheduledTaskId] = useState<
-    string | null
-  >(null);
-  const [scheduledTaskRuns, setScheduledTaskRuns] = useState<
-    ScheduledTaskRunRecord[]
-  >([]);
-  const [automationsBusy, setAutomationsBusy] = useState(false);
-  const [trustSummary, setTrustSummary] = useState(() =>
-    designMock
-      ? "badge: verified · reputation: strong"
-      : "trust baseline not loaded",
-  );
-  const [telemetrySummary, setTelemetrySummary] =
-    useState<TelemetrySummary | null>(() =>
-      designMock ? DESIGN_MOCK_TELEMETRY_SUMMARY : null,
     );
+    setChats(designMock ? [...DESIGN_MOCK_CHATS] : []);
+    setSelectedChatId(
+      designMock && DESIGN_MOCK_CHATS[0] ? DESIGN_MOCK_CHATS[0].id : null,
+    );
+    setChatStorageReady(designMock);
+    setRealtimeState(designMock ? "connected" : "offline");
+  }, [
+    designMock,
+    setAgentTimeline,
+    setChatStorageReady,
+    setChats,
+    setRealtimeState,
+    setSelectedChatId,
+  ]);
+
+  useEffect(() => {
+    if (!devOrbUnlocked) {
+      return;
+    }
+    const timeout = setTimeout(() => {
+      setDevOrbUnlocked(false);
+      setDevOrbOpen(false);
+    }, DEV_ORB_UNLOCK_WINDOW_MS);
+    return () => {
+      clearTimeout(timeout);
+    };
+  }, [devOrbUnlocked]);
   const chatsRef = useRef<LocalChatThread[]>([]);
   const selectedChatIdRef = useRef<string | null>(null);
   const realtimeSessionRef = useRef<RealtimeSession | null>(null);
@@ -432,17 +421,6 @@ export function HomeScreen({
     () => (selectedChatId ? (typingUsersByChat[selectedChatId] ?? []) : []),
     [selectedChatId, typingUsersByChat],
   );
-  const selectedCircle = useMemo(
-    () =>
-      recurringCircles.find((circle) => circle.id === selectedCircleId) ?? null,
-    [recurringCircles, selectedCircleId],
-  );
-  const selectedScheduledTask = useMemo(
-    () =>
-      scheduledTasks.find((task) => task.id === selectedScheduledTaskId) ??
-      null,
-    [scheduledTasks, selectedScheduledTaskId],
-  );
 
   const clearTypingUser = useCallback((chatId: string, userId: string) => {
     setTypingUsersByChat((current) => {
@@ -493,26 +471,13 @@ export function HomeScreen({
     [session.userId],
   );
 
-  const refreshTelemetry = useCallback(async () => {
-    if (skipNetwork) {
-      setTelemetrySummary(DESIGN_MOCK_TELEMETRY_SUMMARY);
-      return;
-    }
-    try {
-      const summary = await getTelemetrySummary(session.userId);
-      setTelemetrySummary(summary);
-    } catch {
-      // Ignore telemetry refresh failures to avoid interrupting core UX flows.
-    }
-  }, [session.userId, skipNetwork]);
-
   const recordTelemetry = useCallback(
     (name: TelemetryEventName, properties?: Record<string, unknown>) => {
-      void trackTelemetryEvent(session.userId, name, properties)
-        .then(() => refreshTelemetry())
-        .catch(() => {});
+      void trackTelemetryEvent(session.userId, name, properties).catch(
+        () => {},
+      );
     },
-    [refreshTelemetry, session.userId],
+    [session.userId],
   );
 
   useEffect(() => {
@@ -524,245 +489,21 @@ export function HomeScreen({
   }, [selectedChatId]);
 
   useEffect(() => {
-    refreshTelemetry().catch(() => {});
-  }, [refreshTelemetry]);
-
-  useEffect(() => {
-    if (skipNetwork) {
-      return;
-    }
-    let mounted = true;
-
-    const bootstrap = async () => {
-      setProfileLoading(true);
-      try {
-        const [globalRules, trust] = await Promise.all([
-          api.getGlobalRules(session.userId, session.accessToken),
-          api.getTrustProfile(session.userId, session.accessToken),
-        ]);
-
-        const notificationMode =
-          globalRules.notificationMode === "digest" ? "digest" : "live";
-        const nextProfile: UserProfileDraft = {
-          ...profileDraft,
-          notificationMode,
-        };
-
-        if (mounted) {
-          setProfileDraft(nextProfile);
-          setTrustSummary(
-            `badge: ${String(trust.verificationBadge ?? "unknown")} · reputation: ${String(
-              trust.reputationScore ?? "n/a",
-            )}`,
-          );
-        }
-      } catch (error) {
-        if (mounted) {
-          setBanner({
-            tone: "error",
-            text: `Failed to bootstrap profile data: ${String(error)}`,
-          });
-        }
-      } finally {
-        if (mounted) {
-          setProfileLoading(false);
-        }
-      }
-    };
-
-    bootstrap().catch(() => {});
+    const showEvent =
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const onShow = Keyboard.addListener(showEvent, () => {
+      setKeyboardVisible(true);
+    });
+    const onHide = Keyboard.addListener(hideEvent, () => {
+      setKeyboardVisible(false);
+    });
     return () => {
-      mounted = false;
+      onShow.remove();
+      onHide.remove();
     };
-  }, [session.accessToken, session.userId, skipNetwork]);
-
-  useEffect(() => {
-    if (skipNetwork || activeTab !== "profile") {
-      return;
-    }
-    let mounted = true;
-    setAutomationsBusy(true);
-    Promise.all([
-      api.listSavedSearches(session.userId, session.accessToken),
-      api.listScheduledTasks(
-        session.userId,
-        { limit: 20 },
-        session.accessToken,
-      ),
-    ])
-      .then(([searches, tasks]) => {
-        if (!mounted) {
-          return;
-        }
-        setSavedSearches(searches);
-        setScheduledTasks(tasks);
-        setSelectedScheduledTaskId((current) => {
-          if (current && tasks.some((task) => task.id === current)) {
-            return current;
-          }
-          return tasks[0]?.id ?? null;
-        });
-      })
-      .catch((error) => {
-        if (!mounted) {
-          return;
-        }
-        setBanner({
-          tone: "error",
-          text: `Could not load automations: ${String(error)}`,
-        });
-      })
-      .finally(() => {
-        if (mounted) {
-          setAutomationsBusy(false);
-        }
-      });
-    return () => {
-      mounted = false;
-    };
-  }, [activeTab, session.accessToken, session.userId, skipNetwork]);
-
-  useEffect(() => {
-    if (skipNetwork || activeTab !== "profile" || !selectedScheduledTaskId) {
-      setScheduledTaskRuns([]);
-      return;
-    }
-    let mounted = true;
-    api
-      .listScheduledTaskRuns(selectedScheduledTaskId, 8, session.accessToken)
-      .then((runs) => {
-        if (!mounted) {
-          return;
-        }
-        setScheduledTaskRuns(runs);
-      })
-      .catch((error) => {
-        if (!mounted) {
-          return;
-        }
-        setBanner({
-          tone: "error",
-          text: `Could not load task runs: ${String(error)}`,
-        });
-      });
-    return () => {
-      mounted = false;
-    };
-  }, [activeTab, selectedScheduledTaskId, session.accessToken, skipNetwork]);
-
-  useEffect(() => {
-    if (skipNetwork || activeTab !== "profile") {
-      return;
-    }
-    let mounted = true;
-    setRecurringBusy(true);
-    api
-      .listRecurringCircles(session.userId, session.accessToken)
-      .then((circles) => {
-        if (!mounted) {
-          return;
-        }
-        setRecurringCircles(circles);
-        setSelectedCircleId((current) => {
-          if (current && circles.some((circle) => circle.id === current)) {
-            return current;
-          }
-          return circles[0]?.id ?? null;
-        });
-      })
-      .catch((error) => {
-        if (!mounted) {
-          return;
-        }
-        setBanner({
-          tone: "error",
-          text: `Could not load circles: ${String(error)}`,
-        });
-      })
-      .finally(() => {
-        if (mounted) {
-          setRecurringBusy(false);
-        }
-      });
-    return () => {
-      mounted = false;
-    };
-  }, [activeTab, session.accessToken, session.userId, skipNetwork]);
-
-  useEffect(() => {
-    if (skipNetwork || activeTab !== "profile" || !selectedCircleId) {
-      setRecurringSessions([]);
-      return;
-    }
-    let mounted = true;
-    api
-      .listRecurringCircleSessions(selectedCircleId, session.accessToken)
-      .then((sessions) => {
-        if (!mounted) {
-          return;
-        }
-        setRecurringSessions(sessions);
-      })
-      .catch((error) => {
-        if (!mounted) {
-          return;
-        }
-        setBanner({
-          tone: "error",
-          text: `Could not load circle sessions: ${String(error)}`,
-        });
-      });
-    return () => {
-      mounted = false;
-    };
-  }, [activeTab, selectedCircleId, session.accessToken, skipNetwork]);
-
-  useEffect(() => {
-    if (skipNetwork || activeTab !== "profile") {
-      return;
-    }
-    let mounted = true;
-    setDiscoveryBusy(true);
-    Promise.all([
-      api.getPassiveDiscovery(session.userId, 3, session.accessToken),
-      api.getDiscoveryInboxSuggestions(session.userId, 4, session.accessToken),
-      api.summarizePendingIntents(session.userId, 8, session.accessToken),
-    ])
-      .then(([passive, inbox, pending]) => {
-        if (!mounted) {
-          return;
-        }
-        setPassiveDiscovery(passive);
-        setInboxSuggestions(inbox);
-        setPendingIntentSummary(pending);
-        setSelectedExplainedIntentId((current) => {
-          if (
-            current &&
-            pending.intents.some((intent) => intent.intentId === current)
-          ) {
-            return current;
-          }
-          return pending.intents[0]?.intentId ?? null;
-        });
-      })
-      .catch((error) => {
-        if (!mounted) {
-          return;
-        }
-        setBanner({
-          tone: "error",
-          text: `Could not load discovery snapshots: ${String(error)}`,
-        });
-      })
-      .finally(() => {
-        if (mounted) {
-          setDiscoveryBusy(false);
-        }
-      });
-    return () => {
-      mounted = false;
-    };
-  }, [activeTab, session.accessToken, session.userId, skipNetwork]);
+  }, []);
 
   useEffect(() => {
     if (skipNetwork || designMock || activeTab !== "home") {
@@ -786,67 +527,6 @@ export function HomeScreen({
       clearInterval(interval);
     };
   }, [activeTab, designMock, session.accessToken, session.userId, skipNetwork]);
-
-  useEffect(() => {
-    if (
-      skipNetwork ||
-      activeTab !== "profile" ||
-      selectedExplainedIntentId == null
-    ) {
-      setUserIntentExplanation(null);
-      return;
-    }
-    let mounted = true;
-    api
-      .getUserIntentExplanation(selectedExplainedIntentId, session.accessToken)
-      .then((explanation) => {
-        if (!mounted) {
-          return;
-        }
-        setUserIntentExplanation(explanation);
-      })
-      .catch((error) => {
-        if (!mounted) {
-          return;
-        }
-        setBanner({
-          tone: "error",
-          text: `Could not load routing explanation: ${String(error)}`,
-        });
-      });
-    return () => {
-      mounted = false;
-    };
-  }, [activeTab, selectedExplainedIntentId, session.accessToken, skipNetwork]);
-
-  useEffect(() => {
-    if (skipNetwork || !enablePushNotifications) {
-      return;
-    }
-    let mounted = true;
-    void import("../lib/notifications")
-      .then((notifications) =>
-        notifications.registerForPushNotificationsAsync(),
-      )
-      .then((result) => {
-        if (!mounted) {
-          return;
-        }
-        setPushEnabled(result.enabled);
-        setPushToken(result.token);
-      })
-      .catch(() => {
-        if (!mounted) {
-          return;
-        }
-        setPushEnabled(false);
-        setPushToken(null);
-      });
-
-    return () => {
-      mounted = false;
-    };
-  }, [enablePushNotifications, skipNetwork]);
 
   useEffect(() => {
     if (skipNetwork) {
@@ -1195,6 +875,13 @@ export function HomeScreen({
           setAgentTimeline(agentThreadMessagesToTranscript(messages));
         }
       }
+      const knownChatIds = new Set(chatsRef.current.map((thread) => thread.id));
+      for (const chatId of result.sentThreadIds) {
+        if (!knownChatIds.has(chatId)) {
+          continue;
+        }
+        await syncChatThread(chatId, { quiet: true });
+      }
       if (result.processed > 0) {
         setBanner({
           tone: "success",
@@ -1218,6 +905,7 @@ export function HomeScreen({
     session.accessToken,
     session.userId,
     skipNetwork,
+    syncChatThread,
   ]);
 
   useEffect(() => {
@@ -1268,7 +956,6 @@ export function HomeScreen({
     recordTelemetry("chat_sync_manual", {
       threads: chatIds.length,
     });
-    setSyncingAllChats(true);
     let failures = 0;
     for (const chatId of chatIds) {
       const ok = await syncChatThread(chatId, { quiet: true });
@@ -1276,7 +963,6 @@ export function HomeScreen({
         failures += 1;
       }
     }
-    setSyncingAllChats(false);
 
     if (failures === 0) {
       setBanner({
@@ -1884,7 +1570,6 @@ export function HomeScreen({
   };
 
   const createDemoChat = async () => {
-    setCreatingChat(true);
     try {
       if (enableE2ELocalMode || designMock) {
         const now = Date.now().toString(36);
@@ -1986,8 +1671,6 @@ export function HomeScreen({
         tone: "error",
         text: `Failed to create chat sandbox: ${String(error)}`,
       });
-    } finally {
-      setCreatingChat(false);
     }
   };
 
@@ -2048,42 +1731,53 @@ export function HomeScreen({
     if (!selectedChat || messageBody.length === 0 || sendingChatMessage) {
       return;
     }
+    const chatId = selectedChat.id;
     const hadMessages = selectedChat.messages.length > 0;
     const hasCounterpartyMessage = selectedChat.messages.some(
       (message) => message.senderUserId !== session.userId,
     );
+    const optimisticMessageId = `message_local_${Date.now().toString(36)}`;
+    const optimisticMessage: LocalChatMessageRecord = {
+      id: optimisticMessageId,
+      chatId,
+      senderUserId: session.userId,
+      body: messageBody,
+      createdAt: new Date().toISOString(),
+      deliveryStatus: "sending",
+    };
 
     setSendingChatMessage(true);
+    setDraftChatMessage("");
+    setChats((current) =>
+      current.map((thread) =>
+        thread.id === chatId
+          ? {
+              ...thread,
+              messages: mergeChatMessages(thread.messages, [optimisticMessage]),
+              highWatermark: optimisticMessage.createdAt,
+              unreadCount: 0,
+            }
+          : thread,
+      ),
+    );
+    if (localTypingStopTimeoutRef.current) {
+      clearTimeout(localTypingStopTimeoutRef.current);
+      localTypingStopTimeoutRef.current = null;
+    }
+    if (localTypingActiveRef.current) {
+      realtimeSessionRef.current?.publishTyping(chatId, session.userId, false);
+      localTypingActiveRef.current = false;
+    }
     try {
       if (enableE2ELocalMode || designMock) {
-        const localMessage: ChatMessageRecord = {
-          id: `message_local_${Date.now().toString(36)}`,
-          chatId: selectedChat.id,
-          senderUserId: session.userId,
-          body: messageBody,
-          createdAt: new Date().toISOString(),
-        };
-        setDraftChatMessage("");
-        setChats((current) =>
-          current.map((thread) =>
-            thread.id === selectedChat.id
-              ? {
-                  ...thread,
-                  messages: mergeChatMessages(thread.messages, [localMessage]),
-                  highWatermark: localMessage.createdAt,
-                  unreadCount: 0,
-                }
-              : thread,
-          ),
-        );
         if (!hadMessages) {
           recordTelemetry("first_message_sent", {
-            chatId: selectedChat.id,
+            chatId,
             bodyLength: messageBody.length,
           });
         } else if (hasCounterpartyMessage) {
           recordTelemetry("message_replied", {
-            chatId: selectedChat.id,
+            chatId,
             bodyLength: messageBody.length,
           });
         }
@@ -2091,8 +1785,12 @@ export function HomeScreen({
         return;
       }
 
+      if (!netOnline) {
+        throw new Error("offline");
+      }
+
       const message = await api.createChatMessage(
-        selectedChat.id,
+        chatId,
         session.userId,
         messageBody,
         session.accessToken,
@@ -2100,45 +1798,84 @@ export function HomeScreen({
           clientMessageId: createClientMessageId(),
         },
       );
-      setDraftChatMessage("");
-      if (localTypingStopTimeoutRef.current) {
-        clearTimeout(localTypingStopTimeoutRef.current);
-        localTypingStopTimeoutRef.current = null;
-      }
-      if (localTypingActiveRef.current) {
-        realtimeSessionRef.current?.publishTyping(
-          selectedChat.id,
-          session.userId,
-          false,
-        );
-        localTypingActiveRef.current = false;
-      }
       setChats((current) =>
         current.map((thread) =>
-          thread.id === selectedChat.id
+          thread.id === chatId
             ? {
                 ...thread,
-                messages: mergeChatMessages(thread.messages, [message]),
+                messages: mergeChatMessages(
+                  thread.messages.filter(
+                    (item) => item.id !== optimisticMessageId,
+                  ),
+                  [message],
+                ),
                 highWatermark: message.createdAt,
                 unreadCount: 0,
               }
             : thread,
         ),
       );
-      realtimeSessionRef.current?.publishChatMessage(selectedChat.id, message);
+      realtimeSessionRef.current?.publishChatMessage(chatId, message);
       if (!hadMessages) {
         recordTelemetry("first_message_sent", {
-          chatId: selectedChat.id,
+          chatId,
           bodyLength: messageBody.length,
         });
       } else if (hasCounterpartyMessage) {
         recordTelemetry("message_replied", {
-          chatId: selectedChat.id,
+          chatId,
           bodyLength: messageBody.length,
         });
       }
       hapticImpact();
     } catch (error) {
+      if (
+        isOfflineApiError(error) ||
+        isRetryableApiError(error) ||
+        !netOnline
+      ) {
+        await queueOfflineComposerSend({
+          userId: session.userId,
+          mode: "chat",
+          threadId: chatId,
+          text: messageBody,
+          idempotencyKey: createClientMessageId(),
+        });
+        await refreshPendingOutboxCount().catch(() => {});
+        setChats((current) =>
+          current.map((thread) =>
+            thread.id === chatId
+              ? {
+                  ...thread,
+                  messages: thread.messages.map((message) =>
+                    message.id === optimisticMessageId
+                      ? { ...message, deliveryStatus: "queued" }
+                      : message,
+                  ),
+                }
+              : thread,
+          ),
+        );
+        setBanner({
+          tone: "info",
+          text: "Message queued. It will send automatically when network is back.",
+        });
+        return;
+      }
+      setChats((current) =>
+        current.map((thread) =>
+          thread.id === chatId
+            ? {
+                ...thread,
+                messages: thread.messages.map((message) =>
+                  message.id === optimisticMessageId
+                    ? { ...message, deliveryStatus: "failed" }
+                    : message,
+                ),
+              }
+            : thread,
+        ),
+      );
       setBanner({
         tone: "error",
         text: `Failed to send message: ${String(error)}`,
@@ -2148,1714 +1885,316 @@ export function HomeScreen({
     }
   };
 
-  const signOut = async () => {
-    if (!designMock) {
-      await clearStoredChats(session.userId).catch(() => {});
-      await clearTelemetryEvents(session.userId).catch(() => {});
-      await clearOfflineOutbox(session.userId).catch(() => {});
-    }
-    setTelemetrySummary(null);
-    await onResetSession();
-  };
-
-  const saveSettings = async () => {
-    const socialModePayloadValue =
-      profileDraft.socialMode === "one_to_one"
-        ? {
-            socialMode: "balanced" as const,
-            preferOneToOne: true,
-            allowGroupInvites: false,
-          }
-        : profileDraft.socialMode === "group"
-          ? {
-              socialMode: "high_energy" as const,
-              preferOneToOne: false,
-              allowGroupInvites: true,
-            }
-          : {
-              socialMode: "balanced" as const,
-              preferOneToOne: false,
-              allowGroupInvites: true,
-            };
-    const globalRulesPayloadValue = {
-      whoCanContact: "anyone" as const,
-      reachable: "always" as const,
-      intentMode:
-        profileDraft.socialMode === "one_to_one"
-          ? ("one_to_one" as const)
-          : profileDraft.socialMode === "group"
-            ? ("group" as const)
-            : ("balanced" as const),
-      modality: "either" as const,
-      languagePreferences: ["en", "es"],
-      countryPreferences: [],
-      requireVerifiedUsers: false,
-      notificationMode:
-        profileDraft.notificationMode === "digest"
-          ? ("digest" as const)
-          : ("immediate" as const),
-      agentAutonomy: "suggest_only" as const,
-      memoryMode: "standard" as const,
-    };
-    try {
-      if (designMock) {
-        onProfileUpdated(profileDraft);
-        setBanner({
-          tone: "success",
-          text: "Saved for this preview session.",
-        });
-        recordTelemetry("personalization_changed", {
-          socialMode: profileDraft.socialMode,
-          notificationMode: profileDraft.notificationMode,
-        });
-        return;
-      }
-      if (!netOnline) {
-        await queueOfflineProfileSave({
-          userId: session.userId,
-          displayName: profileDraft.displayName,
-          bio: profileDraft.bio,
-          city: profileDraft.city,
-          country: profileDraft.country,
-          visibility: "public",
-          interests: profileDraft.interests,
-          socialMode: socialModePayloadValue,
-          globalRules: globalRulesPayloadValue,
-        });
-        await refreshPendingOutboxCount().catch(() => {});
-        onProfileUpdated(profileDraft);
-        setBanner({
-          tone: "info",
-          text: "Settings saved locally and queued for sync.",
-        });
-        return;
-      }
-      await Promise.all([
-        api.setSocialMode(
-          session.userId,
-          socialModePayloadValue,
-          session.accessToken,
-        ),
-        api.setGlobalRules(
-          session.userId,
-          globalRulesPayloadValue,
-          session.accessToken,
-        ),
-      ]);
-
-      onProfileUpdated(profileDraft);
-      setBanner({
-        tone: "success",
-        text: "Profile and rule settings saved.",
-      });
-      recordTelemetry("personalization_changed", {
-        socialMode: profileDraft.socialMode,
-        notificationMode: profileDraft.notificationMode,
-      });
-    } catch (error) {
-      if (isOfflineApiError(error) || isRetryableApiError(error)) {
-        await queueOfflineProfileSave({
-          userId: session.userId,
-          displayName: profileDraft.displayName,
-          bio: profileDraft.bio,
-          city: profileDraft.city,
-          country: profileDraft.country,
-          visibility: "public",
-          interests: profileDraft.interests,
-          socialMode: socialModePayloadValue,
-          globalRules: globalRulesPayloadValue,
-        });
-        await refreshPendingOutboxCount().catch(() => {});
-        onProfileUpdated(profileDraft);
-        setBanner({
-          tone: "info",
-          text: "Network issue detected. Settings are queued and will sync automatically.",
-        });
-        return;
-      }
-      setBanner({
-        tone: "error",
-        text: `Could not save settings: ${String(error)}`,
-      });
-    }
-  };
-
-  const sendDigestNow = async () => {
-    try {
-      if (designMock) {
-        setBanner({
-          tone: "success",
-          text: "Digest queued (preview — no push).",
-        });
-        recordTelemetry("digest_requested");
-        return;
-      }
-      await api.sendDigest(session.userId, session.accessToken);
-      if (enablePushNotifications) {
-        const notifications = await import("../lib/notifications");
-        await notifications.fireLocalNotification(
-          "Digest queued",
-          "A digest notification was created for your account.",
-        );
-      }
-      recordTelemetry("digest_requested");
-      if (enablePushNotifications) {
-        recordTelemetry("notification_local_fired", {
-          type: "digest_requested",
-        });
-      }
-      setBanner({
-        tone: "success",
-        text: "Digest request sent.",
-      });
-    } catch (error) {
-      setBanner({
-        tone: "error",
-        text: `Digest request failed: ${String(error)}`,
-      });
-    }
-  };
-
-  const createCircleQuick = async () => {
-    if (skipNetwork) {
-      return;
-    }
-    try {
-      const created = await api.createRecurringCircle(
-        session.userId,
-        {
-          title: "Weekly open circle",
-          visibility: "invite_only",
-          topicTags: profileDraft.interests.slice(0, 3),
-          cadence: {
-            kind: "weekly",
-            days: ["thu"],
-            hour: 20,
-            minute: 0,
-            timezone: "UTC",
-            intervalWeeks: 1,
-          },
-          kickoffPrompt: "Find a small group for this week's recurring circle.",
-        },
-        session.accessToken,
+  const retryFailedChatMessage = useCallback(
+    async (chatId: string, messageId: string) => {
+      const thread = chatsRef.current.find((item) => item.id === chatId);
+      const failedMessage = thread?.messages.find(
+        (item) =>
+          item.id === messageId &&
+          item.senderUserId === session.userId &&
+          item.deliveryStatus === "failed",
       );
-      setRecurringCircles((current) => [created, ...current]);
-      setSelectedCircleId(created.id);
-      setBanner({ tone: "success", text: "Recurring circle created." });
-    } catch (error) {
-      setBanner({
-        tone: "error",
-        text: `Could not create recurring circle: ${String(error)}`,
-      });
-    }
-  };
+      if (!failedMessage) {
+        return;
+      }
 
-  const runCircleSessionNow = async () => {
-    if (skipNetwork || !selectedCircleId) {
-      return;
-    }
-    try {
-      const opened = await api.runRecurringCircleSessionNow(
-        selectedCircleId,
-        session.accessToken,
-      );
-      setRecurringSessions((current) => [opened, ...current]);
-      setBanner({
-        tone: "success",
-        text: "Circle session opened and matching started.",
-      });
-    } catch (error) {
-      setBanner({
-        tone: "error",
-        text: `Could not open circle session: ${String(error)}`,
-      });
-    }
-  };
-
-  const refreshDiscoverySnapshots = async () => {
-    if (skipNetwork) {
-      return;
-    }
-    setDiscoveryBusy(true);
-    try {
-      const [passive, inbox, pending] = await Promise.all([
-        api.getPassiveDiscovery(session.userId, 3, session.accessToken),
-        api.getDiscoveryInboxSuggestions(
-          session.userId,
-          4,
-          session.accessToken,
+      setChats((current) =>
+        current.map((item) =>
+          item.id === chatId
+            ? {
+                ...item,
+                messages: item.messages.map((message) =>
+                  message.id === messageId
+                    ? { ...message, deliveryStatus: "sending" }
+                    : message,
+                ),
+              }
+            : item,
         ),
-        api.summarizePendingIntents(session.userId, 8, session.accessToken),
-      ]);
-      setPassiveDiscovery(passive);
-      setInboxSuggestions(inbox);
-      setPendingIntentSummary(pending);
-      setSelectedExplainedIntentId((current) => {
-        if (
-          current &&
-          pending.intents.some((intent) => intent.intentId === current)
-        ) {
-          return current;
+      );
+
+      try {
+        if (!netOnline) {
+          throw new Error("offline");
         }
-        return pending.intents[0]?.intentId ?? null;
-      });
-      setBanner({
-        tone: "success",
-        text: "Discovery snapshots refreshed.",
-      });
-    } catch (error) {
-      setBanner({
-        tone: "error",
-        text: `Could not refresh discovery snapshots: ${String(error)}`,
-      });
-    } finally {
-      setDiscoveryBusy(false);
-    }
-  };
-
-  const publishDiscoveryToAgent = async () => {
-    if (skipNetwork) {
-      return;
-    }
-    try {
-      const result = await api.publishAgentRecommendations(
-        session.userId,
-        {
-          ...(agentThreadId ? { threadId: agentThreadId } : {}),
-          limit: 3,
-        },
-        session.accessToken,
-      );
-      setBanner({
-        tone: "success",
-        text: result.delivered
-          ? "Recommendations posted to your agent thread."
-          : "Recommendations generated but no thread was available.",
-      });
-    } catch (error) {
-      setBanner({
-        tone: "error",
-        text: `Could not publish recommendations: ${String(error)}`,
-      });
-    }
-  };
-
-  const runSearch = async () => {
-    if (skipNetwork || searchQuery.trim().length === 0) {
-      return;
-    }
-    setSearchBusy(true);
-    try {
-      const result = await api.search(
-        session.userId,
-        searchQuery.trim(),
-        6,
-        session.accessToken,
-      );
-      setSearchSnapshot(result);
-    } catch (error) {
-      setBanner({
-        tone: "error",
-        text: `Could not run search: ${String(error)}`,
-      });
-    } finally {
-      setSearchBusy(false);
-    }
-  };
-
-  const refreshMemorySnapshot = async () => {
-    if (skipNetwork) {
-      return;
-    }
-    setMemoryBusy(true);
-    try {
-      const [lifeGraph, retrieval] = await Promise.all([
-        api.getLifeGraph(session.userId, session.accessToken),
-        api.queryRetrievalContext(
+        const sent = await api.createChatMessage(
+          chatId,
           session.userId,
-          {
-            query: "Summarize my most relevant social memory context.",
-            maxChunks: 4,
-            maxAgeDays: 90,
-          },
+          failedMessage.body,
           session.accessToken,
-        ),
-      ]);
-      setMemorySnapshot({ lifeGraph, retrieval });
-      setBanner({
-        tone: "success",
-        text: "Memory snapshot refreshed.",
-      });
-    } catch (error) {
-      setBanner({
-        tone: "error",
-        text: `Could not refresh memory snapshot: ${String(error)}`,
-      });
-    } finally {
-      setMemoryBusy(false);
-    }
-  };
-
-  const resetLearnedMemory = async () => {
-    if (skipNetwork) {
-      return;
-    }
-    setMemoryBusy(true);
-    try {
-      await api.resetMemory(
-        session.userId,
-        {
-          actorUserId: session.userId,
-          mode: "learned_memory",
-          reason: "user_requested_from_profile",
-        },
-        session.accessToken,
-      );
-      setMemorySnapshot({ lifeGraph: null, retrieval: null });
-      setBanner({
-        tone: "success",
-        text: "Learned memory reset completed.",
-      });
-    } catch (error) {
-      setBanner({
-        tone: "error",
-        text: `Could not reset memory: ${String(error)}`,
-      });
-    } finally {
-      setMemoryBusy(false);
-    }
-  };
-
-  const createSavedSearchQuick = async () => {
-    if (skipNetwork) {
-      return;
-    }
-    const seed = searchQuery.trim() || "tennis";
-    try {
-      const created = await api.createSavedSearch(
-        session.userId,
-        {
-          title: `Search: ${seed.slice(0, 28)}`,
-          searchType: "activity_search",
-          queryConfig: {
-            q: seed,
-            limit: 6,
-          },
-        },
-        session.accessToken,
-      );
-      setSavedSearches((current) => [created, ...current]);
-      setBanner({
-        tone: "success",
-        text: "Saved search created.",
-      });
-    } catch (error) {
-      setBanner({
-        tone: "error",
-        text: `Could not create saved search: ${String(error)}`,
-      });
-    }
-  };
-
-  const createAutomationQuick = async () => {
-    if (skipNetwork) {
-      return;
-    }
-    try {
-      let savedSearch = savedSearches[0];
-      if (!savedSearch) {
-        const seed = searchQuery.trim() || "tennis";
-        savedSearch = await api.createSavedSearch(
-          session.userId,
           {
-            title: `Search: ${seed.slice(0, 28)}`,
-            searchType: "activity_search",
-            queryConfig: {
-              q: seed,
-              limit: 6,
-            },
+            clientMessageId: createClientMessageId(),
           },
-          session.accessToken,
         );
-        setSavedSearches((current) => [savedSearch!, ...current]);
+        setChats((current) =>
+          current.map((item) =>
+            item.id === chatId
+              ? {
+                  ...item,
+                  messages: mergeChatMessages(
+                    item.messages.filter((message) => message.id !== messageId),
+                    [sent],
+                  ),
+                  highWatermark: sent.createdAt,
+                }
+              : item,
+          ),
+        );
+        realtimeSessionRef.current?.publishChatMessage(chatId, sent);
+      } catch (error) {
+        if (
+          isOfflineApiError(error) ||
+          isRetryableApiError(error) ||
+          !netOnline
+        ) {
+          await queueOfflineComposerSend({
+            userId: session.userId,
+            mode: "chat",
+            threadId: chatId,
+            text: failedMessage.body,
+            idempotencyKey: createClientMessageId(),
+          });
+          await refreshPendingOutboxCount().catch(() => {});
+          setChats((current) =>
+            current.map((item) =>
+              item.id === chatId
+                ? {
+                    ...item,
+                    messages: item.messages.map((message) =>
+                      message.id === messageId
+                        ? { ...message, deliveryStatus: "queued" }
+                        : message,
+                    ),
+                  }
+                : item,
+            ),
+          );
+          setBanner({
+            tone: "info",
+            text: "Message queued. It will retry automatically when network is back.",
+          });
+          return;
+        }
+        setChats((current) =>
+          current.map((item) =>
+            item.id === chatId
+              ? {
+                  ...item,
+                  messages: item.messages.map((message) =>
+                    message.id === messageId
+                      ? { ...message, deliveryStatus: "failed" }
+                      : message,
+                  ),
+                }
+              : item,
+          ),
+        );
+        setBanner({
+          tone: "error",
+          text: `Retry failed: ${String(error)}`,
+        });
       }
-      const created = await api.createScheduledTask(
-        session.userId,
-        {
-          title: "Weekly saved-search briefing",
-          description:
-            "Runs your top saved search and posts a short discovery briefing.",
-          schedule: {
-            kind: "weekly",
-            days: ["thu"],
-            hour: 18,
-            minute: 0,
-            timezone: "UTC",
-          },
-          task: {
-            taskType: "saved_search",
-            config: {
-              savedSearchId: savedSearch.id,
-              deliveryMode: "notification_and_agent_thread",
-              minResults: 1,
-              maxResults: 5,
-            },
-          },
-        },
-        session.accessToken,
-      );
-      setScheduledTasks((current) => [created, ...current]);
-      setSelectedScheduledTaskId(created.id);
-      setBanner({
-        tone: "success",
-        text: "Scheduled automation created.",
-      });
-    } catch (error) {
-      setBanner({
-        tone: "error",
-        text: `Could not create automation: ${String(error)}`,
-      });
-    }
-  };
+    },
+    [netOnline, refreshPendingOutboxCount, session.accessToken, session.userId],
+  );
 
-  const runAutomationNow = async () => {
-    if (skipNetwork || !selectedScheduledTask) {
-      return;
-    }
-    try {
-      await api.runScheduledTaskNow(
-        selectedScheduledTask.id,
-        session.accessToken,
-      );
-      const runs = await api.listScheduledTaskRuns(
-        selectedScheduledTask.id,
-        8,
-        session.accessToken,
-      );
-      setScheduledTaskRuns(runs);
-      setBanner({
-        tone: "success",
-        text: "Automation queued to run now.",
-      });
-    } catch (error) {
-      setBanner({
-        tone: "error",
-        text: `Could not run automation: ${String(error)}`,
-      });
-    }
-  };
+  if (homeLayoutDebug) {
+    return <View className="flex-1 bg-red-600" testID="home-layout-debug" />;
+  }
 
   return (
-    <SafeAreaView className="flex-1 bg-canvas" testID="home-screen">
+    <SafeAreaView
+      className="flex-1 bg-canvas"
+      edges={[]}
+      style={{ flex: 1, backgroundColor: "#050506" }}
+      testID="home-screen"
+    >
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         className="flex-1"
+        keyboardVerticalOffset={0}
+        style={{ flex: 1 }}
       >
-        <AppTopBar
-          compact={activeTab === "home"}
-          leading={
-            <Pressable
-              accessibilityLabel="Open menu"
-              accessibilityRole="button"
-              className="-ml-0.5 rounded-xl p-1.5"
-              hitSlop={10}
-              onPress={() => setDrawerOpen(true)}
-              style={({ pressed }) => ({
-                opacity: pressed ? appTheme.motion.pressOpacity : 1,
-              })}
-              testID="home-drawer-open-button"
-            >
-              <Ionicons
-                color={appTheme.colors.ink}
-                name="menu-outline"
-                size={26}
+        <View
+          className="flex-1"
+          style={{ flex: 1, backgroundColor: "#050506" }}
+        >
+          {visibleBanner && activeTab !== "home" ? (
+            <View className="px-5 pt-3">
+              <InlineNotice
+                text={visibleBanner.text}
+                tone={visibleBanner.tone}
               />
-            </Pressable>
-          }
-          subtitle={
-            activeTab === "home"
-              ? undefined
-              : t(tabDescriptions[activeTab], locale)
-          }
-          title={
-            activeTab === "home"
-              ? "OpenSocial"
-              : t(tabLabels[activeTab], locale)
-          }
-        />
+            </View>
+          ) : null}
+          {!skipNetwork && !netOnline && activeTab !== "home" ? (
+            <View className="px-5 pt-3">
+              <InlineNotice text={t("offlineNotice", locale)} tone="info" />
+            </View>
+          ) : null}
 
-        {banner ? (
-          <View className="px-5 pt-3">
-            <InlineNotice text={banner.text} tone={banner.tone} />
-          </View>
-        ) : null}
-        {!skipNetwork && !netOnline ? (
-          <View className="px-5 pt-3">
-            <InlineNotice text={t("offlineNotice", locale)} tone="info" />
-          </View>
-        ) : null}
-        {!skipNetwork && pendingOutboxCount > 0 ? (
-          <View className="px-5 pt-3">
-            <InlineNotice
-              text={t("homeQueuedActions", locale, {
-                count: pendingOutboxCount,
-                plural: pendingOutboxCount === 1 ? "" : "s",
-              })}
-              tone="info"
-            />
-          </View>
-        ) : null}
-
-        <AnimatedScreen screenKey={activeTab}>
-          {activeTab === "home" ? (
-            <OpenChatScreen
-              agentImageUrl={agentImageUrlDraft}
-              canRegenerate={agentTimeline.some(
-                (message) => message.role === "user",
-              )}
-              composerMode={agentComposerMode}
-              decomposeIntent={decomposeIntent}
-              decomposeMaxIntents={decomposeMaxIntents}
-              draftMessage={draftIntentText}
-              e2eSubmitOnReturn={enableE2ELocalMode}
-              locale={locale}
-              messages={agentTimeline}
-              onboardingCarryover={
-                onboardingCarryoverSeed && onboardingCarryoverState
-                  ? {
-                      seed: onboardingCarryoverSeed,
-                      state: onboardingCarryoverState,
+          <AppShell
+            activeTab={activeTab}
+            hasNotifications={pendingOutboxCount > 0}
+            onPressHome={() => {
+              hapticSelection();
+              setActiveTab("home");
+            }}
+            onPressNotifications={() => {
+              setBanner({
+                tone: "info",
+                text: "No new notifications right now.",
+              });
+            }}
+            onPressProfile={() => {
+              hapticSelection();
+              setActiveTab("profile");
+            }}
+            title={
+              activeTab === "home"
+                ? "OpenSocial"
+                : activeTab === "chats"
+                  ? "Chats"
+                  : "Profile"
+            }
+          >
+            <View
+              className="min-h-0 flex-1"
+              style={{ paddingBottom: shellContentBottomInset, paddingTop: 14 }}
+            >
+              <AnimatedScreen screenKey={activeTab}>
+                {activeTab === "home" ? (
+                  <HomeAgentThreadScreen
+                    agentImageUrl={agentImageUrlDraft}
+                    canRegenerate={agentTimeline.some(
+                      (message) => message.role === "user",
+                    )}
+                    composerMode={agentComposerMode}
+                    decomposeIntent={decomposeIntent}
+                    decomposeMaxIntents={decomposeMaxIntents}
+                    draftMessage={draftIntentText}
+                    e2eSubmitOnReturn={enableE2ELocalMode}
+                    locale={locale}
+                    messages={agentTimeline}
+                    onboardingCarryover={
+                      onboardingCarryoverSeed && onboardingCarryoverState
+                        ? {
+                            seed: onboardingCarryoverSeed,
+                            state: onboardingCarryoverState,
+                          }
+                        : null
                     }
-                  : null
+                    onAgentImageUrlChange={setAgentImageUrlDraft}
+                    onComposerModeChange={setAgentComposerMode}
+                    onDecomposeIntentChange={setDecomposeIntent}
+                    onDecomposeMaxIntentsChange={setDecomposeMaxIntents}
+                    onExecuteOnboardingCarryover={executeOnboardingCarryover}
+                    onOpenChatsTab={() => {
+                      hapticSelection();
+                      setActiveTab("chats");
+                    }}
+                    onRegenerate={regenerateLastIntent}
+                    onSend={sendIntent}
+                    onStop={cancelIntentSend}
+                    onVoiceTranscript={(line) => {
+                      agentVoiceTranscriptRef.current = line.trim() || null;
+                    }}
+                    pendingIntentSummary={pendingIntentSummary}
+                    sending={sendingIntent}
+                    setDraftMessage={setDraftIntentText}
+                    threadLoading={agentThreadLoading}
+                  />
+                ) : null}
+                {activeTab === "chats" ? (
+                  <ChatsListScreen
+                    currentUserId={session.userId}
+                    draftChatMessage={draftChatMessage}
+                    e2eSubmitOnReturn={enableE2ELocalMode}
+                    loadingMessages={
+                      selectedChatId != null &&
+                      Boolean(syncingChats[selectedChatId])
+                    }
+                    onModerationBlock={async (targetUserId, chatId) => {
+                      await blockUser(targetUserId, { chatId });
+                    }}
+                    onModerationReport={async (targetUserId, chatId) => {
+                      await reportUser(targetUserId, { chatId });
+                    }}
+                    onOpenChat={openChat}
+                    onRetryFailedMessage={retryFailedChatMessage}
+                    onSendMessage={sendChatMessage}
+                    realtimeState={realtimeState}
+                    selectedChat={selectedChat}
+                    sendingMessage={sendingChatMessage}
+                    setDraftChatMessage={handleDraftChatMessageChange}
+                    threads={chats}
+                    typingUsers={typingUsers}
+                  />
+                ) : null}
+                {activeTab === "profile" ? (
+                  <ProfileScreen
+                    displayName={session.displayName}
+                    email={session.email}
+                  />
+                ) : null}
+              </AnimatedScreen>
+            </View>
+          </AppShell>
+          <DevOrb
+            bottomOffset={composerBottomInset + 14}
+            onCreateDmSandbox={async () => {
+              setNewChatType("dm");
+              await createDemoChat();
+            }}
+            onCreateGroupSandbox={async () => {
+              setNewChatType("group");
+              await createDemoChat();
+            }}
+            onLock={() => {
+              setDevOrbUnlocked(false);
+              setDevOrbOpen(false);
+            }}
+            onResetAgent={() => {
+              resetAgentConversation();
+              setActiveTab("home");
+              setDevOrbOpen(false);
+            }}
+            onSyncChats={() => {
+              void syncChatsNow();
+            }}
+            onToggle={() => {
+              if (devOrbUnlocked) {
+                setDevOrbOpen(!devOrbOpen);
               }
-              onAgentImageUrlChange={setAgentImageUrlDraft}
-              onComposerModeChange={setAgentComposerMode}
-              onExecuteOnboardingCarryover={executeOnboardingCarryover}
-              onDecomposeIntentChange={setDecomposeIntent}
-              onDecomposeMaxIntentsChange={setDecomposeMaxIntents}
-              onOpenChatsTab={() => setActiveTab("chats")}
-              onRegenerate={regenerateLastIntent}
-              onSend={sendIntent}
-              onStop={cancelIntentSend}
-              onVoiceTranscript={(line) => {
-                agentVoiceTranscriptRef.current = line.trim() || null;
-              }}
-              pendingIntentSummary={pendingIntentSummary}
-              sending={sendingIntent}
-              setDraftMessage={setDraftIntentText}
-              threadLoading={agentThreadLoading}
-            />
-          ) : null}
-          {activeTab === "chats" ? (
-            <ChatsTab
-              chatCreationType={newChatType}
-              creatingChat={creatingChat}
-              currentUserId={session.userId}
-              e2eSubmitOnReturn={enableE2ELocalMode}
-              draftChatMessage={draftChatMessage}
-              loadingMessages={
-                selectedChatId != null && Boolean(syncingChats[selectedChatId])
-              }
-              locale={locale}
-              onChatTypeChange={setNewChatType}
-              onCreateChat={createDemoChat}
-              onModerationBlock={async (targetUserId, chatId) => {
-                await blockUser(targetUserId, { chatId });
-              }}
-              onModerationReport={async (targetUserId, chatId) => {
-                await reportUser(targetUserId, { chatId });
-              }}
-              onOpenChat={openChat}
-              onSendMessage={sendChatMessage}
-              onSyncNow={syncChatsNow}
-              selectedChat={selectedChat}
-              sendingMessage={sendingChatMessage}
-              setDraftChatMessage={handleDraftChatMessageChange}
-              syncingNow={syncingAllChats}
-              realtimeState={realtimeState}
-              threads={chats}
-              typingUsers={typingUsers}
-            />
-          ) : null}
-          {activeTab === "profile" ? (
-            <ProfileTab
-              loading={profileLoading}
-              profile={profileDraft}
-              pushEnabled={pushEnabled}
-              pushToken={pushToken}
-              telemetrySummary={telemetrySummary}
-              trustSummary={trustSummary}
-              onNotificationModeChange={(value) =>
-                setProfileDraft((current) => ({
-                  ...current,
-                  notificationMode: value,
-                }))
-              }
-              onSendDigestNow={sendDigestNow}
-              onSignOut={signOut}
-              onSocialModeChange={(value) =>
-                setProfileDraft((current) => ({
-                  ...current,
-                  socialMode: value,
-                }))
-              }
-              onSaveSettings={saveSettings}
-              circles={recurringCircles}
-              circlesBusy={recurringBusy}
-              selectedCircleId={selectedCircleId}
-              selectedCircleTitle={selectedCircle?.title ?? null}
-              circleSessions={recurringSessions}
-              onCreateCircle={createCircleQuick}
-              onSelectCircle={setSelectedCircleId}
-              onRunCircleSessionNow={runCircleSessionNow}
-              passiveDiscovery={passiveDiscovery}
-              inboxSuggestions={inboxSuggestions}
-              pendingIntentSummary={pendingIntentSummary}
-              selectedExplainedIntentId={selectedExplainedIntentId}
-              userIntentExplanation={userIntentExplanation}
-              discoveryBusy={discoveryBusy}
-              onRefreshDiscovery={refreshDiscoverySnapshots}
-              onPublishDiscoveryToAgent={publishDiscoveryToAgent}
-              onSelectExplainedIntent={setSelectedExplainedIntentId}
-              searchQuery={searchQuery}
-              searchSnapshot={searchSnapshot}
-              searchBusy={searchBusy}
-              onSearchQueryChange={setSearchQuery}
-              onRunSearch={runSearch}
-              memorySnapshot={memorySnapshot}
-              memoryBusy={memoryBusy}
-              locale={locale}
-              onRefreshMemory={refreshMemorySnapshot}
-              onResetLearnedMemory={resetLearnedMemory}
-              onLocaleChange={setLocale}
-              savedSearches={savedSearches}
-              scheduledTasks={scheduledTasks}
-              selectedScheduledTaskId={selectedScheduledTaskId}
-              scheduledTaskRuns={scheduledTaskRuns}
-              automationsBusy={automationsBusy}
-              onSelectScheduledTask={setSelectedScheduledTaskId}
-              onCreateSavedSearch={createSavedSearchQuick}
-              onCreateAutomation={createAutomationQuick}
-              onRunAutomationNow={runAutomationNow}
-            />
-          ) : null}
-        </AnimatedScreen>
-
-        <HomeTabBar
-          activeTab={activeTab}
-          locale={locale}
-          onChange={(tab) => {
-            hapticSelection();
-            setActiveTab(tab);
-          }}
-        />
+            }}
+            onUnlock={() => {
+              setDevOrbUnlocked(true);
+              setDevOrbOpen(true);
+              setBanner({
+                tone: "info",
+                text: "Dev tools unlocked for 10 minutes.",
+              });
+            }}
+            open={devOrbOpen}
+            unlocked={devOrbUnlocked}
+            visible={showDevOrb && activeTab !== "home"}
+          />
+        </View>
       </KeyboardAvoidingView>
-
-      <AppDrawer
-        displayName={session.displayName}
-        locale={locale}
-        onClose={() => setDrawerOpen(false)}
-        onNavigate={setActiveTab}
-        onNewAgentConversation={() => {
-          resetAgentConversation();
-          setActiveTab("home");
-        }}
-        visible={drawerOpen}
-      />
     </SafeAreaView>
   );
 }
 
-interface ChatsTabProps {
-  locale: AppLocale;
-  e2eSubmitOnReturn?: boolean;
-  currentUserId: string;
-  chatCreationType: "dm" | "group";
-  threads: LocalChatThread[];
-  selectedChat: LocalChatThread | null;
-  typingUsers: string[];
-  realtimeState: RealtimeConnectionState;
-  draftChatMessage: string;
-  setDraftChatMessage: (value: string) => void;
-  onChatTypeChange: (value: "dm" | "group") => void;
-  onCreateChat: () => Promise<void>;
-  onOpenChat: (chatId: string) => Promise<void>;
-  onSendMessage: () => Promise<void>;
-  onSyncNow: () => Promise<void>;
-  onModerationReport: (targetUserId: string, chatId: string) => Promise<void>;
-  onModerationBlock: (targetUserId: string, chatId: string) => Promise<void>;
-  creatingChat: boolean;
-  sendingMessage: boolean;
-  syncingNow: boolean;
-  loadingMessages: boolean;
-}
-
-function ChatsTab({
-  chatCreationType,
-  creatingChat,
-  currentUserId,
-  draftChatMessage,
-  e2eSubmitOnReturn = false,
-  loadingMessages,
-  locale,
-  onChatTypeChange,
-  onCreateChat,
-  onModerationBlock,
-  onModerationReport,
-  onOpenChat,
-  onSendMessage,
-  onSyncNow,
-  realtimeState,
-  selectedChat,
-  sendingMessage,
-  setDraftChatMessage,
-  syncingNow,
-  threads,
-  typingUsers,
-}: ChatsTabProps) {
-  const moderationTargetUserId =
-    selectedChat?.messages.find(
-      (message) => message.senderUserId !== currentUserId,
-    )?.senderUserId ?? null;
-  const chatMessageLength = draftChatMessage.trim().length;
-  const canSendMessage = chatMessageLength > 0 && !sendingMessage;
-
-  return (
-    <View className="min-h-0 flex-1 px-5 py-4">
-      <View className="mb-3 flex-row items-center gap-2 px-1">
-        <View className="rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1">
-          <Text
-            className={`text-[10px] font-semibold uppercase tracking-[0.14em] ${
-              realtimeState === "connected"
-                ? "text-white/62"
-                : realtimeState === "connecting"
-                  ? "text-white/46"
-                  : "text-white/34"
-            }`}
-          >
-            {realtimeState === "connected"
-              ? t("chatsRealtimeLive", locale)
-              : realtimeState === "connecting"
-                ? t("chatsRealtimeConnecting", locale)
-                : t("chatsRealtimeOffline", locale)}
-          </Text>
-        </View>
-        <Text
-          className="text-[12px] leading-[18px] text-white/34"
-          numberOfLines={2}
-        >
-          {selectedChat
-            ? formatThreadSummary(selectedChat)
-            : t("chatsEmptyDescription", locale)}
-        </Text>
-      </View>
-      <View className="mb-4 gap-3">
-        <View className="flex-row gap-2">
-          <ChoiceChip
-            label={t("chatsDm", locale)}
-            onPress={() => onChatTypeChange("dm")}
-            selected={chatCreationType === "dm"}
-            testID="chat-type-dm-chip"
-          />
-          <ChoiceChip
-            label={t("chatsGroup", locale)}
-            onPress={() => onChatTypeChange("group")}
-            selected={chatCreationType === "group"}
-            testID="chat-type-group-chip"
-          />
-        </View>
-        <View className="flex-row gap-2">
-          <View className="flex-1">
-            <PrimaryButton
-              label={
-                chatCreationType === "group"
-                  ? t("chatsCreateGroupSandbox", locale)
-                  : t("chatsCreateChatSandbox", locale)
-              }
-              loading={creatingChat}
-              onPress={onCreateChat}
-              testID="chat-create-button"
-              variant="secondary"
-            />
-          </View>
-          <View className="flex-1">
-            <PrimaryButton
-              label={
-                syncingNow
-                  ? t("chatsSyncingNow", locale)
-                  : t("chatsSyncNow", locale)
-              }
-              loading={syncingNow}
-              onPress={onSyncNow}
-              testID="chat-sync-button"
-              variant="ghost"
-            />
-          </View>
-        </View>
-      </View>
-
-      {threads.length === 0 ? (
-        <EmptyState
-          title={t("chatsEmptyTitle", locale)}
-          description={t("chatsEmptyDescription", locale)}
-        />
-      ) : (
-        <ScrollView className="mb-4 max-h-44">
-          {threads.map((thread, index) => (
-            <Pressable
-              className={`mb-2 rounded-[22px] border px-4 py-3.5 ${
-                selectedChat?.id === thread.id
-                  ? "border-white/[0.14] bg-white/[0.08]"
-                  : "border-white/[0.06] bg-white/[0.03]"
-              }`}
-              key={thread.id}
-              onPress={() => onOpenChat(thread.id)}
-              testID={
-                index === 0 ? "chat-thread-latest" : `chat-thread-${thread.id}`
-              }
-            >
-              <Text className="text-[14px] font-semibold text-white/88">
-                {thread.title}
-              </Text>
-              <View className="mt-1 flex-row items-center justify-between">
-                <Text className="text-[11px] text-white/34">
-                  {thread.messages.length} message
-                  {thread.messages.length === 1 ? "" : "s"} ·{" "}
-                  {formatThreadSummary(thread)}
-                </Text>
-                {thread.unreadCount > 0 ? (
-                  <View className="rounded-full border border-white/[0.08] bg-white px-2 py-1">
-                    <Text className="text-[10px] font-semibold text-[#0d0d0d]">
-                      {t("chatsUnread", locale, { count: thread.unreadCount })}
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
-            </Pressable>
-          ))}
-        </ScrollView>
-      )}
-
-      {selectedChat ? (
-        <SurfaceCard className="min-h-0 flex-1 p-4">
-          <Text className="mb-1 flex-shrink-0 text-[17px] font-semibold text-ink">
-            {selectedChat.title}
-          </Text>
-          <Text className="mb-3 text-[11px] text-muted">
-            {formatThreadSummary(selectedChat)}
-          </Text>
-          {moderationTargetUserId ? (
-            <View className="mb-3 flex-row gap-2">
-              <View className="flex-1">
-                <PrimaryButton
-                  label={t("chatsReportUser", locale)}
-                  onPress={() =>
-                    onModerationReport(moderationTargetUserId, selectedChat.id)
-                  }
-                  variant="ghost"
-                />
-              </View>
-              <View className="flex-1">
-                <PrimaryButton
-                  label={t("chatsBlockUser", locale)}
-                  onPress={() =>
-                    onModerationBlock(moderationTargetUserId, selectedChat.id)
-                  }
-                  variant="ghost"
-                />
-              </View>
-            </View>
-          ) : null}
-          {selectedChat.messages.length === 0 && !loadingMessages ? (
-            <Text className="mb-3 text-[13px] text-muted">
-              {t("chatsNoMessages", locale)}
-            </Text>
-          ) : null}
-          {selectedChat.messages.length > 0 ? (
-            <View className="min-h-0 flex-1">
-              <ChatTranscriptList
-                messages={selectedChat.messages}
-                renderBubble={(message) => (
-                  <ChatBubble
-                    body={message.body}
-                    role={
-                      message.senderUserId === currentUserId ? "user" : "agent"
-                    }
-                    testID={
-                      message.senderUserId === currentUserId
-                        ? "chat-user-message"
-                        : "chat-peer-message"
-                    }
-                  />
-                )}
-              />
-            </View>
-          ) : null}
-          {loadingMessages ? (
-            <Text className="mb-2 text-[11px] text-accent">
-              {t("chatsSyncingLatest", locale)}
-            </Text>
-          ) : null}
-          {typingUsers.length > 0 ? (
-            <Text className="mb-2 text-[11px] text-muted">
-              {typingUsers.length === 1
-                ? t("chatsSomeoneTyping", locale)
-                : t("chatsPeopleTyping", locale, { count: typingUsers.length })}
-            </Text>
-          ) : null}
-          <View className="flex-shrink-0">
-            <MessageComposer
-              canSend={canSendMessage}
-              e2eSubmitOnReturn={e2eSubmitOnReturn}
-              inputTestID="chat-message-input"
-              maxLength={1000}
-              multiline
-              onChangeText={setDraftChatMessage}
-              onSend={onSendMessage}
-              placeholder={t("chatsMessagePlaceholder", locale)}
-              sendAccessibilityLabel={t("chatsSendMessage", locale)}
-              sendTestID="chat-send-button"
-              sending={sendingMessage}
-              value={draftChatMessage}
-            />
-            <Text className="mt-1.5 text-[11px] text-muted">
-              {chatMessageLength}/1000
-            </Text>
-          </View>
-        </SurfaceCard>
-      ) : null}
-    </View>
-  );
-}
-
-interface ProfileTabProps {
-  profile: UserProfileDraft;
-  trustSummary: string;
-  telemetrySummary: TelemetrySummary | null;
-  pushEnabled: boolean;
-  pushToken: string | null;
-  circles: RecurringCircleRecord[];
-  circlesBusy: boolean;
-  selectedCircleId: string | null;
-  selectedCircleTitle: string | null;
-  circleSessions: RecurringCircleSessionRecord[];
-  passiveDiscovery: PassiveDiscoveryResponse | null;
-  inboxSuggestions: DiscoveryInboxSuggestionsResponse | null;
-  pendingIntentSummary: PendingIntentsSummaryResponse | null;
-  selectedExplainedIntentId: string | null;
-  userIntentExplanation: UserIntentExplanation | null;
-  discoveryBusy: boolean;
-  searchQuery: string;
-  searchSnapshot: SearchSnapshotResponse | null;
-  searchBusy: boolean;
-  memorySnapshot: {
-    lifeGraph: Record<string, unknown> | null;
-    retrieval: Record<string, unknown> | null;
-  };
-  memoryBusy: boolean;
-  locale: AppLocale;
-  savedSearches: SavedSearchRecord[];
-  scheduledTasks: ScheduledTaskRecord[];
-  selectedScheduledTaskId: string | null;
-  scheduledTaskRuns: ScheduledTaskRunRecord[];
-  automationsBusy: boolean;
-  onSocialModeChange: (value: UserProfileDraft["socialMode"]) => void;
-  onNotificationModeChange: (
-    value: UserProfileDraft["notificationMode"],
-  ) => void;
-  onCreateCircle: () => Promise<void>;
-  onSelectCircle: (circleId: string) => void;
-  onRunCircleSessionNow: () => Promise<void>;
-  onRefreshDiscovery: () => Promise<void>;
-  onPublishDiscoveryToAgent: () => Promise<void>;
-  onSelectExplainedIntent: (intentId: string) => void;
-  onSearchQueryChange: (value: string) => void;
-  onRunSearch: () => Promise<void>;
-  onRefreshMemory: () => Promise<void>;
-  onResetLearnedMemory: () => Promise<void>;
-  onLocaleChange: (value: AppLocale) => void;
-  onSelectScheduledTask: (taskId: string) => void;
-  onCreateSavedSearch: () => Promise<void>;
-  onCreateAutomation: () => Promise<void>;
-  onRunAutomationNow: () => Promise<void>;
-  onSaveSettings: () => Promise<void>;
-  onSendDigestNow: () => Promise<void>;
-  onSignOut: () => Promise<void>;
-  loading: boolean;
-}
-
-function ProfileTab({
-  loading,
-  onNotificationModeChange,
-  onSaveSettings,
-  onSendDigestNow,
-  onSignOut,
-  onSocialModeChange,
-  profile,
-  pushEnabled,
-  pushToken,
-  circles,
-  circlesBusy,
-  selectedCircleId,
-  selectedCircleTitle,
-  circleSessions,
-  passiveDiscovery,
-  inboxSuggestions,
-  pendingIntentSummary,
-  selectedExplainedIntentId,
-  userIntentExplanation,
-  discoveryBusy,
-  searchQuery,
-  searchSnapshot,
-  searchBusy,
-  memorySnapshot,
-  memoryBusy,
-  locale,
-  savedSearches,
-  scheduledTasks,
-  selectedScheduledTaskId,
-  scheduledTaskRuns,
-  automationsBusy,
-  telemetrySummary,
-  trustSummary,
-  onCreateCircle,
-  onSelectCircle,
-  onRunCircleSessionNow,
-  onRefreshDiscovery,
-  onPublishDiscoveryToAgent,
-  onSelectExplainedIntent,
-  onSearchQueryChange,
-  onRunSearch,
-  onRefreshMemory,
-  onResetLearnedMemory,
-  onLocaleChange,
-  onSelectScheduledTask,
-  onCreateSavedSearch,
-  onCreateAutomation,
-  onRunAutomationNow,
-}: ProfileTabProps) {
-  const activationStarted =
-    telemetrySummary?.counters.onboardingActivationStarted ?? 0;
-  const activationSuccessRate =
-    telemetrySummary?.metrics.activationSuccessRate ?? null;
-  const activationQueuedRate =
-    telemetrySummary?.metrics.activationQueuedRate ?? null;
-  const activationFailureRate =
-    telemetrySummary?.metrics.activationFailureRate ?? null;
-  const activationHealthNotice =
-    activationStarted === 0
-      ? {
-          tone: "info" as const,
-          text: t("profileActivationHealthNoData", locale),
-        }
-      : activationSuccessRate != null &&
-          activationSuccessRate >= 0.8 &&
-          (activationFailureRate ?? 0) <= 0.1
-        ? {
-            tone: "success" as const,
-            text: t("profileActivationHealthHealthy", locale),
-          }
-        : activationFailureRate != null && activationFailureRate >= 0.2
-          ? {
-              tone: "error" as const,
-              text: t("profileActivationHealthCritical", locale),
-            }
-          : activationQueuedRate != null && activationQueuedRate >= 0.4
-            ? {
-                tone: "info" as const,
-                text: t("profileActivationHealthWatch", locale),
-              }
-            : {
-                tone: "info" as const,
-                text: t("profileActivationHealthWatch", locale),
-              };
-
-  return (
-    <ScrollView
-      contentContainerStyle={{
-        paddingHorizontal: 20,
-        paddingVertical: 16,
-        gap: 14,
-      }}
-    >
-      <SurfaceCard>
-        <Text className="mb-1 text-[18px] font-semibold tracking-tight text-ink">
-          {t("profileInterests", locale)}
-        </Text>
-        <Text className="mb-3 text-[12px] leading-[18px] text-muted">
-          Interests shape who the system prioritizes around you.
-        </Text>
-        <View className="flex-row flex-wrap gap-2">
-          {profile.interests.map((interest) => (
-            <View className="rounded-full bg-surface px-3 py-2" key={interest}>
-              <Text className="text-xs text-ink">{interest}</Text>
-            </View>
-          ))}
-        </View>
-      </SurfaceCard>
-
-      <SurfaceCard>
-        <Text className="mb-1 text-[18px] font-semibold tracking-tight text-ink">
-          {t("localeLabel", locale)}
-        </Text>
-        <Text className="mb-3 text-[12px] leading-[18px] text-muted">
-          Choose how the app speaks to you.
-        </Text>
-        <View className="flex-row flex-wrap gap-2">
-          <ChoiceChip
-            label={t("localeEnglish", locale)}
-            onPress={() => onLocaleChange("en")}
-            selected={locale === "en"}
-          />
-          <ChoiceChip
-            label={t("localeSpanish", locale)}
-            onPress={() => onLocaleChange("es")}
-            selected={locale === "es"}
-          />
-        </View>
-      </SurfaceCard>
-
-      <SurfaceCard>
-        <Text className="mb-1 text-[18px] font-semibold tracking-tight text-ink">
-          {t("profileDefaultSocialMode", locale)}
-        </Text>
-        <Text className="mb-3 text-[12px] leading-[18px] text-muted">
-          This sets the default tone for new agent matching.
-        </Text>
-        <View className="flex-row flex-wrap gap-2">
-          <ChoiceChip
-            label="1:1"
-            onPress={() => onSocialModeChange("one_to_one")}
-            selected={profile.socialMode === "one_to_one"}
-          />
-          <ChoiceChip
-            label={t("profileModeGroup", locale)}
-            onPress={() => onSocialModeChange("group")}
-            selected={profile.socialMode === "group"}
-          />
-          <ChoiceChip
-            label={t("profileModeFlexible", locale)}
-            onPress={() => onSocialModeChange("either")}
-            selected={profile.socialMode === "either"}
-          />
-        </View>
-      </SurfaceCard>
-
-      <SurfaceCard>
-        <Text className="mb-1 text-[18px] font-semibold tracking-tight text-ink">
-          {t("profileNotifications", locale)}
-        </Text>
-        <Text className="mb-3 text-[12px] leading-[18px] text-muted">
-          Control how quickly OpenSocial reaches back out.
-        </Text>
-        <View className="mb-3 flex-row flex-wrap gap-2">
-          <ChoiceChip
-            label={t("profileLiveAlerts", locale)}
-            onPress={() => onNotificationModeChange("live")}
-            selected={profile.notificationMode === "live"}
-          />
-          <ChoiceChip
-            label={t("profileDigestMode", locale)}
-            onPress={() => onNotificationModeChange("digest")}
-            selected={profile.notificationMode === "digest"}
-          />
-        </View>
-        <Text className="text-xs text-muted">
-          {t("profilePushStatus", locale, {
-            status: pushEnabled
-              ? t("profileEnabled", locale)
-              : t("profileDisabled", locale),
-          })}
-        </Text>
-        <Text className="mt-1 text-xs text-muted">
-          {t("profileTokenStatus", locale, {
-            status: pushToken
-              ? `${pushToken.slice(0, 18)}...`
-              : t("profileNotRegistered", locale),
-          })}
-        </Text>
-      </SurfaceCard>
-
-      <SurfaceCard>
-        <Text className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted">
-          {t("profileTrustSummary", locale)}
-        </Text>
-        <Text className="mt-2 text-[14px] leading-[21px] text-ink">
-          {trustSummary}
-        </Text>
-      </SurfaceCard>
-
-      <SurfaceCard className="gap-5">
-        <View>
-          <View className="mb-2 flex-row items-center justify-between">
-            <Text className="text-[18px] font-semibold tracking-tight text-ink">
-              {t("profileDiscoverySnapshot", locale)}
-            </Text>
-            <PrimaryButton
-              label={
-                discoveryBusy
-                  ? t("profileRefreshing", locale)
-                  : t("commonRefresh", locale)
-              }
-              onPress={onRefreshDiscovery}
-              variant="ghost"
-            />
-          </View>
-          <Text className="text-xs text-muted">
-            {t("profileTonightReconnects", locale, {
-              tonight: passiveDiscovery?.tonight.suggestions.length ?? 0,
-              reconnects: passiveDiscovery?.reconnects.reconnects.length ?? 0,
-            })}
-          </Text>
-          <View className="mt-2 rounded-xl border border-border bg-surface p-2">
-            {passiveDiscovery?.tonight.suggestions.length ? (
-              passiveDiscovery.tonight.suggestions
-                .slice(0, 3)
-                .map((suggestion) => (
-                  <Text
-                    className="mb-1 text-xs text-ink"
-                    key={suggestion.userId}
-                  >
-                    {suggestion.displayName} ·{" "}
-                    {Math.round(suggestion.score * 100)}%
-                  </Text>
-                ))
-            ) : (
-              <Text className="text-xs text-muted">
-                {t("profileNoTonightSuggestions", locale)}
-              </Text>
-            )}
-          </View>
-          <View className="mt-2">
-            <PrimaryButton
-              label={t("profilePublishToAgent", locale)}
-              onPress={onPublishDiscoveryToAgent}
-              variant="secondary"
-            />
-          </View>
-        </View>
-
-        <View className="h-px bg-border" />
-
-        <View>
-          <Text className="mb-2 text-[18px] font-semibold tracking-tight text-ink">
-            {t("profileContinuityReconnect", locale)}
-          </Text>
-          <Text className="text-xs text-muted">
-            {t("profilePendingRequestSuggestions", locale, {
-              count: inboxSuggestions?.pendingRequestCount ?? 0,
-            })}
-          </Text>
-          <View className="mt-2 rounded-xl border border-border bg-surface p-2">
-            {inboxSuggestions?.suggestions.length ? (
-              inboxSuggestions.suggestions.slice(0, 4).map((suggestion) => (
-                <Text
-                  className="mb-1 text-xs text-ink"
-                  key={`${suggestion.title}-${suggestion.reason}`}
-                >
-                  {suggestion.title}
-                </Text>
-              ))
-            ) : (
-              <Text className="text-xs text-muted">
-                {t("profileNoReconnectSuggestions", locale)}
-              </Text>
-            )}
-          </View>
-        </View>
-
-        <View className="h-px bg-border" />
-
-        <View>
-          <Text className="mb-2 text-[18px] font-semibold tracking-tight text-ink">
-            {t("profileWhyThisRoutingResult", locale)}
-          </Text>
-          {pendingIntentSummary?.intents.length ? (
-            <>
-              <View className="mb-2 flex-row flex-wrap gap-2">
-                {pendingIntentSummary.intents.slice(0, 5).map((intent) => (
-                  <ChoiceChip
-                    key={intent.intentId}
-                    label={intent.rawText.slice(0, 18)}
-                    onPress={() => onSelectExplainedIntent(intent.intentId)}
-                    selected={selectedExplainedIntentId === intent.intentId}
-                  />
-                ))}
-              </View>
-              <Text className="text-xs text-muted">
-                {userIntentExplanation?.summary ??
-                  t("profileLoadingExplanation", locale)}
-              </Text>
-              {userIntentExplanation?.factors.length ? (
-                <View className="mt-2 rounded-xl border border-border bg-surface p-2">
-                  {userIntentExplanation.factors.map((factor) => (
-                    <Text className="mb-1 text-xs text-ink" key={factor}>
-                      {factor}
-                    </Text>
-                  ))}
-                </View>
-              ) : null}
-            </>
-          ) : (
-            <Text className="text-xs text-muted">
-              {t("profileNoIntentsToExplain", locale)}
-            </Text>
-          )}
-        </View>
-      </SurfaceCard>
-
-      <SurfaceCard className="gap-5">
-        <View>
-          <Text className="mb-2 text-[18px] font-semibold tracking-tight text-ink">
-            {t("commonSearch", locale)}
-          </Text>
-          <CalmTextField
-            autoCapitalize="none"
-            autoCorrect={false}
-            containerClassName="mb-2"
-            inputClassName="text-[14px]"
-            onChangeText={onSearchQueryChange}
-            placeholder={t("profileSearchPlaceholder", locale)}
-            value={searchQuery}
-          />
-          <PrimaryButton
-            label={
-              searchBusy
-                ? t("profileSearching", locale)
-                : t("commonSearch", locale)
-            }
-            onPress={onRunSearch}
-            variant="secondary"
-          />
-          {searchSnapshot ? (
-            <Text className="mt-2 text-xs text-muted">
-              {t("profileSearchCounts", locale, {
-                users: searchSnapshot.users.length,
-                topics: searchSnapshot.topics.length,
-                activities: searchSnapshot.activities.length,
-                groups: searchSnapshot.groups.length,
-              })}
-            </Text>
-          ) : null}
-        </View>
-
-        <View className="h-px bg-border" />
-
-        <View>
-          <Text className="mb-2 text-[18px] font-semibold tracking-tight text-ink">
-            {t("profileMemoryControls", locale)}
-          </Text>
-          <PrimaryButton
-            label={
-              memoryBusy
-                ? t("profileRefreshing", locale)
-                : t("profileRefreshMemorySnapshot", locale)
-            }
-            onPress={onRefreshMemory}
-            variant="secondary"
-          />
-          <View className="mt-2">
-            <PrimaryButton
-              label={t("profileResetLearnedMemory", locale)}
-              onPress={onResetLearnedMemory}
-              variant="ghost"
-            />
-          </View>
-          <Text className="mt-2 text-xs text-muted">
-            {t("profileMemoryLoaded", locale, {
-              lifeGraph: memorySnapshot.lifeGraph
-                ? t("profileYes", locale)
-                : t("profileNo", locale),
-              retrieval: memorySnapshot.retrieval
-                ? t("profileYes", locale)
-                : t("profileNo", locale),
-            })}
-          </Text>
-        </View>
-      </SurfaceCard>
-
-      <SurfaceCard className="gap-5">
-        <View>
-          <Text className="mb-2 text-[18px] font-semibold tracking-tight text-ink">
-            {t("profileAutomations", locale)}
-          </Text>
-          <Text className="text-xs text-muted">
-            {t("profileAutomationsBody", locale)}
-          </Text>
-          <View className="mt-2 flex-row flex-wrap gap-2">
-            <PrimaryButton
-              label={t("profileNewSavedSearch", locale)}
-              onPress={onCreateSavedSearch}
-              variant="ghost"
-              disabled={automationsBusy}
-            />
-            <PrimaryButton
-              label={t("profileNewAutomation", locale)}
-              onPress={onCreateAutomation}
-              variant="ghost"
-              disabled={automationsBusy}
-            />
-            <PrimaryButton
-              label={t("profileRunNow", locale)}
-              onPress={onRunAutomationNow}
-              variant="secondary"
-              disabled={!selectedScheduledTaskId}
-            />
-          </View>
-          <Text className="mt-2 text-xs text-muted">
-            {t("profileSavedSearchesTasks", locale, {
-              searches: savedSearches.length,
-              tasks: scheduledTasks.length,
-            })}
-          </Text>
-          {scheduledTasks.length ? (
-            <View className="mt-2 gap-2">
-              {scheduledTasks.slice(0, 4).map((task) => (
-                <Pressable
-                  className={`rounded-xl border px-3 py-2 ${
-                    selectedScheduledTaskId === task.id
-                      ? "border-primary bg-primary/10"
-                      : "border-border bg-surface"
-                  }`}
-                  key={task.id}
-                  onPress={() => onSelectScheduledTask(task.id)}
-                >
-                  <Text className="text-xs font-semibold text-ink">
-                    {task.title}
-                  </Text>
-                  <Text className="mt-1 text-[11px] text-muted">
-                    {task.taskType} · {task.status}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          ) : null}
-          {selectedScheduledTaskId ? (
-            <View className="mt-2 rounded-xl border border-border bg-surface p-2">
-              {scheduledTaskRuns.length === 0 ? (
-                <Text className="text-xs text-muted">
-                  {t("profileNoRunsYet", locale)}
-                </Text>
-              ) : (
-                scheduledTaskRuns.map((run) => (
-                  <Text className="mb-1 text-xs text-ink" key={run.id}>
-                    {formatRelativeTime(run.triggeredAt)} · {run.status}
-                  </Text>
-                ))
-              )}
-            </View>
-          ) : null}
-        </View>
-
-        <View className="h-px bg-border" />
-
-        <View>
-          <View className="mb-2 flex-row items-center justify-between">
-            <Text className="text-[18px] font-semibold tracking-tight text-ink">
-              {t("profileRecurringCircles", locale)}
-            </Text>
-            <PrimaryButton
-              label={t("profileNew", locale)}
-              onPress={onCreateCircle}
-              variant="ghost"
-            />
-          </View>
-          {circlesBusy ? (
-            <Text className="text-xs text-muted">
-              {t("profileLoadingCircles", locale)}
-            </Text>
-          ) : circles.length === 0 ? (
-            <Text className="text-xs text-muted">
-              {t("profileNoCircles", locale)}
-            </Text>
-          ) : (
-            <View className="gap-2">
-              {circles.map((circle) => (
-                <Pressable
-                  className={`rounded-xl border px-3 py-2 ${
-                    selectedCircleId === circle.id
-                      ? "border-primary bg-primary/10"
-                      : "border-border bg-surface"
-                  }`}
-                  key={circle.id}
-                  onPress={() => onSelectCircle(circle.id)}
-                >
-                  <Text className="text-xs font-semibold text-ink">
-                    {circle.title}
-                  </Text>
-                  <Text className="mt-1 text-[11px] text-muted">
-                    {circle.status} · next{" "}
-                    {circle.nextSessionAt
-                      ? formatRelativeTime(circle.nextSessionAt)
-                      : t("profileNextScheduled", locale)}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          )}
-          <View className="mt-3 flex-row items-center justify-between">
-            <Text className="text-xs text-muted">
-              {selectedCircleTitle ?? t("profileSelectCircle", locale)}
-            </Text>
-            <PrimaryButton
-              label={t("profileOpenNow", locale)}
-              onPress={onRunCircleSessionNow}
-              variant="secondary"
-              disabled={!selectedCircleId}
-            />
-          </View>
-          <View className="mt-2 rounded-xl border border-border bg-surface p-2">
-            {circleSessions.length === 0 ? (
-              <Text className="text-xs text-muted">
-                {t("profileNoRecentSessions", locale)}
-              </Text>
-            ) : (
-              circleSessions.map((sessionItem) => (
-                <Text className="mb-1 text-xs text-ink" key={sessionItem.id}>
-                  {formatRelativeTime(sessionItem.scheduledFor)} ·{" "}
-                  {sessionItem.status}
-                </Text>
-              ))
-            )}
-          </View>
-        </View>
-      </SurfaceCard>
-
-      <SurfaceCard>
-        <Text className="mb-2 text-base font-semibold text-ink">
-          {t("profileLocalTelemetry", locale)}
-        </Text>
-        <View className="mb-2">
-          <InlineNotice
-            text={activationHealthNotice.text}
-            tone={activationHealthNotice.tone}
-          />
-        </View>
-        <Text className="text-xs text-muted">
-          {t("profileEvents", locale, {
-            count: telemetrySummary?.totalEvents ?? 0,
-          })}
-        </Text>
-        <Text className="text-xs text-muted">
-          {t("profileLast", locale, {
-            value: telemetrySummary?.lastEventAt
-              ? formatRelativeTime(telemetrySummary.lastEventAt)
-              : t("profileNa", locale),
-          })}
-        </Text>
-        <Text className="mt-2 text-xs text-muted">
-          {t("profileTelemetryIntents", locale, {
-            intents: telemetrySummary?.counters.intentsCreated ?? 0,
-            sent: telemetrySummary?.counters.requestsSent ?? 0,
-            responded: telemetrySummary?.counters.requestsResponded ?? 0,
-          })}
-        </Text>
-        <Text className="text-xs text-muted">
-          {t("profileTelemetryChats", locale, {
-            started: telemetrySummary?.counters.chatsStarted ?? 0,
-            messages: telemetrySummary?.counters.firstMessagesSent ?? 0,
-          })}
-        </Text>
-        <Text className="text-xs text-muted">
-          {t("profileTelemetryModeration", locale, {
-            reports: telemetrySummary?.counters.reportsSubmitted ?? 0,
-            blocked: telemetrySummary?.counters.usersBlocked ?? 0,
-          })}
-        </Text>
-        <Text className="text-xs text-muted">
-          {t("profileTelemetryIntentMetrics", locale, {
-            accept: formatMetricSeconds(
-              telemetrySummary?.metrics.avgIntentToFirstAcceptanceSeconds ??
-                null,
-            ),
-            firstMessage: formatMetricSeconds(
-              telemetrySummary?.metrics.avgIntentToFirstMessageSeconds ?? null,
-            ),
-          })}
-        </Text>
-        <Text className="text-xs text-muted">
-          {t("profileTelemetryConnectionMetrics", locale, {
-            success: formatMetricRate(
-              telemetrySummary?.metrics.connectionSuccessRate ?? null,
-            ),
-            completion: formatMetricRate(
-              telemetrySummary?.metrics.groupFormationCompletionRate ?? null,
-            ),
-          })}
-        </Text>
-        <Text className="text-xs text-muted">
-          {t("profileTelemetryNotificationMetrics", locale, {
-            open: formatMetricRate(
-              telemetrySummary?.metrics.notificationToOpenRate ?? null,
-            ),
-            incidence: formatMetricRate(
-              telemetrySummary?.metrics.moderationIncidentRate ?? null,
-            ),
-          })}
-        </Text>
-        <Text className="text-xs text-muted">
-          {t("profileTelemetrySyncMetrics", locale, {
-            failure: formatMetricRate(
-              telemetrySummary?.metrics.syncFailureRate ?? null,
-            ),
-            repeat: formatMetricRate(
-              telemetrySummary?.metrics.repeatConnectionRate ?? null,
-            ),
-          })}
-        </Text>
-        <Text className="text-xs text-muted">
-          {t("profileTelemetryActivationMetrics", locale, {
-            ready: telemetrySummary?.counters.onboardingActivationReady ?? 0,
-            started:
-              telemetrySummary?.counters.onboardingActivationStarted ?? 0,
-            success:
-              telemetrySummary?.counters.onboardingActivationSucceeded ?? 0,
-            queued: telemetrySummary?.counters.onboardingActivationQueued ?? 0,
-            failed: telemetrySummary?.counters.onboardingActivationFailed ?? 0,
-            avg: formatMetricSeconds(
-              telemetrySummary?.metrics.avgActivationCompletionSeconds ?? null,
-            ),
-            successRate: formatMetricRate(
-              telemetrySummary?.metrics.activationSuccessRate ?? null,
-            ),
-          })}
-        </Text>
-      </SurfaceCard>
-
-      <PrimaryButton
-        label={
-          loading
-            ? t("commonLoading", locale)
-            : t("profileSaveSettings", locale)
-        }
-        loading={loading}
-        onPress={onSaveSettings}
-        variant="secondary"
-      />
-      <PrimaryButton
-        label={t("profileRequestDigestNow", locale)}
-        onPress={onSendDigestNow}
-        variant="ghost"
-      />
-      <PrimaryButton
-        label={t("profileSignOut", locale)}
-        onPress={onSignOut}
-        variant="ghost"
-      />
-    </ScrollView>
-  );
-}
-
 function mergeChatMessages(
-  existing: ChatMessageRecord[],
+  existing: LocalChatMessageRecord[],
   incoming: ChatMessageRecord[],
 ) {
-  const dedupedById = new Map<string, ChatMessageRecord>();
+  const dedupedById = new Map<string, LocalChatMessageRecord>();
   for (const message of [...existing, ...incoming]) {
     dedupedById.set(message.id, message);
   }
 
-  return Array.from(dedupedById.values()).sort((left, right) => {
+  const sorted = Array.from(dedupedById.values()).sort((left, right) => {
     const leftTimestamp = Date.parse(left.createdAt);
     const rightTimestamp = Date.parse(right.createdAt);
     const leftTime = Number.isFinite(leftTimestamp) ? leftTimestamp : 0;
@@ -3865,19 +2204,31 @@ function mergeChatMessages(
     }
     return left.id.localeCompare(right.id);
   });
+
+  const remoteFingerprintSet = new Set(
+    sorted
+      .filter((message) => message.deliveryStatus == null)
+      .map((message) => fingerprintMessage(message)),
+  );
+
+  return sorted.filter((message) => {
+    if (message.deliveryStatus == null) {
+      return true;
+    }
+    return !remoteFingerprintSet.has(fingerprintMessage(message));
+  });
 }
 
-function formatThreadSummary(thread: LocalChatThread) {
-  const typeLabel = thread.type === "group" ? "group" : "dm";
-  const participants =
-    thread.participantCount == null
-      ? "participants n/a"
-      : `${thread.participantCount} participant${thread.participantCount === 1 ? "" : "s"}`;
-  const status = thread.connectionStatus ?? "status n/a";
-  const syncedAt = thread.highWatermark
-    ? `synced ${formatRelativeTime(thread.highWatermark)}`
-    : "not synced";
-  return `${typeLabel} · ${participants} · ${status} · ${syncedAt}`;
+function fingerprintMessage(message: {
+  chatId: string;
+  senderUserId: string;
+  body: string;
+}) {
+  return [
+    message.chatId,
+    message.senderUserId,
+    message.body.trim().toLowerCase(),
+  ].join("::");
 }
 
 function formatChatTitle(chatId: string, type: "dm" | "group") {
@@ -3906,39 +2257,4 @@ function sleep(milliseconds: number) {
   return new Promise<void>((resolve) => {
     setTimeout(resolve, milliseconds);
   });
-}
-
-function formatMetricSeconds(seconds: number | null) {
-  if (seconds == null) {
-    return "n/a";
-  }
-  if (seconds < 60) {
-    return `${seconds}s`;
-  }
-  if (seconds < 3600) {
-    return `${Math.round(seconds / 60)}m`;
-  }
-  return `${Math.round(seconds / 3600)}h`;
-}
-
-function formatMetricRate(value: number | null) {
-  if (value == null) {
-    return "n/a";
-  }
-  return `${Math.round(value * 100)}%`;
-}
-
-function formatRelativeTime(input: string) {
-  const createdAt = new Date(input);
-  const deltaSeconds = Math.max(
-    Math.floor((Date.now() - createdAt.getTime()) / 1000),
-    0,
-  );
-  if (deltaSeconds < 60) {
-    return `${deltaSeconds}s ago`;
-  }
-  if (deltaSeconds < 3600) {
-    return `${Math.floor(deltaSeconds / 60)}m ago`;
-  }
-  return `${Math.floor(deltaSeconds / 3600)}h ago`;
 }

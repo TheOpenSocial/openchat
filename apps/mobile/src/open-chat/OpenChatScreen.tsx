@@ -1,18 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  FlatList,
+  type LayoutChangeEvent,
   LayoutAnimation,
   Platform,
   Pressable,
   Text,
-  TextInput,
   UIManager,
   View,
 } from "react-native";
 
-import { AgentIntentToolbar } from "../components/AgentIntentToolbar";
 import { ChatTranscriptList } from "../components/ChatTranscriptList";
-import { ChoiceChip } from "../components/ChoiceChip";
 import type { PendingIntentsSummaryResponse } from "../lib/api";
 import { hapticSelection } from "../lib/haptics";
 import type { AppLocale } from "../i18n/strings";
@@ -86,40 +85,76 @@ export function OpenChatScreen({
   onboardingCarryover = null,
   onExecuteOnboardingCarryover,
 }: OpenChatScreenProps) {
-  const [toolsOpen, setToolsOpen] = useState(false);
+  void agentImageUrl;
+  void canRegenerate;
+  void composerMode;
+  void decomposeIntent;
+  void decomposeMaxIntents;
+  void onAgentImageUrlChange;
+  void onComposerModeChange;
+  void onDecomposeIntentChange;
+  void onDecomposeMaxIntentsChange;
+  void onRegenerate;
+  void onStop;
+  const transcriptRef = useRef<FlatList<AgentTimelineMessage> | null>(null);
   const inlineChips = useMemo(
     () => [
       {
-        label: t("openChatInlineFootball", locale),
-        body: t("openChatInlineFootballBody", locale),
+        label: "Talk about something",
+        body: "I want to talk about something on my mind.",
       },
       {
-        label: t("openChatInlineTonight", locale),
-        body: t("openChatInlineTonightBody", locale),
+        label: "Find people for tonight",
+        body: "Find people who are free tonight.",
       },
       {
-        label: t("openChatInlineMeet", locale),
-        body: t("openChatInlineMeetBody", locale),
+        label: "Meet someone new",
+        body: "I want to meet someone new around a shared interest.",
       },
       {
-        label: t("openChatInlineGroup", locale),
-        body: t("openChatInlineGroupBody", locale),
-      },
-      {
-        label: t("openChatInlineExplore", locale),
-        body: t("openChatInlineExploreBody", locale),
+        label: "Start a group",
+        body: "I want to start a small group around something I care about.",
       },
     ],
-    [locale],
+    [],
   );
   const userActive = hasUserTurn(messages);
+  const filteredMessages = useMemo(() => {
+    const DEBUG_PATTERNS = [
+      /planning agentic response/i,
+      /risk check before tools/i,
+      /simple-turn fast path selected/i,
+      /synthesizing final response/i,
+      /agentic turn completed/i,
+    ];
+    return messages.filter((m) => {
+      const body = m.body?.trim() ?? "";
+      if (!body) return false;
+      return !DEBUG_PATTERNS.some((pattern) => pattern.test(body));
+    });
+  }, [messages]);
+
+  const latestUserIntent = useMemo(() => {
+    for (let i = filteredMessages.length - 1; i >= 0; i -= 1) {
+      const row = filteredMessages[i];
+      if (row.role === "user" && row.body.trim().length > 0) {
+        return row.body.trim();
+      }
+    }
+    return null;
+  }, [filteredMessages]);
+
+  const progressHint = useMemo(
+    () => compactProgressHint(pendingIntentSummary),
+    [pendingIntentSummary],
+  );
+
   const phase = deriveThreadPhase(
-    messages,
+    filteredMessages,
     pendingIntentSummary,
     sending,
     threadLoading,
   );
-  const progressHint = compactProgressHint(pendingIntentSummary);
 
   const threadActions = useMemo((): ThreadActionSpec[] => {
     const seen = new Set<string>();
@@ -151,7 +186,7 @@ export function OpenChatScreen({
       UIManager.setLayoutAnimationEnabledExperimental?.(true);
     }
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-  }, [messages.length]);
+  }, [filteredMessages.length]);
 
   const intentLen = draftMessage.trim().length;
   const canSend = intentLen > 0 && !sending;
@@ -160,6 +195,18 @@ export function OpenChatScreen({
     (phase === "empty" || phase === "active" || !userActive);
   const carryoverProcessing =
     showOnboardingCarryover && onboardingCarryover?.state === "processing";
+  const [composerOverlayHeight, setComposerOverlayHeight] = useState(154);
+  const [atBottom, setAtBottom] = useState(true);
+  const [pendingUpdates, setPendingUpdates] = useState(0);
+
+  useEffect(() => {
+    if (atBottom) {
+      setPendingUpdates(0);
+      transcriptRef.current?.scrollToEnd({ animated: true });
+      return;
+    }
+    setPendingUpdates((current) => current + 1);
+  }, [atBottom, filteredMessages.length]);
 
   useEffect(() => {
     if (Platform.OS === "android") {
@@ -188,21 +235,40 @@ export function OpenChatScreen({
     }
   };
 
-  return (
-    <View className="min-h-0 flex-1 bg-[#060607] px-4 pb-1 pt-2">
-      <OpenChatHeader locale={locale} showPresence={!userActive} />
+  const onComposerLayout = (event: LayoutChangeEvent) => {
+    const nextHeight = Math.ceil(event.nativeEvent.layout.height);
+    if (Math.abs(nextHeight - composerOverlayHeight) > 2) {
+      setComposerOverlayHeight(nextHeight);
+    }
+  };
 
+  return (
+    <View className="min-h-0 flex-1 bg-[#050506] px-5 pt-3">
+      <OpenChatHeader locale={locale} showPresence={!userActive} />
+      {latestUserIntent ? (
+        <View className="mb-2 mt-1 rounded-2xl border border-white/[0.06] bg-white/[0.03] px-3 py-2.5">
+          <Text className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/36">
+            Current intent
+          </Text>
+          <Text
+            className="mt-1 text-[14px] leading-[20px] text-white/78"
+            numberOfLines={2}
+          >
+            {latestUserIntent}
+          </Text>
+        </View>
+      ) : null}
       <ThreadContextStrip hint={progressHint} phase={phase} />
 
       {showOnboardingCarryover ? (
-        <View className="mb-3 mt-2 rounded-[22px] border border-white/[0.06] bg-white/[0.025] px-4 py-4">
-          <Text className="text-[11px] font-medium uppercase tracking-[0.14em] text-white/30">
-            {t("openChatOnboardingCarryoverTitle", locale)}
+        <View className="mb-4 mt-1 border-l border-white/[0.08] pl-4">
+          <Text className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/28">
+            Resume
           </Text>
-          <Text className="mt-2 text-[15px] leading-[23px] text-white/78">
+          <Text className="mt-2 text-[16px] leading-[24px] text-white/78">
             "{onboardingCarryover.seed}"
           </Text>
-          <Text className="mt-2 text-[13px] leading-[20px] text-white/42">
+          <Text className="mt-2 text-[13px] leading-[20px] text-white/38">
             {onboardingCarryover.state === "processing"
               ? t("openChatOnboardingCarryoverProcessing", locale)
               : onboardingCarryover.state === "queued"
@@ -223,7 +289,7 @@ export function OpenChatScreen({
             ) : null}
             {onboardingCarryover.state === "ready" ? (
               <Pressable
-                className="self-start rounded-full border border-white/15 bg-white/[0.06] px-3.5 py-2 active:opacity-80"
+                className="self-start rounded-full border border-white/12 bg-white/[0.045] px-3.5 py-2 active:opacity-80"
                 disabled={sending}
                 onPress={onExecuteOnboardingCarryover}
               >
@@ -234,7 +300,7 @@ export function OpenChatScreen({
             ) : null}
             {onboardingCarryover.state === "queued" ? (
               <Pressable
-                className="self-start rounded-full border border-white/15 bg-white/[0.06] px-3.5 py-2 active:opacity-80"
+                className="self-start rounded-full border border-white/12 bg-white/[0.045] px-3.5 py-2 active:opacity-80"
                 disabled={sending}
                 onPress={onExecuteOnboardingCarryover}
               >
@@ -247,35 +313,39 @@ export function OpenChatScreen({
         </View>
       ) : null}
 
-      {userActive ? (
-        <View className="min-h-0 flex-1">
+      {hasUserTurn(filteredMessages) ? (
+        <View className="-mx-5 min-h-0 flex-1">
           <ChatTranscriptList
-            messages={messages}
+            contentPaddingBottom={composerOverlayHeight + 18}
+            contentPaddingTop={14}
+            listRef={transcriptRef}
+            messages={filteredMessages}
+            onAtBottomChange={setAtBottom}
             renderBubble={(message) => (
-              <ThreadMessage body={message.body} role={message.role} />
+              <View className="px-5">
+                <ThreadMessage body={message.body} role={message.role} />
+              </View>
             )}
           />
         </View>
       ) : carryoverProcessing ? (
         <View className="min-h-0 flex-1 items-center justify-center py-8">
-          <View className="w-full max-w-[320px] rounded-[24px] border border-white/[0.06] bg-white/[0.02] px-5 py-5">
-            <Text className="text-center text-[20px] font-semibold tracking-tight text-white/94">
-              {t("openChatOnboardingHandoffTitle", locale)}
-            </Text>
-            <Text className="mt-2 text-center text-[14px] leading-[21px] text-white/52">
-              {t("openChatOnboardingHandoffSubtitle", locale)}
-            </Text>
-          </View>
+          <Text className="text-center text-[22px] font-semibold tracking-tight text-white/92">
+            OpenChat
+          </Text>
+          <Text className="mt-3 max-w-[280px] text-center text-[14px] leading-[21px] text-white/42">
+            Processing your first intent.
+          </Text>
         </View>
       ) : (
         <View className="min-h-0 flex-1 justify-center py-8">
-          <Text className="text-center text-[28px] font-semibold tracking-tight text-white">
-            {t("openChatEmptyTitle", locale)}
+          <Text className="text-center text-[34px] font-semibold tracking-[-0.03em] text-white">
+            What do you want to do?
           </Text>
-          <Text className="mt-3 max-w-[280px] self-center text-center text-[15px] leading-[22px] text-white/44">
-            {t("openChatEmptySubtitle", locale)}
+          <Text className="mt-3 max-w-[260px] self-center text-center text-[15px] leading-[22px] text-white/42">
+            Start with anything.
           </Text>
-          <View className="mt-9">
+          <View className="mt-10">
             <StarterPrompts
               onPick={(text) => {
                 setDraftMessage(text);
@@ -285,10 +355,10 @@ export function OpenChatScreen({
         </View>
       )}
 
-      {userActive && messages.length <= 6 ? (
-        <View className="mb-2 mt-2">
-          <Text className="mb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-white/28">
-            {t("openChatSuggestions", locale)}
+      {hasUserTurn(filteredMessages) && filteredMessages.length <= 6 ? (
+        <View className="mb-3 mt-1">
+          <Text className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/24">
+            Suggestions
           </Text>
           <View className="flex-row flex-wrap gap-2">
             {inlineChips.map((c) => (
@@ -297,7 +367,7 @@ export function OpenChatScreen({
                 key={c.label}
                 onPress={() => setDraftMessage(c.body)}
               >
-                <Text className="text-[12px] font-medium text-white/50">
+                <Text className="text-[12px] font-medium text-white/56">
                   {c.label}
                 </Text>
               </Pressable>
@@ -307,106 +377,31 @@ export function OpenChatScreen({
       ) : null}
 
       <ThreadActionPills actions={threadActions} onAction={onThreadAction} />
-
-      <View className="flex-shrink-0 border-t border-white/[0.06] pt-3">
-        <AgentIntentToolbar
-          canRegenerate={canRegenerate}
-          loading={sending}
-          onRegenerate={onRegenerate}
-          onStop={onStop}
-        />
-
-        <Pressable
-          className="mb-2 mt-1 self-start py-1"
-          onPress={() => setToolsOpen((o) => !o)}
-        >
-          <Text className="text-[12px] text-white/28">
-            {toolsOpen
-              ? t("openChatHideOptions", locale)
-              : t("openChatMoreOptions", locale)}
-          </Text>
-        </Pressable>
-
-        {toolsOpen ? (
-          <View className="mb-3 gap-2">
-            <View className="flex-row flex-wrap gap-2">
-              <ChoiceChip
-                label={t("agentComposerModeChat", locale)}
-                onPress={() => {
-                  onComposerModeChange("chat");
-                }}
-                selected={composerMode === "chat"}
-                testID="agent-mode-chat"
-              />
-              <ChoiceChip
-                label={t("agentComposerModeIntent", locale)}
-                onPress={() => {
-                  onComposerModeChange("intent");
-                }}
-                selected={composerMode === "intent"}
-                testID="agent-mode-intent"
-              />
-            </View>
-            {threadLoading ? (
-              <Text className="text-[12px] text-white/40">
-                {t("agentHistoryLoading", locale)}
-              </Text>
-            ) : null}
-            <Text className="text-[12px] text-white/40">
-              {composerMode === "chat"
-                ? t("agentComposerHintChat", locale)
-                : t("agentComposerHintIntent", locale)}
+      {!atBottom && pendingUpdates > 0 ? (
+        <View className="absolute bottom-[192px] self-center">
+          <Pressable
+            accessibilityLabel="Jump to latest update"
+            accessibilityRole="button"
+            className="rounded-full border border-white/[0.1] bg-white/[0.08] px-3.5 py-2"
+            onPress={() => {
+              hapticSelection();
+              transcriptRef.current?.scrollToEnd({ animated: true });
+              setPendingUpdates(0);
+            }}
+          >
+            <Text className="text-[12px] font-medium text-white/90">
+              {pendingUpdates > 1 ? `${pendingUpdates} updates` : "New update"}
             </Text>
-            {composerMode === "intent" ? (
-              <View className="rounded-[22px] border border-white/[0.08] bg-white/[0.025] px-3 py-2.5">
-                <Pressable
-                  className="mb-2 flex-row items-center justify-between"
-                  onPress={() => onDecomposeIntentChange(!decomposeIntent)}
-                >
-                  <Text className="text-[12px] text-white/75">
-                    {t("openChatSplitIntent", locale)}
-                  </Text>
-                  <Text className="text-[12px] font-semibold text-teal-300/90">
-                    {decomposeIntent
-                      ? t("openChatOn", locale)
-                      : t("openChatOff", locale)}
-                  </Text>
-                </Pressable>
-                <Text className="mb-1 text-[11px] text-white/38">
-                  {t("openChatMaxIntents", locale)}
-                </Text>
-                <View className="flex-row flex-wrap gap-2">
-                  {[1, 2, 3, 4, 5].map((value) => (
-                    <ChoiceChip
-                      key={`max-intents-${value}`}
-                      label={String(value)}
-                      onPress={() => onDecomposeMaxIntentsChange(value)}
-                      selected={decomposeMaxIntents === value}
-                    />
-                  ))}
-                </View>
-              </View>
-            ) : null}
-            {composerMode === "chat" ? (
-              <View>
-                <Text className="mb-1 text-[11px] text-white/38">
-                  {t("agentImageUrlOptional", locale)}
-                </Text>
-                <TextInput
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  className="min-h-[44px] rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-[14px] text-white"
-                  keyboardType="url"
-                  onChangeText={onAgentImageUrlChange}
-                  placeholder="https://…"
-                  placeholderTextColor="rgba(255,255,255,0.28)"
-                  value={agentImageUrl}
-                />
-              </View>
-            ) : null}
-          </View>
-        ) : null}
+          </Pressable>
+        </View>
+      ) : null}
 
+      <View
+        className="absolute"
+        onLayout={onComposerLayout}
+        pointerEvents="box-none"
+        style={{ bottom: 30, left: 5, right: 5 }}
+      >
         <OpenChatComposer
           canSend={canSend}
           e2eSubmitOnReturn={e2eSubmitOnReturn}
@@ -420,9 +415,6 @@ export function OpenChatScreen({
           sending={sending}
           value={draftMessage}
         />
-        <Text className="mt-1.5 text-right text-[11px] text-white/24">
-          {intentLen}/2000
-        </Text>
       </View>
     </View>
   );
