@@ -305,7 +305,7 @@ export function OpenChatScreen({
       {!atBottom && pendingUpdates > 0 ? (
         <View
           className="absolute self-center"
-          style={{ bottom: composerBottomOffset + 134 }}
+          style={{ bottom: composerBottomOffset + 122 }}
         >
           <Pressable
             accessibilityLabel="Jump to latest update"
@@ -328,7 +328,7 @@ export function OpenChatScreen({
         className="absolute"
         onLayout={onComposerLayout}
         pointerEvents="box-none"
-        style={{ bottom: 15, left: 5, right: 5 }}
+        style={{ bottom: composerBottomOffset + 6, left: 5, right: 5 }}
       >
         <OpenChatComposer
           canSend={canSend}

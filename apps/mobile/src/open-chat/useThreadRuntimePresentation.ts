@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { TelemetryEventName } from "../lib/telemetry";
+import {
+  THREAD_RUNTIME_MOTION,
+  THREAD_RUNTIME_PRIORITY,
+} from "./runtime-constants";
 import type { ThreadRuntimeModel, ThreadRuntimeState } from "./thread-types";
 
 type UseThreadRuntimePresentationInput = {
@@ -12,22 +16,7 @@ type UseThreadRuntimePresentationInput = {
 };
 
 function statePriority(state: ThreadRuntimeState) {
-  switch (state) {
-    case "sending":
-      return 6;
-    case "loading":
-      return 5;
-    case "matching":
-      return 4;
-    case "waiting":
-      return 3;
-    case "ready":
-      return 2;
-    case "no_match":
-      return 1;
-    default:
-      return 0;
-  }
+  return THREAD_RUNTIME_PRIORITY[state] ?? THREAD_RUNTIME_PRIORITY.idle;
 }
 
 export function useThreadRuntimePresentation({
@@ -47,7 +36,7 @@ export function useThreadRuntimePresentation({
     }
     const timeout = setTimeout(() => {
       setRuntime(rawRuntime);
-    }, 380);
+    }, THREAD_RUNTIME_MOTION.presentationDowngradeDelayMs);
     return () => {
       clearTimeout(timeout);
     };

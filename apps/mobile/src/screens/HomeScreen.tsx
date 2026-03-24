@@ -554,7 +554,7 @@ export function HomeScreen({
             (message) => message.role === "user",
           )}
           composerMode={agentComposerMode}
-          composerBottomOffset={keyboardVisible ? 0 : tabBarHeight}
+          composerBottomOffset={keyboardVisible ? 0 : tabBarHeight - 4}
           decomposeIntent={decomposeIntent}
           decomposeMaxIntents={decomposeMaxIntents}
           draftMessage={draftIntentText}

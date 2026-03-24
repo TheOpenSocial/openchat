@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
 import { Animated, Easing, Text, View } from "react-native";
 
+import { THREAD_THINKING_MOTION } from "./runtime-constants";
+
 type ThreadThinkingIndicatorProps = {
   label: string;
 };
@@ -8,9 +10,15 @@ type ThreadThinkingIndicatorProps = {
 export function ThreadThinkingIndicator({
   label,
 }: ThreadThinkingIndicatorProps) {
-  const pulseA = useRef(new Animated.Value(0.25)).current;
-  const pulseB = useRef(new Animated.Value(0.25)).current;
-  const pulseC = useRef(new Animated.Value(0.25)).current;
+  const pulseA = useRef(
+    new Animated.Value(THREAD_THINKING_MOTION.dotMinOpacity),
+  ).current;
+  const pulseB = useRef(
+    new Animated.Value(THREAD_THINKING_MOTION.dotMinOpacity),
+  ).current;
+  const pulseC = useRef(
+    new Animated.Value(THREAD_THINKING_MOTION.dotMinOpacity),
+  ).current;
 
   useEffect(() => {
     const makePulse = (value: Animated.Value, delayMs: number) =>
@@ -18,14 +26,14 @@ export function ThreadThinkingIndicator({
         Animated.sequence([
           Animated.delay(delayMs),
           Animated.timing(value, {
-            toValue: 1,
-            duration: 320,
+            toValue: THREAD_THINKING_MOTION.dotMaxOpacity,
+            duration: THREAD_THINKING_MOTION.pulseInDurationMs,
             easing: Easing.out(Easing.cubic),
             useNativeDriver: true,
           }),
           Animated.timing(value, {
-            toValue: 0.25,
-            duration: 420,
+            toValue: THREAD_THINKING_MOTION.dotMinOpacity,
+            duration: THREAD_THINKING_MOTION.pulseOutDurationMs,
             easing: Easing.in(Easing.cubic),
             useNativeDriver: true,
           }),
@@ -33,8 +41,8 @@ export function ThreadThinkingIndicator({
       );
 
     const a = makePulse(pulseA, 0);
-    const b = makePulse(pulseB, 120);
-    const c = makePulse(pulseC, 240);
+    const b = makePulse(pulseB, THREAD_THINKING_MOTION.pulseDelayMs);
+    const c = makePulse(pulseC, THREAD_THINKING_MOTION.pulseDelayMs * 2);
     a.start();
     b.start();
     c.start();

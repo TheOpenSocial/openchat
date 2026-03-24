@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Animated, Easing, View } from "react-native";
 
+import { THREAD_RUNTIME_MOTION } from "./runtime-constants";
 import { ThreadContextStrip } from "./ThreadContextStrip";
 import { ThreadThinkingIndicator } from "./ThreadThinkingIndicator";
 
@@ -22,18 +23,18 @@ export function ThreadStatusTransition({
   const signature = `${contextLabel ?? ""}|${hint ?? ""}|${thinkingLabel ?? ""}|${showThinking ? "1" : "0"}`;
 
   useEffect(() => {
-    opacity.setValue(0.3);
-    translateY.setValue(4);
+    opacity.setValue(THREAD_RUNTIME_MOTION.statusTransition.fromOpacity);
+    translateY.setValue(THREAD_RUNTIME_MOTION.statusTransition.fromTranslateY);
     Animated.parallel([
       Animated.timing(opacity, {
         toValue: 1,
-        duration: 220,
+        duration: THREAD_RUNTIME_MOTION.statusTransition.durationMs,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
       Animated.timing(translateY, {
         toValue: 0,
-        duration: 220,
+        duration: THREAD_RUNTIME_MOTION.statusTransition.durationMs,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
