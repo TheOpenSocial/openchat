@@ -394,6 +394,82 @@ describe("AgentConversationService", () => {
     );
   });
 
+  it("falls back when conversation planning exceeds timeout", async () => {
+    const previousPlanTimeout = process.env.AGENT_LLM_PLAN_TIMEOUT_MS;
+    process.env.AGENT_LLM_PLAN_TIMEOUT_MS = "1000";
+    vi.useFakeTimers();
+
+    try {
+      const { service, openai } = createServiceHarness();
+      const deferredPlan = createDeferred<any>();
+      openai.planConversationTurn.mockReturnValueOnce(deferredPlan.promise);
+
+      const pending = service.runAgenticTurn({
+        threadId: IDS.threadId,
+        userId: IDS.userId,
+        content: "Help me find someone to play tennis tonight.",
+      });
+      await vi.advanceTimersByTimeAsync(1100);
+      const result = await pending;
+
+      expect(result.plan.specialists).toEqual(["intent_parser"]);
+      expect(result.plan.toolCalls).toEqual([]);
+      expect(result.plan.responseGoal).toContain("concise");
+    } finally {
+      vi.useRealTimers();
+      if (previousPlanTimeout === undefined) {
+        delete process.env.AGENT_LLM_PLAN_TIMEOUT_MS;
+      } else {
+        process.env.AGENT_LLM_PLAN_TIMEOUT_MS = previousPlanTimeout;
+      }
+    }
+  });
+
+  it("falls back when response synthesis exceeds timeout", async () => {
+    const previousPlanTimeout = process.env.AGENT_LLM_PLAN_TIMEOUT_MS;
+    const previousResponseTimeout = process.env.AGENT_LLM_RESPONSE_TIMEOUT_MS;
+    process.env.AGENT_LLM_PLAN_TIMEOUT_MS = "1000";
+    process.env.AGENT_LLM_RESPONSE_TIMEOUT_MS = "1000";
+    vi.useFakeTimers();
+
+    try {
+      const { service, openai, agentService } = createServiceHarness();
+      openai.planConversationTurn.mockResolvedValueOnce({
+        specialists: ["intent_parser"],
+        toolCalls: [],
+        responseGoal: "help quickly",
+      });
+      const deferredResponse = createDeferred<string>();
+      openai.composeConversationResponse.mockReturnValueOnce(
+        deferredResponse.promise,
+      );
+
+      const pending = service.runAgenticTurn({
+        threadId: IDS.threadId,
+        userId: IDS.userId,
+        content: "Need a quick suggestion.",
+      });
+      await vi.advanceTimersByTimeAsync(1100);
+      const result = await pending;
+
+      expect(result.agentMessageId).toBeTruthy();
+      const messagePayload = agentService.createAgentMessage.mock.calls[0]?.[1];
+      expect(messagePayload).toContain("I’m here with you");
+    } finally {
+      vi.useRealTimers();
+      if (previousPlanTimeout === undefined) {
+        delete process.env.AGENT_LLM_PLAN_TIMEOUT_MS;
+      } else {
+        process.env.AGENT_LLM_PLAN_TIMEOUT_MS = previousPlanTimeout;
+      }
+      if (previousResponseTimeout === undefined) {
+        delete process.env.AGENT_LLM_RESPONSE_TIMEOUT_MS;
+      } else {
+        process.env.AGENT_LLM_RESPONSE_TIMEOUT_MS = previousResponseTimeout;
+      }
+    }
+  });
+
   it("continues the turn when a specialist fails", async () => {
     const { service, agentService, openai } = createServiceHarness();
 

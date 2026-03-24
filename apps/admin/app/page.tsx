@@ -15,6 +15,7 @@ import { useWorkbenchState } from "./components/workbench/useWorkbenchState";
 import { useModerationWorkbench } from "./components/workbench/useModerationWorkbench";
 import {
   type AdminTab,
+  type LlmRuntimeHealthSnapshot,
   type OnboardingActivationSnapshot,
   tabConfig,
   tabSubtitle,
@@ -138,6 +139,8 @@ function AdminHomeContent() {
     setRelayCount,
     onboardingActivationSnapshot,
     setOnboardingActivationSnapshot,
+    llmRuntimeHealthSnapshot,
+    setLlmRuntimeHealthSnapshot,
     deadLetters,
     setDeadLetters,
     adminUserId,
@@ -442,6 +445,18 @@ function AdminHomeContent() {
         ),
       "Onboarding activation snapshot refreshed.",
       (snapshot) => setOnboardingActivationSnapshot(snapshot),
+    );
+
+  const loadLlmRuntimeHealthSnapshot = () =>
+    runAction(
+      "Load LLM runtime health snapshot",
+      () =>
+        requestApi<LlmRuntimeHealthSnapshot>(
+          "GET",
+          "/admin/ops/llm-runtime-health",
+        ),
+      "LLM runtime health refreshed.",
+      (snapshot) => setLlmRuntimeHealthSnapshot(snapshot),
     );
 
   const inspectUser = () =>
@@ -1354,7 +1369,9 @@ function AdminHomeContent() {
           debugResponse,
           executeDebugQuery,
           health,
+          llmRuntimeHealthSnapshot,
           loadDeadLetters,
+          loadLlmRuntimeHealthSnapshot,
           loadOnboardingActivationSnapshot,
           onboardingActivationSnapshot,
           relayCount,

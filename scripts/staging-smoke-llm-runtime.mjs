@@ -12,6 +12,11 @@ const userId = process.env.SMOKE_USER_ID;
 const timeoutMs = Number(process.env.SMOKE_TIMEOUT_MS || 12000);
 const onboardingP95Ms = Number(process.env.SMOKE_ONBOARDING_P95_MS || 4000);
 const agentP95Ms = Number(process.env.SMOKE_AGENT_P95_MS || 6000);
+const maxOnboardingFallbackRate = Number(
+  process.env.SMOKE_MAX_ONBOARDING_FALLBACK_RATE || 0.25,
+);
+const maxOpenAIErrorRate = Number(process.env.SMOKE_MAX_OPENAI_ERROR_RATE || 0.2);
+const allowCircuitOpen = process.env.SMOKE_ALLOW_OPENAI_CIRCUIT_OPEN === "true";
 
 async function requestJson(path, init = {}) {
   const startedAt = Date.now();
@@ -108,6 +113,33 @@ async function runAgentRespondSmoke() {
   };
 }
 
+async function runLlmRuntimeHealthSmoke() {
+  if (!accessToken) {
+    return {
+      id: "llm_runtime_health",
+      skipped: true,
+      reason: "missing SMOKE_ACCESS_TOKEN",
+    };
+  }
+  const result = await requestJson("/api/admin/ops/llm-runtime-health", {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "x-admin-user-id":
+        process.env.SMOKE_ADMIN_USER_ID || "11111111-1111-4111-8111-111111111111",
+      "x-admin-role": process.env.SMOKE_ADMIN_ROLE || "support",
+      ...(process.env.SMOKE_ADMIN_API_KEY
+        ? { "x-admin-api-key": process.env.SMOKE_ADMIN_API_KEY }
+        : {}),
+    },
+  });
+  return {
+    id: "llm_runtime_health",
+    skipped: false,
+    ...result,
+  };
+}
+
 function printResult(result) {
   if (result.skipped) {
     console.log(`- [SKIP] ${result.id}: ${result.reason}`);
@@ -138,6 +170,7 @@ async function main() {
       "I just moved and want to find real connections, mostly in small groups, weekends work best.",
     ),
     await runAgentRespondSmoke(),
+    await runLlmRuntimeHealthSmoke(),
   ];
 
   checks.forEach(printResult);
@@ -170,6 +203,34 @@ async function main() {
   if (agentLatencies.length > 0 && agentP95 > agentP95Ms) {
     console.error(`Agent latency SLO breach: p95=${agentP95}ms > ${agentP95Ms}ms`);
     process.exit(1);
+  }
+
+  const llmHealth = checks.find((check) => check.id === "llm_runtime_health");
+  if (llmHealth && !llmHealth.skipped && llmHealth.body?.data) {
+    const health = llmHealth.body.data;
+    const fallbackRate = Number(health.onboarding?.fallbackRate ?? 0);
+    const openaiErrorRate = Number(health.openai?.errorRate ?? 0);
+    const anyCircuitOpen = Boolean(health.budget?.anyCircuitOpen);
+    console.log(
+      `Runtime health: onboardingFallbackRate=${fallbackRate.toFixed(3)}, openaiErrorRate=${openaiErrorRate.toFixed(3)}, circuitOpen=${anyCircuitOpen}`,
+    );
+
+    if (fallbackRate > maxOnboardingFallbackRate) {
+      console.error(
+        `Onboarding fallback rate too high: ${fallbackRate} > ${maxOnboardingFallbackRate}`,
+      );
+      process.exit(1);
+    }
+    if (openaiErrorRate > maxOpenAIErrorRate) {
+      console.error(
+        `OpenAI error rate too high: ${openaiErrorRate} > ${maxOpenAIErrorRate}`,
+      );
+      process.exit(1);
+    }
+    if (anyCircuitOpen && !allowCircuitOpen) {
+      console.error("OpenAI budget circuit is open; failing smoke.");
+      process.exit(1);
+    }
   }
 
   console.log("LLM runtime smoke passed.");

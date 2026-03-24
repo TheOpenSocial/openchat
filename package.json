@@ -32,6 +32,7 @@
     "benchmark:onboarding": "node scripts/benchmark-onboarding.mjs",
     "staging:verify:incident": "node scripts/staging-incident-verify.mjs",
     "moderation:drill": "node scripts/moderation-drill.mjs",
+    "release:check:api": "node scripts/release-check-api.mjs",
     "jarvis": "bash scripts/jarvis-ios.sh",
     "deps:outdated": "pnpm outdated -r",
     "deps:outdated:latest": "pnpm outdated -r --long",

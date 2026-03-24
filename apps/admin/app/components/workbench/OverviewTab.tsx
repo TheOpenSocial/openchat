@@ -1,5 +1,14 @@
 import { JsonView } from "@/app/components/JsonView";
 import { Panel } from "@/app/components/Panel";
+import {
+  LlmRuntimeHealthPanel,
+  OnboardingActivationHealthPanel,
+  SystemControlsPanel,
+} from "./OverviewRuntimePanels";
+import {
+  type LlmRuntimeHealthSnapshot,
+  type OnboardingActivationSnapshot,
+} from "./workbench-config";
 
 interface DeadLetterRow {
   id: string;
@@ -18,24 +27,6 @@ interface DebugHistoryRow {
   success: boolean;
 }
 
-interface OnboardingActivationSnapshot {
-  window: {
-    hours: number;
-  };
-  counters: {
-    started: number;
-    succeeded: number;
-    failed: number;
-    processing: number;
-  };
-  metrics: {
-    successRate: number | null;
-    failureRate: number | null;
-    processingRate: number | null;
-    avgCompletionSeconds: number | null;
-  };
-}
-
 export function OverviewTab({
   adminButtonClass,
   adminButtonGhostClass,
@@ -51,12 +42,14 @@ export function OverviewTab({
   debugResponse,
   deadLetters,
   health,
+  llmRuntimeHealthSnapshot,
   onboardingActivationSnapshot,
   relayCount,
   threadId,
   userId,
   executeDebugQuery,
   loadDeadLetters,
+  loadLlmRuntimeHealthSnapshot,
   loadOnboardingActivationSnapshot,
   relayOutbox,
   replayDeadLetter,
@@ -83,12 +76,14 @@ export function OverviewTab({
   debugResponse: unknown;
   deadLetters: DeadLetterRow[];
   health: string;
+  llmRuntimeHealthSnapshot: LlmRuntimeHealthSnapshot | null;
   onboardingActivationSnapshot: OnboardingActivationSnapshot | null;
   relayCount: number | null;
   threadId: string;
   userId: string;
   executeDebugQuery: () => Promise<unknown>;
   loadDeadLetters: () => Promise<unknown>;
+  loadLlmRuntimeHealthSnapshot: () => Promise<unknown>;
   loadOnboardingActivationSnapshot: () => Promise<unknown>;
   relayOutbox: () => Promise<unknown>;
   replayDeadLetter: (id: string) => Promise<unknown>;
@@ -104,34 +99,13 @@ export function OverviewTab({
   return (
     <section className="mt-4 space-y-4">
       <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
-        <Panel
-          subtitle="Live queue operations and system health."
-          title="System Controls"
-        >
-          <div className="flex flex-wrap gap-2">
-            <button
-              className={adminButtonClass}
-              onClick={loadDeadLetters}
-              type="button"
-            >
-              Load dead letters
-            </button>
-            <button
-              className={adminButtonClass}
-              onClick={relayOutbox}
-              type="button"
-            >
-              Relay outbox
-            </button>
-          </div>
-          <p className="mt-3 text-xs text-muted-foreground">
-            health: <span className="text-foreground">{health}</span>
-          </p>
-          <p className="text-xs text-muted-foreground">
-            outbox processed:{" "}
-            <span className="text-foreground">{relayCount ?? "n/a"}</span>
-          </p>
-        </Panel>
+        <SystemControlsPanel
+          adminButtonClass={adminButtonClass}
+          health={health}
+          loadDeadLetters={loadDeadLetters}
+          relayCount={relayCount}
+          relayOutbox={relayOutbox}
+        />
 
         <Panel
           subtitle="Google sign-in sets your admin user id. Override only for impersonation or debugging."
@@ -184,47 +158,16 @@ export function OverviewTab({
         </Panel>
       </div>
 
-      <Panel
-        subtitle="Server-side onboarding first-activation execution snapshot."
-        title="Onboarding Activation Health"
-      >
-        <div className="flex flex-wrap gap-2">
-          <button
-            className={adminButtonClass}
-            onClick={loadOnboardingActivationSnapshot}
-            type="button"
-          >
-            Refresh activation snapshot
-          </button>
-        </div>
-        {!onboardingActivationSnapshot ? (
-          <p className="mt-3 text-sm text-muted-foreground">
-            No activation snapshot loaded yet.
-          </p>
-        ) : (
-          <div className="mt-3 space-y-1 text-xs text-muted-foreground">
-            <p>
-              window: last {onboardingActivationSnapshot.window.hours}h ·
-              started: {onboardingActivationSnapshot.counters.started} ·
-              succeeded: {onboardingActivationSnapshot.counters.succeeded} ·
-              failed: {onboardingActivationSnapshot.counters.failed} ·
-              processing: {onboardingActivationSnapshot.counters.processing}
-            </p>
-            <p>
-              success:{" "}
-              {formatRate(onboardingActivationSnapshot.metrics.successRate)} ·
-              failure:{" "}
-              {formatRate(onboardingActivationSnapshot.metrics.failureRate)} ·
-              processing:{" "}
-              {formatRate(onboardingActivationSnapshot.metrics.processingRate)}{" "}
-              · avg completion:{" "}
-              {formatSeconds(
-                onboardingActivationSnapshot.metrics.avgCompletionSeconds,
-              )}
-            </p>
-          </div>
-        )}
-      </Panel>
+      <OnboardingActivationHealthPanel
+        adminButtonClass={adminButtonClass}
+        loadOnboardingActivationSnapshot={loadOnboardingActivationSnapshot}
+        onboardingActivationSnapshot={onboardingActivationSnapshot}
+      />
+      <LlmRuntimeHealthPanel
+        adminButtonClass={adminButtonClass}
+        llmRuntimeHealthSnapshot={llmRuntimeHealthSnapshot}
+        loadLlmRuntimeHealthSnapshot={loadLlmRuntimeHealthSnapshot}
+      />
 
       <Panel
         subtitle="Replay failed jobs without touching Redis manually."
@@ -399,18 +342,4 @@ export function OverviewTab({
       </div>
     </section>
   );
-}
-
-function formatRate(value: number | null) {
-  if (value == null) {
-    return "n/a";
-  }
-  return `${Math.round(value * 100)}%`;
-}
-
-function formatSeconds(value: number | null) {
-  if (value == null) {
-    return "n/a";
-  }
-  return `${Math.round(value)}s`;
 }

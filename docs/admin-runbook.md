@@ -19,6 +19,7 @@
 2. Runtime ops
 - `GET /api/admin/ops/metrics`
 - `GET /api/admin/ops/alerts`
+- `GET /api/admin/ops/llm-runtime-health` (primary onboarding/agentic runtime triage snapshot)
 
 3. Queue state
 - `GET /api/admin/jobs/queues`
@@ -59,3 +60,13 @@ Escalate to incident runbook when:
 - queue backlog breaches alert thresholds
 - moderation backlog breaches threshold
 - realtime or auth outage impacts core flow
+
+## Onboarding inference lifecycle contract
+Treat onboarding infer responses as additive but stable when `lifecycle` is present:
+- `infer-started`: server accepted inference request
+- `infer-processing`: runtime is actively resolving model output
+- `infer-success`: structured model response accepted
+- `infer-fallback`: deterministic fallback payload returned due to timeout/error/unavailable model
+
+Operational expectation:
+- sustained `infer-fallback` increase + rising `onboarding.fallbackRate` in `/api/admin/ops/llm-runtime-health` should trigger runtime investigation and model timeout/policy review.

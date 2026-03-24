@@ -89,6 +89,14 @@ type SocialContextPacket = {
 @Injectable()
 export class AgentConversationService {
   private readonly logger = new Logger(AgentConversationService.name);
+  private readonly planTimeoutMs = Math.max(
+    1000,
+    Number(process.env.AGENT_LLM_PLAN_TIMEOUT_MS ?? 4000) || 4000,
+  );
+  private readonly responseTimeoutMs = Math.max(
+    this.planTimeoutMs,
+    Number(process.env.AGENT_LLM_RESPONSE_TIMEOUT_MS ?? 6000) || 6000,
+  );
   private readonly openai = new OpenAIClient({
     apiKey: process.env.OPENAI_API_KEY ?? "",
   });
@@ -297,22 +305,40 @@ export class AgentConversationService {
         "moderation_assistant",
       ];
 
-      const planned = await this.openai.planConversationTurn(
-        {
-          userMessage: userContent,
-          threadSummary,
-          ...(socialContext ? { socialContext } : {}),
-          multimodalContext: hasMultimodal
-            ? {
-                voiceTranscript: multimodalContext.voiceTranscript,
-                attachments: multimodalContext.attachments,
-              }
-            : undefined,
-          allowedSpecialists,
-          maxToolCalls: 8,
-        },
-        traceId,
-      );
+      const planned = (await this.withTimeout(
+        this.openai.planConversationTurn(
+          {
+            userMessage: userContent,
+            threadSummary,
+            ...(socialContext ? { socialContext } : {}),
+            multimodalContext: hasMultimodal
+              ? {
+                  voiceTranscript: multimodalContext.voiceTranscript,
+                  attachments: multimodalContext.attachments,
+                }
+              : undefined,
+            allowedSpecialists,
+            maxToolCalls: 8,
+          },
+          traceId,
+        ),
+        this.planTimeoutMs,
+        "conversation_planning",
+      )) ?? {
+        specialists: ["intent_parser"],
+        toolCalls: [],
+        responseGoal:
+          "Provide a concise, safe reply and ask one clarifying question if needed.",
+      };
+
+      if (planned.toolCalls.length === 0 && planned.specialists.length === 1) {
+        await this.appendOrchestrationStep(
+          input.threadId,
+          traceId,
+          "planning_degraded",
+          "Planning timed out or was unavailable; using fallback plan.",
+        );
+      }
 
       specialists = planned.specialists.filter((role) =>
         canAgentHandoff("manager", role),
@@ -462,18 +488,32 @@ export class AgentConversationService {
     let responseText =
       preToolRisk.decision === "blocked"
         ? this.blockedByRiskResponse(preToolRisk.reasons)
-        : await this.openai.composeConversationResponse(
-            responseInput,
-            traceId,
-            streamResponseTokens
-              ? {
-                  onTextDelta: async (delta) => {
-                    pendingStreamChunk += delta;
-                    await flushPendingStreamChunk(false);
-                  },
-                }
-              : undefined,
-          );
+        : ((await this.withTimeout(
+            this.openai.composeConversationResponse(
+              responseInput,
+              traceId,
+              streamResponseTokens
+                ? {
+                    onTextDelta: async (delta) => {
+                      pendingStreamChunk += delta;
+                      await flushPendingStreamChunk(false);
+                    },
+                  }
+                : undefined,
+            ),
+            this.responseTimeoutMs,
+            "conversation_response",
+          )) ??
+          "I’m here with you. I’m still syncing context, so share one more detail about timing or preferred format (1:1 or small group), and I’ll refine this right away.");
+
+    if (responseText.includes("I’m here with you. I’m still syncing context")) {
+      await this.appendOrchestrationStep(
+        input.threadId,
+        traceId,
+        "response_degraded",
+        "Response timed out; sent safe fallback reply.",
+      );
+    }
 
     if (streamResponseTokens) {
       await flushPendingStreamChunk(true);
@@ -723,6 +763,35 @@ export class AgentConversationService {
     return normalized.length <= 160
       ? normalized
       : `${normalized.slice(0, 157)}...`;
+  }
+
+  private async withTimeout<T>(
+    promise: Promise<T>,
+    timeoutMs: number,
+    task: "conversation_planning" | "conversation_response",
+  ): Promise<T | null> {
+    let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+    try {
+      const timeoutPromise = new Promise<null>((resolve) => {
+        timeoutHandle = setTimeout(() => resolve(null), timeoutMs);
+      });
+      const result = await Promise.race([promise, timeoutPromise]);
+      if (result === null) {
+        this.logger.warn(
+          JSON.stringify({
+            event: "agentic.timeout",
+            task,
+            timeoutMs,
+            reason: "deadline_exceeded",
+          }),
+        );
+      }
+      return result as T | null;
+    } finally {
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+      }
+    }
   }
 
   private async executeToolCall(

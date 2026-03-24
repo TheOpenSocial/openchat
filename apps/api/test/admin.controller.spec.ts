@@ -1105,6 +1105,54 @@ describe("AdminController", () => {
     );
   });
 
+  it("returns llm runtime health snapshot for support role", async () => {
+    resetOpsRuntimeMetrics();
+    recordOpenAIMetric({
+      operation: "conversation_response",
+      latencyMs: 320,
+      ok: true,
+    });
+    recordOnboardingInferenceMetric({
+      mode: "fast",
+      model: "gpt-4.1-mini",
+      durationMs: 950,
+      unavailable: false,
+      fallback: false,
+    });
+    recordOnboardingInferenceMetric({
+      mode: "rich",
+      model: "gpt-4.1-mini",
+      durationMs: 1800,
+      unavailable: true,
+      fallback: true,
+    });
+
+    const { controller, adminAuditService } = createController();
+    const result = await controller.llmRuntimeHealth(ADMIN_USER_ID, "support");
+    const payload = result.data as {
+      onboarding: {
+        calls: number;
+        fallbackRate: number;
+        byMode: { fast: any };
+      };
+      openai: { calls: number; errorRate: number };
+      budget: { clientCount: number; anyCircuitOpen: boolean };
+    };
+
+    expect(payload.onboarding.calls).toBe(2);
+    expect(payload.onboarding.fallbackRate).toBeGreaterThan(0);
+    expect(payload.onboarding.byMode.fast).toBeTruthy();
+    expect(payload.openai.calls).toBe(1);
+    expect(payload.openai.errorRate).toBe(0);
+    expect(payload.budget.clientCount).toBeGreaterThanOrEqual(0);
+    expect(typeof payload.budget.anyCircuitOpen).toBe("boolean");
+    expect(adminAuditService.recordAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "admin.ops_llm_runtime_health_view",
+      }),
+    );
+  });
+
   it("returns onboarding activation ops snapshot from client mutations", async () => {
     const { controller, adminAuditService, prisma } = createController({
       prisma: {

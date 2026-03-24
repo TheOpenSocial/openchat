@@ -154,6 +154,58 @@ export class AdminController {
     });
   }
 
+  @Get("ops/llm-runtime-health")
+  async llmRuntimeHealth(
+    @Headers("x-admin-user-id") adminUserIdHeader?: string,
+    @Headers("x-admin-role") adminRoleHeader?: string,
+  ) {
+    const admin = this.parseAdminContext(adminUserIdHeader, adminRoleHeader, [
+      "admin",
+      "support",
+      "moderator",
+    ]);
+    const runtime = getOpsRuntimeMetricsSnapshot();
+    const openaiBudget = getOpenAIBudgetGuardrailSnapshot();
+    const onboardingRich = runtime.onboardingInference.byMode.find(
+      (entry) => entry.mode === "rich",
+    );
+    const onboardingFast = runtime.onboardingInference.byMode.find(
+      (entry) => entry.mode === "fast",
+    );
+
+    await this.adminAuditService.recordAction({
+      adminUserId: admin.adminUserId,
+      role: admin.role,
+      action: "admin.ops_llm_runtime_health_view",
+      entityType: "ops_llm_runtime_health",
+    });
+
+    return ok({
+      generatedAt: new Date().toISOString(),
+      onboarding: {
+        calls: runtime.onboardingInference.calls,
+        fallbackRate: runtime.onboardingInference.fallbackRate,
+        unavailableRate: runtime.onboardingInference.unavailableRate,
+        p95LatencyMs: runtime.onboardingInference.latencyMs.p95Ms,
+        byMode: {
+          fast: onboardingFast ?? null,
+          rich: onboardingRich ?? null,
+        },
+      },
+      openai: {
+        calls: runtime.openai.calls,
+        errorRate: runtime.openai.errorRate,
+        avgLatencyMs: runtime.openai.avgLatencyMs,
+        operations: runtime.openai.operations,
+      },
+      budget: {
+        clientCount: openaiBudget.clientCount,
+        anyCircuitOpen: openaiBudget.anyCircuitOpen,
+        openCircuitCount: openaiBudget.openCircuitCount,
+      },
+    });
+  }
+
   @Get("ops/alerts")
   async opsAlerts(
     @Headers("x-admin-user-id") adminUserIdHeader?: string,

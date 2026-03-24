@@ -32,6 +32,57 @@ export interface OnboardingActivationSnapshot {
   };
 }
 
+export interface LlmRuntimeHealthSnapshot {
+  generatedAt: string;
+  onboarding: {
+    calls: number;
+    fallbackRate: number;
+    unavailableRate: number;
+    p95LatencyMs: number;
+    byMode: {
+      fast: {
+        mode: "fast";
+        calls: number;
+        unavailable: number;
+        unavailableRate: number;
+        fallbacks: number;
+        fallbackRate: number;
+        avgLatencyMs: number;
+        p95LatencyMs: number;
+      } | null;
+      rich: {
+        mode: "rich";
+        calls: number;
+        unavailable: number;
+        unavailableRate: number;
+        fallbacks: number;
+        fallbackRate: number;
+        avgLatencyMs: number;
+        p95LatencyMs: number;
+      } | null;
+    };
+  };
+  openai: {
+    calls: number;
+    errorRate: number;
+    avgLatencyMs: number;
+    operations: Array<{
+      operation: string;
+      calls: number;
+      errors: number;
+      errorRate: number;
+      avgLatencyMs: number;
+      p95LatencyMs: number;
+      totalEstimatedCostUsd: number;
+    }>;
+  };
+  budget: {
+    clientCount: number;
+    anyCircuitOpen: boolean;
+    openCircuitCount: number;
+  };
+}
+
 export const tabConfig: Array<{
   id: AdminTab;
   label: string;

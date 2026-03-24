@@ -160,4 +160,66 @@ describe("ClientMutationService", () => {
       }),
     ).rejects.toBeInstanceOf(ConflictException);
   });
+
+  it("allows retry after transient failure for agent.respond scope", async () => {
+    const { prisma } = createPrismaMock();
+    const service = new ClientMutationService(prisma);
+    const handler = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("agent transient failure"))
+      .mockResolvedValueOnce({ traceId: "trace-1", agentMessageId: "msg-1" });
+
+    await expect(
+      service.run({
+        userId: "user-1",
+        scope: "agent.respond",
+        idempotencyKey: "agent-respond-retry-1",
+        handler,
+      }),
+    ).rejects.toThrow("agent transient failure");
+
+    const retried = await service.run({
+      userId: "user-1",
+      scope: "agent.respond",
+      idempotencyKey: "agent-respond-retry-1",
+      handler,
+    });
+
+    expect(retried).toEqual({ traceId: "trace-1", agentMessageId: "msg-1" });
+    expect(handler).toHaveBeenCalledTimes(2);
+  });
+
+  it("allows retry after transient failure for onboarding.infer scope", async () => {
+    const { prisma } = createPrismaMock();
+    const service = new ClientMutationService(prisma);
+    const handler = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("onboarding infer timeout"))
+      .mockResolvedValueOnce({
+        summary: "You want to meet people around design.",
+        firstIntent: "Help me find people around design this week.",
+      });
+
+    await expect(
+      service.run({
+        userId: "user-1",
+        scope: "onboarding.infer",
+        idempotencyKey: "onboarding-infer-retry-1",
+        handler,
+      }),
+    ).rejects.toThrow("onboarding infer timeout");
+
+    const retried = await service.run({
+      userId: "user-1",
+      scope: "onboarding.infer",
+      idempotencyKey: "onboarding-infer-retry-1",
+      handler,
+    });
+
+    expect(retried).toEqual({
+      summary: "You want to meet people around design.",
+      firstIntent: "Help me find people around design this week.",
+    });
+    expect(handler).toHaveBeenCalledTimes(2);
+  });
 });

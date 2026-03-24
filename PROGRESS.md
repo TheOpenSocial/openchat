@@ -1417,6 +1417,20 @@ Production rollout is approved only when:
 - [x] `TP-16` One-tap activation execution path: execute first recommended action directly after onboarding with backend idempotency, optimistic UX, and recoverable failure handling.
 - [x] `TP-17` Activation funnel telemetry and guardrails: instrument onboarding-complete -> activation-ready -> first-action-succeeded funnel with alert thresholds for activation failure and cold-start latency regressions.
 
+### 34.4.2 TP closure criteria (explicit)
+- `TP-01` closes when onboarding screen transitions hold stable CTA/footer placement across expression/refinement/result with no visible layout jump in low-end device smoke.
+- `TP-02` closes when loading copy/motion uses non-technical wording, deterministic state progression, and zero contradictory labels between voice capture and inference stages.
+- `TP-03` closes when `infer-fast` and `infer` both return non-failing structured payloads under timeout, malformed model output, and empty-output simulation.
+- `TP-04` closes when EN/ES transcript benchmark set (20+) meets persona/summary acceptance rubric and no generic persona fallback appears above threshold.
+- `TP-05` closes when fast/rich routing policy is documented and validated with measured p95 latency gates plus quality acceptance for selected models.
+- `TP-06` closes when deploy parity checklist verifies onboarding env var sync on staging/prod/rollback and regression checks assert effective runtime config.
+- `TP-07` closes when runtime dashboard + alerts track onboarding success, timeout, fallback, and per-model latency without missing buckets.
+- `TP-09` closes when API + client integration tests cover transcript capture -> infer -> persona confirmation -> persistence with contract assertions.
+- `TP-12` closes when launch runbook includes limits, fallback behavior, links to monitors/alerts, kill switches, and first-24h incident ownership.
+- `TP-13` closes when post-onboarding returns typed activation state (`idle|pending|ready|failed`) and deterministic first-action payload on every completion path.
+- `TP-14` closes when mobile/web route users directly to actionable activation state with resume-safe handling across relaunch/background transitions.
+- `TP-15` closes when starter-intent generation persists with deterministic idempotency and safe fallback for weak/empty LLM outputs.
+
 ---
 
 ## 35. Comprehensive Use-Case Coverage Board

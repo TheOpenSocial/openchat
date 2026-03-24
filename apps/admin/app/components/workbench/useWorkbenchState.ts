@@ -5,6 +5,7 @@ import { type HttpMethod } from "../../lib/api";
 import {
   type AdminTab,
   type Banner,
+  type LlmRuntimeHealthSnapshot,
   type OnboardingActivationSnapshot,
 } from "./workbench-config";
 
@@ -19,6 +20,8 @@ export function useWorkbenchState() {
   const [relayCount, setRelayCount] = useState<number | null>(null);
   const [onboardingActivationSnapshot, setOnboardingActivationSnapshot] =
     useState<OnboardingActivationSnapshot | null>(null);
+  const [llmRuntimeHealthSnapshot, setLlmRuntimeHealthSnapshot] =
+    useState<LlmRuntimeHealthSnapshot | null>(null);
   const [deadLetters, setDeadLetters] = useState<
     Array<{
       id: string;
@@ -150,6 +153,8 @@ export function useWorkbenchState() {
     setRelayCount,
     onboardingActivationSnapshot,
     setOnboardingActivationSnapshot,
+    llmRuntimeHealthSnapshot,
+    setLlmRuntimeHealthSnapshot,
     deadLetters,
     setDeadLetters,
     adminUserId,

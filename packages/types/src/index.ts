@@ -515,6 +515,18 @@ export const onboardingActivationPlanResponseSchema = z.object({
   }),
 });
 
+export const onboardingInferenceLifecycleStateSchema = z.enum([
+  "infer-started",
+  "infer-processing",
+  "infer-success",
+  "infer-fallback",
+]);
+
+export const onboardingInferenceLifecycleSchema = z.object({
+  current: onboardingInferenceLifecycleStateSchema,
+  transitions: z.array(onboardingInferenceLifecycleStateSchema).min(1).max(4),
+});
+
 export const onboardingQuickInferResponseSchema = z.object({
   transcript: z.string().min(1),
   interests: z.array(z.string().min(1)).max(8).default([]),
@@ -522,6 +534,7 @@ export const onboardingQuickInferResponseSchema = z.object({
   summary: z.string().min(1),
   firstIntent: z.string().min(1),
   followUpQuestion: z.string().optional(),
+  lifecycle: onboardingInferenceLifecycleSchema.optional(),
 });
 
 export const onboardingInferResponseSchema = z.object({
@@ -549,6 +562,7 @@ export const onboardingInferResponseSchema = z.object({
     firstIntent: onboardingInferenceFieldMetaSchema,
     persona: onboardingInferenceFieldMetaSchema,
   }),
+  lifecycle: onboardingInferenceLifecycleSchema.optional(),
 });
 
 export const intentFollowupActionBodySchema = z

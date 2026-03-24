@@ -95,7 +95,11 @@ export class OnboardingService {
       this.fastOpenaiByModel,
       this.onboardingQuickTimeoutMs,
     );
-    const llmInferred = await fastClient.inferOnboardingQuick(raw, traceId);
+    const llmInferred = await this.withTimeout(
+      fastClient.inferOnboardingQuick(raw, traceId),
+      this.onboardingQuickTimeoutMs,
+      "onboarding_fast_pass",
+    );
     const durationMs = Date.now() - startedAt;
 
     if (llmInferred) {
@@ -110,7 +114,17 @@ export class OnboardingService {
         unavailable: false,
         fallback: false,
       });
-      return llmInferred;
+      return {
+        ...llmInferred,
+        lifecycle: {
+          current: "infer-success",
+          transitions: [
+            "infer-started",
+            "infer-processing",
+            "infer-success",
+          ] as const,
+        },
+      };
     }
 
     this.logger.warn(
@@ -123,7 +137,7 @@ export class OnboardingService {
       unavailable: true,
       fallback: true,
     });
-    return this.buildQuickFallback(raw);
+    return this.withLifecycle(this.buildQuickFallback(raw), true);
   }
 
   async inferFromTranscript(
@@ -152,7 +166,11 @@ export class OnboardingService {
       this.richOpenaiByModel,
       this.onboardingRichTimeoutMs,
     );
-    const llmInferred = await richClient.inferOnboarding(raw, traceId);
+    const llmInferred = await this.withTimeout(
+      richClient.inferOnboarding(raw, traceId),
+      this.onboardingRichTimeoutMs,
+      "onboarding_inference",
+    );
     const durationMs = Date.now() - startedAt;
 
     if (llmInferred) {
@@ -167,7 +185,17 @@ export class OnboardingService {
         unavailable: false,
         fallback: false,
       });
-      return llmInferred;
+      return {
+        ...llmInferred,
+        lifecycle: {
+          current: "infer-success",
+          transitions: [
+            "infer-started",
+            "infer-processing",
+            "infer-success",
+          ] as const,
+        },
+      };
     }
 
     this.logger.warn(
@@ -180,7 +208,7 @@ export class OnboardingService {
       unavailable: true,
       fallback: true,
     });
-    return this.buildRichFallback(raw);
+    return this.withLifecycle(this.buildRichFallback(raw), true);
   }
 
   async buildActivationPlan(
@@ -203,9 +231,10 @@ export class OnboardingService {
       this.fastOpenaiByModel,
       this.onboardingQuickTimeoutMs,
     );
-    const llmInferred = await fastClient.inferOnboardingQuick(
-      transcript,
-      traceId,
+    const llmInferred = await this.withTimeout(
+      fastClient.inferOnboardingQuick(transcript, traceId),
+      this.onboardingQuickTimeoutMs,
+      "onboarding_fast_pass",
     );
     const durationMs = Date.now() - startedAt;
     if (llmInferred?.firstIntent?.trim()) {
@@ -368,6 +397,33 @@ export class OnboardingService {
     };
   }
 
+  private withLifecycle<T extends { lifecycle?: unknown }>(
+    payload: T,
+    fallback: boolean,
+  ): T {
+    const lifecycle = fallback
+      ? {
+          current: "infer-fallback",
+          transitions: [
+            "infer-started",
+            "infer-processing",
+            "infer-fallback",
+          ] as const,
+        }
+      : {
+          current: "infer-success",
+          transitions: [
+            "infer-started",
+            "infer-processing",
+            "infer-success",
+          ] as const,
+        };
+    return {
+      ...payload,
+      lifecycle,
+    };
+  }
+
   private buildSummary(transcript: string): string {
     return transcript.length > 160
       ? `${transcript.slice(0, 157).trimEnd()}...`
@@ -475,5 +531,29 @@ export class OnboardingService {
       goals.add("discover connections");
     }
     return [...goals];
+  }
+
+  private async withTimeout<T>(
+    promise: Promise<T>,
+    timeoutMs: number,
+    task: "onboarding_fast_pass" | "onboarding_inference",
+  ): Promise<T | null> {
+    let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+    try {
+      const timeoutPromise = new Promise<null>((resolve) => {
+        timeoutHandle = setTimeout(() => resolve(null), timeoutMs);
+      });
+      const result = await Promise.race([promise, timeoutPromise]);
+      if (result === null) {
+        this.logger.warn(
+          `onboarding ${task} timed out after ${timeoutMs}ms; using fallback`,
+        );
+      }
+      return result as T | null;
+    } finally {
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+      }
+    }
   }
 }
