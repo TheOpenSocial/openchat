@@ -88,7 +88,7 @@ export function OpenChatComposer({
       shadowRadius: 28,
       transform: [
         {
-          translateY: interpolate(emphasis.value, [0, 1], [0, -1]),
+          translateY: 0,
         },
       ],
     };

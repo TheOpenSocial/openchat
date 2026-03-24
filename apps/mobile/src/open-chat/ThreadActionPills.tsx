@@ -14,7 +14,7 @@ export function ThreadActionPills({
   if (!actions.length) return null;
 
   return (
-    <View className="mb-1.5 mt-1">
+    <View className="mb-2 mt-1">
       <ScrollView
         contentContainerStyle={{ gap: 8, paddingVertical: 2 }}
         horizontal
@@ -24,7 +24,7 @@ export function ThreadActionPills({
           <Pressable
             accessibilityLabel={a.label}
             accessibilityRole="button"
-            className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3.5 py-2"
+            className="rounded-full border border-white/[0.07] bg-white/[0.025] px-3.5 py-2"
             key={a.id}
             onPress={() => onAction(a.id)}
             style={({ pressed }) => ({
@@ -32,7 +32,7 @@ export function ThreadActionPills({
               transform: [{ scale: pressed ? 0.988 : 1 }],
             })}
           >
-            <Text className="text-[13px] font-medium text-white/72">
+            <Text className="text-[12px] font-medium text-white/70">
               {a.label}
             </Text>
           </Pressable>

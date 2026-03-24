@@ -593,6 +593,14 @@ function ProductionApp() {
 }
 
 export default function App() {
+  const rootLayoutDebug = false;
+  if (rootLayoutDebug) {
+    return (
+      <SafeAreaProvider style={{ flex: 1 }}>
+        <StatusBar style="light" />
+      </SafeAreaProvider>
+    );
+  }
   if (designMockApp) {
     return <DesignMockApp />;
   }

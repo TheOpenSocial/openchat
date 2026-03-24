@@ -21,6 +21,10 @@ const mode = (process.env.ONBOARDING_BENCH_MODE ?? "both").trim();
 const modelOverride = process.env.ONBOARDING_BENCH_MODEL?.trim() || "";
 const timeoutMs = Number(process.env.ONBOARDING_BENCH_TIMEOUT_MS ?? 20_000);
 const delayMs = Number(process.env.ONBOARDING_BENCH_DELAY_MS ?? 350);
+const maxP95Ms = Number(process.env.ONBOARDING_BENCH_MAX_P95_MS ?? 4_000);
+const maxFailureRate = Number(
+  process.env.ONBOARDING_BENCH_MAX_FAILURE_RATE ?? 0.2,
+);
 
 if (!url) {
   console.error("Missing ONBOARDING_BENCH_URL");
@@ -123,11 +127,13 @@ function printModeSummary(selectedMode, results) {
   const durations = ok
     .map((item) => item.reportedDurationMs ?? item.elapsed)
     .sort((a, b) => a - b);
+  const p95 = percentile(durations, 95);
+  const failureRate = results.length === 0 ? 1 : failed.length / results.length;
   const fallbackCount = ok.filter((item) => item.fallback).length;
   const line =
     `mode=${selectedMode} runs=${results.length} ok=${ok.length} ` +
     `failed=${failed.length} p50=${percentile(durations, 50) ?? "n/a"}ms ` +
-    `p95=${percentile(durations, 95) ?? "n/a"}ms avg=${Math.round(avg(durations) ?? 0)}ms ` +
+    `p95=${p95 ?? "n/a"}ms avg=${Math.round(avg(durations) ?? 0)}ms ` +
     `fallbackRate=${ok.length ? Math.round((fallbackCount / ok.length) * 100) : 0}%`;
   console.log(line);
   if (failed.length) {
@@ -137,6 +143,12 @@ function printModeSummary(selectedMode, results) {
       );
     }
   }
+  return {
+    failureRate,
+    p95,
+    hasBreached:
+      failureRate > maxFailureRate || (typeof p95 === "number" && p95 > maxP95Ms),
+  };
 }
 
 async function main() {
@@ -144,6 +156,7 @@ async function main() {
     `benchmark starting url=${url} runs=${runs} mode=${mode} model=${modelOverride || "default"} timeoutMs=${timeoutMs} delayMs=${delayMs}`,
   );
   const all = [];
+  let breached = false;
   for (const selectedMode of modes) {
     const modeResults = [];
     for (let i = 0; i < runs; i += 1) {
@@ -161,10 +174,19 @@ async function main() {
       }
     }
     process.stdout.write("\n");
-    printModeSummary(selectedMode, modeResults);
+    const summary = printModeSummary(selectedMode, modeResults);
+    if (summary.hasBreached) {
+      breached = true;
+      console.error(
+        `  threshold breach mode=${selectedMode} failureRate=${Math.round(summary.failureRate * 100)}% maxFailureRate=${Math.round(maxFailureRate * 100)}% p95=${summary.p95 ?? "n/a"}ms maxP95=${maxP95Ms}ms`,
+      );
+    }
   }
   const totalFailed = all.filter((item) => !item.ok).length;
   console.log(`benchmark finished totalRuns=${all.length} failed=${totalFailed}`);
+  if (breached) {
+    process.exitCode = 1;
+  }
 }
 
 main().catch((error) => {

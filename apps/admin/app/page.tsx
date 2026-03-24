@@ -3,20 +3,22 @@
 export const dynamic = "force-dynamic";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 
 import { AdminShell } from "./components/AdminShell";
 import { AdminSignIn } from "./components/AdminSignIn";
 import { AppLoading } from "./components/AppLoading";
-import { Notice } from "./components/Notice";
-import { AgentTab } from "./components/workbench/AgentTab";
-import { ChatsTab } from "./components/workbench/ChatsTab";
-import { IntentsTab } from "./components/workbench/IntentsTab";
-import { ModerationTab } from "./components/workbench/ModerationTab";
-import { OverviewTab } from "./components/workbench/OverviewTab";
-import { PersonalizationTab } from "./components/workbench/PersonalizationTab";
-import { UserInspectorTab } from "./components/workbench/UserInspectorTab";
+import { useAdminApiActions } from "./components/workbench/useAdminApiActions";
+import { useAgentStream } from "./components/workbench/useAgentStream";
+import { WorkbenchContent } from "./components/workbench/WorkbenchContent";
+import { useWorkbenchState } from "./components/workbench/useWorkbenchState";
 import { useModerationWorkbench } from "./components/workbench/useModerationWorkbench";
+import {
+  type AdminTab,
+  type OnboardingActivationSnapshot,
+  tabConfig,
+  tabSubtitle,
+} from "./components/workbench/workbench-config";
 import {
   clearAdminSession,
   clearLegacyAdminApiKeyStorage,
@@ -32,27 +34,9 @@ import {
 } from "./lib/admin-ui";
 import { type AppLocale, supportedLocales, t } from "./lib/i18n";
 import {
-  apiRequest,
-  apiRequestNullable,
-  buildApiUrl,
   configureAdminApiAuthLifecycle,
   fetchGoogleOAuthStartUrl,
-  type HttpMethod,
 } from "./lib/api";
-
-type AdminTab =
-  | "overview"
-  | "users"
-  | "intents"
-  | "chats"
-  | "moderation"
-  | "personalization"
-  | "agent";
-
-interface Banner {
-  tone: "info" | "error" | "success";
-  text: string;
-}
 
 interface DeadLetterRow {
   id: string;
@@ -63,85 +47,8 @@ interface DeadLetterRow {
   createdAt: string;
 }
 
-interface StreamEventRow {
-  id: string;
-  at: string;
-  kind: string;
-  payload: unknown;
-}
-
-interface DebugHistoryRow {
-  id: string;
-  at: string;
-  method: HttpMethod;
-  path: string;
-  success: boolean;
-}
-
-interface OnboardingActivationSnapshot {
-  window: {
-    hours: number;
-    start: string;
-    end: string;
-  };
-  counters: {
-    started: number;
-    succeeded: number;
-    failed: number;
-    processing: number;
-  };
-  metrics: {
-    successRate: number | null;
-    failureRate: number | null;
-    processingRate: number | null;
-    avgCompletionSeconds: number | null;
-  };
-}
-
-const DEFAULT_UUID = "00000000-0000-0000-0000-000000000000";
-const STREAM_EVENT_LIMIT = 60;
 const DEBUG_HISTORY_LIMIT = 20;
 const ADMIN_LOCALE_STORAGE_KEY = "opensocial.admin.locale.v1";
-
-const tabConfig: Array<{ id: AdminTab; label: string; subtitle: string }> = [
-  {
-    id: "overview",
-    label: "Overview",
-    subtitle:
-      "Queue controls, health, dead-letter replay, and debug query helper",
-  },
-  {
-    id: "users",
-    label: "Users",
-    subtitle: "Profile, trust, rules, sessions, inbox, and digest",
-  },
-  {
-    id: "intents",
-    label: "Intents",
-    subtitle: "Inspect explanations and run follow-up superpowers",
-  },
-  {
-    id: "chats",
-    label: "Chats",
-    subtitle: "Inspect metadata/sync and run stuck-flow repair actions",
-  },
-  {
-    id: "moderation",
-    label: "Moderation",
-    subtitle:
-      "Reports, blocks, queue, agent-thread risk flags (triage / assign)",
-  },
-  {
-    id: "personalization",
-    label: "Personalization",
-    subtitle: "Inspect life graph and explain policy decisions",
-  },
-  {
-    id: "agent",
-    label: "Agent",
-    subtitle: "Inspect thread traces with live SSE stream viewer",
-  },
-];
 
 function errorText(error: unknown) {
   return error instanceof Error ? error.message : String(error);
@@ -202,18 +109,6 @@ function normalizeQueryValues(
   return normalized;
 }
 
-function tabSubtitle(tab: AdminTab) {
-  return tabConfig.find((entry) => entry.id === tab)?.subtitle ?? "";
-}
-
-function safeJsonParse(raw: string): unknown {
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return raw;
-  }
-}
-
 function createHistoryId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -229,111 +124,136 @@ function AdminHomeContent() {
   );
   const [signInError, setSignInError] = useState<string | null>(null);
 
-  const [activeTab, setActiveTab] = useState<AdminTab>("overview");
-  const [busyKey, setBusyKey] = useState<string | null>(null);
-  const [banner, setBanner] = useState<Banner | null>(null);
-
-  const [health, setHealth] = useState("checking...");
-  const [relayCount, setRelayCount] = useState<number | null>(null);
-  const [onboardingActivationSnapshot, setOnboardingActivationSnapshot] =
-    useState<OnboardingActivationSnapshot | null>(null);
-  const [deadLetters, setDeadLetters] = useState<DeadLetterRow[]>([]);
-  const [adminUserId, setAdminUserId] = useState(DEFAULT_UUID);
-  const [adminRole, setAdminRole] = useState<"admin" | "support" | "moderator">(
-    "admin",
-  );
-
-  const [userId, setUserId] = useState(DEFAULT_UUID);
-  const [intentId, setIntentId] = useState("");
-  const [chatId, setChatId] = useState("");
-  const [threadId, setThreadId] = useState("");
-  const [revokeSessionId, setRevokeSessionId] = useState("");
-
-  const [actingUserId, setActingUserId] = useState(DEFAULT_UUID);
-  const [messageId, setMessageId] = useState("");
-  const [moderatorUserId, setModeratorUserId] = useState(DEFAULT_UUID);
-  const [hideReason, setHideReason] = useState("policy violation");
-  const [syncAfter, setSyncAfter] = useState("");
-  const [groupSizeTarget, setGroupSizeTarget] = useState(3);
-
-  const [policyContextInput, setPolicyContextInput] = useState(
-    '{"surface":"admin","source":"manual"}',
-  );
-  const [policyFlags, setPolicyFlags] = useState({
-    safetyAllowed: true,
-    hardRuleAllowed: true,
-    productPolicyAllowed: true,
-    overrideAllowed: true,
-    learnedPreferenceAllowed: true,
-    rankingAllowed: true,
-  });
-
-  const [agentMessage, setAgentMessage] = useState("Manual admin trace ping");
-
-  const [debugMethod, setDebugMethod] = useState<HttpMethod>("GET");
-  const [debugPath, setDebugPath] = useState("/admin/health");
-  const [debugQueryInput, setDebugQueryInput] = useState("{}");
-  const [debugBodyInput, setDebugBodyInput] = useState("{}");
-  const [debugResponse, setDebugResponse] = useState<unknown>(null);
-  const [debugHistory, setDebugHistory] = useState<DebugHistoryRow[]>([]);
-
-  const [streamStatus, setStreamStatus] = useState<
-    "idle" | "connecting" | "live" | "error"
-  >("idle");
-  const [streamEvents, setStreamEvents] = useState<StreamEventRow[]>([]);
-  const streamRef = useRef<EventSource | null>(null);
-
-  const [profileSnapshot, setProfileSnapshot] = useState<unknown>(null);
-  const [trustSnapshot, setTrustSnapshot] = useState<unknown>(null);
-  const [ruleSnapshot, setRuleSnapshot] = useState<unknown>(null);
-  const [interestSnapshot, setInterestSnapshot] = useState<unknown>(null);
-  const [topicSnapshot, setTopicSnapshot] = useState<unknown>(null);
-  const [availabilitySnapshot, setAvailabilitySnapshot] =
-    useState<unknown>(null);
-  const [photoSnapshot, setPhotoSnapshot] = useState<unknown>(null);
-  const [sessionSnapshot, setSessionSnapshot] = useState<unknown>(null);
-  const [inboxSnapshot, setInboxSnapshot] = useState<unknown>(null);
-  const [recurringCircleSnapshot, setRecurringCircleSnapshot] =
-    useState<unknown>(null);
-  const [recurringCircleSessionSnapshot, setRecurringCircleSessionSnapshot] =
-    useState<unknown>(null);
-  const [savedSearchSnapshot, setSavedSearchSnapshot] = useState<unknown>(null);
-  const [scheduledTaskSnapshot, setScheduledTaskSnapshot] =
-    useState<unknown>(null);
-  const [scheduledTaskRunsSnapshot, setScheduledTaskRunsSnapshot] =
-    useState<unknown>(null);
-  const [discoveryPassiveSnapshot, setDiscoveryPassiveSnapshot] =
-    useState<unknown>(null);
-  const [discoveryInboxSnapshot, setDiscoveryInboxSnapshot] =
-    useState<unknown>(null);
-  const [pendingIntentSummarySnapshot, setPendingIntentSummarySnapshot] =
-    useState<unknown>(null);
-  const [continuityIntentExplainSnapshot, setContinuityIntentExplainSnapshot] =
-    useState<unknown>(null);
-  const [searchQuery, setSearchQuery] = useState("tennis");
-  const [searchSnapshot, setSearchSnapshot] = useState<unknown>(null);
-
-  const [intentExplainSnapshot, setIntentExplainSnapshot] =
-    useState<unknown>(null);
-  const [intentUserExplainSnapshot, setIntentUserExplainSnapshot] =
-    useState<unknown>(null);
-  const [intentActionSnapshot, setIntentActionSnapshot] =
-    useState<unknown>(null);
-
-  const [chatMessagesSnapshot, setChatMessagesSnapshot] =
-    useState<unknown>(null);
-  const [chatMetadataSnapshot, setChatMetadataSnapshot] =
-    useState<unknown>(null);
-  const [chatSyncSnapshot, setChatSyncSnapshot] = useState<unknown>(null);
-
-  const [deactivateReason, setDeactivateReason] =
-    useState("support escalation");
-  const [restrictReason, setRestrictReason] = useState("safety restriction");
-  const [lifeGraphSnapshot, setLifeGraphSnapshot] = useState<unknown>(null);
-  const [policyExplainSnapshot, setPolicyExplainSnapshot] =
-    useState<unknown>(null);
-  const [memoryResetSnapshot, setMemoryResetSnapshot] = useState<unknown>(null);
-  const [agentTraceSnapshot, setAgentTraceSnapshot] = useState<unknown>(null);
+  const {
+    DEFAULT_UUID,
+    activeTab,
+    setActiveTab,
+    busyKey,
+    setBusyKey,
+    banner,
+    setBanner,
+    health,
+    setHealth,
+    relayCount,
+    setRelayCount,
+    onboardingActivationSnapshot,
+    setOnboardingActivationSnapshot,
+    deadLetters,
+    setDeadLetters,
+    adminUserId,
+    setAdminUserId,
+    adminRole,
+    setAdminRole,
+    userId,
+    setUserId,
+    intentId,
+    setIntentId,
+    chatId,
+    setChatId,
+    threadId,
+    setThreadId,
+    revokeSessionId,
+    setRevokeSessionId,
+    actingUserId,
+    setActingUserId,
+    messageId,
+    setMessageId,
+    moderatorUserId,
+    setModeratorUserId,
+    hideReason,
+    setHideReason,
+    syncAfter,
+    setSyncAfter,
+    groupSizeTarget,
+    setGroupSizeTarget,
+    policyContextInput,
+    setPolicyContextInput,
+    policyFlags,
+    setPolicyFlags,
+    agentMessage,
+    setAgentMessage,
+    debugMethod,
+    setDebugMethod,
+    debugPath,
+    setDebugPath,
+    debugQueryInput,
+    setDebugQueryInput,
+    debugBodyInput,
+    setDebugBodyInput,
+    debugResponse,
+    setDebugResponse,
+    debugHistory,
+    setDebugHistory,
+    streamStatus,
+    setStreamStatus,
+    streamEvents,
+    setStreamEvents,
+    streamRef,
+    profileSnapshot,
+    setProfileSnapshot,
+    trustSnapshot,
+    setTrustSnapshot,
+    ruleSnapshot,
+    setRuleSnapshot,
+    interestSnapshot,
+    setInterestSnapshot,
+    topicSnapshot,
+    setTopicSnapshot,
+    availabilitySnapshot,
+    setAvailabilitySnapshot,
+    photoSnapshot,
+    setPhotoSnapshot,
+    sessionSnapshot,
+    setSessionSnapshot,
+    inboxSnapshot,
+    setInboxSnapshot,
+    recurringCircleSnapshot,
+    setRecurringCircleSnapshot,
+    recurringCircleSessionSnapshot,
+    setRecurringCircleSessionSnapshot,
+    savedSearchSnapshot,
+    setSavedSearchSnapshot,
+    scheduledTaskSnapshot,
+    setScheduledTaskSnapshot,
+    scheduledTaskRunsSnapshot,
+    setScheduledTaskRunsSnapshot,
+    discoveryPassiveSnapshot,
+    setDiscoveryPassiveSnapshot,
+    discoveryInboxSnapshot,
+    setDiscoveryInboxSnapshot,
+    pendingIntentSummarySnapshot,
+    setPendingIntentSummarySnapshot,
+    continuityIntentExplainSnapshot,
+    setContinuityIntentExplainSnapshot,
+    searchQuery,
+    setSearchQuery,
+    searchSnapshot,
+    setSearchSnapshot,
+    intentExplainSnapshot,
+    setIntentExplainSnapshot,
+    intentUserExplainSnapshot,
+    setIntentUserExplainSnapshot,
+    intentActionSnapshot,
+    setIntentActionSnapshot,
+    chatMessagesSnapshot,
+    setChatMessagesSnapshot,
+    chatMetadataSnapshot,
+    setChatMetadataSnapshot,
+    chatSyncSnapshot,
+    setChatSyncSnapshot,
+    deactivateReason,
+    setDeactivateReason,
+    restrictReason,
+    setRestrictReason,
+    lifeGraphSnapshot,
+    setLifeGraphSnapshot,
+    policyExplainSnapshot,
+    setPolicyExplainSnapshot,
+    memoryResetSnapshot,
+    setMemoryResetSnapshot,
+    agentTraceSnapshot,
+    setAgentTraceSnapshot,
+  } = useWorkbenchState();
 
   useEffect(() => {
     const tab = searchParams.get("tab");
@@ -368,147 +288,22 @@ function AdminHomeContent() {
     [deadLetters.length, health, relayCount],
   );
 
-  const runAction = async <T,>(
-    key: string,
-    operation: () => Promise<T>,
-    successText: string | ((payload: T) => string),
-    onSuccess?: (payload: T) => void,
-  ) => {
-    setBusyKey(key);
-    setBanner(null);
+  const { requestApi, requestApiNullable, runAction } = useAdminApiActions({
+    accessToken: signedInSession?.accessToken,
+    adminRole,
+    adminUserId,
+    setBusyKey,
+    setBanner,
+  });
 
-    try {
-      const payload = await operation();
-      onSuccess?.(payload);
-      const text =
-        typeof successText === "function" ? successText(payload) : successText;
-      setBanner({
-        tone: "success",
-        text,
-      });
-      return payload;
-    } catch (error) {
-      setBanner({
-        tone: "error",
-        text: `${key} failed: ${errorText(error)}`,
-      });
-      return null;
-    } finally {
-      setBusyKey((current) => (current === key ? null : current));
-    }
-  };
-
-  const adminRequestHeaders = useMemo(
-    () => ({
-      ...(signedInSession?.accessToken
-        ? { authorization: `Bearer ${signedInSession.accessToken}` }
-        : {}),
-      "x-admin-user-id": adminUserId.trim(),
-      "x-admin-role": adminRole,
-    }),
-    [adminRole, adminUserId, signedInSession?.accessToken],
-  );
-
-  const requestApi = <T,>(
-    method: HttpMethod,
-    path: string,
-    options?: {
-      body?: Record<string, unknown>;
-      query?: Record<string, string | number | boolean | undefined>;
-      headers?: Record<string, string>;
-    },
-  ) =>
-    apiRequest<T>(method, path, {
-      ...options,
-      headers: {
-        ...(options?.headers ?? {}),
-        ...adminRequestHeaders,
-      },
-    });
-
-  const requestApiNullable = <T,>(
-    method: HttpMethod,
-    path: string,
-    options?: {
-      body?: Record<string, unknown>;
-      query?: Record<string, string | number | boolean | undefined>;
-      headers?: Record<string, string>;
-    },
-  ) =>
-    apiRequestNullable<T>(method, path, {
-      ...options,
-      headers: {
-        ...(options?.headers ?? {}),
-        ...adminRequestHeaders,
-      },
-    });
-
-  const pushStreamEvent = (kind: string, payload: unknown) => {
-    setStreamEvents((current) =>
-      [
-        {
-          id: createHistoryId(),
-          at: new Date().toISOString(),
-          kind,
-          payload,
-        },
-        ...current,
-      ].slice(0, STREAM_EVENT_LIMIT),
-    );
-  };
-
-  const stopAgentStream = () => {
-    streamRef.current?.close();
-    streamRef.current = null;
-    setStreamStatus("idle");
-  };
-
-  const startAgentStream = () => {
-    if (!threadId.trim()) {
-      setBanner({ tone: "error", text: "Provide a thread id." });
-      return;
-    }
-
-    const streamToken = signedInSession?.accessToken?.trim();
-    if (!streamToken) {
-      setBanner({
-        tone: "error",
-        text: "Sign in again to attach an access token for the live stream.",
-      });
-      return;
-    }
-
-    stopAgentStream();
-    setStreamStatus("connecting");
-
-    const source = new EventSource(
-      buildApiUrl(`/agent/threads/${threadId.trim()}/stream`, {
-        access_token: streamToken,
-      }),
-    );
-    streamRef.current = source;
-
-    source.onopen = () => {
-      setStreamStatus("live");
-      setBanner({
-        tone: "success",
-        text: `Live SSE stream connected for thread ${threadId.trim().slice(0, 8)}...`,
-      });
-    };
-
-    source.onerror = () => {
-      setStreamStatus("error");
-    };
-
-    source.onmessage = (event) => {
-      pushStreamEvent(event.type || "message", safeJsonParse(event.data));
-    };
-
-    source.addEventListener("agent.message", (event) => {
-      const messageEvent = event as MessageEvent;
-      pushStreamEvent("agent.message", safeJsonParse(messageEvent.data));
-    });
-  };
+  const { startAgentStream, stopAgentStream } = useAgentStream({
+    accessToken: signedInSession?.accessToken,
+    setBanner,
+    setStreamEvents,
+    setStreamStatus,
+    streamRef,
+    threadId,
+  });
 
   useEffect(
     () => () => {
@@ -1398,277 +1193,248 @@ function AdminHomeContent() {
       summary={summary}
       title="Operations workbench"
     >
-      {banner ? (
-        <div className="mb-4">
-          <Notice text={banner.text} tone={banner.tone} />
-        </div>
-      ) : null}
-
-      <p className="mb-4 text-xs text-muted-foreground md:hidden">
-        {tabSubtitle(activeTab)}
-      </p>
-
-      {activeTab === "overview" ? (
-        <OverviewTab
-          adminButtonClass={adminButtonClass}
-          adminButtonGhostClass={adminButtonGhostClass}
-          adminInputClass={adminInputClass}
-          adminLabelClass={adminLabelClass}
-          adminRole={adminRole}
-          adminUserId={adminUserId}
-          deadLetters={deadLetters}
-          debugBodyInput={debugBodyInput}
-          debugHistory={debugHistory}
-          debugMethod={debugMethod}
-          debugPath={debugPath}
-          debugQueryInput={debugQueryInput}
-          debugResponse={debugResponse}
-          executeDebugQuery={executeDebugQuery}
-          health={health}
-          loadDeadLetters={loadDeadLetters}
-          loadOnboardingActivationSnapshot={loadOnboardingActivationSnapshot}
-          relayCount={relayCount}
-          relayOutbox={relayOutbox}
-          onboardingActivationSnapshot={onboardingActivationSnapshot}
-          replayDeadLetter={replayDeadLetter}
-          setAdminRole={setAdminRole}
-          setAdminUserId={setAdminUserId}
-          setDebugBodyInput={setDebugBodyInput}
-          setDebugMethod={setDebugMethod}
-          setDebugPath={setDebugPath}
-          setDebugQueryInput={setDebugQueryInput}
-          setThreadId={setThreadId}
-          setUserId={setUserId}
-          threadId={threadId}
-          userId={userId}
-        />
-      ) : null}
-
-      {activeTab === "users" ? (
-        <UserInspectorTab
-          adminButtonClass={adminButtonClass}
-          adminButtonDangerClass={adminButtonDangerClass}
-          adminButtonGhostClass={adminButtonGhostClass}
-          adminInputClass={adminInputClass}
-          adminLabelClass={adminLabelClass}
-          availabilitySnapshot={availabilitySnapshot}
-          continuityIntentExplainSnapshot={continuityIntentExplainSnapshot}
-          deactivateReason={deactivateReason}
-          deactivateUser={deactivateUser}
-          discoveryInboxSnapshot={discoveryInboxSnapshot}
-          discoveryPassiveSnapshot={discoveryPassiveSnapshot}
-          inboxSnapshot={inboxSnapshot}
-          inspectUser={inspectUser}
-          interestSnapshot={interestSnapshot}
-          pendingIntentSummarySnapshot={pendingIntentSummarySnapshot}
-          photoSnapshot={photoSnapshot}
-          profileSnapshot={profileSnapshot}
-          recurringCircleSessionSnapshot={recurringCircleSessionSnapshot}
-          recurringCircleSnapshot={recurringCircleSnapshot}
-          restrictReason={restrictReason}
-          restrictUser={restrictUser}
-          revokeAllSessions={revokeAllSessions}
-          revokeSession={revokeSession}
-          revokeSessionId={revokeSessionId}
-          ruleSnapshot={ruleSnapshot}
-          runSearch={runSearch}
-          savedSearchSnapshot={savedSearchSnapshot}
-          scheduledTaskRunsSnapshot={scheduledTaskRunsSnapshot}
-          scheduledTaskSnapshot={scheduledTaskSnapshot}
-          searchQuery={searchQuery}
-          searchSnapshot={searchSnapshot}
-          sendDigest={sendDigest}
-          sessionSnapshot={sessionSnapshot}
-          setDeactivateReason={setDeactivateReason}
-          setRestrictReason={setRestrictReason}
-          setRevokeSessionId={setRevokeSessionId}
-          setSearchQuery={setSearchQuery}
-          setUserId={setUserId}
-          summarizePendingIntents={summarizePendingIntents}
-          topicSnapshot={topicSnapshot}
-          trustSnapshot={trustSnapshot}
-          userId={userId}
-        />
-      ) : null}
-
-      {activeTab === "intents" ? (
-        <IntentsTab
-          adminButtonClass={adminButtonClass}
-          adminButtonGhostClass={adminButtonGhostClass}
-          adminInputClass={adminInputClass}
-          adminLabelClass={adminLabelClass}
-          cancelIntent={cancelIntent}
-          convertIntent={convertIntent}
-          groupSizeTarget={groupSizeTarget}
-          inspectIntent={inspectIntent}
-          intentActionSnapshot={intentActionSnapshot}
-          intentExplainSnapshot={intentExplainSnapshot}
-          intentId={intentId}
-          intentUserExplainSnapshot={intentUserExplainSnapshot}
-          retryIntent={retryIntent}
-          setGroupSizeTarget={setGroupSizeTarget}
-          setIntentId={setIntentId}
-          setThreadId={setThreadId}
-          setUserId={setUserId}
-          threadId={threadId}
-          userId={userId}
-          widenIntent={widenIntent}
-        />
-      ) : null}
-
-      {activeTab === "chats" ? (
-        <ChatsTab
-          actingUserId={actingUserId}
-          adminButtonClass={adminButtonClass}
-          adminButtonDangerClass={adminButtonDangerClass}
-          adminButtonGhostClass={adminButtonGhostClass}
-          adminInputClass={adminInputClass}
-          adminLabelClass={adminLabelClass}
-          chatId={chatId}
-          chatMessagesSnapshot={chatMessagesSnapshot}
-          chatMetadataSnapshot={chatMetadataSnapshot}
-          chatSyncSnapshot={chatSyncSnapshot}
-          hideChatMessage={hideChatMessage}
-          hideReason={hideReason}
-          inspectChat={inspectChat}
-          leaveChat={leaveChat}
-          messageId={messageId}
-          moderatorUserId={moderatorUserId}
-          repairChatFlow={repairChatFlow}
-          setActingUserId={setActingUserId}
-          setChatId={setChatId}
-          setHideReason={setHideReason}
-          setMessageId={setMessageId}
-          setModeratorUserId={setModeratorUserId}
-          setSyncAfter={setSyncAfter}
-          syncAfter={syncAfter}
-          syncChat={syncChat}
-        />
-      ) : null}
-
-      {activeTab === "moderation" ? (
-        <ModerationTab
-          adminButtonClass={adminButtonClass}
-          adminButtonGhostClass={adminButtonGhostClass}
-          adminInputClass={adminInputClass}
-          adminLabelClass={adminLabelClass}
-          agentRiskDecisionQuery={moderation.agentRiskDecisionQuery}
-          agentRiskItems={moderation.agentRiskItems}
-          agentRiskLimit={moderation.agentRiskLimit}
-          agentRiskSnapshot={moderation.agentRiskSnapshot}
-          agentRiskStatusQuery={moderation.agentRiskStatusQuery}
-          assignAgentRiskFlag={moderation.assignAgentRiskFlag}
-          assignFlagId={moderation.assignFlagId}
-          assignReason={moderation.assignReason}
-          assigneeUserId={moderation.assigneeUserId}
-          auditLogLimit={moderation.auditLogLimit}
-          auditLogSnapshot={moderation.auditLogSnapshot}
-          blockedUserId={moderation.blockedUserId}
-          blockerUserId={moderation.blockerUserId}
-          createBlock={moderation.createBlock}
-          createReport={moderation.createReport}
-          loadAgentRiskFlags={moderation.loadAgentRiskFlags}
-          loadAuditLogs={moderation.loadAuditLogs}
-          loadModerationQueue={moderation.loadModerationQueue}
-          loadModerationSettings={moderation.loadModerationSettings}
-          loadModerationSummary={moderation.loadModerationSummary}
-          moderationQueueEntityTypeQuery={
-            moderation.moderationQueueEntityTypeQuery
-          }
-          moderationQueueItems={moderation.moderationQueueItems}
-          moderationQueueLimit={moderation.moderationQueueLimit}
-          moderationQueueReasonQuery={moderation.moderationQueueReasonQuery}
-          moderationQueueSnapshot={moderation.moderationQueueSnapshot}
-          moderationQueueStatusQuery={moderation.moderationQueueStatusQuery}
-          moderationSettingsSnapshot={moderation.moderationSettingsSnapshot}
-          moderationSnapshot={moderation.moderationSnapshot}
-          moderationSummarySnapshot={moderation.moderationSummarySnapshot}
-          primeTriageFromFlag={moderation.primeTriageFromFlag}
-          reportDetails={moderation.reportDetails}
-          reportReason={moderation.reportReason}
-          reporterUserId={moderation.reporterUserId}
-          setAgentRiskDecisionQuery={moderation.setAgentRiskDecisionQuery}
-          setAgentRiskLimit={moderation.setAgentRiskLimit}
-          setAgentRiskStatusQuery={moderation.setAgentRiskStatusQuery}
-          setAssignFlagId={moderation.setAssignFlagId}
-          setAssignReason={moderation.setAssignReason}
-          setAssigneeUserId={moderation.setAssigneeUserId}
-          setAuditLogLimit={moderation.setAuditLogLimit}
-          setBlockedUserId={moderation.setBlockedUserId}
-          setBlockerUserId={moderation.setBlockerUserId}
-          setModerationQueueEntityTypeQuery={
-            moderation.setModerationQueueEntityTypeQuery
-          }
-          setModerationQueueLimit={moderation.setModerationQueueLimit}
-          setModerationQueueReasonQuery={
-            moderation.setModerationQueueReasonQuery
-          }
-          setModerationQueueSnapshot={moderation.setModerationQueueSnapshot}
-          setModerationQueueStatusQuery={
-            moderation.setModerationQueueStatusQuery
-          }
-          setReportDetails={moderation.setReportDetails}
-          setReportReason={moderation.setReportReason}
-          setReporterUserId={moderation.setReporterUserId}
-          setTargetUserId={moderation.setTargetUserId}
-          setTriageAction={moderation.setTriageAction}
-          setTriageFlagId={moderation.setTriageFlagId}
-          setTriageReason={moderation.setTriageReason}
-          setTriageTargetUserId={moderation.setTriageTargetUserId}
-          targetUserId={moderation.targetUserId}
-          triageAction={moderation.triageAction}
-          triageAgentRiskFlag={moderation.triageAgentRiskFlag}
-          triageFlagId={moderation.triageFlagId}
-          triageReason={moderation.triageReason}
-          triageTargetUserId={moderation.triageTargetUserId}
-        />
-      ) : null}
-
-      {activeTab === "personalization" ? (
-        <PersonalizationTab
-          adminButtonClass={adminButtonClass}
-          adminButtonGhostClass={adminButtonGhostClass}
-          adminInputClass={adminInputClass}
-          adminLabelClass={adminLabelClass}
-          explainPolicy={explainPolicy}
-          inspectLifeGraph={inspectLifeGraph}
-          lifeGraphSnapshot={lifeGraphSnapshot}
-          memoryResetSnapshot={memoryResetSnapshot}
-          policyContextInput={policyContextInput}
-          policyExplainSnapshot={policyExplainSnapshot}
-          policyFlags={policyFlags}
-          resetLearnedMemory={resetLearnedMemory}
-          setPolicyContextInput={setPolicyContextInput}
-          setPolicyFlags={setPolicyFlags}
-          setUserId={setUserId}
-          userId={userId}
-        />
-      ) : null}
-
-      {activeTab === "agent" ? (
-        <AgentTab
-          actingUserId={actingUserId}
-          adminButtonClass={adminButtonClass}
-          adminButtonGhostClass={adminButtonGhostClass}
-          adminInputClass={adminInputClass}
-          adminLabelClass={adminLabelClass}
-          agentMessage={agentMessage}
-          agentTraceSnapshot={agentTraceSnapshot}
-          inspectAgentThread={inspectAgentThread}
-          loadPrimaryAgentThreadFromSession={loadPrimaryAgentThreadFromSession}
-          postAgentMessage={postAgentMessage}
-          runAgenticRespond={runAgenticRespond}
-          setActingUserId={setActingUserId}
-          setAgentMessage={setAgentMessage}
-          setStreamEvents={setStreamEvents}
-          setThreadId={setThreadId}
-          startAgentStream={startAgentStream}
-          stopAgentStream={stopAgentStream}
-          streamEvents={streamEvents}
-          streamStatus={streamStatus}
-          threadId={threadId}
-        />
-      ) : null}
+      <WorkbenchContent
+        activeTab={activeTab}
+        agentProps={{
+          actingUserId,
+          adminButtonClass,
+          adminButtonGhostClass,
+          adminInputClass,
+          adminLabelClass,
+          agentMessage,
+          agentTraceSnapshot,
+          inspectAgentThread,
+          loadPrimaryAgentThreadFromSession,
+          postAgentMessage,
+          runAgenticRespond,
+          setActingUserId,
+          setAgentMessage,
+          setStreamEvents,
+          setThreadId,
+          startAgentStream,
+          stopAgentStream,
+          streamEvents,
+          streamStatus,
+          threadId,
+        }}
+        banner={banner}
+        chatsProps={{
+          actingUserId,
+          adminButtonClass,
+          adminButtonDangerClass,
+          adminButtonGhostClass,
+          adminInputClass,
+          adminLabelClass,
+          chatId,
+          chatMessagesSnapshot,
+          chatMetadataSnapshot,
+          chatSyncSnapshot,
+          hideChatMessage,
+          hideReason,
+          inspectChat,
+          leaveChat,
+          messageId,
+          moderatorUserId,
+          repairChatFlow,
+          setActingUserId,
+          setChatId,
+          setHideReason,
+          setMessageId,
+          setModeratorUserId,
+          setSyncAfter,
+          syncAfter,
+          syncChat,
+        }}
+        intentsProps={{
+          adminButtonClass,
+          adminButtonGhostClass,
+          adminInputClass,
+          adminLabelClass,
+          cancelIntent,
+          convertIntent,
+          groupSizeTarget,
+          inspectIntent,
+          intentActionSnapshot,
+          intentExplainSnapshot,
+          intentId,
+          intentUserExplainSnapshot,
+          retryIntent,
+          setGroupSizeTarget,
+          setIntentId,
+          setThreadId,
+          setUserId,
+          threadId,
+          userId,
+          widenIntent,
+        }}
+        moderationProps={{
+          adminButtonClass,
+          adminButtonGhostClass,
+          adminInputClass,
+          adminLabelClass,
+          agentRiskDecisionQuery: moderation.agentRiskDecisionQuery,
+          agentRiskItems: moderation.agentRiskItems,
+          agentRiskLimit: moderation.agentRiskLimit,
+          agentRiskSnapshot: moderation.agentRiskSnapshot,
+          agentRiskStatusQuery: moderation.agentRiskStatusQuery,
+          assignAgentRiskFlag: moderation.assignAgentRiskFlag,
+          assignFlagId: moderation.assignFlagId,
+          assignReason: moderation.assignReason,
+          assigneeUserId: moderation.assigneeUserId,
+          auditLogLimit: moderation.auditLogLimit,
+          auditLogSnapshot: moderation.auditLogSnapshot,
+          blockedUserId: moderation.blockedUserId,
+          blockerUserId: moderation.blockerUserId,
+          createBlock: moderation.createBlock,
+          createReport: moderation.createReport,
+          loadAgentRiskFlags: moderation.loadAgentRiskFlags,
+          loadAuditLogs: moderation.loadAuditLogs,
+          loadModerationQueue: moderation.loadModerationQueue,
+          loadModerationSettings: moderation.loadModerationSettings,
+          loadModerationSummary: moderation.loadModerationSummary,
+          moderationQueueEntityTypeQuery:
+            moderation.moderationQueueEntityTypeQuery,
+          moderationQueueItems: moderation.moderationQueueItems,
+          moderationQueueLimit: moderation.moderationQueueLimit,
+          moderationQueueReasonQuery: moderation.moderationQueueReasonQuery,
+          moderationQueueSnapshot: moderation.moderationQueueSnapshot,
+          moderationQueueStatusQuery: moderation.moderationQueueStatusQuery,
+          moderationSettingsSnapshot: moderation.moderationSettingsSnapshot,
+          moderationSnapshot: moderation.moderationSnapshot,
+          moderationSummarySnapshot: moderation.moderationSummarySnapshot,
+          primeTriageFromFlag: moderation.primeTriageFromFlag,
+          reportDetails: moderation.reportDetails,
+          reportReason: moderation.reportReason,
+          reporterUserId: moderation.reporterUserId,
+          setAgentRiskDecisionQuery: moderation.setAgentRiskDecisionQuery,
+          setAgentRiskLimit: moderation.setAgentRiskLimit,
+          setAgentRiskStatusQuery: moderation.setAgentRiskStatusQuery,
+          setAssignFlagId: moderation.setAssignFlagId,
+          setAssignReason: moderation.setAssignReason,
+          setAssigneeUserId: moderation.setAssigneeUserId,
+          setAuditLogLimit: moderation.setAuditLogLimit,
+          setBlockedUserId: moderation.setBlockedUserId,
+          setBlockerUserId: moderation.setBlockerUserId,
+          setModerationQueueEntityTypeQuery:
+            moderation.setModerationQueueEntityTypeQuery,
+          setModerationQueueLimit: moderation.setModerationQueueLimit,
+          setModerationQueueReasonQuery:
+            moderation.setModerationQueueReasonQuery,
+          setModerationQueueSnapshot: moderation.setModerationQueueSnapshot,
+          setModerationQueueStatusQuery:
+            moderation.setModerationQueueStatusQuery,
+          setReportDetails: moderation.setReportDetails,
+          setReportReason: moderation.setReportReason,
+          setReporterUserId: moderation.setReporterUserId,
+          setTargetUserId: moderation.setTargetUserId,
+          setTriageAction: moderation.setTriageAction,
+          setTriageFlagId: moderation.setTriageFlagId,
+          setTriageReason: moderation.setTriageReason,
+          setTriageTargetUserId: moderation.setTriageTargetUserId,
+          targetUserId: moderation.targetUserId,
+          triageAction: moderation.triageAction,
+          triageAgentRiskFlag: moderation.triageAgentRiskFlag,
+          triageFlagId: moderation.triageFlagId,
+          triageReason: moderation.triageReason,
+          triageTargetUserId: moderation.triageTargetUserId,
+        }}
+        overviewProps={{
+          adminButtonClass,
+          adminButtonGhostClass,
+          adminInputClass,
+          adminLabelClass,
+          adminRole,
+          adminUserId,
+          deadLetters,
+          debugBodyInput,
+          debugHistory,
+          debugMethod,
+          debugPath,
+          debugQueryInput,
+          debugResponse,
+          executeDebugQuery,
+          health,
+          loadDeadLetters,
+          loadOnboardingActivationSnapshot,
+          onboardingActivationSnapshot,
+          relayCount,
+          relayOutbox,
+          replayDeadLetter,
+          setAdminRole,
+          setAdminUserId,
+          setDebugBodyInput,
+          setDebugMethod,
+          setDebugPath,
+          setDebugQueryInput,
+          setThreadId,
+          setUserId,
+          threadId,
+          userId,
+        }}
+        personalizationProps={{
+          adminButtonClass,
+          adminButtonGhostClass,
+          adminInputClass,
+          adminLabelClass,
+          explainPolicy,
+          inspectLifeGraph,
+          lifeGraphSnapshot,
+          memoryResetSnapshot,
+          policyContextInput,
+          policyExplainSnapshot,
+          policyFlags,
+          resetLearnedMemory,
+          setPolicyContextInput,
+          setPolicyFlags,
+          setUserId,
+          userId,
+        }}
+        tabSubtitle={tabSubtitle}
+        userInspectorProps={{
+          adminButtonClass,
+          adminButtonDangerClass,
+          adminButtonGhostClass,
+          adminInputClass,
+          adminLabelClass,
+          availabilitySnapshot,
+          continuityIntentExplainSnapshot,
+          deactivateReason,
+          deactivateUser,
+          discoveryInboxSnapshot,
+          discoveryPassiveSnapshot,
+          inboxSnapshot,
+          inspectUser,
+          interestSnapshot,
+          pendingIntentSummarySnapshot,
+          photoSnapshot,
+          profileSnapshot,
+          recurringCircleSessionSnapshot,
+          recurringCircleSnapshot,
+          restrictReason,
+          restrictUser,
+          revokeAllSessions,
+          revokeSession,
+          revokeSessionId,
+          ruleSnapshot,
+          runSearch,
+          savedSearchSnapshot,
+          scheduledTaskRunsSnapshot,
+          scheduledTaskSnapshot,
+          searchQuery,
+          searchSnapshot,
+          sendDigest,
+          sessionSnapshot,
+          setDeactivateReason,
+          setRestrictReason,
+          setRevokeSessionId,
+          setSearchQuery,
+          setUserId,
+          summarizePendingIntents,
+          topicSnapshot,
+          trustSnapshot,
+          userId,
+        }}
+      />
     </AdminShell>
   );
 }

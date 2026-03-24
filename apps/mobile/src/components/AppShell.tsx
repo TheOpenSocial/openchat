@@ -31,7 +31,7 @@ export function AppShell({
   const headerHeight = insets.top + 46;
 
   return (
-    <View className="flex-1 bg-[#050506]" style={{ flex: 1 }}>
+    <View style={{ flex: 1 }}>
       <View
         className="min-h-0 flex-1"
         style={{ flex: 1, paddingTop: insets.top + 4 }}

@@ -29,25 +29,24 @@ type StarterPromptsProps = {
 
 export function StarterPrompts({ onPick }: StarterPromptsProps) {
   return (
-    <View className="gap-2.5">
+    <View className="gap-1.5">
       {STARTERS.map((row) => (
         <Pressable
           accessibilityHint="Uses this as your first message"
           accessibilityLabel={row.label}
           accessibilityRole="button"
-          className="rounded-[22px] border border-white/[0.06] bg-white/[0.02] px-4 py-3.5"
+          className="rounded-[18px] border border-white/[0.05] bg-transparent px-1 py-3"
           key={row.label}
           onPress={() => onPick(row.body)}
           style={({ pressed }) => ({
-            opacity: 1,
-            transform: [{ scale: pressed ? 0.988 : 1 }],
+            opacity: pressed ? 0.72 : 1,
           })}
         >
-          <Text className="text-[15px] font-medium text-white/88">
+          <Text className="text-[16px] font-medium text-white/88">
             {row.label}
           </Text>
           <Text
-            className="mt-1.5 text-[13px] leading-[19px] text-white/38"
+            className="mt-1 text-[13px] leading-[19px] text-white/34"
             numberOfLines={2}
           >
             {row.body}

@@ -100,9 +100,6 @@ sync_local_checkout() {
     --exclude ".env.production" \
     ./ "$DEPLOY_PATH"/
   sync_local_env_var "OPENAI_API_KEY" "${OPENAI_API_KEY:-}"
-  sync_local_env_var "ONBOARDING_LLM_PROVIDER" "${ONBOARDING_LLM_PROVIDER:-}"
-  sync_local_env_var "ONBOARDING_LLM_BASE_URL" "${ONBOARDING_LLM_BASE_URL:-}"
-  sync_local_env_var "ONBOARDING_LLM_API_KEY" "${ONBOARDING_LLM_API_KEY:-}"
   sync_local_env_var "ONBOARDING_LLM_MODEL" "${ONBOARDING_LLM_MODEL:-}"
   sync_local_env_var "ONBOARDING_LLM_FAST_MODEL" "${ONBOARDING_LLM_FAST_MODEL:-}"
   sync_local_env_var "ONBOARDING_LLM_RICH_MODEL" "${ONBOARDING_LLM_RICH_MODEL:-}"
@@ -215,9 +212,6 @@ ssh_opts=(
 )
 
 sync_remote_env_var "OPENAI_API_KEY" "${OPENAI_API_KEY:-}"
-sync_remote_env_var "ONBOARDING_LLM_PROVIDER" "${ONBOARDING_LLM_PROVIDER:-}"
-sync_remote_env_var "ONBOARDING_LLM_BASE_URL" "${ONBOARDING_LLM_BASE_URL:-}"
-sync_remote_env_var "ONBOARDING_LLM_API_KEY" "${ONBOARDING_LLM_API_KEY:-}"
 sync_remote_env_var "ONBOARDING_LLM_MODEL" "${ONBOARDING_LLM_MODEL:-}"
 sync_remote_env_var "ONBOARDING_LLM_FAST_MODEL" "${ONBOARDING_LLM_FAST_MODEL:-}"
 sync_remote_env_var "ONBOARDING_LLM_RICH_MODEL" "${ONBOARDING_LLM_RICH_MODEL:-}"

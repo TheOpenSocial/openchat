@@ -288,20 +288,12 @@ export async function processOfflineOutbox(input: {
     try {
       if (isComposerItem(item)) {
         if (item.payload.mode === "chat" && item.payload.threadId) {
-          await api.agentThreadRespond(
+          await api.createChatMessage(
             item.payload.threadId,
             input.userId,
             item.payload.text,
             input.accessToken,
-            { idempotencyKey: item.id },
-            {
-              ...(item.payload.voiceTranscript
-                ? { voiceTranscript: item.payload.voiceTranscript }
-                : {}),
-              ...(item.payload.attachments?.length
-                ? { attachments: item.payload.attachments }
-                : {}),
-            },
+            { clientMessageId: item.id },
           );
           result.sentThreadIds.push(item.payload.threadId);
         } else if (item.payload.mode === "intent" && item.payload.threadId) {

@@ -28,7 +28,7 @@
         <key>CFBundleURLSchemes</key>
         <array>
           <string>opensocial</string>
-          <string>com.opensocial.app</string>
+          <string>so.opensocial.app</string>
         </array>
       </dict>
     </array>

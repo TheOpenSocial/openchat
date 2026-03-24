@@ -190,10 +190,9 @@ export function AppBottomTabs({
       style={shellStyle}
     >
       <View
-        className="overflow-hidden "
+        className="overflow-hidden"
         onLayout={handleLayout}
         style={{
-          minHeight: 76 + Math.max(insets.bottom, 8),
           paddingBottom: Math.max(insets.bottom, 8),
           width: "100%",
         }}
@@ -210,7 +209,7 @@ export function AppBottomTabs({
             { backgroundColor: "rgba(5,6,7,0.78)" },
           ]}
         />
-        <View className="pt-2.5">
+        <View>
           <View className="overflow-hidden ">
             <Animated.View
               className="absolute bottom-[5px] left-0 top-[5px] rounded-full bg-white/[0.055]"

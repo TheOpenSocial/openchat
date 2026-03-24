@@ -30,7 +30,9 @@ export type TelemetryEventName =
   | "notification_opened"
   | "digest_requested"
   | "chat_sync_manual"
-  | "chat_sync_failed";
+  | "chat_sync_failed"
+  | "home_thread_state_transition"
+  | "home_thread_state_duration";
 
 export interface TelemetryEvent {
   id: string;

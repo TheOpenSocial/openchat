@@ -4,15 +4,15 @@
  */
 export const WELCOME_TITLE_TIMING = {
   /** Slide from off-screen right into center. */
-  slideEnterMs: 720,
+  slideEnterMs: 560,
   /** Slide out toward the left while fading. */
-  slideExitMs: 640,
+  slideExitMs: 500,
   /** Hold at center, fully visible, before exiting. */
-  holdMs: 1000,
+  holdMs: 760,
   /** Hold on “Open” at center before “ Social” slides in from the right. */
-  holdOpenMs: 1500,
+  holdOpenMs: 500,
   /** “ Social” slide-in duration (from the right). */
-  suffixInMs: 780,
+  suffixInMs: 620,
   /** Start position for hero lines (px); positive = right of center. */
   slideFromRightPx: 40,
   /** Exit distance (px); animated toward negative X. */
@@ -20,12 +20,12 @@ export const WELCOME_TITLE_TIMING = {
   /** Suffix starts closer — shorter travel beside “Open”. */
   suffixSlideFromPx: 18,
   /** After final lockup, before completion callback / subtitle. */
-  holdFinalMs: 1100,
+  holdFinalMs: 850,
   /** Subtitle fades in after the title has settled. */
-  subtitleFadeMs: 720,
-  subtitleDelayMs: 260,
-  ctaRevealDelayMs: 260,
-  ctaFadeInMs: 680,
+  subtitleFadeMs: 560,
+  subtitleDelayMs: 180,
+  ctaRevealDelayMs: 180,
+  ctaFadeInMs: 520,
 } as const;
 
 /**
@@ -33,8 +33,8 @@ export const WELCOME_TITLE_TIMING = {
  */
 export const WELCOME_TITLE_SOLO_WORDS = [
   "Agentic.",
-  "Social.",
-  "Open.",
+  "Human.",
+  "Useful.",
 ] as const;
 
 export const WELCOME_TITLE_TYPOGRAPHY = {

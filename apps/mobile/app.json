@@ -14,7 +14,6 @@
     },
     "assetBundlePatterns": ["**/*"],
     "plugins": [
-      "expo-notifications",
       [
         "expo-image-picker",
         {
@@ -24,14 +23,15 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.opensocial.app",
+      "bundleIdentifier": "so.opensocial.app",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "OpenSocial uses the microphone for voice input when composing intents and messages.",
         "NSSpeechRecognitionUsageDescription": "OpenSocial uses speech recognition to turn your voice into text."
-      }
+      },
+      "appleTeamId": "FJ6SU8G5YM"
     },
     "android": {
-      "package": "com.opensocial.app",
+      "package": "so.opensocial.app",
       "permissions": ["android.permission.RECORD_AUDIO"],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",

@@ -4,6 +4,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { AnimatedScreen } from "../components/AnimatedScreen";
 import { AppToastHost } from "../components/AppToastHost";
+import { LoadingState } from "../components/LoadingState";
 import { type AppLocale, t } from "../i18n/strings";
 import {
   DESIGN_MOCK_AUTH_CODE,
@@ -17,7 +18,6 @@ import {
 import { OnboardingFlow } from "../onboarding/OnboardingFlow";
 import { MobileSession, UserProfileDraft } from "../types";
 import { AuthScreen } from "./AuthScreen";
-import { HomeScreen } from "./HomeScreen";
 import { WelcomeScreen } from "./WelcomeScreen";
 
 type DesignMockStage = "welcome" | "auth" | "onboarding" | "home";
@@ -108,17 +108,30 @@ export function DesignMockApp() {
               session={session}
             />
           ) : null}
-          {stage === "home" && session ? (
-            <HomeScreen
-              designMock
-              initialAgentMessage={homeAgentSeedMessage}
-              initialProfile={profile}
-              onInitialAgentMessageConsumed={() => setHomeAgentSeedMessage(null)}
-              onProfileUpdated={setProfile}
-              onResetSession={handleResetSession}
-              session={session}
-            />
-          ) : null}
+          {stage === "home" && session
+            ? (() => {
+                try {
+                  const { HomeScreen } =
+                    // eslint-disable-next-line @typescript-eslint/no-require-imports
+                    require("./HomeScreen") as typeof import("./HomeScreen");
+                  return (
+                    <HomeScreen
+                      designMock
+                      initialAgentMessage={homeAgentSeedMessage}
+                      initialProfile={profile}
+                      onInitialAgentMessageConsumed={() =>
+                        setHomeAgentSeedMessage(null)
+                      }
+                      onProfileUpdated={setProfile}
+                      onResetSession={handleResetSession}
+                      session={session}
+                    />
+                  );
+                } catch {
+                  return <LoadingState label={t("loadingYourSpace", locale)} />;
+                }
+              })()
+            : null}
         </AnimatedScreen>
       )}
       <AppToastHost />

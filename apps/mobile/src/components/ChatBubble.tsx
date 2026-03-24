@@ -1,6 +1,5 @@
 import { cva } from "class-variance-authority";
-import Markdown from "react-native-markdown-display";
-import { Platform, Text, View } from "react-native";
+import { Pressable, Text } from "react-native";
 
 import { cn } from "../lib/cn";
 import type { ChatBubbleRole } from "../types";
@@ -8,6 +7,8 @@ import type { ChatBubbleRole } from "../types";
 interface ChatBubbleProps {
   role: ChatBubbleRole;
   body: string;
+  deliveryStatus?: "sending" | "queued" | "failed";
+  onPress?: () => void;
   testID?: string;
 }
 
@@ -45,71 +46,59 @@ const textVariants = cva("", {
   },
 });
 
-const markdownStyles = {
-  body: {
-    color: "#ececec",
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  bullet_list: { marginBottom: 4, marginTop: 4 },
-  code_inline: {
-    backgroundColor: "#363636",
-    borderRadius: 4,
-    color: "#e4e4e7",
-    fontFamily: Platform.select({
-      android: "monospace",
-      ios: "Menlo",
-      default: "monospace",
-    }),
-    paddingHorizontal: 4,
-  },
-  fence: {
-    backgroundColor: "#262626",
-    borderRadius: 8,
-    color: "#e4e4e7",
-    fontFamily: Platform.select({
-      android: "monospace",
-      ios: "Menlo",
-      default: "monospace",
-    }),
-    fontSize: 13,
-    marginVertical: 6,
-    padding: 8,
-  },
-  heading1: { color: "#ececec", fontSize: 18, fontWeight: "600" as const },
-  heading2: { color: "#ececec", fontSize: 17, fontWeight: "600" as const },
-  link: { color: "#2dd4bf" },
-  ordered_list: { marginBottom: 4, marginTop: 4 },
-  paragraph: { marginBottom: 0, marginTop: 0 },
-};
+function deliveryStatusLabel(status: "sending" | "queued" | "failed") {
+  if (status === "sending") {
+    return "Sending...";
+  }
+  if (status === "queued") {
+    return "Queued";
+  }
+  return "Failed";
+}
 
-const systemMarkdownStyles = {
-  ...markdownStyles,
-  body: {
-    ...markdownStyles.body,
-    fontSize: 14,
-    lineHeight: 21,
-  },
-};
-
-export function ChatBubble({ body, role, testID }: ChatBubbleProps) {
+export function ChatBubble({
+  body,
+  role,
+  deliveryStatus,
+  onPress,
+  testID,
+}: ChatBubbleProps) {
   const useMarkdown = role === "agent" || role === "system";
-
-  return (
-    <View
-      className={cn(bubbleVariants({ role }))}
-      collapsable={false}
-      testID={testID}
-    >
+  const bubbleContent = (
+    <>
       {useMarkdown ? (
-        <Markdown
-          style={role === "system" ? systemMarkdownStyles : markdownStyles}
-        >
-          {body}
-        </Markdown>
+        <Text className={cn(textVariants({ role }))}>{body}</Text>
       ) : (
         <Text className={cn(textVariants({ role }))}>{body}</Text>
       )}
-    </View>
+      {role === "user" && deliveryStatus ? (
+        <Text
+          className={`mt-1 text-right text-[10px] ${
+            deliveryStatus === "failed" ? "text-rose-200" : "text-ink/55"
+          }`}
+        >
+          {deliveryStatusLabel(deliveryStatus)}
+          {deliveryStatus === "failed" ? " - tap to retry" : ""}
+        </Text>
+      ) : null}
+    </>
+  );
+
+  return (
+    <Pressable
+      accessibilityLabel={
+        role === "user" && deliveryStatus === "failed"
+          ? "Retry failed message"
+          : undefined
+      }
+      accessibilityRole={onPress ? "button" : undefined}
+      className={cn(bubbleVariants({ role }))}
+      collapsable={false}
+      disabled={!onPress}
+      onPress={onPress}
+      testID={testID}
+    >
+      {bubbleContent}
+    </Pressable>
   );
 }

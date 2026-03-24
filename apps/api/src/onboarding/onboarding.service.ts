@@ -46,75 +46,27 @@ export class OnboardingService {
   );
   private readonly fastOpenaiByModel = new Map<string, OpenAIClient>();
   private readonly richOpenaiByModel = new Map<string, OpenAIClient>();
-  private readonly fastOpenai = new OpenAIClient(
-    process.env.ONBOARDING_LLM_BASE_URL
-      ? {
-          apiKey:
-            process.env.ONBOARDING_LLM_API_KEY ??
-            process.env.OPENAI_API_KEY ??
-            "",
-          baseURL: process.env.ONBOARDING_LLM_BASE_URL,
-          providerName:
-            process.env.ONBOARDING_LLM_PROVIDER?.trim() || "ollama-cloud",
-          modelRouting: {
-            onboarding_fast_pass: this.defaultFastModel,
-          },
-          timeoutMs: this.onboardingQuickTimeoutMs,
-          maxRetries: 0,
-        }
-      : {
-          apiKey: process.env.OPENAI_API_KEY ?? "",
-          providerName: "openai",
-          timeoutMs: this.onboardingQuickTimeoutMs,
-          maxRetries: 0,
-        },
-  );
-  private readonly richOpenai = new OpenAIClient(
-    process.env.ONBOARDING_LLM_BASE_URL
-      ? {
-          apiKey:
-            process.env.ONBOARDING_LLM_API_KEY ??
-            process.env.OPENAI_API_KEY ??
-            "",
-          baseURL: process.env.ONBOARDING_LLM_BASE_URL,
-          providerName:
-            process.env.ONBOARDING_LLM_PROVIDER?.trim() || "ollama-cloud",
-          modelRouting: {
-            onboarding_inference: this.defaultRichModel,
-          },
-          timeoutMs: this.onboardingRichTimeoutMs,
-          maxRetries: 0,
-        }
-      : {
-          apiKey: process.env.OPENAI_API_KEY ?? "",
-          providerName: "openai",
-          timeoutMs: this.onboardingRichTimeoutMs,
-          maxRetries: 0,
-        },
-  );
 
   constructor() {
-    if (process.env.ONBOARDING_LLM_BASE_URL) {
-      for (const model of this.fastModelCandidates) {
-        this.fastOpenaiByModel.set(
-          model,
-          this.createOnboardingClient("onboarding_fast_pass", model, {
-            timeoutMs: this.onboardingQuickTimeoutMs,
-          }),
-        );
-      }
-      for (const model of this.richModelCandidates) {
-        this.richOpenaiByModel.set(
-          model,
-          this.createOnboardingClient("onboarding_inference", model, {
-            timeoutMs: this.onboardingRichTimeoutMs,
-          }),
-        );
-      }
-      this.logger.log(
-        `onboarding model candidates configured fast=[${this.fastModelCandidates.join(", ")}] rich=[${this.richModelCandidates.join(", ")}]`,
+    for (const model of this.fastModelCandidates) {
+      this.fastOpenaiByModel.set(
+        model,
+        this.createOnboardingClient("onboarding_fast_pass", model, {
+          timeoutMs: this.onboardingQuickTimeoutMs,
+        }),
       );
     }
+    for (const model of this.richModelCandidates) {
+      this.richOpenaiByModel.set(
+        model,
+        this.createOnboardingClient("onboarding_inference", model, {
+          timeoutMs: this.onboardingRichTimeoutMs,
+        }),
+      );
+    }
+    this.logger.log(
+      `onboarding model candidates configured fast=[${this.fastModelCandidates.join(", ")}] rich=[${this.richModelCandidates.join(", ")}]`,
+    );
   }
 
   async inferQuickFromTranscript(
@@ -141,7 +93,6 @@ export class OnboardingService {
       "onboarding_fast_pass",
       selectedFastModel,
       this.fastOpenaiByModel,
-      this.fastOpenai,
       this.onboardingQuickTimeoutMs,
     );
     const llmInferred = await fastClient.inferOnboardingQuick(raw, traceId);
@@ -199,7 +150,6 @@ export class OnboardingService {
       "onboarding_inference",
       selectedRichModel,
       this.richOpenaiByModel,
-      this.richOpenai,
       this.onboardingRichTimeoutMs,
     );
     const llmInferred = await richClient.inferOnboarding(raw, traceId);
@@ -251,7 +201,6 @@ export class OnboardingService {
       "onboarding_fast_pass",
       selectedFastModel,
       this.fastOpenaiByModel,
-      this.fastOpenai,
       this.onboardingQuickTimeoutMs,
     );
     const llmInferred = await fastClient.inferOnboardingQuick(
@@ -318,11 +267,8 @@ export class OnboardingService {
     options: { timeoutMs: number },
   ): OpenAIClient {
     return new OpenAIClient({
-      apiKey:
-        process.env.ONBOARDING_LLM_API_KEY ?? process.env.OPENAI_API_KEY ?? "",
-      baseURL: process.env.ONBOARDING_LLM_BASE_URL,
-      providerName:
-        process.env.ONBOARDING_LLM_PROVIDER?.trim() || "ollama-cloud",
+      apiKey: process.env.OPENAI_API_KEY ?? "",
+      providerName: "openai",
       modelRouting: {
         [task]: model,
       },
@@ -335,15 +281,11 @@ export class OnboardingService {
     task: "onboarding_fast_pass" | "onboarding_inference",
     model: string,
     cache: Map<string, OpenAIClient>,
-    fallback: OpenAIClient,
     timeoutMs: number,
   ): OpenAIClient {
     const cached = cache.get(model);
     if (cached) {
       return cached;
-    }
-    if (!process.env.ONBOARDING_LLM_BASE_URL) {
-      return fallback;
     }
     const client = this.createOnboardingClient(task, model, { timeoutMs });
     cache.set(model, client);

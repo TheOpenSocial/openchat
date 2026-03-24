@@ -201,8 +201,8 @@ export function OpenChatScreen({
     <View className="min-h-0 flex-1 bg-[#050506] px-5 pt-3">
       <OpenChatHeader locale={locale} showPresence={!userActive} />
       <ThreadStatusTransition
-        contextLabel={runtime.contextLabel}
-        hint={runtime.hint}
+        contextLabel={null}
+        hint={null}
         showThinking={hasUserTurn(filteredMessages)}
         thinkingLabel={runtime.thinkingLabel}
       />
@@ -328,7 +328,7 @@ export function OpenChatScreen({
         className="absolute"
         onLayout={onComposerLayout}
         pointerEvents="box-none"
-        style={{ bottom: composerBottomOffset + 6, left: 5, right: 5 }}
+        style={{ bottom: 10, left: 5, right: 5 }}
       >
         <OpenChatComposer
           canSend={canSend}

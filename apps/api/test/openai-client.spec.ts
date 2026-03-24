@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   OpenAIFailureStore,
   OpenAIClient,
@@ -11,6 +11,10 @@ import {
 } from "@opensocial/openai";
 
 describe("OpenAIClient", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("supports task-based model routing", () => {
     const client = new OpenAIClient({
       apiKey: "",
@@ -156,14 +160,9 @@ describe("OpenAIClient", () => {
       defaultModel: "model-default",
     });
     const deltas: string[] = [];
-
-    (client as any).client.responses.create = vi.fn().mockResolvedValue({
-      async *[Symbol.asyncIterator]() {
-        yield { type: "response.output_text.delta", delta: "Hello " };
-        yield { type: "response.output_text.delta", delta: "world" };
-        yield { type: "response.completed" };
-      },
-    });
+    vi.spyOn(client as any, "runTextAgent").mockResolvedValueOnce(
+      "Hello world",
+    );
 
     const response = await client.composeConversationResponse(
       {
@@ -178,7 +177,7 @@ describe("OpenAIClient", () => {
     );
 
     expect(response).toBe("Hello world");
-    expect(deltas).toEqual(["Hello ", "world"]);
+    expect(deltas).toEqual(["Hello world"]);
   });
 
   it("opens circuit after repeated response failures and short-circuits requests", async () => {
@@ -193,11 +192,11 @@ describe("OpenAIClient", () => {
         apiKey: "enabled",
         defaultModel: "model-default",
       });
-      const createMock = vi
+      const runMock = vi
         .fn()
         .mockRejectedValueOnce(new Error("synthetic upstream timeout"))
         .mockRejectedValueOnce(new Error("synthetic upstream timeout again"));
-      (client as any).client.responses.create = createMock;
+      vi.spyOn(client as any, "runTextAgent").mockImplementation(runMock);
 
       await client.composeConversationResponse(
         { userMessage: "First call" },
@@ -212,7 +211,7 @@ describe("OpenAIClient", () => {
         "trace-circuit-3",
       );
 
-      expect(createMock).toHaveBeenCalledTimes(2);
+      expect(runMock).toHaveBeenCalledTimes(2);
       const failures = client.listCapturedFailures("conversation_response");
       expect(
         failures.some((failure) => failure.reason === "circuit_open"),
@@ -248,8 +247,8 @@ describe("OpenAIClient", () => {
         apiKey: "enabled",
         defaultModel: "model-default",
       });
-      const createMock = vi.fn();
-      (client as any).client.responses.create = createMock;
+      const runMock = vi.fn();
+      vi.spyOn(client as any, "runTextAgent").mockImplementation(runMock);
 
       const response = await client.composeConversationResponse(
         {
@@ -260,7 +259,7 @@ describe("OpenAIClient", () => {
       );
 
       expect(response.length).toBeGreaterThan(0);
-      expect(createMock).not.toHaveBeenCalled();
+      expect(runMock).not.toHaveBeenCalled();
       const failures = client.listCapturedFailures("conversation_response");
       expect(
         failures.some(
@@ -472,27 +471,21 @@ describe("OpenAIClient", () => {
       defaultModel: "model-default",
       failureStore,
     });
-
-    const createMock = vi
-      .fn()
+    vi.spyOn(client as any, "runStructuredAgent")
       .mockRejectedValueOnce(new Error("synthetic outage"))
       .mockResolvedValueOnce({
-        output_text: JSON.stringify({
-          version: 1,
-          rawText: "Need tennis now",
-          intentType: "activity",
-          urgency: "now",
-          topics: ["tennis"],
-          activities: ["play"],
-          timingConstraints: ["now"],
-          skillConstraints: [],
-          vibeConstraints: [],
-          confidence: 0.9,
-          requiresFollowUp: false,
-        }),
+        version: 1,
+        rawText: "Need tennis now",
+        intentType: "activity",
+        urgency: "now",
+        topics: ["tennis"],
+        activities: ["play"],
+        timingConstraints: ["now"],
+        skillConstraints: [],
+        vibeConstraints: [],
+        confidence: 0.9,
+        requiresFollowUp: false,
       });
-
-    (client as any).client.responses.create = createMock;
 
     const fallbackResult = await client.parseIntent(
       "Need tennis now",
@@ -540,10 +533,9 @@ describe("OpenAIClient", () => {
       defaultModel: "model-default",
       failureStore,
     });
-
-    (client as any).client.responses.create = vi
-      .fn()
-      .mockRejectedValueOnce(new Error("request timeout exceeded"));
+    vi.spyOn(client as any, "runStructuredAgent").mockRejectedValueOnce(
+      new Error("request timeout exceeded"),
+    );
 
     const result = await client.parseIntent(
       "Need someone to chat now",

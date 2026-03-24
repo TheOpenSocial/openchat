@@ -5,6 +5,12 @@ import {
   onboardingInferResponseSchema,
   onboardingQuickInferResponseSchema,
 } from "@opensocial/types";
+import {
+  Agent,
+  run,
+  setDefaultOpenAIClient,
+  setOpenAIAPI,
+} from "@openai/agents";
 import { SpanStatusCode, context, trace } from "@opentelemetry/api";
 import OpenAI from "openai";
 import { z } from "zod";
@@ -179,6 +185,8 @@ export class OpenAIClient {
       timeout: options.timeoutMs ?? 15_000,
       maxRetries: options.maxRetries ?? 3,
     });
+    setDefaultOpenAIClient(this.client as never);
+    setOpenAIAPI("responses");
 
     const globalFallbackModel =
       options.defaultModel ?? process.env.OPENAI_DEFAULT_MODEL;
@@ -496,55 +504,31 @@ export class OpenAIClient {
       if (!this.apiEnabled) {
         return this.fallbackParseIntent(rawText);
       }
-      const prompt = getPromptDefinition("intent_parsing");
-      const model = this.getModelForTask("intent_parsing");
-
       try {
-        const response = await this.client.responses.create({
-          model,
-          instructions: prompt.instructions,
-          input: rawText,
-          metadata: this.createTraceMetadata(traceId, "intent_parsing", {
-            feature: "intent_parsing",
-            promptVersion: prompt.version,
-          }),
-        });
-
-        const text = this.extractResponseText(response);
-        if (!text) {
+        const parsed = await this.runStructuredAgent(
+          "intent_parsing",
+          traceId,
+          rawText,
+          parsedIntentSchema,
+        );
+        if (!parsed) {
           this.captureFailure({
             task: "intent_parsing",
             traceId,
-            model,
-            promptVersion: prompt.version,
+            model: this.getModelForTask("intent_parsing"),
+            promptVersion: getPromptDefinition("intent_parsing").version,
             reason: "empty_output",
             inputPayload: rawText,
           });
           return this.fallbackParseIntent(rawText);
         }
-
-        try {
-          return parsedIntentSchema.parse(JSON.parse(text));
-        } catch (error) {
-          this.captureFailure({
-            task: "intent_parsing",
-            traceId,
-            model,
-            promptVersion: prompt.version,
-            reason: "schema_parse_failed",
-            inputPayload: rawText,
-            responseText: text,
-            errorMessage:
-              error instanceof Error ? error.message : "parse_error",
-          });
-          return this.fallbackParseIntent(rawText);
-        }
+        return parsed;
       } catch (error) {
         this.captureFailure({
           task: "intent_parsing",
           traceId,
-          model,
-          promptVersion: prompt.version,
+          model: this.getModelForTask("intent_parsing"),
+          promptVersion: getPromptDefinition("intent_parsing").version,
           reason: "request_failed",
           inputPayload: rawText,
           errorMessage:
@@ -583,22 +567,16 @@ export class OpenAIClient {
         return null;
       }
 
-      const prompt = getPromptDefinition("onboarding_inference");
       const model = this.getModelForTask("onboarding_inference");
 
       try {
-        const response = await this.client.responses.create({
-          model,
-          instructions: prompt.instructions,
-          input: rawText,
-          metadata: this.createTraceMetadata(traceId, "onboarding_inference", {
-            feature: "onboarding_inference",
-            promptVersion: prompt.version,
-          }),
-        });
-
-        const text = this.extractResponseText(response);
-        if (!text) {
+        const parsed = await this.runStructuredAgent(
+          "onboarding_inference",
+          traceId,
+          rawText,
+          onboardingInferResponseSchema,
+        );
+        if (!parsed) {
           console.warn(
             `[openai:onboarding] empty output provider=${this.providerName} traceId=${traceId} model=${model} durationMs=${Date.now() - startedAt}`,
           );
@@ -606,57 +584,16 @@ export class OpenAIClient {
             task: "onboarding_inference",
             traceId,
             model,
-            promptVersion: prompt.version,
+            promptVersion: getPromptDefinition("onboarding_inference").version,
             reason: "empty_output",
             inputPayload: rawText,
           });
           return null;
         }
-
-        const normalizedText = text
-          .replace(/^```(?:json)?\s*/i, "")
-          .replace(/\s*```$/, "")
-          .trim();
-
-        try {
-          const parsed = onboardingInferResponseSchema.parse(
-            JSON.parse(normalizedText),
-          );
-          console.log(
-            `[openai:onboarding] success provider=${this.providerName} traceId=${traceId} model=${model} durationMs=${Date.now() - startedAt} hasPersona=${Boolean(parsed.persona)} hasFollowUp=${Boolean(parsed.followUpQuestion?.trim())}`,
-          );
-          return parsed;
-        } catch (error) {
-          const extractedJson = this.extractFirstJsonObject(normalizedText);
-          if (extractedJson) {
-            try {
-              const recovered = onboardingInferResponseSchema.parse(
-                JSON.parse(extractedJson),
-              );
-              console.log(
-                `[openai:onboarding] recovered_json provider=${this.providerName} traceId=${traceId} model=${model} durationMs=${Date.now() - startedAt}`,
-              );
-              return recovered;
-            } catch {
-              // Keep existing error handling below.
-            }
-          }
-          console.warn(
-            `[openai:onboarding] schema parse failed provider=${this.providerName} traceId=${traceId} model=${model} durationMs=${Date.now() - startedAt} error=${error instanceof Error ? error.message : "parse_error"}`,
-          );
-          this.captureFailure({
-            task: "onboarding_inference",
-            traceId,
-            model,
-            promptVersion: prompt.version,
-            reason: "schema_parse_failed",
-            inputPayload: rawText,
-            responseText: text,
-            errorMessage:
-              error instanceof Error ? error.message : "parse_error",
-          });
-          return null;
-        }
+        console.log(
+          `[openai:onboarding] success provider=${this.providerName} traceId=${traceId} model=${model} durationMs=${Date.now() - startedAt} hasPersona=${Boolean(parsed.persona)} hasFollowUp=${Boolean(parsed.followUpQuestion?.trim())}`,
+        );
+        return parsed;
       } catch (error) {
         console.error(
           `[openai:onboarding] request failed provider=${this.providerName} traceId=${traceId} model=${model} durationMs=${Date.now() - startedAt} error=${error instanceof Error ? error.message : "request_failed_unknown"}`,
@@ -665,7 +602,7 @@ export class OpenAIClient {
           task: "onboarding_inference",
           traceId,
           model,
-          promptVersion: prompt.version,
+          promptVersion: getPromptDefinition("onboarding_inference").version,
           reason: "request_failed",
           inputPayload: rawText,
           errorMessage:
@@ -704,22 +641,16 @@ export class OpenAIClient {
         return null;
       }
 
-      const prompt = getPromptDefinition("onboarding_fast_pass");
       const model = this.getModelForTask("onboarding_fast_pass");
 
       try {
-        const response = await this.client.responses.create({
-          model,
-          instructions: prompt.instructions,
-          input: rawText,
-          metadata: this.createTraceMetadata(traceId, "onboarding_fast_pass", {
-            feature: "onboarding_fast_pass",
-            promptVersion: prompt.version,
-          }),
-        });
-
-        const text = this.extractResponseText(response);
-        if (!text) {
+        const parsed = await this.runStructuredAgent(
+          "onboarding_fast_pass",
+          traceId,
+          rawText,
+          onboardingQuickInferResponseSchema,
+        );
+        if (!parsed) {
           console.warn(
             `[openai:onboarding-fast] empty output provider=${this.providerName} traceId=${traceId} model=${model} durationMs=${Date.now() - startedAt}`,
           );
@@ -727,57 +658,16 @@ export class OpenAIClient {
             task: "onboarding_fast_pass",
             traceId,
             model,
-            promptVersion: prompt.version,
+            promptVersion: getPromptDefinition("onboarding_fast_pass").version,
             reason: "empty_output",
             inputPayload: rawText,
           });
           return null;
         }
-
-        const normalizedText = text
-          .replace(/^```(?:json)?\s*/i, "")
-          .replace(/\s*```$/, "")
-          .trim();
-
-        try {
-          const parsed = onboardingQuickInferResponseSchema.parse(
-            JSON.parse(normalizedText),
-          );
-          console.log(
-            `[openai:onboarding-fast] success provider=${this.providerName} traceId=${traceId} model=${model} durationMs=${Date.now() - startedAt} hasFollowUp=${Boolean(parsed.followUpQuestion?.trim())}`,
-          );
-          return parsed;
-        } catch (error) {
-          const extractedJson = this.extractFirstJsonObject(normalizedText);
-          if (extractedJson) {
-            try {
-              const recovered = onboardingQuickInferResponseSchema.parse(
-                JSON.parse(extractedJson),
-              );
-              console.log(
-                `[openai:onboarding-fast] recovered_json provider=${this.providerName} traceId=${traceId} model=${model} durationMs=${Date.now() - startedAt}`,
-              );
-              return recovered;
-            } catch {
-              // Keep existing error handling below.
-            }
-          }
-          console.warn(
-            `[openai:onboarding-fast] schema parse failed provider=${this.providerName} traceId=${traceId} model=${model} durationMs=${Date.now() - startedAt} error=${error instanceof Error ? error.message : "parse_error"}`,
-          );
-          this.captureFailure({
-            task: "onboarding_fast_pass",
-            traceId,
-            model,
-            promptVersion: prompt.version,
-            reason: "schema_parse_failed",
-            inputPayload: rawText,
-            responseText: text,
-            errorMessage:
-              error instanceof Error ? error.message : "parse_error",
-          });
-          return null;
-        }
+        console.log(
+          `[openai:onboarding-fast] success provider=${this.providerName} traceId=${traceId} model=${model} durationMs=${Date.now() - startedAt} hasFollowUp=${Boolean(parsed.followUpQuestion?.trim())}`,
+        );
+        return parsed;
       } catch (error) {
         console.error(
           `[openai:onboarding-fast] request failed provider=${this.providerName} traceId=${traceId} model=${model} durationMs=${Date.now() - startedAt} error=${error instanceof Error ? error.message : "request_failed_unknown"}`,
@@ -786,7 +676,7 @@ export class OpenAIClient {
           task: "onboarding_fast_pass",
           traceId,
           model,
-          promptVersion: prompt.version,
+          promptVersion: getPromptDefinition("onboarding_fast_pass").version,
           reason: "request_failed",
           inputPayload: rawText,
           errorMessage:
@@ -829,31 +719,20 @@ export class OpenAIClient {
             input.maxSuggestions ?? 3,
           );
         }
-        const prompt = getPromptDefinition("suggestion_generation");
-        const model = this.getModelForTask("suggestion_generation");
-
         try {
-          const response = await this.client.responses.create({
-            model,
-            instructions: prompt.instructions,
-            input: input.intentText,
-            metadata: this.createTraceMetadata(
-              traceId,
-              "suggestion_generation",
-              {
-                feature: "suggestion_generation",
-                promptVersion: prompt.version,
-              },
-            ),
-          });
-
-          const text = response.output_text?.trim();
-          if (!text) {
+          const parsed = await this.runStructuredAgent(
+            "suggestion_generation",
+            traceId,
+            input.intentText,
+            suggestionsResponseSchema,
+          );
+          if (!parsed) {
             this.captureFailure({
               task: "suggestion_generation",
               traceId,
-              model,
-              promptVersion: prompt.version,
+              model: this.getModelForTask("suggestion_generation"),
+              promptVersion: getPromptDefinition("suggestion_generation")
+                .version,
               reason: "empty_output",
               inputPayload: input,
             });
@@ -863,32 +742,13 @@ export class OpenAIClient {
             );
           }
 
-          try {
-            const parsed = suggestionsResponseSchema.parse(JSON.parse(text));
-            return parsed.suggestions.slice(0, input.maxSuggestions ?? 3);
-          } catch (error) {
-            this.captureFailure({
-              task: "suggestion_generation",
-              traceId,
-              model,
-              promptVersion: prompt.version,
-              reason: "schema_parse_failed",
-              inputPayload: input,
-              responseText: text,
-              errorMessage:
-                error instanceof Error ? error.message : "parse_error",
-            });
-            return this.fallbackSuggestions(input.intentText).slice(
-              0,
-              input.maxSuggestions ?? 3,
-            );
-          }
+          return parsed.suggestions.slice(0, input.maxSuggestions ?? 3);
         } catch (error) {
           this.captureFailure({
             task: "suggestion_generation",
             traceId,
-            model,
-            promptVersion: prompt.version,
+            model: this.getModelForTask("suggestion_generation"),
+            promptVersion: getPromptDefinition("suggestion_generation").version,
             reason: "request_failed",
             inputPayload: input,
             errorMessage:
@@ -928,55 +788,31 @@ export class OpenAIClient {
       if (!this.apiEnabled) {
         return this.fallbackRankingExplanation(input);
       }
-      const prompt = getPromptDefinition("ranking_explanation");
-      const model = this.getModelForTask("ranking_explanation");
-
       try {
-        const response = await this.client.responses.create({
-          model,
-          instructions: prompt.instructions,
-          input: JSON.stringify(input),
-          metadata: this.createTraceMetadata(traceId, "ranking_explanation", {
-            feature: "ranking_explanation",
-            promptVersion: prompt.version,
-          }),
-        });
-
-        const text = this.extractResponseText(response);
-        if (!text) {
+        const parsed = await this.runStructuredAgent(
+          "ranking_explanation",
+          traceId,
+          JSON.stringify(input),
+          rankingExplanationSchema,
+        );
+        if (!parsed) {
           this.captureFailure({
             task: "ranking_explanation",
             traceId,
-            model,
-            promptVersion: prompt.version,
+            model: this.getModelForTask("ranking_explanation"),
+            promptVersion: getPromptDefinition("ranking_explanation").version,
             reason: "empty_output",
             inputPayload: input,
           });
           return this.fallbackRankingExplanation(input);
         }
-
-        try {
-          return rankingExplanationSchema.parse(JSON.parse(text));
-        } catch (error) {
-          this.captureFailure({
-            task: "ranking_explanation",
-            traceId,
-            model,
-            promptVersion: prompt.version,
-            reason: "schema_parse_failed",
-            inputPayload: input,
-            responseText: text,
-            errorMessage:
-              error instanceof Error ? error.message : "parse_error",
-          });
-          return this.fallbackRankingExplanation(input);
-        }
+        return parsed;
       } catch (error) {
         this.captureFailure({
           task: "ranking_explanation",
           traceId,
-          model,
-          promptVersion: prompt.version,
+          model: this.getModelForTask("ranking_explanation"),
+          promptVersion: getPromptDefinition("ranking_explanation").version,
           reason: "request_failed",
           inputPayload: input,
           errorMessage:
@@ -1002,7 +838,6 @@ export class OpenAIClient {
       "conversation_planning",
       traceId,
       async () => {
-        const prompt = getPromptDefinition("conversation_planning");
         const model = this.getModelForTask("conversation_planning");
         const fallback = this.sanitizeConversationPlan(
           this.fallbackConversationPlan(input.userMessage),
@@ -1015,7 +850,7 @@ export class OpenAIClient {
             task: "conversation_planning",
             traceId,
             model,
-            promptVersion: prompt.version,
+            promptVersion: getPromptDefinition("conversation_planning").version,
             reason: "prompt_injection_detected",
             inputPayload: input,
           });
@@ -1027,60 +862,35 @@ export class OpenAIClient {
         }
 
         try {
-          const response = await this.client.responses.create({
-            model,
-            instructions: prompt.instructions,
-            input: JSON.stringify(input),
-            metadata: this.createTraceMetadata(
-              traceId,
-              "conversation_planning",
-              {
-                feature: "conversation_planning",
-                promptVersion: prompt.version,
-              },
-            ),
-          });
-
-          const text = response.output_text?.trim();
-          if (!text) {
+          const parsed = await this.runStructuredAgent(
+            "conversation_planning",
+            traceId,
+            JSON.stringify(input),
+            conversationPlanSchema,
+          );
+          if (!parsed) {
             this.captureFailure({
               task: "conversation_planning",
               traceId,
               model,
-              promptVersion: prompt.version,
+              promptVersion: getPromptDefinition("conversation_planning")
+                .version,
               reason: "empty_output",
               inputPayload: input,
             });
             return fallback;
           }
-
-          try {
-            const parsed = conversationPlanSchema.parse(JSON.parse(text));
-            return this.sanitizeConversationPlan(
-              parsed,
-              input.allowedSpecialists,
-              input.maxToolCalls,
-            );
-          } catch (error) {
-            this.captureFailure({
-              task: "conversation_planning",
-              traceId,
-              model,
-              promptVersion: prompt.version,
-              reason: "schema_parse_failed",
-              inputPayload: input,
-              responseText: text,
-              errorMessage:
-                error instanceof Error ? error.message : "parse_error",
-            });
-            return fallback;
-          }
+          return this.sanitizeConversationPlan(
+            parsed,
+            input.allowedSpecialists,
+            input.maxToolCalls,
+          );
         } catch (error) {
           this.captureFailure({
             task: "conversation_planning",
             traceId,
             model,
-            promptVersion: prompt.version,
+            promptVersion: getPromptDefinition("conversation_planning").version,
             reason: "request_failed",
             inputPayload: input,
             errorMessage:
@@ -1110,7 +920,6 @@ export class OpenAIClient {
       "conversation_response",
       traceId,
       async () => {
-        const prompt = getPromptDefinition("conversation_response");
         const model = this.getModelForTask("conversation_response");
         const fallback = this.fallbackConversationResponse(input);
 
@@ -1119,7 +928,7 @@ export class OpenAIClient {
             task: "conversation_response",
             traceId,
             model,
-            promptVersion: prompt.version,
+            promptVersion: getPromptDefinition("conversation_response").version,
             reason: "prompt_injection_detected",
             inputPayload: input,
           });
@@ -1131,7 +940,7 @@ export class OpenAIClient {
             task: "conversation_response",
             traceId,
             model,
-            promptVersion: prompt.version,
+            promptVersion: getPromptDefinition("conversation_response").version,
             reason: "circuit_open",
             inputPayload: input,
           });
@@ -1147,7 +956,7 @@ export class OpenAIClient {
             task: "conversation_response",
             traceId,
             model,
-            promptVersion: prompt.version,
+            promptVersion: getPromptDefinition("conversation_response").version,
             reason: "budget_guardrail_exceeded",
             inputPayload: {
               ...input,
@@ -1164,31 +973,10 @@ export class OpenAIClient {
         }
 
         try {
-          const requestPayload = JSON.stringify(input);
-          const metadata = this.createTraceMetadata(
-            traceId,
+          const text = await this.runTextAgent(
             "conversation_response",
-            {
-              feature: "conversation_response",
-              promptVersion: prompt.version,
-            },
+            JSON.stringify(input),
           );
-          const text = options?.onTextDelta
-            ? await this.streamConversationResponse({
-                model,
-                instructions: prompt.instructions,
-                payload: requestPayload,
-                metadata,
-                onTextDelta: options.onTextDelta,
-              })
-            : (
-                await this.client.responses.create({
-                  model,
-                  instructions: prompt.instructions,
-                  input: requestPayload,
-                  metadata,
-                })
-              ).output_text?.trim();
 
           const boundedText = this.applyResponseLengthBudget(text ?? "");
           if (!boundedText) {
@@ -1196,7 +984,8 @@ export class OpenAIClient {
               task: "conversation_response",
               traceId,
               model,
-              promptVersion: prompt.version,
+              promptVersion: getPromptDefinition("conversation_response")
+                .version,
               reason: "empty_output",
               inputPayload: input,
             });
@@ -1204,6 +993,9 @@ export class OpenAIClient {
             return fallback;
           }
 
+          if (options?.onTextDelta) {
+            await options.onTextDelta(boundedText);
+          }
           this.registerOpenAISuccess();
           this.syncBudgetRegistry("request_succeeded");
           return boundedText;
@@ -1212,7 +1004,7 @@ export class OpenAIClient {
             task: "conversation_response",
             traceId,
             model,
-            promptVersion: prompt.version,
+            promptVersion: getPromptDefinition("conversation_response").version,
             reason: "request_failed",
             inputPayload: input,
             errorMessage:
@@ -1235,7 +1027,6 @@ export class OpenAIClient {
     traceId: string,
   ): Promise<ModerationAssistResult> {
     return this.runWithOpenAISpan("moderation_assist", traceId, async () => {
-      const prompt = getPromptDefinition("moderation_assist");
       const model = this.getModelForTask("moderation_assist");
       const fallback = this.fallbackModerationAssist(input.content);
 
@@ -1244,7 +1035,7 @@ export class OpenAIClient {
           task: "moderation_assist",
           traceId,
           model,
-          promptVersion: prompt.version,
+          promptVersion: getPromptDefinition("moderation_assist").version,
           reason: "prompt_injection_detected",
           inputPayload: input,
         });
@@ -1256,49 +1047,30 @@ export class OpenAIClient {
       }
 
       try {
-        const response = await this.client.responses.create({
-          model,
-          instructions: prompt.instructions,
-          input: JSON.stringify(input),
-          metadata: this.createTraceMetadata(traceId, "moderation_assist", {
-            feature: "moderation_assist",
-            promptVersion: prompt.version,
-          }),
-        });
-        const text = response.output_text?.trim();
-        if (!text) {
+        const parsed = await this.runStructuredAgent(
+          "moderation_assist",
+          traceId,
+          JSON.stringify(input),
+          moderationAssistSchema,
+        );
+        if (!parsed) {
           this.captureFailure({
             task: "moderation_assist",
             traceId,
             model,
-            promptVersion: prompt.version,
+            promptVersion: getPromptDefinition("moderation_assist").version,
             reason: "empty_output",
             inputPayload: input,
           });
           return fallback;
         }
-        try {
-          return moderationAssistSchema.parse(JSON.parse(text));
-        } catch (error) {
-          this.captureFailure({
-            task: "moderation_assist",
-            traceId,
-            model,
-            promptVersion: prompt.version,
-            reason: "schema_parse_failed",
-            inputPayload: input,
-            responseText: text,
-            errorMessage:
-              error instanceof Error ? error.message : "parse_error",
-          });
-          return fallback;
-        }
+        return parsed;
       } catch (error) {
         this.captureFailure({
           task: "moderation_assist",
           traceId,
           model,
-          promptVersion: prompt.version,
+          promptVersion: getPromptDefinition("moderation_assist").version,
           reason: "request_failed",
           inputPayload: input,
           errorMessage:
@@ -1318,7 +1090,6 @@ export class OpenAIClient {
     traceId: string,
   ): Promise<string> {
     return this.runWithOpenAISpan("notification_copy", traceId, async () => {
-      const prompt = getPromptDefinition("notification_copy");
       const model = this.getModelForTask("notification_copy");
       const fallback = this.fallbackNotificationCopy(input.intentText);
 
@@ -1327,7 +1098,7 @@ export class OpenAIClient {
           task: "notification_copy",
           traceId,
           model,
-          promptVersion: prompt.version,
+          promptVersion: getPromptDefinition("notification_copy").version,
           reason: "prompt_injection_detected",
           inputPayload: input,
         });
@@ -1339,22 +1110,16 @@ export class OpenAIClient {
       }
 
       try {
-        const response = await this.client.responses.create({
-          model,
-          instructions: prompt.instructions,
-          input: JSON.stringify(input),
-          metadata: this.createTraceMetadata(traceId, "notification_copy", {
-            feature: "notification_copy",
-            promptVersion: prompt.version,
-          }),
-        });
-        const text = response.output_text?.trim();
+        const text = await this.runTextAgent(
+          "notification_copy",
+          JSON.stringify(input),
+        );
         if (!text) {
           this.captureFailure({
             task: "notification_copy",
             traceId,
             model,
-            promptVersion: prompt.version,
+            promptVersion: getPromptDefinition("notification_copy").version,
             reason: "empty_output",
             inputPayload: input,
           });
@@ -1366,7 +1131,7 @@ export class OpenAIClient {
           task: "notification_copy",
           traceId,
           model,
-          promptVersion: prompt.version,
+          promptVersion: getPromptDefinition("notification_copy").version,
           reason: "request_failed",
           inputPayload: input,
           errorMessage:
@@ -1375,6 +1140,63 @@ export class OpenAIClient {
         return fallback;
       }
     });
+  }
+
+  private async runStructuredAgent<T>(
+    task: OpenAIRoutingTask,
+    traceId: string,
+    input: string,
+    schema: z.ZodType<T>,
+  ): Promise<T | null> {
+    const prompt = getPromptDefinition(task);
+    const model = this.getModelForTask(task);
+    const agent = new Agent({
+      name: `opensocial-${task}`,
+      instructions: prompt.instructions,
+      model,
+    });
+    const result = await run(agent, input);
+    const outputText =
+      typeof result.finalOutput === "string"
+        ? result.finalOutput.trim()
+        : typeof result.finalOutput === "object" && result.finalOutput
+          ? JSON.stringify(result.finalOutput)
+          : "";
+    if (!outputText) {
+      return null;
+    }
+    try {
+      return schema.parse(JSON.parse(outputText));
+    } catch (error) {
+      this.captureFailure({
+        task,
+        traceId,
+        model,
+        promptVersion: prompt.version,
+        reason: "schema_parse_failed",
+        inputPayload: input,
+        responseText: outputText,
+        errorMessage: error instanceof Error ? error.message : "parse_error",
+      });
+      return null;
+    }
+  }
+
+  private async runTextAgent(
+    task: OpenAIRoutingTask,
+    input: string,
+  ): Promise<string | null> {
+    const prompt = getPromptDefinition(task);
+    const model = this.getModelForTask(task);
+    const agent = new Agent({
+      name: `opensocial-${task}`,
+      instructions: prompt.instructions,
+      model,
+    });
+    const result = await run(agent, input);
+    const text =
+      typeof result.finalOutput === "string" ? result.finalOutput.trim() : "";
+    return text.length > 0 ? text : null;
   }
 
   private async runWithOpenAISpan<T>(
@@ -1881,46 +1703,6 @@ export class OpenAIClient {
 
   private fallbackNotificationCopy(intentText: string) {
     return `Quick update: ${intentText.slice(0, 120)}${intentText.length > 120 ? "..." : ""}`;
-  }
-
-  private async streamConversationResponse(input: {
-    model: string;
-    instructions: string;
-    payload: string;
-    metadata: Record<string, string>;
-    onTextDelta: (delta: string) => Promise<void> | void;
-  }) {
-    const stream = await this.client.responses.create({
-      model: input.model,
-      instructions: input.instructions,
-      input: input.payload,
-      metadata: input.metadata,
-      stream: true,
-    });
-
-    let outputText = "";
-    for await (const event of stream as AsyncIterable<{
-      type?: string;
-      delta?: string;
-      response?: { output_text?: string };
-    }>) {
-      if (
-        event.type === "response.output_text.delta" &&
-        typeof event.delta === "string" &&
-        event.delta.length > 0
-      ) {
-        outputText += event.delta;
-        await input.onTextDelta(event.delta);
-      } else if (
-        event.type === "response.completed" &&
-        typeof event.response?.output_text === "string" &&
-        outputText.trim().length === 0
-      ) {
-        outputText = event.response.output_text;
-      }
-    }
-
-    return outputText.trim();
   }
 
   private estimateConversationResponseCostUsd(

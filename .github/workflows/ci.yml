@@ -83,6 +83,12 @@ jobs:
       - name: Test (API lane)
         run: pnpm turbo run test --filter=@opensocial/api...
 
+      - name: Test (OpenAI contracts)
+        run: pnpm --filter @opensocial/openai test
+
+      - name: Test (API endpoint contracts)
+        run: pnpm --filter @opensocial/api test -- test/onboarding-agent.contract.spec.ts
+
   web:
     runs-on: ubuntu-latest
     steps:

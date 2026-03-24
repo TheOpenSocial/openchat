@@ -142,8 +142,8 @@ export class OnboardingController {
     @Headers("x-onboarding-probe-token") providedToken?: string,
   ) {
     this.assertProbeAuthorized(providedToken);
-    const baseUrl = process.env.ONBOARDING_LLM_BASE_URL?.trim() || null;
-    const provider = process.env.ONBOARDING_LLM_PROVIDER?.trim() || "openai";
+    const baseUrl = null;
+    const provider = "openai";
     const fastModel =
       process.env.ONBOARDING_LLM_FAST_MODEL?.trim() ||
       process.env.ONBOARDING_LLM_MODEL?.trim() ||
@@ -164,15 +164,8 @@ export class OnboardingController {
       richModel,
       timeoutMs,
       richTimeoutMs,
-      hasApiKey: Boolean(
-        process.env.ONBOARDING_LLM_API_KEY?.trim() ||
-        process.env.OPENAI_API_KEY?.trim(),
-      ),
-      apiKeyPrefix: (
-        process.env.ONBOARDING_LLM_API_KEY?.trim() ||
-        process.env.OPENAI_API_KEY?.trim() ||
-        ""
-      ).slice(0, 6),
+      hasApiKey: Boolean(process.env.OPENAI_API_KEY?.trim()),
+      apiKeyPrefix: (process.env.OPENAI_API_KEY?.trim() || "").slice(0, 6),
     });
   }
 
