@@ -2265,8 +2265,8 @@ export class AgentConversationService {
 
   private blockedByRiskResponse(reasons: string[]) {
     return [
-      "I can’t continue with that request.",
-      "I can still help with a safe social plan if you share a different goal.",
+      "I can’t help with that request.",
+      "If you want, I can help you reframe it into a safe social plan that still gets you moving.",
       `Reference: ${reasons[0] ?? "policy_guardrail"}.`,
     ].join(" ");
   }
@@ -2274,7 +2274,7 @@ export class AgentConversationService {
   private reviewConstrainedResponse(responseText: string) {
     const normalized = responseText.trim();
     if (normalized.length === 0) {
-      return "I can help with safe planning details instead. Share timing, mode, and group-size preferences.";
+      return "I can still help in a safe way. Share your timing, format (1:1 or small group), and whether this is online or in person.";
     }
     return `${normalized.slice(0, 500)}\n\nI can continue once the request stays within safety policy.`;
   }

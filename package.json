@@ -30,6 +30,7 @@
     "staging:smoke:api": "node scripts/staging-smoke-api.mjs",
     "staging:smoke:llm-runtime": "node scripts/staging-smoke-llm-runtime.mjs",
     "benchmark:onboarding": "node scripts/benchmark-onboarding.mjs",
+    "benchmark:agentic": "node scripts/benchmark-agentic-intents.mjs",
     "staging:verify:incident": "node scripts/staging-incident-verify.mjs",
     "moderation:drill": "node scripts/moderation-drill.mjs",
     "release:check:api": "node scripts/release-check-api.mjs",

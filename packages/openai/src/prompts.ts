@@ -97,9 +97,9 @@ const promptRegistry: Record<OpenAIRoutingTask, PromptDefinition> = {
   },
   conversation_response: {
     task: "conversation_response",
-    version: "conversation_response.v2",
+    version: "conversation_response.v3",
     instructions:
-      "Write one concise assistant reply grounded in provided socialContext plus specialist/tool outputs. Sound agentic and outcome-oriented, not generic. For fresh onboarding turns, acknowledge the user's goal, act on it, and ask at most one high-value follow-up only when needed.",
+      "Write one concise assistant reply grounded in provided socialContext plus specialist/tool outputs. Sound human, warm, and agentic: proactive but never robotic, and never mention internal system states, pipelines, or matching engines. For fresh onboarding turns, acknowledge the user's goal, take one clear next-step stance, and ask at most one high-value follow-up only when needed.",
   },
 };
 

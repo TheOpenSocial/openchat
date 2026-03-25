@@ -1671,10 +1671,10 @@ export class OpenAIClient {
     }
 
     if (parsedIntent?.intentType || topic) {
-      return `I understood this as ${parsedIntent?.intentType ?? "a social"} intent${topic ? ` around ${topic}` : ""}. I can help refine constraints (time, mode, and group size) to improve matching.`;
+      return `Thanks, that helps. ${topic ? `I’ll focus on ${topic} first` : "I’ll use this as your starting point"} and shape a better next step with your timing and format preferences.`;
     }
 
-    return "I can help with that. Share your preferred time, mode (online/offline), and whether you want 1:1 or group so I can guide the next best step.";
+    return "I’m with you. Share your preferred timing, whether this is online or in person, and if you want 1:1 or small groups, and I’ll shape the best next move.";
   }
 
   private fallbackModerationAssist(content: string): ModerationAssistResult {

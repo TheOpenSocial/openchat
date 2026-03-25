@@ -51,3 +51,19 @@ pnpm db:up
 pnpm db:migrate
 pnpm db:seed
 ```
+
+## 8) Local agentic benchmark (backend)
+Use this to validate "agentic-first" behavior: fast acknowledgement plus background follow-up delivery.
+
+```bash
+AGENTIC_BENCH_URL=http://localhost:3000 \
+AGENTIC_BENCH_ACCESS_TOKEN=<access_token> \
+AGENTIC_BENCH_USER_ID=<user_uuid> \
+AGENTIC_BENCH_THREAD_ID=<thread_uuid> \
+pnpm benchmark:agentic
+```
+
+What it reports:
+- API acknowledge latency for `POST /api/intents/from-agent`
+- SLO pass/fail for acknowledge latency
+- whether a background non-user follow-up message appears in the thread

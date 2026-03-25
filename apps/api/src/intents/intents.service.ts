@@ -27,6 +27,7 @@ const MAX_PENDING_OUTGOING_REQUESTS_PER_SENDER = 12;
 const MAX_DAILY_OUTGOING_REQUESTS_PER_SENDER = 30;
 const ROUTING_ESCALATION_TIMEOUT_LEVELS_MINUTES = [8, 16];
 const ROUTING_ESCALATION_RETRY_DELAY_MS = 30_000;
+const INTENT_PARSE_TIMEOUT_MS = 1_200;
 const INTENT_MODERATION_BLOCKLIST = [
   "kill yourself",
   "how to kill",
@@ -106,7 +107,7 @@ export class IntentsService {
     agentThreadId?: string,
   ) {
     const parseStartedAt = Date.now();
-    const parsed = await this.openai.parseIntent(rawText, traceId);
+    const parsed = await this.parseIntentWithBudget(rawText, traceId);
     if (process.env.OPENAI_API_KEY) {
       recordOpenAIMetric({
         operation: "intent_parsing",
@@ -132,7 +133,10 @@ export class IntentsService {
     parsedIntentOverrides: Record<string, unknown>;
   }) {
     const parseStartedAt = Date.now();
-    const parsed = await this.openai.parseIntent(input.rawText, input.traceId);
+    const parsed = await this.parseIntentWithBudget(
+      input.rawText,
+      input.traceId,
+    );
     if (process.env.OPENAI_API_KEY) {
       recordOpenAIMetric({
         operation: "intent_parsing",
@@ -151,6 +155,67 @@ export class IntentsService {
       },
       agentThreadId: input.agentThreadId,
     });
+  }
+
+  private async parseIntentWithBudget(
+    rawText: string,
+    traceId: string,
+  ): Promise<ParsedIntentPayload & { confidence?: number }> {
+    const timeoutMs = Number.parseInt(
+      process.env.INTENT_PARSE_TIMEOUT_MS ?? `${INTENT_PARSE_TIMEOUT_MS}`,
+      10,
+    );
+    const normalizedTimeoutMs =
+      Number.isFinite(timeoutMs) && timeoutMs > 0
+        ? timeoutMs
+        : INTENT_PARSE_TIMEOUT_MS;
+
+    try {
+      return await Promise.race([
+        this.openai.parseIntent(rawText, traceId),
+        new Promise<ParsedIntentPayload & { confidence?: number }>(
+          (resolve) => {
+            setTimeout(
+              () => resolve(this.buildDeterministicParsedIntent(rawText)),
+              normalizedTimeoutMs,
+            );
+          },
+        ),
+      ]);
+    } catch (error) {
+      this.logger.warn(
+        JSON.stringify({
+          event: "intent.parse.fallback",
+          traceId,
+          reason: "llm_unavailable",
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+      return this.buildDeterministicParsedIntent(rawText);
+    }
+  }
+
+  private buildDeterministicParsedIntent(
+    rawText: string,
+  ): ParsedIntentPayload & { confidence?: number } {
+    const cleaned = rawText.trim().toLowerCase();
+    const topics = cleaned
+      .replace(/[^\p{L}\p{N}\s]/gu, " ")
+      .split(/\s+/)
+      .filter((word) => word.length >= 4)
+      .slice(0, 6);
+
+    return {
+      topics,
+      activities: topics.slice(0, 3),
+      intentType: "social",
+      modality: "mixed",
+      urgency: "soon",
+      timingConstraints: [],
+      skillConstraints: [],
+      vibeConstraints: [],
+      confidence: 0.25,
+    };
   }
 
   async sendIntentRequest(input: {
@@ -319,10 +384,10 @@ export class IntentsService {
     await this.agentService.createAgentMessage(
       threadId,
       intentTexts.length > boundedIntentTexts.length
-        ? `Got it. I split your request into ${intents.length} intents for now and applied a safety cap based on current outreach quota.`
+        ? `All right. I split this into ${intents.length} focused asks and started in the background with a safe outreach cap. I’ll notify you as soon as I find strong matches.`
         : intents.length === 1
-          ? "Got it. I captured your request and started matching now."
-          : `Got it. I split your request into ${intents.length} intents and started matching each one.`,
+          ? "All right. I’m on it in the background, and I’ll notify you as soon as I find someone relevant."
+          : `All right. I split this into ${intents.length} focused asks and started them in the background. I’ll notify you as soon as I find strong matches.`,
     );
 
     return {

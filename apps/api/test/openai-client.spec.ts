@@ -87,7 +87,7 @@ describe("OpenAIClient", () => {
       "conversation_planning.v6",
     );
     expect(client.getPromptVersion("conversation_response")).toBe(
-      "conversation_response.v2",
+      "conversation_response.v3",
     );
   });
 

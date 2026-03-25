@@ -1039,7 +1039,7 @@ describe("IntentsService", () => {
     expect(result.intentIds).toEqual(["intent-1", "intent-2"]);
     expect(agentService.createAgentMessage).toHaveBeenCalledWith(
       "thread-1",
-      expect.stringContaining("split your request into 2 intents"),
+      expect.stringContaining("split this into 2 focused asks"),
     );
   });
 
@@ -1094,7 +1094,7 @@ describe("IntentsService", () => {
     expect(result.intentCount).toBe(1);
     expect(agentService.createAgentMessage).toHaveBeenCalledWith(
       "thread-1",
-      expect.stringContaining("safety cap"),
+      expect.stringContaining("safe outreach cap"),
     );
   });
 
