@@ -316,6 +316,7 @@ describe("PersonalizationService", () => {
       modality: "either",
       languagePreferences: [],
       countryPreferences: [],
+      translationOptIn: false,
       timezone: "UTC",
       requireVerifiedUsers: false,
       notificationMode: "immediate",
@@ -332,6 +333,7 @@ describe("PersonalizationService", () => {
       modality: "offline",
       languagePreferences: ["en", "es"],
       countryPreferences: ["ar", "uy"],
+      translationOptIn: true,
       timezone: "America/Argentina/Buenos_Aires",
       requireVerifiedUsers: true,
       notificationMode: "digest",
@@ -359,6 +361,10 @@ describe("PersonalizationService", () => {
           {
             key: "global_rules_country_preferences",
             value: expected.countryPreferences,
+          },
+          {
+            key: "global_rules_translation_opt_in",
+            value: expected.translationOptIn,
           },
           {
             key: "global_rules_timezone",
@@ -426,7 +432,7 @@ describe("PersonalizationService", () => {
       expected,
     );
 
-    expect(prisma.userPreference.create).toHaveBeenCalledTimes(11);
+    expect(prisma.userPreference.create).toHaveBeenCalledTimes(12);
     expect(result).toEqual(expected);
     expect(analyticsService.trackEvent).toHaveBeenCalledWith(
       expect.objectContaining({

@@ -742,6 +742,7 @@ export class AgentOutcomeToolsService {
       modality: "online" | "offline" | "either";
       languagePreferences: string[];
       countryPreferences: string[];
+      translationOptIn: boolean;
       requireVerifiedUsers: boolean;
       notificationMode: "immediate" | "digest" | "quiet";
       agentAutonomy: "manual" | "suggest_only" | "auto_non_risky";

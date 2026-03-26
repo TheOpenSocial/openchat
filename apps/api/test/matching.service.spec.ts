@@ -318,6 +318,81 @@ describe("MatchingService", () => {
     ]);
   });
 
+  it("allows language mismatch when both sides opt into translation", async () => {
+    const prisma: any = {
+      user: {
+        findUnique: async () => ({
+          id: "11111111-1111-4111-8111-111111111111",
+          googleSubjectId: "sender-google",
+          email: "sender@example.com",
+          createdAt: new Date("2026-01-01T00:00:00.000Z"),
+          profile: { trustScore: 70, availabilityMode: "now" },
+        }),
+        findMany: async () => [
+          {
+            id: "22222222-2222-4222-8222-222222222222",
+            displayName: "English Only",
+            status: "active",
+            createdAt: new Date("2026-01-01T00:00:00.000Z"),
+            email: "en@example.com",
+            googleSubjectId: null,
+            profile: { availabilityMode: "now", trustScore: 70 },
+          },
+        ],
+      },
+      block: { findMany: async () => [] },
+      userInterest: {
+        findMany: async () => [
+          {
+            userId: "22222222-2222-4222-8222-222222222222",
+            normalizedLabel: "design",
+          },
+        ],
+      },
+      userTopic: { findMany: async () => [] },
+      intentRequest: { findMany: async () => [] },
+      userPreference: {
+        findMany: async () => [
+          {
+            userId: "11111111-1111-4111-8111-111111111111",
+            key: "global_rules_language_preferences",
+            value: ["es"],
+          },
+          {
+            userId: "22222222-2222-4222-8222-222222222222",
+            key: "global_rules_language_preferences",
+            value: ["en"],
+          },
+          {
+            userId: "11111111-1111-4111-8111-111111111111",
+            key: "global_rules_translation_opt_in",
+            value: true,
+          },
+          {
+            userId: "22222222-2222-4222-8222-222222222222",
+            key: "global_rules_translation_opt_in",
+            value: true,
+          },
+        ],
+      },
+    };
+
+    const service = new MatchingService(prisma);
+    const results = await service.retrieveCandidates(
+      "11111111-1111-4111-8111-111111111111",
+      {
+        topics: ["design"],
+        intentType: "chat",
+      },
+      5,
+    );
+
+    expect(results.map((candidate) => candidate.userId)).toEqual([
+      "22222222-2222-4222-8222-222222222222",
+    ]);
+    expect(results[0]?.rationale["translationBridge"]).toBe(true);
+  });
+
   it("filters candidates when explicit country preferences do not match", async () => {
     const prisma: any = {
       user: {
@@ -400,6 +475,147 @@ describe("MatchingService", () => {
     expect(results.map((candidate) => candidate.userId)).toEqual([
       "22222222-2222-4222-8222-222222222222",
     ]);
+  });
+
+  it("ranks candidates using reliability signals when semantic scores tie", async () => {
+    const intentRequestFindMany = vi.fn().mockImplementation((args?: any) => {
+      if (args?.where?.status?.in) {
+        return Promise.resolve([
+          {
+            recipientUserId: "22222222-2222-4222-8222-222222222222",
+            status: "accepted",
+          },
+          {
+            recipientUserId: "22222222-2222-4222-8222-222222222222",
+            status: "accepted",
+          },
+          {
+            recipientUserId: "22222222-2222-4222-8222-222222222222",
+            status: "rejected",
+          },
+          {
+            recipientUserId: "33333333-3333-4333-8333-333333333333",
+            status: "pending",
+          },
+          {
+            recipientUserId: "33333333-3333-4333-8333-333333333333",
+            status: "rejected",
+          },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+
+    const prisma: any = {
+      user: {
+        findUnique: async () => ({
+          id: "11111111-1111-4111-8111-111111111111",
+          googleSubjectId: "google-sub-1",
+          email: "sender@example.com",
+          profile: { trustScore: 85 },
+        }),
+        findMany: async () => [
+          {
+            id: "22222222-2222-4222-8222-222222222222",
+            displayName: "Reliable User",
+            status: "active",
+            profile: { availabilityMode: "now", trustScore: 70 },
+          },
+          {
+            id: "33333333-3333-4333-8333-333333333333",
+            displayName: "Low Reliability User",
+            status: "active",
+            profile: { availabilityMode: "now", trustScore: 70 },
+          },
+        ],
+      },
+      block: { findMany: async () => [] },
+      userInterest: { findMany: async () => [] },
+      userTopic: { findMany: async () => [] },
+      intentRequest: { findMany: intentRequestFindMany },
+      userPreference: { findMany: async () => [] },
+      $queryRawUnsafe: vi.fn().mockResolvedValue([
+        {
+          userId: "22222222-2222-4222-8222-222222222222",
+          semanticScore: 0.9,
+        },
+        {
+          userId: "33333333-3333-4333-8333-333333333333",
+          semanticScore: 0.9,
+        },
+      ]),
+      auditLog: { create: vi.fn().mockResolvedValue({}) },
+    };
+
+    const service = new MatchingService(prisma);
+    const results = await service.retrieveCandidates(
+      "11111111-1111-4111-8111-111111111111",
+      {
+        topics: ["running"],
+      },
+      2,
+      { intentId: "44444444-4444-4444-8444-444444444444" },
+    );
+
+    expect(results.map((candidate) => candidate.userId)).toEqual([
+      "22222222-2222-4222-8222-222222222222",
+      "33333333-3333-4333-8333-333333333333",
+    ]);
+    expect(results[0]?.rationale["reliabilityScore"]).toBeGreaterThan(
+      Number(results[1]?.rationale["reliabilityScore"] ?? 0),
+    );
+  });
+
+  it("uses empty-market widening strategy to avoid no-result stalls", async () => {
+    const previous = process.env.MATCHING_MARKET_STAGE;
+    process.env.MATCHING_MARKET_STAGE = "empty";
+    try {
+      const prisma: any = {
+        user: {
+          findUnique: async () => ({
+            id: "11111111-1111-4111-8111-111111111111",
+            googleSubjectId: "google-sub-1",
+            email: "sender@example.com",
+            profile: { trustScore: 70, availabilityMode: "now" },
+          }),
+          findMany: async () => [
+            {
+              id: "22222222-2222-4222-8222-222222222222",
+              displayName: "Fallback Candidate",
+              status: "active",
+              profile: { availabilityMode: "now", trustScore: 70 },
+            },
+          ],
+        },
+        block: { findMany: async () => [] },
+        userInterest: { findMany: async () => [] },
+        userTopic: { findMany: async () => [] },
+        intentRequest: { findMany: async () => [] },
+        userPreference: { findMany: async () => [] },
+      };
+
+      const service = new MatchingService(prisma);
+      const results = await service.retrieveCandidates(
+        "11111111-1111-4111-8111-111111111111",
+        {
+          topics: ["ultra-niche-topic"],
+          intentType: "chat",
+        },
+        1,
+      );
+
+      expect(results.map((candidate) => candidate.userId)).toEqual([
+        "22222222-2222-4222-8222-222222222222",
+      ]);
+      expect(results[0]?.rationale["marketStage"]).toBe("empty");
+      expect(results[0]?.rationale["sparseFallbackEnabled"]).toBe(true);
+    } finally {
+      if (previous === undefined) {
+        delete process.env.MATCHING_MARKET_STAGE;
+      } else {
+        process.env.MATCHING_MARKET_STAGE = previous;
+      }
+    }
   });
 
   it("applies offline account-age and location privacy safeguards", async () => {

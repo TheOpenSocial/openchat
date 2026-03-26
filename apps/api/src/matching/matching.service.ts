@@ -47,6 +47,16 @@ interface PersonalizationProfile {
   highSuccessPeople: Map<string, number>;
 }
 
+interface ReliabilitySnapshot {
+  sampleSize: number;
+  responseRate: number;
+  acceptanceRate: number;
+  followThroughRate: number;
+  score: number;
+}
+
+type MarketStage = "empty" | "seed" | "healthy";
+
 const EMBEDDING_DIMENSIONS = 1536;
 const EMBEDDING_MODEL = "text-embedding-3-small";
 const DEFAULT_SEMANTIC_POOL_SIZE = 24;
@@ -54,12 +64,16 @@ const RECENT_INTERACTION_SUPPRESSION_DAYS = 14;
 const DEFAULT_OFFLINE_MIN_ACCOUNT_AGE_DAYS = 7;
 const MUTE_USER_IDS_PREFERENCE_KEY = "global_rules_muted_user_ids";
 const OPEN_REPORT_SUPPRESSION_THRESHOLD = 3;
+const TRANSLATION_OPT_IN_PREFERENCE_KEY = "global_rules_translation_opt_in";
+const DEFAULT_MARKET_STAGE: MarketStage = "healthy";
+const RELIABILITY_LOOKBACK_DAYS = 30;
 
 @Injectable()
 export class MatchingService {
   private readonly logger = new Logger(MatchingService.name);
   private readonly offlineMinAccountAgeDays =
     this.resolveOfflineMinAccountAgeDays();
+  private readonly configuredMarketStage = this.resolveConfiguredMarketStage();
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -172,6 +186,7 @@ export class MatchingService {
                   "global_rules_language_preferences",
                   "global_rules_country_preferences",
                   "global_rules_require_verified_users",
+                  TRANSLATION_OPT_IN_PREFERENCE_KEY,
                   MUTE_USER_IDS_PREFERENCE_KEY,
                 ],
               },
@@ -271,6 +286,7 @@ export class MatchingService {
     const eligibleUsers = users.filter((user) =>
       this.passesHardConstraints(user, hardConstraintInput),
     );
+    const marketStage = this.resolveEffectiveMarketStage(eligibleUsers.length);
     if (eligibleUsers.length === 0) {
       await this.logRetrievalSnapshot({
         senderUserId,
@@ -286,12 +302,17 @@ export class MatchingService {
     }
 
     const eligibleUserIds = eligibleUsers.map((user) => user.id);
-    const [availabilityWindowRows, openReportRows, recentInteractionCounts] =
-      await Promise.all([
-        this.loadAvailabilityWindows([senderUserId, ...eligibleUserIds]),
-        this.loadOpenReports(eligibleUserIds),
-        this.fetchRecentInteractionCounts(senderUserId, eligibleUserIds),
-      ]);
+    const [
+      availabilityWindowRows,
+      openReportRows,
+      recentInteractionCounts,
+      reliabilityByUser,
+    ] = await Promise.all([
+      this.loadAvailabilityWindows([senderUserId, ...eligibleUserIds]),
+      this.loadOpenReports(eligibleUserIds),
+      this.fetchRecentInteractionCounts(senderUserId, eligibleUserIds),
+      this.fetchReliabilitySignals(eligibleUserIds),
+    ]);
     const personalizationProfile =
       await this.fetchPersonalizationProfile(senderUserId);
     const reportsByUser = new Map<string, number>();
@@ -369,11 +390,14 @@ export class MatchingService {
         semanticSimilarity === undefined
           ? lexicalScore
           : Math.max(semanticSimilarity, lexicalScore * 0.7);
+      const sparseFallbackEnabled =
+        this.configuredMarketStage !== "healthy" && marketStage !== "healthy";
 
       if (
         requestedLabelCount > 0 &&
         semanticSimilarity === undefined &&
-        lexicalOverlapCount === 0
+        lexicalOverlapCount === 0 &&
+        !sparseFallbackEnabled
       ) {
         continue;
       }
@@ -405,17 +429,29 @@ export class MatchingService {
         styleSignals,
         labels,
       });
+      const reliability = reliabilityByUser.get(user.id) ?? {
+        sampleSize: 0,
+        responseRate: 0.5,
+        acceptanceRate: 0.5,
+        followThroughRate: 0.5,
+        score: 0.5,
+      };
       const personalization = this.computePersonalizationBoost({
         requestedLabels,
         candidateDisplayName: user.displayName ?? "",
         personalizationProfile,
       });
+      const translationBridge = this.isTranslationBridgeAllowed(
+        user.id,
+        preferencesByUser,
+        sender?.id ?? null,
+      );
 
-      const score = this.scoreCandidate({
+      const score = this.scoreCandidateForMarket(marketStage, {
         semantic,
         availability,
         trust: normalizedTrust,
-        responsiveness: 0.5,
+        responsiveness: reliability.score,
         novelty,
         proximity,
         style,
@@ -439,6 +475,14 @@ export class MatchingService {
           noveltySuppressionScore: novelty,
           proximityScore: proximity,
           styleCompatibility: style,
+          reliabilityScore: reliability.score,
+          reliabilitySampleSize: reliability.sampleSize,
+          responseRate: reliability.responseRate,
+          acceptanceRate: reliability.acceptanceRate,
+          followThroughRate: reliability.followThroughRate,
+          marketStage,
+          sparseFallbackEnabled,
+          translationBridge,
           personalizationBoost: personalization,
         },
       });
@@ -460,6 +504,38 @@ export class MatchingService {
       scoredCandidates: selected,
     });
     return selected;
+  }
+
+  private scoreCandidateForMarket(
+    marketStage: MarketStage,
+    input: CandidateScoreInput,
+  ) {
+    if (marketStage === "empty") {
+      return (
+        input.semantic * 0.18 +
+        input.availability * 0.22 +
+        input.trust * 0.16 +
+        input.responsiveness * 0.16 +
+        input.novelty * 0.07 +
+        input.proximity * 0.08 +
+        input.style * 0.04 +
+        input.personalization * 0.09
+      );
+    }
+    if (marketStage === "seed") {
+      return (
+        input.semantic * 0.24 +
+        input.availability * 0.2 +
+        input.trust * 0.16 +
+        input.responsiveness * 0.12 +
+        input.novelty * 0.08 +
+        input.proximity * 0.08 +
+        input.style * 0.05 +
+        input.personalization * 0.07
+      );
+    }
+
+    return this.scoreCandidate(input);
   }
 
   async lookupAvailabilityContext(
@@ -1639,12 +1715,17 @@ export class MatchingService {
     if (senderLanguages.length === 0 && candidateLanguages.length === 0) {
       return true;
     }
-    if (senderLanguages.length === 0 || candidateLanguages.length === 0) {
-      return false;
+    const hasDirectOverlap = senderLanguages.some((language) =>
+      candidateLanguages.includes(language),
+    );
+    if (hasDirectOverlap) {
+      return true;
     }
 
-    return senderLanguages.some((language) =>
-      candidateLanguages.includes(language),
+    return this.isTranslationBridgeAllowed(
+      candidateUserId,
+      preferencesByUser,
+      senderUserId,
     );
   }
 
@@ -1713,6 +1794,29 @@ export class MatchingService {
   ): boolean | null {
     const value = preferencesByUser.get(userId)?.get(key);
     return typeof value === "boolean" ? value : null;
+  }
+
+  private isTranslationBridgeAllowed(
+    candidateUserId: string,
+    preferencesByUser: Map<string, Map<string, unknown>>,
+    senderUserId: string | null,
+  ) {
+    if (!senderUserId) {
+      return false;
+    }
+    const senderOptIn =
+      this.readBooleanPreference(
+        preferencesByUser,
+        senderUserId,
+        TRANSLATION_OPT_IN_PREFERENCE_KEY,
+      ) ?? false;
+    const candidateOptIn =
+      this.readBooleanPreference(
+        preferencesByUser,
+        candidateUserId,
+        TRANSLATION_OPT_IN_PREFERENCE_KEY,
+      ) ?? false;
+    return senderOptIn && candidateOptIn;
   }
 
   private readNormalizedStringArrayPreference(
@@ -1872,6 +1976,111 @@ export class MatchingService {
       return DEFAULT_OFFLINE_MIN_ACCOUNT_AGE_DAYS;
     }
     return Math.min(Math.max(Math.floor(parsed), 0), 365);
+  }
+
+  private resolveConfiguredMarketStage(): MarketStage {
+    const value = process.env.MATCHING_MARKET_STAGE?.trim().toLowerCase();
+    if (value === "empty" || value === "seed" || value === "healthy") {
+      return value;
+    }
+    return DEFAULT_MARKET_STAGE;
+  }
+
+  private resolveEffectiveMarketStage(eligibleUserCount: number): MarketStage {
+    if (this.configuredMarketStage !== "healthy") {
+      if (this.configuredMarketStage === "seed" && eligibleUserCount <= 1) {
+        return "empty";
+      }
+      return this.configuredMarketStage;
+    }
+    if (eligibleUserCount <= 2) {
+      return "empty";
+    }
+    if (eligibleUserCount <= 7) {
+      return "seed";
+    }
+    return "healthy";
+  }
+
+  private async fetchReliabilitySignals(candidateUserIds: string[]) {
+    const reliabilityByUser = new Map<string, ReliabilitySnapshot>();
+    if (candidateUserIds.length === 0) {
+      return reliabilityByUser;
+    }
+
+    const lookbackStart = new Date(
+      Date.now() - RELIABILITY_LOOKBACK_DAYS * 24 * 60 * 60_000,
+    );
+    const rows = await this.prisma.intentRequest.findMany({
+      where: {
+        recipientUserId: {
+          in: candidateUserIds,
+        },
+        sentAt: {
+          gte: lookbackStart,
+        },
+        status: {
+          in: ["pending", "accepted", "rejected", "expired", "cancelled"],
+        },
+      },
+      select: {
+        recipientUserId: true,
+        status: true,
+      },
+    });
+
+    const totals = new Map<
+      string,
+      {
+        total: number;
+        responded: number;
+        accepted: number;
+      }
+    >();
+    for (const row of rows) {
+      const counters = totals.get(row.recipientUserId) ?? {
+        total: 0,
+        responded: 0,
+        accepted: 0,
+      };
+      counters.total += 1;
+      if (row.status !== "pending") {
+        counters.responded += 1;
+      }
+      if (row.status === "accepted") {
+        counters.accepted += 1;
+      }
+      totals.set(row.recipientUserId, counters);
+    }
+
+    for (const userId of candidateUserIds) {
+      const counters = totals.get(userId);
+      if (!counters || counters.total === 0) {
+        continue;
+      }
+      const responseRate = this.clampUnitInterval(
+        counters.responded / counters.total,
+      );
+      const acceptanceRate = this.clampUnitInterval(
+        counters.accepted / counters.total,
+      );
+      const followThroughRate =
+        counters.responded === 0
+          ? 0
+          : this.clampUnitInterval(counters.accepted / counters.responded);
+      const score = this.clampUnitInterval(
+        responseRate * 0.4 + acceptanceRate * 0.35 + followThroughRate * 0.25,
+      );
+      reliabilityByUser.set(userId, {
+        sampleSize: counters.total,
+        responseRate,
+        acceptanceRate,
+        followThroughRate,
+        score,
+      });
+    }
+
+    return reliabilityByUser;
   }
 
   private clampUnitInterval(value: number) {

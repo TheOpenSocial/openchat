@@ -19,6 +19,7 @@ export interface GlobalRules {
   modality: "online" | "offline" | "either";
   languagePreferences: string[];
   countryPreferences: string[];
+  translationOptIn: boolean;
   timezone: string;
   requireVerifiedUsers: boolean;
   notificationMode: "immediate" | "digest" | "quiet";
@@ -131,6 +132,7 @@ const GLOBAL_RULE_DEFAULTS: GlobalRules = {
   modality: "either",
   languagePreferences: [],
   countryPreferences: [],
+  translationOptIn: false,
   timezone: "UTC",
   requireVerifiedUsers: false,
   notificationMode: "immediate",
@@ -145,6 +147,7 @@ const GLOBAL_RULE_PREF_KEYS: Record<keyof GlobalRules, string> = {
   modality: "global_rules_modality",
   languagePreferences: "global_rules_language_preferences",
   countryPreferences: "global_rules_country_preferences",
+  translationOptIn: "global_rules_translation_opt_in",
   timezone: "global_rules_timezone",
   requireVerifiedUsers: "global_rules_require_verified_users",
   notificationMode: "global_rules_notification_mode",
@@ -333,6 +336,10 @@ export class PersonalizationService {
         this.readStringArrayValue(
           byKey.get(GLOBAL_RULE_PREF_KEYS.countryPreferences),
         ) ?? GLOBAL_RULE_DEFAULTS.countryPreferences,
+      translationOptIn:
+        this.readBooleanValue(
+          byKey.get(GLOBAL_RULE_PREF_KEYS.translationOptIn),
+        ) ?? GLOBAL_RULE_DEFAULTS.translationOptIn,
       requireVerifiedUsers:
         this.readBooleanValue(
           byKey.get(GLOBAL_RULE_PREF_KEYS.requireVerifiedUsers),
@@ -1484,6 +1491,7 @@ export class PersonalizationService {
       `rules.contact: ${input.globalRules.whoCanContact}`,
       `rules.languages: ${input.globalRules.languagePreferences.join(", ") || "unspecified"}`,
       `rules.countries: ${input.globalRules.countryPreferences.join(", ") || "unspecified"}`,
+      `rules.translation_opt_in: ${input.globalRules.translationOptIn ? "yes" : "no"}`,
     ];
     return lines.join("\n");
   }

@@ -2756,6 +2756,7 @@ export class AgentConversationService {
         modality: "online" | "offline" | "either";
         languagePreferences: string[];
         countryPreferences: string[];
+        translationOptIn: boolean;
         requireVerifiedUsers: boolean;
         notificationMode: "immediate" | "digest" | "quiet";
         agentAutonomy: "manual" | "suggest_only" | "auto_non_risky";
@@ -2799,6 +2800,10 @@ export class AgentConversationService {
           : undefined,
       languagePreferences: this.readStringArray(record.languagePreferences),
       countryPreferences: this.readStringArray(record.countryPreferences),
+      translationOptIn:
+        typeof record.translationOptIn === "boolean"
+          ? record.translationOptIn
+          : undefined,
       requireVerifiedUsers:
         typeof record.requireVerifiedUsers === "boolean"
           ? record.requireVerifiedUsers
