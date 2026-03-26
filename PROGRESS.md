@@ -203,6 +203,10 @@ Last verified: 2026-03-20
       - `AGENTIC_BENCH_BURST_SIZE`
       - `AGENTIC_BENCH_MAX_DUPLICATE_SIDE_EFFECT_RATE`
       - `AGENTIC_BENCH_MAX_QUEUE_LAG_MS`
+    - benchmark runner now supports transient network hardening controls:
+      - `AGENTIC_BENCH_REQUEST_TIMEOUT_MS`
+      - `AGENTIC_BENCH_REQUEST_RETRY_COUNT`
+      - `AGENTIC_BENCH_REQUEST_RETRY_DELAY_MS`
     - benchmark artifacts now include explicit guardrail thresholds and pass/fail flags so regressions are machine-checkable in CI
     - suite records/artifacts now capture benchmark pressure and dedupe signals (`workerIndex`, `burstIndex`, `concurrency`, `burstSize`, `queueLagMs`, `duplicateVisibleSideEffects`, `duplicateVisibleSideEffectRate`, `summary.benchmark.queueLagP95Ms`)
     - benchmark runner now supports workflow-runtime health guardrails (critical runs + failed/blocked stage counts) sourced from `GET /api/admin/ops/agent-workflows`, with verification-lane defaults set to fail on any critical/failed/blocked drift

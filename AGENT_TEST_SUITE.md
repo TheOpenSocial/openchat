@@ -319,6 +319,10 @@ Current runner artifact behavior:
   - `AGENTIC_BENCH_BURST_SIZE`
   - `AGENTIC_BENCH_MAX_DUPLICATE_SIDE_EFFECT_RATE`
   - `AGENTIC_BENCH_MAX_QUEUE_LAG_MS`
+- benchmark network-resilience tuning is now supported with:
+  - `AGENTIC_BENCH_REQUEST_TIMEOUT_MS`
+  - `AGENTIC_BENCH_REQUEST_RETRY_COUNT`
+  - `AGENTIC_BENCH_REQUEST_RETRY_DELAY_MS`
 - benchmark records now emit pressure/dedupe metrics (`workerIndex`, `burstIndex`, `concurrency`, `burstSize`, `queueLagMs`, `duplicateVisibleSideEffects`, `duplicateVisibleSideEffectRate`) and summary includes `queueLagP95Ms`
 - strict verification lane now enables and requires benchmark workflow-health checks by default
 - prod-smoke lane executes `staging-smoke-api`, `staging-smoke-llm-runtime`, and `staging-incident-verify` when enabled
