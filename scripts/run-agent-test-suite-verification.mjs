@@ -97,9 +97,73 @@ const resolvedEnv = {
   ),
 };
 
-const missing = Object.entries(resolvedEnv)
-  .filter(([, value]) => value.length === 0)
-  .map(([key]) => key);
+function collectMissing(envMap) {
+  return Object.entries(envMap)
+    .filter(([, value]) => value.length === 0)
+    .map(([key]) => key);
+}
+
+async function tryBootstrapMissingEnvFromPlayground(currentEnv, missingKeys) {
+  const baseUrl = (
+    process.env.PLAYGROUND_BASE_URL ||
+    process.env.SMOKE_BASE_URL ||
+    ""
+  ).trim();
+  const adminUserId = (process.env.PLAYGROUND_ADMIN_USER_ID || "").trim();
+  const adminRole = (process.env.PLAYGROUND_ADMIN_ROLE || "admin").trim();
+  const adminApiKey = (process.env.PLAYGROUND_ADMIN_API_KEY || "").trim();
+  const rotateProbeToken =
+    process.env.PLAYGROUND_BOOTSTRAP_ROTATE_PROBE_TOKEN === "1";
+
+  if (!baseUrl || !adminUserId || missingKeys.length === 0) {
+    return currentEnv;
+  }
+
+  try {
+    const response = await fetch(
+      `${baseUrl.replace(/\/+$/, "")}/api/admin/playground/bootstrap`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-admin-user-id": adminUserId,
+          "x-admin-role": adminRole,
+          ...(adminApiKey ? { "x-admin-api-key": adminApiKey } : {}),
+        },
+        body: JSON.stringify({
+          rotateProbeToken,
+        }),
+      },
+    );
+    const payload = await response.json();
+    const envFromBootstrap = payload?.data?.env ?? {};
+    if (!response.ok || !payload?.success || typeof envFromBootstrap !== "object") {
+      return currentEnv;
+    }
+
+    const merged = { ...currentEnv };
+    for (const key of Object.keys(currentEnv)) {
+      if (merged[key]) {
+        continue;
+      }
+      const value = envFromBootstrap[key];
+      if (typeof value === "string" && value.trim().length > 0) {
+        merged[key] = value.trim();
+      }
+    }
+    return merged;
+  } catch {
+    return currentEnv;
+  }
+}
+
+let hydratedEnv = { ...resolvedEnv };
+const initialMissing = collectMissing(hydratedEnv);
+hydratedEnv = await tryBootstrapMissingEnvFromPlayground(
+  hydratedEnv,
+  initialMissing,
+);
+const missing = collectMissing(hydratedEnv);
 
 if (missing.length > 0) {
   console.error(
@@ -121,11 +185,11 @@ const result = spawnSync(
       AGENT_TEST_SUITE_REQUIRE_PROD_SMOKE: "1",
       AGENTIC_BENCH_ENABLE_WORKFLOW_HEALTH: "1",
       AGENTIC_BENCH_REQUIRE_WORKFLOW_HEALTH: "1",
-      ...resolvedEnv,
+      ...hydratedEnv,
       AGENTIC_BENCH_ADMIN_USER_ID:
         process.env.AGENTIC_BENCH_ADMIN_USER_ID ??
         process.env.SMOKE_ADMIN_USER_ID ??
-        resolvedEnv.SMOKE_ADMIN_USER_ID,
+        hydratedEnv.SMOKE_ADMIN_USER_ID,
       AGENTIC_BENCH_ADMIN_ROLE:
         process.env.AGENTIC_BENCH_ADMIN_ROLE ??
         process.env.SMOKE_ADMIN_ROLE ??
