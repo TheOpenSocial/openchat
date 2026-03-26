@@ -67,6 +67,12 @@ describe("Deployment pipeline artifacts", () => {
       "ONBOARDING_LLM_RICH_MODEL: ${{ secrets.ONBOARDING_LLM_RICH_MODEL }}",
     );
     expect(stagingWorkflow).toContain(
+      "ONBOARDING_LLM_FAST_MODEL_CANDIDATES: ${{ secrets.ONBOARDING_LLM_FAST_MODEL_CANDIDATES }}",
+    );
+    expect(stagingWorkflow).toContain(
+      "ONBOARDING_LLM_RICH_MODEL_CANDIDATES: ${{ secrets.ONBOARDING_LLM_RICH_MODEL_CANDIDATES }}",
+    );
+    expect(stagingWorkflow).toContain(
       "ONBOARDING_LLM_TIMEOUT_MS: ${{ secrets.ONBOARDING_LLM_TIMEOUT_MS }}",
     );
     expect(stagingWorkflow).toContain(
@@ -85,6 +91,12 @@ describe("Deployment pipeline artifacts", () => {
       "ONBOARDING_LLM_RICH_MODEL: ${{ secrets.ONBOARDING_LLM_RICH_MODEL }}",
     );
     expect(productionWorkflow).toContain(
+      "ONBOARDING_LLM_FAST_MODEL_CANDIDATES: ${{ secrets.ONBOARDING_LLM_FAST_MODEL_CANDIDATES }}",
+    );
+    expect(productionWorkflow).toContain(
+      "ONBOARDING_LLM_RICH_MODEL_CANDIDATES: ${{ secrets.ONBOARDING_LLM_RICH_MODEL_CANDIDATES }}",
+    );
+    expect(productionWorkflow).toContain(
       "ONBOARDING_LLM_TIMEOUT_MS: ${{ secrets.ONBOARDING_LLM_TIMEOUT_MS }}",
     );
     expect(productionWorkflow).toContain(
@@ -101,6 +113,12 @@ describe("Deployment pipeline artifacts", () => {
     );
     expect(rollbackWorkflow).toContain(
       "ONBOARDING_LLM_RICH_MODEL: ${{ secrets.ONBOARDING_LLM_RICH_MODEL }}",
+    );
+    expect(rollbackWorkflow).toContain(
+      "ONBOARDING_LLM_FAST_MODEL_CANDIDATES: ${{ secrets.ONBOARDING_LLM_FAST_MODEL_CANDIDATES }}",
+    );
+    expect(rollbackWorkflow).toContain(
+      "ONBOARDING_LLM_RICH_MODEL_CANDIDATES: ${{ secrets.ONBOARDING_LLM_RICH_MODEL_CANDIDATES }}",
     );
     expect(rollbackWorkflow).toContain(
       "ONBOARDING_LLM_TIMEOUT_MS: ${{ secrets.ONBOARDING_LLM_TIMEOUT_MS }}",
@@ -198,6 +216,12 @@ describe("Deployment pipeline artifacts", () => {
       'sync_remote_env_var "ONBOARDING_LLM_RICH_MODEL"',
     );
     expect(stagingScript).toContain(
+      'sync_remote_env_var "ONBOARDING_LLM_FAST_MODEL_CANDIDATES"',
+    );
+    expect(stagingScript).toContain(
+      'sync_remote_env_var "ONBOARDING_LLM_RICH_MODEL_CANDIDATES"',
+    );
+    expect(stagingScript).toContain(
       'sync_remote_env_var "ONBOARDING_LLM_TIMEOUT_MS"',
     );
     expect(stagingScript).toContain(
@@ -216,6 +240,12 @@ describe("Deployment pipeline artifacts", () => {
       'sync_remote_env_var "ONBOARDING_LLM_RICH_MODEL"',
     );
     expect(productionScript).toContain(
+      'sync_remote_env_var "ONBOARDING_LLM_FAST_MODEL_CANDIDATES"',
+    );
+    expect(productionScript).toContain(
+      'sync_remote_env_var "ONBOARDING_LLM_RICH_MODEL_CANDIDATES"',
+    );
+    expect(productionScript).toContain(
       'sync_remote_env_var "ONBOARDING_LLM_TIMEOUT_MS"',
     );
     expect(productionScript).toContain(
@@ -232,6 +262,12 @@ describe("Deployment pipeline artifacts", () => {
     );
     expect(rollbackScript).toContain(
       'sync_remote_env_var "ONBOARDING_LLM_RICH_MODEL"',
+    );
+    expect(rollbackScript).toContain(
+      'sync_remote_env_var "ONBOARDING_LLM_FAST_MODEL_CANDIDATES"',
+    );
+    expect(rollbackScript).toContain(
+      'sync_remote_env_var "ONBOARDING_LLM_RICH_MODEL_CANDIDATES"',
     );
     expect(rollbackScript).toContain(
       'sync_remote_env_var "ONBOARDING_LLM_TIMEOUT_MS"',

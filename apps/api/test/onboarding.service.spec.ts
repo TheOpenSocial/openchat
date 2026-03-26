@@ -145,4 +145,58 @@ describe("OnboardingService activation plan", () => {
       "infer-success",
     ]);
   });
+
+  it("normalizes generic rich persona/summary into concrete output", async () => {
+    const service = new OnboardingService();
+    (service as any).resolveClient = vi.fn().mockReturnValue({
+      inferOnboarding: vi.fn().mockResolvedValue({
+        transcript: "I want local football and design plans this weekend.",
+        interests: ["football", "design"],
+        goals: ["meet people"],
+        mode: "social",
+        format: "small_groups",
+        style: "Chill",
+        availability: "Weekends",
+        area: "Buenos Aires",
+        country: "Argentina",
+        persona: "Connector",
+        summary: "meet people",
+        firstIntent: "Find football and design plans.",
+        followUpQuestion: "",
+      }),
+    });
+
+    const result = await service.inferFromTranscript(
+      "11111111-1111-4111-8111-111111111111",
+      "I want local football and design plans this weekend.",
+    );
+
+    expect(result.persona.toLowerCase()).not.toBe("connector");
+    expect(result.summary.toLowerCase()).not.toBe("meet people");
+    expect(result.summary.toLowerCase()).toContain("football");
+    expect(result.lifecycle?.current).toBe("infer-success");
+  });
+
+  it("normalizes generic quick summary into concrete output", async () => {
+    const service = new OnboardingService();
+    (service as any).resolveClient = vi.fn().mockReturnValue({
+      inferOnboardingQuick: vi.fn().mockResolvedValue({
+        transcript: "I like startup chats and coffee meetups.",
+        interests: ["startups", "coffee"],
+        goals: ["meet people"],
+        summary: "social plans",
+        firstIntent: "Find social plans around startups.",
+        followUpQuestion: "",
+      }),
+    });
+
+    const result = await service.inferQuickFromTranscript(
+      "11111111-1111-4111-8111-111111111111",
+      "I like startup chats and coffee meetups.",
+    );
+
+    expect(result.summary.toLowerCase()).not.toBe("social plans");
+    expect(result.summary.toLowerCase()).toContain("startups");
+    expect(result.lifecycle?.current).toBe("infer-success");
+  });
 });

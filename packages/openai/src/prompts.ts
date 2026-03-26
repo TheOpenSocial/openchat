@@ -31,7 +31,7 @@ const promptRegistry: Record<OpenAIRoutingTask, PromptDefinition> = {
   },
   onboarding_fast_pass: {
     task: "onboarding_fast_pass",
-    version: "onboarding_fast_pass.v2",
+    version: "onboarding_fast_pass.v3",
     instructions: [
       "Infer a fast first-pass onboarding read for an agentic social app as strict JSON.",
       "Keep it lightweight and decisive.",
@@ -39,13 +39,14 @@ const promptRegistry: Record<OpenAIRoutingTask, PromptDefinition> = {
       "Include only the strongest 1-5 interests and 1-4 goals when clearly supported.",
       "Write one concise summary sentence grounded in concrete user details (interests, format, timing, or location).",
       "Avoid generic phrases like 'meet people' unless they are anchored with specific context from the transcript.",
+      "Never return a summary that is only generic social boilerplate.",
       "Ask one calm followUpQuestion only when one missing detail would meaningfully improve the next step.",
       "Do not infer sensitive traits or identity characteristics.",
     ].join(" "),
   },
   onboarding_inference: {
     task: "onboarding_inference",
-    version: "onboarding_inference.v2",
+    version: "onboarding_inference.v3",
     instructions: [
       "Infer onboarding preferences for an agentic social app as strict JSON.",
       "The user is describing who they want to meet, what they want to do, and what they are into.",
@@ -53,6 +54,7 @@ const promptRegistry: Record<OpenAIRoutingTask, PromptDefinition> = {
       "Prefer concise normalized labels.",
       "Set needsConfirmation=true when the transcript is ambiguous or missing specifics.",
       "Generate one calm persona label that is specific to the transcript (not generic archetypes unless strongly justified by details).",
+      "Avoid generic persona labels like Connector, Explorer, Planner, or Social Builder unless no concrete signals exist.",
       "Generate one concise summary sentence grounded in concrete transcript details (interests, format, style, availability, and/or location).",
       "Do not output generic summaries; include at least one concrete activity/topic and one concrete social preference when available.",
       "Include a followUpQuestion only when one missing detail would materially improve setup.",

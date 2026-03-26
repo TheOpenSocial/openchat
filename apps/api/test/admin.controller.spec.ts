@@ -2159,6 +2159,15 @@ describe("AdminController", () => {
         fallback: index % 2 === 0,
       });
     }
+    for (let index = 0; index < 12; index += 1) {
+      recordOnboardingInferenceMetric({
+        mode: "fast",
+        model: "gpt-oss:20b",
+        durationMs: 4_500,
+        unavailable: true,
+        fallback: false,
+      });
+    }
 
     const queue = {
       getJobCounts: vi.fn().mockResolvedValue({
@@ -2218,6 +2227,8 @@ describe("AdminController", () => {
         expect.objectContaining({ key: "openai_error_spike" }),
         expect.objectContaining({ key: "moderation_backlog_high" }),
         expect.objectContaining({ key: "onboarding_fallback_spike" }),
+        expect.objectContaining({ key: "onboarding_unavailable_spike" }),
+        expect.objectContaining({ key: "onboarding_fast_latency_high" }),
         expect.objectContaining({ key: "onboarding_rich_latency_high" }),
         expect.objectContaining({ key: "onboarding_activation_failure_high" }),
         expect.objectContaining({

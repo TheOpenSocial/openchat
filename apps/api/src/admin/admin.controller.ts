@@ -321,6 +321,14 @@ export class AdminController {
       process.env.ALERT_ONBOARDING_FALLBACK_RATE_THRESHOLD,
       0.2,
     );
+    const onboardingUnavailableRateThreshold = this.parseThreshold(
+      process.env.ALERT_ONBOARDING_UNAVAILABLE_RATE_THRESHOLD,
+      0.12,
+    );
+    const onboardingFastP95LatencyThresholdMs = this.parseThreshold(
+      process.env.ALERT_ONBOARDING_FAST_P95_LATENCY_THRESHOLD_MS,
+      4_000,
+    );
     const onboardingRichP95LatencyThresholdMs = this.parseThreshold(
       process.env.ALERT_ONBOARDING_RICH_P95_LATENCY_THRESHOLD_MS,
       6_000,
@@ -516,6 +524,38 @@ export class AdminController {
             },
           ]
         : []),
+      ...(runtime.onboardingInference.calls >= onboardingMinCallsThreshold &&
+      runtime.onboardingInference.unavailableRate >=
+        onboardingUnavailableRateThreshold
+        ? [
+            {
+              key: "onboarding_unavailable_spike",
+              status: "triggered" as const,
+              severity: "warning" as const,
+              message: `Onboarding unavailable rate is elevated (${runtime.onboardingInference.unavailableRate.toFixed(2)} over ${runtime.onboardingInference.calls} calls).`,
+              value: runtime.onboardingInference.unavailableRate,
+              threshold: onboardingUnavailableRateThreshold,
+              calls: runtime.onboardingInference.calls,
+            },
+          ]
+        : []),
+      ...runtime.onboardingInference.byMode
+        .filter(
+          (mode) =>
+            mode.mode === "fast" &&
+            mode.calls >= onboardingMinCallsThreshold &&
+            mode.latencyMs.p95Ms >= onboardingFastP95LatencyThresholdMs,
+        )
+        .map((mode) => ({
+          key: "onboarding_fast_latency_high",
+          status: "triggered" as const,
+          severity: "warning" as const,
+          message: `Onboarding fast latency p95 is elevated (${Math.round(mode.latencyMs.p95Ms)}ms over ${mode.calls} calls).`,
+          mode: mode.mode,
+          value: mode.latencyMs.p95Ms,
+          threshold: onboardingFastP95LatencyThresholdMs,
+          calls: mode.calls,
+        })),
       ...runtime.onboardingInference.byMode
         .filter(
           (mode) =>

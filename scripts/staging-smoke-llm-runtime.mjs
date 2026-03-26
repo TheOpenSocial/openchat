@@ -15,8 +15,13 @@ const agentP95Ms = Number(process.env.SMOKE_AGENT_P95_MS || 6000);
 const maxOnboardingFallbackRate = Number(
   process.env.SMOKE_MAX_ONBOARDING_FALLBACK_RATE || 0.25,
 );
+const maxOnboardingUnavailableRate = Number(
+  process.env.SMOKE_MAX_ONBOARDING_UNAVAILABLE_RATE || 0.2,
+);
 const maxOpenAIErrorRate = Number(process.env.SMOKE_MAX_OPENAI_ERROR_RATE || 0.2);
 const allowCircuitOpen = process.env.SMOKE_ALLOW_OPENAI_CIRCUIT_OPEN === "true";
+const enforceOnboardingModelBuckets =
+  process.env.SMOKE_ENFORCE_ONBOARDING_MODEL_BUCKETS !== "false";
 
 async function requestJson(path, init = {}) {
   const startedAt = Date.now();
@@ -209,10 +214,16 @@ async function main() {
   if (llmHealth && !llmHealth.skipped && llmHealth.body?.data) {
     const health = llmHealth.body.data;
     const fallbackRate = Number(health.onboarding?.fallbackRate ?? 0);
+    const unavailableRate = Number(health.onboarding?.unavailableRate ?? 0);
     const openaiErrorRate = Number(health.openai?.errorRate ?? 0);
     const anyCircuitOpen = Boolean(health.budget?.anyCircuitOpen);
+    const byModel = Array.isArray(health.onboarding?.byModel)
+      ? health.onboarding.byModel
+      : [];
+    const fastModel = process.env.ONBOARDING_LLM_FAST_MODEL?.trim();
+    const richModel = process.env.ONBOARDING_LLM_RICH_MODEL?.trim();
     console.log(
-      `Runtime health: onboardingFallbackRate=${fallbackRate.toFixed(3)}, openaiErrorRate=${openaiErrorRate.toFixed(3)}, circuitOpen=${anyCircuitOpen}`,
+      `Runtime health: onboardingFallbackRate=${fallbackRate.toFixed(3)}, onboardingUnavailableRate=${unavailableRate.toFixed(3)}, openaiErrorRate=${openaiErrorRate.toFixed(3)}, circuitOpen=${anyCircuitOpen}`,
     );
 
     if (fallbackRate > maxOnboardingFallbackRate) {
@@ -221,11 +232,42 @@ async function main() {
       );
       process.exit(1);
     }
+    if (unavailableRate > maxOnboardingUnavailableRate) {
+      console.error(
+        `Onboarding unavailable rate too high: ${unavailableRate} > ${maxOnboardingUnavailableRate}`,
+      );
+      process.exit(1);
+    }
     if (openaiErrorRate > maxOpenAIErrorRate) {
       console.error(
         `OpenAI error rate too high: ${openaiErrorRate} > ${maxOpenAIErrorRate}`,
       );
       process.exit(1);
+    }
+    if (
+      enforceOnboardingModelBuckets &&
+      (fastModel || richModel) &&
+      byModel.length > 0
+    ) {
+      const modelSet = new Set(
+        byModel
+          .map((entry) =>
+            typeof entry?.model === "string" ? entry.model.trim() : "",
+          )
+          .filter((entry) => entry.length > 0),
+      );
+      if (fastModel && !modelSet.has(fastModel)) {
+        console.error(
+          `Missing fast onboarding model bucket in runtime health: ${fastModel}`,
+        );
+        process.exit(1);
+      }
+      if (richModel && !modelSet.has(richModel)) {
+        console.error(
+          `Missing rich onboarding model bucket in runtime health: ${richModel}`,
+        );
+        process.exit(1);
+      }
     }
     if (anyCircuitOpen && !allowCircuitOpen) {
       console.error("OpenAI budget circuit is open; failing smoke.");

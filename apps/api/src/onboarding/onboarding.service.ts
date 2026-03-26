@@ -21,6 +21,24 @@ type OnboardingActivationPlanResponse = z.infer<
   typeof onboardingActivationPlanResponseSchema
 >;
 
+const GENERIC_PERSONA_LABELS = new Set([
+  "connector",
+  "explorer",
+  "social builder",
+  "researcher",
+  "planner",
+  "friend",
+  "social",
+]);
+
+const GENERIC_SUMMARY_FRAGMENTS = [
+  "meet people",
+  "make plans",
+  "social plans",
+  "connect with people",
+  "new connections",
+];
+
 @Injectable()
 export class OnboardingService {
   private readonly logger = new Logger(OnboardingService.name);
@@ -103,9 +121,10 @@ export class OnboardingService {
     const durationMs = Date.now() - startedAt;
 
     if (llmInferred) {
+      const normalized = this.normalizeQuickInferencePayload(llmInferred, raw);
       const level = durationMs > 2500 ? "warn" : "log";
       this.logger[level](
-        `onboarding fast inference completed traceId=${traceId} model=${selectedFastModel} durationMs=${durationMs} followUp=${Boolean(llmInferred.followUpQuestion?.trim())} summaryChars=${llmInferred.summary?.length ?? 0} interestsCount=${llmInferred.interests?.length ?? 0}`,
+        `onboarding fast inference completed traceId=${traceId} model=${selectedFastModel} durationMs=${durationMs} followUp=${Boolean(normalized.followUpQuestion?.trim())} summaryChars=${normalized.summary?.length ?? 0} interestsCount=${normalized.interests?.length ?? 0}`,
       );
       recordOnboardingInferenceMetric({
         mode: "fast",
@@ -115,7 +134,7 @@ export class OnboardingService {
         fallback: false,
       });
       return {
-        ...llmInferred,
+        ...normalized,
         lifecycle: {
           current: "infer-success",
           transitions: [
@@ -174,9 +193,10 @@ export class OnboardingService {
     const durationMs = Date.now() - startedAt;
 
     if (llmInferred) {
+      const normalized = this.normalizeRichInferencePayload(llmInferred, raw);
       const level = durationMs > 12000 ? "warn" : "log";
       this.logger[level](
-        `onboarding inference completed traceId=${traceId} model=${selectedRichModel} durationMs=${durationMs} persona="${llmInferred.persona}" followUp=${Boolean(llmInferred.followUpQuestion?.trim())} interestsCount=${llmInferred.interests?.length ?? 0} goalsCount=${llmInferred.goals?.length ?? 0}`,
+        `onboarding inference completed traceId=${traceId} model=${selectedRichModel} durationMs=${durationMs} persona="${normalized.persona}" followUp=${Boolean(normalized.followUpQuestion?.trim())} interestsCount=${normalized.interests?.length ?? 0} goalsCount=${normalized.goals?.length ?? 0}`,
       );
       recordOnboardingInferenceMetric({
         mode: "rich",
@@ -186,7 +206,7 @@ export class OnboardingService {
         fallback: false,
       });
       return {
-        ...llmInferred,
+        ...normalized,
         lifecycle: {
           current: "infer-success",
           transitions: [
@@ -428,6 +448,124 @@ export class OnboardingService {
     return transcript.length > 160
       ? `${transcript.slice(0, 157).trimEnd()}...`
       : transcript;
+  }
+
+  private normalizeQuickInferencePayload(
+    payload: OnboardingQuickInferResponse,
+    transcript: string,
+  ): OnboardingQuickInferResponse {
+    const interests =
+      payload.interests.length > 0
+        ? payload.interests
+        : this.extractInterests(transcript).slice(0, 8);
+    const goals =
+      payload.goals.length > 0
+        ? payload.goals
+        : this.extractGoals(transcript).slice(0, 6);
+    const summary = this.normalizeSummaryText({
+      summary: payload.summary,
+      transcript,
+      interests,
+      goals,
+    });
+    const firstIntent = payload.firstIntent?.trim() || transcript.trim();
+    return {
+      ...payload,
+      interests,
+      goals,
+      summary,
+      firstIntent,
+    };
+  }
+
+  private normalizeRichInferencePayload(
+    payload: OnboardingInferResponse,
+    transcript: string,
+  ): OnboardingInferResponse {
+    const interests =
+      payload.interests.length > 0
+        ? payload.interests
+        : this.extractInterests(transcript).slice(0, 12);
+    const goals =
+      payload.goals.length > 0
+        ? payload.goals
+        : this.extractGoals(transcript).slice(0, 8);
+    const summary = this.normalizeSummaryText({
+      summary: payload.summary,
+      transcript,
+      interests,
+      goals,
+    });
+    const persona = this.normalizePersonaLabel(
+      payload.persona,
+      interests,
+      goals,
+    );
+    return {
+      ...payload,
+      interests,
+      goals,
+      summary,
+      persona,
+    };
+  }
+
+  private normalizePersonaLabel(
+    persona: string,
+    interests: string[],
+    goals: string[],
+  ): string {
+    const trimmed = persona.trim();
+    const normalized = trimmed.toLowerCase();
+    if (trimmed.length > 0 && !GENERIC_PERSONA_LABELS.has(normalized)) {
+      return trimmed;
+    }
+    const primaryInterest = interests.find((value) => value.trim().length > 0);
+    const primaryGoal = goals.find((value) => value.trim().length > 0);
+    if (primaryInterest) {
+      return `${this.toTitleCase(primaryInterest)} Connector`;
+    }
+    if (primaryGoal) {
+      return `${this.toTitleCase(primaryGoal)} Planner`;
+    }
+    return "Intent-led Connector";
+  }
+
+  private normalizeSummaryText(input: {
+    summary: string;
+    transcript: string;
+    interests: string[];
+    goals: string[];
+  }): string {
+    const summary = input.summary.trim();
+    if (!this.isLikelyGenericSummary(summary)) {
+      return summary;
+    }
+    const interests = input.interests.slice(0, 2).join(" and ");
+    const goals = input.goals.slice(0, 1).join(", ");
+    const anchoredInterests =
+      interests.length > 0 ? interests : "relevant activities";
+    const anchoredGoals = goals.length > 0 ? ` with a focus on ${goals}` : "";
+    return `You’re looking for ${anchoredInterests}${anchoredGoals}.`;
+  }
+
+  private isLikelyGenericSummary(value: string): boolean {
+    const normalized = value.trim().toLowerCase();
+    if (normalized.length < 24) {
+      return true;
+    }
+    return GENERIC_SUMMARY_FRAGMENTS.some(
+      (fragment) =>
+        normalized === fragment || normalized.includes(` ${fragment}`),
+    );
+  }
+
+  private toTitleCase(value: string): string {
+    return value
+      .split(/\s+/)
+      .filter((part) => part.length > 0)
+      .map((part) => part[0]!.toUpperCase() + part.slice(1).toLowerCase())
+      .join(" ");
   }
 
   private buildActivationPlanTranscript(
