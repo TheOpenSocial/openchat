@@ -16,13 +16,8 @@ import { useModerationWorkbench } from "./components/workbench/useModerationWork
 import { useAdminSessionLifecycle } from "./components/workbench/useAdminSessionLifecycle";
 import { useOpsSnapshotsActions } from "./components/workbench/useOpsSnapshotsActions";
 import { useEntityInspectorActions } from "./components/workbench/useEntityInspectorActions";
-import {
-  createHistoryId,
-  errorText,
-  normalizeQueryValues,
-  parseContextInput,
-  parseRecordJsonInput,
-} from "./components/workbench/workbench-utils";
+import { useAgentDebugActions } from "./components/workbench/useAgentDebugActions";
+import { parseContextInput } from "./components/workbench/workbench-utils";
 import {
   type AdminTab,
   tabConfig,
@@ -37,7 +32,6 @@ import {
 } from "./lib/admin-ui";
 import { type AppLocale, supportedLocales, t } from "./lib/i18n";
 
-const DEBUG_HISTORY_LIMIT = 20;
 const ADMIN_LOCALE_STORAGE_KEY = "opensocial.admin.locale.v1";
 
 function AdminHomeContent() {
@@ -448,159 +442,30 @@ function AdminHomeContent() {
       (payload) => setMemoryResetSnapshot(payload),
     );
 
-  const inspectAgentThread = () => {
-    if (!threadId.trim()) {
-      setBanner({ tone: "error", text: "Provide a thread id." });
-      return Promise.resolve(null);
-    }
-
-    return runAction(
-      "Inspect agent thread",
-      () => requestApi("GET", `/agent/threads/${threadId.trim()}/messages`),
-      "Agent thread messages loaded.",
-      (payload) => setAgentTraceSnapshot(payload),
-    );
-  };
-
-  const loadPrimaryAgentThreadFromSession = () =>
-    runAction(
-      "Load primary agent thread",
-      () =>
-        requestApiNullable<{
-          id: string;
-          title: string;
-          createdAt: string;
-        }>("GET", "/agent/threads/me/summary"),
-      (payload) =>
-        payload?.id
-          ? `Primary thread “${payload.title}” — id copied to field.`
-          : "No primary thread for the signed-in user (data was null).",
-      (payload) => {
-        setAgentTraceSnapshot(payload);
-        if (payload?.id) {
-          setThreadId(payload.id);
-        }
-      },
-    );
-
-  const postAgentMessage = () => {
-    if (!threadId.trim()) {
-      setBanner({ tone: "error", text: "Provide a thread id." });
-      return Promise.resolve(null);
-    }
-
-    return runAction(
-      "Post agent thread message",
-      async () => {
-        await requestApi("POST", `/agent/threads/${threadId.trim()}/messages`, {
-          body: {
-            userId: actingUserId.trim(),
-            content: agentMessage.trim(),
-          },
-        });
-        return requestApi("GET", `/agent/threads/${threadId.trim()}/messages`);
-      },
-      "Thread message inserted and trace refreshed.",
-      (payload) => setAgentTraceSnapshot(payload),
-    );
-  };
-
-  const runAgenticRespond = () => {
-    if (!threadId.trim()) {
-      setBanner({ tone: "error", text: "Provide a thread id." });
-      return Promise.resolve(null);
-    }
-    if (!actingUserId.trim()) {
-      setBanner({ tone: "error", text: "Provide acting user id." });
-      return Promise.resolve(null);
-    }
-    if (!agentMessage.trim()) {
-      setBanner({ tone: "error", text: "Provide inject message content." });
-      return Promise.resolve(null);
-    }
-
-    return runAction(
-      "Agentic respond",
-      async () => {
-        await requestApi("POST", `/agent/threads/${threadId.trim()}/respond`, {
-          body: {
-            userId: actingUserId.trim(),
-            content: agentMessage.trim(),
-          },
-        });
-        return requestApi("GET", `/agent/threads/${threadId.trim()}/messages`);
-      },
-      "Agentic turn completed; thread refreshed.",
-      (payload) => setAgentTraceSnapshot(payload),
-    );
-  };
-
-  const executeDebugQuery = async () => {
-    const pathValue = debugPath.trim();
-    if (pathValue.length === 0) {
-      setBanner({ tone: "error", text: "Debug path cannot be empty." });
-      return;
-    }
-
-    setBusyKey("Debug query");
-    setBanner(null);
-
-    const normalizedPath = pathValue.startsWith("/")
-      ? pathValue
-      : `/${pathValue}`;
-    const now = new Date().toISOString();
-
-    try {
-      const parsedQuery = parseRecordJsonInput("Debug query", debugQueryInput);
-      const query = normalizeQueryValues(parsedQuery);
-      const parsedBody =
-        debugMethod === "GET"
-          ? undefined
-          : parseRecordJsonInput("Debug body", debugBodyInput);
-
-      const payload = await requestApi(debugMethod, normalizedPath, {
-        ...(query ? { query } : {}),
-        ...(parsedBody ? { body: parsedBody } : {}),
-      });
-
-      setDebugResponse(payload);
-      setDebugHistory((current) =>
-        [
-          {
-            id: createHistoryId(),
-            at: now,
-            method: debugMethod,
-            path: normalizedPath,
-            success: true,
-          },
-          ...current,
-        ].slice(0, DEBUG_HISTORY_LIMIT),
-      );
-      setBanner({
-        tone: "success",
-        text: `Debug query succeeded: ${debugMethod} ${normalizedPath}`,
-      });
-    } catch (error) {
-      setDebugHistory((current) =>
-        [
-          {
-            id: createHistoryId(),
-            at: now,
-            method: debugMethod,
-            path: normalizedPath,
-            success: false,
-          },
-          ...current,
-        ].slice(0, DEBUG_HISTORY_LIMIT),
-      );
-      setBanner({
-        tone: "error",
-        text: `Debug query failed: ${errorText(error)}`,
-      });
-    } finally {
-      setBusyKey((current) => (current === "Debug query" ? null : current));
-    }
-  };
+  const {
+    inspectAgentThread,
+    loadPrimaryAgentThreadFromSession,
+    postAgentMessage,
+    runAgenticRespond,
+    executeDebugQuery,
+  } = useAgentDebugActions({
+    requestApi,
+    requestApiNullable,
+    runAction,
+    setBanner,
+    setBusyKey,
+    threadId,
+    setThreadId,
+    actingUserId,
+    agentMessage,
+    debugMethod,
+    debugPath,
+    debugQueryInput,
+    debugBodyInput,
+    setAgentTraceSnapshot,
+    setDebugResponse,
+    setDebugHistory,
+  });
 
   if (!sessionHydrated) {
     return <AppLoading label="Restoring session…" />;
