@@ -133,19 +133,17 @@ jobs:
           chmod +x scripts/deploy-production.sh
           DEPLOY_PHASE=ps ./scripts/deploy-production.sh
 
-      - name: Setup Node (post-deploy verification)
-        if: ${{ inputs.run_post_deploy_verification }}
-        uses: actions/setup-node@v5
-        with:
-          node-version: 22
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
       - name: Setup pnpm (post-deploy verification)
         if: ${{ inputs.run_post_deploy_verification }}
         uses: pnpm/action-setup@v4
         with:
           version: 10.7.1
+
+      - name: Setup Node (post-deploy verification)
+        if: ${{ inputs.run_post_deploy_verification }}
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
 
       - name: Install deps (post-deploy verification)
         if: ${{ inputs.run_post_deploy_verification }}
