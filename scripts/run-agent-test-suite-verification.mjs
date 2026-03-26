@@ -128,6 +128,8 @@ async function tryBootstrapEnvFromPlayground(
   const adminUserId = (process.env.PLAYGROUND_ADMIN_USER_ID || "").trim();
   const adminRole = (process.env.PLAYGROUND_ADMIN_ROLE || "admin").trim();
   const adminApiKey = (process.env.PLAYGROUND_ADMIN_API_KEY || "").trim();
+  const playgroundHostHeader =
+    (process.env.PLAYGROUND_HOST_HEADER || process.env.SMOKE_HOST_HEADER || "").trim();
   const rotateProbeToken =
     process.env.PLAYGROUND_BOOTSTRAP_ROTATE_PROBE_TOKEN === "1";
 
@@ -147,6 +149,7 @@ async function tryBootstrapEnvFromPlayground(
         method: "POST",
         headers: {
           "content-type": "application/json",
+          ...(playgroundHostHeader ? { Host: playgroundHostHeader } : {}),
           "x-admin-user-id": adminUserId,
           "x-admin-role": adminRole,
           ...(adminApiKey ? { "x-admin-api-key": adminApiKey } : {}),
@@ -209,6 +212,11 @@ async function benchAccessTokenIsValid(envMap) {
   const baseUrl = envMap.SMOKE_BASE_URL?.trim();
   const accessToken = envMap.AGENTIC_BENCH_ACCESS_TOKEN?.trim();
   const threadId = envMap.AGENTIC_BENCH_THREAD_ID?.trim();
+  const benchHostHeader = (
+    process.env.AGENTIC_BENCH_HOST_HEADER ||
+    process.env.SMOKE_HOST_HEADER ||
+    ""
+  ).trim();
   if (!baseUrl || !accessToken || !threadId) {
     return false;
   }
@@ -219,6 +227,7 @@ async function benchAccessTokenIsValid(envMap) {
         method: "GET",
         headers: {
           authorization: `Bearer ${accessToken}`,
+          ...(benchHostHeader ? { Host: benchHostHeader } : {}),
         },
       },
     );

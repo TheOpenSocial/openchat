@@ -48,6 +48,10 @@ const baseUrl = (process.env.AGENTIC_BENCH_URL ?? "http://localhost:3000").repla
   /\/$/,
   "",
 );
+const benchHostHeader =
+  process.env.AGENTIC_BENCH_HOST_HEADER?.trim() ||
+  process.env.SMOKE_HOST_HEADER?.trim() ||
+  "";
 const accessToken = process.env.AGENTIC_BENCH_ACCESS_TOKEN ?? "";
 const userId = process.env.AGENTIC_BENCH_USER_ID ?? "";
 const threadId = process.env.AGENTIC_BENCH_THREAD_ID ?? "";
@@ -149,6 +153,7 @@ async function requestJson(pathname, init = {}) {
   const headers = {
     "content-type": "application/json",
     authorization: `Bearer ${accessToken}`,
+    ...(benchHostHeader ? { Host: benchHostHeader } : {}),
     ...(init.headers ?? {}),
   };
   let attempt = 0;
@@ -587,6 +592,7 @@ async function main() {
   console.log(`- requestTimeoutMs: ${requestTimeoutMs}`);
   console.log(`- requestRetryCount: ${requestRetryCount}`);
   console.log(`- requestRetryDelayMs: ${requestRetryDelayMs}`);
+  console.log(`- benchHostHeader: ${benchHostHeader || "(none)"}`);
   console.log(
     `- workflowHealth: ${enableWorkflowHealth ? "enabled" : "disabled"} (required=${requireWorkflowHealth ? "yes" : "no"})`,
   );

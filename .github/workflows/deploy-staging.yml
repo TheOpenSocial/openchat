@@ -168,7 +168,8 @@ jobs:
       - name: Verify incident-readiness gates
         if: ${{ inputs.run_post_deploy_verification }}
         env:
-          SMOKE_BASE_URL: http://localhost:3001
+          SMOKE_BASE_URL: http://127.0.0.1
+          SMOKE_HOST_HEADER: api.opensocial.so
           SMOKE_ADMIN_USER_ID: ${{ secrets.STAGING_SMOKE_ADMIN_USER_ID || secrets.SMOKE_ADMIN_USER_ID }}
           SMOKE_ADMIN_ROLE: ${{ secrets.STAGING_SMOKE_ADMIN_ROLE || secrets.SMOKE_ADMIN_ROLE || 'support' }}
           SMOKE_ADMIN_API_KEY: ${{ secrets.STAGING_SMOKE_ADMIN_API_KEY || secrets.SMOKE_ADMIN_API_KEY }}
@@ -187,7 +188,8 @@ jobs:
         env:
           STAGING_EQUALS_PROD: "true"
           BACKEND_OPS_TARGET: "staging"
-          SMOKE_BASE_URL: http://localhost:3001
+          SMOKE_BASE_URL: http://127.0.0.1
+          SMOKE_HOST_HEADER: api.opensocial.so
           SMOKE_ADMIN_USER_ID: ${{ secrets.STAGING_SMOKE_ADMIN_USER_ID || secrets.SMOKE_ADMIN_USER_ID }}
           SMOKE_ADMIN_ROLE: ${{ secrets.STAGING_SMOKE_ADMIN_ROLE || secrets.SMOKE_ADMIN_ROLE || 'admin' }}
           SMOKE_ADMIN_API_KEY: ${{ secrets.STAGING_SMOKE_ADMIN_API_KEY || secrets.SMOKE_ADMIN_API_KEY }}
@@ -196,7 +198,10 @@ jobs:
           SMOKE_AGENT_THREAD_ID: ${{ secrets.STAGING_SMOKE_AGENT_THREAD_ID || secrets.SMOKE_AGENT_THREAD_ID }}
           AGENTIC_VERIFICATION_LANE_ID: ${{ secrets.STAGING_AGENTIC_VERIFICATION_LANE_ID || secrets.AGENTIC_VERIFICATION_LANE_ID || secrets.PROD_AGENTIC_VERIFICATION_LANE_ID }}
           ONBOARDING_PROBE_TOKEN: ${{ secrets.STAGING_ONBOARDING_PROBE_TOKEN || secrets.ONBOARDING_PROBE_TOKEN || secrets.PROD_ONBOARDING_PROBE_TOKEN }}
-          PLAYGROUND_BASE_URL: http://localhost:3001
+          PLAYGROUND_BASE_URL: http://127.0.0.1
+          PLAYGROUND_HOST_HEADER: api.opensocial.so
+          AGENTIC_BENCH_URL: http://127.0.0.1
+          AGENTIC_BENCH_HOST_HEADER: api.opensocial.so
           PLAYGROUND_ADMIN_USER_ID: ${{ secrets.STAGING_SMOKE_ADMIN_USER_ID || secrets.SMOKE_ADMIN_USER_ID }}
           PLAYGROUND_ADMIN_ROLE: ${{ secrets.STAGING_SMOKE_ADMIN_ROLE || secrets.SMOKE_ADMIN_ROLE || 'admin' }}
           PLAYGROUND_ADMIN_API_KEY: ${{ secrets.STAGING_SMOKE_ADMIN_API_KEY || secrets.SMOKE_ADMIN_API_KEY }}

@@ -4,6 +4,7 @@ const baseUrl = (process.env.SMOKE_BASE_URL || "http://localhost:3001").replace(
   /\/+$/,
   "",
 );
+const smokeHostHeader = process.env.SMOKE_HOST_HEADER?.trim() || "";
 const adminUserId =
   process.env.SMOKE_ADMIN_USER_ID || "11111111-1111-4111-8111-111111111111";
 const adminRole = process.env.SMOKE_ADMIN_ROLE || "support";
@@ -82,6 +83,9 @@ function buildHeaders(useAdminHeaders, checkIndex) {
   if (accessToken) {
     headers.Authorization = `Bearer ${accessToken}`;
   }
+  if (smokeHostHeader) {
+    headers.Host = smokeHostHeader;
+  }
   if (useUniqueForwardedIp) {
     headers["x-forwarded-for"] = `198.51.100.${10 + checkIndex}`;
   }
@@ -140,6 +144,7 @@ async function runCheck(check, checkIndex) {
 function printConfig() {
   console.log("Staging smoke config:");
   console.log(`- baseUrl: ${baseUrl}`);
+  console.log(`- smokeHostHeader: ${smokeHostHeader || "(none)"}`);
   console.log(`- adminUserId: ${adminUserId}`);
   console.log(`- adminRole: ${adminRole}`);
   console.log(`- timeoutMs: ${timeoutMs}`);

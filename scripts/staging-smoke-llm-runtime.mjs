@@ -4,6 +4,7 @@ const baseUrl = (process.env.SMOKE_BASE_URL || "http://localhost:3001").replace(
   /\/+$/,
   "",
 );
+const smokeHostHeader = process.env.SMOKE_HOST_HEADER?.trim() || "";
 const probeToken = process.env.ONBOARDING_PROBE_TOKEN;
 const accessToken = process.env.SMOKE_ACCESS_TOKEN;
 const agentThreadId = process.env.SMOKE_AGENT_THREAD_ID;
@@ -33,6 +34,7 @@ async function requestJson(path, init = {}) {
       signal: controller.signal,
       headers: {
         Accept: "application/json",
+        ...(smokeHostHeader ? { Host: smokeHostHeader } : {}),
         ...(init.headers || {}),
       },
     });
@@ -160,6 +162,7 @@ function printResult(result) {
 async function main() {
   console.log("LLM runtime smoke");
   console.log(`- baseUrl: ${baseUrl}`);
+  console.log(`- smokeHostHeader: ${smokeHostHeader || "(none)"}`);
   console.log(`- timeoutMs: ${timeoutMs}`);
   console.log(`- probeToken: ${probeToken ? "set" : "unset"}`);
   console.log(`- accessToken: ${accessToken ? "set" : "unset"}`);
