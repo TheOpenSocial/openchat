@@ -89,6 +89,18 @@ const maxBlockedStageCount = Number(
 const maxObservabilityGapRuns = Number(
   process.env.AGENTIC_BENCH_MAX_OBSERVABILITY_GAP_RUNS ?? 0,
 );
+const requestTimeoutMs = Math.max(
+  1000,
+  Number(process.env.AGENTIC_BENCH_REQUEST_TIMEOUT_MS ?? 10000),
+);
+const requestRetryCount = Math.max(
+  0,
+  Number(process.env.AGENTIC_BENCH_REQUEST_RETRY_COUNT ?? 2),
+);
+const requestRetryDelayMs = Math.max(
+  100,
+  Number(process.env.AGENTIC_BENCH_REQUEST_RETRY_DELAY_MS ?? 300),
+);
 const adminUserId = process.env.AGENTIC_BENCH_ADMIN_USER_ID ?? "";
 const adminRole = process.env.AGENTIC_BENCH_ADMIN_ROLE ?? "support";
 const adminApiKey = process.env.AGENTIC_BENCH_ADMIN_API_KEY ?? "";
@@ -139,20 +151,65 @@ async function requestJson(pathname, init = {}) {
     authorization: `Bearer ${accessToken}`,
     ...(init.headers ?? {}),
   };
+  let attempt = 0;
+  let lastError = null;
 
-  const response = await fetch(`${baseUrl}${pathname}`, {
-    ...init,
-    headers,
-  });
+  while (attempt <= requestRetryCount) {
+    const controller = new AbortController();
+    const timeoutHandle = setTimeout(() => {
+      controller.abort();
+    }, requestTimeoutMs);
 
-  const text = await response.text();
-  const json = text ? JSON.parse(text) : null;
-  if (!response.ok) {
-    throw new Error(
-      `HTTP ${response.status} ${response.statusText} on ${pathname}: ${text.slice(0, 300)}`,
-    );
+    try {
+      const response = await fetch(`${baseUrl}${pathname}`, {
+        ...init,
+        headers,
+        signal: controller.signal,
+      });
+
+      const text = await response.text();
+      const isTransientStatus =
+        response.status >= 500 ||
+        response.status === 408 ||
+        response.status === 425 ||
+        response.status === 429;
+
+      if (!response.ok) {
+        if (isTransientStatus && attempt < requestRetryCount) {
+          attempt += 1;
+          await sleep(requestRetryDelayMs * attempt);
+          continue;
+        }
+        throw new Error(
+          `HTTP ${response.status} ${response.statusText} on ${pathname}: ${text.slice(0, 300)}`,
+        );
+      }
+
+      const json = text ? JSON.parse(text) : null;
+      return unwrapResponse(json);
+    } catch (error) {
+      lastError = error;
+      const message = error instanceof Error ? error.message : String(error);
+      const isAbort = error && typeof error === "object" && error.name === "AbortError";
+      const isFetchFailure =
+        isAbort ||
+        message.includes("fetch failed") ||
+        message.includes("ECONNRESET") ||
+        message.includes("ECONNREFUSED") ||
+        message.includes("ETIMEDOUT") ||
+        message.includes("ENOTFOUND");
+      if (isFetchFailure && attempt < requestRetryCount) {
+        attempt += 1;
+        await sleep(requestRetryDelayMs * attempt);
+        continue;
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeoutHandle);
+    }
   }
-  return unwrapResponse(json);
+
+  throw lastError ?? new Error(`request failed for ${pathname}`);
 }
 
 async function fetchWorkflowHealthSnapshot() {
@@ -480,6 +537,9 @@ async function main() {
   console.log(`- maxDegradedRate: ${maxDegradedRate}`);
   console.log(`- maxDuplicateSideEffectRate: ${maxDuplicateSideEffectRate}`);
   console.log(`- maxQueueLagMs: ${maxQueueLagMs}`);
+  console.log(`- requestTimeoutMs: ${requestTimeoutMs}`);
+  console.log(`- requestRetryCount: ${requestRetryCount}`);
+  console.log(`- requestRetryDelayMs: ${requestRetryDelayMs}`);
   console.log(
     `- workflowHealth: ${enableWorkflowHealth ? "enabled" : "disabled"} (required=${requireWorkflowHealth ? "yes" : "no"})`,
   );
@@ -526,6 +586,9 @@ async function main() {
     maxDegradedRate,
     maxDuplicateSideEffectRate,
     maxQueueLagMs,
+    requestTimeoutMs,
+    requestRetryCount,
+    requestRetryDelayMs,
     ackWithinSloRate,
     backgroundFollowupRate,
     degradedRate,
