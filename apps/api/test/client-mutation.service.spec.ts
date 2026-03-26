@@ -222,4 +222,48 @@ describe("ClientMutationService", () => {
     });
     expect(handler).toHaveBeenCalledTimes(2);
   });
+
+  it("falls back to direct execution when idempotency table is unavailable on lookup", async () => {
+    const { prisma } = createPrismaMock();
+    const missingTableError: any = new Error("missing client_mutations table");
+    missingTableError.code = "P2021";
+    prisma.clientMutation.findUnique = vi
+      .fn()
+      .mockRejectedValue(missingTableError);
+
+    const service = new ClientMutationService(prisma);
+    const handler = vi.fn().mockResolvedValue({ traceId: "trace-fallback-1" });
+
+    const result = await service.run({
+      userId: "user-1",
+      scope: "agent.respond",
+      idempotencyKey: "agent-respond-schema-fallback-1",
+      handler,
+    });
+
+    expect(result).toEqual({ traceId: "trace-fallback-1" });
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns handler result when persistence update fails with schema drift", async () => {
+    const { prisma } = createPrismaMock();
+    const missingTableError: any = new Error("missing client_mutations table");
+    missingTableError.code = "P2021";
+    prisma.clientMutation.update = vi
+      .fn()
+      .mockRejectedValueOnce(missingTableError);
+
+    const service = new ClientMutationService(prisma);
+    const handler = vi.fn().mockResolvedValue({ traceId: "trace-fallback-2" });
+
+    const result = await service.run({
+      userId: "user-1",
+      scope: "agent.respond",
+      idempotencyKey: "agent-respond-schema-fallback-2",
+      handler,
+    });
+
+    expect(result).toEqual({ traceId: "trace-fallback-2" });
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
 });

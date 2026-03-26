@@ -298,6 +298,64 @@ describe("AgentController", () => {
     });
   });
 
+  it("lists thread messages hiding internal workflow history by default", async () => {
+    const threadId = "11111111-1111-4111-8111-111111111111";
+    const userId = "22222222-2222-4222-8222-222222222222";
+    const messages = [
+      {
+        id: "msg-plan",
+        role: "workflow",
+        content: "Plan ready.",
+      },
+    ];
+    const { controller, agentService } = createController({
+      agentService: {
+        listThreadMessages: vi.fn().mockResolvedValue(messages),
+      },
+    });
+
+    const result = await controller.getMessages(threadId, undefined, userId);
+
+    expect(agentService.assertThreadOwnership).toHaveBeenCalledWith(
+      threadId,
+      userId,
+    );
+    expect(agentService.listThreadMessages).toHaveBeenCalledWith(threadId, {
+      includeInternalWorkflow: false,
+    });
+    expect(result).toEqual({
+      success: true,
+      data: messages,
+    });
+  });
+
+  it("allows including internal workflow history via query flag", async () => {
+    const threadId = "11111111-1111-4111-8111-111111111111";
+    const userId = "22222222-2222-4222-8222-222222222222";
+    const { controller, agentService } = createController({
+      agentService: {
+        listThreadMessages: vi.fn().mockResolvedValue([]),
+      },
+    });
+
+    await controller.getMessages(threadId, "true", userId);
+
+    expect(agentService.listThreadMessages).toHaveBeenCalledWith(threadId, {
+      includeInternalWorkflow: true,
+    });
+  });
+
+  it("rejects invalid includeInternalWorkflow query values", async () => {
+    const threadId = "11111111-1111-4111-8111-111111111111";
+    const userId = "22222222-2222-4222-8222-222222222222";
+    const { controller, agentService } = createController();
+
+    await expect(
+      controller.getMessages(threadId, "maybe", userId),
+    ).rejects.toThrow("boolean query must be true or false");
+    expect(agentService.listThreadMessages).not.toHaveBeenCalled();
+  });
+
   it("lists and resolves plan checkpoints", async () => {
     const threadId = "11111111-1111-4111-8111-111111111111";
     const checkpointId = "44444444-4444-4444-8444-444444444444";

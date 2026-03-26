@@ -90,6 +90,36 @@
       "trustScore": 90,
       "availabilityMode": "later_today",
       "tags": ["reconnect"]
+    },
+    {
+      "userId": "user-diana",
+      "displayName": "Diana",
+      "country": "Spain",
+      "city": "Madrid",
+      "languages": ["es"],
+      "trustScore": 93,
+      "availabilityMode": "later_today",
+      "tags": ["dating", "cafes", "music"]
+    },
+    {
+      "userId": "user-seller",
+      "displayName": "Seller",
+      "country": "Argentina",
+      "city": "Buenos Aires",
+      "languages": ["en", "es"],
+      "trustScore": 89,
+      "availabilityMode": "flexible",
+      "tags": ["commerce", "console", "cycling"]
+    },
+    {
+      "userId": "user-buyer",
+      "displayName": "Buyer",
+      "country": "Argentina",
+      "city": "Buenos Aires",
+      "languages": ["en"],
+      "trustScore": 86,
+      "availabilityMode": "now",
+      "tags": ["commerce", "gaming", "cycling"]
     }
   ],
   "relationships": [
@@ -107,6 +137,16 @@
       "sourceUserId": "user-alice",
       "targetUserId": "user-hugo",
       "type": "reconnect_candidate"
+    },
+    {
+      "sourceUserId": "user-alice",
+      "targetUserId": "user-diana",
+      "type": "dating_candidate"
+    },
+    {
+      "sourceUserId": "user-buyer",
+      "targetUserId": "user-seller",
+      "type": "commerce_candidate"
     }
   ],
   "opportunities": [
@@ -121,6 +161,18 @@
       "type": "reconnect",
       "ownerUserId": "user-hugo",
       "tags": ["reconnect"]
+    },
+    {
+      "id": "opp-dating-intro-diana",
+      "type": "dating",
+      "ownerUserId": "user-diana",
+      "tags": ["dating", "music"]
+    },
+    {
+      "id": "opp-commerce-console-seller",
+      "type": "commerce",
+      "ownerUserId": "user-seller",
+      "tags": ["commerce", "console"]
     }
   ]
 }

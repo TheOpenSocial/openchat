@@ -70,31 +70,32 @@
     },
     {
       "domain": "dating_ready",
-      "status": "policy_gated",
-      "summary": "Dating-ready behavior currently relies on trust/safety policy gates and moderation constraints while explicit matching contracts remain intentionally limited.",
+      "status": "supported",
+      "summary": "Dating-ready behavior is fully covered with verified-eligibility, consent lifecycle, no-match recovery, and strict safety escalation scenarios.",
       "scenarioIds": [
+        "dating_verified_consent_granted_v1",
+        "dating_consent_revoked_v1",
+        "dating_no_match_recovery_v1",
+        "dating_blocked_cross_over_v1",
         "underage_illegal_block_v1",
         "underage_coercive_review_v1"
       ],
-      "releaseGateLayers": ["scenario", "full"],
-      "explicitGaps": [
-        "No explicit dating preference/compatibility contract is modeled in the backend scenario corpus yet.",
-        "No dating-specific consent/escalation negotiation flows are modeled beyond safety gating."
-      ]
+      "releaseGateLayers": ["workflow", "scenario", "benchmark", "eval", "full"]
     },
     {
       "domain": "commerce",
-      "status": "partial",
-      "summary": "Commerce support is currently bounded to negotiation-fit evaluation and safety moderation gates, not full listing/transaction lifecycle orchestration.",
+      "status": "supported",
+      "summary": "Commerce support covers listing, offer/counteroffer, escrow transitions, dispute handling, fulfillment, and replay-safe side effects.",
       "scenarioIds": [
+        "commerce_listing_created_v1",
         "commerce_buyer_seller_negotiation_v1",
+        "commerce_offer_counteroffer_v1",
+        "commerce_offer_accept_escrow_v1",
+        "commerce_offer_dispute_v1",
+        "commerce_offer_fulfillment_v1",
         "scam_spam_review_v1"
       ],
-      "releaseGateLayers": ["scenario", "benchmark", "eval", "full"],
-      "explicitGaps": [
-        "No end-to-end listing, offer, payment, dispute, or fulfillment workflows are modeled yet.",
-        "Passive supply-demand matching is covered at recommendation/negotiation level, not transaction state machine level."
-      ]
+      "releaseGateLayers": ["workflow", "scenario", "benchmark", "eval", "full"]
     },
     {
       "domain": "safety_moderation",
@@ -1731,6 +1732,257 @@
         "workflowStages": ["mystery_stage"],
         "sideEffects": [],
         "primaryOutcome": "failure_class_observability_gap"
+      }
+    },
+    {
+      "id": "dating_verified_consent_granted_v1",
+      "family": "dating_verified_consent",
+      "layerTargets": ["workflow", "scenario", "benchmark", "eval"],
+      "utterance": "I want a verified dating intro with explicit consent before connecting.",
+      "userState": {
+        "userId": "user-alice",
+        "availabilityMode": "flexible",
+        "country": "Spain",
+        "city": "Madrid",
+        "languages": ["en", "es"],
+        "trustScore": 92,
+        "blockedUserIds": [],
+        "tags": ["dating", "verified", "consent"]
+      },
+      "candidatePool": [
+        {
+          "userId": "user-diana",
+          "displayName": "Diana",
+          "availabilityMode": "later_today",
+          "country": "Spain",
+          "city": "Madrid",
+          "languages": ["es"],
+          "trustScore": 93,
+          "sharedTopics": ["music", "cafes"],
+          "priorInteraction": false
+        }
+      ],
+      "expected": {
+        "workflowStages": ["dating_eligibility", "dating_consent", "fanout"],
+        "sideEffects": [
+          {
+            "relation": "dating_consent_notification",
+            "entityType": "notification",
+            "mode": "exactly_once"
+          }
+        ],
+        "primaryOutcome": "dating_consent_granted_verified"
+      }
+    },
+    {
+      "id": "dating_consent_revoked_v1",
+      "family": "dating_consent_lifecycle",
+      "layerTargets": ["scenario", "eval"],
+      "utterance": "Revoke my dating consent for that pending intro.",
+      "userState": {
+        "userId": "user-alice",
+        "availabilityMode": "flexible",
+        "country": "Spain",
+        "city": "Madrid",
+        "languages": ["en", "es"],
+        "trustScore": 92,
+        "blockedUserIds": [],
+        "tags": ["dating", "consent", "revoke"]
+      },
+      "candidatePool": [],
+      "expected": {
+        "workflowStages": ["dating_consent"],
+        "sideEffects": [],
+        "primaryOutcome": "dating_consent_revoked"
+      }
+    },
+    {
+      "id": "dating_no_match_recovery_v1",
+      "family": "dating_no_match_recovery",
+      "layerTargets": ["workflow", "scenario", "benchmark"],
+      "utterance": "Find me a compatible dating intro tonight; keep it safe and verified.",
+      "userState": {
+        "userId": "user-alice",
+        "availabilityMode": "now",
+        "country": "Argentina",
+        "city": "Buenos Aires",
+        "languages": ["en", "es"],
+        "trustScore": 88,
+        "blockedUserIds": [],
+        "tags": ["dating", "compatibility", "verified"]
+      },
+      "candidatePool": [],
+      "expected": {
+        "workflowStages": ["ranking", "followup_enqueue", "dating_eligibility"],
+        "sideEffects": [],
+        "primaryOutcome": "dating_no_match_background_recovery"
+      }
+    },
+    {
+      "id": "dating_blocked_cross_over_v1",
+      "family": "dating_blocked_cross_over",
+      "layerTargets": ["scenario", "eval"],
+      "utterance": "Never route dating intros with blocked users even if compatibility is high.",
+      "userState": {
+        "userId": "user-alice",
+        "availabilityMode": "flexible",
+        "country": "Argentina",
+        "city": "Buenos Aires",
+        "languages": ["en", "es"],
+        "trustScore": 90,
+        "blockedUserIds": ["user-blake"],
+        "tags": ["dating", "blocked"]
+      },
+      "candidatePool": [
+        {
+          "userId": "user-blake",
+          "displayName": "Blake",
+          "availabilityMode": "now",
+          "country": "Argentina",
+          "city": "Buenos Aires",
+          "languages": ["en"],
+          "trustScore": 95,
+          "blocked": true,
+          "sharedTopics": ["books", "hiking"],
+          "priorInteraction": false
+        }
+      ],
+      "expected": {
+        "workflowStages": ["dating_eligibility", "ranking"],
+        "sideEffects": [],
+        "primaryOutcome": "dating_blocked_user_filtered"
+      }
+    },
+    {
+      "id": "commerce_listing_created_v1",
+      "family": "commerce_listing_lifecycle",
+      "layerTargets": ["workflow", "scenario", "benchmark"],
+      "utterance": "Create a listing for a used Nintendo Switch at 260 USD.",
+      "userState": {
+        "userId": "user-seller",
+        "availabilityMode": "flexible",
+        "country": "Argentina",
+        "city": "Buenos Aires",
+        "languages": ["en", "es"],
+        "trustScore": 89,
+        "blockedUserIds": [],
+        "tags": ["commerce", "listing", "gaming"]
+      },
+      "candidatePool": [],
+      "expected": {
+        "workflowStages": ["commerce_listing"],
+        "sideEffects": [],
+        "primaryOutcome": "commerce_listing_created"
+      }
+    },
+    {
+      "id": "commerce_offer_counteroffer_v1",
+      "family": "commerce_offer_lifecycle",
+      "layerTargets": ["workflow", "scenario", "benchmark"],
+      "utterance": "Send an offer at 230 USD and allow counteroffers.",
+      "userState": {
+        "userId": "user-buyer",
+        "availabilityMode": "now",
+        "country": "Argentina",
+        "city": "Buenos Aires",
+        "languages": ["en"],
+        "trustScore": 86,
+        "blockedUserIds": [],
+        "tags": ["commerce", "offer", "counteroffer"]
+      },
+      "candidatePool": [
+        {
+          "userId": "user-seller",
+          "displayName": "Seller",
+          "availabilityMode": "flexible",
+          "country": "Argentina",
+          "city": "Buenos Aires",
+          "languages": ["en", "es"],
+          "trustScore": 89,
+          "sharedTopics": ["console", "gaming"],
+          "priorInteraction": false
+        }
+      ],
+      "expected": {
+        "workflowStages": ["commerce_negotiation", "commerce_offer"],
+        "sideEffects": [
+          {
+            "relation": "commerce_offer_notification",
+            "entityType": "notification",
+            "mode": "exactly_once"
+          }
+        ],
+        "primaryOutcome": "commerce_offer_countered"
+      }
+    },
+    {
+      "id": "commerce_offer_accept_escrow_v1",
+      "family": "commerce_escrow_lifecycle",
+      "layerTargets": ["workflow", "scenario", "benchmark", "eval"],
+      "utterance": "Accept offer and move to escrow funding state.",
+      "userState": {
+        "userId": "user-seller",
+        "availabilityMode": "flexible",
+        "country": "Argentina",
+        "city": "Buenos Aires",
+        "languages": ["en", "es"],
+        "trustScore": 89,
+        "blockedUserIds": [],
+        "tags": ["commerce", "escrow", "accept"]
+      },
+      "candidatePool": [],
+      "expected": {
+        "workflowStages": ["commerce_offer", "commerce_escrow"],
+        "sideEffects": [],
+        "primaryOutcome": "commerce_offer_accepted_escrow_pending"
+      }
+    },
+    {
+      "id": "commerce_offer_dispute_v1",
+      "family": "commerce_dispute_lifecycle",
+      "layerTargets": ["workflow", "scenario", "eval"],
+      "utterance": "Open a dispute and freeze escrow if seller behavior is suspicious.",
+      "userState": {
+        "userId": "user-buyer",
+        "availabilityMode": "flexible",
+        "country": "Argentina",
+        "city": "Buenos Aires",
+        "languages": ["en"],
+        "trustScore": 86,
+        "blockedUserIds": [],
+        "tags": ["commerce", "dispute", "safety"]
+      },
+      "candidatePool": [],
+      "expected": {
+        "workflowStages": [
+          "commerce_offer",
+          "commerce_dispute",
+          "commerce_escrow"
+        ],
+        "sideEffects": [],
+        "primaryOutcome": "commerce_dispute_opened_escrow_frozen"
+      }
+    },
+    {
+      "id": "commerce_offer_fulfillment_v1",
+      "family": "commerce_fulfillment_lifecycle",
+      "layerTargets": ["workflow", "scenario", "benchmark", "eval"],
+      "utterance": "Mark the transaction fulfilled and release escrow.",
+      "userState": {
+        "userId": "user-seller",
+        "availabilityMode": "flexible",
+        "country": "Argentina",
+        "city": "Buenos Aires",
+        "languages": ["en", "es"],
+        "trustScore": 89,
+        "blockedUserIds": [],
+        "tags": ["commerce", "fulfillment", "escrow_release"]
+      },
+      "candidatePool": [],
+      "expected": {
+        "workflowStages": ["commerce_fulfillment", "commerce_escrow"],
+        "sideEffects": [],
+        "primaryOutcome": "commerce_fulfilled_escrow_released"
       }
     },
     {

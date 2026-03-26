@@ -655,6 +655,428 @@ describe("ConnectionSetupService", () => {
     );
   });
 
+  it("reuses workflow-linked group backfill notifications and sender thread updates on replay", async () => {
+    const sideEffectRows: Array<{
+      action: string;
+      entityType: string;
+      entityId: string;
+      createdAt: Date;
+      metadata: Record<string, unknown>;
+    }> = [];
+    const notificationsById = new Map<string, any>();
+    const messagesById = new Map<string, any>();
+    let notificationCounter = 0;
+    let messageCounter = 0;
+
+    const intentRequestFindMany = vi.fn(async (args?: any) => {
+      if (args?.where?.status === "accepted") {
+        return [{ recipientUserId: "user-2" }];
+      }
+      return [{ recipientUserId: "user-2", status: "accepted", wave: 1 }];
+    });
+
+    const prisma: any = {
+      intentRequest: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "req-group-replay",
+          status: "accepted",
+          intentId: "intent-group-replay",
+          senderUserId: "user-1",
+          recipientUserId: "user-2",
+        }),
+        findMany: intentRequestFindMany,
+        createMany: vi.fn().mockResolvedValue({ count: 2 }),
+      },
+      intent: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "intent-group-replay",
+          createdAt: new Date(),
+          parsedIntent: { intentType: "group", groupSizeTarget: 4 },
+        }),
+        update: vi.fn().mockResolvedValue({}),
+      },
+      intentCandidate: {
+        findMany: vi.fn().mockResolvedValue([
+          { candidateUserId: "user-3", rationale: { semantic: 0.9 } },
+          { candidateUserId: "user-4", rationale: { semantic: 0.8 } },
+        ]),
+      },
+      connection: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "conn-group-replay",
+          type: "group",
+          originIntentId: "intent-group-replay",
+        }),
+      },
+      connectionParticipant: {
+        findMany: vi.fn().mockResolvedValue([
+          { userId: "user-1", leftAt: null },
+          { userId: "user-2", leftAt: null },
+        ]),
+        createMany: vi.fn().mockResolvedValue({}),
+      },
+      chat: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "chat-group-replay",
+          connectionId: "conn-group-replay",
+          type: "group",
+        }),
+      },
+      chatMembership: {
+        findMany: vi.fn().mockResolvedValue([
+          { chatId: "chat-group-replay", userId: "user-1" },
+          { chatId: "chat-group-replay", userId: "user-2" },
+        ]),
+        createMany: vi.fn().mockResolvedValue({}),
+      },
+      agentThread: {
+        findFirst: vi.fn().mockResolvedValue({ id: "thread-group-replay" }),
+      },
+      notification: {
+        findUnique: vi.fn().mockImplementation(({ where }: any) => {
+          return Promise.resolve(notificationsById.get(where.id) ?? null);
+        }),
+      },
+      agentMessage: {
+        findUnique: vi.fn().mockImplementation(({ where }: any) => {
+          return Promise.resolve(messagesById.get(where.id) ?? null);
+        }),
+      },
+      auditLog: {
+        findMany: vi.fn().mockImplementation(({ where }: any) => {
+          const gte = where?.createdAt?.gte as Date | undefined;
+          const rows = sideEffectRows.filter((row) => {
+            if (where?.action && row.action !== where.action) {
+              return false;
+            }
+            if (where?.entityType && row.entityType !== where.entityType) {
+              return false;
+            }
+            if (gte && row.createdAt < gte) {
+              return false;
+            }
+            return true;
+          });
+          return Promise.resolve(
+            rows.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()),
+          );
+        }),
+      },
+    };
+
+    const notificationsService: any = {
+      createInAppNotification: vi
+        .fn()
+        .mockImplementation(
+          (recipientUserId: string, type: NotificationType, body: string) => {
+            const notification = {
+              id: `notification-${++notificationCounter}`,
+              recipientUserId,
+              type,
+              body,
+            };
+            notificationsById.set(notification.id, notification);
+            return Promise.resolve(notification);
+          },
+        ),
+    };
+    const agentService: any = {
+      createAgentMessage: vi
+        .fn()
+        .mockImplementation((threadId: string, content: string) => {
+          const message = {
+            id: `agent-message-${++messageCounter}`,
+            threadId,
+            content,
+          };
+          messagesById.set(message.id, message);
+          return Promise.resolve(message);
+        }),
+    };
+    const workflowRuntimeService: any = {
+      buildWorkflowRunId: vi
+        .fn()
+        .mockReturnValue("social:intent_request:req-group-replay"),
+      startRun: vi.fn().mockResolvedValue(undefined),
+      checkpoint: vi.fn().mockResolvedValue(undefined),
+      linkSideEffect: vi.fn().mockImplementation((input: any) => {
+        sideEffectRows.push({
+          action: "agent.workflow_side_effect_linked",
+          entityType: input.entityType,
+          entityId: input.entityId,
+          createdAt: new Date(),
+          metadata: {
+            workflowRunId: input.workflowRunId,
+            relation: input.relation,
+            ...(input.metadata ?? {}),
+          },
+        });
+        return Promise.resolve(undefined);
+      }),
+    };
+
+    const service = new ConnectionSetupService(
+      prisma,
+      {
+        createConnection: vi
+          .fn()
+          .mockResolvedValue({ id: "conn-group-replay" }),
+      } as any,
+      {
+        createChat: vi.fn().mockResolvedValue({ id: "chat-group-replay" }),
+        createMessage: vi.fn().mockResolvedValue({}),
+        createSystemMessage: vi.fn().mockResolvedValue({}),
+      } as any,
+      notificationsService,
+      {
+        recordBehaviorSignal: vi.fn().mockResolvedValue({}),
+        storeInteractionSummary: vi.fn().mockResolvedValue({}),
+      } as any,
+      {
+        upsertConversationSummaryEmbedding: vi.fn().mockResolvedValue({}),
+      } as any,
+      agentService,
+      {
+        recordGroupFormationStalled: vi.fn().mockResolvedValue(undefined),
+      } as any,
+      undefined,
+      undefined,
+      undefined,
+      workflowRuntimeService,
+    );
+
+    await service.setupFromAcceptedRequest("req-group-replay", "trace-1");
+    await service.setupFromAcceptedRequest("req-group-replay", "trace-2");
+
+    expect(notificationsService.createInAppNotification).toHaveBeenCalledTimes(
+      3,
+    );
+    expect(agentService.createAgentMessage).toHaveBeenCalledTimes(2);
+
+    const dedupedSideEffects = workflowRuntimeService.linkSideEffect.mock.calls
+      .map(([input]: [any]) => input)
+      .filter((input: any) => input?.metadata?.deduped === true);
+    const dedupedRelations = new Set(
+      dedupedSideEffects.map((input: any) => input.relation),
+    );
+
+    expect(dedupedRelations.has("group_sender_notification")).toBe(true);
+    expect(dedupedRelations.has("group_backfill_notification")).toBe(true);
+    expect(dedupedRelations.has("group_sender_thread_message")).toBe(true);
+  });
+
+  it("reuses workflow-linked group-ready notifications and sender thread update on replay", async () => {
+    const sideEffectRows: Array<{
+      action: string;
+      entityType: string;
+      entityId: string;
+      createdAt: Date;
+      metadata: Record<string, unknown>;
+    }> = [];
+    const notificationsById = new Map<string, any>();
+    const messagesById = new Map<string, any>();
+    let notificationCounter = 0;
+    let messageCounter = 0;
+
+    const intentRequestFindMany = vi.fn(async (args?: any) => {
+      if (args?.where?.status === "accepted") {
+        return [{ recipientUserId: "user-2" }, { recipientUserId: "user-3" }];
+      }
+      return [
+        { recipientUserId: "user-2", status: "accepted", wave: 1 },
+        { recipientUserId: "user-3", status: "accepted", wave: 1 },
+      ];
+    });
+
+    const prisma: any = {
+      intentRequest: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "req-group-ready-replay",
+          status: "accepted",
+          intentId: "intent-group-ready-replay",
+          senderUserId: "user-1",
+          recipientUserId: "user-2",
+        }),
+        findMany: intentRequestFindMany,
+      },
+      intent: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "intent-group-ready-replay",
+          createdAt: new Date(),
+          parsedIntent: { intentType: "group", groupSizeTarget: 3 },
+        }),
+        update: vi.fn().mockResolvedValue({}),
+      },
+      connection: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "conn-group-ready-replay",
+          type: "group",
+          originIntentId: "intent-group-ready-replay",
+        }),
+      },
+      connectionParticipant: {
+        findMany: vi.fn().mockResolvedValue([
+          { userId: "user-1", leftAt: null },
+          { userId: "user-2", leftAt: null },
+          { userId: "user-3", leftAt: null },
+        ]),
+        createMany: vi.fn().mockResolvedValue({}),
+      },
+      chat: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "chat-group-ready-replay",
+          connectionId: "conn-group-ready-replay",
+          type: "group",
+        }),
+      },
+      chatMembership: {
+        findMany: vi.fn().mockResolvedValue([
+          { chatId: "chat-group-ready-replay", userId: "user-1" },
+          { chatId: "chat-group-ready-replay", userId: "user-2" },
+          { chatId: "chat-group-ready-replay", userId: "user-3" },
+        ]),
+        createMany: vi.fn().mockResolvedValue({}),
+      },
+      agentThread: {
+        findFirst: vi
+          .fn()
+          .mockResolvedValue({ id: "thread-group-ready-replay" }),
+      },
+      notification: {
+        findUnique: vi.fn().mockImplementation(({ where }: any) => {
+          return Promise.resolve(notificationsById.get(where.id) ?? null);
+        }),
+      },
+      agentMessage: {
+        findUnique: vi.fn().mockImplementation(({ where }: any) => {
+          return Promise.resolve(messagesById.get(where.id) ?? null);
+        }),
+      },
+      auditLog: {
+        findMany: vi.fn().mockImplementation(({ where }: any) => {
+          const gte = where?.createdAt?.gte as Date | undefined;
+          const rows = sideEffectRows.filter((row) => {
+            if (where?.action && row.action !== where.action) {
+              return false;
+            }
+            if (where?.entityType && row.entityType !== where.entityType) {
+              return false;
+            }
+            if (gte && row.createdAt < gte) {
+              return false;
+            }
+            return true;
+          });
+          return Promise.resolve(
+            rows.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()),
+          );
+        }),
+      },
+    };
+
+    const notificationsService: any = {
+      createInAppNotification: vi
+        .fn()
+        .mockImplementation(
+          (recipientUserId: string, type: NotificationType, body: string) => {
+            const notification = {
+              id: `notification-${++notificationCounter}`,
+              recipientUserId,
+              type,
+              body,
+            };
+            notificationsById.set(notification.id, notification);
+            return Promise.resolve(notification);
+          },
+        ),
+    };
+    const agentService: any = {
+      createAgentMessage: vi
+        .fn()
+        .mockImplementation((threadId: string, content: string) => {
+          const message = {
+            id: `agent-message-${++messageCounter}`,
+            threadId,
+            content,
+          };
+          messagesById.set(message.id, message);
+          return Promise.resolve(message);
+        }),
+    };
+    const workflowRuntimeService: any = {
+      buildWorkflowRunId: vi
+        .fn()
+        .mockReturnValue("social:intent_request:req-group-ready-replay"),
+      startRun: vi.fn().mockResolvedValue(undefined),
+      checkpoint: vi.fn().mockResolvedValue(undefined),
+      linkSideEffect: vi.fn().mockImplementation((input: any) => {
+        sideEffectRows.push({
+          action: "agent.workflow_side_effect_linked",
+          entityType: input.entityType,
+          entityId: input.entityId,
+          createdAt: new Date(),
+          metadata: {
+            workflowRunId: input.workflowRunId,
+            relation: input.relation,
+            ...(input.metadata ?? {}),
+          },
+        });
+        return Promise.resolve(undefined);
+      }),
+    };
+
+    const service = new ConnectionSetupService(
+      prisma,
+      {
+        createConnection: vi
+          .fn()
+          .mockResolvedValue({ id: "conn-group-ready-replay" }),
+      } as any,
+      {
+        createChat: vi
+          .fn()
+          .mockResolvedValue({ id: "chat-group-ready-replay" }),
+        createMessage: vi.fn().mockResolvedValue({}),
+        createSystemMessage: vi.fn().mockResolvedValue({}),
+      } as any,
+      notificationsService,
+      {
+        recordBehaviorSignal: vi.fn().mockResolvedValue({}),
+        storeInteractionSummary: vi.fn().mockResolvedValue({}),
+      } as any,
+      {
+        upsertConversationSummaryEmbedding: vi.fn().mockResolvedValue({}),
+      } as any,
+      agentService,
+      {
+        recordGroupFormationStalled: vi.fn().mockResolvedValue(undefined),
+      } as any,
+      undefined,
+      undefined,
+      undefined,
+      workflowRuntimeService,
+    );
+
+    await service.setupFromAcceptedRequest("req-group-ready-replay", "trace-1");
+    await service.setupFromAcceptedRequest("req-group-ready-replay", "trace-2");
+
+    expect(notificationsService.createInAppNotification).toHaveBeenCalledTimes(
+      3,
+    );
+    expect(agentService.createAgentMessage).toHaveBeenCalledTimes(1);
+
+    const dedupedSideEffects = workflowRuntimeService.linkSideEffect.mock.calls
+      .map(([input]: [any]) => input)
+      .filter((input: any) => input?.metadata?.deduped === true);
+    const dedupedRelations = new Set(
+      dedupedSideEffects.map((input: any) => input.relation),
+    );
+
+    expect(dedupedRelations.has("group_sender_notification")).toBe(true);
+    expect(dedupedRelations.has("group_participant_notification")).toBe(true);
+    expect(dedupedRelations.has("group_sender_thread_message")).toBe(true);
+  });
+
   it("does not backfill when pending invites already fill capacity", async () => {
     const createManyIntentRequests = vi.fn().mockResolvedValue({ count: 0 });
     const candidateFindMany = vi
@@ -844,6 +1266,332 @@ describe("ConnectionSetupService", () => {
       undefined,
       expect.objectContaining({
         idempotencyKey: "chat-membership-join:chat-1:user-active",
+      }),
+    );
+  });
+
+  it("reuses workflow-linked dm notifications and sender thread update on replay", async () => {
+    const sideEffectRows: Array<{
+      action: string;
+      entityType: string;
+      entityId: string;
+      createdAt: Date;
+      metadata: Record<string, unknown>;
+    }> = [];
+    const notificationsById = new Map<string, any>();
+    const messagesById = new Map<string, any>();
+    let notificationCounter = 0;
+    let messageCounter = 0;
+
+    const prisma: any = {
+      intentRequest: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "req-replay",
+          status: "accepted",
+          intentId: "intent-replay",
+          senderUserId: "user-1",
+          recipientUserId: "user-2",
+        }),
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      intent: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "intent-replay",
+          parsedIntent: { intentType: "chat" },
+        }),
+        update: vi.fn().mockResolvedValue({}),
+      },
+      connection: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "conn-replay",
+          type: "dm",
+          originIntentId: "intent-replay",
+        }),
+      },
+      connectionParticipant: {
+        findMany: vi.fn().mockResolvedValue([
+          { userId: "user-1", leftAt: null },
+          { userId: "user-2", leftAt: null },
+        ]),
+        createMany: vi.fn().mockResolvedValue({}),
+      },
+      chat: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "chat-replay",
+          connectionId: "conn-replay",
+          type: "dm",
+        }),
+      },
+      chatMembership: {
+        findMany: vi.fn().mockResolvedValue([
+          { chatId: "chat-replay", userId: "user-1" },
+          { chatId: "chat-replay", userId: "user-2" },
+        ]),
+        createMany: vi.fn().mockResolvedValue({}),
+      },
+      agentThread: {
+        findFirst: vi.fn().mockResolvedValue({ id: "thread-replay" }),
+      },
+      notification: {
+        findUnique: vi.fn().mockImplementation(({ where }: any) => {
+          return Promise.resolve(notificationsById.get(where.id) ?? null);
+        }),
+      },
+      agentMessage: {
+        findUnique: vi.fn().mockImplementation(({ where }: any) => {
+          return Promise.resolve(messagesById.get(where.id) ?? null);
+        }),
+      },
+      auditLog: {
+        findMany: vi.fn().mockImplementation(({ where }: any) => {
+          const gte = where?.createdAt?.gte as Date | undefined;
+          const rows = sideEffectRows.filter((row) => {
+            if (where?.action && row.action !== where.action) {
+              return false;
+            }
+            if (where?.entityType && row.entityType !== where.entityType) {
+              return false;
+            }
+            if (gte && row.createdAt < gte) {
+              return false;
+            }
+            return true;
+          });
+          return Promise.resolve(
+            rows.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()),
+          );
+        }),
+      },
+    };
+
+    const notificationsService: any = {
+      createInAppNotification: vi
+        .fn()
+        .mockImplementation(
+          (recipientUserId: string, type: NotificationType, body: string) => {
+            const notification = {
+              id: `notification-${++notificationCounter}`,
+              recipientUserId,
+              type,
+              body,
+            };
+            notificationsById.set(notification.id, notification);
+            return Promise.resolve(notification);
+          },
+        ),
+    };
+    const agentService: any = {
+      createAgentMessage: vi
+        .fn()
+        .mockImplementation((threadId: string, content: string) => {
+          const message = {
+            id: `agent-message-${++messageCounter}`,
+            threadId,
+            content,
+          };
+          messagesById.set(message.id, message);
+          return Promise.resolve(message);
+        }),
+    };
+    const workflowRuntimeService: any = {
+      buildWorkflowRunId: vi
+        .fn()
+        .mockReturnValue("social:intent_request:req-replay"),
+      startRun: vi.fn().mockResolvedValue(undefined),
+      checkpoint: vi.fn().mockResolvedValue(undefined),
+      linkSideEffect: vi.fn().mockImplementation((input: any) => {
+        sideEffectRows.push({
+          action: "agent.workflow_side_effect_linked",
+          entityType: input.entityType,
+          entityId: input.entityId,
+          createdAt: new Date(),
+          metadata: {
+            workflowRunId: input.workflowRunId,
+            relation: input.relation,
+            ...(input.metadata ?? {}),
+          },
+        });
+        return Promise.resolve(undefined);
+      }),
+    };
+
+    const service = new ConnectionSetupService(
+      prisma,
+      {} as any,
+      {
+        createChat: vi.fn(),
+        createMessage: vi.fn(),
+        createSystemMessage: vi.fn(),
+      } as any,
+      notificationsService,
+      {
+        recordBehaviorSignal: vi.fn().mockResolvedValue({}),
+        storeInteractionSummary: vi.fn().mockResolvedValue({}),
+      } as any,
+      {
+        upsertConversationSummaryEmbedding: vi.fn().mockResolvedValue({}),
+      } as any,
+      agentService,
+      {
+        recordGroupFormationStalled: vi.fn().mockResolvedValue(undefined),
+      } as any,
+      undefined,
+      undefined,
+      undefined,
+      workflowRuntimeService,
+    );
+
+    await service.setupFromAcceptedRequest("req-replay", "trace-1");
+    await service.setupFromAcceptedRequest("req-replay", "trace-2");
+
+    expect(notificationsService.createInAppNotification).toHaveBeenCalledTimes(
+      2,
+    );
+    expect(agentService.createAgentMessage).toHaveBeenCalledTimes(1);
+
+    const dedupedSideEffects = workflowRuntimeService.linkSideEffect.mock.calls
+      .map(([input]: [any]) => input)
+      .filter((input: any) => input?.metadata?.deduped === true);
+
+    expect(
+      dedupedSideEffects.some(
+        (input: any) => input.relation === "connection_sender_notification",
+      ),
+    ).toBe(true);
+    expect(
+      dedupedSideEffects.some(
+        (input: any) => input.relation === "connection_recipient_notification",
+      ),
+    ).toBe(true);
+    expect(
+      dedupedSideEffects.some(
+        (input: any) => input.relation === "connection_sender_thread_message",
+      ),
+    ).toBe(true);
+  });
+
+  it("records a blocked workflow checkpoint when group formation is disabled", async () => {
+    const workflowRuntimeService: any = {
+      buildWorkflowRunId: vi
+        .fn()
+        .mockReturnValue("social:intent_request:req-blocked"),
+      startRun: vi.fn().mockResolvedValue(undefined),
+      checkpoint: vi.fn().mockResolvedValue(undefined),
+    };
+    const launchControlsService: any = {
+      assertActionAllowed: vi
+        .fn()
+        .mockRejectedValue(new Error("group_formation_disabled")),
+    };
+    const prisma: any = {
+      intentRequest: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "req-blocked",
+          status: "accepted",
+          intentId: "intent-blocked",
+          senderUserId: "user-1",
+          recipientUserId: "user-2",
+        }),
+        findMany: vi.fn().mockResolvedValue([{ recipientUserId: "user-2" }]),
+      },
+      intent: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "intent-blocked",
+          parsedIntent: { intentType: "group", groupSizeTarget: 3 },
+          createdAt: new Date(),
+        }),
+      },
+    };
+
+    const service = new ConnectionSetupService(
+      prisma,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      launchControlsService,
+      undefined,
+      undefined,
+      workflowRuntimeService,
+    );
+
+    const result = await service.setupFromAcceptedRequest(
+      "req-blocked",
+      "trace-blocked",
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        status: "skipped",
+        reason: "group_formation_disabled",
+      }),
+    );
+    expect(workflowRuntimeService.startRun).toHaveBeenCalledTimes(1);
+    expect(workflowRuntimeService.checkpoint).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workflowRunId: "social:intent_request:req-blocked",
+        traceId: "trace-blocked",
+        stage: "connection_setup",
+        status: "blocked",
+      }),
+    );
+  });
+
+  it("records a failed workflow checkpoint when runtime setup errors", async () => {
+    const workflowRuntimeService: any = {
+      buildWorkflowRunId: vi
+        .fn()
+        .mockReturnValue("social:intent_request:req-failed"),
+      startRun: vi.fn().mockResolvedValue(undefined),
+      checkpoint: vi.fn().mockResolvedValue(undefined),
+    };
+    const prisma: any = {
+      intentRequest: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "req-failed",
+          status: "accepted",
+          intentId: "intent-missing",
+          senderUserId: "user-1",
+          recipientUserId: "user-2",
+        }),
+      },
+      intent: {
+        findUnique: vi.fn().mockResolvedValue(null),
+      },
+    };
+
+    const service = new ConnectionSetupService(
+      prisma,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      undefined,
+      undefined,
+      undefined,
+      workflowRuntimeService,
+    );
+
+    await expect(
+      service.setupFromAcceptedRequest("req-failed", "trace-failed"),
+    ).rejects.toThrow("intent not found");
+
+    expect(workflowRuntimeService.startRun).toHaveBeenCalledTimes(1);
+    expect(workflowRuntimeService.checkpoint).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workflowRunId: "social:intent_request:req-failed",
+        traceId: "trace-failed",
+        stage: "connection_setup",
+        status: "failed",
+        metadata: expect.objectContaining({
+          reason: "intent not found",
+        }),
       }),
     );
   });

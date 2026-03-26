@@ -1455,6 +1455,19 @@ export class OpenAIClient {
       normalized.includes("set my default") ||
       normalized.includes("update my preferences") ||
       normalized.includes("change my profile");
+    const looksLikeCommerce =
+      normalized.includes("buy") ||
+      normalized.includes("sell") ||
+      normalized.includes("price") ||
+      normalized.includes("offer") ||
+      normalized.includes("marketplace") ||
+      normalized.includes("listing");
+    const looksLikeNegotiation =
+      looksLikeCommerce ||
+      normalized.includes("negotiat") ||
+      normalized.includes("deal") ||
+      normalized.includes("compare seller") ||
+      normalized.includes("best offer");
 
     return conversationPlanSchema.parse({
       specialists: [
@@ -1507,6 +1520,24 @@ export class OpenAIClient {
                 role: "manager" as const,
                 tool: "intent.persist" as const,
                 input: { text: userMessage.slice(0, 500) },
+              },
+            ]
+          : []),
+        ...(looksLikeNegotiation
+          ? [
+              {
+                role: "manager" as const,
+                tool: "negotiation.evaluate" as const,
+                input: {
+                  domain: looksLikeCommerce ? "commerce" : "social",
+                  mode: looksTimeSensitive ? "sync" : "async",
+                  intentSummary: userMessage.slice(0, 500),
+                  requester: {
+                    objectives: looksLikeCommerce
+                      ? ["buyer_intent"]
+                      : ["social_connection"],
+                  },
+                },
               },
             ]
           : []),

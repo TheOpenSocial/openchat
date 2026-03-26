@@ -28,6 +28,7 @@ import { RecurringCirclesModule } from "./recurring-circles/recurring-circles.mo
 import { HealthController } from "./health/health.controller.js";
 import { SearchModule } from "./search/search.module.js";
 import { OnboardingModule } from "./onboarding/onboarding.module.js";
+import { RuntimeModule } from "./runtime/runtime.module.js";
 
 @Module({
   controllers: [HealthController],
@@ -63,6 +64,7 @@ import { OnboardingModule } from "./onboarding/onboarding.module.js";
     RecurringCirclesModule,
     SearchModule,
     OnboardingModule,
+    RuntimeModule,
   ],
   providers: [
     {

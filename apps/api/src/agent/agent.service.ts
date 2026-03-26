@@ -14,6 +14,11 @@ type ThreadMessageListener = (message: {
 }) => void;
 
 type AgentMessageRole = "user" | "agent" | "system" | "workflow";
+const INTERNAL_WORKFLOW_HISTORY_STAGES = new Set([
+  "risk_assessment_pre_tools",
+  "risk_assessment_pre_send",
+  "response_sanitized",
+]);
 
 @Injectable()
 export class AgentService {
@@ -49,11 +54,24 @@ export class AgentService {
     }
   }
 
-  listThreadMessages(threadId: string) {
-    return this.prisma.agentMessage.findMany({
+  async listThreadMessages(
+    threadId: string,
+    options: {
+      includeInternalWorkflow?: boolean;
+    } = {},
+  ) {
+    const messages = await this.prisma.agentMessage.findMany({
       where: { threadId },
       orderBy: { createdAt: "asc" },
     });
+
+    if (options.includeInternalWorkflow) {
+      return messages;
+    }
+
+    return messages.filter(
+      (message) => !this.isInternalWorkflowHistoryMessage(message),
+    );
   }
 
   createThread(userId: string, title?: string) {
@@ -138,6 +156,32 @@ export class AgentService {
 
   private threadEventName(threadId: string) {
     return `thread:${threadId}:message`;
+  }
+
+  private isInternalWorkflowHistoryMessage(message: {
+    role: string;
+    metadata?: Prisma.JsonValue | null;
+  }) {
+    if (message.role !== "workflow") {
+      return false;
+    }
+    const metadata = this.readMetadata(message.metadata);
+    const stage = this.readString(metadata.stage);
+    return (
+      typeof stage === "string" && INTERNAL_WORKFLOW_HISTORY_STAGES.has(stage)
+    );
+  }
+
+  private readMetadata(value: unknown): Record<string, unknown> {
+    return value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
+  }
+
+  private readString(value: unknown) {
+    return typeof value === "string" && value.trim().length > 0
+      ? value.trim()
+      : null;
   }
 
   private async createThreadMessage(

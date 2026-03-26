@@ -542,7 +542,7 @@ describe("Agentic communication E2E flow", () => {
     } as any);
     expect(
       agentMessages.some((message) =>
-        message.content.toLowerCase().includes("remember you asked earlier"),
+        message.content.toLowerCase().includes("still in progress"),
       ),
     ).toBe(true);
 

@@ -1,16 +1,19 @@
 import { OnWorkerEvent, Processor, WorkerHost } from "@nestjs/bullmq";
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, Optional } from "@nestjs/common";
 import { NotificationType } from "@opensocial/types";
 import { Job } from "bullmq";
 import { AgentService } from "../../agent/agent.service.js";
 import { recordQueueJobSkipped } from "../../common/ops-metrics.js";
 import { runInTraceSpan } from "../../common/tracing.js";
+import { AgentWorkflowRuntimeService } from "../../database/agent-workflow-runtime.service.js";
 import { PrismaService } from "../../database/prisma.service.js";
 import { ExecutionReconciliationService } from "../../execution-reconciliation/execution-reconciliation.service.js";
 import { NotificationsService } from "../../notifications/notifications.service.js";
 import { DeadLetterService } from "../dead-letter.service.js";
 import { extractJobTraceId, logJobProcessing } from "../job-logging.js";
 import { validateQueuePayload } from "../queue-validation.js";
+
+const FOLLOWUP_NOTIFICATION_REPLAY_DEDUPE_WINDOW_MS = 30 * 60_000;
 
 @Injectable()
 @Processor("notification")
@@ -23,6 +26,8 @@ export class AsyncAgentFollowupConsumer extends WorkerHost {
     private readonly notificationsService: NotificationsService,
     private readonly executionReconciliationService: ExecutionReconciliationService,
     private readonly deadLetterService: DeadLetterService,
+    @Optional()
+    private readonly workflowRuntimeService?: AgentWorkflowRuntimeService,
   ) {
     super();
   }
@@ -192,20 +197,92 @@ export class AsyncAgentFollowupConsumer extends WorkerHost {
         const message =
           payload.message ??
           this.renderFollowupMessage(payload.template, counts, intent.rawText);
+        const workflowRunId =
+          this.workflowRuntimeService?.buildWorkflowRunId({
+            domain: "social",
+            entityType: "intent",
+            entityId: intent.id,
+          }) ?? `social:intent:${intent.id}`;
 
         const threadId =
           payload.agentThreadId ??
           (await this.resolveLatestThreadIdForUser(intent.userId));
+        let threadMessageInserted = false;
 
         if (threadId) {
-          await this.agentService.createAgentMessage(threadId, message);
+          const existingThreadMessage =
+            await this.findRecentDuplicateThreadMessage(threadId, message);
+          const threadMessage =
+            existingThreadMessage ??
+            (await this.agentService.createAgentMessage(threadId, message));
+          threadMessageInserted = existingThreadMessage == null;
+          await this.workflowRuntimeService?.linkSideEffect({
+            workflowRunId,
+            traceId: payloadEnvelope.traceId,
+            relation: "followup_thread_message",
+            entityType: "agent_message",
+            entityId: threadMessage.id,
+            userId: intent.userId,
+            summary: threadMessageInserted
+              ? "Persisted async follow-up into the agent thread."
+              : "Reused a recent async follow-up already present in the agent thread.",
+            metadata: {
+              template: payload.template,
+              threadId,
+              deduped: !threadMessageInserted,
+            },
+          });
         }
 
-        await this.notificationsService.createInAppNotification(
-          intent.userId,
-          payload.notificationType ?? NotificationType.AGENT_UPDATE,
-          message,
-        );
+        const notificationType =
+          payload.notificationType ?? NotificationType.AGENT_UPDATE;
+        const existingNotification = await this.findRecentFollowupNotification({
+          workflowRunId,
+          userId: intent.userId,
+          template: payload.template,
+          notificationType,
+        });
+        const notification =
+          existingNotification ??
+          (await this.notificationsService.createInAppNotification(
+            intent.userId,
+            notificationType,
+            message,
+          ));
+        const notificationDeduped = existingNotification != null;
+        await this.workflowRuntimeService?.linkSideEffect({
+          workflowRunId,
+          traceId: payloadEnvelope.traceId,
+          relation: "followup_notification",
+          entityType: "notification",
+          entityId: notification.id,
+          userId: intent.userId,
+          summary: notificationDeduped
+            ? "Reused a recent async follow-up notification already persisted for this workflow."
+            : "Persisted async follow-up notification.",
+          metadata: {
+            template: payload.template,
+            notificationType,
+            deduped: notificationDeduped,
+          },
+        });
+        await this.workflowRuntimeService?.checkpoint({
+          workflowRunId,
+          traceId: payloadEnvelope.traceId,
+          stage: "followup_delivery",
+          status: "completed",
+          entityType: "intent",
+          entityId: intent.id,
+          userId: intent.userId,
+          summary:
+            "Async follow-up delivered to thread and notification surfaces.",
+          metadata: {
+            template: payload.template,
+            threadId: threadId ?? null,
+            notificationId: notification.id,
+            notificationDeduped,
+          },
+        });
         this.logger.log(
           JSON.stringify({
             event: "queue.job.completed",
@@ -216,9 +293,9 @@ export class AsyncAgentFollowupConsumer extends WorkerHost {
             intentId: intent.id,
             userId: intent.userId,
             threadId: threadId ?? null,
-            threadMessageInserted: Boolean(threadId),
-            notificationType:
-              payload.notificationType ?? NotificationType.AGENT_UPDATE,
+            threadMessageInserted,
+            notificationType,
+            notificationDeduped,
           }),
         );
 
@@ -252,22 +329,22 @@ export class AsyncAgentFollowupConsumer extends WorkerHost {
     rawText: string,
   ) {
     if (template === "no_match_yet") {
-      return "Nobody matched yet; want me to widen filters?";
+      return "No strong match yet. Want me to broaden the search?";
     }
 
     if (template === "progress_update") {
-      return `I found progress for your request: ${counts.accepted} accepted and ${counts.pending} still pending.`;
+      return `Quick update: ${counts.accepted} accepted and ${counts.pending} still pending.`;
     }
 
     if (counts.accepted > 0 && counts.pending > 0) {
-      return `Remember you asked earlier about "${rawText.slice(0, 48)}": ${counts.accepted} accepted and ${counts.pending} are still pending.`;
+      return `Quick update on "${rawText.slice(0, 48)}": ${counts.accepted} accepted and ${counts.pending} still pending.`;
     }
 
     if (counts.accepted > 0 && counts.pending === 0) {
-      return `Remember you asked earlier: ${counts.accepted} accepted so far. I can send another wave if you want.`;
+      return `Great news: ${counts.accepted} accepted so far. I can send another wave if you want.`;
     }
 
-    return `Remember you asked earlier: still waiting on ${counts.pending} pending invite${counts.pending === 1 ? "" : "s"}.`;
+    return `Still in progress: ${counts.pending} pending invite${counts.pending === 1 ? "" : "s"}. I’ll keep you posted.`;
   }
 
   private async resolveLatestThreadIdForUser(userId: string) {
@@ -280,5 +357,124 @@ export class AsyncAgentFollowupConsumer extends WorkerHost {
       select: { id: true },
     });
     return thread?.id;
+  }
+
+  private async findRecentDuplicateThreadMessage(
+    threadId: string,
+    message: string,
+  ) {
+    if (!this.prisma.agentMessage?.findFirst) {
+      return null;
+    }
+    return this.prisma.agentMessage.findFirst({
+      where: {
+        threadId,
+        role: "agent",
+        content: message,
+        createdAt: {
+          gte: new Date(Date.now() - 10 * 60_000),
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      select: {
+        id: true,
+      },
+    });
+  }
+
+  private async findRecentFollowupNotification(input: {
+    workflowRunId: string;
+    userId: string;
+    template: "pending_reminder" | "no_match_yet" | "progress_update";
+    notificationType: NotificationType;
+  }) {
+    if (
+      !this.prisma.auditLog?.findMany ||
+      !this.prisma.notification?.findUnique
+    ) {
+      return null;
+    }
+
+    const sideEffectRows = await this.prisma.auditLog.findMany({
+      where: {
+        action: "agent.workflow_side_effect_linked",
+        entityType: "notification",
+        createdAt: {
+          gte: new Date(
+            Date.now() - FOLLOWUP_NOTIFICATION_REPLAY_DEDUPE_WINDOW_MS,
+          ),
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      take: 20,
+      select: {
+        entityId: true,
+        metadata: true,
+      },
+    });
+
+    for (const row of sideEffectRows) {
+      const metadata = this.readMetadata(row.metadata);
+      const workflowRunId = this.readString(metadata.workflowRunId);
+      const relation = this.readString(metadata.relation);
+      const template = this.readString(metadata.template);
+      const notificationType = this.readString(metadata.notificationType);
+      const notificationId = this.readString(row.entityId);
+
+      if (!notificationId) {
+        continue;
+      }
+      if (
+        workflowRunId !== input.workflowRunId ||
+        relation !== "followup_notification"
+      ) {
+        continue;
+      }
+      if (
+        template !== input.template ||
+        notificationType !== input.notificationType
+      ) {
+        continue;
+      }
+
+      const existing = await this.prisma.notification.findUnique({
+        where: { id: notificationId },
+        select: {
+          id: true,
+          recipientUserId: true,
+          type: true,
+        },
+      });
+      if (!existing) {
+        continue;
+      }
+      if (
+        existing.recipientUserId === input.userId &&
+        existing.type === input.notificationType
+      ) {
+        return existing;
+      }
+    }
+
+    return null;
+  }
+
+  private readMetadata(value: unknown) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return {};
+    }
+    return value as Record<string, unknown>;
+  }
+
+  private readString(value: unknown) {
+    if (typeof value !== "string") {
+      return null;
+    }
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
   }
 }

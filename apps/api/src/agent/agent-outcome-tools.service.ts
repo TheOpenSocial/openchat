@@ -1,6 +1,8 @@
 import { Injectable, Optional } from "@nestjs/common";
 import {
   NotificationType,
+  negotiationOutcomeSchema,
+  negotiationPacketSchema,
   type scheduledTaskCreateBodySchema,
 } from "@opensocial/types";
 import { OpenAIClient } from "@opensocial/openai";
@@ -16,6 +18,8 @@ import { RecurringCirclesService } from "../recurring-circles/recurring-circles.
 import { ScheduledTasksService } from "../scheduled-tasks/scheduled-tasks.service.js";
 
 type ScheduledTaskCreateBody = z.infer<typeof scheduledTaskCreateBodySchema>;
+type NegotiationPacket = z.infer<typeof negotiationPacketSchema>;
+type NegotiationOutcome = z.infer<typeof negotiationOutcomeSchema>;
 
 @Injectable()
 export class AgentOutcomeToolsService {
@@ -148,6 +152,235 @@ export class AgentOutcomeToolsService {
       input.userId,
       input.candidateUserIds ?? [],
     );
+  }
+
+  async evaluateNegotiation(input: {
+    userId: string;
+    traceId: string;
+    packet: unknown;
+  }) {
+    const parsedPacket = negotiationPacketSchema.safeParse(input.packet);
+    if (!parsedPacket.success) {
+      return {
+        evaluated: false,
+        reason: "invalid_negotiation_packet",
+      };
+    }
+
+    const packet = parsedPacket.data;
+    const policyBlocked = packet.policyFlags.some(
+      (flag) =>
+        flag === "blocked" ||
+        flag === "reported" ||
+        flag === "suspected_spam" ||
+        flag === "unsafe_goods",
+    );
+    if (policyBlocked) {
+      const blockedOutcome = negotiationOutcomeSchema.parse({
+        packetId: packet.id ?? null,
+        domain: packet.domain,
+        mode: packet.mode,
+        decision: "decline",
+        confidence: 0.96,
+        summary:
+          packet.domain === "commerce"
+            ? "I’m declining this negotiation because the policy risk is too high for a safe buyer-seller connection."
+            : "I’m declining this match negotiation because policy signals indicate this should not move forward.",
+        reasons: [
+          "Policy flags indicate unsafe or blocked counterpart conditions.",
+        ],
+        nextActions: [
+          {
+            type: "workflow.write",
+            reason: "Record policy decline and avoid visible side effects.",
+          },
+        ],
+        scoreBreakdown: {
+          compatibility: 0,
+          trust: 0,
+          availability: 0,
+          language: 0,
+          location: 0,
+          constraints: 0,
+          offer: packet.domain === "commerce" ? 0 : 0.5,
+        },
+        bounded: true,
+        roundsUsed: 1,
+      });
+      return {
+        evaluated: true,
+        ...blockedOutcome,
+      };
+    }
+
+    const trust = this.clamp01((packet.counterpart.trustScore ?? 55) / 100);
+    const availability = this.computeAvailabilityScore(
+      packet.requester.availabilityMode,
+      packet.counterpart.availabilityMode,
+    );
+    const language = this.computeLanguageScore(
+      packet.requester.languages,
+      packet.counterpart.languages,
+    );
+    const location = this.computeLocationScore(
+      packet.requester.country,
+      packet.requester.city,
+      packet.counterpart.country,
+      packet.counterpart.city,
+    );
+    const constraints = this.computeConstraintScore(packet);
+    const offer = this.computeOfferScore(packet);
+
+    const compatibility = this.clamp01(
+      packet.domain === "commerce"
+        ? trust * 0.2 +
+            language * 0.15 +
+            location * 0.1 +
+            constraints * 0.1 +
+            offer * 0.45
+        : trust * 0.15 +
+            availability * 0.25 +
+            language * 0.2 +
+            location * 0.15 +
+            constraints * 0.25,
+    );
+    const sparseSignals = this.hasSparseNegotiationSignals(packet);
+
+    const decision: NegotiationOutcome["decision"] =
+      compatibility >= 0.74 &&
+      trust >= 0.55 &&
+      (packet.domain === "social" || offer >= 0.6)
+        ? "propose_intro"
+        : compatibility >= 0.52
+          ? "defer_async"
+          : sparseSignals
+            ? "needs_clarification"
+            : "decline";
+    const mode: NegotiationOutcome["mode"] =
+      decision === "defer_async" ? "async" : packet.mode;
+    const confidence = this.clamp01(
+      decision === "propose_intro"
+        ? compatibility
+        : decision === "defer_async"
+          ? compatibility * 0.9
+          : sparseSignals
+            ? 0.62
+            : 0.79,
+    );
+
+    const nextActions =
+      decision === "propose_intro"
+        ? [
+            {
+              type: "intro.send_request" as const,
+              reason:
+                "Strong compatibility and trust signal; safe to progress into an intro request.",
+            },
+          ]
+        : decision === "defer_async"
+          ? [
+              {
+                type: "followup.schedule" as const,
+                reason:
+                  "Potential fit exists but is not strong enough for immediate intro.",
+              },
+              {
+                type: "candidate.search" as const,
+                reason:
+                  "Broaden the candidate pool while preserving current negotiation context.",
+              },
+            ]
+          : decision === "needs_clarification"
+            ? [
+                {
+                  type: "workflow.write" as const,
+                  reason:
+                    "Request one high-value clarification before any visible side effect.",
+                },
+              ]
+            : [
+                {
+                  type: "workflow.write" as const,
+                  reason:
+                    "Decline and document rationale to avoid repeating low-quality matches.",
+                },
+              ];
+
+    const summary =
+      decision === "propose_intro"
+        ? packet.domain === "commerce"
+          ? "I found a strong buyer-seller fit and recommend moving forward with an intro."
+          : "I found a strong social fit and recommend moving forward with an intro."
+        : decision === "defer_async"
+          ? packet.domain === "commerce"
+            ? "This buyer-seller fit is promising but needs asynchronous follow-up before introducing both sides."
+            : "This social fit is promising but needs asynchronous follow-up before introducing both sides."
+          : decision === "needs_clarification"
+            ? "I need one key clarification before deciding whether this negotiation should move forward."
+            : "I’m declining this negotiation because current fit and trust signals are below a safe threshold.";
+
+    const reasons = [
+      `compatibility=${compatibility.toFixed(2)}`,
+      `trust=${trust.toFixed(2)}`,
+      packet.domain === "commerce"
+        ? `offer=${offer.toFixed(2)}`
+        : `availability=${availability.toFixed(2)}`,
+      `language=${language.toFixed(2)}`,
+      `constraints=${constraints.toFixed(2)}`,
+    ];
+
+    const outcome = negotiationOutcomeSchema.parse({
+      packetId: packet.id ?? null,
+      domain: packet.domain,
+      mode,
+      decision,
+      confidence,
+      summary,
+      reasons,
+      nextActions,
+      scoreBreakdown: {
+        compatibility,
+        trust,
+        availability,
+        language,
+        location,
+        constraints,
+        offer,
+      },
+      bounded: true,
+      roundsUsed: 1,
+    });
+
+    await this.recordExecutionMemory(input.userId, {
+      summary: `Negotiation (${packet.domain}) decided ${outcome.decision} with confidence ${Math.round(outcome.confidence * 100)}%.`,
+      topics: this.uniqueNormalized(
+        [
+          ...packet.requester.objectives,
+          ...packet.counterpart.objectives,
+          ...packet.requester.itemInterests,
+          ...packet.counterpart.itemInterests,
+        ],
+        6,
+      ),
+      activities: ["negotiation"],
+      people: this.uniqueNormalized(
+        [packet.counterpart.userId ?? "", packet.requester.userId ?? ""],
+        2,
+      ),
+      context: {
+        source: "agent_outcome_tool",
+        outcome: "negotiation_evaluated",
+        traceId: input.traceId,
+        decision: outcome.decision,
+        domain: outcome.domain,
+        mode: outcome.mode,
+      },
+    });
+
+    return {
+      evaluated: true,
+      ...outcome,
+    };
   }
 
   async searchCircles(input: { userId: string; limit?: number }) {
@@ -600,6 +833,25 @@ export class AgentOutcomeToolsService {
     context?: Record<string, unknown>;
     topics?: string[];
     activities?: string[];
+    traceId?: string;
+    workflowRunId?: string;
+    memoryClass?:
+      | "profile_memory"
+      | "stable_preference"
+      | "inferred_preference"
+      | "relationship_history"
+      | "safety_memory"
+      | "commerce_memory"
+      | "interaction_summary"
+      | "transient_working_memory";
+    memoryKey?: string;
+    memoryValue?: string;
+    confidence?: number;
+    safeWritePolicy?: "strict" | "allow_with_trace" | "best_effort";
+    contradictionPolicy?:
+      | "keep_latest"
+      | "suppress_conflict"
+      | "append_conflict_note";
   }) {
     if (!this.personalizationService) {
       return { stored: false, reason: "personalization_service_unavailable" };
@@ -610,14 +862,46 @@ export class AgentOutcomeToolsService {
       return { stored: false, reason: "empty_summary" };
     }
 
+    const context = {
+      ...(input.context ?? {}),
+      ...(input.traceId ? { traceId: input.traceId } : {}),
+      ...(input.workflowRunId ? { workflowRunId: input.workflowRunId } : {}),
+    };
     const stored = await this.personalizationService.storeInteractionSummary(
       input.userId,
       {
         summary,
         safe: true,
-        context: input.context,
+        context,
+        memory: {
+          class: input.memoryClass ?? "interaction_summary",
+          key: input.memoryKey,
+          value: input.memoryValue,
+          confidence: input.confidence,
+          safeWritePolicy: input.safeWritePolicy ?? "allow_with_trace",
+          contradictionPolicy:
+            input.contradictionPolicy ?? "append_conflict_note",
+          provenance: {
+            sourceType: "agent_tool",
+            traceId: input.traceId,
+            workflowRunId: input.workflowRunId,
+            toolName: "memory.write",
+          },
+        },
       },
     );
+    if ("stored" in stored && stored.stored === false) {
+      return {
+        stored: false,
+        reason: stored.reason,
+      };
+    }
+    if (!("documentId" in stored) || !("docType" in stored)) {
+      return {
+        stored: false,
+        reason: "memory_write_storage_result_invalid",
+      };
+    }
 
     const topicUpdates = (input.topics ?? [])
       .map((topic) => topic.trim())
@@ -629,7 +913,7 @@ export class AgentOutcomeToolsService {
           targetNode: { nodeType: "topic", label: topic },
           signalStrength: 0.3,
           feedbackType: "agent_memory_write_topic",
-          context: input.context,
+          context,
         }),
       );
 
@@ -643,7 +927,7 @@ export class AgentOutcomeToolsService {
           targetNode: { nodeType: "activity", label: activity },
           signalStrength: 0.28,
           feedbackType: "agent_memory_write_activity",
-          context: input.context,
+          context,
         }),
       );
 
@@ -716,6 +1000,182 @@ export class AgentOutcomeToolsService {
       status: task.status,
       notificationType: NotificationType.REMINDER,
     };
+  }
+
+  private clamp01(value: number) {
+    if (!Number.isFinite(value)) {
+      return 0;
+    }
+    return Math.min(Math.max(value, 0), 1);
+  }
+
+  private computeAvailabilityScore(
+    requester?: "now" | "later_today" | "flexible" | "away" | "invisible",
+    counterpart?: "now" | "later_today" | "flexible" | "away" | "invisible",
+  ) {
+    const scoreByMode: Record<string, number> = {
+      now: 1,
+      later_today: 0.75,
+      flexible: 0.6,
+      away: 0.2,
+      invisible: 0.1,
+    };
+    const requesterScore =
+      requester && scoreByMode[requester] !== undefined
+        ? scoreByMode[requester]
+        : 0.55;
+    const counterpartScore =
+      counterpart && scoreByMode[counterpart] !== undefined
+        ? scoreByMode[counterpart]
+        : 0.55;
+    return this.clamp01(
+      1 - Math.min(Math.abs(requesterScore - counterpartScore) * 1.4, 1),
+    );
+  }
+
+  private computeLanguageScore(requester: string[], counterpart: string[]) {
+    const requesterSet = new Set(
+      requester.map((value) => value.toLowerCase().trim()).filter(Boolean),
+    );
+    const counterpartSet = new Set(
+      counterpart.map((value) => value.toLowerCase().trim()).filter(Boolean),
+    );
+    if (requesterSet.size === 0 || counterpartSet.size === 0) {
+      return 0.6;
+    }
+    let overlap = 0;
+    for (const lang of requesterSet) {
+      if (counterpartSet.has(lang)) {
+        overlap += 1;
+      }
+    }
+    return this.clamp01(overlap / requesterSet.size);
+  }
+
+  private computeLocationScore(
+    requesterCountry?: string,
+    requesterCity?: string,
+    counterpartCountry?: string,
+    counterpartCity?: string,
+  ) {
+    const countryA = requesterCountry?.trim().toLowerCase() ?? "";
+    const countryB = counterpartCountry?.trim().toLowerCase() ?? "";
+    const cityA = requesterCity?.trim().toLowerCase() ?? "";
+    const cityB = counterpartCity?.trim().toLowerCase() ?? "";
+
+    if (countryA && countryB && countryA === countryB) {
+      if (cityA && cityB && cityA === cityB) {
+        return 1;
+      }
+      return 0.8;
+    }
+    if (countryA && countryB && countryA !== countryB) {
+      return 0.25;
+    }
+    return 0.6;
+  }
+
+  private computeConstraintScore(packet: NegotiationPacket) {
+    const requesterTokens = this.toTokenSet([
+      ...packet.requester.objectives,
+      ...packet.requester.constraints,
+      packet.intentSummary,
+    ]);
+    const counterpartTokens = this.toTokenSet([
+      ...packet.counterpart.objectives,
+      ...packet.counterpart.constraints,
+      ...packet.counterpart.itemInterests,
+    ]);
+    if (requesterTokens.size === 0 || counterpartTokens.size === 0) {
+      return 0.6;
+    }
+    let overlap = 0;
+    for (const token of requesterTokens) {
+      if (counterpartTokens.has(token)) {
+        overlap += 1;
+      }
+    }
+    return this.clamp01(overlap / Math.min(requesterTokens.size, 8));
+  }
+
+  private computeOfferScore(packet: NegotiationPacket) {
+    if (packet.domain !== "commerce") {
+      return 0.65;
+    }
+
+    const wantedItems = this.toTokenSet(packet.requester.itemInterests);
+    const offeredItems = this.toTokenSet(packet.counterpart.itemInterests);
+    let itemScore = 0.45;
+    if (wantedItems.size > 0 && offeredItems.size > 0) {
+      let overlap = 0;
+      for (const token of wantedItems) {
+        if (offeredItems.has(token)) {
+          overlap += 1;
+        }
+      }
+      itemScore = this.clamp01(overlap / wantedItems.size);
+    }
+
+    let priceScore = 0.55;
+    const range = packet.requester.priceRange;
+    const ask = packet.counterpart.askingPrice;
+    if (
+      range &&
+      Number.isFinite(range.min) &&
+      Number.isFinite(range.max) &&
+      typeof ask === "number" &&
+      Number.isFinite(ask) &&
+      range.max >= range.min
+    ) {
+      if (ask >= range.min && ask <= range.max) {
+        priceScore = 1;
+      } else {
+        const span = Math.max(1, range.max - range.min);
+        const distance =
+          ask < range.min ? range.min - ask : Math.max(0, ask - range.max);
+        priceScore = this.clamp01(1 - distance / (span * 1.5));
+      }
+    }
+
+    return this.clamp01(itemScore * 0.6 + priceScore * 0.4);
+  }
+
+  private hasSparseNegotiationSignals(packet: NegotiationPacket) {
+    const missingLanguage =
+      packet.requester.languages.length === 0 &&
+      packet.counterpart.languages.length === 0;
+    const missingLocation =
+      !packet.requester.country &&
+      !packet.requester.city &&
+      !packet.counterpart.country &&
+      !packet.counterpart.city;
+    const missingCounterpartIdentity = !packet.counterpart.userId;
+    const missingCommercePayload =
+      packet.domain === "commerce" &&
+      packet.requester.itemInterests.length === 0 &&
+      packet.counterpart.itemInterests.length === 0 &&
+      packet.counterpart.askingPrice === undefined;
+
+    const sparseSignals = [
+      missingLanguage,
+      missingLocation,
+      missingCounterpartIdentity,
+      missingCommercePayload,
+    ].filter(Boolean).length;
+    return sparseSignals >= 2;
+  }
+
+  private toTokenSet(values: string[]) {
+    const tokens = values
+      .flatMap((value) =>
+        value
+          .toLowerCase()
+          .split(/[^a-z0-9]+/g)
+          .map((token) => token.trim())
+          .filter((token) => token.length >= 3),
+      )
+      .slice(0, 64);
+    return new Set(tokens);
   }
 
   private normalizeTitle(value?: string) {

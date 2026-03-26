@@ -84,7 +84,7 @@ describe("OpenAIClient", () => {
       "suggestion_generation.v1",
     );
     expect(client.getPromptVersion("conversation_planning")).toBe(
-      "conversation_planning.v6",
+      "conversation_planning.v7",
     );
     expect(client.getPromptVersion("conversation_response")).toBe(
       "conversation_response.v3",
@@ -429,6 +429,7 @@ describe("OpenAIClient", () => {
     expect(canAgentUseTool("ranking_explanation", "ranking.explain")).toBe(
       true,
     );
+    expect(canAgentUseTool("manager", "negotiation.evaluate")).toBe(true);
     expect(canAgentUseTool("intent_parser", "moderation.review")).toBe(false);
   });
 

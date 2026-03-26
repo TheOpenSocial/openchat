@@ -408,4 +408,118 @@ describe("AgentOutcomeToolsService", () => {
       }),
     );
   });
+
+  it("evaluates social and commerce negotiation packets with bounded outcomes", async () => {
+    const personalizationService: any = {
+      storeInteractionSummary: vi.fn().mockResolvedValue({
+        documentId: "doc-1",
+        docType: "interaction_summary",
+      }),
+      recordBehaviorSignal: vi.fn().mockResolvedValue(undefined),
+      refreshPreferenceMemoryDocument: vi.fn().mockResolvedValue(undefined),
+    };
+    const service = new AgentOutcomeToolsService(
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      personalizationService,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+
+    const social = await service.evaluateNegotiation({
+      userId: "user-1",
+      traceId: "trace-neg-social",
+      packet: {
+        id: "neg-social-1",
+        domain: "social",
+        mode: "async",
+        intentSummary: "Looking for someone to play tennis with this week.",
+        requester: {
+          userId: "user-1",
+          country: "AR",
+          city: "Buenos Aires",
+          languages: ["es", "en"],
+          trustScore: 82,
+          availabilityMode: "flexible",
+          objectives: ["play tennis", "new friends"],
+        },
+        counterpart: {
+          userId: "user-2",
+          displayName: "Bruno",
+          country: "AR",
+          city: "Buenos Aires",
+          languages: ["es"],
+          trustScore: 86,
+          availabilityMode: "later_today",
+          objectives: ["play tennis"],
+        },
+      },
+    });
+
+    const commerce = await service.evaluateNegotiation({
+      userId: "user-1",
+      traceId: "trace-neg-commerce",
+      packet: {
+        id: "neg-commerce-1",
+        domain: "commerce",
+        mode: "async",
+        intentSummary: "I want to buy a used road bike around 400 USD.",
+        requester: {
+          userId: "user-1",
+          languages: ["en"],
+          itemInterests: ["road bike"],
+          priceRange: {
+            min: 320,
+            max: 450,
+            currency: "USD",
+          },
+        },
+        counterpart: {
+          userId: "seller-1",
+          displayName: "Seller",
+          languages: ["en"],
+          trustScore: 79,
+          itemInterests: ["road bike", "cycling"],
+          askingPrice: 410,
+        },
+      },
+    });
+
+    expect(social).toEqual(
+      expect.objectContaining({
+        evaluated: true,
+        domain: "social",
+        decision: expect.stringMatching(
+          /propose_intro|defer_async|needs_clarification|decline/,
+        ),
+        bounded: true,
+        roundsUsed: 1,
+      }),
+    );
+    expect(commerce).toEqual(
+      expect.objectContaining({
+        evaluated: true,
+        domain: "commerce",
+        decision: expect.stringMatching(
+          /propose_intro|defer_async|needs_clarification|decline/,
+        ),
+        bounded: true,
+        roundsUsed: 1,
+      }),
+    );
+    expect(personalizationService.storeInteractionSummary).toHaveBeenCalledWith(
+      "user-1",
+      expect.objectContaining({
+        summary: expect.stringContaining("Negotiation ("),
+        safe: true,
+        context: expect.objectContaining({
+          outcome: "negotiation_evaluated",
+        }),
+      }),
+    );
+  });
 });

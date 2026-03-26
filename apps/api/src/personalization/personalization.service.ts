@@ -62,10 +62,60 @@ export interface RecordLifeGraphBehaviorSignalInput {
   context?: Record<string, unknown>;
 }
 
+export type MemoryClass =
+  | "profile_memory"
+  | "stable_preference"
+  | "inferred_preference"
+  | "relationship_history"
+  | "safety_memory"
+  | "commerce_memory"
+  | "interaction_summary"
+  | "transient_working_memory";
+
+export type MemorySourceType =
+  | "explicit_user_input"
+  | "user_profile_edit"
+  | "interaction_observation"
+  | "agent_tool"
+  | "model_inference"
+  | "system_event";
+
+export type MemorySafeWritePolicy =
+  | "strict"
+  | "allow_with_trace"
+  | "best_effort";
+
+export type MemoryContradictionPolicy =
+  | "keep_latest"
+  | "suppress_conflict"
+  | "append_conflict_note";
+
+export interface MemoryWriteProvenance {
+  sourceType: MemorySourceType;
+  sourceId?: string;
+  traceId?: string;
+  workflowRunId?: string;
+  toolName?: string;
+  model?: string;
+  observedAt?: string;
+}
+
+export interface InteractionMemoryWriteInput {
+  class?: MemoryClass;
+  key?: string;
+  value?: string;
+  confidence?: number;
+  safeWritePolicy?: MemorySafeWritePolicy;
+  contradictionPolicy?: MemoryContradictionPolicy;
+  compressible?: boolean;
+  provenance?: MemoryWriteProvenance;
+}
+
 export interface StoreInteractionSummaryInput {
   summary: string;
   safe?: boolean;
   context?: Record<string, unknown>;
+  memory?: InteractionMemoryWriteInput;
 }
 
 export interface RetrievePersonalizationContextInput {
@@ -143,6 +193,27 @@ const RETRIEVAL_DEFAULT_MAX_CHUNKS = 5;
 const RETRIEVAL_DEFAULT_MAX_AGE_DAYS = 30;
 const RETRIEVAL_MAX_DOC_SCAN = 50;
 const RETRIEVAL_CHUNK_WORD_TARGET = 90;
+const RETRIEVAL_BUNDLE_MAX_CHARS = 1_200;
+const MEMORY_MIN_CONFIDENCE_BY_CLASS: Record<MemoryClass, number> = {
+  profile_memory: 0.5,
+  stable_preference: 0.7,
+  inferred_preference: 0.35,
+  relationship_history: 0.25,
+  safety_memory: 0.65,
+  commerce_memory: 0.6,
+  interaction_summary: 0,
+  transient_working_memory: 0,
+};
+const MEMORY_TRACE_REQUIRED_CLASSES = new Set<MemoryClass>([
+  "stable_preference",
+  "safety_memory",
+  "commerce_memory",
+]);
+const DEFAULT_MEMORY_CLASS: MemoryClass = "interaction_summary";
+const DEFAULT_MEMORY_SAFE_WRITE_POLICY: MemorySafeWritePolicy =
+  "allow_with_trace";
+const DEFAULT_MEMORY_CONTRADICTION_POLICY: MemoryContradictionPolicy =
+  "append_conflict_note";
 const RETRIEVAL_UNSAFE_PATTERN =
   /\b(hate|threat|abuse|violence|self-harm|suicide)\b/i;
 
@@ -862,16 +933,87 @@ export class PersonalizationService {
     input: StoreInteractionSummaryInput,
   ) {
     const summary = input.summary.trim();
+    const memoryWrite = this.normalizeInteractionMemoryWrite(input);
+    const safeWrite = this.evaluateMemorySafeWrite(memoryWrite);
+    if (!safeWrite.allowed && memoryWrite.safeWritePolicy === "strict") {
+      return {
+        stored: false,
+        reason: safeWrite.reason,
+        safe: false,
+        memory: {
+          ...memoryWrite,
+          compressedSummary: this.compressSummary(summary, 160),
+          safeWriteDecision: "suppressed" as const,
+          safeWriteReason: safeWrite.reason,
+          contradictionDetected: false,
+          conflictingDocumentId: null,
+        },
+      };
+    }
+
+    const contradiction = await this.detectMemoryContradiction(
+      userId,
+      memoryWrite,
+    );
+    if (
+      contradiction.detected &&
+      memoryWrite.contradictionPolicy === "suppress_conflict"
+    ) {
+      return {
+        stored: false,
+        reason: "contradiction_suppressed",
+        safe: false,
+        memory: {
+          ...memoryWrite,
+          compressedSummary: this.compressSummary(summary, 160),
+          safeWriteDecision: "suppressed" as const,
+          safeWriteReason: "contradiction_suppressed",
+          contradictionDetected: true,
+          conflictingDocumentId: contradiction.conflictingDocumentId,
+        },
+      };
+    }
+
+    const compressedSummary = memoryWrite.compressible
+      ? this.compressSummary(summary, 160)
+      : summary;
+    const enrichedContext = this.mergeMemoryContext(
+      input.context,
+      memoryWrite,
+      compressedSummary,
+      contradiction,
+      safeWrite,
+    );
     const safe =
       input.safe ?? (summary.length > 0 && !this.isUnsafeContent(summary));
     const docType = safe
       ? RETRIEVAL_DOC_TYPE_INTERACTION_SUMMARY
       : RETRIEVAL_DOC_TYPE_INTERACTION_FLAGGED;
+
+    const contradictionLine =
+      contradiction.detected &&
+      memoryWrite.contradictionPolicy === "append_conflict_note" &&
+      contradiction.conflictingDocumentId
+        ? `memory.contradiction_note: conflicting key "${memoryWrite.key ?? "unknown"}" supersedes document ${contradiction.conflictingDocumentId}`
+        : null;
     const content = [
       `summary: ${summary}`,
-      input.context
-        ? `context: ${this.stableStringify(input.context)}`
-        : "context: {}",
+      `context: ${this.stableStringify(enrichedContext)}`,
+      `memory: ${this.stableStringify({
+        class: memoryWrite.class,
+        key: memoryWrite.key,
+        value: memoryWrite.value,
+        confidence: memoryWrite.confidence,
+        safeWritePolicy: memoryWrite.safeWritePolicy,
+        contradictionPolicy: memoryWrite.contradictionPolicy,
+        provenance: memoryWrite.provenance,
+        compressedSummary,
+        contradictionDetected: contradiction.detected,
+        conflictingDocumentId: contradiction.conflictingDocumentId,
+        safeWriteDecision: safeWrite.allowed ? "accepted" : "degraded",
+        safeWriteReason: safeWrite.reason,
+      })}`,
+      ...(contradictionLine ? [contradictionLine] : []),
       `safe: ${String(safe)}`,
     ].join("\n");
     const stored = await this.saveRetrievalDocument(
@@ -882,8 +1024,19 @@ export class PersonalizationService {
     );
 
     return {
+      stored: true,
       ...stored,
       safe,
+      memory: {
+        ...memoryWrite,
+        compressedSummary,
+        safeWriteDecision: safeWrite.allowed
+          ? ("accepted" as const)
+          : ("degraded" as const),
+        safeWriteReason: safeWrite.reason,
+        contradictionDetected: contradiction.detected,
+        conflictingDocumentId: contradiction.conflictingDocumentId,
+      },
     };
   }
 
@@ -975,6 +1128,8 @@ export class PersonalizationService {
       .filter((item): item is NonNullable<typeof item> => item != null)
       .sort((a, b) => b.score - a.score)
       .slice(0, maxChunks);
+    const bundle = this.buildRetrievalBundleText(scoredChunks);
+    const bundleTokenEstimate = this.estimateTokenCount(bundle);
 
     return {
       userId,
@@ -983,6 +1138,8 @@ export class PersonalizationService {
       maxAgeDays,
       staleCutoff,
       results: scoredChunks,
+      bundle,
+      bundleTokenEstimate,
     };
   }
 
@@ -1037,6 +1194,271 @@ export class PersonalizationService {
       chunkCount: chunks.length,
       createdAt: document.createdAt,
     };
+  }
+
+  private normalizeInteractionMemoryWrite(input: StoreInteractionSummaryInput) {
+    const context = input.context ?? {};
+    const contextSource = this.readString(context["source"]);
+    const sourceType = this.normalizeMemorySourceType(
+      input.memory?.provenance?.sourceType,
+      contextSource,
+    );
+    const confidence =
+      typeof input.memory?.confidence === "number" &&
+      Number.isFinite(input.memory.confidence)
+        ? this.clampNumber(input.memory.confidence, 0, 1)
+        : null;
+    const provenance: MemoryWriteProvenance = {
+      sourceType,
+      sourceId: this.limitString(input.memory?.provenance?.sourceId, 255),
+      traceId:
+        this.limitString(input.memory?.provenance?.traceId, 255) ??
+        this.limitString(context["traceId"], 255) ??
+        this.limitString(context["appTraceId"], 255),
+      workflowRunId:
+        this.limitString(input.memory?.provenance?.workflowRunId, 255) ??
+        this.limitString(context["workflowRunId"], 255),
+      toolName:
+        this.limitString(input.memory?.provenance?.toolName, 120) ??
+        this.limitString(context["tool"], 120),
+      model:
+        this.limitString(input.memory?.provenance?.model, 120) ??
+        this.limitString(context["model"], 120),
+      observedAt:
+        this.limitIsoDate(input.memory?.provenance?.observedAt) ??
+        new Date().toISOString(),
+    };
+
+    return {
+      class: this.normalizeMemoryClass(input.memory?.class),
+      key: this.limitString(input.memory?.key, 160) ?? null,
+      value: this.limitString(input.memory?.value, 400) ?? null,
+      confidence,
+      safeWritePolicy:
+        input.memory?.safeWritePolicy ?? DEFAULT_MEMORY_SAFE_WRITE_POLICY,
+      contradictionPolicy:
+        input.memory?.contradictionPolicy ??
+        DEFAULT_MEMORY_CONTRADICTION_POLICY,
+      compressible: input.memory?.compressible !== false,
+      provenance,
+    };
+  }
+
+  private normalizeMemoryClass(value?: MemoryClass): MemoryClass {
+    if (!value) {
+      return DEFAULT_MEMORY_CLASS;
+    }
+    return value;
+  }
+
+  private normalizeMemorySourceType(
+    explicitSource: MemorySourceType | undefined,
+    contextSource: string | null,
+  ): MemorySourceType {
+    if (explicitSource) {
+      return explicitSource;
+    }
+    const source = (contextSource ?? "").toLowerCase();
+    if (source.includes("profile")) {
+      return "user_profile_edit";
+    }
+    if (source.includes("agent")) {
+      return "agent_tool";
+    }
+    if (source.includes("intent")) {
+      return "interaction_observation";
+    }
+    return "system_event";
+  }
+
+  private evaluateMemorySafeWrite(input: {
+    class: MemoryClass;
+    confidence: number | null;
+    safeWritePolicy: MemorySafeWritePolicy;
+    provenance: MemoryWriteProvenance;
+  }) {
+    if (input.safeWritePolicy === "best_effort") {
+      return { allowed: true, reason: null as string | null };
+    }
+
+    const requiresTrace = MEMORY_TRACE_REQUIRED_CLASSES.has(input.class);
+    const hasTrace =
+      Boolean(input.provenance.traceId) ||
+      Boolean(input.provenance.workflowRunId);
+    if (requiresTrace && !hasTrace) {
+      if (input.safeWritePolicy === "strict") {
+        return { allowed: false, reason: "missing_trace_context" };
+      }
+      return { allowed: true, reason: "missing_trace_context" };
+    }
+
+    const minConfidence = MEMORY_MIN_CONFIDENCE_BY_CLASS[input.class];
+    if (
+      input.confidence != null &&
+      minConfidence > 0 &&
+      input.confidence < minConfidence
+    ) {
+      if (input.safeWritePolicy === "strict") {
+        return { allowed: false, reason: "insufficient_confidence" };
+      }
+      return { allowed: true, reason: "insufficient_confidence" };
+    }
+
+    return { allowed: true, reason: null as string | null };
+  }
+
+  private async detectMemoryContradiction(
+    userId: string,
+    memoryWrite: {
+      key: string | null;
+      value: string | null;
+      class: MemoryClass;
+      contradictionPolicy: MemoryContradictionPolicy;
+    },
+  ) {
+    const key = memoryWrite.key?.trim().toLowerCase();
+    const value = memoryWrite.value?.trim().toLowerCase();
+    if (!key || !value) {
+      return {
+        detected: false,
+        conflictingDocumentId: null as string | null,
+      };
+    }
+
+    const recentDocs = await this.prisma.retrievalDocument.findMany({
+      where: {
+        userId,
+        docType: RETRIEVAL_DOC_TYPE_INTERACTION_SUMMARY,
+      },
+      select: {
+        id: true,
+        content: true,
+        createdAt: true,
+      },
+      orderBy: [{ createdAt: "desc" }],
+      take: 25,
+    });
+
+    for (const document of recentDocs) {
+      const parsedContext = this.parseInteractionContextLine(document.content);
+      const memoryContext =
+        parsedContext && typeof parsedContext["memory"] === "object"
+          ? (parsedContext["memory"] as Record<string, unknown>)
+          : null;
+      if (!memoryContext) {
+        continue;
+      }
+      const existingKey = this.readString(memoryContext["key"])?.toLowerCase();
+      const existingValue = this.readString(
+        memoryContext["value"],
+      )?.toLowerCase();
+      if (!existingKey || !existingValue) {
+        continue;
+      }
+      if (existingKey === key && existingValue !== value) {
+        return {
+          detected: true,
+          conflictingDocumentId: document.id,
+        };
+      }
+    }
+
+    return {
+      detected: false,
+      conflictingDocumentId: null as string | null,
+    };
+  }
+
+  private mergeMemoryContext(
+    context: Record<string, unknown> | undefined,
+    memoryWrite: {
+      class: MemoryClass;
+      key: string | null;
+      value: string | null;
+      confidence: number | null;
+      safeWritePolicy: MemorySafeWritePolicy;
+      contradictionPolicy: MemoryContradictionPolicy;
+      provenance: MemoryWriteProvenance;
+    },
+    compressedSummary: string,
+    contradiction: {
+      detected: boolean;
+      conflictingDocumentId: string | null;
+    },
+    safeWrite: {
+      allowed: boolean;
+      reason: string | null;
+    },
+  ) {
+    return {
+      ...(context ?? {}),
+      memory: {
+        class: memoryWrite.class,
+        key: memoryWrite.key,
+        value: memoryWrite.value,
+        confidence: memoryWrite.confidence,
+        safeWritePolicy: memoryWrite.safeWritePolicy,
+        contradictionPolicy: memoryWrite.contradictionPolicy,
+        provenance: memoryWrite.provenance,
+        compressedSummary,
+        safeWriteDecision: safeWrite.allowed ? "accepted" : "degraded",
+        safeWriteReason: safeWrite.reason,
+        contradictionDetected: contradiction.detected,
+        conflictingDocumentId: contradiction.conflictingDocumentId,
+      },
+    };
+  }
+
+  private parseInteractionContextLine(content: string) {
+    const contextLine = content
+      .split("\n")
+      .find((line) => line.startsWith("context: "));
+    if (!contextLine) {
+      return null;
+    }
+    const raw = contextLine.slice("context: ".length).trim();
+    if (!raw) {
+      return null;
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return null;
+      }
+      return parsed as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  }
+
+  private buildRetrievalBundleText(
+    results: Array<{
+      docType: string;
+      score: number;
+      excerpt: string;
+    }>,
+  ) {
+    if (results.length === 0) {
+      return "";
+    }
+
+    const lines = results.map((item, index) => {
+      const prefix = `[${index + 1}] ${item.docType} score=${item.score.toFixed(2)}`;
+      return `${prefix} ${item.excerpt}`;
+    });
+    const raw = lines.join("\n");
+    if (raw.length <= RETRIEVAL_BUNDLE_MAX_CHARS) {
+      return raw;
+    }
+    return this.compressSummary(raw, RETRIEVAL_BUNDLE_MAX_CHARS);
+  }
+
+  private compressSummary(value: string, maxLength: number) {
+    const normalized = value.replace(/\s+/g, " ").trim();
+    if (normalized.length <= maxLength) {
+      return normalized;
+    }
+    return `${normalized.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
   }
 
   private buildProfileSummaryContent(input: {
@@ -1422,6 +1844,36 @@ export class PersonalizationService {
     targetNodeId: string,
   ) {
     return `${LIFE_GRAPH_PREF_KEY_PREFIX}${sourceNodeId}:${edgeType}:${targetNodeId}`;
+  }
+
+  private limitString(value: unknown, maxLength: number) {
+    if (typeof value !== "string") {
+      return undefined;
+    }
+    const normalized = value.trim();
+    if (normalized.length === 0) {
+      return undefined;
+    }
+    return normalized.slice(0, maxLength);
+  }
+
+  private limitIsoDate(value: unknown) {
+    if (typeof value !== "string") {
+      return undefined;
+    }
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return undefined;
+    }
+    return parsed.toISOString();
+  }
+
+  private readString(value: unknown) {
+    if (typeof value !== "string") {
+      return null;
+    }
+    const normalized = value.trim();
+    return normalized.length > 0 ? normalized : null;
   }
 
   private readEnumValue<T extends string>(

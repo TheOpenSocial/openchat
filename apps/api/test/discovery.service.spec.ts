@@ -135,6 +135,13 @@ function createService(overrides: Partial<Record<string, unknown>> = {}) {
     block: {
       findMany: overrides.blockFindMany ?? vi.fn().mockResolvedValue([]),
     },
+    userPreference: {
+      findMany:
+        overrides.userPreferenceFindMany ?? vi.fn().mockResolvedValue([]),
+    },
+    userReport: {
+      findMany: overrides.userReportFindMany ?? vi.fn().mockResolvedValue([]),
+    },
     agentThread: {
       findFirst:
         overrides.agentThreadFindFirst ??
@@ -258,6 +265,79 @@ describe("DiscoveryService", () => {
           blockedUserId: USER_B,
         },
       ]),
+    });
+
+    const result = await service.suggestReconnects(USER_ID, 5);
+
+    expect(result.reconnects).toHaveLength(1);
+    expect(result.reconnects[0]?.userId).toBe(USER_A);
+  });
+
+  it("filters muted peers from reconnect suggestions", async () => {
+    const { service } = createService({
+      connectionParticipantFindMany: vi
+        .fn()
+        .mockResolvedValueOnce([
+          {
+            connectionId: "conn-1",
+            connection: {
+              createdAt: new Date(),
+            },
+          },
+          {
+            connectionId: "conn-2",
+            connection: {
+              createdAt: new Date(),
+            },
+          },
+        ])
+        .mockResolvedValueOnce([
+          { userId: USER_A, connectionId: "conn-1" },
+          { userId: USER_B, connectionId: "conn-2" },
+        ]),
+      userPreferenceFindMany: vi.fn().mockResolvedValue([
+        {
+          userId: USER_ID,
+          value: [USER_B],
+        },
+      ]),
+    });
+
+    const result = await service.suggestReconnects(USER_ID, 5);
+
+    expect(result.reconnects).toHaveLength(1);
+    expect(result.reconnects[0]?.userId).toBe(USER_A);
+  });
+
+  it("filters heavily reported peers from reconnect suggestions", async () => {
+    const { service } = createService({
+      connectionParticipantFindMany: vi
+        .fn()
+        .mockResolvedValueOnce([
+          {
+            connectionId: "conn-1",
+            connection: {
+              createdAt: new Date(),
+            },
+          },
+          {
+            connectionId: "conn-2",
+            connection: {
+              createdAt: new Date(),
+            },
+          },
+        ])
+        .mockResolvedValueOnce([
+          { userId: USER_A, connectionId: "conn-1" },
+          { userId: USER_B, connectionId: "conn-2" },
+        ]),
+      userReportFindMany: vi
+        .fn()
+        .mockResolvedValue([
+          { targetUserId: USER_B },
+          { targetUserId: USER_B },
+          { targetUserId: USER_B },
+        ]),
     });
 
     const result = await service.suggestReconnects(USER_ID, 5);

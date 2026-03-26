@@ -197,26 +197,22 @@ function createDiscoveryHarness(
     userInterest: {
       findMany:
         overrides.userInterestFindMany ??
-        vi
-          .fn()
-          .mockResolvedValue([
-            {
-              normalizedLabel: "tennis",
-              userId: "22222222-2222-4222-8222-222222222222",
-            },
-          ]),
+        vi.fn().mockResolvedValue([
+          {
+            normalizedLabel: "tennis",
+            userId: "22222222-2222-4222-8222-222222222222",
+          },
+        ]),
     },
     userTopic: {
       findMany:
         overrides.userTopicFindMany ??
-        vi
-          .fn()
-          .mockResolvedValue([
-            {
-              normalizedLabel: "reconnect",
-              userId: "22222222-2222-4222-8222-222222222222",
-            },
-          ]),
+        vi.fn().mockResolvedValue([
+          {
+            normalizedLabel: "reconnect",
+            userId: "22222222-2222-4222-8222-222222222222",
+          },
+        ]),
     },
     intent: {
       findMany:
@@ -387,7 +383,16 @@ describe("Agentic scenario suite", () => {
         "saved_search_no_results_suppressed_v1",
         "social_reminder_quiet_hours_v1",
         "social_negotiation_async_defer_v1",
+        "dating_verified_consent_granted_v1",
+        "dating_consent_revoked_v1",
+        "dating_no_match_recovery_v1",
+        "dating_blocked_cross_over_v1",
+        "commerce_listing_created_v1",
         "commerce_buyer_seller_negotiation_v1",
+        "commerce_offer_counteroffer_v1",
+        "commerce_offer_accept_escrow_v1",
+        "commerce_offer_dispute_v1",
+        "commerce_offer_fulfillment_v1",
         "scam_spam_review_v1",
         "underage_illegal_block_v1",
         "underage_coercive_review_v1",
@@ -422,20 +427,17 @@ describe("Agentic scenario suite", () => {
         "eval_runtime",
       ]),
     );
-    expect(coverage.some((entry) => entry.status === "partial")).toBe(true);
-    expect(coverage.some((entry) => entry.status === "policy_gated")).toBe(
-      true,
-    );
+    expect(coverage.every((entry) => entry.status === "supported")).toBe(true);
     expect(coverage.find((entry) => entry.domain === "social")?.status).toBe(
       "supported",
     );
     expect(coverage.find((entry) => entry.domain === "commerce")?.status).toBe(
-      "partial",
+      "supported",
     );
     expect(
       coverage.find((entry) => entry.domain === "dating_ready")?.status,
-    ).toBe("policy_gated");
-    expect(world.users.length).toBeGreaterThanOrEqual(8);
+    ).toBe("supported");
+    expect(world.users.length).toBeGreaterThanOrEqual(11);
     expect(world.relationships.some((edge) => edge.type === "blocked")).toBe(
       true,
     );
@@ -1569,14 +1571,12 @@ describe("Agentic scenario suite", () => {
     const now = Date.now();
     const prisma: any = {
       userInterest: {
-        findMany: vi
-          .fn()
-          .mockResolvedValue([
-            {
-              normalizedLabel: "reconnect",
-              userId: "22222222-2222-4222-8222-222222222222",
-            },
-          ]),
+        findMany: vi.fn().mockResolvedValue([
+          {
+            normalizedLabel: "reconnect",
+            userId: "22222222-2222-4222-8222-222222222222",
+          },
+        ]),
       },
       userTopic: {
         findMany: vi.fn().mockResolvedValue([]),

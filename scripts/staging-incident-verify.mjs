@@ -17,6 +17,8 @@ const timeoutMs = Number(process.env.SMOKE_TIMEOUT_MS || 12000);
 const failOnWarning = process.env.INCIDENT_VERIFY_FAIL_ON_WARNING === "true";
 const requireHealthySummary =
   process.env.INCIDENT_VERIFY_REQUIRE_HEALTHY !== "false";
+const allowCriticalAlerts =
+  process.env.INCIDENT_VERIFY_ALLOW_CRITICAL === "true";
 const verifyRunbooks = process.env.INCIDENT_VERIFY_RUNBOOKS !== "false";
 const skipHttpChecks = process.env.INCIDENT_VERIFY_SKIP_HTTP === "true";
 
@@ -181,6 +183,7 @@ function printConfig() {
   console.log(`- adminRole: ${adminRole}`);
   console.log(`- timeoutMs: ${timeoutMs}`);
   console.log(`- requireHealthySummary: ${requireHealthySummary}`);
+  console.log(`- allowCriticalAlerts: ${allowCriticalAlerts}`);
   console.log(`- failOnWarning: ${failOnWarning}`);
   console.log(`- verifyRunbooks: ${verifyRunbooks}`);
   console.log(`- skipHttpChecks: ${skipHttpChecks}`);
@@ -262,6 +265,7 @@ async function main() {
     summaryIssues.push("ops_alerts summary is missing/unparseable");
   } else if (!skipHttpChecks) {
     if (
+      !allowCriticalAlerts &&
       alertsSummary.criticalCount !== null &&
       alertsSummary.criticalCount > 0
     ) {

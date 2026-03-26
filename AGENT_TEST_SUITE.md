@@ -20,6 +20,7 @@ The suite exists to prove that the backend can:
 
 ## Current Foundation
 - Workflow execution tracking is active in the backend through `workflowRunId`, `traceId`, stage checkpoints, and linked side effects.
+- Canonical runtime API surface is single-version under `/api/runtime/*` with no legacy compatibility route.
 - Workflow checkpoints now cover early exits explicitly (`intent_not_processable`, moderation-gated routing skips, and launch-control follow-up suppression) so traces stay complete even when no fanout occurs.
 - Replay-safe dedupe is active for `intent_request` fanout reuse, recent duplicate async follow-up thread suppression, and workflow-linked follow-up notification reuse on replay.
 - Replay-safe dedupe is active for accepted-request connection setup side effects: sender/participant notifications, sender-thread workflow updates, group-ready fanout notifications, and group backfill notifications are now workflow-linked and replay-reused to avoid duplicate visible outcomes.
@@ -43,16 +44,12 @@ The suite covers these domains through a machine-readable matrix in:
 - `apps/api/test/fixtures/agentic-scenarios.json` (`domainCoverage`)
 
 Current matrix statuses:
-- supported: social, passive discovery, groups/circles, events/reminders, safety/moderation, eval runtime
-- partial: commerce
-- policy-gated: dating-ready
+- supported: social, passive discovery, groups/circles, events/reminders, dating-ready, commerce, safety/moderation, eval runtime
 
 Each domain maps to:
 - canonical scenario ids
 - release-gate layers (`workflow|scenario|benchmark|eval|full`)
-- explicit uncovered gaps for `partial` and `policy_gated` domains
-
-Unsupported or partially modeled domains must be called out explicitly in the scenario corpus instead of being tested implicitly.
+- domain-complete coverage with no `partial`/`policy_gated` status for release claims
 
 ## Backend-Only Pass Coverage (ATS-08/09/10)
 | Area | Covered in this pass | Intentionally out of scope in this pass |
@@ -169,7 +166,8 @@ Current scenario-backed coverage is strongest in:
 - deterministic scam/spam moderation gating and review
 - deterministic underage/illegal exploitation blocking and coercive-underage review routing
 - social negotiation async defer/intro decisions
-- commerce buyer-seller negotiation fit decisions
+- dating verified-consent lifecycle, revocation, no-match recovery, and blocked cross-over policy handling
+- commerce listing/offer/counteroffer, escrow accept/freeze/release paths, dispute routing, and fulfillment transitions
 
 ### 5. Eval and Trace Grading
 Grades:

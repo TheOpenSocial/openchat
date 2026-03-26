@@ -10,6 +10,7 @@ import { randomUUID } from "node:crypto";
 import { AnalyticsService } from "../analytics/analytics.service.js";
 import { AgentService } from "../agent/agent.service.js";
 import { ChatsService } from "../chats/chats.service.js";
+import { AgentWorkflowRuntimeService } from "../database/agent-workflow-runtime.service.js";
 import { PrismaService } from "../database/prisma.service.js";
 import { ExecutionReconciliationService } from "../execution-reconciliation/execution-reconciliation.service.js";
 import { MatchingService } from "../matching/matching.service.js";
@@ -21,6 +22,7 @@ import { ConnectionsService } from "./connections.service.js";
 
 const GROUP_FALLBACK_THRESHOLD_DELAY_MS = 10 * 60 * 1000;
 const GROUP_MIN_READY_PARTICIPANTS = 2;
+const CONNECTION_SETUP_SIDE_EFFECT_REPLAY_WINDOW_MS = 30 * 60_000;
 
 @Injectable()
 export class ConnectionSetupService {
@@ -41,115 +43,203 @@ export class ConnectionSetupService {
     private readonly analyticsService?: AnalyticsService,
     @Optional()
     private readonly realtimeEventsService?: RealtimeEventsService,
+    @Optional()
+    private readonly workflowRuntimeService?: AgentWorkflowRuntimeService,
   ) {}
 
-  async setupFromAcceptedRequest(requestId: string) {
+  async setupFromAcceptedRequest(requestId: string, traceId?: string) {
     const request = await this.prisma.intentRequest.findUnique({
       where: { id: requestId },
     });
     if (!request) {
       throw new NotFoundException("request not found");
     }
-
-    if (request.status !== "accepted") {
-      return {
-        status: "skipped",
-        reason: "request_not_accepted",
-        request,
-      } as const;
-    }
-
-    const intent = await this.prisma.intent.findUnique({
-      where: { id: request.intentId },
-    });
-    if (!intent) {
-      throw new NotFoundException("intent not found");
-    }
-
-    const parsed =
-      (intent.parsedIntent as {
-        intentType?: string;
-        groupSizeTarget?: number;
-      } | null) ?? {};
-    const requestedGroupSize = Math.min(
-      Math.max(parsed.groupSizeTarget ?? 2, 2),
-      4,
-    );
-    const isGroupIntent =
-      parsed.intentType === "group" || requestedGroupSize > 2;
-    const acceptedRecipients = await this.prisma.intentRequest.findMany({
-      where: {
+    const workflowTraceId = traceId?.trim() || randomUUID();
+    const workflowRunId =
+      this.workflowRuntimeService?.buildWorkflowRunId({
+        domain: "social",
+        entityType: "intent_request",
+        entityId: requestId,
+      }) ?? `social:intent_request:${requestId}`;
+    await this.workflowRuntimeService?.startRun({
+      workflowRunId,
+      traceId: workflowTraceId,
+      domain: "social",
+      entityType: "intent_request",
+      entityId: requestId,
+      userId: request.senderUserId,
+      summary: "Accepted request entered connection setup.",
+      metadata: {
         intentId: request.intentId,
-        status: "accepted",
-      },
-      select: {
-        recipientUserId: true,
+        recipientUserId: request.recipientUserId,
       },
     });
-    const acceptedRecipientCount = new Set(
-      acceptedRecipients.map((row) => row.recipientUserId),
-    ).size;
-    const shouldConvertToGroup = !isGroupIntent && acceptedRecipientCount >= 2;
-    const targetSize = isGroupIntent
-      ? requestedGroupSize
-      : this.resolveConvertedGroupTargetSize(acceptedRecipientCount + 1);
-    const runAsGroup = isGroupIntent || shouldConvertToGroup;
-    if (runAsGroup && this.launchControlsService) {
-      try {
-        await this.launchControlsService.assertActionAllowed(
-          "group_formation",
-          request.senderUserId,
-        );
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "group formation disabled";
-        this.logger.warn(
-          JSON.stringify({
-            event: "connection.setup.skipped",
-            reason: "group_formation_disabled",
-            requestId,
-            intentId: request.intentId,
-            senderUserId: request.senderUserId,
-            recipientUserId: request.recipientUserId,
-            message,
-          }),
-        );
+
+    try {
+      if (request.status !== "accepted") {
+        await this.workflowRuntimeService?.checkpoint({
+          workflowRunId,
+          traceId: workflowTraceId,
+          stage: "connection_setup",
+          status: "skipped",
+          entityType: "intent_request",
+          entityId: requestId,
+          userId: request.senderUserId,
+          summary: "Connection setup skipped because request is not accepted.",
+          metadata: {
+            requestStatus: request.status,
+          },
+        });
         return {
           status: "skipped",
-          reason: "group_formation_disabled",
+          reason: "request_not_accepted",
           request,
-          message,
         } as const;
       }
+
+      const intent = await this.prisma.intent.findUnique({
+        where: { id: request.intentId },
+      });
+      if (!intent) {
+        throw new NotFoundException("intent not found");
+      }
+
+      const parsed =
+        (intent.parsedIntent as {
+          intentType?: string;
+          groupSizeTarget?: number;
+        } | null) ?? {};
+      const requestedGroupSize = Math.min(
+        Math.max(parsed.groupSizeTarget ?? 2, 2),
+        4,
+      );
+      const isGroupIntent =
+        parsed.intentType === "group" || requestedGroupSize > 2;
+      const acceptedRecipients = await this.prisma.intentRequest.findMany({
+        where: {
+          intentId: request.intentId,
+          status: "accepted",
+        },
+        select: {
+          recipientUserId: true,
+        },
+      });
+      const acceptedRecipientCount = new Set(
+        acceptedRecipients.map((row) => row.recipientUserId),
+      ).size;
+      const shouldConvertToGroup =
+        !isGroupIntent && acceptedRecipientCount >= 2;
+      const targetSize = isGroupIntent
+        ? requestedGroupSize
+        : this.resolveConvertedGroupTargetSize(acceptedRecipientCount + 1);
+      const runAsGroup = isGroupIntent || shouldConvertToGroup;
+      if (runAsGroup && this.launchControlsService) {
+        try {
+          await this.launchControlsService.assertActionAllowed(
+            "group_formation",
+            request.senderUserId,
+          );
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : "group formation disabled";
+          this.logger.warn(
+            JSON.stringify({
+              event: "connection.setup.skipped",
+              reason: "group_formation_disabled",
+              requestId,
+              intentId: request.intentId,
+              senderUserId: request.senderUserId,
+              recipientUserId: request.recipientUserId,
+              message,
+            }),
+          );
+          await this.workflowRuntimeService?.checkpoint({
+            workflowRunId,
+            traceId: workflowTraceId,
+            stage: "connection_setup",
+            status: "blocked",
+            entityType: "intent_request",
+            entityId: requestId,
+            userId: request.senderUserId,
+            summary:
+              "Connection setup blocked because group formation is disabled.",
+            metadata: {
+              reason: "group_formation_disabled",
+              message,
+            },
+          });
+          return {
+            status: "skipped",
+            reason: "group_formation_disabled",
+            request,
+            message,
+          } as const;
+        }
+      }
+      const result = runAsGroup
+        ? await this.setupGroupConnection(request, {
+            targetSize,
+            intentCreatedAt: intent.createdAt ?? new Date(),
+            conversionFromOneToOne: shouldConvertToGroup,
+            workflowRunId,
+            traceId: workflowTraceId,
+          })
+        : await this.setupDmConnection(request, {
+            workflowRunId,
+            traceId: workflowTraceId,
+          });
+      this.logger.log(
+        JSON.stringify({
+          event: "connection.setup.completed",
+          requestId,
+          intentId: request.intentId,
+          senderUserId: request.senderUserId,
+          recipientUserId: request.recipientUserId,
+          mode: isGroupIntent || shouldConvertToGroup ? "group" : "dm",
+          targetSize: isGroupIntent || shouldConvertToGroup ? targetSize : null,
+          convertedFromOneToOne: shouldConvertToGroup,
+          result,
+        }),
+      );
+      return result;
+    } catch (error) {
+      await this.workflowRuntimeService?.checkpoint({
+        workflowRunId,
+        traceId: workflowTraceId,
+        stage: "connection_setup",
+        status: "failed",
+        entityType: "intent_request",
+        entityId: requestId,
+        userId: request.senderUserId,
+        summary: "Connection setup failed due to a runtime error.",
+        metadata: {
+          reason: this.normalizeErrorReason(error),
+        },
+      });
+      throw error;
     }
-    const result = runAsGroup
-      ? await this.setupGroupConnection(request, {
-          targetSize,
-          intentCreatedAt: intent.createdAt ?? new Date(),
-          conversionFromOneToOne: shouldConvertToGroup,
-        })
-      : await this.setupDmConnection(request);
-    this.logger.log(
-      JSON.stringify({
-        event: "connection.setup.completed",
-        requestId,
-        intentId: request.intentId,
-        senderUserId: request.senderUserId,
-        recipientUserId: request.recipientUserId,
-        mode: isGroupIntent || shouldConvertToGroup ? "group" : "dm",
-        targetSize: isGroupIntent || shouldConvertToGroup ? targetSize : null,
-        convertedFromOneToOne: shouldConvertToGroup,
-        result,
-      }),
-    );
-    return result;
   }
 
-  private async setupDmConnection(request: {
-    intentId: string;
-    senderUserId: string;
-    recipientUserId: string;
-  }) {
+  private normalizeErrorReason(error: unknown) {
+    if (!(error instanceof Error)) {
+      return "unknown_error";
+    }
+    const message = error.message.trim();
+    if (!message) {
+      return "unknown_error";
+    }
+    return message.slice(0, 160);
+  }
+
+  private async setupDmConnection(
+    request: {
+      id: string;
+      intentId: string;
+      senderUserId: string;
+      recipientUserId: string;
+    },
+    workflow: { workflowRunId: string; traceId: string },
+  ) {
     let connectionWasCreated = false;
     let connection = await this.prisma.connection.findFirst({
       where: {
@@ -169,6 +259,18 @@ export class ConnectionSetupService {
       );
       connectionWasCreated = true;
     }
+    await this.workflowRuntimeService?.linkSideEffect({
+      workflowRunId: workflow.workflowRunId,
+      traceId: workflow.traceId,
+      relation: "connection_created_or_reused",
+      entityType: "connection",
+      entityId: connection.id,
+      userId: request.senderUserId,
+      summary: "Resolved DM connection for accepted request.",
+      metadata: {
+        created: connectionWasCreated,
+      },
+    });
 
     await this.ensureParticipants(connection.id, [
       request.senderUserId,
@@ -179,6 +281,18 @@ export class ConnectionSetupService {
       "dm",
       request.senderUserId,
     );
+    await this.workflowRuntimeService?.linkSideEffect({
+      workflowRunId: workflow.workflowRunId,
+      traceId: workflow.traceId,
+      relation: "chat_created_or_reused",
+      entityType: "chat",
+      entityId: chat.id,
+      userId: request.senderUserId,
+      summary: "Resolved DM chat for accepted request.",
+      metadata: {
+        created: chatWasCreated,
+      },
+    });
     if (connectionWasCreated) {
       await this.trackAnalyticsEventSafe({
         eventType: "connection_created",
@@ -221,21 +335,32 @@ export class ConnectionSetupService {
       },
     );
 
-    await this.notificationsService.createInAppNotification(
-      request.senderUserId,
-      NotificationType.REQUEST_ACCEPTED,
-      "Someone accepted your request. Your chat is ready.",
-    );
+    await this.createWorkflowNotification({
+      workflowRunId: workflow.workflowRunId,
+      traceId: workflow.traceId,
+      relation: "connection_sender_notification",
+      recipientUserId: request.senderUserId,
+      notificationType: NotificationType.REQUEST_ACCEPTED,
+      body: "Someone accepted your request. Your chat is ready.",
+    });
 
-    await this.notificationsService.createInAppNotification(
-      request.recipientUserId,
-      NotificationType.AGENT_UPDATE,
-      "You accepted the request. Say hi and get started.",
-    );
+    await this.createWorkflowNotification({
+      workflowRunId: workflow.workflowRunId,
+      traceId: workflow.traceId,
+      relation: "connection_recipient_notification",
+      recipientUserId: request.recipientUserId,
+      notificationType: NotificationType.AGENT_UPDATE,
+      body: "You accepted the request. Say hi and get started.",
+    });
 
     await this.notifySenderThread(
       request.senderUserId,
       "Great news: someone accepted. I opened your chat.",
+      {
+        workflowRunId: workflow.workflowRunId,
+        traceId: workflow.traceId,
+        relation: "connection_sender_thread_message",
+      },
     );
 
     await this.recordMutualSuccessSignal(
@@ -266,11 +391,26 @@ export class ConnectionSetupService {
         chatId: chat.id,
       }),
     );
+    await this.workflowRuntimeService?.checkpoint({
+      workflowRunId: workflow.workflowRunId,
+      traceId: workflow.traceId,
+      stage: "connection_setup",
+      status: "completed",
+      entityType: "intent_request",
+      entityId: request.id,
+      userId: request.senderUserId,
+      summary: "Accepted request resolved into a direct chat connection.",
+      metadata: {
+        connectionId: connection.id,
+        chatId: chat.id,
+      },
+    });
     return { status: "connected", connection, chat } as const;
   }
 
   private async setupGroupConnection(
     request: {
+      id: string;
       intentId: string;
       senderUserId: string;
       recipientUserId: string;
@@ -279,6 +419,8 @@ export class ConnectionSetupService {
       targetSize: number;
       intentCreatedAt: Date;
       conversionFromOneToOne?: boolean;
+      workflowRunId: string;
+      traceId: string;
     },
   ) {
     const targetSize = options.targetSize;
@@ -313,6 +455,19 @@ export class ConnectionSetupService {
       );
       connectionWasCreated = true;
     }
+    await this.workflowRuntimeService?.linkSideEffect({
+      workflowRunId: options.workflowRunId,
+      traceId: options.traceId,
+      relation: "connection_created_or_reused",
+      entityType: "connection",
+      entityId: connection.id,
+      userId: request.senderUserId,
+      summary: "Resolved group connection during accepted-request processing.",
+      metadata: {
+        created: connectionWasCreated,
+        conversionFromOneToOne: options.conversionFromOneToOne ?? false,
+      },
+    });
 
     const intentRequests = await this.prisma.intentRequest.findMany({
       where: {
@@ -341,6 +496,18 @@ export class ConnectionSetupService {
       "group",
       request.senderUserId,
     );
+    await this.workflowRuntimeService?.linkSideEffect({
+      workflowRunId: options.workflowRunId,
+      traceId: options.traceId,
+      relation: "chat_created_or_reused",
+      entityType: "chat",
+      entityId: chat.id,
+      userId: request.senderUserId,
+      summary: "Resolved group chat during accepted-request processing.",
+      metadata: {
+        created: chatWasCreated,
+      },
+    });
     if (connectionWasCreated) {
       await this.trackAnalyticsEventSafe({
         eventType: "connection_created",
@@ -394,11 +561,21 @@ export class ConnectionSetupService {
       type: "group",
     });
 
-    await this.notificationsService.createInAppNotification(
-      request.senderUserId,
-      isReady ? NotificationType.GROUP_FORMED : NotificationType.AGENT_UPDATE,
-      senderMessage,
-    );
+    await this.createWorkflowNotification({
+      workflowRunId: options.workflowRunId,
+      traceId: options.traceId,
+      relation: "group_sender_notification",
+      recipientUserId: request.senderUserId,
+      notificationType: isReady
+        ? NotificationType.GROUP_FORMED
+        : NotificationType.AGENT_UPDATE,
+      body: senderMessage,
+      metadata: {
+        targetSize,
+        participantCount,
+        isReady,
+      },
+    });
 
     if (isReady) {
       const participantMessage = reachedFallbackThreshold
@@ -409,11 +586,19 @@ export class ConnectionSetupService {
       );
       await Promise.all(
         participantIds.map((participantId) =>
-          this.notificationsService.createInAppNotification(
-            participantId,
-            NotificationType.GROUP_FORMED,
-            participantMessage,
-          ),
+          this.createWorkflowNotification({
+            workflowRunId: options.workflowRunId,
+            traceId: options.traceId,
+            relation: "group_participant_notification",
+            recipientUserId: participantId,
+            notificationType: NotificationType.GROUP_FORMED,
+            body: participantMessage,
+            metadata: {
+              targetSize,
+              participantCount,
+              isReady,
+            },
+          }),
         ),
       );
     }
@@ -425,11 +610,21 @@ export class ConnectionSetupService {
           ? `Group ready at fallback threshold: ${participantCount}/${targetSize} participants connected.`
           : `Group ready: ${participantCount}/${targetSize} participants connected.`
         : `Progress update: ${participantCount}/${targetSize} participants accepted.`,
+      {
+        workflowRunId: options.workflowRunId,
+        traceId: options.traceId,
+        relation: "group_sender_thread_message",
+      },
     );
     if (options.conversionFromOneToOne) {
       await this.notifySenderThread(
         request.senderUserId,
         "I converted your active 1:1 intent into a group flow because multiple people accepted.",
+        {
+          workflowRunId: options.workflowRunId,
+          traceId: options.traceId,
+          relation: "group_sender_thread_message",
+        },
       );
     }
 
@@ -441,11 +636,18 @@ export class ConnectionSetupService {
         participantCount,
         requiredParticipants: readiness.requiredParticipants,
         targetSize,
+        workflowRunId: options.workflowRunId,
+        traceId: options.traceId,
       });
       if (backfillRequested > 0) {
         await this.notifySenderThread(
           request.senderUserId,
           `I sent ${backfillRequested} backfill invite${backfillRequested === 1 ? "" : "s"} to keep building your group.`,
+          {
+            workflowRunId: options.workflowRunId,
+            traceId: options.traceId,
+            relation: "group_sender_thread_message",
+          },
         );
       } else {
         await this.executionReconciliationService.recordGroupFormationStalled({
@@ -492,6 +694,25 @@ export class ConnectionSetupService {
         backfillRequested,
       }),
     );
+    await this.workflowRuntimeService?.checkpoint({
+      workflowRunId: options.workflowRunId,
+      traceId: options.traceId,
+      stage: "connection_setup",
+      status: isReady ? "completed" : "degraded",
+      entityType: "intent_request",
+      entityId: request.id,
+      userId: request.senderUserId,
+      summary: isReady
+        ? "Group request resolved into an active group connection."
+        : "Group request remains partial and is waiting on more participants.",
+      metadata: {
+        connectionId: connection.id,
+        chatId: chat.id,
+        participantCount,
+        targetSize,
+        backfillRequested,
+      },
+    });
     return {
       status: isReady ? "connected" : "partial",
       connection,
@@ -544,6 +765,8 @@ export class ConnectionSetupService {
     participantCount: number;
     requiredParticipants: number;
     targetSize: number;
+    workflowRunId: string;
+    traceId: string;
   }) {
     const pendingInviteCount = input.existingRequests.filter(
       (request) => request.status === "pending",
@@ -628,11 +851,17 @@ export class ConnectionSetupService {
 
     await Promise.all(
       candidates.map((candidate) =>
-        this.notificationsService.createInAppNotification(
-          candidate.candidateUserId,
-          NotificationType.REQUEST_RECEIVED,
-          "A group request is available now. Join if you are in.",
-        ),
+        this.createWorkflowNotification({
+          workflowRunId: input.workflowRunId,
+          traceId: input.traceId,
+          relation: "group_backfill_notification",
+          recipientUserId: candidate.candidateUserId,
+          notificationType: NotificationType.REQUEST_RECEIVED,
+          body: "A group request is available now. Join if you are in.",
+          metadata: {
+            intentId: input.request.intentId,
+          },
+        }),
       ),
     );
 
@@ -758,15 +987,257 @@ export class ConnectionSetupService {
     };
   }
 
-  private async notifySenderThread(senderUserId: string, message: string) {
+  private async notifySenderThread(
+    senderUserId: string,
+    message: string,
+    workflow?: { workflowRunId: string; traceId: string; relation: string },
+  ) {
     const senderThread = await this.prisma.agentThread.findFirst({
       where: { userId: senderUserId },
       orderBy: { createdAt: "desc" },
     });
 
-    if (senderThread) {
-      await this.agentService.createAgentMessage(senderThread.id, message);
+    if (!senderThread) {
+      return;
     }
+
+    const existingMessage = workflow
+      ? await this.findRecentWorkflowLinkedThreadMessage({
+          workflowRunId: workflow.workflowRunId,
+          relation: workflow.relation,
+          threadId: senderThread.id,
+          message,
+        })
+      : null;
+    const threadMessage =
+      existingMessage ??
+      (await this.agentService.createAgentMessage(senderThread.id, message));
+    const deduped = existingMessage != null;
+
+    if (workflow) {
+      await this.workflowRuntimeService?.linkSideEffect({
+        workflowRunId: workflow.workflowRunId,
+        traceId: workflow.traceId,
+        relation: workflow.relation,
+        entityType: "agent_message",
+        entityId: threadMessage.id,
+        userId: senderUserId,
+        summary: deduped
+          ? "Reused an existing workflow thread update."
+          : "Persisted a workflow thread update.",
+        metadata: {
+          threadId: senderThread.id,
+          message,
+          deduped,
+        },
+      });
+    }
+  }
+
+  private async createWorkflowNotification(input: {
+    workflowRunId: string;
+    traceId: string;
+    relation: string;
+    recipientUserId: string;
+    notificationType: NotificationType;
+    body: string;
+    metadata?: Record<string, unknown>;
+  }) {
+    const existingNotification =
+      await this.findRecentWorkflowLinkedNotification({
+        workflowRunId: input.workflowRunId,
+        relation: input.relation,
+        recipientUserId: input.recipientUserId,
+        notificationType: input.notificationType,
+        body: input.body,
+      });
+    const notification =
+      existingNotification ??
+      (await this.notificationsService.createInAppNotification(
+        input.recipientUserId,
+        input.notificationType,
+        input.body,
+      ));
+    const deduped = existingNotification != null;
+    await this.workflowRuntimeService?.linkSideEffect({
+      workflowRunId: input.workflowRunId,
+      traceId: input.traceId,
+      relation: input.relation,
+      entityType: "notification",
+      entityId: notification.id,
+      userId: input.recipientUserId,
+      summary: deduped
+        ? "Reused an existing workflow notification side effect."
+        : "Persisted workflow notification side effect.",
+      metadata: {
+        recipientUserId: input.recipientUserId,
+        notificationType: input.notificationType,
+        body: input.body,
+        deduped,
+        ...(input.metadata ?? {}),
+      },
+    });
+    return notification;
+  }
+
+  private async findRecentWorkflowLinkedNotification(input: {
+    workflowRunId: string;
+    relation: string;
+    recipientUserId: string;
+    notificationType: NotificationType;
+    body: string;
+  }) {
+    if (
+      !this.prisma.auditLog?.findMany ||
+      !this.prisma.notification?.findUnique
+    ) {
+      return null;
+    }
+
+    const rows = await this.prisma.auditLog.findMany({
+      where: {
+        action: "agent.workflow_side_effect_linked",
+        entityType: "notification",
+        createdAt: {
+          gte: new Date(
+            Date.now() - CONNECTION_SETUP_SIDE_EFFECT_REPLAY_WINDOW_MS,
+          ),
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 40,
+      select: { entityId: true, metadata: true },
+    });
+
+    for (const row of rows) {
+      const metadata = this.readMetadata(row.metadata);
+      const workflowRunId = this.readString(metadata.workflowRunId);
+      const relation = this.readString(metadata.relation);
+      const recipientUserId = this.readString(metadata.recipientUserId);
+      const notificationType = this.readString(metadata.notificationType);
+      const body = this.readString(metadata.body);
+      const notificationId = this.readString(row.entityId);
+
+      if (!notificationId) {
+        continue;
+      }
+      if (
+        workflowRunId !== input.workflowRunId ||
+        relation !== input.relation ||
+        recipientUserId !== input.recipientUserId ||
+        notificationType !== input.notificationType ||
+        body !== input.body
+      ) {
+        continue;
+      }
+
+      const existing = await this.prisma.notification.findUnique({
+        where: { id: notificationId },
+        select: {
+          id: true,
+          recipientUserId: true,
+          type: true,
+          body: true,
+        },
+      });
+      if (!existing) {
+        continue;
+      }
+      if (
+        existing.recipientUserId === input.recipientUserId &&
+        existing.type === input.notificationType &&
+        existing.body === input.body
+      ) {
+        return existing;
+      }
+    }
+
+    return null;
+  }
+
+  private async findRecentWorkflowLinkedThreadMessage(input: {
+    workflowRunId: string;
+    relation: string;
+    threadId: string;
+    message: string;
+  }) {
+    if (
+      !this.prisma.auditLog?.findMany ||
+      !this.prisma.agentMessage?.findUnique
+    ) {
+      return null;
+    }
+
+    const rows = await this.prisma.auditLog.findMany({
+      where: {
+        action: "agent.workflow_side_effect_linked",
+        entityType: "agent_message",
+        createdAt: {
+          gte: new Date(
+            Date.now() - CONNECTION_SETUP_SIDE_EFFECT_REPLAY_WINDOW_MS,
+          ),
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 40,
+      select: { entityId: true, metadata: true },
+    });
+
+    for (const row of rows) {
+      const metadata = this.readMetadata(row.metadata);
+      const workflowRunId = this.readString(metadata.workflowRunId);
+      const relation = this.readString(metadata.relation);
+      const threadId = this.readString(metadata.threadId);
+      const message = this.readString(metadata.message);
+      const agentMessageId = this.readString(row.entityId);
+
+      if (!agentMessageId) {
+        continue;
+      }
+      if (
+        workflowRunId !== input.workflowRunId ||
+        relation !== input.relation ||
+        threadId !== input.threadId ||
+        message !== input.message
+      ) {
+        continue;
+      }
+
+      const existing = await this.prisma.agentMessage.findUnique({
+        where: { id: agentMessageId },
+        select: {
+          id: true,
+          threadId: true,
+          content: true,
+        },
+      });
+      if (!existing) {
+        continue;
+      }
+      if (
+        existing.threadId === input.threadId &&
+        existing.content === input.message
+      ) {
+        return existing;
+      }
+    }
+
+    return null;
+  }
+
+  private readMetadata(value: unknown) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return {};
+    }
+    return value as Record<string, unknown>;
+  }
+
+  private readString(value: unknown) {
+    if (typeof value !== "string") {
+      return null;
+    }
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
   }
 
   private async recordMutualSuccessSignal(
