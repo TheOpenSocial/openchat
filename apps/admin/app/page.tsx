@@ -14,6 +14,13 @@ import { WorkbenchContent } from "./components/workbench/WorkbenchContent";
 import { useWorkbenchState } from "./components/workbench/useWorkbenchState";
 import { useModerationWorkbench } from "./components/workbench/useModerationWorkbench";
 import {
+  createHistoryId,
+  errorText,
+  normalizeQueryValues,
+  parseContextInput,
+  parseRecordJsonInput,
+} from "./components/workbench/workbench-utils";
+import {
   type AdminTab,
   type LlmRuntimeHealthSnapshot,
   type OnboardingActivationSnapshot,
@@ -50,69 +57,6 @@ interface DeadLetterRow {
 
 const DEBUG_HISTORY_LIMIT = 20;
 const ADMIN_LOCALE_STORAGE_KEY = "opensocial.admin.locale.v1";
-
-function errorText(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
-}
-
-function parseRecordJsonInput(
-  label: string,
-  raw: string,
-  allowEmpty = true,
-): Record<string, unknown> | undefined {
-  const trimmed = raw.trim();
-  if (trimmed.length === 0) {
-    if (allowEmpty) {
-      return undefined;
-    }
-    throw new Error(`${label} cannot be empty.`);
-  }
-
-  const parsed = JSON.parse(trimmed) as unknown;
-  if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
-    return parsed as Record<string, unknown>;
-  }
-
-  throw new Error(`${label} must be a JSON object.`);
-}
-
-function parseContextInput(raw: string): Record<string, unknown> | undefined {
-  return parseRecordJsonInput("Policy context", raw);
-}
-
-function normalizeQueryValues(
-  record: Record<string, unknown> | undefined,
-): Record<string, string | number | boolean | undefined> | undefined {
-  if (!record) {
-    return undefined;
-  }
-
-  const normalized: Record<string, string | number | boolean | undefined> = {};
-  for (const [key, value] of Object.entries(record)) {
-    if (
-      typeof value === "string" ||
-      typeof value === "number" ||
-      typeof value === "boolean" ||
-      value === undefined
-    ) {
-      normalized[key] = value;
-      continue;
-    }
-
-    if (value === null) {
-      normalized[key] = "null";
-      continue;
-    }
-
-    normalized[key] = JSON.stringify(value);
-  }
-
-  return normalized;
-}
-
-function createHistoryId() {
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-}
 
 function AdminHomeContent() {
   const router = useRouter();

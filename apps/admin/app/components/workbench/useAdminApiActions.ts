@@ -2,10 +2,7 @@
 
 import { useMemo } from "react";
 import { apiRequest, apiRequestNullable, type HttpMethod } from "../../lib/api";
-
-function errorText(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
-}
+import { errorText } from "./workbench-utils";
 
 export function useAdminApiActions(input: {
   accessToken?: string;

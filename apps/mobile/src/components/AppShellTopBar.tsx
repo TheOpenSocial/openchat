@@ -1,6 +1,6 @@
 import { BlurView } from "expo-blur";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Keyboard, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { appTheme } from "../theme";
 
@@ -25,6 +25,11 @@ export function AppShellTopBar({
   topInset,
   title,
 }: AppShellTopBarProps) {
+  const dismissAnd = (handler: () => void) => {
+    Keyboard.dismiss();
+    handler();
+  };
+
   return (
     <View
       className="px-5"
@@ -54,7 +59,7 @@ export function AppShellTopBar({
           accessibilityRole="button"
           className="min-w-0 flex-1"
           hitSlop={8}
-          onPress={onPressHome}
+          onPress={() => dismissAnd(onPressHome)}
           style={({ pressed }) => ({
             opacity: pressed ? appTheme.motion.pressOpacity : 1,
           })}
@@ -82,7 +87,7 @@ export function AppShellTopBar({
             accessibilityRole="button"
             className="h-9 w-9 items-center justify-center"
             hitSlop={8}
-            onPress={onPressNotifications}
+            onPress={() => dismissAnd(onPressNotifications)}
             style={({ pressed }) => ({
               opacity: pressed ? appTheme.motion.pressOpacity : 1,
             })}
@@ -104,7 +109,7 @@ export function AppShellTopBar({
             accessibilityRole="button"
             className="h-9 w-9 items-center justify-center"
             hitSlop={8}
-            onPress={onPressProfile}
+            onPress={() => dismissAnd(onPressProfile)}
             style={({ pressed }) => ({
               opacity: pressed ? appTheme.motion.pressOpacity : 1,
             })}

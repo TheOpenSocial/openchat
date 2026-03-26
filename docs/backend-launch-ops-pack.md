@@ -1,0 +1,78 @@
+# Backend Launch Ops Pack
+
+This runbook is the backend-first execution path for launch readiness with reproducible evidence.
+
+## Goal
+
+Prove the backend is green on release gates, Golden Suite verification, smoke lane checks, and moderation operator drills with machine-readable artifacts.
+
+## Command
+
+```bash
+pnpm test:backend:ops-pack
+```
+
+Artifact output:
+- `.artifacts/backend-ops-pack/<run-id>.json`
+
+## Default steps
+
+1. `pnpm release:check:api`
+2. `pnpm test:agentic:suite:verification`
+3. `pnpm staging:smoke:verification-lane`
+4. `pnpm moderation:drill`
+
+## Environment
+
+Core verification lane env:
+- `AGENTIC_BENCH_ACCESS_TOKEN`
+- `AGENTIC_BENCH_USER_ID`
+- `AGENTIC_BENCH_THREAD_ID`
+- `AGENTIC_VERIFICATION_LANE_ID`
+- `SMOKE_BASE_URL`
+- `SMOKE_ACCESS_TOKEN`
+- `SMOKE_ADMIN_USER_ID`
+- `SMOKE_AGENT_THREAD_ID`
+- `SMOKE_USER_ID`
+- `ONBOARDING_PROBE_TOKEN`
+
+Moderation drill add-ons (for full synthetic drill):
+- `MODERATION_DRILL_REPORTER_USER_ID`
+- `MODERATION_DRILL_ACCESS_TOKEN`
+- `MODERATION_DRILL_TARGET_USER_ID`
+
+## Staging = Prod mode
+
+When staging should temporarily use production-like verification credentials:
+
+```bash
+STAGING_EQUALS_PROD=true pnpm test:agentic:suite:verification
+```
+
+And for the full pack:
+
+```bash
+STAGING_EQUALS_PROD=true BACKEND_OPS_TARGET=staging pnpm test:backend:ops-pack
+```
+
+`STAGING_EQUALS_PROD=true` enables fallback lookup from `STAGING_*` keys to `PROD_*`/`PRODUCTION_*` aliases in verification scripts.
+
+## Pass criteria
+
+- `release:check:api` passes.
+- `test:agentic:suite:verification` passes with required benchmark + prod-smoke gates.
+- moderation drill passes with report -> flag -> assign -> triage -> audit verification.
+- ops-pack artifact status is `passed`.
+
+## Rollback criteria
+
+Immediately block rollout when any of the following occur:
+- Golden Suite verification fails.
+- duplicate visible side effects in verification artifact.
+- reliability snapshot is `critical` with unresolved suspect stages.
+- moderation drill cannot complete operator loop.
+
+Rollback action:
+1. Redeploy previous production tag.
+2. Freeze launches with admin launch controls.
+3. Capture artifact + trace ids in incident ticket.

@@ -1,0 +1,120 @@
+{
+  "generatedAt": "2026-03-26T02:36:33.553Z",
+  "url": "http://localhost:3000",
+  "runCount": 2,
+  "concurrency": 1,
+  "burstSize": 1,
+  "ackSloMs": 1800,
+  "backgroundWaitMs": 30000,
+  "ackLatencyMs": {
+    "p50": 24,
+    "p95": 53,
+    "max": 53
+  },
+  "ackWithinSloCount": 2,
+  "ackWithinSloRate": 1,
+  "backgroundFollowupCount": 2,
+  "backgroundFollowupRate": 1,
+  "duplicateVisibleSideEffectCount": 0,
+  "duplicateVisibleSideEffectRate": 0,
+  "queueLagMs": {
+    "p95": 5
+  },
+  "scenarioIds": ["social_direct_match_v1", "social_no_match_recovery_v1"],
+  "fallbackOrDegradedCount": 0,
+  "fallbackOrDegradedRate": 0,
+  "workflowHealth": {
+    "status": "passed",
+    "reason": "workflow health is within configured thresholds",
+    "totalRuns": 9,
+    "health": {
+      "healthy": 0,
+      "watch": 9,
+      "critical": 0
+    },
+    "stageStatusCounts": {
+      "started": 15,
+      "completed": 87,
+      "skipped": 0,
+      "blocked": 0,
+      "degraded": 10,
+      "failed": 0,
+      "unknown": 0
+    },
+    "failureClasses": {
+      "none": 0,
+      "llmOrSchema": 0,
+      "moderationOrPolicy": 0,
+      "matchingOrNegotiation": 7,
+      "queueOrReplay": 0,
+      "persistenceOrDedupe": 0,
+      "notificationOrFollowup": 0,
+      "latencyOrCapacity": 0,
+      "observabilityGap": 2
+    },
+    "thresholds": {
+      "maxCriticalWorkflowRuns": 999,
+      "maxFailedStageCount": 999,
+      "maxBlockedStageCount": 999,
+      "maxObservabilityGapRuns": 999
+    }
+  },
+  "guardrail": {
+    "concurrency": 1,
+    "burstSize": 1,
+    "minAckWithinSloRate": 0,
+    "minBackgroundFollowupRate": 0,
+    "maxDegradedRate": 1,
+    "maxDuplicateSideEffectRate": 1,
+    "maxQueueLagMs": 60000,
+    "ackWithinSloRate": 1,
+    "backgroundFollowupRate": 1,
+    "degradedRate": 0,
+    "duplicateVisibleSideEffectRate": 0,
+    "queueLagP95Ms": 5,
+    "ackWithinSloPass": true,
+    "backgroundFollowupPass": true,
+    "degradedRatePass": true,
+    "duplicateSideEffectPass": true,
+    "queueLagPass": true,
+    "workflowHealthPass": true,
+    "workflowHealthStatus": "passed",
+    "workflowHealthReason": "workflow health is within configured thresholds"
+  },
+  "results": [
+    {
+      "run": 1,
+      "workerIndex": 1,
+      "burstIndex": 1,
+      "threadId": "5d203384-7041-4e64-832a-e4af3c2bf63c",
+      "scenarioId": "social_direct_match_v1",
+      "prompt": "Find me someone to play tennis with tonight.",
+      "intentId": "78137e8b-8ea0-4b98-87b4-67421950b24b",
+      "ackLatencyMs": 53,
+      "ackWithinSlo": true,
+      "ackDetectedMs": 58,
+      "queueLagMs": 5,
+      "duplicateVisibleSideEffects": 0,
+      "ackMessage": "All right. I’m handling this in the background and I’ll notify you here as soon as I find a stro...",
+      "backgroundFollowupDetected": true,
+      "backgroundMessage": "I found 2 candidates and sent requests. I will update you when someone accepts."
+    },
+    {
+      "run": 2,
+      "workerIndex": 1,
+      "burstIndex": 2,
+      "threadId": "5d203384-7041-4e64-832a-e4af3c2bf63c",
+      "scenarioId": "social_no_match_recovery_v1",
+      "prompt": "Find me a chess partner near me right now.",
+      "intentId": "f5ff9239-1810-4a84-8af4-85b2c917bf95",
+      "ackLatencyMs": 24,
+      "ackWithinSlo": true,
+      "ackDetectedMs": 27,
+      "queueLagMs": 3,
+      "duplicateVisibleSideEffects": 0,
+      "ackMessage": "All right. I’m handling this in the background and I’ll notify you here as soon as I find a stro...",
+      "backgroundFollowupDetected": true,
+      "backgroundMessage": "No strong match yet. If you want, I can broaden the search and keep going."
+    }
+  ]
+}

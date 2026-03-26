@@ -1,0 +1,31 @@
+{
+  "runId": "agent-suite-2026-03-25T12-49-39-513Z",
+  "generatedAt": "2026-03-25T12:49:39.516Z",
+  "layer": "prod-smoke",
+  "status": "skipped",
+  "cases": [
+    {
+      "id": "prod-smoke-verification-lane",
+      "scenarioId": null,
+      "scenarioIds": [
+        "prod_smoke_health_v1",
+        "prod_smoke_ops_metrics_v1",
+        "prod_smoke_llm_runtime_v1",
+        "prod_smoke_incident_readiness_v1"
+      ],
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "skipped",
+      "latencyMs": null,
+      "failureClass": null,
+      "summary": "Prod-smoke skipped (set AGENT_TEST_SUITE_ENABLE_PROD_SMOKE=1 to execute verification lane checks).",
+      "sideEffects": [],
+      "metadata": {
+        "smokeBaseUrl": false,
+        "smokeAccessToken": false,
+        "smokeAdminApiKey": false,
+        "onboardingProbeToken": false
+      }
+    }
+  ]
+}

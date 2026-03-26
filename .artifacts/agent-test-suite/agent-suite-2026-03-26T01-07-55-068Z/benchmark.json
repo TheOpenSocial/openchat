@@ -1,0 +1,150 @@
+{
+  "runId": "agent-suite-2026-03-26T01-07-55-068Z",
+  "generatedAt": "2026-03-26T01:07:55.073Z",
+  "layer": "benchmark",
+  "status": "skipped",
+  "cases": [
+    {
+      "id": "agentic-benchmark",
+      "scenarioId": null,
+      "scenarioIds": [
+        "social_direct_match_v1",
+        "social_no_match_recovery_v1",
+        "blocked_user_exclusion_v1",
+        "country_language_mismatch_v1",
+        "trust_gate_v1",
+        "reconnect_signal_v1",
+        "social_negotiation_async_defer_v1",
+        "commerce_buyer_seller_negotiation_v1"
+      ],
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "skipped",
+      "latencyMs": null,
+      "failureClass": null,
+      "summary": "Benchmark skipped because AGENTIC_BENCH_* env was not provided.",
+      "sideEffects": []
+    }
+  ],
+  "records": [
+    {
+      "runId": "agent-suite-2026-03-26T01-07-55-068Z",
+      "layer": "benchmark",
+      "checkId": "agentic-benchmark",
+      "summary": "Benchmark skipped because AGENTIC_BENCH_* env was not provided.",
+      "scenarioId": "social_direct_match_v1",
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "skipped",
+      "latencyMs": null,
+      "failureClass": null,
+      "sideEffects": []
+    },
+    {
+      "runId": "agent-suite-2026-03-26T01-07-55-068Z",
+      "layer": "benchmark",
+      "checkId": "agentic-benchmark",
+      "summary": "Benchmark skipped because AGENTIC_BENCH_* env was not provided.",
+      "scenarioId": "social_no_match_recovery_v1",
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "skipped",
+      "latencyMs": null,
+      "failureClass": null,
+      "sideEffects": []
+    },
+    {
+      "runId": "agent-suite-2026-03-26T01-07-55-068Z",
+      "layer": "benchmark",
+      "checkId": "agentic-benchmark",
+      "summary": "Benchmark skipped because AGENTIC_BENCH_* env was not provided.",
+      "scenarioId": "blocked_user_exclusion_v1",
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "skipped",
+      "latencyMs": null,
+      "failureClass": null,
+      "sideEffects": []
+    },
+    {
+      "runId": "agent-suite-2026-03-26T01-07-55-068Z",
+      "layer": "benchmark",
+      "checkId": "agentic-benchmark",
+      "summary": "Benchmark skipped because AGENTIC_BENCH_* env was not provided.",
+      "scenarioId": "country_language_mismatch_v1",
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "skipped",
+      "latencyMs": null,
+      "failureClass": null,
+      "sideEffects": []
+    },
+    {
+      "runId": "agent-suite-2026-03-26T01-07-55-068Z",
+      "layer": "benchmark",
+      "checkId": "agentic-benchmark",
+      "summary": "Benchmark skipped because AGENTIC_BENCH_* env was not provided.",
+      "scenarioId": "trust_gate_v1",
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "skipped",
+      "latencyMs": null,
+      "failureClass": null,
+      "sideEffects": []
+    },
+    {
+      "runId": "agent-suite-2026-03-26T01-07-55-068Z",
+      "layer": "benchmark",
+      "checkId": "agentic-benchmark",
+      "summary": "Benchmark skipped because AGENTIC_BENCH_* env was not provided.",
+      "scenarioId": "reconnect_signal_v1",
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "skipped",
+      "latencyMs": null,
+      "failureClass": null,
+      "sideEffects": []
+    },
+    {
+      "runId": "agent-suite-2026-03-26T01-07-55-068Z",
+      "layer": "benchmark",
+      "checkId": "agentic-benchmark",
+      "summary": "Benchmark skipped because AGENTIC_BENCH_* env was not provided.",
+      "scenarioId": "social_negotiation_async_defer_v1",
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "skipped",
+      "latencyMs": null,
+      "failureClass": null,
+      "sideEffects": []
+    },
+    {
+      "runId": "agent-suite-2026-03-26T01-07-55-068Z",
+      "layer": "benchmark",
+      "checkId": "agentic-benchmark",
+      "summary": "Benchmark skipped because AGENTIC_BENCH_* env was not provided.",
+      "scenarioId": "commerce_buyer_seller_negotiation_v1",
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "skipped",
+      "latencyMs": null,
+      "failureClass": null,
+      "sideEffects": []
+    }
+  ],
+  "summary": {
+    "caseCounts": {
+      "total": 1,
+      "passed": 0,
+      "failed": 0,
+      "skipped": 1
+    },
+    "recordCounts": {
+      "total": 8,
+      "passed": 0,
+      "failed": 0,
+      "skipped": 8
+    },
+    "failureClasses": {}
+  }
+}

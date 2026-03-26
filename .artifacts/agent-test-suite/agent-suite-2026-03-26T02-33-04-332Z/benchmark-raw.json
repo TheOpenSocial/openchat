@@ -1,0 +1,88 @@
+{
+  "generatedAt": "2026-03-26T02:34:25.665Z",
+  "url": "http://localhost:3000",
+  "runCount": 2,
+  "concurrency": 1,
+  "burstSize": 1,
+  "ackSloMs": 1800,
+  "backgroundWaitMs": 30000,
+  "ackLatencyMs": {
+    "p50": 34,
+    "p95": 42,
+    "max": 42
+  },
+  "ackWithinSloCount": 2,
+  "ackWithinSloRate": 1,
+  "backgroundFollowupCount": 2,
+  "backgroundFollowupRate": 1,
+  "duplicateVisibleSideEffectCount": 0,
+  "duplicateVisibleSideEffectRate": 0,
+  "queueLagMs": {
+    "p95": 11
+  },
+  "scenarioIds": ["social_direct_match_v1", "social_no_match_recovery_v1"],
+  "fallbackOrDegradedCount": 0,
+  "fallbackOrDegradedRate": 0,
+  "workflowHealth": {
+    "status": "failed",
+    "reason": "workflow health request failed: HTTP 429 Too Many Requests on /api/admin/ops/agent-workflows?limit=30: {\"success\":false,\"error\":{\"code\":\"abuse_throttled\",\"message\":\"request temporarily blocked due to abuse controls\"}}"
+  },
+  "guardrail": {
+    "concurrency": 1,
+    "burstSize": 1,
+    "minAckWithinSloRate": 0,
+    "minBackgroundFollowupRate": 0,
+    "maxDegradedRate": 1,
+    "maxDuplicateSideEffectRate": 1,
+    "maxQueueLagMs": 60000,
+    "ackWithinSloRate": 1,
+    "backgroundFollowupRate": 1,
+    "degradedRate": 0,
+    "duplicateVisibleSideEffectRate": 0,
+    "queueLagP95Ms": 11,
+    "ackWithinSloPass": true,
+    "backgroundFollowupPass": true,
+    "degradedRatePass": true,
+    "duplicateSideEffectPass": true,
+    "queueLagPass": true,
+    "workflowHealthPass": false,
+    "workflowHealthStatus": "failed",
+    "workflowHealthReason": "workflow health request failed: HTTP 429 Too Many Requests on /api/admin/ops/agent-workflows?limit=30: {\"success\":false,\"error\":{\"code\":\"abuse_throttled\",\"message\":\"request temporarily blocked due to abuse controls\"}}"
+  },
+  "results": [
+    {
+      "run": 1,
+      "workerIndex": 1,
+      "burstIndex": 1,
+      "threadId": "6f609149-8ef5-4fff-b71e-44394e5de9f6",
+      "scenarioId": "social_direct_match_v1",
+      "prompt": "Find me someone to play tennis with tonight.",
+      "intentId": "cdfb0296-f188-489a-b0ea-c7c8a282bc01",
+      "ackLatencyMs": 42,
+      "ackWithinSlo": true,
+      "ackDetectedMs": 53,
+      "queueLagMs": 11,
+      "duplicateVisibleSideEffects": 0,
+      "ackMessage": "All right. I’m handling this in the background and I’ll notify you here as soon as I find a stro...",
+      "backgroundFollowupDetected": true,
+      "backgroundMessage": "I found 2 candidates and sent requests. I will update you when someone accepts."
+    },
+    {
+      "run": 2,
+      "workerIndex": 1,
+      "burstIndex": 2,
+      "threadId": "6f609149-8ef5-4fff-b71e-44394e5de9f6",
+      "scenarioId": "social_no_match_recovery_v1",
+      "prompt": "Find me a chess partner near me right now.",
+      "intentId": "5266bb1d-9c28-4abc-ab41-b7bdd6682940",
+      "ackLatencyMs": 34,
+      "ackWithinSlo": true,
+      "ackDetectedMs": 39,
+      "queueLagMs": 5,
+      "duplicateVisibleSideEffects": 0,
+      "ackMessage": "All right. I’m handling this in the background and I’ll notify you here as soon as I find a stro...",
+      "backgroundFollowupDetected": true,
+      "backgroundMessage": "No strong match yet. If you want, I can broaden the search and keep going."
+    }
+  ]
+}

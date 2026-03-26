@@ -32,8 +32,16 @@ interface LocalChatThread {
 interface ChatsListScreenProps {
   currentUserId: string;
   draftChatMessage: string;
-  e2eSubmitOnReturn?: boolean;
   loadingMessages: boolean;
+  onOpenUserProfile: (input: {
+    userId: string;
+    context: {
+      source: "chat" | "request";
+      reason?: string;
+      sharedTopics?: string[];
+      lastInteraction?: string;
+    };
+  }) => void;
   onModerationBlock: (targetUserId: string, chatId: string) => Promise<void>;
   onModerationReport: (targetUserId: string, chatId: string) => Promise<void>;
   onOpenChat: (chatId: string) => Promise<void>;
@@ -60,8 +68,8 @@ function formatThreadSummary(thread: LocalChatThread) {
 export function ChatsListScreen({
   currentUserId,
   draftChatMessage,
-  e2eSubmitOnReturn = false,
   loadingMessages,
+  onOpenUserProfile,
   onModerationBlock,
   onModerationReport,
   onOpenChat,
@@ -89,6 +97,25 @@ export function ChatsListScreen({
     if (Math.abs(nextHeight - composerOverlayHeight) > 2) {
       setComposerOverlayHeight(nextHeight);
     }
+  };
+  const openCounterpartyProfile = (userId: string) => {
+    onOpenUserProfile({
+      userId,
+      context: {
+        source: "chat",
+        reason: selectedChat
+          ? `Context from "${selectedChat.title}" conversation`
+          : "Context from your chat thread",
+        sharedTopics: selectedChat?.title
+          ? selectedChat.title
+              .split(/[\s,-]+/)
+              .map((item) => item.trim())
+              .filter((item) => item.length > 2)
+              .slice(0, 3)
+          : [],
+        lastInteraction: "You chatted recently",
+      },
+    });
   };
 
   return (
@@ -175,6 +202,15 @@ export function ChatsListScreen({
                 <View className="mb-3 mt-3 flex-row gap-2">
                   <View className="flex-1">
                     <PrimaryButton
+                      label="View profile"
+                      onPress={() => {
+                        openCounterpartyProfile(moderationTargetUserId);
+                      }}
+                      variant="secondary"
+                    />
+                  </View>
+                  <View className="flex-1">
+                    <PrimaryButton
                       label="Report"
                       onPress={() =>
                         onModerationReport(
@@ -209,15 +245,18 @@ export function ChatsListScreen({
                         body={message.body}
                         deliveryStatus={message.deliveryStatus}
                         onPress={
-                          message.senderUserId === currentUserId &&
-                          message.deliveryStatus === "failed"
-                            ? () => {
-                                void onRetryFailedMessage(
-                                  selectedChat.id,
-                                  message.id,
-                                );
+                          message.senderUserId === currentUserId
+                            ? message.deliveryStatus === "failed"
+                              ? () => {
+                                  void onRetryFailedMessage(
+                                    selectedChat.id,
+                                    message.id,
+                                  );
+                                }
+                              : undefined
+                            : () => {
+                                openCounterpartyProfile(message.senderUserId);
                               }
-                            : undefined
                         }
                         role={
                           message.senderUserId === currentUserId
@@ -278,7 +317,6 @@ export function ChatsListScreen({
             />
             <MessageComposer
               canSend={canSendMessage}
-              e2eSubmitOnReturn={e2eSubmitOnReturn}
               inputTestID="chat-message-input"
               maxLength={1000}
               multiline

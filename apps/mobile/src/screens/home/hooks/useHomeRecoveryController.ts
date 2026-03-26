@@ -11,8 +11,6 @@ type SetState<T> = (value: SetStateAction<T>) => void;
 type UseHomeRecoveryControllerInput = {
   agentThreadId: string | null;
   chatsRef: MutableRefObject<LocalChatThread[]>;
-  designMock: boolean;
-  enableE2ELocalMode: boolean;
   netOnline: boolean;
   refreshPendingOutboxCount: () => Promise<void>;
   sessionAccessToken: string;
@@ -31,8 +29,6 @@ type UseHomeRecoveryControllerInput = {
 export function useHomeRecoveryController({
   agentThreadId,
   chatsRef,
-  designMock,
-  enableE2ELocalMode,
   netOnline,
   refreshPendingOutboxCount,
   sessionAccessToken,
@@ -43,7 +39,7 @@ export function useHomeRecoveryController({
   syncChatThread,
 }: UseHomeRecoveryControllerInput) {
   useEffect(() => {
-    if (skipNetwork || designMock || enableE2ELocalMode || !netOnline) {
+    if (skipNetwork || !netOnline) {
       return;
     }
 
@@ -91,8 +87,6 @@ export function useHomeRecoveryController({
   }, [
     agentThreadId,
     chatsRef,
-    designMock,
-    enableE2ELocalMode,
     netOnline,
     refreshPendingOutboxCount,
     sessionAccessToken,
@@ -104,13 +98,7 @@ export function useHomeRecoveryController({
   ]);
 
   useEffect(() => {
-    if (
-      skipNetwork ||
-      designMock ||
-      enableE2ELocalMode ||
-      !netOnline ||
-      !agentThreadId
-    ) {
+    if (skipNetwork || !netOnline || !agentThreadId) {
       return;
     }
     let cancelled = false;
@@ -127,8 +115,6 @@ export function useHomeRecoveryController({
     };
   }, [
     agentThreadId,
-    designMock,
-    enableE2ELocalMode,
     netOnline,
     sessionAccessToken,
     setAgentTimeline,

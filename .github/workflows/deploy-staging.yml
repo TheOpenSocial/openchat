@@ -152,11 +152,11 @@ jobs:
       - name: Verify incident-readiness gates
         if: ${{ inputs.run_post_deploy_verification }}
         env:
-          SMOKE_BASE_URL: ${{ secrets.STAGING_API_BASE_URL }}
-          SMOKE_ADMIN_USER_ID: ${{ secrets.STAGING_SMOKE_ADMIN_USER_ID }}
-          SMOKE_ADMIN_ROLE: ${{ secrets.STAGING_SMOKE_ADMIN_ROLE }}
-          SMOKE_ADMIN_API_KEY: ${{ secrets.STAGING_SMOKE_ADMIN_API_KEY }}
-          SMOKE_ACCESS_TOKEN: ${{ secrets.STAGING_SMOKE_ACCESS_TOKEN }}
+          SMOKE_BASE_URL: ${{ secrets.STAGING_API_BASE_URL || secrets.SMOKE_BASE_URL || 'https://api.opensocial.so' }}
+          SMOKE_ADMIN_USER_ID: ${{ secrets.STAGING_SMOKE_ADMIN_USER_ID || secrets.SMOKE_ADMIN_USER_ID }}
+          SMOKE_ADMIN_ROLE: ${{ secrets.STAGING_SMOKE_ADMIN_ROLE || secrets.SMOKE_ADMIN_ROLE || 'support' }}
+          SMOKE_ADMIN_API_KEY: ${{ secrets.STAGING_SMOKE_ADMIN_API_KEY || secrets.SMOKE_ADMIN_API_KEY }}
+          SMOKE_ACCESS_TOKEN: ${{ secrets.STAGING_SMOKE_ACCESS_TOKEN || secrets.SMOKE_ACCESS_TOKEN }}
           SMOKE_TIMEOUT_MS: "15000"
           INCIDENT_VERIFY_REQUIRE_HEALTHY: "true"
           INCIDENT_VERIFY_FAIL_ON_WARNING: "false"

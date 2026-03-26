@@ -1,0 +1,30 @@
+{
+  "runId": "agent-suite-2026-03-25T02-31-59-793Z",
+  "generatedAt": "2026-03-25T02:32:10.655Z",
+  "layer": "full",
+  "status": "failed",
+  "cases": [
+    {
+      "id": "api-typecheck",
+      "scenarioId": null,
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "passed",
+      "latencyMs": 7880,
+      "failureClass": null,
+      "summary": "API typecheck baseline",
+      "sideEffects": []
+    },
+    {
+      "id": "api-lint",
+      "scenarioId": null,
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "failed",
+      "latencyMs": 2980,
+      "failureClass": "observability_gap",
+      "summary": "API lint baseline",
+      "sideEffects": []
+    }
+  ]
+}

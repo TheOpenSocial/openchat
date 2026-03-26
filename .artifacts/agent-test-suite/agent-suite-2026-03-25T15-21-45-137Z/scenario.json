@@ -1,0 +1,51 @@
+{
+  "runId": "agent-suite-2026-03-25T15-21-45-137Z",
+  "generatedAt": "2026-03-25T15:21:54.289Z",
+  "layer": "scenario",
+  "status": "passed",
+  "cases": [
+    {
+      "id": "scenario-corpus-suite",
+      "scenarioId": null,
+      "scenarioIds": [
+        "social_direct_match_v1",
+        "social_no_match_recovery_v1",
+        "blocked_user_exclusion_v1",
+        "country_language_mismatch_v1",
+        "trust_gate_v1",
+        "reconnect_signal_v1",
+        "blocked_reconnect_filtered_v1",
+        "muted_reconnect_filtered_v1",
+        "reported_reconnect_filtered_v1",
+        "passive_discovery_bundle_v1",
+        "inbox_pending_request_context_v1",
+        "agent_recommendations_publish_v1",
+        "delayed_widening_retry_v1",
+        "group_suggestions_topic_cluster_v1",
+        "blocked_group_chat_message_v1",
+        "blocked_dm_chat_message_v1",
+        "muted_group_chat_message_v1",
+        "reported_dm_chat_message_v1",
+        "group_archive_after_leave_v1",
+        "discovery_briefing_delivery_v1",
+        "reconnect_briefing_delivery_v1",
+        "saved_search_delivery_v1",
+        "social_reminder_delivery_v1",
+        "saved_search_below_threshold_v1",
+        "social_reminder_agent_thread_only_v1",
+        "saved_search_no_results_suppressed_v1",
+        "social_reminder_quiet_hours_v1",
+        "social_negotiation_async_defer_v1",
+        "commerce_buyer_seller_negotiation_v1",
+        "scam_spam_review_v1"
+      ],
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "passed",
+      "latencyMs": 9149,
+      "failureClass": null,
+      "summary": "Canonical backend scenario corpus",
+      "sideEffects": []
+    }
+  ]
+}

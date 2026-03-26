@@ -1,0 +1,25 @@
+{
+  "runId": "agent-suite-2026-03-26T02-35-13-363Z:prod-smoke",
+  "generatedAt": "2026-03-26T02:36:35.338Z",
+  "laneId": "local-dev",
+  "baseUrl": "http://localhost:3000",
+  "status": "failed",
+  "totalLatencyMs": 1742,
+  "paceMs": 1500,
+  "steps": [
+    {
+      "id": "smoke_api",
+      "summary": "staging smoke api",
+      "status": "passed",
+      "exitCode": 0,
+      "latencyMs": 107
+    },
+    {
+      "id": "smoke_llm_runtime",
+      "summary": "staging smoke llm runtime",
+      "status": "failed",
+      "exitCode": 1,
+      "latencyMs": 132
+    }
+  ]
+}

@@ -35,18 +35,10 @@ import {
 import { clearOnboardingDraft } from "./src/onboarding/onboarding-storage";
 import { OnboardingFlow } from "./src/onboarding/OnboardingFlow";
 import { AuthScreen } from "./src/screens/AuthScreen";
-import { DesignMockApp } from "./src/screens/DesignMockApp";
 import { AppStage, MobileSession, UserProfileDraft } from "./src/types";
-
-const designMockApp =
-  process.env.EXPO_PUBLIC_DESIGN_MOCK === "1" ||
-  process.env.EXPO_PUBLIC_DESIGN_MOCK === "true";
 const MOBILE_LOCALE_STORAGE_KEY = "opensocial.mobile.locale.v1";
 
 function ProductionApp() {
-  const allowE2EBypass = process.env.EXPO_PUBLIC_ENABLE_E2E_AUTH_BYPASS === "1";
-  const enableE2ELocalMode =
-    process.env.EXPO_PUBLIC_ENABLE_E2E_LOCAL_MODE === "1";
   const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [splashLayerVisible, setSplashLayerVisible] = useState(true);
   const [stage, setStage] = useState<AppStage>("auth");
@@ -247,41 +239,6 @@ function ProductionApp() {
     setAuthError(null);
 
     try {
-      if (
-        allowE2EBypass &&
-        enableE2ELocalMode &&
-        code === "maestro-e2e-auth-code"
-      ) {
-        const nextSession: MobileSession = {
-          userId: "maestro-e2e-user",
-          displayName: "Maestro User",
-          email: "maestro-e2e@example.com",
-          accessToken: "maestro-e2e-access-token",
-          refreshToken: "maestro-e2e-refresh-token",
-          sessionId: `maestro-e2e-session-${Date.now().toString(36)}`,
-        };
-
-        await saveStoredSession({
-          userId: nextSession.userId,
-          displayName: nextSession.displayName,
-          email: nextSession.email,
-          accessToken: nextSession.accessToken,
-          refreshToken: nextSession.refreshToken,
-          sessionId: nextSession.sessionId,
-        });
-
-        setSession(nextSession);
-        setProfile((current) => ({
-          ...current,
-          displayName: nextSession.displayName,
-        }));
-        setStage("home");
-        void trackTelemetryEvent(nextSession.userId, "auth_success", {
-          source: "e2e_local_bypass",
-        }).catch(() => {});
-        return;
-      }
-
       const authResult = await api.authGoogleCallback(code);
       const nextSession: MobileSession = {
         userId: authResult.user.id,
@@ -539,7 +496,6 @@ function ProductionApp() {
         <AnimatedScreen screenKey={stageKey}>
           {stage === "auth" ? (
             <AuthScreen
-              allowE2EBypass={allowE2EBypass}
               errorMessage={authError}
               locale={locale}
               loading={authLoading}
@@ -600,9 +556,6 @@ export default function App() {
         <StatusBar style="light" />
       </SafeAreaProvider>
     );
-  }
-  if (designMockApp) {
-    return <DesignMockApp />;
   }
   return <ProductionApp />;
 }

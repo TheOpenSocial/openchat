@@ -1,20 +1,20 @@
 export const THREAD_RUNTIME_COPY = {
   sending: {
-    contextLabel: "Sending",
-    thinkingLabel: "Thinking…",
+    contextLabel: "Working",
+    thinkingLabel: "Got it. Shaping your next step…",
   },
   loading: {
-    contextLabel: "Loading",
-    thinkingLabel: "Loading your thread…",
+    contextLabel: "Working",
+    thinkingLabel: "Preparing your thread…",
   },
   matching: {
-    contextLabel: "Looking",
-    thinkingLabel: "Looking for people…",
+    contextLabel: "Working",
+    thinkingLabel: "Finding your best next step…",
   },
   waiting: {
-    contextLabelFallback: "Waiting",
+    contextLabelFallback: "In progress",
     contextLabelWithHint: "In progress",
-    thinkingLabel: "Waiting on replies…",
+    thinkingLabel: "Still with you while replies come in…",
   },
   ready: {
     contextLabel: "Ready",

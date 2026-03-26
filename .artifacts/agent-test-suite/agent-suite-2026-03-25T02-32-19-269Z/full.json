@@ -1,0 +1,107 @@
+{
+  "runId": "agent-suite-2026-03-25T02-32-19-269Z",
+  "generatedAt": "2026-03-25T02:33:41.227Z",
+  "layer": "full",
+  "status": "passed",
+  "cases": [
+    {
+      "id": "api-typecheck",
+      "scenarioId": null,
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "passed",
+      "latencyMs": 7746,
+      "failureClass": null,
+      "summary": "API typecheck baseline",
+      "sideEffects": []
+    },
+    {
+      "id": "api-lint",
+      "scenarioId": null,
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "passed",
+      "latencyMs": 2841,
+      "failureClass": null,
+      "summary": "API lint baseline",
+      "sideEffects": []
+    },
+    {
+      "id": "api-release-check",
+      "scenarioId": null,
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "passed",
+      "latencyMs": 32065,
+      "failureClass": null,
+      "summary": "API release gate baseline",
+      "sideEffects": []
+    },
+    {
+      "id": "openai-package-contracts",
+      "scenarioId": null,
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "passed",
+      "latencyMs": 739,
+      "failureClass": null,
+      "summary": "OpenAI package contracts",
+      "sideEffects": []
+    },
+    {
+      "id": "api-contracts-and-regressions",
+      "scenarioId": null,
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "passed",
+      "latencyMs": 9827,
+      "failureClass": null,
+      "summary": "API contract and agent runtime regressions",
+      "sideEffects": []
+    },
+    {
+      "id": "agent-workflow-foundation",
+      "scenarioId": null,
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "passed",
+      "latencyMs": 9852,
+      "failureClass": null,
+      "summary": "Intent, workflow runtime, follow-up, connection, and admin ops workflow coverage",
+      "sideEffects": []
+    },
+    {
+      "id": "queue-replay-safety",
+      "scenarioId": null,
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "passed",
+      "latencyMs": 9417,
+      "failureClass": null,
+      "summary": "Dead-letter, replay, and follow-up queue safety",
+      "sideEffects": []
+    },
+    {
+      "id": "scenario-corpus-suite",
+      "scenarioId": null,
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "passed",
+      "latencyMs": 9468,
+      "failureClass": null,
+      "summary": "Canonical backend scenario corpus",
+      "sideEffects": []
+    },
+    {
+      "id": "agentic-benchmark",
+      "scenarioId": null,
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "skipped",
+      "latencyMs": null,
+      "failureClass": null,
+      "summary": "Benchmark skipped because AGENTIC_BENCH_* env was not provided.",
+      "sideEffects": []
+    }
+  ]
+}

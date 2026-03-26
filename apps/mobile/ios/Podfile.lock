@@ -38,6 +38,8 @@ PODS:
     - ExpoModulesCore
   - ExpoFont (55.0.4):
     - ExpoModulesCore
+  - ExpoGlassEffect (55.0.8):
+    - ExpoModulesCore
   - ExpoHaptics (55.0.9):
     - ExpoModulesCore
   - ExpoImagePicker (55.0.13):
@@ -2162,6 +2164,7 @@ DEPENDENCIES:
   - "ExpoDomWebView (from `../../../node_modules/.pnpm/@expo+dom-webview@55.0.3_expo@55.0.8_react-native@0.83.2_@babel+core@7.29.0_@react-nati_198857c1387f020f3b1305a8af7b7442/node_modules/@expo/dom-webview/ios`)"
   - "ExpoFileSystem (from `../../../node_modules/.pnpm/expo-file-system@55.0.11_expo@55.0.8_react-native@0.83.2_@babel+core@7.29.0_@react-nati_881f752bc4fd1f571c284090483d3d7c/node_modules/expo-file-system/ios`)"
   - "ExpoFont (from `../../../node_modules/.pnpm/expo-font@55.0.4_expo@55.0.8_react-native@0.83.2_@babel+core@7.29.0_@react-native+metro_b5438470b2754d92b833bbb457d098ce/node_modules/expo-font/ios`)"
+  - "ExpoGlassEffect (from `../../../node_modules/.pnpm/expo-glass-effect@55.0.8_expo@55.0.8_react-native@0.83.2_@babel+core@7.29.0_@react-nati_123ee4fbd69113cf71457109281257eb/node_modules/expo-glass-effect/ios`)"
   - "ExpoHaptics (from `../../../node_modules/.pnpm/expo-haptics@55.0.9_expo@55.0.8/node_modules/expo-haptics/ios`)"
   - "ExpoImagePicker (from `../../../node_modules/.pnpm/expo-image-picker@55.0.13_expo@55.0.8/node_modules/expo-image-picker/ios`)"
   - "ExpoKeepAwake (from `../../../node_modules/.pnpm/expo-keep-awake@55.0.4_expo@55.0.8_react@19.2.3/node_modules/expo-keep-awake/ios`)"
@@ -2276,6 +2279,8 @@ EXTERNAL SOURCES:
     :path: "../../../node_modules/.pnpm/expo-file-system@55.0.11_expo@55.0.8_react-native@0.83.2_@babel+core@7.29.0_@react-nati_881f752bc4fd1f571c284090483d3d7c/node_modules/expo-file-system/ios"
   ExpoFont:
     :path: "../../../node_modules/.pnpm/expo-font@55.0.4_expo@55.0.8_react-native@0.83.2_@babel+core@7.29.0_@react-native+metro_b5438470b2754d92b833bbb457d098ce/node_modules/expo-font/ios"
+  ExpoGlassEffect:
+    :path: "../../../node_modules/.pnpm/expo-glass-effect@55.0.8_expo@55.0.8_react-native@0.83.2_@babel+core@7.29.0_@react-nati_123ee4fbd69113cf71457109281257eb/node_modules/expo-glass-effect/ios"
   ExpoHaptics:
     :path: "../../../node_modules/.pnpm/expo-haptics@55.0.9_expo@55.0.8/node_modules/expo-haptics/ios"
   ExpoImagePicker:
@@ -2469,6 +2474,7 @@ SPEC CHECKSUMS:
   ExpoDomWebView: f101fb3db4b6eec4163fca51f7507189b7e48661
   ExpoFileSystem: ccbe192dde132e6e97bedcd51018a1642f4fa01c
   ExpoFont: 1aa465cf9f8ac6b670405becba8b15473581b2dd
+  ExpoGlassEffect: 42361543f2c0c383df0cb779e3cd2496b47a585e
   ExpoHaptics: bc44f72943e785c2fdb912738a3665142569472d
   ExpoImagePicker: 4463c7e793d904553fb832f7568e306fd7544bc9
   ExpoKeepAwake: 7f3b28c361c37389b18841bb52a58003b39fcb33

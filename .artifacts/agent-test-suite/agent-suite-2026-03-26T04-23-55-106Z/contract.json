@@ -1,0 +1,75 @@
+{
+  "runId": "agent-suite-2026-03-26T04-23-55-106Z",
+  "generatedAt": "2026-03-26T04:24:13.325Z",
+  "layer": "contract",
+  "status": "passed",
+  "cases": [
+    {
+      "id": "openai-package-contracts",
+      "scenarioId": null,
+      "scenarioIds": [],
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "passed",
+      "latencyMs": 925,
+      "failureClass": null,
+      "summary": "OpenAI package contracts",
+      "sideEffects": []
+    },
+    {
+      "id": "api-contracts-and-regressions",
+      "scenarioId": null,
+      "scenarioIds": [],
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "passed",
+      "latencyMs": 17290,
+      "failureClass": null,
+      "summary": "API contract and agent runtime regressions",
+      "sideEffects": []
+    }
+  ],
+  "records": [
+    {
+      "runId": "agent-suite-2026-03-26T04-23-55-106Z",
+      "layer": "contract",
+      "checkId": "openai-package-contracts",
+      "summary": "OpenAI package contracts",
+      "scenarioId": null,
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "passed",
+      "latencyMs": 925,
+      "failureClass": null,
+      "sideEffects": []
+    },
+    {
+      "runId": "agent-suite-2026-03-26T04-23-55-106Z",
+      "layer": "contract",
+      "checkId": "api-contracts-and-regressions",
+      "summary": "API contract and agent runtime regressions",
+      "scenarioId": null,
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "passed",
+      "latencyMs": 17290,
+      "failureClass": null,
+      "sideEffects": []
+    }
+  ],
+  "summary": {
+    "caseCounts": {
+      "total": 2,
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0
+    },
+    "recordCounts": {
+      "total": 2,
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0
+    },
+    "failureClasses": {}
+  }
+}

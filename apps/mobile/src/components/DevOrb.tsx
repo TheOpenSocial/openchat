@@ -1,8 +1,13 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
+import {
+  isGlassEffectAPIAvailable,
+  isLiquidGlassAvailable,
+} from "expo-glass-effect";
 import { useEffect, useMemo, useRef } from "react";
 import {
   Animated,
   PanResponder,
+  Platform,
   Pressable,
   Text,
   useWindowDimensions,
@@ -115,6 +120,27 @@ export function DevOrb({
     [maxX, maxY, minX, minY, position],
   );
 
+  const glassDiagnostics = useMemo(() => {
+    const diagnostics = {
+      apiAvailable: false,
+      liquidGlassAvailable: false,
+      platform: Platform.OS,
+    };
+
+    if (Platform.OS !== "ios") {
+      return diagnostics;
+    }
+
+    try {
+      diagnostics.apiAvailable = isGlassEffectAPIAvailable();
+      diagnostics.liquidGlassAvailable = isLiquidGlassAvailable();
+    } catch {
+      /* ignored: fallback remains false */
+    }
+
+    return diagnostics;
+  }, []);
+
   if (!visible) {
     return null;
   }
@@ -128,51 +154,74 @@ export function DevOrb({
         transform: position.getTranslateTransform(),
       }}
     >
-      {unlocked && open ? (
+      {open ? (
         <View className="mb-3 w-[240px] rounded-3xl border border-white/15 bg-[#0b0e13] px-3.5 py-3 shadow-lg shadow-black/50">
           <Text className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/40">
             Dev Tools
           </Text>
-          <Pressable
-            className="mb-2 rounded-2xl border border-white/10 bg-white/[0.06] px-3 py-2.5"
-            onPress={onCreateDmSandbox}
-          >
-            <Text className="text-[12px] font-semibold text-white/90">
-              Create DM Sandbox
+          <View className="mb-2 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
+            <Text className="text-[11px] font-semibold uppercase tracking-[0.06em] text-white/45">
+              Runtime
             </Text>
-          </Pressable>
-          <Pressable
-            className="mb-2 rounded-2xl border border-white/10 bg-white/[0.06] px-3 py-2.5"
-            onPress={onCreateGroupSandbox}
-          >
-            <Text className="text-[12px] font-semibold text-white/90">
-              Create Group Sandbox
+            <Text className="mt-1 text-[12px] text-white/85">
+              Platform: {glassDiagnostics.platform}
             </Text>
-          </Pressable>
-          <Pressable
-            className="mb-2 rounded-2xl border border-white/10 bg-white/[0.06] px-3 py-2.5"
-            onPress={onSyncChats}
-          >
-            <Text className="text-[12px] font-semibold text-white/90">
-              Sync Chats
+            <Text className="mt-0.5 text-[12px] text-white/85">
+              Glass API: {glassDiagnostics.apiAvailable ? "available" : "off"}
             </Text>
-          </Pressable>
-          <Pressable
-            className="rounded-2xl border border-white/10 bg-white/[0.06] px-3 py-2.5"
-            onPress={onResetAgent}
-          >
-            <Text className="text-[12px] font-semibold text-white/90">
-              Reset Agent
+            <Text className="mt-0.5 text-[12px] text-white/85">
+              Liquid Glass:{" "}
+              {glassDiagnostics.liquidGlassAvailable ? "on" : "fallback"}
             </Text>
-          </Pressable>
-          <Pressable
-            className="mt-2 rounded-2xl border border-white/10 bg-black/30 px-3 py-2.5"
-            onPress={onLock}
-          >
-            <Text className="text-[12px] font-semibold text-white/60">
-              Lock Dev Tools
+          </View>
+          {unlocked ? (
+            <>
+              <Pressable
+                className="mb-2 rounded-2xl border border-white/10 bg-white/[0.06] px-3 py-2.5"
+                onPress={onCreateDmSandbox}
+              >
+                <Text className="text-[12px] font-semibold text-white/90">
+                  Create DM Sandbox
+                </Text>
+              </Pressable>
+              <Pressable
+                className="mb-2 rounded-2xl border border-white/10 bg-white/[0.06] px-3 py-2.5"
+                onPress={onCreateGroupSandbox}
+              >
+                <Text className="text-[12px] font-semibold text-white/90">
+                  Create Group Sandbox
+                </Text>
+              </Pressable>
+              <Pressable
+                className="mb-2 rounded-2xl border border-white/10 bg-white/[0.06] px-3 py-2.5"
+                onPress={onSyncChats}
+              >
+                <Text className="text-[12px] font-semibold text-white/90">
+                  Sync Chats
+                </Text>
+              </Pressable>
+              <Pressable
+                className="rounded-2xl border border-white/10 bg-white/[0.06] px-3 py-2.5"
+                onPress={onResetAgent}
+              >
+                <Text className="text-[12px] font-semibold text-white/90">
+                  Reset Agent
+                </Text>
+              </Pressable>
+              <Pressable
+                className="mt-2 rounded-2xl border border-white/10 bg-black/30 px-3 py-2.5"
+                onPress={onLock}
+              >
+                <Text className="text-[12px] font-semibold text-white/60">
+                  Lock Dev Tools
+                </Text>
+              </Pressable>
+            </>
+          ) : (
+            <Text className="text-[12px] text-white/55">
+              Hold the orb to unlock dev actions.
             </Text>
-          </Pressable>
+          )}
         </View>
       ) : null}
       <Pressable

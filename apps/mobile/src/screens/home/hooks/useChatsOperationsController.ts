@@ -13,8 +13,6 @@ type BannerInput = {
 type SetState<T> = (value: SetStateAction<T>) => void;
 
 type UseChatsOperationsControllerInput = {
-  designMock: boolean;
-  enableE2ELocalMode: boolean;
   sessionAccessToken: string;
   sessionUserId: string;
   setBanner: (input: BannerInput | null) => void;
@@ -31,8 +29,6 @@ type UseChatsOperationsControllerInput = {
 };
 
 export function useChatsOperationsController({
-  designMock,
-  enableE2ELocalMode,
   sessionAccessToken,
   sessionUserId,
   setBanner,
@@ -44,18 +40,6 @@ export function useChatsOperationsController({
   const reportUser = useCallback(
     async (targetUserId: string, context: { chatId: string }) => {
       try {
-        if (designMock) {
-          setBanner({
-            tone: "success",
-            text: "Report recorded (preview — no server).",
-          });
-          trackTelemetry("report_submitted", {
-            source: "chat",
-            targetUserId,
-            chatId: context.chatId,
-          });
-          return;
-        }
         await api.createReport(
           {
             reporterUserId: sessionUserId,
@@ -81,24 +65,12 @@ export function useChatsOperationsController({
         });
       }
     },
-    [designMock, sessionAccessToken, sessionUserId, setBanner, trackTelemetry],
+    [sessionAccessToken, sessionUserId, setBanner, trackTelemetry],
   );
 
   const blockUser = useCallback(
     async (blockedUserId: string, context: { chatId: string }) => {
       try {
-        if (designMock) {
-          setBanner({
-            tone: "success",
-            text: "User blocked (preview — local UI only).",
-          });
-          trackTelemetry("user_blocked", {
-            source: "chat",
-            blockedUserId,
-            chatId: context.chatId,
-          });
-          return;
-        }
         await api.blockUser(
           {
             blockerUserId: sessionUserId,
@@ -122,53 +94,12 @@ export function useChatsOperationsController({
         });
       }
     },
-    [designMock, sessionAccessToken, sessionUserId, setBanner, trackTelemetry],
+    [sessionAccessToken, sessionUserId, setBanner, trackTelemetry],
   );
 
   const createDemoChat = useCallback(
     async (type: "dm" | "group") => {
       try {
-        if (enableE2ELocalMode || designMock) {
-          const now = Date.now().toString(36);
-          const localChatId = `chat_local_${now}`;
-          const localConnectionId = `connection_local_${now}`;
-          const nextThread: LocalChatThread = {
-            id: localChatId,
-            connectionId: localConnectionId,
-            title: formatChatTitle(localChatId, type),
-            type,
-            messages: [],
-            highWatermark: null,
-            unreadCount: 0,
-            participantCount: type === "group" ? 3 : 2,
-            connectionStatus: "active",
-          };
-          setChats((current) => [nextThread, ...current]);
-          setSelectedChatId(nextThread.id);
-          setBanner({
-            tone: "success",
-            text:
-              type === "group"
-                ? designMock
-                  ? "Group thread added to your preview."
-                  : "Group chat sandbox created in local E2E mode."
-                : designMock
-                  ? "Direct thread added to your preview."
-                  : "Chat sandbox created in local E2E mode.",
-          });
-          trackTelemetry("connection_created", {
-            connectionId: localConnectionId,
-            chatId: localChatId,
-            type,
-          });
-          trackTelemetry("chat_started", {
-            chatId: localChatId,
-            type,
-            participantCount: nextThread.participantCount,
-          });
-          return;
-        }
-
         const connection = await api.createConnection(
           sessionUserId,
           type,
@@ -231,8 +162,6 @@ export function useChatsOperationsController({
       }
     },
     [
-      designMock,
-      enableE2ELocalMode,
       sessionAccessToken,
       sessionUserId,
       setBanner,

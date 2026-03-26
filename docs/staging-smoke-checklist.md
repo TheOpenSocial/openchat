@@ -33,6 +33,15 @@ Optional automation (incident/readiness verification):
   - `INCIDENT_VERIFY_RUNBOOK_FILES` (comma-separated file list override)
 - The script verifies health, `ops/alerts`, `ops/metrics`, launch controls, queue visibility, and runbook-path presence; exits non-zero on readiness failures.
 
+Optional automation (full backend launch pack):
+- Command: `pnpm test:backend:ops-pack`
+- Runs: release gate + Golden Suite verification lane + smoke lane + moderation drill.
+- Writes machine-readable artifact at `.artifacts/backend-ops-pack/<run-id>.json`.
+- Useful for TP-11/TP-12 readiness and launch go/no-go evidence.
+- For temporary staging=prod parity:
+  - `STAGING_EQUALS_PROD=true BACKEND_OPS_TARGET=staging pnpm test:backend:ops-pack`
+  - verification scripts will resolve `STAGING_*` keys from `PROD_*`/`PRODUCTION_*` aliases when staging keys are missing.
+
 Optional automation (moderation drill):
 - Command: `pnpm moderation:drill`
 - Use this to verify the full moderation operator loop in a deployed environment: report -> flag visibility -> assignment -> triage -> audit trail -> optional enforcement verification.

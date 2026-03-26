@@ -11,12 +11,12 @@ import { loadOfflineOutbox } from "../lib/offline-outbox";
 import { useNetworkOnline } from "../lib/use-network-online";
 import { usePrimaryAgentThread } from "../lib/use-primary-agent-thread";
 import { useKeyboardVisible } from "../hooks/useKeyboardVisible";
-import {
-  DESIGN_MOCK_AGENT_TIMELINE,
-  DESIGN_MOCK_CHATS,
-} from "../mocks/design-fixtures";
 import { MobileSession, UserProfileDraft } from "../types";
 import { HomeAgentThreadScreen } from "./HomeAgentThreadScreen";
+import {
+  OtherUserProfileScreen,
+  type OtherProfileContext,
+} from "./OtherUserProfileScreen";
 import { ProfileScreen } from "./ProfileScreen";
 import { ChatsListScreen } from "./ChatsListScreen";
 import { HomeScreenLayout } from "./home/HomeScreenLayout";
@@ -35,6 +35,7 @@ import { useHomeTelemetry } from "./home/hooks/useHomeTelemetry";
 import { useChatsRealtime } from "./home/hooks/useChatsRealtime";
 import { useChatsHydration } from "./home/hooks/useChatsHydration";
 import { useHomeRecoveryController } from "./home/hooks/useHomeRecoveryController";
+import { useHomeWelcomeSheet } from "./home/hooks/useHomeWelcomeSheet";
 import { useHomeShellStore } from "../store/home-shell-store";
 import { useHomeThreadStore } from "../store/home-thread-store";
 import { useChatsStore } from "../store/chats-store";
@@ -44,8 +45,6 @@ export interface HomeScreenProps {
   initialProfile: UserProfileDraft;
   onProfileUpdated: (profile: UserProfileDraft) => void;
   onResetSession: () => Promise<void>;
-  /** Full UI on local fixtures; skips API, realtime, and chat persistence. */
-  designMock?: boolean;
   /** When set, sent as the first agent-thread message once the primary thread is ready (e.g. post-onboarding). */
   initialAgentMessage?: string | null;
   /** Called after the seed message attempt finishes (success or error). */
@@ -67,7 +66,6 @@ function buildOnboardingCarryoverIdempotencyKey(userId: string, seed: string) {
 }
 
 export function HomeScreen({
-  designMock = false,
   initialAgentMessage = null,
   initialProfile,
   onInitialAgentMessageConsumed,
@@ -76,14 +74,17 @@ export function HomeScreen({
   session,
 }: HomeScreenProps) {
   void initialProfile;
-  void onProfileUpdated;
-  void onResetSession;
   const insets = useSafeAreaInsets();
   const { locale } = useHomeLocale("en");
+  const {
+    dismiss: dismissWelcomeSheet,
+    hydrated: welcomeSheetHydrated,
+    visible: welcomeSheetVisible,
+  } = useHomeWelcomeSheet({
+    userId: session.userId,
+  });
   const keyboardVisible = useKeyboardVisible();
-  const enableE2ELocalMode =
-    process.env.EXPO_PUBLIC_ENABLE_E2E_LOCAL_MODE === "1";
-  const skipNetwork = designMock;
+  const skipNetwork = false;
   const activeTab = useHomeShellStore((store) => store.activeTab);
   const setActiveTab = useHomeShellStore((store) => store.setActiveTab);
   const agentVoiceTranscriptRef = useRef<string | null>(null);
@@ -172,7 +173,6 @@ export function HomeScreen({
   );
   const pendingIntentSummary = usePendingIntentSummary({
     activeTab,
-    designMock,
     sessionAccessToken: session.accessToken,
     sessionUserId: session.userId,
     skipNetwork,
@@ -190,33 +190,15 @@ export function HomeScreen({
   );
   const showDevOrb = __DEV__ || process.env.EXPO_PUBLIC_ENABLE_DEV_ORB === "1";
   const DEV_ORB_UNLOCK_WINDOW_MS = 10 * 60 * 1000;
+  const [otherProfileTarget, setOtherProfileTarget] = useState<{
+    userId: string;
+    context: OtherProfileContext;
+  } | null>(null);
 
   useEffect(() => {
-    setAgentTimeline(
-      designMock
-        ? [...DESIGN_MOCK_AGENT_TIMELINE]
-        : [
-            {
-              id: "seed_1",
-              role: "agent",
-              body: t("homeAgentSeedPrompt", "en"),
-            },
-          ],
-    );
-    setChats(designMock ? [...DESIGN_MOCK_CHATS] : []);
-    setSelectedChatId(
-      designMock && DESIGN_MOCK_CHATS[0] ? DESIGN_MOCK_CHATS[0].id : null,
-    );
-    setChatStorageReady(designMock);
-    setRealtimeState(designMock ? "connected" : "offline");
-  }, [
-    designMock,
-    setAgentTimeline,
-    setChatStorageReady,
-    setChats,
-    setRealtimeState,
-    setSelectedChatId,
-  ]);
+    setChatStorageReady(false);
+    setRealtimeState("offline");
+  }, [setChatStorageReady, setRealtimeState]);
 
   useEffect(() => {
     if (!devOrbUnlocked) {
@@ -241,8 +223,6 @@ export function HomeScreen({
   const onboardingSeedHandledRef = useRef(false);
 
   useOnboardingCarryoverPersistence({
-    designMock,
-    enableE2ELocalMode,
     initialAgentMessage,
     onboardingCarryoverIdempotencyKey,
     onboardingCarryoverSeed,
@@ -269,15 +249,14 @@ export function HomeScreen({
   );
   const netOnline = useNetworkOnline(skipNetwork);
   const refreshPendingOutboxCount = useCallback(async () => {
-    if (designMock || enableE2ELocalMode || skipNetwork) {
+    if (skipNetwork) {
       setPendingOutboxCount(0);
       return;
     }
     const pending = await loadOfflineOutbox(session.userId);
     setPendingOutboxCount(pending.length);
-  }, [designMock, enableE2ELocalMode, session.userId, skipNetwork]);
-  const agentThreadSyncEnabled =
-    !skipNetwork && !enableE2ELocalMode && !designMock;
+  }, [session.userId, skipNetwork]);
+  const agentThreadSyncEnabled = !skipNetwork;
   const { loading: agentThreadLoading, threadId: agentThreadId } =
     usePrimaryAgentThread({
       accessToken: session.accessToken,
@@ -351,8 +330,6 @@ export function HomeScreen({
     chatStorageReady,
     chats,
     chatsRef,
-    designMock,
-    enableE2ELocalMode,
     netOnline,
     selectedChatIdRef,
     sessionAccessToken: session.accessToken,
@@ -395,8 +372,6 @@ export function HomeScreen({
   useHomeRecoveryController({
     agentThreadId,
     chatsRef,
-    designMock,
-    enableE2ELocalMode,
     netOnline,
     refreshPendingOutboxCount,
     sessionAccessToken: session.accessToken,
@@ -408,19 +383,15 @@ export function HomeScreen({
   });
 
   const resetAgentConversation = useCallback(() => {
-    setAgentTimeline(
-      designMock
-        ? [...DESIGN_MOCK_AGENT_TIMELINE]
-        : [
-            {
-              id: "seed_1",
-              role: "agent",
-              body: "What would you like to do today—or who would you like to meet?",
-            },
-          ],
-    );
+    setAgentTimeline([
+      {
+        id: "seed_1",
+        role: "agent",
+        body: "What would you like to do today—or who would you like to meet?",
+      },
+    ]);
     setDraftIntentText("");
-  }, [designMock]);
+  }, [setAgentTimeline, setDraftIntentText]);
 
   const regenerateLastIntent = useCallback(() => {
     setAgentTimeline((current) => {
@@ -450,9 +421,7 @@ export function HomeScreen({
       agentVoiceTranscriptRef,
       decomposeIntent,
       decomposeMaxIntents,
-      designMock,
       draftIntentText,
-      enableE2ELocalMode,
       locale,
       netOnline,
       onInitialAgentMessageConsumed,
@@ -477,8 +446,6 @@ export function HomeScreen({
 
   const { blockUser, createDemoChat, openChat, reportUser } =
     useChatsOperationsController({
-      designMock,
-      enableE2ELocalMode,
       sessionAccessToken: session.accessToken,
       sessionUserId: session.userId,
       setBanner,
@@ -494,9 +461,7 @@ export function HomeScreen({
     sendChatMessage,
   } = useChatMessagingController({
     chatsRef,
-    designMock,
     draftChatMessage,
-    enableE2ELocalMode,
     localTypingActiveRef,
     localTypingStopTimeoutRef,
     netOnline,
@@ -525,10 +490,13 @@ export function HomeScreen({
         <ChatsListScreen
           currentUserId={session.userId}
           draftChatMessage={draftChatMessage}
-          e2eSubmitOnReturn={enableE2ELocalMode}
           loadingMessages={
             selectedChatId != null && Boolean(syncingChats[selectedChatId])
           }
+          onOpenUserProfile={(input) => {
+            hapticSelection();
+            setOtherProfileTarget(input);
+          }}
           onModerationBlock={async (targetUserId, chatId) => {
             await blockUser(targetUserId, { chatId });
           }}
@@ -558,7 +526,6 @@ export function HomeScreen({
           decomposeIntent={decomposeIntent}
           decomposeMaxIntents={decomposeMaxIntents}
           draftMessage={draftIntentText}
-          e2eSubmitOnReturn={enableE2ELocalMode}
           locale={locale}
           messages={agentTimeline}
           onboardingCarryover={
@@ -588,6 +555,13 @@ export function HomeScreen({
           sending={sendingIntent}
           setDraftMessage={setDraftIntentText}
           threadLoading={agentThreadLoading}
+          onDismissWelcomeSheet={dismissWelcomeSheet}
+          welcomeSheetVisible={
+            welcomeSheetHydrated &&
+            welcomeSheetVisible &&
+            activeTab === "home" &&
+            !keyboardVisible
+          }
         />
       }
       locale={locale}
@@ -612,48 +586,67 @@ export function HomeScreen({
         setActiveTab(tab);
       }}
       overlay={
-        <DevOrb
-          bottomOffset={composerBottomInset + 14}
-          onCreateDmSandbox={async () => {
-            await createDemoChat("dm");
-          }}
-          onCreateGroupSandbox={async () => {
-            await createDemoChat("group");
-          }}
-          onLock={() => {
-            setDevOrbUnlocked(false);
-            setDevOrbOpen(false);
-          }}
-          onResetAgent={() => {
-            resetAgentConversation();
-            setActiveTab("home");
-            setDevOrbOpen(false);
-          }}
-          onSyncChats={() => {
-            void syncChatsNow();
-          }}
-          onToggle={() => {
-            if (devOrbUnlocked) {
+        <>
+          <DevOrb
+            bottomOffset={composerBottomInset + 14}
+            onCreateDmSandbox={async () => {
+              await createDemoChat("dm");
+            }}
+            onCreateGroupSandbox={async () => {
+              await createDemoChat("group");
+            }}
+            onLock={() => {
+              setDevOrbUnlocked(false);
+              setDevOrbOpen(false);
+            }}
+            onResetAgent={() => {
+              resetAgentConversation();
+              setActiveTab("home");
+              setDevOrbOpen(false);
+            }}
+            onSyncChats={() => {
+              void syncChatsNow();
+            }}
+            onToggle={() => {
               setDevOrbOpen(!devOrbOpen);
-            }
-          }}
-          onUnlock={() => {
-            setDevOrbUnlocked(true);
-            setDevOrbOpen(true);
-            setBanner({
-              tone: "info",
-              text: "Dev tools unlocked for 10 minutes.",
-            });
-          }}
-          open={devOrbOpen}
-          unlocked={devOrbUnlocked}
-          visible={showDevOrb && activeTab !== "home"}
-        />
+            }}
+            onUnlock={() => {
+              setDevOrbUnlocked(true);
+              setDevOrbOpen(true);
+              setBanner({
+                tone: "info",
+                text: "Dev tools unlocked for 10 minutes.",
+              });
+            }}
+            open={devOrbOpen}
+            unlocked={devOrbUnlocked}
+            visible={showDevOrb}
+          />
+          {otherProfileTarget ? (
+            <OtherUserProfileScreen
+              accessToken={session.accessToken}
+              context={otherProfileTarget.context}
+              currentUserId={session.userId}
+              onClose={() => {
+                setOtherProfileTarget(null);
+              }}
+              onStartConversation={() => {
+                setActiveTab("chats");
+              }}
+              targetUserId={otherProfileTarget.userId}
+            />
+          ) : null}
+        </>
       }
       profileContent={
         <ProfileScreen
+          accessToken={session.accessToken}
           displayName={session.displayName}
           email={session.email}
+          initialDraft={initialProfile}
+          onProfileUpdated={onProfileUpdated}
+          onResetSession={onResetSession}
+          userId={session.userId}
         />
       }
       shellContentBottomInset={shellContentBottomInset}

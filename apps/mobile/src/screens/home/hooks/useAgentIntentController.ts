@@ -34,9 +34,7 @@ type UseAgentIntentControllerInput = {
   agentVoiceTranscriptRef: MutableRefObject<string | null>;
   decomposeIntent: boolean;
   decomposeMaxIntents: number;
-  designMock: boolean;
   draftIntentText: string;
-  enableE2ELocalMode: boolean;
   locale: AppLocale;
   netOnline: boolean;
   onInitialAgentMessageConsumed?: () => void;
@@ -89,9 +87,7 @@ export function useAgentIntentController({
   agentVoiceTranscriptRef,
   decomposeIntent,
   decomposeMaxIntents,
-  designMock,
   draftIntentText,
-  enableE2ELocalMode,
   locale,
   netOnline,
   onInitialAgentMessageConsumed,
@@ -121,10 +117,6 @@ export function useAgentIntentController({
       if (trackedRequestSentIntentsRef.current.has(intentId)) {
         return;
       }
-      if (designMock) {
-        return;
-      }
-
       for (let attempt = 0; attempt < 4; attempt += 1) {
         try {
           const summary = await api.summarizePendingIntents(
@@ -167,7 +159,7 @@ export function useAgentIntentController({
         await sleep(2_000 * (attempt + 1));
       }
     },
-    [designMock, sessionAccessToken, sessionUserId, trackTelemetry],
+    [sessionAccessToken, sessionUserId, trackTelemetry],
   );
 
   const sendIntent = useCallback(
@@ -195,15 +187,9 @@ export function useAgentIntentController({
         `composer-send:${sessionUserId}:${timelineIdBase}`;
       const workflowMessageId = `workflow_${timelineIdBase}`;
       const useAgentChat =
-        agentComposerMode === "chat" &&
-        Boolean(agentThreadId) &&
-        !enableE2ELocalMode &&
-        !designMock;
+        agentComposerMode === "chat" && Boolean(agentThreadId);
       const useIntentAgentEndpoint =
-        agentComposerMode === "intent" &&
-        Boolean(agentThreadId) &&
-        !enableE2ELocalMode &&
-        !designMock;
+        agentComposerMode === "intent" && Boolean(agentThreadId);
       const workflowBody = useAgentChat
         ? t("agentWorkflowThinking", locale)
         : t("agentWorkflowRouting", locale);
@@ -231,7 +217,7 @@ export function useAgentIntentController({
           : []),
       ]);
 
-      if (!skipNetwork && !designMock && !enableE2ELocalMode && !netOnline) {
+      if (!skipNetwork && !netOnline) {
         await queueOfflineComposerSend({
           userId: sessionUserId,
           mode: agentComposerMode,
@@ -269,30 +255,6 @@ export function useAgentIntentController({
       }
 
       try {
-        if (enableE2ELocalMode || designMock) {
-          const localIntentId = enableE2ELocalMode
-            ? `intent_local_${timelineIdBase}`
-            : `intent_preview_${timelineIdBase}`;
-          const agentBody = designMock
-            ? `Intent queued (${localIntentId}). In production this fans out to matching, inbox, and chats.`
-            : `Intent captured (${localIntentId}) in local E2E mode.`;
-          setAgentTimeline((current) => [
-            ...current,
-            {
-              id: `agent_${timelineIdBase}`,
-              role: "agent",
-              body: agentBody,
-            },
-          ]);
-          trackTelemetry("intent_created", {
-            intentId: localIntentId,
-            textLength: rawText.length,
-          });
-          hapticImpact();
-          options?.onOutcome?.("sent");
-          return;
-        }
-
         const controller = new AbortController();
         intentAbortRef.current = controller;
 
@@ -373,8 +335,8 @@ export function useAgentIntentController({
               role: "agent",
               body:
                 intentResult.intentCount > 1
-                  ? `Split into ${intentResult.intentCount} intents and started matching.`
-                  : `Intent captured (${primaryIntentId.slice(0, 8)}) and sent to matching.`,
+                  ? `All right. I split this into ${intentResult.intentCount} focused asks and started in the background. I’ll notify you as soon as I find strong matches (${primaryIntentId.slice(0, 8)}).`
+                  : `All right. I’m on it in the background, and I’ll notify you as soon as I find someone relevant (${primaryIntentId.slice(0, 8)}).`,
             },
           ]);
           trackTelemetry("intent_created", {
@@ -410,7 +372,7 @@ export function useAgentIntentController({
           {
             id: `agent_${timelineIdBase}`,
             role: "agent",
-            body: `Intent captured (${String(intent.id ?? "new")}) and sent to matching.`,
+            body: `All right. I’m on it in the background, and I’ll notify you as soon as I find someone relevant (${String(intent.id ?? "new")}).`,
           },
         ]);
         const intentId = typeof intent.id === "string" ? intent.id : null;
@@ -495,9 +457,7 @@ export function useAgentIntentController({
       agentVoiceTranscriptRef,
       decomposeIntent,
       decomposeMaxIntents,
-      designMock,
       draftIntentText,
-      enableE2ELocalMode,
       locale,
       netOnline,
       refreshPendingOutboxCount,

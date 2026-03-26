@@ -1,4 +1,10 @@
-import { TextInput, type TextInputProps, View } from "react-native";
+import {
+  TextInput,
+  type TextInputProps,
+  type StyleProp,
+  type ViewStyle,
+  View,
+} from "react-native";
 
 import { cn } from "../lib/cn";
 
@@ -7,11 +13,13 @@ const PLACEHOLDER_MUTED = "#949494";
 
 interface ComposerInputProps extends TextInputProps {
   containerClassName?: string;
+  containerStyle?: StyleProp<ViewStyle>;
 }
 
 export function ComposerInput({
   className,
   containerClassName,
+  containerStyle,
   placeholderTextColor = PLACEHOLDER_MUTED,
   testID,
   ...props
@@ -23,15 +31,14 @@ export function ComposerInput({
         containerClassName,
       )}
       collapsable={false}
+      style={containerStyle}
     >
       <TextInput
-        className={cn(
-          "max-h-36 min-h-[22px] text-[15px] leading-[22px] text-ink",
-          className,
-        )}
+        className={cn("text-[15px] leading-[25px] text-ink", className)}
         placeholderTextColor={placeholderTextColor}
         testID={testID}
         textAlignVertical="top"
+        underlineColorAndroid="transparent"
         {...props}
       />
     </View>

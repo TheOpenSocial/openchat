@@ -8,11 +8,9 @@ import { WelcomeBackdrop } from "../components/WelcomeBackdrop";
 import { type AppLocale, t } from "../i18n/strings";
 import { api } from "../lib/api";
 import { showErrorToast } from "../lib/app-toast";
-import { DESIGN_MOCK_AUTH_CODE } from "../mocks/design-fixtures";
 
 import { SignInActions } from "./sign-in/SignInActions";
 import { SignInGradientOverlay } from "./sign-in/SignInGradientOverlay";
-import { SignInHeroCopy } from "./sign-in/SignInHeroCopy";
 import { signInTheme } from "./sign-in/sign-in-theme";
 import { WELCOME_TITLE_TIMING } from "./sign-in/welcome-title-sequence-timing";
 import { WelcomeTitleSequence } from "./sign-in/WelcomeTitleSequence";
@@ -22,9 +20,6 @@ interface AuthScreenProps {
   loading: boolean;
   errorMessage: string | null;
   locale?: AppLocale;
-  allowE2EBypass?: boolean;
-  /** Static preview flow: single CTA, no OAuth (uses `design-mock-preview` code). */
-  designPreviewMode?: boolean;
 }
 
 WebBrowser.maybeCompleteAuthSession();
@@ -34,8 +29,6 @@ WebBrowser.maybeCompleteAuthSession();
  * @alias OpenSocialSignInScreen
  */
 export function AuthScreen({
-  allowE2EBypass = false,
-  designPreviewMode = false,
   errorMessage,
   loading,
   locale = "en",
@@ -43,22 +36,13 @@ export function AuthScreen({
 }: AuthScreenProps) {
   const [oauthLoading, setOauthLoading] = useState(false);
   const mobileRedirectUri = useMemo(() => Linking.createURL("auth/google"), []);
-  const footerOpacity = useRef(
-    new Animated.Value(designPreviewMode ? 1 : 0),
-  ).current;
+  const footerOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (designPreviewMode) {
-      footerOpacity.setValue(1);
-      return;
-    }
     footerOpacity.setValue(0);
-  }, [designPreviewMode, footerOpacity]);
+  }, [footerOpacity]);
 
   const handleWelcomeTitleSequenceComplete = useCallback(() => {
-    if (designPreviewMode) {
-      return;
-    }
     Animated.timing(footerOpacity, {
       toValue: 1,
       duration: WELCOME_TITLE_TIMING.ctaFadeInMs,
@@ -66,7 +50,7 @@ export function AuthScreen({
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
-  }, [designPreviewMode, footerOpacity]);
+  }, [footerOpacity]);
 
   useEffect(() => {
     if (!errorMessage) {
@@ -116,12 +100,7 @@ export function AuthScreen({
     }
   };
 
-  const title = designPreviewMode
-    ? t("authPreviewTitle", locale)
-    : t("authTitle", locale);
-  const subtitle = designPreviewMode
-    ? t("authPreviewSubtitle", locale)
-    : t("authSubtitle", locale);
+  const subtitle = t("authSubtitle", locale);
 
   return (
     <View className="flex-1 bg-black" testID="auth-screen">
@@ -138,33 +117,21 @@ export function AuthScreen({
 
             <View style={styles.middle}>
               <View style={styles.flexSpacer} />
-              {designPreviewMode ? (
-                <SignInHeroCopy subtitle={subtitle} title={title} />
-              ) : (
-                <WelcomeTitleSequence
-                  subtitle={subtitle}
-                  onSequenceComplete={handleWelcomeTitleSequenceComplete}
-                />
-              )}
+              <WelcomeTitleSequence
+                subtitle={subtitle}
+                onSequenceComplete={handleWelcomeTitleSequenceComplete}
+              />
               <View style={styles.flexSpacerLarge} />
             </View>
 
             <Animated.View style={[styles.footer, { opacity: footerOpacity }]}>
               <SignInActions
-                allowE2EBypass={allowE2EBypass}
-                designPreviewMode={designPreviewMode}
                 locale={locale}
                 loading={loading}
                 oauthLoading={oauthLoading}
-                onE2EBypassPress={() =>
-                  void onAuthenticated("maestro-e2e-auth-code")
-                }
                 onGooglePress={() => {
                   void handleGoogleOAuth();
                 }}
-                onPreviewPress={() =>
-                  void onAuthenticated(DESIGN_MOCK_AUTH_CODE)
-                }
               />
             </Animated.View>
           </View>

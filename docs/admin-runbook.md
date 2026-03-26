@@ -29,6 +29,10 @@
 - `GET /api/admin/moderation/queue`
 - `pnpm moderation:drill` for end-to-end operator verification in staging/prod
 
+5. Backend launch evidence pack
+- `pnpm test:backend:ops-pack`
+- Artifact: `.artifacts/backend-ops-pack/<run-id>.json`
+
 ## Core operations
 - Replay intent workflow: `POST /api/admin/intents/:intentId/replay`
 - Inspect routing explanation: `GET /api/admin/intents/:intentId/routing-explanations`

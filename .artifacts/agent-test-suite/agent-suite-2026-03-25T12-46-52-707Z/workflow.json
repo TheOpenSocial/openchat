@@ -1,0 +1,20 @@
+{
+  "runId": "agent-suite-2026-03-25T12-46-52-707Z",
+  "generatedAt": "2026-03-25T12:47:04.184Z",
+  "layer": "workflow",
+  "status": "passed",
+  "cases": [
+    {
+      "id": "agent-workflow-foundation",
+      "scenarioId": null,
+      "scenarioIds": [],
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "passed",
+      "latencyMs": 11474,
+      "failureClass": null,
+      "summary": "Intent, workflow runtime, follow-up, connection, and admin ops workflow coverage",
+      "sideEffects": []
+    }
+  ]
+}

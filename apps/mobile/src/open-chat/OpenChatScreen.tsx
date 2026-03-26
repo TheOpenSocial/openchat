@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
   FlatList,
   type LayoutChangeEvent,
   LayoutAnimation,
   Platform,
   Pressable,
+  ScrollView,
   Text,
   UIManager,
   View,
@@ -21,8 +23,10 @@ import type { AgentTimelineMessage } from "../types";
 import type { HomeRuntimeViewModel } from "../screens/home/domain/types";
 import { OpenChatComposer } from "./OpenChatComposer";
 import { OpenChatHeader } from "./OpenChatHeader";
+import { OpenChatWelcomeSheet } from "./OpenChatWelcomeSheet";
 import { StarterPrompts } from "./StarterPrompts";
 import { ThreadMessage } from "./ThreadMessage";
+import { RUNTIME_SYSTEM_MESSAGE_PREFIX } from "./ThreadMessage";
 import { ThreadStatusTransition } from "./ThreadStatusTransition";
 import { useThreadRuntimePresentation } from "./useThreadRuntimePresentation";
 import {
@@ -52,7 +56,6 @@ export type OpenChatScreenProps = {
   onDecomposeIntentChange: (value: boolean) => void;
   onDecomposeMaxIntentsChange: (value: number) => void;
   pendingIntentSummary: PendingIntentsSummaryResponse | null;
-  e2eSubmitOnReturn?: boolean;
   onboardingCarryover?: {
     seed: string;
     state: "processing" | "queued" | "ready";
@@ -64,6 +67,8 @@ export type OpenChatScreenProps = {
     properties?: Record<string, unknown>,
   ) => void;
   runtimeViewModel?: HomeRuntimeViewModel;
+  welcomeSheetVisible?: boolean;
+  onDismissWelcomeSheet?: () => void;
 };
 
 export function OpenChatScreen({
@@ -73,7 +78,6 @@ export function OpenChatScreen({
   decomposeIntent,
   decomposeMaxIntents,
   draftMessage,
-  e2eSubmitOnReturn = false,
   locale,
   messages,
   onAgentImageUrlChange,
@@ -93,6 +97,8 @@ export function OpenChatScreen({
   composerBottomOffset = 0,
   onRuntimeTelemetry,
   runtimeViewModel,
+  welcomeSheetVisible = false,
+  onDismissWelcomeSheet,
 }: OpenChatScreenProps) {
   void agentImageUrl;
   void canRegenerate;
@@ -155,6 +161,23 @@ export function OpenChatScreen({
   });
 
   const phase = runtime.phase;
+  const transcriptMessages = useMemo(() => {
+    const shouldShowRuntimeSystem =
+      hasUserTurn(filteredMessages) &&
+      (runtime.state === "matching" ||
+        runtime.state === "sending" ||
+        runtime.state === "loading");
+    if (!shouldShowRuntimeSystem) {
+      return filteredMessages;
+    }
+    const label = runtime.thinkingLabel?.trim() || "Working on it…";
+    const runtimeMessage: AgentTimelineMessage = {
+      id: "__runtime_system_status__",
+      role: "system",
+      body: `${RUNTIME_SYSTEM_MESSAGE_PREFIX}${label}`,
+    };
+    return [...filteredMessages, runtimeMessage];
+  }, [filteredMessages, runtime.state, runtime.thinkingLabel]);
 
   useEffect(() => {
     if (Platform.OS === "android") {
@@ -173,6 +196,10 @@ export function OpenChatScreen({
   const [composerOverlayHeight, setComposerOverlayHeight] = useState(154);
   const [atBottom, setAtBottom] = useState(true);
   const [pendingUpdates, setPendingUpdates] = useState(0);
+  const welcomeOpacity = useRef(new Animated.Value(0)).current;
+  const welcomeTranslateY = useRef(new Animated.Value(10)).current;
+  const starterOpacity = useRef(new Animated.Value(0)).current;
+  const starterTranslateY = useRef(new Animated.Value(14)).current;
 
   useEffect(() => {
     if (atBottom) {
@@ -190,6 +217,56 @@ export function OpenChatScreen({
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
   }, [showOnboardingCarryover, onboardingCarryover?.state]);
 
+  useEffect(() => {
+    if (
+      hasUserTurn(filteredMessages) ||
+      carryoverProcessing ||
+      showOnboardingCarryover
+    ) {
+      welcomeOpacity.setValue(0);
+      welcomeTranslateY.setValue(10);
+      starterOpacity.setValue(0);
+      starterTranslateY.setValue(14);
+      return;
+    }
+
+    Animated.parallel([
+      Animated.timing(welcomeOpacity, {
+        duration: 240,
+        toValue: 1,
+        useNativeDriver: true,
+      }),
+      Animated.timing(welcomeTranslateY, {
+        duration: 260,
+        toValue: 0,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    Animated.parallel([
+      Animated.timing(starterOpacity, {
+        delay: 70,
+        duration: 240,
+        toValue: 1,
+        useNativeDriver: true,
+      }),
+      Animated.timing(starterTranslateY, {
+        delay: 70,
+        duration: 280,
+        toValue: 0,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [
+    carryoverProcessing,
+    filteredMessages,
+    showOnboardingCarryover,
+    starterOpacity,
+    starterTranslateY,
+    welcomeOpacity,
+    welcomeTranslateY,
+  ]);
+
   const onComposerLayout = (event: LayoutChangeEvent) => {
     const nextHeight = Math.ceil(event.nativeEvent.layout.height);
     if (Math.abs(nextHeight - composerOverlayHeight) > 2) {
@@ -203,7 +280,7 @@ export function OpenChatScreen({
       <ThreadStatusTransition
         contextLabel={null}
         hint={null}
-        showThinking={hasUserTurn(filteredMessages)}
+        showThinking={false}
         thinkingLabel={runtime.thinkingLabel}
       />
 
@@ -266,7 +343,7 @@ export function OpenChatScreen({
             contentPaddingBottom={composerOverlayHeight + 18}
             contentPaddingTop={14}
             listRef={transcriptRef}
-            messages={filteredMessages}
+            messages={transcriptMessages}
             onAtBottomChange={setAtBottom}
             renderBubble={(message) => (
               <View className="px-5">
@@ -285,21 +362,52 @@ export function OpenChatScreen({
           </Text>
         </View>
       ) : (
-        <View className="min-h-0 flex-1 justify-center py-8">
-          <Text className="text-center text-[34px] font-semibold tracking-[-0.03em] text-white">
-            What do you want to do?
-          </Text>
-          <Text className="mt-3 max-w-[260px] self-center text-center text-[15px] leading-[22px] text-white/42">
-            Start with anything.
-          </Text>
-          <View className="mt-10">
+        <ScrollView
+          className="-mx-5 min-h-0 flex-1"
+          contentContainerStyle={{
+            minHeight: "100%",
+            paddingBottom: composerOverlayHeight + 40,
+            paddingHorizontal: 20,
+            paddingTop: 58,
+          }}
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <Animated.View
+            style={{
+              opacity: welcomeOpacity,
+              transform: [{ translateY: welcomeTranslateY }],
+            }}
+          >
+            <Text className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/34">
+              Welcome
+            </Text>
+            <Text className="mt-4 text-[36px] font-semibold tracking-[-0.035em] text-white">
+              {t("openChatEmptyTitle", locale)}
+            </Text>
+            <Text className="mt-3 max-w-[320px] text-[15px] leading-[23px] text-white/44">
+              {t("openChatEmptySubtitle", locale)}
+            </Text>
+          </Animated.View>
+
+          <Animated.View
+            className="mt-10"
+            style={{
+              opacity: starterOpacity,
+              transform: [{ translateY: starterTranslateY }],
+            }}
+          >
+            <Text className="mb-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/32">
+              Try one
+            </Text>
             <StarterPrompts
               onPick={(text) => {
                 setDraftMessage(text);
               }}
             />
-          </View>
-        </View>
+          </Animated.View>
+        </ScrollView>
       )}
 
       {!atBottom && pendingUpdates > 0 ? (
@@ -332,7 +440,6 @@ export function OpenChatScreen({
       >
         <OpenChatComposer
           canSend={canSend}
-          e2eSubmitOnReturn={e2eSubmitOnReturn}
           inputTestID="agent-intent-input"
           maxLength={2000}
           onChangeText={setDraftMessage}
@@ -344,6 +451,17 @@ export function OpenChatScreen({
           value={draftMessage}
         />
       </View>
+      <OpenChatWelcomeSheet
+        locale={locale}
+        onClose={() => {
+          onDismissWelcomeSheet?.();
+        }}
+        onPickExample={(text) => {
+          setDraftMessage(text);
+          onDismissWelcomeSheet?.();
+        }}
+        visible={welcomeSheetVisible}
+      />
     </View>
   );
 }

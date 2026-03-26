@@ -16,8 +16,6 @@ type BannerInput = {
 };
 
 type UseOnboardingCarryoverPersistenceInput = {
-  designMock: boolean;
-  enableE2ELocalMode: boolean;
   initialAgentMessage: string | null;
   onboardingCarryoverIdempotencyKey: string | null;
   onboardingCarryoverSeed: string;
@@ -31,8 +29,6 @@ type UseOnboardingCarryoverPersistenceInput = {
 };
 
 export function useOnboardingCarryoverPersistence({
-  designMock,
-  enableE2ELocalMode,
   initialAgentMessage,
   onboardingCarryoverIdempotencyKey,
   onboardingCarryoverSeed,
@@ -45,9 +41,6 @@ export function useOnboardingCarryoverPersistence({
   userId,
 }: UseOnboardingCarryoverPersistenceInput) {
   useEffect(() => {
-    if (designMock || enableE2ELocalMode) {
-      return;
-    }
     if (initialAgentMessage?.trim()) {
       return;
     }
@@ -90,7 +83,7 @@ export function useOnboardingCarryoverPersistence({
     return () => {
       mounted = false;
     };
-  }, [designMock, enableE2ELocalMode, initialAgentMessage, userId]);
+  }, [initialAgentMessage, userId]);
 
   useEffect(() => {
     const seed = onboardingCarryoverSeed.trim();

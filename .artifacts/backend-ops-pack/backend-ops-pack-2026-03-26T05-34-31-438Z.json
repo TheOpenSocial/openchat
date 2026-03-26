@@ -1,0 +1,27 @@
+{
+  "runId": "backend-ops-pack-2026-03-26T05-34-31-438Z",
+  "generatedAt": "2026-03-26T05:35:01.992Z",
+  "target": "production",
+  "status": "failed",
+  "stageEqualsProd": false,
+  "dryRun": false,
+  "totalLatencyMs": 30550,
+  "steps": [
+    {
+      "id": "release_check_api",
+      "summary": "release gate baseline",
+      "status": "passed",
+      "exitCode": 0,
+      "latencyMs": 30310,
+      "command": "pnpm release:check:api"
+    },
+    {
+      "id": "agentic_suite_verification",
+      "summary": "golden suite verification lane",
+      "status": "failed",
+      "exitCode": 1,
+      "latencyMs": 238,
+      "command": "pnpm test:agentic:suite:verification"
+    }
+  ]
+}

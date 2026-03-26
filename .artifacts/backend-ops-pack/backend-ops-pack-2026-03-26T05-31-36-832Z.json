@@ -1,0 +1,43 @@
+{
+  "runId": "backend-ops-pack-2026-03-26T05-31-36-832Z",
+  "generatedAt": "2026-03-26T05:31:36.835Z",
+  "target": "staging",
+  "status": "passed",
+  "stageEqualsProd": true,
+  "dryRun": true,
+  "totalLatencyMs": 2,
+  "steps": [
+    {
+      "id": "release_check_api",
+      "summary": "release gate baseline",
+      "status": "skipped",
+      "exitCode": 0,
+      "latencyMs": 1,
+      "command": "pnpm release:check:api"
+    },
+    {
+      "id": "agentic_suite_verification",
+      "summary": "golden suite verification lane",
+      "status": "skipped",
+      "exitCode": 0,
+      "latencyMs": 0,
+      "command": "pnpm test:agentic:suite:verification"
+    },
+    {
+      "id": "agentic_prod_smoke_lane",
+      "summary": "prod/staging smoke lane",
+      "status": "skipped",
+      "exitCode": 0,
+      "latencyMs": 0,
+      "command": "pnpm staging:smoke:verification-lane"
+    },
+    {
+      "id": "moderation_drill",
+      "summary": "moderation operator drill",
+      "status": "skipped",
+      "exitCode": 0,
+      "latencyMs": 0,
+      "command": "pnpm moderation:drill"
+    }
+  ]
+}

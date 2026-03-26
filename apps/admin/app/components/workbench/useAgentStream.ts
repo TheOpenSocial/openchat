@@ -2,6 +2,7 @@
 
 import { type MutableRefObject } from "react";
 import { buildApiUrl } from "../../lib/api";
+import { createHistoryId } from "./workbench-utils";
 
 function safeJsonParse(raw: string): unknown {
   try {
@@ -9,10 +10,6 @@ function safeJsonParse(raw: string): unknown {
   } catch {
     return raw;
   }
-}
-
-function createHistoryId() {
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 const STREAM_EVENT_LIMIT = 60;

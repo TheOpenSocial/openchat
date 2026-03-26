@@ -30,6 +30,7 @@
     "expo-blur": "~55.0.10",
     "expo-constants": "^55.0.9",
     "expo-device": "^55.0.10",
+    "expo-glass-effect": "~55.0.8",
     "expo-haptics": "^55.0.9",
     "expo-image-picker": "~55.0.0",
     "expo-linear-gradient": "^55.0.9",

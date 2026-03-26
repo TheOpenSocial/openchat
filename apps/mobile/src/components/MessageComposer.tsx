@@ -20,20 +20,13 @@ interface MessageComposerProps {
   inputClassName?: string;
   /** Show dictation control (native speech module when available). */
   voiceEnabled?: boolean;
-  /** Distinct label so E2E can target the composer send vs keyboard actions. */
   sendAccessibilityLabel?: string;
-  /**
-   * Single-line + return-to-send helps Maestro / XCUITest keep native text and React state in sync
-   * on iOS (multiline fields often skip `onChangeText` for automated typing).
-   */
-  e2eSubmitOnReturn?: boolean;
   /** Raw STT line for API metadata (e.g. `voiceTranscript`); composer text may merge the same line. */
   onVoiceTranscript?: (line: string) => void;
 }
 
 export function MessageComposer({
   canSend,
-  e2eSubmitOnReturn = false,
   inputClassName,
   inputTestID,
   maxLength,
@@ -49,7 +42,6 @@ export function MessageComposer({
   voiceEnabled = true,
 }: MessageComposerProps) {
   const showActive = canSend && !sending;
-  const effectiveMultiline = e2eSubmitOnReturn ? false : multiline;
 
   const mergeVoice = (line: string) => {
     onVoiceTranscript?.(line);
@@ -60,24 +52,13 @@ export function MessageComposer({
   return (
     <View className="flex-row items-end gap-1">
       <ComposerInput
-        blurOnSubmit={e2eSubmitOnReturn}
         className={cn("py-1", inputClassName)}
         containerClassName="min-h-[44px] min-w-0 flex-1"
         editable={!sending}
         maxLength={maxLength}
-        multiline={effectiveMultiline}
+        multiline={multiline}
         onChangeText={onChangeText}
-        onSubmitEditing={
-          e2eSubmitOnReturn
-            ? () => {
-                if (canSend && !sending) {
-                  void onSend();
-                }
-              }
-            : undefined
-        }
         placeholder={placeholder}
-        returnKeyType={e2eSubmitOnReturn ? "send" : undefined}
         testID={inputTestID}
         value={value}
       />

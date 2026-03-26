@@ -13,25 +13,17 @@ import { type AppLocale, t } from "../../i18n/strings";
 import { signInTheme } from "./sign-in-theme";
 
 type SignInActionsProps = {
-  designPreviewMode: boolean;
   locale: AppLocale;
   loading: boolean;
   oauthLoading: boolean;
-  allowE2EBypass: boolean;
   onGooglePress: () => void;
-  onPreviewPress: () => void;
-  onE2EBypassPress: () => void;
 };
 
 export function SignInActions({
-  allowE2EBypass,
-  designPreviewMode,
   locale,
   loading,
   oauthLoading,
-  onE2EBypassPress,
   onGooglePress,
-  onPreviewPress,
 }: SignInActionsProps) {
   const fade = useRef(new Animated.Value(0)).current;
   const [reduceMotion, setReduceMotion] = useState(false);
@@ -66,44 +58,15 @@ export function SignInActions({
 
   return (
     <Animated.View style={[styles.column, { opacity: fade }]}>
-      {designPreviewMode ? (
-        <PrimaryChromeButton
-          disabled={loading}
-          label={t("authContinuePreview", locale)}
-          loading={loading}
-          onPress={onPreviewPress}
-          testID="auth-design-preview-button"
-        />
-      ) : (
-        <PrimaryChromeButton
-          disabled={busy}
-          label={t("authContinueWithGoogle", locale)}
-          loading={busy}
-          onPress={onGooglePress}
-          testID="auth-google-button"
-        />
-      )}
+      <PrimaryChromeButton
+        disabled={busy}
+        label={t("authContinueWithGoogle", locale)}
+        loading={busy}
+        onPress={onGooglePress}
+        testID="auth-google-button"
+      />
 
-      <Text style={styles.footnote}>
-        {designPreviewMode
-          ? t("authPreviewFootnote", locale)
-          : t("authBrowserFootnote", locale)}
-      </Text>
-
-      {!designPreviewMode && allowE2EBypass ? (
-        <Pressable
-          accessibilityRole="button"
-          hitSlop={12}
-          onPress={onE2EBypassPress}
-          style={({ pressed }) => [
-            styles.ghostWrap,
-            pressed && styles.ghostPressed,
-          ]}
-          testID="auth-e2e-bypass-button"
-        >
-          <Text style={styles.ghostLabel}>{t("authE2eBypass", locale)}</Text>
-        </Pressable>
-      ) : null}
+      <Text style={styles.footnote}>{t("authBrowserFootnote", locale)}</Text>
     </Animated.View>
   );
 }
@@ -177,19 +140,5 @@ const styles = StyleSheet.create({
     lineHeight: signInTheme.footnoteSize * 1.45,
     marginTop: 14,
     textAlign: "center",
-  },
-  ghostWrap: {
-    alignSelf: "center",
-    marginTop: 20,
-    paddingVertical: 8,
-  },
-  ghostPressed: {
-    opacity: 0.65,
-  },
-  ghostLabel: {
-    color: "rgba(255,255,255,0.45)",
-    fontSize: 13,
-    fontWeight: "500",
-    letterSpacing: 0.3,
   },
 });

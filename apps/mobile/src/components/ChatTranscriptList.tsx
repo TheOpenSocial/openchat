@@ -2,6 +2,7 @@ import { useMemo, useRef, type RefObject } from "react";
 import type { ReactElement } from "react";
 import {
   FlatList,
+  Keyboard,
   type ListRenderItem,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -50,7 +51,10 @@ export function ChatTranscriptList<T extends { id: string }>({
         data={data}
         keyExtractor={(item) => item.id}
         keyboardDismissMode="interactive"
-        keyboardShouldPersistTaps="handled"
+        keyboardShouldPersistTaps="never"
+        onScrollBeginDrag={() => {
+          Keyboard.dismiss();
+        }}
         onScroll={onAtBottomChange ? handleScroll : undefined}
         ref={scrollRef}
         renderItem={renderItem}

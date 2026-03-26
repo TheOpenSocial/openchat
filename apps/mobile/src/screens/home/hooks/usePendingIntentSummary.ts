@@ -5,7 +5,6 @@ import type { HomeTab } from "../../../types";
 
 type UsePendingIntentSummaryInput = {
   activeTab: HomeTab;
-  designMock: boolean;
   sessionAccessToken: string;
   sessionUserId: string;
   skipNetwork: boolean;
@@ -13,7 +12,6 @@ type UsePendingIntentSummaryInput = {
 
 export function usePendingIntentSummary({
   activeTab,
-  designMock,
   sessionAccessToken,
   sessionUserId,
   skipNetwork,
@@ -22,7 +20,7 @@ export function usePendingIntentSummary({
     useState<PendingIntentsSummaryResponse | null>(null);
 
   useEffect(() => {
-    if (skipNetwork || designMock || activeTab !== "home") {
+    if (skipNetwork || activeTab !== "home") {
       return;
     }
 
@@ -44,7 +42,7 @@ export function usePendingIntentSummary({
       cancelled = true;
       clearInterval(interval);
     };
-  }, [activeTab, designMock, sessionAccessToken, sessionUserId, skipNetwork]);
+  }, [activeTab, sessionAccessToken, sessionUserId, skipNetwork]);
 
   return pendingIntentSummary;
 }

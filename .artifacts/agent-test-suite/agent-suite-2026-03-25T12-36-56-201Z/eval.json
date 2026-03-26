@@ -1,0 +1,28 @@
+{
+  "runId": "agent-suite-2026-03-25T12-36-56-201Z",
+  "generatedAt": "2026-03-25T12:37:05.416Z",
+  "layer": "eval",
+  "status": "passed",
+  "cases": [
+    {
+      "id": "agentic-eval-scorecards",
+      "scenarioId": null,
+      "scenarioIds": [
+        "eval_planning_bounds_v1",
+        "eval_injection_fallback_v1",
+        "eval_moderation_fallback_v1",
+        "eval_human_approval_policy_v1",
+        "eval_failure_capture_v1",
+        "eval_social_outcome_telemetry_v1",
+        "eval_workflow_runtime_traceability_v1"
+      ],
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "passed",
+      "latencyMs": 9212,
+      "failureClass": null,
+      "summary": "Agentic eval scorecards and admin snapshot coverage",
+      "sideEffects": []
+    }
+  ]
+}

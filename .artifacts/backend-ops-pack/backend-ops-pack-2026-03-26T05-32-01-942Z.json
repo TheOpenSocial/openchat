@@ -1,0 +1,19 @@
+{
+  "runId": "backend-ops-pack-2026-03-26T05-32-01-942Z",
+  "generatedAt": "2026-03-26T05:32:02.198Z",
+  "target": "staging",
+  "status": "failed",
+  "stageEqualsProd": true,
+  "dryRun": false,
+  "totalLatencyMs": 255,
+  "steps": [
+    {
+      "id": "agentic_suite_verification",
+      "summary": "golden suite verification lane",
+      "status": "failed",
+      "exitCode": 1,
+      "latencyMs": 253,
+      "command": "pnpm test:agentic:suite:verification"
+    }
+  ]
+}

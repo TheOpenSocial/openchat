@@ -18,8 +18,6 @@ type UseChatSyncControllerInput = {
   chatStorageReady: boolean;
   chats: LocalChatThread[];
   chatsRef: MutableRefObject<LocalChatThread[]>;
-  designMock: boolean;
-  enableE2ELocalMode: boolean;
   netOnline: boolean;
   selectedChatIdRef: MutableRefObject<string | null>;
   sessionAccessToken: string;
@@ -38,8 +36,6 @@ export function useChatSyncController({
   chatStorageReady,
   chats,
   chatsRef,
-  designMock,
-  enableE2ELocalMode,
   netOnline,
   selectedChatIdRef,
   sessionAccessToken,
@@ -80,10 +76,6 @@ export function useChatSyncController({
         quiet?: boolean;
       },
     ) => {
-      if (enableE2ELocalMode || designMock) {
-        return true;
-      }
-
       const currentThread = chatsRef.current.find(
         (thread) => thread.id === chatId,
       );
@@ -149,8 +141,6 @@ export function useChatSyncController({
     },
     [
       chatsRef,
-      designMock,
-      enableE2ELocalMode,
       selectedChatIdRef,
       sessionAccessToken,
       sessionUserId,
@@ -222,14 +212,6 @@ export function useChatSyncController({
       return;
     }
 
-    if (designMock) {
-      setBanner({
-        tone: "success",
-        text: "Chats up to date (preview).",
-      });
-      return;
-    }
-
     trackTelemetry("chat_sync_manual", {
       threads: chatIds.length,
     });
@@ -257,7 +239,7 @@ export function useChatSyncController({
       failures,
       total: chatIds.length,
     });
-  }, [chatsRef, designMock, setBanner, syncChatThread, trackTelemetry]);
+  }, [chatsRef, setBanner, syncChatThread, trackTelemetry]);
 
   return {
     syncChatThread,

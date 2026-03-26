@@ -1,0 +1,151 @@
+{
+  "runId": "agent-suite-2026-03-25T03-08-34-040Z",
+  "generatedAt": "2026-03-25T03:10:25.833Z",
+  "layer": "full",
+  "status": "passed",
+  "cases": [
+    {
+      "id": "api-typecheck",
+      "scenarioId": null,
+      "scenarioIds": [],
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "passed",
+      "latencyMs": 25926,
+      "failureClass": null,
+      "summary": "API typecheck baseline",
+      "sideEffects": []
+    },
+    {
+      "id": "api-lint",
+      "scenarioId": null,
+      "scenarioIds": [],
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "passed",
+      "latencyMs": 2879,
+      "failureClass": null,
+      "summary": "API lint baseline",
+      "sideEffects": []
+    },
+    {
+      "id": "api-release-check",
+      "scenarioId": null,
+      "scenarioIds": [],
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "passed",
+      "latencyMs": 31264,
+      "failureClass": null,
+      "summary": "API release gate baseline",
+      "sideEffects": []
+    },
+    {
+      "id": "openai-package-contracts",
+      "scenarioId": null,
+      "scenarioIds": [],
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "passed",
+      "latencyMs": 765,
+      "failureClass": null,
+      "summary": "OpenAI package contracts",
+      "sideEffects": []
+    },
+    {
+      "id": "api-contracts-and-regressions",
+      "scenarioId": null,
+      "scenarioIds": [],
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "passed",
+      "latencyMs": 9454,
+      "failureClass": null,
+      "summary": "API contract and agent runtime regressions",
+      "sideEffects": []
+    },
+    {
+      "id": "agent-workflow-foundation",
+      "scenarioId": null,
+      "scenarioIds": [],
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "passed",
+      "latencyMs": 11547,
+      "failureClass": null,
+      "summary": "Intent, workflow runtime, follow-up, connection, and admin ops workflow coverage",
+      "sideEffects": []
+    },
+    {
+      "id": "queue-replay-safety",
+      "scenarioId": null,
+      "scenarioIds": [],
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "passed",
+      "latencyMs": 10614,
+      "failureClass": null,
+      "summary": "Dead-letter, replay, and follow-up queue safety",
+      "sideEffects": []
+    },
+    {
+      "id": "scenario-corpus-suite",
+      "scenarioId": null,
+      "scenarioIds": [
+        "social_direct_match_v1",
+        "social_no_match_recovery_v1",
+        "blocked_user_exclusion_v1",
+        "country_language_mismatch_v1",
+        "trust_gate_v1",
+        "reconnect_signal_v1",
+        "passive_discovery_bundle_v1",
+        "inbox_pending_request_context_v1",
+        "agent_recommendations_publish_v1",
+        "delayed_widening_retry_v1",
+        "group_suggestions_topic_cluster_v1",
+        "blocked_group_chat_message_v1",
+        "group_archive_after_leave_v1",
+        "discovery_briefing_delivery_v1",
+        "scam_spam_review_v1"
+      ],
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "passed",
+      "latencyMs": 9433,
+      "failureClass": null,
+      "summary": "Canonical backend scenario corpus",
+      "sideEffects": []
+    },
+    {
+      "id": "agentic-eval-scorecards",
+      "scenarioId": null,
+      "scenarioIds": [
+        "eval_planning_bounds_v1",
+        "eval_injection_fallback_v1",
+        "eval_moderation_fallback_v1",
+        "eval_human_approval_policy_v1",
+        "eval_failure_capture_v1",
+        "eval_social_outcome_telemetry_v1"
+      ],
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "passed",
+      "latencyMs": 9906,
+      "failureClass": null,
+      "summary": "Agentic eval scorecards and admin snapshot coverage",
+      "sideEffects": []
+    },
+    {
+      "id": "agentic-benchmark",
+      "scenarioId": null,
+      "scenarioIds": [],
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "skipped",
+      "latencyMs": null,
+      "failureClass": null,
+      "summary": "Benchmark skipped because AGENTIC_BENCH_* env was not provided.",
+      "sideEffects": []
+    }
+  ]
+}

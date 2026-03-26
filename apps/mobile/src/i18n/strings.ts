@@ -20,7 +20,6 @@ const catalogs = {
     authContinuePreview: "Continue",
     authPreviewFootnote: "Preview data only. Nothing syncs.",
     authBrowserFootnote: "Opens in your browser, then returns here.",
-    authE2eBypass: "E2E bypass",
     authSignInFailed: "Sign-in failed",
     authCouldNotSignIn: "Could not sign in",
     authPreviewTitle: "Preview",
@@ -185,6 +184,22 @@ const catalogs = {
     openChatEmptyTitle: "What do you want to do?",
     openChatEmptySubtitle:
       "Start with anything. A topic, a plan, or someone you want to meet.",
+    homeWelcomeTitle: "Start with intent.",
+    homeWelcomeSubtitle:
+      "Tell OpenSocial what you want to do, who you want to meet, or what kind of conversation you want next.",
+    homeWelcomeHowItWorksTitle: "How it works",
+    homeWelcomeHowItWorksBody:
+      "You write once. OpenSocial interprets the signal, looks for the right people, and keeps the thread moving.",
+    homeWelcomeExamplesTitle: "What to say",
+    homeWelcomeExamplesBody:
+      "Use natural language. A plan, a topic, a vibe, or the kind of person you want to meet is enough.",
+    homeWelcomeChatsTitle: "What happens next",
+    homeWelcomeChatsBody:
+      "When people accept, chats open automatically. You stay in one thread until something is ready.",
+    homeWelcomeTryTitle: "Try one",
+    homeWelcomeTryHint: "Use this as your first message",
+    homeWelcomePrimaryCta: "Try it now",
+    homeWelcomeSkip: "Skip",
     openChatOnboardingCarryoverTitle: "Picked up from onboarding",
     openChatOnboardingCarryoverProcessing:
       "We’re carrying your first intent into your thread.",
@@ -325,7 +340,6 @@ const catalogs = {
     profileRequestDigestNow: "Request digest now",
     profileSignOut: "Sign out",
     loadingYourSpace: "Loading your space…",
-    loadingDesignPreview: "Loading design preview…",
     authSessionExpired: "Session expired. Sign in again.",
     authSessionExpiredContinueOnboarding:
       "Session expired. Sign in again to continue onboarding.",
@@ -335,14 +349,6 @@ const catalogs = {
     onboardingSavedLocally:
       "Saved locally. We’ll finish syncing your onboarding when internet is back.",
     onboardingPhotoUploadFailed: "Photo not uploaded",
-    designPreviewBadge: "Design preview",
-    designPreviewWelcomeBody:
-      "Explore the full mobile shell: home, discover, inbox, chats, and profile, with realistic mock data. No API or account required.",
-    designPreviewExploreApp: "Explore the app",
-    designPreviewFootnote: "Preview mode · data stays on this device only",
-    designPreviewUsePreviewProfile:
-      "In design preview, use Continue with preview profile on the sign-in screen.",
-    designPreviewMissingSession: "Missing preview session.",
     onboardingBackdropKicker: "Agentic onboarding",
   },
   es: {
@@ -363,7 +369,6 @@ const catalogs = {
     authContinuePreview: "Continuar",
     authPreviewFootnote: "Solo datos de prueba. Nada se sincroniza.",
     authBrowserFootnote: "Se abre en tu navegador y luego vuelve aquí.",
-    authE2eBypass: "Atajo E2E",
     authSignInFailed: "Error al iniciar sesión",
     authCouldNotSignIn: "No se pudo iniciar sesión",
     authPreviewTitle: "Vista previa",
@@ -531,6 +536,22 @@ const catalogs = {
     openChatEmptyTitle: "¿Qué quieres hacer?",
     openChatEmptySubtitle:
       "Empieza con cualquier cosa. Un tema, un plan o alguien que quieras conocer.",
+    homeWelcomeTitle: "Empieza con una intención.",
+    homeWelcomeSubtitle:
+      "Dile a OpenSocial qué quieres hacer, a quién quieres conocer o qué tipo de conversación quieres tener ahora.",
+    homeWelcomeHowItWorksTitle: "Cómo funciona",
+    homeWelcomeHowItWorksBody:
+      "Escribes una vez. OpenSocial interpreta la señal, busca a las personas correctas y hace avanzar el hilo.",
+    homeWelcomeExamplesTitle: "Qué decir",
+    homeWelcomeExamplesBody:
+      "Usa lenguaje natural. Un plan, un tema, una vibra o el tipo de persona que quieres conocer alcanza.",
+    homeWelcomeChatsTitle: "Qué pasa después",
+    homeWelcomeChatsBody:
+      "Cuando alguien acepta, los chats se abren automáticamente. Te quedas en un solo hilo hasta que algo esté listo.",
+    homeWelcomeTryTitle: "Prueba uno",
+    homeWelcomeTryHint: "Usa esto como tu primer mensaje",
+    homeWelcomePrimaryCta: "Probar ahora",
+    homeWelcomeSkip: "Omitir",
     openChatOnboardingCarryoverTitle: "Traído desde onboarding",
     openChatOnboardingCarryoverProcessing:
       "Estamos llevando tu primer intent a tu hilo.",
@@ -677,7 +698,6 @@ const catalogs = {
     profileRequestDigestNow: "Pedir resumen ahora",
     profileSignOut: "Cerrar sesión",
     loadingYourSpace: "Cargando tu espacio…",
-    loadingDesignPreview: "Cargando vista previa…",
     authSessionExpired: "La sesión expiró. Inicia sesión de nuevo.",
     authSessionExpiredContinueOnboarding:
       "La sesión expiró. Inicia sesión de nuevo para continuar el onboarding.",
@@ -687,15 +707,6 @@ const catalogs = {
     onboardingSavedLocally:
       "Se guardó localmente. Terminaremos de sincronizar tu onboarding cuando vuelva internet.",
     onboardingPhotoUploadFailed: "La foto no se subió",
-    designPreviewBadge: "Vista de diseño",
-    designPreviewWelcomeBody:
-      "Explora toda la experiencia móvil: inicio, discover, inbox, chats y perfil, con datos de muestra realistas. No necesitas API ni cuenta.",
-    designPreviewExploreApp: "Explorar la app",
-    designPreviewFootnote:
-      "Modo vista previa · los datos quedan solo en este dispositivo",
-    designPreviewUsePreviewProfile:
-      "En la vista previa, usa Continuar con perfil de prueba en la pantalla de acceso.",
-    designPreviewMissingSession: "Falta la sesión de vista previa.",
     onboardingBackdropKicker: "Onboarding agéntico",
   },
 } as const;

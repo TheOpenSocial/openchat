@@ -276,6 +276,7 @@ pnpm test:agentic:suite -- --layer=prod-smoke
 pnpm test:agentic:suite -- --layer=full
 pnpm staging:smoke:verification-lane
 pnpm test:agentic:suite:verification
+pnpm test:backend:ops-pack
 ```
 
 The backend golden suite runner currently supports:
@@ -321,6 +322,7 @@ Current runner artifact behavior:
   - `AGENT_TEST_SUITE_ENABLE_PROD_SMOKE=1` (run smoke lane)
   - `AGENT_TEST_SUITE_REQUIRE_PROD_SMOKE=1` (fail if smoke lane is not enabled/passing)
 - strict verification lane command (`pnpm test:agentic:suite:verification`) enforces benchmark and prod-smoke requirements in one pass and fails fast when required env vars are missing
+- strict verification now supports temporary staging=prod env resolution (`STAGING_EQUALS_PROD=true`) so missing `STAGING_*` verification keys can resolve from `PROD_*`/`PRODUCTION_*` aliases during parity windows
 - local verification profile (for localhost-only smoke realism without staging credentials) can be run by supplying:
   - a valid local access token/session and user/thread ids for `AGENTIC_BENCH_*` and `SMOKE_*`
   - `SMOKE_MAX_ONBOARDING_FALLBACK_RATE=1` when local LLM providers are intentionally unavailable

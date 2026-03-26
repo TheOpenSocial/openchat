@@ -1,0 +1,192 @@
+{
+  "runId": "agent-suite-2026-03-26T02-46-23-726Z",
+  "generatedAt": "2026-03-26T02:46:37.405Z",
+  "layer": "eval",
+  "status": "passed",
+  "cases": [
+    {
+      "id": "agentic-eval-scorecards",
+      "scenarioId": null,
+      "scenarioIds": [
+        "eval_planning_bounds_v1",
+        "eval_injection_fallback_v1",
+        "eval_moderation_fallback_v1",
+        "eval_human_approval_policy_v1",
+        "eval_failure_capture_v1",
+        "eval_social_outcome_telemetry_v1",
+        "eval_tone_agentic_async_ack_v1",
+        "eval_usefulness_no_match_recovery_v1",
+        "eval_grounding_profile_memory_consistency_v1",
+        "eval_negotiation_quality_v1",
+        "eval_workflow_runtime_traceability_v1"
+      ],
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "passed",
+      "latencyMs": 13675,
+      "failureClass": null,
+      "summary": "Agentic eval scorecards and admin snapshot coverage",
+      "sideEffects": []
+    }
+  ],
+  "records": [
+    {
+      "runId": "agent-suite-2026-03-26T02-46-23-726Z",
+      "layer": "eval",
+      "checkId": "agentic-eval-scorecards",
+      "summary": "Agentic eval scorecards and admin snapshot coverage",
+      "scenarioId": "eval_planning_bounds_v1",
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "passed",
+      "latencyMs": 13675,
+      "failureClass": null,
+      "sideEffects": []
+    },
+    {
+      "runId": "agent-suite-2026-03-26T02-46-23-726Z",
+      "layer": "eval",
+      "checkId": "agentic-eval-scorecards",
+      "summary": "Agentic eval scorecards and admin snapshot coverage",
+      "scenarioId": "eval_injection_fallback_v1",
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "passed",
+      "latencyMs": 13675,
+      "failureClass": null,
+      "sideEffects": []
+    },
+    {
+      "runId": "agent-suite-2026-03-26T02-46-23-726Z",
+      "layer": "eval",
+      "checkId": "agentic-eval-scorecards",
+      "summary": "Agentic eval scorecards and admin snapshot coverage",
+      "scenarioId": "eval_moderation_fallback_v1",
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "passed",
+      "latencyMs": 13675,
+      "failureClass": null,
+      "sideEffects": []
+    },
+    {
+      "runId": "agent-suite-2026-03-26T02-46-23-726Z",
+      "layer": "eval",
+      "checkId": "agentic-eval-scorecards",
+      "summary": "Agentic eval scorecards and admin snapshot coverage",
+      "scenarioId": "eval_human_approval_policy_v1",
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "passed",
+      "latencyMs": 13675,
+      "failureClass": null,
+      "sideEffects": []
+    },
+    {
+      "runId": "agent-suite-2026-03-26T02-46-23-726Z",
+      "layer": "eval",
+      "checkId": "agentic-eval-scorecards",
+      "summary": "Agentic eval scorecards and admin snapshot coverage",
+      "scenarioId": "eval_failure_capture_v1",
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "passed",
+      "latencyMs": 13675,
+      "failureClass": null,
+      "sideEffects": []
+    },
+    {
+      "runId": "agent-suite-2026-03-26T02-46-23-726Z",
+      "layer": "eval",
+      "checkId": "agentic-eval-scorecards",
+      "summary": "Agentic eval scorecards and admin snapshot coverage",
+      "scenarioId": "eval_social_outcome_telemetry_v1",
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "passed",
+      "latencyMs": 13675,
+      "failureClass": null,
+      "sideEffects": []
+    },
+    {
+      "runId": "agent-suite-2026-03-26T02-46-23-726Z",
+      "layer": "eval",
+      "checkId": "agentic-eval-scorecards",
+      "summary": "Agentic eval scorecards and admin snapshot coverage",
+      "scenarioId": "eval_tone_agentic_async_ack_v1",
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "passed",
+      "latencyMs": 13675,
+      "failureClass": null,
+      "sideEffects": []
+    },
+    {
+      "runId": "agent-suite-2026-03-26T02-46-23-726Z",
+      "layer": "eval",
+      "checkId": "agentic-eval-scorecards",
+      "summary": "Agentic eval scorecards and admin snapshot coverage",
+      "scenarioId": "eval_usefulness_no_match_recovery_v1",
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "passed",
+      "latencyMs": 13675,
+      "failureClass": null,
+      "sideEffects": []
+    },
+    {
+      "runId": "agent-suite-2026-03-26T02-46-23-726Z",
+      "layer": "eval",
+      "checkId": "agentic-eval-scorecards",
+      "summary": "Agentic eval scorecards and admin snapshot coverage",
+      "scenarioId": "eval_grounding_profile_memory_consistency_v1",
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "passed",
+      "latencyMs": 13675,
+      "failureClass": null,
+      "sideEffects": []
+    },
+    {
+      "runId": "agent-suite-2026-03-26T02-46-23-726Z",
+      "layer": "eval",
+      "checkId": "agentic-eval-scorecards",
+      "summary": "Agentic eval scorecards and admin snapshot coverage",
+      "scenarioId": "eval_negotiation_quality_v1",
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "passed",
+      "latencyMs": 13675,
+      "failureClass": null,
+      "sideEffects": []
+    },
+    {
+      "runId": "agent-suite-2026-03-26T02-46-23-726Z",
+      "layer": "eval",
+      "checkId": "agentic-eval-scorecards",
+      "summary": "Agentic eval scorecards and admin snapshot coverage",
+      "scenarioId": "eval_workflow_runtime_traceability_v1",
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "passed",
+      "latencyMs": 13675,
+      "failureClass": null,
+      "sideEffects": []
+    }
+  ],
+  "summary": {
+    "caseCounts": {
+      "total": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    "recordCounts": {
+      "total": 11,
+      "passed": 11,
+      "failed": 0,
+      "skipped": 0
+    },
+    "failureClasses": {}
+  }
+}

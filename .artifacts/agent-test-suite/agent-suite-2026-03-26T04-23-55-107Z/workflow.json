@@ -1,0 +1,50 @@
+{
+  "runId": "agent-suite-2026-03-26T04-23-55-107Z",
+  "generatedAt": "2026-03-26T04:24:13.014Z",
+  "layer": "workflow",
+  "status": "passed",
+  "cases": [
+    {
+      "id": "agent-workflow-foundation",
+      "scenarioId": null,
+      "scenarioIds": [],
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "passed",
+      "latencyMs": 17904,
+      "failureClass": null,
+      "summary": "Intent, workflow runtime, follow-up, connection, and admin ops workflow coverage",
+      "sideEffects": []
+    }
+  ],
+  "records": [
+    {
+      "runId": "agent-suite-2026-03-26T04-23-55-107Z",
+      "layer": "workflow",
+      "checkId": "agent-workflow-foundation",
+      "summary": "Intent, workflow runtime, follow-up, connection, and admin ops workflow coverage",
+      "scenarioId": null,
+      "workflowRunId": null,
+      "traceId": null,
+      "status": "passed",
+      "latencyMs": 17904,
+      "failureClass": null,
+      "sideEffects": []
+    }
+  ],
+  "summary": {
+    "caseCounts": {
+      "total": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    "recordCounts": {
+      "total": 1,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    "failureClasses": {}
+  }
+}

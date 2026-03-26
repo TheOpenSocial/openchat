@@ -17,9 +17,7 @@ type SetState<T> = (value: SetStateAction<T>) => void;
 
 type UseChatMessagingControllerInput = {
   chatsRef: MutableRefObject<LocalChatThread[]>;
-  designMock: boolean;
   draftChatMessage: string;
-  enableE2ELocalMode: boolean;
   localTypingActiveRef: MutableRefObject<boolean>;
   localTypingStopTimeoutRef: MutableRefObject<ReturnType<
     typeof setTimeout
@@ -44,9 +42,7 @@ type UseChatMessagingControllerInput = {
 
 export function useChatMessagingController({
   chatsRef,
-  designMock,
   draftChatMessage,
-  enableE2ELocalMode,
   localTypingActiveRef,
   localTypingStopTimeoutRef,
   netOnline,
@@ -158,22 +154,6 @@ export function useChatMessagingController({
       localTypingActiveRef.current = false;
     }
     try {
-      if (enableE2ELocalMode || designMock) {
-        if (!hadMessages) {
-          trackTelemetry("first_message_sent", {
-            chatId,
-            bodyLength: messageBody.length,
-          });
-        } else if (hasCounterpartyMessage) {
-          trackTelemetry("message_replied", {
-            chatId,
-            bodyLength: messageBody.length,
-          });
-        }
-        hapticImpact();
-        return;
-      }
-
       if (!netOnline) {
         throw new Error("offline");
       }
@@ -273,9 +253,7 @@ export function useChatMessagingController({
       setSendingChatMessage(false);
     }
   }, [
-    designMock,
     draftChatMessage,
-    enableE2ELocalMode,
     localTypingActiveRef,
     localTypingStopTimeoutRef,
     netOnline,

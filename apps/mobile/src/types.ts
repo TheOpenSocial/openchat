@@ -45,3 +45,28 @@ export interface InboxRequest {
   senderUserId?: string;
   intentId?: string;
 }
+
+export interface ProfilePreferences {
+  mode?: string;
+  format?: string;
+  style?: string;
+  availability?: string;
+}
+
+export interface ProfileContextSummary {
+  reason?: string;
+  sharedTopics?: string[];
+  lastInteraction?: string;
+}
+
+export interface ProfileSummary {
+  id: string;
+  name: string;
+  avatarUrl?: string;
+  bio?: string;
+  location?: string;
+  interests: string[];
+  preferences: ProfilePreferences;
+  persona?: string;
+  context?: ProfileContextSummary;
+}

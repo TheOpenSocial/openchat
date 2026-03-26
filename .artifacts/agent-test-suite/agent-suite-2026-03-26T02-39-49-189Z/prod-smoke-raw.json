@@ -1,0 +1,32 @@
+{
+  "runId": "agent-suite-2026-03-26T02-39-49-189Z:prod-smoke",
+  "generatedAt": "2026-03-26T02:41:13.981Z",
+  "laneId": "local-dev",
+  "baseUrl": "http://localhost:3000",
+  "status": "failed",
+  "totalLatencyMs": 3402,
+  "paceMs": 1500,
+  "steps": [
+    {
+      "id": "smoke_api",
+      "summary": "staging smoke api",
+      "status": "passed",
+      "exitCode": 0,
+      "latencyMs": 134
+    },
+    {
+      "id": "smoke_llm_runtime",
+      "summary": "staging smoke llm runtime",
+      "status": "passed",
+      "exitCode": 0,
+      "latencyMs": 156
+    },
+    {
+      "id": "incident_verify",
+      "summary": "staging incident verify",
+      "status": "failed",
+      "exitCode": 1,
+      "latencyMs": 107
+    }
+  ]
+}

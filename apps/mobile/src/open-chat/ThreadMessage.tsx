@@ -1,11 +1,14 @@
 import { Text, View } from "react-native";
 
+import { SystemBlobAnimation } from "../components/SystemBlobAnimation";
 import type { ChatBubbleRole } from "../types";
 
 interface ThreadMessageProps {
   role: ChatBubbleRole;
   body: string;
 }
+
+export const RUNTIME_SYSTEM_MESSAGE_PREFIX = "__runtime_status__:";
 
 /**
  * Premium thread bubble: restrained, readable, not iMessage/WhatsApp clone.
@@ -50,6 +53,21 @@ export function ThreadMessage({ body, role }: ThreadMessageProps) {
   }
 
   if (role === "system") {
+    if (compactBody.startsWith(RUNTIME_SYSTEM_MESSAGE_PREFIX)) {
+      const label = compactBody
+        .slice(RUNTIME_SYSTEM_MESSAGE_PREFIX.length)
+        .trim();
+      return (
+        <View className="mb-4 self-start rounded-[16px] border border-white/[0.08] bg-white/[0.03] px-3 py-2.5">
+          <View className="flex-row items-center gap-2.5">
+            <SystemBlobAnimation size={28} />
+            <Text className="text-[13px] leading-[18px] font-medium text-white/70">
+              {label || "Working on it…"}
+            </Text>
+          </View>
+        </View>
+      );
+    }
     return (
       <View className="mb-3 self-start rounded-full border border-white/[0.06] bg-white/[0.03] px-3 py-1.5">
         <Text className="text-[12px] leading-[18px] font-medium text-white/52">
