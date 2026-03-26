@@ -19,21 +19,53 @@ const targets = [
   "scripts",
 ];
 
-const result = spawnSync(
-  "rg",
-  [
-    "-n",
-    residuePattern,
-    "--glob",
-    "!scripts/check-runtime-version-residue.mjs",
-    ...targets,
-  ],
-  {
+function hasRipgrep() {
+  const probe = spawnSync("rg", ["--version"], {
     cwd: process.cwd(),
     encoding: "utf8",
     shell: process.platform === "win32",
-  },
-);
+  });
+  return probe.status === 0;
+}
+
+function runSearch() {
+  if (hasRipgrep()) {
+    return spawnSync(
+      "rg",
+      [
+        "-n",
+        residuePattern,
+        "--glob",
+        "!scripts/check-runtime-version-residue.mjs",
+        ...targets,
+      ],
+      {
+        cwd: process.cwd(),
+        encoding: "utf8",
+        shell: process.platform === "win32",
+      },
+    );
+  }
+
+  return spawnSync(
+    "grep",
+    [
+      "-R",
+      "-n",
+      "-E",
+      residuePattern,
+      "--exclude=check-runtime-version-residue.mjs",
+      ...targets,
+    ],
+    {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      shell: process.platform === "win32",
+    },
+  );
+}
+
+const result = runSearch();
 
 if (result.status === 0) {
   if (result.stdout) {
