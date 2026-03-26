@@ -3,7 +3,7 @@
 export const dynamic = "force-dynamic";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo } from "react";
 
 import { AdminShell } from "./components/AdminShell";
 import { AdminSignIn } from "./components/AdminSignIn";
@@ -17,6 +17,8 @@ import { useAdminSessionLifecycle } from "./components/workbench/useAdminSession
 import { useOpsSnapshotsActions } from "./components/workbench/useOpsSnapshotsActions";
 import { useEntityInspectorActions } from "./components/workbench/useEntityInspectorActions";
 import { useAgentDebugActions } from "./components/workbench/useAgentDebugActions";
+import { useAdminLocale } from "./components/workbench/useAdminLocale";
+import { useAdminHealthPolling } from "./components/workbench/useAdminHealthPolling";
 import { parseContextInput } from "./components/workbench/workbench-utils";
 import {
   type AdminTab,
@@ -30,15 +32,13 @@ import {
   adminInputClass,
   adminLabelClass,
 } from "./lib/admin-ui";
-import { type AppLocale, supportedLocales, t } from "./lib/i18n";
-
-const ADMIN_LOCALE_STORAGE_KEY = "opensocial.admin.locale.v1";
+import { t } from "./lib/i18n";
 
 function AdminHomeContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [locale, setLocale] = useState<AppLocale>("en");
+  const { locale, setLocale } = useAdminLocale("en");
   const {
     DEFAULT_UUID,
     activeTab,
@@ -263,35 +263,11 @@ function AdminHomeContent() {
     }
   }, [signedInSession, stopAgentStream]);
 
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    const stored = window.localStorage.getItem(ADMIN_LOCALE_STORAGE_KEY);
-    if (stored && supportedLocales.includes(stored as AppLocale)) {
-      setLocale(stored as AppLocale);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    window.localStorage.setItem(ADMIN_LOCALE_STORAGE_KEY, locale);
-  }, [locale]);
-
-  useEffect(() => {
-    if (!sessionHydrated || !signedInSession) {
-      return;
-    }
-
-    refreshHealth().catch(() => {});
-    const timer = setInterval(() => {
-      refreshHealth().catch(() => {});
-    }, 15_000);
-
-    return () => clearInterval(timer);
-  }, [refreshHealth, sessionHydrated, signedInSession]);
+  useAdminHealthPolling({
+    sessionHydrated,
+    hasSignedInSession: Boolean(signedInSession),
+    refreshHealth,
+  });
 
   const {
     inspectUser,

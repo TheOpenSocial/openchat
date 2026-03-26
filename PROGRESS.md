@@ -46,6 +46,7 @@ Last verified: 2026-03-20
 | AM-02 Extract ops snapshot/action orchestration hook | [x] | Codex | `pnpm --filter @opensocial/admin typecheck && pnpm --filter @opensocial/admin lint` | `apps/admin/app/components/workbench/useOpsSnapshotsActions.ts` + `apps/admin/app/page.tsx` | 2026-03-26 |
 | AM-03 Extract entity inspector/action hook family (user/intent/chat) | [x] | Codex | `pnpm --filter @opensocial/admin typecheck && pnpm --filter @opensocial/admin lint` | `apps/admin/app/components/workbench/useEntityInspectorActions.ts` + `apps/admin/app/page.tsx` | 2026-03-26 |
 | AM-04 Extract agent thread/debug orchestration hook | [x] | Codex | `pnpm --filter @opensocial/admin typecheck && pnpm --filter @opensocial/admin lint` | `apps/admin/app/components/workbench/useAgentDebugActions.ts` + `apps/admin/app/page.tsx` | 2026-03-26 |
+| AM-05 Extract locale + health polling lifecycle hooks | [x] | Codex | `pnpm --filter @opensocial/admin typecheck && pnpm --filter @opensocial/admin lint` | `apps/admin/app/components/workbench/useAdminLocale.ts` + `useAdminHealthPolling.ts` + `apps/admin/app/page.tsx` | 2026-03-26 |
 
 ### Agentic Backend Master Queue
 - [x] `ATS-00` Domain coverage matrix and product-policy decision matrix
