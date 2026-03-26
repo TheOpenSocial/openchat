@@ -78,10 +78,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker system df || true
-          docker builder prune -af || true
-          docker image prune -af || true
-          docker system df || true
+          timeout 30s docker system df || true
+          timeout 120s docker container prune -f || true
+          timeout 180s docker builder prune -af --filter "until=240h" || true
+          timeout 180s docker image prune -af --filter "until=240h" || true
+          timeout 30s docker system df || true
 
       - name: Registry login
         if: ${{ inputs.deploy_mode == 'images' }}
