@@ -31,6 +31,14 @@ function readWithStagingProdFallback(primary, ...fallbacks) {
 }
 
 const resolvedEnv = {
+  AGENTIC_BENCH_URL: readWithStagingProdFallback(
+    "AGENTIC_BENCH_URL",
+    "SMOKE_BASE_URL",
+    "STAGING_API_BASE_URL",
+    "PROD_API_BASE_URL",
+    "PRODUCTION_API_BASE_URL",
+    "API_BASE_URL",
+  ),
   AGENTIC_BENCH_ACCESS_TOKEN: readWithStagingProdFallback(
     "AGENTIC_BENCH_ACCESS_TOKEN",
     "SMOKE_ACCESS_TOKEN",
