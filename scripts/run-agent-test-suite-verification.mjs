@@ -117,6 +117,9 @@ async function tryBootstrapEnvFromPlayground(
   options = {},
 ) {
   const forceRefresh = options.forceRefresh === true;
+  const required =
+    options.required === true ||
+    process.env.PLAYGROUND_BOOTSTRAP_REQUIRED === "1";
   const baseUrl = (
     process.env.PLAYGROUND_BASE_URL ||
     process.env.SMOKE_BASE_URL ||
@@ -129,6 +132,11 @@ async function tryBootstrapEnvFromPlayground(
     process.env.PLAYGROUND_BOOTSTRAP_ROTATE_PROBE_TOKEN === "1";
 
   if (!baseUrl || !adminUserId || (!forceRefresh && missingKeys.length === 0)) {
+    if (required && (!baseUrl || !adminUserId)) {
+      throw new Error(
+        "playground bootstrap required but PLAYGROUND_BASE_URL or PLAYGROUND_ADMIN_USER_ID is missing",
+      );
+    }
     return currentEnv;
   }
 
@@ -151,6 +159,11 @@ async function tryBootstrapEnvFromPlayground(
     const payload = await response.json();
     const envFromBootstrap = payload?.data?.env ?? {};
     if (!response.ok || !payload?.success || typeof envFromBootstrap !== "object") {
+      if (required) {
+        throw new Error(
+          `playground bootstrap failed (${response.status}): ${JSON.stringify(payload).slice(0, 300)}`,
+        );
+      }
       return currentEnv;
     }
 
@@ -172,8 +185,22 @@ async function tryBootstrapEnvFromPlayground(
         merged[key] = value.trim();
       }
     }
+    if (
+      required &&
+      (!merged.AGENTIC_BENCH_ACCESS_TOKEN ||
+        !merged.AGENTIC_BENCH_THREAD_ID ||
+        !merged.SMOKE_ACCESS_TOKEN)
+    ) {
+      throw new Error(
+        "playground bootstrap required but did not return complete smoke/benchmark credentials",
+      );
+    }
     return merged;
-  } catch {
+  } catch (error) {
+    if (required) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`playground bootstrap required but request failed: ${message}`);
+    }
     return currentEnv;
   }
 }
@@ -206,10 +233,14 @@ const initialMissing = collectMissing(hydratedEnv);
 hydratedEnv = await tryBootstrapEnvFromPlayground(
   hydratedEnv,
   initialMissing,
+  {
+    required: process.env.PLAYGROUND_BOOTSTRAP_REQUIRED === "1",
+  },
 );
 if (!(await benchAccessTokenIsValid(hydratedEnv))) {
   hydratedEnv = await tryBootstrapEnvFromPlayground(hydratedEnv, [], {
     forceRefresh: true,
+    required: process.env.PLAYGROUND_BOOTSTRAP_REQUIRED === "1",
   });
 }
 const missing = collectMissing(hydratedEnv);

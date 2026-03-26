@@ -63,6 +63,10 @@ jobs:
       GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
       GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
       GOOGLE_REDIRECT_URI: https://api.opensocial.so/api/auth/google/callback
+      ADMIN_API_KEY: ${{ secrets.STAGING_SMOKE_ADMIN_API_KEY || secrets.SMOKE_ADMIN_API_KEY }}
+      PLAYGROUND_ENABLED: "true"
+      PLAYGROUND_MUTATIONS_ENABLED: "true"
+      PLAYGROUND_ALLOWED_ADMIN_USER_IDS: ${{ secrets.STAGING_SMOKE_ADMIN_USER_ID || secrets.SMOKE_ADMIN_USER_ID }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -196,6 +200,7 @@ jobs:
           PLAYGROUND_ADMIN_USER_ID: ${{ secrets.STAGING_SMOKE_ADMIN_USER_ID || secrets.SMOKE_ADMIN_USER_ID }}
           PLAYGROUND_ADMIN_ROLE: ${{ secrets.STAGING_SMOKE_ADMIN_ROLE || secrets.SMOKE_ADMIN_ROLE || 'admin' }}
           PLAYGROUND_ADMIN_API_KEY: ${{ secrets.STAGING_SMOKE_ADMIN_API_KEY || secrets.SMOKE_ADMIN_API_KEY }}
+          PLAYGROUND_BOOTSTRAP_REQUIRED: "1"
         run: |
           set -euo pipefail
           timeout 28m pnpm test:backend:ops-pack
