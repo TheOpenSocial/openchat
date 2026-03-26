@@ -25,6 +25,11 @@ The suite exists to prove that the backend can:
 - Replay-safe dedupe is active for `intent_request` fanout reuse, recent duplicate async follow-up thread suppression, and workflow-linked follow-up notification reuse on replay.
 - Replay-safe dedupe is active for accepted-request connection setup side effects: sender/participant notifications, sender-thread workflow updates, group-ready fanout notifications, and group backfill notifications are now workflow-linked and replay-reused to avoid duplicate visible outcomes.
 - Backend ops can inspect replayability (`replayable` / `partial` / `inspect_only`) and dedupe integrity signals for recent workflow runs.
+- Admin playground orchestration is wired for internal verification runs through:
+  - `POST /api/admin/playground/bootstrap`
+  - `POST /api/admin/playground/run-suite`
+  - `GET /api/admin/ops/agent-reliability`
+  This path now reuses the shared verification-run cache contract so canary status reflects playground-triggered suite runs.
 - Memory writes are now normalized through typed taxonomy/provenance envelopes with strict safe-write suppression, contradiction policies, and compressed retrieval bundles for bounded long-context grounding.
 - Negotiation runtime is now structured and bounded through `negotiation.evaluate` (social + commerce packet/outcome contracts, policy gating, and explicit next-action decisions).
 - Canonical fixture parity is now locked for reconnect + eval runtime coverage (`reconnect_signal_v1` executed in scenario suite, `eval_workflow_runtime_traceability_v1` present in fixture corpus and eval contract).

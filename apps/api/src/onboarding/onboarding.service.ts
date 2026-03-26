@@ -6,7 +6,7 @@ import {
   onboardingInferResponseSchema,
   onboardingQuickInferResponseSchema,
 } from "@opensocial/types";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { recordOnboardingInferenceMetric } from "../common/ops-metrics.js";
 
@@ -259,12 +259,18 @@ export class OnboardingService {
     const durationMs = Date.now() - startedAt;
     if (llmInferred?.firstIntent?.trim()) {
       const recommendationText = llmInferred.firstIntent.trim();
+      const activationIdentity = this.buildActivationIdentity(
+        input.userId,
+        recommendationText,
+      );
       this.logger.log(
         `onboarding activation plan ready traceId=${traceId} model=${selectedFastModel} durationMs=${durationMs} source=llm`,
       );
       return {
         state: "ready",
         source: "llm",
+        idempotencyKey: activationIdentity.idempotencyKey,
+        activationFingerprint: activationIdentity.fingerprint,
         summary:
           llmInferred.summary?.trim() ||
           "We prepared your first step based on what you shared.",
@@ -606,16 +612,37 @@ export class OnboardingService {
       reason === "missing_context"
         ? "We prepared a clean first step to get you started."
         : "We prepared a reliable first step while we refine your setup.";
+    const activationIdentity = this.buildActivationIdentity(input.userId, seed);
 
     return {
       state: "ready",
       source: "fallback",
+      idempotencyKey: activationIdentity.idempotencyKey,
+      activationFingerprint: activationIdentity.fingerprint,
       summary,
       recommendedAction: {
         kind: "agent_thread_seed",
         label: "Start with this",
         text: seed,
       },
+    };
+  }
+
+  private buildActivationIdentity(
+    userId: string,
+    seedText: string,
+  ): {
+    fingerprint: string;
+    idempotencyKey: string;
+  } {
+    const normalizedSeed = seedText.trim().toLowerCase().replace(/\s+/g, " ");
+    const fingerprint = createHash("sha256")
+      .update(`${userId}:${normalizedSeed}`)
+      .digest("hex")
+      .slice(0, 16);
+    return {
+      fingerprint,
+      idempotencyKey: `onboarding-carryover:${userId}:${fingerprint}`,
     };
   }
 

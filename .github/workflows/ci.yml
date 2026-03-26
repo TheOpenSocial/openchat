@@ -89,6 +89,12 @@ jobs:
       - name: Test (API endpoint contracts)
         run: pnpm --filter @opensocial/api test -- test/onboarding-agent.contract.spec.ts
 
+      - name: Test (Admin playground services)
+        run: pnpm --filter @opensocial/api test -- test/admin-playground.controller.spec.ts test/admin-playground.service.spec.ts
+
+      - name: Agentic suite (contract layer)
+        run: pnpm test:agentic:suite -- --layer=contract
+
   web:
     runs-on: ubuntu-latest
     steps:

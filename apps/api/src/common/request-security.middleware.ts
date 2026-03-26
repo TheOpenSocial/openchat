@@ -12,6 +12,8 @@ interface RequestSecurityConfig {
   globalLimit: number;
   writeWindowMs: number;
   writeLimit: number;
+  playgroundWindowMs: number;
+  playgroundLimit: number;
   authWindowMs: number;
   authLimit: number;
   abuseWindowMs: number;
@@ -21,6 +23,7 @@ interface RequestSecurityConfig {
 
 const logger = new Logger("RequestSecurity");
 const rateCounters = new Map<string, CounterWindow>();
+const playgroundCounters = new Map<string, CounterWindow>();
 const abuseCounters = new Map<string, CounterWindow>();
 let requestCounter = 0;
 const ADMIN_ROLES = new Set(["admin", "support", "moderator"]);
@@ -32,6 +35,8 @@ const DEFAULT_CONFIG: RequestSecurityConfig = {
   globalLimit: 300,
   writeWindowMs: 60_000,
   writeLimit: 150,
+  playgroundWindowMs: 60_000,
+  playgroundLimit: 20,
   authWindowMs: 60_000,
   authLimit: 40,
   abuseWindowMs: 30_000,
@@ -56,6 +61,14 @@ function readConfig(): RequestSecurityConfig {
     writeLimit: readEnvNumber(
       "RATE_LIMIT_WRITE_MAX_REQUESTS",
       DEFAULT_CONFIG.writeLimit,
+    ),
+    playgroundWindowMs: readEnvNumber(
+      "RATE_LIMIT_PLAYGROUND_WINDOW_MS",
+      DEFAULT_CONFIG.playgroundWindowMs,
+    ),
+    playgroundLimit: readEnvNumber(
+      "RATE_LIMIT_PLAYGROUND_MAX_REQUESTS",
+      DEFAULT_CONFIG.playgroundLimit,
     ),
     authWindowMs: readEnvNumber(
       "RATE_LIMIT_AUTH_WINDOW_MS",
@@ -135,6 +148,10 @@ function isHighRiskPath(path: string) {
     path.startsWith("/api/inbox/requests/") ||
     path.startsWith("/api/admin/")
   );
+}
+
+function isPlaygroundPath(path: string) {
+  return path.startsWith("/api/admin/playground/");
 }
 
 function getSingleHeader(
@@ -234,6 +251,7 @@ function maybePrune(now: number, config: RequestSecurityConfig) {
     now,
     Math.max(config.globalWindowMs, config.writeWindowMs),
   );
+  pruneMap(playgroundCounters, now, config.playgroundWindowMs);
   pruneMap(
     abuseCounters,
     now,
@@ -279,6 +297,66 @@ export function requestSecurityMiddleware(
   const traceId = (request as Request & { traceId?: string }).traceId ?? null;
   const isWrite = isWriteMethod(method);
   const isAuth = isAuthPath(path);
+  const isPlayground = isPlaygroundPath(path);
+
+  if (isPlayground) {
+    const playgroundIdentity =
+      getSingleHeader(request.headers["x-admin-user-id"])?.trim() || ip;
+    const playgroundKey = `playground:${playgroundIdentity}:${ip}`;
+    const playgroundWindow = getOrInitWindow(
+      playgroundCounters,
+      playgroundKey,
+      now,
+      config.playgroundWindowMs,
+    );
+    if (playgroundWindow.blockedUntil && playgroundWindow.blockedUntil > now) {
+      const retryAfterMs = playgroundWindow.blockedUntil - now;
+      writeRateLimitHeaders(response, config.playgroundLimit, 0, retryAfterMs);
+      reject(
+        response,
+        429,
+        "rate_limited",
+        "playground request rate limit exceeded",
+        Math.ceil(retryAfterMs / 1000),
+      );
+      return;
+    }
+    playgroundWindow.count += 1;
+    const playgroundRemaining = config.playgroundLimit - playgroundWindow.count;
+    const playgroundResetMs = Math.max(
+      0,
+      playgroundWindow.windowStartedAt + config.playgroundWindowMs - now,
+    );
+    writeRateLimitHeaders(
+      response,
+      config.playgroundLimit,
+      playgroundRemaining,
+      playgroundResetMs,
+    );
+    if (playgroundWindow.count > config.playgroundLimit) {
+      playgroundWindow.blockedUntil =
+        now + Math.min(config.playgroundWindowMs, 15_000);
+      logger.warn(
+        JSON.stringify({
+          event: "security.playground_rate_limited",
+          traceId,
+          ip,
+          method,
+          path,
+          limit: config.playgroundLimit,
+          windowMs: config.playgroundWindowMs,
+        }),
+      );
+      reject(
+        response,
+        429,
+        "rate_limited",
+        "playground request rate limit exceeded",
+        Math.ceil(Math.min(config.playgroundWindowMs, 15_000) / 1000),
+      );
+      return;
+    }
+  }
 
   const rateKey = isAuth
     ? `auth:${ip}`
@@ -396,6 +474,7 @@ export function requestSecurityMiddleware(
 
 export function resetRequestSecurityState() {
   rateCounters.clear();
+  playgroundCounters.clear();
   abuseCounters.clear();
   requestCounter = 0;
 }

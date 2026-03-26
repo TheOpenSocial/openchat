@@ -18,3 +18,5 @@ apps/web/test-results/
 apps/web/playwright-report/
 settings.generated/
 .opencore/
+.openloop/
+.artifacts/

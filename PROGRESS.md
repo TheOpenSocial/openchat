@@ -25,6 +25,25 @@ Last verified: 2026-03-20
 
 ## Automated Pipeline Bootstrap Task Queue (Priority)
 
+## Playground + Golden Suite Rollout
+
+| Milestone | Status | Owner | Evidence Command | Artifact/Endpoint | Last Updated |
+| --- | --- | --- | --- | --- | --- |
+| PG-01 Add admin playground API surface (`state/bootstrap/run-scenario/run-suite/rotate-probe-token/artifacts`) | [x] | Codex | `pnpm --filter @opensocial/api typecheck` | `/api/admin/playground/*` | 2026-03-26 |
+| PG-02 Bootstrap internal smoke credentials (no Google dependency) | [x] | Codex | `pnpm --filter @opensocial/api test -- test/admin-playground.controller.spec.ts` | `POST /api/admin/playground/bootstrap` | 2026-03-26 |
+| PG-03 Production safety gates (`PLAYGROUND_ENABLED`, mutation allowlist, role checks, audit) | [x] | Codex | `pnpm --filter @opensocial/api test -- test/admin-playground.controller.spec.ts` | `/api/admin/playground/state` + mutation endpoints | 2026-03-26 |
+| PG-04 Suite orchestration + verification-run ingestion | [x] | Codex | `pnpm release:check:api` | `POST /api/admin/playground/run-suite` + `GET /api/admin/ops/agent-reliability` | 2026-03-26 |
+| PG-05 EC2 bridge script for bootstrap -> verification -> ops-pack -> ingest | [x] | Codex | `node --check scripts/playground-ec2-verification-bridge.mjs` | `scripts/playground-ec2-verification-bridge.mjs` | 2026-03-26 |
+| PG-06 Playground abuse/rate-limit bucket | [x] | Codex | `pnpm --filter @opensocial/api test -- test/request-security.middleware.spec.ts` | request-security middleware for `/api/admin/playground/*` | 2026-03-26 |
+| PG-07 Playground run-suite -> reliability snapshot wiring | [x] | Codex | `pnpm --filter @opensocial/api test -- test/admin-playground-reliability.spec.ts` | `POST /api/admin/playground/run-suite` + `GET /api/admin/ops/agent-reliability` | 2026-03-26 |
+| PG-08 CI backend gate includes playground + contract-layer suite checks | [x] | Codex | `pnpm test:agentic:suite -- --layer=contract` | `.github/workflows/ci.yml` (backend job) | 2026-03-26 |
+
+## Admin Workbench Monolith Refactor Track
+
+| Milestone | Status | Owner | Evidence Command | Artifact | Last Updated |
+| --- | --- | --- | --- | --- | --- |
+| AM-01 Create extraction map and safety guardrails | [x] | Codex | `pnpm --filter @opensocial/admin typecheck` | `apps/admin/app/components/workbench/ADMIN_MONOLITH_REFACTOR_PLAN.md` | 2026-03-26 |
+
 ### Agentic Backend Master Queue
 - [x] `ATS-00` Domain coverage matrix and product-policy decision matrix
   - Goal: map every supported backend domain to explicit validation ownership.

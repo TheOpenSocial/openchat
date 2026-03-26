@@ -1136,6 +1136,8 @@ export const onboardingActivationPlanResponseSchema = z.object({
   state: z.enum(["idle", "pending", "ready", "failed"]),
   source: z.enum(["llm", "fallback"]),
   summary: z.string().min(1),
+  idempotencyKey: z.string().min(1),
+  activationFingerprint: z.string().min(8),
   recommendedAction: z.object({
     kind: z.enum(["agent_thread_seed", "intent_create"]),
     label: z.string().min(1),
@@ -1374,6 +1376,91 @@ export const adminVerificationRunListQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional(),
   lane: z.enum(["suite", "verification", "prod-smoke"]).optional(),
   status: z.enum(["passed", "failed", "skipped"]).optional(),
+});
+
+export const adminPlaygroundSuiteLayerSchema = z.enum([
+  "contract",
+  "workflow",
+  "queue",
+  "scenario",
+  "eval",
+  "benchmark",
+  "prod-smoke",
+  "full",
+  "verification",
+]);
+
+export const adminPlaygroundBootstrapBodySchema = z
+  .object({
+    rotateProbeToken: z.boolean().optional(),
+    laneId: z.string().min(1).max(160).optional(),
+    smokeBaseUrl: z.string().url().optional(),
+  })
+  .default({});
+
+export const adminPlaygroundBootstrapResponseSchema = z.object({
+  runId: z.string().min(1),
+  traceId: z.string().min(1),
+  workflowRunId: z.string().min(1),
+  env: z.object({
+    SMOKE_BASE_URL: z.string().min(1),
+    SMOKE_ACCESS_TOKEN: z.string().min(1),
+    SMOKE_USER_ID: uuidSchema,
+    SMOKE_AGENT_THREAD_ID: uuidSchema,
+    SMOKE_ADMIN_USER_ID: uuidSchema,
+    AGENTIC_BENCH_ACCESS_TOKEN: z.string().min(1),
+    AGENTIC_BENCH_USER_ID: uuidSchema,
+    AGENTIC_BENCH_THREAD_ID: uuidSchema,
+    AGENTIC_VERIFICATION_LANE_ID: z.string().min(1),
+    ONBOARDING_PROBE_TOKEN: z.string().min(1),
+  }),
+  entities: z.object({
+    smokeUserId: uuidSchema,
+    smokeAdminUserId: uuidSchema,
+    smokeAgentThreadId: uuidSchema,
+  }),
+  notes: z.array(z.string().min(1)).default([]),
+});
+
+export const adminPlaygroundRunScenarioBodySchema = z.object({
+  scenarioId: z.string().min(1).max(160),
+});
+
+export const adminPlaygroundRunSuiteBodySchema = z.object({
+  layer: adminPlaygroundSuiteLayerSchema.default("full"),
+});
+
+export const adminPlaygroundRunSuiteResponseSchema = z.object({
+  runId: z.string().min(1),
+  traceId: z.string().min(1),
+  workflowRunId: z.string().min(1),
+  layer: adminPlaygroundSuiteLayerSchema,
+  status: z.enum(["passed", "failed"]),
+  latencyMs: z.number().int().nonnegative(),
+  artifactPath: z.string().min(1).nullable(),
+  stdoutPreview: z.string().nullable(),
+  stderrPreview: z.string().nullable(),
+});
+
+export const adminPlaygroundRotateProbeTokenBodySchema = z
+  .object({
+    length: z.number().int().min(24).max(128).optional(),
+  })
+  .default({});
+
+export const adminPlaygroundRotateProbeTokenResponseSchema = z.object({
+  token: z.string().min(1),
+  generatedAt: isoDateTimeSchema,
+  notes: z.array(z.string().min(1)).default([]),
+});
+
+export const adminPlaygroundStateResponseSchema = z.object({
+  enabled: z.boolean(),
+  mutationsEnabled: z.boolean(),
+  mutationAllowedForActor: z.boolean(),
+  hasProbeToken: z.boolean(),
+  baseUrl: z.string().min(1),
+  requiredEnvStatus: z.record(z.string(), z.boolean()),
 });
 
 export const adminModerationFlagTriageBodySchema = z

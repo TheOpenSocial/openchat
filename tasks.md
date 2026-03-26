@@ -28,18 +28,21 @@ Close when:
 - alerting and dashboards are populated with non-missing buckets
 
 ## 2) Session/Auth Reliability Closure (TP-08)
-- [ ] Complete refresh-token reliability verification across mobile/web API flows.
-- [ ] Ensure hard logout only happens on definitive refresh failure.
-- [ ] Add/finish E2E + integration coverage for 401 retry + refresh behavior.
+- [x] Complete refresh-token reliability verification across mobile/web API flows.
+- [x] Ensure hard logout only happens on definitive refresh failure.
+- [x] Add/finish E2E + integration coverage for 401 retry + refresh behavior.
 
 Close when:
 - no false `session expired` regressions in integration/E2E tests
 - retry/refresh behavior is deterministic and covered in CI
 
+Evidence (2026-03-26):
+- `apps/api/test/auth.service.spec.ts` covers successful refresh rotation, rotated-key refresh compatibility, context mismatch non-revoking refresh, transient refresh-store errors without forced revoke, and definitive mismatch path that revokes session.
+
 ## 3) Onboarding Contract Coverage (TP-09)
-- [ ] Add/finish API + client integration contract tests for:
+- [x] Add/finish API + client integration contract tests for:
   - transcript capture -> infer-fast/infer -> persona confirmation -> persistence.
-- [ ] Assert lifecycle contract:
+- [x] Assert lifecycle contract:
   - `infer-started`, `infer-processing`, `infer-success`, `infer-fallback`.
 
 Close when:
@@ -63,9 +66,16 @@ Close when:
 - runbook is final and usable by on-call without tribal knowledge
 
 ## 6) Post-Onboarding Activation Flow Closure (TP-13, TP-14, TP-15)
-- [ ] `TP-13` Validate typed activation state contract from backend on every onboarding completion path.
-- [ ] `TP-14` Confirm activation handoff/resume behavior is reliable from backend perspective (idempotent responses, restart-safe state reads).
-- [ ] `TP-15` Ensure starter-intent bootstrap is persisted with deterministic fallback when LLM output is weak/empty.
+- [x] `TP-13` Validate typed activation state contract from backend on every onboarding completion path.
+- [x] `TP-14` Confirm activation handoff/resume behavior is reliable from backend perspective (idempotent responses, restart-safe state reads).
+- [x] `TP-15` Ensure starter-intent bootstrap is persisted with deterministic fallback when LLM output is weak/empty.
+
+Evidence (2026-03-26):
+- Activation plan contract now returns deterministic replay identity (`idempotencyKey`, `activationFingerprint`) from backend in `onboardingActivationPlanResponseSchema` and `OnboardingService.buildActivationPlan`.
+- Added weak/empty LLM output fallback coverage + stable activation identity regression checks in `apps/api/test/onboarding.service.spec.ts`.
+- Added onboarding carryover replay-safe bootstrap contract test in `apps/api/test/onboarding-flow.contract.spec.ts` proving `intent.create_from_agent` dedupe with activation idempotency key.
+- Added restart-safe activation identity test across service re-instantiation in `apps/api/test/onboarding.service.spec.ts` (same input -> same `idempotencyKey` and `activationFingerprint`).
+- Added activation handoff retry contract test in `apps/api/test/onboarding-flow.contract.spec.ts` proving starter-intent bootstrap handler runs once under repeated retries with identical onboarding carryover key.
 
 Close when:
 - activation contract is deterministic and covered by integration tests
@@ -110,13 +120,22 @@ Close when:
 - [x] `pnpm --filter @opensocial/api typecheck`
 - [x] `pnpm --filter @opensocial/api lint`
 - [x] `pnpm release:check:api`
-- [ ] `pnpm test:agentic:suite -- --layer=contract`
-- [ ] `pnpm test:agentic:suite -- --layer=workflow`
-- [ ] `pnpm test:agentic:suite -- --layer=queue`
-- [ ] `pnpm test:agentic:suite -- --layer=scenario`
-- [ ] `pnpm test:agentic:suite -- --layer=eval`
-- [ ] `pnpm test:agentic:suite -- --layer=benchmark`
-- [ ] `pnpm test:agentic:suite -- --layer=prod-smoke`
-- [ ] `pnpm test:agentic:suite -- --layer=full`
+- [x] `pnpm test:agentic:suite -- --layer=contract`
+- [x] `pnpm test:agentic:suite -- --layer=workflow`
+- [x] `pnpm test:agentic:suite -- --layer=queue`
+- [x] `pnpm test:agentic:suite -- --layer=scenario`
+- [x] `pnpm test:agentic:suite -- --layer=eval`
+- [x] `pnpm test:agentic:suite -- --layer=benchmark`
+- [x] `pnpm test:agentic:suite -- --layer=prod-smoke`
+- [x] `pnpm test:agentic:suite -- --layer=full`
 - [ ] `pnpm test:agentic:suite:verification`
 - [ ] `pnpm test:backend:ops-pack`
+
+Local artifact evidence (2026-03-26):
+- `benchmark`: `.artifacts/agent-test-suite/agent-suite-2026-03-26T15-14-29-649Z/benchmark.json`
+- `prod-smoke`: `.artifacts/agent-test-suite/agent-suite-2026-03-26T15-16-10-501Z/prod-smoke.json`
+- `full`: `.artifacts/agent-test-suite/agent-suite-2026-03-26T15-14-37-392Z/full.json`
+- `verification` + `backend:ops-pack` currently blocked locally by missing verification env vars:
+  `AGENTIC_BENCH_ACCESS_TOKEN`, `AGENTIC_BENCH_USER_ID`, `AGENTIC_BENCH_THREAD_ID`,
+  `AGENTIC_VERIFICATION_LANE_ID`, `SMOKE_BASE_URL`, `SMOKE_ACCESS_TOKEN`,
+  `SMOKE_ADMIN_USER_ID`, `SMOKE_AGENT_THREAD_ID`, `SMOKE_USER_ID`, `ONBOARDING_PROBE_TOKEN`.

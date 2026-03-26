@@ -731,6 +731,115 @@ describe("AuthService", () => {
     );
   });
 
+  it("keeps refresh successful on context mismatch and only emits suspicious signal", async () => {
+    const oldRefreshToken = "refresh-old";
+    const oldHash = createHash("sha256").update(oldRefreshToken).digest("hex");
+    const prisma: any = {
+      userSession: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "session-ctx",
+          userId: "11111111-1111-4111-8111-111111111111",
+          status: "active",
+          expiresAt: new Date(Date.now() + 60_000),
+          refreshTokenHash: oldHash,
+          deviceId: "device-old",
+          deviceName: "Old Device",
+          userAgent: "agent-old",
+          ipAddress: "1.1.1.1",
+        }),
+        update: vi.fn().mockResolvedValue({}),
+        updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+      auditLog: {
+        create: vi.fn().mockResolvedValue({}),
+      },
+      outboxEvent: {
+        create: vi.fn().mockResolvedValue({}),
+      },
+    };
+    const jwtService: any = {
+      sign: vi
+        .fn()
+        .mockImplementation((payload: any) =>
+          payload.tokenType === "refresh"
+            ? "refresh-ctx-new"
+            : `access-${payload.sub}-${payload.sessionId}`,
+        ),
+      verify: vi.fn().mockReturnValue({
+        sub: "11111111-1111-4111-8111-111111111111",
+        sessionId: "session-ctx",
+        tokenType: "refresh",
+      }),
+    };
+
+    const service = new AuthService(jwtService, prisma);
+    const result = await service.refreshSession(oldRefreshToken, {
+      deviceId: "device-new",
+      userAgent: "agent-new",
+      ipAddress: "2.2.2.2",
+    });
+
+    expect(result.sessionId).toBe("session-ctx");
+    expect(prisma.userSession.updateMany).not.toHaveBeenCalled();
+    expect(prisma.outboxEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          eventType: "auth.suspicious_login_detected",
+        }),
+      }),
+    );
+  });
+
+  it("does not force revoke session on transient storage errors during refresh", async () => {
+    const oldRefreshToken = "refresh-old";
+    const oldHash = createHash("sha256").update(oldRefreshToken).digest("hex");
+    const prisma: any = {
+      userSession: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "session-transient",
+          userId: "11111111-1111-4111-8111-111111111111",
+          status: "active",
+          expiresAt: new Date(Date.now() + 60_000),
+          refreshTokenHash: oldHash,
+          deviceId: null,
+          deviceName: null,
+          userAgent: null,
+          ipAddress: null,
+        }),
+        update: vi
+          .fn()
+          .mockRejectedValue(new Error("db temporarily unavailable")),
+        updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+      auditLog: {
+        create: vi.fn().mockResolvedValue({}),
+      },
+      outboxEvent: {
+        create: vi.fn().mockResolvedValue({}),
+      },
+    };
+    const jwtService: any = {
+      sign: vi
+        .fn()
+        .mockImplementation((payload: any) =>
+          payload.tokenType === "refresh"
+            ? "refresh-transient-new"
+            : `access-${payload.sub}-${payload.sessionId}`,
+        ),
+      verify: vi.fn().mockReturnValue({
+        sub: "11111111-1111-4111-8111-111111111111",
+        sessionId: "session-transient",
+        tokenType: "refresh",
+      }),
+    };
+
+    const service = new AuthService(jwtService, prisma);
+    await expect(service.refreshSession(oldRefreshToken)).rejects.toThrow(
+      "db temporarily unavailable",
+    );
+    expect(prisma.userSession.updateMany).not.toHaveBeenCalled();
+  });
+
   it("revokes all active sessions except an optional current session", async () => {
     const prisma: any = {
       userSession: {

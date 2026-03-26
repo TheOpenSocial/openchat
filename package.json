@@ -37,6 +37,7 @@
     "test:agentic:suite": "node scripts/run-agent-test-suite.mjs",
     "test:agentic:suite:verification": "node scripts/run-agent-test-suite-verification.mjs",
     "test:backend:ops-pack": "node scripts/run-backend-ops-pack.mjs",
+    "test:playground:ec2-bridge": "node scripts/playground-ec2-verification-bridge.mjs",
     "staging:verify:incident": "node scripts/staging-incident-verify.mjs",
     "moderation:drill": "node scripts/moderation-drill.mjs",
     "release:check:api": "node scripts/release-check-api.mjs",

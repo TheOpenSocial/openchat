@@ -37,6 +37,8 @@ describe("requestSecurityMiddleware", () => {
     delete process.env.RATE_LIMIT_GLOBAL_WINDOW_MS;
     delete process.env.ABUSE_THROTTLE_MAX_SCORE;
     delete process.env.ABUSE_THROTTLE_BLOCK_MS;
+    delete process.env.RATE_LIMIT_PLAYGROUND_MAX_REQUESTS;
+    delete process.env.RATE_LIMIT_PLAYGROUND_WINDOW_MS;
     resetRequestSecurityState();
   });
 
@@ -160,6 +162,39 @@ describe("requestSecurityMiddleware", () => {
         success: false,
         error: expect.objectContaining({
           code: "abuse_throttled",
+        }),
+      }),
+    );
+  });
+
+  it("rate-limits admin playground requests with dedicated bucket", () => {
+    process.env.RATE_LIMIT_PLAYGROUND_MAX_REQUESTS = "1";
+    process.env.RATE_LIMIT_PLAYGROUND_WINDOW_MS = "60000";
+
+    const request = createRequest({
+      method: "GET",
+      path: "/api/admin/playground/state",
+      ip: "203.0.113.77",
+      headers: {
+        "x-admin-user-id": "11111111-1111-4111-8111-111111111111",
+        "x-admin-role": "admin",
+      },
+    });
+    const responseA = createResponse();
+    const responseB = createResponse();
+    const next = vi.fn();
+
+    requestSecurityMiddleware(request, responseA, next);
+    requestSecurityMiddleware(request, responseB, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(responseB.status).toHaveBeenCalledWith(429);
+    expect(responseB.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: false,
+        error: expect.objectContaining({
+          code: "rate_limited",
+          message: "playground request rate limit exceeded",
         }),
       }),
     );
