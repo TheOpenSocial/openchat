@@ -91,11 +91,11 @@ const maxObservabilityGapRuns = Number(
 );
 const requestTimeoutMs = Math.max(
   1000,
-  Number(process.env.AGENTIC_BENCH_REQUEST_TIMEOUT_MS ?? 10000),
+  Number(process.env.AGENTIC_BENCH_REQUEST_TIMEOUT_MS ?? 15000),
 );
 const requestRetryCount = Math.max(
   0,
-  Number(process.env.AGENTIC_BENCH_REQUEST_RETRY_COUNT ?? 2),
+  Number(process.env.AGENTIC_BENCH_REQUEST_RETRY_COUNT ?? 4),
 );
 const requestRetryDelayMs = Math.max(
   100,
@@ -176,6 +176,10 @@ async function requestJson(pathname, init = {}) {
 
       if (!response.ok) {
         if (isTransientStatus && attempt < requestRetryCount) {
+          const retryAttempt = attempt + 1;
+          console.warn(
+            `[bench] transient HTTP ${response.status} on ${pathname}; retry ${retryAttempt}/${requestRetryCount}`,
+          );
           attempt += 1;
           await sleep(requestRetryDelayMs * attempt);
           continue;
@@ -199,6 +203,10 @@ async function requestJson(pathname, init = {}) {
         message.includes("ETIMEDOUT") ||
         message.includes("ENOTFOUND");
       if (isFetchFailure && attempt < requestRetryCount) {
+        const retryAttempt = attempt + 1;
+        console.warn(
+          `[bench] transient fetch error on ${pathname}; retry ${retryAttempt}/${requestRetryCount}: ${message}`,
+        );
         attempt += 1;
         await sleep(requestRetryDelayMs * attempt);
         continue;
@@ -209,7 +217,32 @@ async function requestJson(pathname, init = {}) {
     }
   }
 
-  throw lastError ?? new Error(`request failed for ${pathname}`);
+  const rawMessage =
+    lastError instanceof Error ? lastError.message : String(lastError ?? "unknown error");
+  throw new Error(
+    `request failed for ${pathname} after ${requestRetryCount + 1} attempts: ${rawMessage}`,
+  );
+}
+
+async function requestJsonWithStepRetry(pathname, init = {}, stepLabel = "request") {
+  let attempt = 0;
+  const maxStepAttempts = 3;
+  let lastError = null;
+  while (attempt < maxStepAttempts) {
+    try {
+      return await requestJson(pathname, init);
+    } catch (error) {
+      lastError = error;
+      attempt += 1;
+      if (attempt >= maxStepAttempts) {
+        break;
+      }
+      await sleep(Math.max(100, requestRetryDelayMs) * attempt);
+    }
+  }
+  const message =
+    lastError instanceof Error ? lastError.message : String(lastError ?? "unknown error");
+  throw new Error(`${stepLabel} failed for ${pathname}: ${message}`);
 }
 
 async function fetchWorkflowHealthSnapshot() {
@@ -385,14 +418,15 @@ async function runOne(index, scenario, options) {
   const requestHeaders = forwardedFor
     ? { "x-forwarded-for": forwardedFor }
     : undefined;
-  const beforeMessages = await requestJson(
+  const beforeMessages = await requestJsonWithStepRetry(
     `/api/agent/threads/${selectedThreadId}/messages`,
     requestHeaders ? { headers: requestHeaders } : {},
+    "before-messages lookup",
   );
   const beforeCount = beforeMessages.length;
   const startedAt = Date.now();
 
-  const createIntentResult = await requestJson("/api/intents/from-agent", {
+  const createIntentResult = await requestJsonWithStepRetry("/api/intents/from-agent", {
     method: "POST",
     ...(requestHeaders ? { headers: requestHeaders } : {}),
     body: JSON.stringify({
@@ -402,7 +436,7 @@ async function runOne(index, scenario, options) {
       allowDecomposition: true,
       maxIntents: 3,
     }),
-  });
+  }, "intent creation");
 
   const ackLatencyMs = Date.now() - startedAt;
   const intentId = createIntentResult?.intentId ?? null;
@@ -412,10 +446,16 @@ async function runOne(index, scenario, options) {
 
   const ackDetectionDeadline = Date.now() + Math.max(1500, Math.floor(ackSloMs * 2));
   while (Date.now() < ackDetectionDeadline) {
-    const current = await requestJson(
-      `/api/agent/threads/${selectedThreadId}/messages`,
-      requestHeaders ? { headers: requestHeaders } : {},
-    );
+    let current = null;
+    try {
+      current = await requestJson(
+        `/api/agent/threads/${selectedThreadId}/messages`,
+        requestHeaders ? { headers: requestHeaders } : {},
+      );
+    } catch {
+      await sleep(pollMs);
+      continue;
+    }
     const newlyAdded = current.slice(beforeCount);
     const nonUser = newlyAdded.find(isNonUserMessage);
     if (nonUser) {
@@ -430,10 +470,16 @@ async function runOne(index, scenario, options) {
   let nonUserMessages = [];
   const backgroundDeadline = Date.now() + bgWaitMs;
   while (Date.now() < backgroundDeadline) {
-    const current = await requestJson(
-      `/api/agent/threads/${selectedThreadId}/messages`,
-      requestHeaders ? { headers: requestHeaders } : {},
-    );
+    let current = null;
+    try {
+      current = await requestJson(
+        `/api/agent/threads/${selectedThreadId}/messages`,
+        requestHeaders ? { headers: requestHeaders } : {},
+      );
+    } catch {
+      await sleep(pollMs);
+      continue;
+    }
     const newlyAdded = current.slice(beforeCount);
     nonUserMessages = newlyAdded.filter(isNonUserMessage);
     if (nonUserMessages.length >= 2) {
@@ -443,9 +489,10 @@ async function runOne(index, scenario, options) {
     await sleep(pollMs);
   }
   if (nonUserMessages.length === 0) {
-    const current = await requestJson(
+    const current = await requestJsonWithStepRetry(
       `/api/agent/threads/${selectedThreadId}/messages`,
       requestHeaders ? { headers: requestHeaders } : {},
+      "final message refresh",
     );
     nonUserMessages = current.slice(beforeCount).filter(isNonUserMessage);
   }
