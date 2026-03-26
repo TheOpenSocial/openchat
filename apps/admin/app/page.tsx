@@ -15,6 +15,7 @@ import { useWorkbenchState } from "./components/workbench/useWorkbenchState";
 import { useModerationWorkbench } from "./components/workbench/useModerationWorkbench";
 import { useAdminSessionLifecycle } from "./components/workbench/useAdminSessionLifecycle";
 import { useOpsSnapshotsActions } from "./components/workbench/useOpsSnapshotsActions";
+import { useEntityInspectorActions } from "./components/workbench/useEntityInspectorActions";
 import {
   createHistoryId,
   errorText,
@@ -298,457 +299,66 @@ function AdminHomeContent() {
     return () => clearInterval(timer);
   }, [refreshHealth, sessionHydrated, signedInSession]);
 
-  const inspectUser = () =>
-    runAction(
-      "Inspect user",
-      async () => {
-        const id = userId.trim();
-        const [
-          profile,
-          trust,
-          rules,
-          interests,
-          topics,
-          windows,
-          photos,
-          sessions,
-          inbox,
-          circles,
-          savedSearches,
-          scheduledTasks,
-          discoveryPassive,
-          discoveryInbox,
-          pendingIntentSummary,
-        ] = await Promise.all([
-          requestApi("GET", `/profiles/${id}`),
-          requestApi("GET", `/profiles/${id}/trust`),
-          requestApi("GET", `/personalization/${id}/rules/global`),
-          requestApi("GET", `/profiles/${id}/interests`),
-          requestApi("GET", `/profiles/${id}/topics`),
-          requestApi("GET", `/profiles/${id}/availability-windows`),
-          requestApi("GET", `/profiles/${id}/photos`),
-          requestApi("GET", `/auth/sessions/${id}`),
-          requestApi("GET", `/inbox/requests/${id}`),
-          requestApi("GET", `/recurring-circles/${id}`),
-          requestApi("GET", `/saved-searches/${id}`),
-          requestApi("GET", `/scheduled-tasks/${id}`, {
-            query: { limit: 20 },
-          }),
-          requestApi("GET", `/discovery/${id}/passive`, {
-            query: { limit: 3 },
-          }),
-          requestApi("GET", `/discovery/${id}/inbox-suggestions`, {
-            query: { limit: 4 },
-          }),
-          requestApi("POST", "/intents/summarize-pending", {
-            body: {
-              userId: id,
-              maxIntents: 5,
-            },
-          }),
-        ]);
-        const firstCircleId = Array.isArray(circles)
-          ? (circles[0] as { id?: string } | undefined)?.id
-          : undefined;
-        const circleSessions = firstCircleId
-          ? await requestApi(
-              "GET",
-              `/recurring-circles/${firstCircleId}/sessions`,
-            )
-          : [];
-        const firstTaskId = Array.isArray(scheduledTasks)
-          ? (scheduledTasks[0] as { id?: string } | undefined)?.id
-          : undefined;
-        const scheduledTaskRuns = firstTaskId
-          ? await requestApi("GET", `/scheduled-tasks/${firstTaskId}/runs`, {
-              query: { limit: 10 },
-            })
-          : [];
-        const firstIntentId =
-          typeof pendingIntentSummary === "object" &&
-          pendingIntentSummary !== null &&
-          "intents" in pendingIntentSummary &&
-          Array.isArray(
-            (pendingIntentSummary as { intents?: unknown[] }).intents,
-          )
-            ? ((
-                pendingIntentSummary as {
-                  intents?: Array<{ intentId?: string }>;
-                }
-              ).intents?.[0]?.intentId ?? null)
-            : null;
-        const continuityUserExplain = firstIntentId
-          ? await requestApi(
-              "GET",
-              `/intents/${firstIntentId}/explanations/user`,
-            ).catch(() => null)
-          : null;
-
-        return {
-          profile,
-          trust,
-          rules,
-          interests,
-          topics,
-          windows,
-          photos,
-          sessions,
-          inbox,
-          circles,
-          circleSessions,
-          savedSearches,
-          scheduledTasks,
-          scheduledTaskRuns,
-          discoveryPassive,
-          discoveryInbox,
-          pendingIntentSummary,
-          continuityUserExplain,
-        };
-      },
-      "User snapshots loaded.",
-      (payload) => {
-        setProfileSnapshot(payload.profile);
-        setTrustSnapshot(payload.trust);
-        setRuleSnapshot(payload.rules);
-        setInterestSnapshot(payload.interests);
-        setTopicSnapshot(payload.topics);
-        setAvailabilitySnapshot(payload.windows);
-        setPhotoSnapshot(payload.photos);
-        setSessionSnapshot(payload.sessions);
-        setInboxSnapshot(payload.inbox);
-        setRecurringCircleSnapshot(payload.circles);
-        setRecurringCircleSessionSnapshot(payload.circleSessions);
-        setSavedSearchSnapshot(payload.savedSearches);
-        setScheduledTaskSnapshot(payload.scheduledTasks);
-        setScheduledTaskRunsSnapshot(payload.scheduledTaskRuns);
-        setDiscoveryPassiveSnapshot(payload.discoveryPassive);
-        setDiscoveryInboxSnapshot(payload.discoveryInbox);
-        setPendingIntentSummarySnapshot(payload.pendingIntentSummary);
-        setContinuityIntentExplainSnapshot(payload.continuityUserExplain);
-      },
-    );
-
-  const sendDigest = () =>
-    runAction(
-      "Send digest",
-      () =>
-        requestApi("POST", `/notifications/${userId.trim()}/digest`, {
-          body: {},
-        }),
-      "Digest request submitted.",
-    );
-
-  const summarizePendingIntents = () =>
-    runAction(
-      "Summarize pending intents",
-      () =>
-        requestApi("POST", "/intents/summarize-pending", {
-          body: {
-            userId: userId.trim(),
-          },
-        }),
-      "Pending intent summary generated.",
-      (payload) => setIntentActionSnapshot(payload),
-    );
-
-  const runSearch = () =>
-    runAction(
-      "Run search",
-      () =>
-        requestApi("GET", `/search/${userId.trim()}`, {
-          query: {
-            q: searchQuery.trim(),
-            limit: 6,
-          },
-        }),
-      "Search snapshot loaded.",
-      (payload) => setSearchSnapshot(payload),
-    );
-
-  const revokeSession = () => {
-    if (!revokeSessionId.trim()) {
-      setBanner({ tone: "error", text: "Provide a session id to revoke." });
-      return Promise.resolve(null);
-    }
-
-    return runAction(
-      "Revoke session",
-      async () => {
-        const revoked = await requestApi(
-          "POST",
-          `/auth/sessions/${revokeSessionId.trim()}/revoke`,
-          {
-            body: {
-              userId: userId.trim(),
-            },
-          },
-        );
-        const sessions = await requestApi(
-          "GET",
-          `/auth/sessions/${userId.trim()}`,
-        );
-        return { revoked, sessions };
-      },
-      "Session revoked and list refreshed.",
-      (payload) => setSessionSnapshot(payload.sessions),
-    );
-  };
-
-  const revokeAllSessions = () =>
-    runAction(
-      "Revoke all sessions",
-      async () => {
-        const revoked = await requestApi("POST", "/auth/sessions/revoke-all", {
-          body: {
-            userId: userId.trim(),
-          },
-        });
-        const sessions = await requestApi(
-          "GET",
-          `/auth/sessions/${userId.trim()}`,
-        );
-        return { revoked, sessions };
-      },
-      "All sessions revoked and list refreshed.",
-      (payload) => setSessionSnapshot(payload.sessions),
-    );
-
-  const inspectIntent = () => {
-    if (!intentId.trim()) {
-      setBanner({ tone: "error", text: "Provide an intent id." });
-      return Promise.resolve(null);
-    }
-
-    return runAction(
-      "Inspect intent",
-      async () => {
-        const [adminExplain, userExplain] = await Promise.all([
-          requestApi("GET", `/intents/${intentId.trim()}/explanations`),
-          requestApi("GET", `/intents/${intentId.trim()}/explanations/user`),
-        ]);
-
-        return { adminExplain, userExplain };
-      },
-      "Intent explanation snapshots loaded.",
-      (payload) => {
-        setIntentExplainSnapshot(payload.adminExplain);
-        setIntentUserExplainSnapshot(payload.userExplain);
-      },
-    );
-  };
-
-  const cancelIntent = () => {
-    if (!intentId.trim()) {
-      setBanner({ tone: "error", text: "Provide an intent id." });
-      return Promise.resolve(null);
-    }
-
-    return runAction(
-      "Cancel intent",
-      () =>
-        requestApi("POST", `/intents/${intentId.trim()}/cancel`, {
-          body: {
-            userId: userId.trim(),
-            ...(threadId.trim() ? { agentThreadId: threadId.trim() } : {}),
-          },
-        }),
-      "Intent cancellation submitted.",
-      (payload) => setIntentActionSnapshot(payload),
-    );
-  };
-
-  const retryIntent = () => {
-    if (!intentId.trim()) {
-      setBanner({ tone: "error", text: "Provide an intent id." });
-      return Promise.resolve(null);
-    }
-
-    return runAction(
-      "Retry intent",
-      () =>
-        requestApi("POST", `/intents/${intentId.trim()}/retry`, {
-          body: {
-            ...(threadId.trim() ? { agentThreadId: threadId.trim() } : {}),
-          },
-        }),
-      "Intent retry job submitted.",
-      (payload) => setIntentActionSnapshot(payload),
-    );
-  };
-
-  const widenIntent = () => {
-    if (!intentId.trim()) {
-      setBanner({ tone: "error", text: "Provide an intent id." });
-      return Promise.resolve(null);
-    }
-
-    return runAction(
-      "Widen intent",
-      () =>
-        requestApi("POST", `/intents/${intentId.trim()}/widen`, {
-          body: {
-            ...(threadId.trim() ? { agentThreadId: threadId.trim() } : {}),
-          },
-        }),
-      "Intent widen job submitted.",
-      (payload) => setIntentActionSnapshot(payload),
-    );
-  };
-
-  const convertIntent = (mode: "group" | "one_to_one") => {
-    if (!intentId.trim()) {
-      setBanner({ tone: "error", text: "Provide an intent id." });
-      return Promise.resolve(null);
-    }
-
-    return runAction(
-      `Convert intent to ${mode}`,
-      () =>
-        requestApi("POST", `/intents/${intentId.trim()}/convert`, {
-          body:
-            mode === "group"
-              ? {
-                  mode,
-                  groupSizeTarget,
-                }
-              : {
-                  mode,
-                },
-        }),
-      `Intent converted to ${mode}.`,
-      (payload) => setIntentActionSnapshot(payload),
-    );
-  };
-
-  const inspectChat = () => {
-    if (!chatId.trim()) {
-      setBanner({ tone: "error", text: "Provide a chat id." });
-      return Promise.resolve(null);
-    }
-
-    return runAction(
-      "Inspect chat",
-      async () => {
-        const [messages, metadata] = await Promise.all([
-          requestApi("GET", `/chats/${chatId.trim()}/messages`),
-          requestApi("GET", `/chats/${chatId.trim()}/metadata`),
-        ]);
-        return { messages, metadata };
-      },
-      "Chat messages and metadata loaded.",
-      (payload) => {
-        setChatMessagesSnapshot(payload.messages);
-        setChatMetadataSnapshot(payload.metadata);
-      },
-    );
-  };
-
-  const syncChat = () => {
-    if (!chatId.trim()) {
-      setBanner({ tone: "error", text: "Provide a chat id." });
-      return Promise.resolve(null);
-    }
-
-    return runAction(
-      "Sync chat",
-      () =>
-        requestApi("GET", `/chats/${chatId.trim()}/sync`, {
-          query: {
-            userId: actingUserId.trim(),
-            ...(syncAfter.trim() ? { after: syncAfter.trim() } : {}),
-          },
-        }),
-      "Chat sync snapshot loaded.",
-      (payload) => setChatSyncSnapshot(payload),
-    );
-  };
-
-  const leaveChat = () => {
-    if (!chatId.trim()) {
-      setBanner({ tone: "error", text: "Provide a chat id." });
-      return Promise.resolve(null);
-    }
-
-    return runAction(
-      "Leave chat",
-      () =>
-        requestApi("POST", `/chats/${chatId.trim()}/leave`, {
-          body: {
-            userId: actingUserId.trim(),
-          },
-        }),
-      "Leave chat action completed.",
-      (payload) => setChatMetadataSnapshot(payload),
-    );
-  };
-
-  const hideChatMessage = () => {
-    if (!chatId.trim() || !messageId.trim()) {
-      setBanner({
-        tone: "error",
-        text: "Provide both chat id and message id.",
-      });
-      return Promise.resolve(null);
-    }
-
-    return runAction(
-      "Hide chat message",
-      () =>
-        requestApi(
-          "POST",
-          `/chats/${chatId.trim()}/messages/${messageId.trim()}/hide`,
-          {
-            body: {
-              moderatorUserId: moderatorUserId.trim(),
-              ...(hideReason.trim() ? { reason: hideReason.trim() } : {}),
-            },
-          },
-        ),
-      "Message hidden by moderation.",
-      (payload) => setChatMessagesSnapshot(payload),
-    );
-  };
-
-  const repairChatFlow = () => {
-    if (!chatId.trim()) {
-      setBanner({ tone: "error", text: "Provide a chat id." });
-      return Promise.resolve(null);
-    }
-
-    return runAction(
-      "Repair chat flow",
-      async () => {
-        const [metadata, syncSnapshot, relay] = await Promise.all([
-          requestApi("GET", `/chats/${chatId.trim()}/metadata`),
-          requestApi("GET", `/chats/${chatId.trim()}/sync`, {
-            query: {
-              userId: actingUserId.trim(),
-            },
-          }),
-          requestApi<{ processedCount: number }>(
-            "POST",
-            "/admin/outbox/relay",
-            {
-              body: {},
-            },
-          ),
-        ]);
-
-        return {
-          metadata,
-          syncSnapshot,
-          relay,
-        };
-      },
-      (payload) =>
-        `Repair routine complete. Outbox processed ${payload.relay.processedCount} event(s).`,
-      (payload) => {
-        setChatMetadataSnapshot(payload.metadata);
-        setChatSyncSnapshot(payload.syncSnapshot);
-        setRelayCount(payload.relay.processedCount);
-      },
-    );
-  };
+  const {
+    inspectUser,
+    sendDigest,
+    summarizePendingIntents,
+    runSearch,
+    revokeSession,
+    revokeAllSessions,
+    inspectIntent,
+    cancelIntent,
+    retryIntent,
+    widenIntent,
+    convertIntent,
+    inspectChat,
+    syncChat,
+    leaveChat,
+    hideChatMessage,
+    repairChatFlow,
+  } = useEntityInspectorActions({
+    requestApi,
+    runAction,
+    setBanner,
+    userId,
+    intentId,
+    chatId,
+    threadId,
+    revokeSessionId,
+    actingUserId,
+    messageId,
+    moderatorUserId,
+    hideReason,
+    syncAfter,
+    groupSizeTarget,
+    searchQuery,
+    setProfileSnapshot,
+    setTrustSnapshot,
+    setRuleSnapshot,
+    setInterestSnapshot,
+    setTopicSnapshot,
+    setAvailabilitySnapshot,
+    setPhotoSnapshot,
+    setSessionSnapshot,
+    setInboxSnapshot,
+    setRecurringCircleSnapshot,
+    setRecurringCircleSessionSnapshot,
+    setSavedSearchSnapshot,
+    setScheduledTaskSnapshot,
+    setScheduledTaskRunsSnapshot,
+    setDiscoveryPassiveSnapshot,
+    setDiscoveryInboxSnapshot,
+    setPendingIntentSummarySnapshot,
+    setContinuityIntentExplainSnapshot,
+    setIntentActionSnapshot,
+    setSearchSnapshot,
+    setIntentExplainSnapshot,
+    setIntentUserExplainSnapshot,
+    setChatMessagesSnapshot,
+    setChatMetadataSnapshot,
+    setChatSyncSnapshot,
+    setRelayCount,
+  });
 
   const moderation = useModerationWorkbench({
     activeTab,
