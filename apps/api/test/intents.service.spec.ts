@@ -12,6 +12,7 @@ function createIntentsService(
     notificationQueue?: any;
     launchControlsService?: any;
     realtimeEventsService?: any;
+    workflowRuntimeService?: any;
   } = {},
 ) {
   const prisma: any =
@@ -103,6 +104,17 @@ function createIntentsService(
       emitRequestUpdated: vi.fn(),
     } as any);
 
+  const workflowRuntimeService: any =
+    overrides.workflowRuntimeService ??
+    ({
+      buildWorkflowRunId: vi.fn(
+        (input: any) => `${input.domain}:${input.entityType}:${input.entityId}`,
+      ),
+      startRun: vi.fn().mockResolvedValue({}),
+      checkpoint: vi.fn().mockResolvedValue({}),
+      linkSideEffect: vi.fn().mockResolvedValue({}),
+    } as any);
+
   return {
     prisma,
     matchingService,
@@ -112,6 +124,7 @@ function createIntentsService(
     intentQueue,
     notificationQueue,
     realtimeEventsService,
+    workflowRuntimeService,
     service: new IntentsService(
       prisma,
       matchingService,
@@ -123,6 +136,7 @@ function createIntentsService(
       undefined,
       launchControlsService,
       realtimeEventsService,
+      workflowRuntimeService,
     ),
   };
 }
@@ -136,6 +150,7 @@ describe("IntentsService", () => {
       intentQueue,
       matchingService,
       realtimeEventsService,
+      workflowRuntimeService,
     } = createIntentsService({
       prisma: {
         intent: {
@@ -179,6 +194,20 @@ describe("IntentsService", () => {
         intentId: "intent-1",
         status: "parsed",
       },
+    );
+    expect(workflowRuntimeService.startRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workflowRunId: "social:intent:intent-1",
+        entityType: "intent",
+        entityId: "intent-1",
+      }),
+    );
+    expect(workflowRuntimeService.checkpoint).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workflowRunId: "social:intent:intent-1",
+        stage: "parse",
+        status: "completed",
+      }),
     );
   });
 
@@ -550,20 +579,21 @@ describe("IntentsService", () => {
   });
 
   it("skips fanout pipeline when intent is in moderation review state", async () => {
-    const { service, matchingService } = createIntentsService({
-      prisma: {
-        intent: {
-          findUnique: vi.fn().mockResolvedValue({
-            id: "intent-review",
-            userId: "11111111-1111-4111-8111-111111111111",
-            status: "parsed",
-            safetyState: "review",
-            parsedIntent: { topics: ["chat"] },
-            createdAt: new Date(),
-          }),
+    const { service, matchingService, workflowRuntimeService } =
+      createIntentsService({
+        prisma: {
+          intent: {
+            findUnique: vi.fn().mockResolvedValue({
+              id: "intent-review",
+              userId: "11111111-1111-4111-8111-111111111111",
+              status: "parsed",
+              safetyState: "review",
+              parsedIntent: { topics: ["chat"] },
+              createdAt: new Date(),
+            }),
+          },
         },
-      },
-    });
+      });
 
     const result = await service.processIntentPipeline(
       "intent-review",
@@ -578,6 +608,63 @@ describe("IntentsService", () => {
       }),
     );
     expect(matchingService.retrieveCandidates).not.toHaveBeenCalled();
+    expect(workflowRuntimeService.checkpoint).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workflowRunId: "social:intent:intent-review",
+        stage: "moderation",
+        status: "degraded",
+      }),
+    );
+    expect(workflowRuntimeService.checkpoint).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workflowRunId: "social:intent:intent-review",
+        stage: "routing_pipeline",
+        status: "skipped",
+      }),
+    );
+  });
+
+  it("records skipped routing checkpoint when intent is cancelled before pipeline processing", async () => {
+    const { service, matchingService, workflowRuntimeService } =
+      createIntentsService({
+        prisma: {
+          intent: {
+            findUnique: vi.fn().mockResolvedValue({
+              id: "intent-cancelled",
+              userId: "11111111-1111-4111-8111-111111111111",
+              status: "cancelled",
+              safetyState: "clean",
+              parsedIntent: { topics: ["chat"] },
+              createdAt: new Date(),
+            }),
+          },
+        },
+      });
+
+    const result = await service.processIntentPipeline(
+      "intent-cancelled",
+      "trace-cancelled",
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        intentId: "intent-cancelled",
+        fanoutCount: 0,
+        skipped: true,
+      }),
+    );
+    expect(matchingService.retrieveCandidates).not.toHaveBeenCalled();
+    expect(workflowRuntimeService.checkpoint).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workflowRunId: "social:intent:intent-cancelled",
+        stage: "routing_pipeline",
+        status: "skipped",
+        metadata: expect.objectContaining({
+          reason: "intent_not_processable",
+          status: "cancelled",
+        }),
+      }),
+    );
   });
 
   it("defers fanout when sender outreach cap is exhausted", async () => {
@@ -753,14 +840,14 @@ describe("IntentsService", () => {
     expect(notificationsService.createInAppNotification).toHaveBeenCalledWith(
       "11111111-1111-4111-8111-111111111111",
       "agent_update",
-      expect.stringContaining("widened your filters"),
+      expect.stringContaining("broadened"),
     );
     expect(notificationQueue.add).toHaveBeenCalledWith(
       "AsyncAgentFollowup",
       expect.objectContaining({
         payload: expect.objectContaining({
           template: "progress_update",
-          message: expect.stringContaining("widened your filters"),
+          message: expect.stringContaining("broadened the criteria"),
         }),
       }),
       expect.objectContaining({
@@ -833,7 +920,7 @@ describe("IntentsService", () => {
     expect(notificationsService.createInAppNotification).toHaveBeenCalledWith(
       "11111111-1111-4111-8111-111111111111",
       "agent_update",
-      expect.stringContaining("try broadening"),
+      expect.stringContaining("broaden the search"),
     );
     expect(notificationQueue.add).toHaveBeenCalledWith(
       "AsyncAgentFollowup",
@@ -911,8 +998,8 @@ describe("IntentsService", () => {
     expect(noCandidateRetryCalls).toHaveLength(2);
   });
 
-  it("skips async followup enqueue when agent followups flag is disabled", async () => {
-    const { service, notificationsService, notificationQueue, intentQueue } =
+  it("reuses existing fanout requests during replay instead of duplicating them", async () => {
+    const { service, prisma, notificationsService, agentService } =
       createIntentsService({
         prisma: {
           intent: {
@@ -920,7 +1007,7 @@ describe("IntentsService", () => {
               id: "intent-1",
               userId: "11111111-1111-4111-8111-111111111111",
               status: "parsed",
-              createdAt: new Date(Date.now() - 2 * 60_000),
+              createdAt: new Date(Date.now() - 3 * 60_000),
               parsedIntent: {
                 intentType: "chat",
                 topics: ["ai"],
@@ -931,31 +1018,97 @@ describe("IntentsService", () => {
           intentCandidate: { create: vi.fn().mockResolvedValue({}) },
           intentRequest: {
             createMany: vi.fn().mockResolvedValue({ count: 0 }),
+            findMany: vi.fn().mockResolvedValue([
+              {
+                id: "request-existing",
+                recipientUserId: "22222222-2222-4222-8222-222222222222",
+                status: "pending",
+              },
+            ]),
             count: vi.fn().mockResolvedValue(0),
           },
           $transaction: vi.fn().mockResolvedValue([]),
         },
         matchingService: {
-          retrieveCandidates: vi.fn().mockResolvedValue([]),
-        },
-        launchControlsService: {
-          getSnapshot: vi.fn().mockResolvedValue({
-            globalKillSwitch: false,
-            inviteOnlyMode: false,
-            alphaCohortUserIds: [],
-            enableNewIntents: true,
-            enableAgentFollowups: false,
-            enableGroupFormation: true,
-            enablePushNotifications: true,
-            enablePersonalization: true,
-            enableDiscovery: true,
-            enableModerationStrictness: false,
-            enableAiParsing: true,
-            enableRealtimeChat: true,
-            generatedAt: new Date().toISOString(),
-          }),
+          retrieveCandidates: vi.fn().mockResolvedValue([
+            {
+              userId: "22222222-2222-4222-8222-222222222222",
+              score: 0.92,
+              rationale: {
+                topicsOverlap: ["ai"],
+              },
+            },
+          ]),
         },
       });
+
+    await service.processIntentPipeline(
+      "intent-1",
+      "trace-1",
+      "44444444-4444-4444-8444-444444444444",
+    );
+
+    expect(prisma.intentRequest.createMany).not.toHaveBeenCalled();
+    expect(
+      notificationsService.createInAppNotification,
+    ).not.toHaveBeenCalledWith(
+      "22222222-2222-4222-8222-222222222222",
+      "request_received",
+      expect.any(String),
+    );
+    expect(agentService.appendWorkflowUpdate).not.toHaveBeenCalled();
+  });
+
+  it("skips async followup enqueue when agent followups flag is disabled", async () => {
+    const {
+      service,
+      notificationsService,
+      notificationQueue,
+      intentQueue,
+      workflowRuntimeService,
+    } = createIntentsService({
+      prisma: {
+        intent: {
+          findUnique: vi.fn().mockResolvedValue({
+            id: "intent-1",
+            userId: "11111111-1111-4111-8111-111111111111",
+            status: "parsed",
+            createdAt: new Date(Date.now() - 2 * 60_000),
+            parsedIntent: {
+              intentType: "chat",
+              topics: ["ai"],
+            },
+          }),
+          update: vi.fn().mockResolvedValue({}),
+        },
+        intentCandidate: { create: vi.fn().mockResolvedValue({}) },
+        intentRequest: {
+          createMany: vi.fn().mockResolvedValue({ count: 0 }),
+          count: vi.fn().mockResolvedValue(0),
+        },
+        $transaction: vi.fn().mockResolvedValue([]),
+      },
+      matchingService: {
+        retrieveCandidates: vi.fn().mockResolvedValue([]),
+      },
+      launchControlsService: {
+        getSnapshot: vi.fn().mockResolvedValue({
+          globalKillSwitch: false,
+          inviteOnlyMode: false,
+          alphaCohortUserIds: [],
+          enableNewIntents: true,
+          enableAgentFollowups: false,
+          enableGroupFormation: true,
+          enablePushNotifications: true,
+          enablePersonalization: true,
+          enableDiscovery: true,
+          enableModerationStrictness: false,
+          enableAiParsing: true,
+          enableRealtimeChat: true,
+          generatedAt: new Date().toISOString(),
+        }),
+      },
+    });
 
     await service.processIntentPipeline(
       "intent-1",
@@ -966,7 +1119,7 @@ describe("IntentsService", () => {
     expect(notificationsService.createInAppNotification).toHaveBeenCalledWith(
       "11111111-1111-4111-8111-111111111111",
       "agent_update",
-      expect.stringContaining("try broadening"),
+      expect.stringContaining("broaden the search"),
     );
     expect(notificationQueue.add).not.toHaveBeenCalledWith(
       "AsyncAgentFollowup",
@@ -979,6 +1132,17 @@ describe("IntentsService", () => {
         type: "IntentCreated",
       }),
       expect.any(Object),
+    );
+    expect(workflowRuntimeService.checkpoint).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workflowRunId: "social:intent:intent-1",
+        stage: "followup_enqueue",
+        status: "skipped",
+        metadata: expect.objectContaining({
+          reason: "launch_controls_disabled",
+          template: "no_match_yet",
+        }),
+      }),
     );
   });
 
