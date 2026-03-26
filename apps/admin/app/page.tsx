@@ -19,7 +19,7 @@ import { useEntityInspectorActions } from "./components/workbench/useEntityInspe
 import { useAgentDebugActions } from "./components/workbench/useAgentDebugActions";
 import { useAdminLocale } from "./components/workbench/useAdminLocale";
 import { useAdminHealthPolling } from "./components/workbench/useAdminHealthPolling";
-import { parseContextInput } from "./components/workbench/workbench-utils";
+import { usePolicyAdminActions } from "./components/workbench/usePolicyAdminActions";
 import {
   type AdminTab,
   tabConfig,
@@ -337,86 +337,26 @@ function AdminHomeContent() {
     setBanner,
   });
 
-  const deactivateUser = () => {
-    if (!userId.trim()) {
-      setBanner({ tone: "error", text: "Provide a user id." });
-      return Promise.resolve(null);
-    }
-
-    return runAction(
-      "Deactivate account",
-      () =>
-        requestApi("POST", `/admin/users/${userId.trim()}/deactivate`, {
-          body: {
-            reason: deactivateReason.trim(),
-          },
-        }),
-      "Account deactivated.",
-      (payload) => moderation.setModerationSnapshot(payload),
-    );
-  };
-
-  const restrictUser = () => {
-    if (!userId.trim()) {
-      setBanner({ tone: "error", text: "Provide a user id." });
-      return Promise.resolve(null);
-    }
-
-    return runAction(
-      "Restrict account",
-      () =>
-        requestApi("POST", `/admin/users/${userId.trim()}/restrict`, {
-          body: {
-            reason: restrictReason.trim(),
-          },
-        }),
-      "Account restriction applied.",
-      (payload) => moderation.setModerationSnapshot(payload),
-    );
-  };
-
-  const inspectLifeGraph = () =>
-    runAction(
-      "Inspect life graph",
-      () => requestApi("GET", `/personalization/${userId.trim()}/life-graph`),
-      "Life graph snapshot loaded.",
-      (payload) => setLifeGraphSnapshot(payload),
-    );
-
-  const explainPolicy = () =>
-    runAction(
-      "Explain policy",
-      async () => {
-        const context = parseContextInput(policyContextInput);
-        return requestApi(
-          "POST",
-          `/personalization/${userId.trim()}/policy/explain`,
-          {
-            body: {
-              ...policyFlags,
-              ...(context ? { context } : {}),
-            },
-          },
-        );
-      },
-      "Policy explanation generated.",
-      (payload) => setPolicyExplainSnapshot(payload),
-    );
-
-  const resetLearnedMemory = () =>
-    runAction(
-      "Reset learned memory",
-      () =>
-        requestApi("POST", `/privacy/${userId.trim()}/memory/reset`, {
-          body: {
-            actorUserId: userId.trim(),
-            mode: "learned_memory",
-            reason: "admin_panel_manual_reset",
-          },
-        }),
-      "Learned memory reset completed.",
-      (payload) => setMemoryResetSnapshot(payload),
-    );
+  const {
+    deactivateUser,
+    restrictUser,
+    inspectLifeGraph,
+    explainPolicy,
+    resetLearnedMemory,
+  } = usePolicyAdminActions({
+    requestApi,
+    runAction,
+    setBanner,
+    userId,
+    deactivateReason,
+    restrictReason,
+    policyContextInput,
+    policyFlags,
+    setModerationSnapshot: moderation.setModerationSnapshot,
+    setLifeGraphSnapshot,
+    setPolicyExplainSnapshot,
+    setMemoryResetSnapshot,
+  });
 
   const {
     inspectAgentThread,
