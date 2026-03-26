@@ -13,6 +13,7 @@ import { useAgentStream } from "./components/workbench/useAgentStream";
 import { WorkbenchContent } from "./components/workbench/WorkbenchContent";
 import { useWorkbenchState } from "./components/workbench/useWorkbenchState";
 import { useModerationWorkbench } from "./components/workbench/useModerationWorkbench";
+import { useAdminSessionLifecycle } from "./components/workbench/useAdminSessionLifecycle";
 import {
   createHistoryId,
   errorText,
@@ -28,12 +29,6 @@ import {
   tabSubtitle,
 } from "./components/workbench/workbench-config";
 import {
-  clearAdminSession,
-  clearLegacyAdminApiKeyStorage,
-  loadAdminSession,
-  type AdminSession,
-} from "./lib/admin-session";
-import {
   adminButtonClass,
   adminButtonDangerClass,
   adminButtonGhostClass,
@@ -41,10 +36,6 @@ import {
   adminLabelClass,
 } from "./lib/admin-ui";
 import { type AppLocale, supportedLocales, t } from "./lib/i18n";
-import {
-  configureAdminApiAuthLifecycle,
-  fetchGoogleOAuthStartUrl,
-} from "./lib/api";
 
 interface DeadLetterRow {
   id: string;
@@ -63,12 +54,6 @@ function AdminHomeContent() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [locale, setLocale] = useState<AppLocale>("en");
-  const [sessionHydrated, setSessionHydrated] = useState(false);
-  const [signedInSession, setSignedInSession] = useState<AdminSession | null>(
-    null,
-  );
-  const [signInError, setSignInError] = useState<string | null>(null);
-
   const {
     DEFAULT_UUID,
     activeTab,
@@ -235,6 +220,17 @@ function AdminHomeContent() {
     [deadLetters.length, health, relayCount],
   );
 
+  const {
+    sessionHydrated,
+    signedInSession,
+    signInError,
+    signOut,
+    startGoogleSignIn,
+  } = useAdminSessionLifecycle({
+    defaultAdminUserId: DEFAULT_UUID,
+    setAdminUserId,
+  });
+
   const { requestApi, requestApiNullable, runAction } = useAdminApiActions({
     accessToken: signedInSession?.accessToken,
     adminRole,
@@ -260,6 +256,12 @@ function AdminHomeContent() {
   );
 
   useEffect(() => {
+    if (!signedInSession) {
+      stopAgentStream();
+    }
+  }, [signedInSession, stopAgentStream]);
+
+  useEffect(() => {
     if (typeof window === "undefined") {
       return;
     }
@@ -276,33 +278,6 @@ function AdminHomeContent() {
     window.localStorage.setItem(ADMIN_LOCALE_STORAGE_KEY, locale);
   }, [locale]);
 
-  useEffect(() => {
-    configureAdminApiAuthLifecycle({
-      onSessionRefreshed: (tokens) => {
-        setSignedInSession((current) => {
-          if (!current) {
-            return current;
-          }
-          return {
-            ...current,
-            ...tokens,
-          };
-        });
-      },
-      onAuthFailure: () => {
-        stopAgentStream();
-        clearAdminSession();
-        setSignedInSession(null);
-        setAdminUserId(DEFAULT_UUID);
-        setSignInError("Session expired. Sign in again.");
-      },
-    });
-
-    return () => {
-      configureAdminApiAuthLifecycle({});
-    };
-  }, []);
-
   const refreshHealth = async () => {
     try {
       const payload = await requestApi<{ service: string; status: string }>(
@@ -314,16 +289,6 @@ function AdminHomeContent() {
       setHealth(`error:${errorText(error)}`);
     }
   };
-
-  useEffect(() => {
-    clearLegacyAdminApiKeyStorage();
-    const session = loadAdminSession();
-    setSignedInSession(session);
-    if (session) {
-      setAdminUserId(session.userId);
-    }
-    setSessionHydrated(true);
-  }, []);
 
   useEffect(() => {
     if (!sessionHydrated || !signedInSession) {
@@ -1103,16 +1068,7 @@ function AdminHomeContent() {
 
   if (!signedInSession) {
     return (
-      <AdminSignIn
-        errorText={signInError}
-        onGoogleSignIn={async () => {
-          setSignInError(null);
-          const url = await fetchGoogleOAuthStartUrl(
-            `${window.location.origin}/auth/callback`,
-          );
-          window.location.assign(url);
-        }}
-      />
+      <AdminSignIn errorText={signInError} onGoogleSignIn={startGoogleSignIn} />
     );
   }
 
@@ -1133,11 +1089,7 @@ function AdminHomeContent() {
       localeSpanishLabel={t("spanish", locale)}
       onNavigate={(id) => setActiveTab(id as AdminTab)}
       onLocaleChange={setLocale}
-      onSignOut={() => {
-        clearAdminSession();
-        setSignedInSession(null);
-        setAdminUserId(DEFAULT_UUID);
-      }}
+      onSignOut={signOut}
       operatorContextNote={t("operatorContextNote", locale)}
       readyLabel={t("ready", locale)}
       sessionLabel={sessionLabel}
