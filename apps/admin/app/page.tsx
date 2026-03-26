@@ -456,6 +456,13 @@ function AdminHomeContent() {
       userId,
       widenIntent,
     },
+    moderationProps: {
+      adminButtonClass,
+      adminButtonGhostClass,
+      adminInputClass,
+      adminLabelClass,
+      ...moderation,
+    },
     overviewProps: {
       adminButtonClass,
       adminButtonGhostClass,
@@ -600,13 +607,6 @@ function AdminHomeContent() {
       <WorkbenchContent
         activeTab={activeTab}
         banner={banner}
-        moderationProps={{
-          adminButtonClass,
-          adminButtonGhostClass,
-          adminInputClass,
-          adminLabelClass,
-          ...moderation,
-        }}
         tabSubtitle={tabSubtitle}
         {...workbenchTabProps}
       />

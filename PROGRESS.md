@@ -50,6 +50,7 @@ Last verified: 2026-03-20
 | AM-06 Extract policy/moderation account action hook | [x] | Codex | `pnpm --filter @opensocial/admin typecheck && pnpm --filter @opensocial/admin lint` | `apps/admin/app/components/workbench/usePolicyAdminActions.ts` + `apps/admin/app/page.tsx` | 2026-03-26 |
 | AM-07 Reduce tab prop monolith via moderation prop spread | [x] | Codex | `pnpm --filter @opensocial/admin typecheck && pnpm --filter @opensocial/admin lint` | `apps/admin/app/page.tsx` (`moderationProps` now uses `...moderation`) | 2026-03-26 |
 | AM-08 Extract Workbench tab-prop composition out of JSX | [x] | Codex | `pnpm --filter @opensocial/admin typecheck && pnpm --filter @opensocial/admin lint` | `apps/admin/app/components/workbench/buildWorkbenchTabProps.ts` + `apps/admin/app/page.tsx` | 2026-03-26 |
+| AM-09 Move moderation props into shared tab-prop builder | [x] | Codex | `pnpm --filter @opensocial/admin typecheck && pnpm --filter @opensocial/admin lint` | `apps/admin/app/components/workbench/buildWorkbenchTabProps.ts` + `apps/admin/app/page.tsx` | 2026-03-26 |
 
 ### Agentic Backend Master Queue
 - [x] `ATS-00` Domain coverage matrix and product-policy decision matrix
