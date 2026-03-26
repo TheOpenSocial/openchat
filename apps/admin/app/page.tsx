@@ -14,6 +14,7 @@ import { WorkbenchContent } from "./components/workbench/WorkbenchContent";
 import { useWorkbenchState } from "./components/workbench/useWorkbenchState";
 import { useModerationWorkbench } from "./components/workbench/useModerationWorkbench";
 import { useAdminSessionLifecycle } from "./components/workbench/useAdminSessionLifecycle";
+import { useOpsSnapshotsActions } from "./components/workbench/useOpsSnapshotsActions";
 import {
   createHistoryId,
   errorText,
@@ -23,8 +24,6 @@ import {
 } from "./components/workbench/workbench-utils";
 import {
   type AdminTab,
-  type LlmRuntimeHealthSnapshot,
-  type OnboardingActivationSnapshot,
   tabConfig,
   tabSubtitle,
 } from "./components/workbench/workbench-config";
@@ -36,15 +35,6 @@ import {
   adminLabelClass,
 } from "./lib/admin-ui";
 import { type AppLocale, supportedLocales, t } from "./lib/i18n";
-
-interface DeadLetterRow {
-  id: string;
-  queueName: string;
-  jobName: string;
-  attempts: number;
-  lastError: string;
-  createdAt: string;
-}
 
 const DEBUG_HISTORY_LIMIT = 20;
 const ADMIN_LOCALE_STORAGE_KEY = "opensocial.admin.locale.v1";
@@ -239,6 +229,23 @@ function AdminHomeContent() {
     setBanner,
   });
 
+  const {
+    refreshHealth,
+    loadDeadLetters,
+    replayDeadLetter,
+    relayOutbox,
+    loadOnboardingActivationSnapshot,
+    loadLlmRuntimeHealthSnapshot,
+  } = useOpsSnapshotsActions({
+    requestApi,
+    runAction,
+    setHealth,
+    setDeadLetters,
+    setRelayCount,
+    setOnboardingActivationSnapshot,
+    setLlmRuntimeHealthSnapshot,
+  });
+
   const { startAgentStream, stopAgentStream } = useAgentStream({
     accessToken: signedInSession?.accessToken,
     setBanner,
@@ -278,18 +285,6 @@ function AdminHomeContent() {
     window.localStorage.setItem(ADMIN_LOCALE_STORAGE_KEY, locale);
   }, [locale]);
 
-  const refreshHealth = async () => {
-    try {
-      const payload = await requestApi<{ service: string; status: string }>(
-        "GET",
-        "/admin/health",
-      );
-      setHealth(`${payload.service}:${payload.status}`);
-    } catch (error) {
-      setHealth(`error:${errorText(error)}`);
-    }
-  };
-
   useEffect(() => {
     if (!sessionHydrated || !signedInSession) {
       return;
@@ -301,72 +296,7 @@ function AdminHomeContent() {
     }, 15_000);
 
     return () => clearInterval(timer);
-  }, [sessionHydrated, signedInSession]);
-
-  const loadDeadLetters = () =>
-    runAction(
-      "Load dead letters",
-      () => requestApi<DeadLetterRow[]>("GET", "/admin/jobs/dead-letters"),
-      (rows) => `Loaded ${rows.length} dead-letter rows.`,
-      (rows) => setDeadLetters(rows),
-    );
-
-  const replayDeadLetter = (deadLetterId: string) =>
-    runAction(
-      "Replay dead letter",
-      async () => {
-        await requestApi(
-          "POST",
-          `/admin/jobs/dead-letters/${deadLetterId}/replay`,
-          {
-            body: {},
-          },
-        );
-        return requestApi<DeadLetterRow[]>("GET", "/admin/jobs/dead-letters");
-      },
-      "Replay requested and dead-letter list refreshed.",
-      (rows) => setDeadLetters(rows),
-    );
-
-  const relayOutbox = () =>
-    runAction(
-      "Relay outbox",
-      () =>
-        requestApi<{ processedCount: number }>("POST", "/admin/outbox/relay", {
-          body: {},
-        }),
-      (result) => `Outbox relay processed ${result.processedCount} event(s).`,
-      (result) => setRelayCount(result.processedCount),
-    );
-
-  const loadOnboardingActivationSnapshot = () =>
-    runAction(
-      "Load onboarding activation snapshot",
-      () =>
-        requestApi<OnboardingActivationSnapshot>(
-          "GET",
-          "/admin/ops/onboarding-activation",
-          {
-            query: {
-              hours: 24,
-            },
-          },
-        ),
-      "Onboarding activation snapshot refreshed.",
-      (snapshot) => setOnboardingActivationSnapshot(snapshot),
-    );
-
-  const loadLlmRuntimeHealthSnapshot = () =>
-    runAction(
-      "Load LLM runtime health snapshot",
-      () =>
-        requestApi<LlmRuntimeHealthSnapshot>(
-          "GET",
-          "/admin/ops/llm-runtime-health",
-        ),
-      "LLM runtime health refreshed.",
-      (snapshot) => setLlmRuntimeHealthSnapshot(snapshot),
-    );
+  }, [refreshHealth, sessionHydrated, signedInSession]);
 
   const inspectUser = () =>
     runAction(

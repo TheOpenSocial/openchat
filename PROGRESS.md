@@ -43,6 +43,7 @@ Last verified: 2026-03-20
 | Milestone | Status | Owner | Evidence Command | Artifact | Last Updated |
 | --- | --- | --- | --- | --- | --- |
 | AM-01 Create extraction map and safety guardrails | [x] | Codex | `pnpm --filter @opensocial/admin typecheck` | `apps/admin/app/components/workbench/ADMIN_MONOLITH_REFACTOR_PLAN.md` | 2026-03-26 |
+| AM-02 Extract ops snapshot/action orchestration hook | [x] | Codex | `pnpm --filter @opensocial/admin typecheck && pnpm --filter @opensocial/admin lint` | `apps/admin/app/components/workbench/useOpsSnapshotsActions.ts` + `apps/admin/app/page.tsx` | 2026-03-26 |
 
 ### Agentic Backend Master Queue
 - [x] `ATS-00` Domain coverage matrix and product-policy decision matrix
