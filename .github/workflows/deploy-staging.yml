@@ -34,54 +34,104 @@ env:
 
 jobs:
   deploy-staging:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, opensocial-prod]
     environment: staging
     concurrency:
       group: deploy-staging
       cancel-in-progress: false
+    env:
+      LOCAL_DEPLOY: "1"
+      DEPLOY_PATH: ${{ secrets.STAGING_DEPLOY_PATH }}
+      REMOTE_ENV_FILE: .env.production
+      DEPLOY_MODE: ${{ inputs.deploy_mode }}
+      API_IMAGE: ${{ inputs.api_image }}
+      ADMIN_IMAGE: ${{ inputs.admin_image }}
+      WEB_IMAGE: ${{ inputs.web_image }}
+      REGISTRY_HOST: ghcr.io
+      REGISTRY_USERNAME: ${{ secrets.GHCR_USERNAME }}
+      REGISTRY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      ONBOARDING_LLM_MODEL: ${{ secrets.ONBOARDING_LLM_MODEL }}
+      ONBOARDING_LLM_FAST_MODEL: ${{ secrets.ONBOARDING_LLM_FAST_MODEL }}
+      ONBOARDING_LLM_RICH_MODEL: ${{ secrets.ONBOARDING_LLM_RICH_MODEL }}
+      ONBOARDING_LLM_TIMEOUT_MS: ${{ secrets.ONBOARDING_LLM_TIMEOUT_MS }}
+      ONBOARDING_LLM_RICH_TIMEOUT_MS: ${{ secrets.ONBOARDING_LLM_RICH_TIMEOUT_MS }}
+      ONBOARDING_PROBE_TOKEN: ${{ secrets.ONBOARDING_PROBE_TOKEN }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      GOOGLE_REDIRECT_URI: https://api.opensocial.so/api/auth/google/callback
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Prepare SSH key
+      - name: Sync deploy workspace
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p ~/.ssh
-          echo "${STAGING_SSH_KEY}" > ~/.ssh/staging_key
-          chmod 600 ~/.ssh/staging_key
-        env:
-          STAGING_SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+          chmod +x scripts/deploy-production.sh
+          DEPLOY_PHASE=sync ./scripts/deploy-production.sh
 
-      - name: Deploy to staging
+      - name: Registry login
+        if: ${{ inputs.deploy_mode == 'images' }}
         shell: bash
-        env:
-          DEPLOY_HOST: ${{ secrets.STAGING_HOST }}
-          DEPLOY_USER: ${{ secrets.STAGING_USER }}
-          DEPLOY_PATH: ${{ secrets.STAGING_DEPLOY_PATH }}
-          SSH_KEY_PATH: ~/.ssh/staging_key
-          DEPLOY_MODE: ${{ inputs.deploy_mode }}
-          API_IMAGE: ${{ inputs.api_image }}
-          ADMIN_IMAGE: ${{ inputs.admin_image }}
-          WEB_IMAGE: ${{ inputs.web_image }}
-          REGISTRY_HOST: ghcr.io
-          REGISTRY_USERNAME: ${{ secrets.GHCR_USERNAME }}
-          REGISTRY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          ONBOARDING_LLM_MODEL: ${{ secrets.ONBOARDING_LLM_MODEL }}
-          ONBOARDING_LLM_FAST_MODEL: ${{ secrets.ONBOARDING_LLM_FAST_MODEL }}
-          ONBOARDING_LLM_RICH_MODEL: ${{ secrets.ONBOARDING_LLM_RICH_MODEL }}
-          ONBOARDING_LLM_TIMEOUT_MS: ${{ secrets.ONBOARDING_LLM_TIMEOUT_MS }}
-          ONBOARDING_LLM_RICH_TIMEOUT_MS: ${{ secrets.ONBOARDING_LLM_RICH_TIMEOUT_MS }}
-          ONBOARDING_PROBE_TOKEN: ${{ secrets.ONBOARDING_PROBE_TOKEN }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
-          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-          GOOGLE_REDIRECT_URI: https://api.opensocial.so/api/auth/google/callback
         run: |
           set -euo pipefail
-          chmod +x scripts/deploy-staging.sh
-          ./scripts/deploy-staging.sh
+          chmod +x scripts/deploy-production.sh
+          DEPLOY_PHASE=registry-login ./scripts/deploy-production.sh
+
+      - name: Pull API image
+        if: ${{ inputs.deploy_mode == 'images' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x scripts/deploy-production.sh
+          DEPLOY_PHASE=pull-api ./scripts/deploy-production.sh
+
+      - name: Pull admin image
+        if: ${{ inputs.deploy_mode == 'images' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x scripts/deploy-production.sh
+          DEPLOY_PHASE=pull-admin ./scripts/deploy-production.sh
+
+      - name: Pull web image
+        if: ${{ inputs.deploy_mode == 'images' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x scripts/deploy-production.sh
+          DEPLOY_PHASE=pull-web ./scripts/deploy-production.sh
+
+      - name: Build services
+        if: ${{ inputs.deploy_mode != 'images' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x scripts/deploy-production.sh
+          DEPLOY_PHASE=pull-or-build ./scripts/deploy-production.sh
+
+      - name: Run API migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x scripts/deploy-production.sh
+          DEPLOY_PHASE=migrate ./scripts/deploy-production.sh
+
+      - name: Start staging services
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x scripts/deploy-production.sh
+          DEPLOY_PHASE=up ./scripts/deploy-production.sh
+
+      - name: Show service status
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x scripts/deploy-production.sh
+          DEPLOY_PHASE=ps ./scripts/deploy-production.sh
 
       - name: Setup Node (post-deploy verification)
         if: ${{ inputs.run_post_deploy_verification }}
