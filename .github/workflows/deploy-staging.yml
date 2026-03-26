@@ -74,6 +74,15 @@ jobs:
           chmod +x scripts/deploy-production.sh
           DEPLOY_PHASE=sync ./scripts/deploy-production.sh
 
+      - name: Reclaim docker space on runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker system df || true
+          docker builder prune -af || true
+          docker image prune -af || true
+          docker system df || true
+
       - name: Registry login
         if: ${{ inputs.deploy_mode == 'images' }}
         shell: bash
