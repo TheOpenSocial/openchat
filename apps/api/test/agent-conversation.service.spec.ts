@@ -244,6 +244,32 @@ function createServiceHarness() {
       nextRunAt: new Date("2026-03-21T18:00:00.000Z").toISOString(),
       status: "active",
     }),
+    evaluateNegotiation: vi.fn().mockResolvedValue({
+      evaluated: true,
+      domain: "social",
+      mode: "async",
+      decision: "defer_async",
+      confidence: 0.71,
+      summary: "Promising but better to follow up asynchronously.",
+      reasons: ["compatibility=0.71"],
+      nextActions: [
+        {
+          type: "followup.schedule",
+          reason: "Potential fit but not strong enough for immediate intro.",
+        },
+      ],
+      scoreBreakdown: {
+        compatibility: 0.71,
+        trust: 0.78,
+        availability: 0.66,
+        language: 1,
+        location: 0.8,
+        constraints: 0.6,
+        offer: 0.65,
+      },
+      bounded: true,
+      roundsUsed: 1,
+    }),
   };
 
   const service = new AgentConversationService(
@@ -749,6 +775,120 @@ describe("AgentConversationService", () => {
     );
   });
 
+  it("executes bounded negotiation evaluation and records the decision", async () => {
+    const { service, openai, agentOutcomeToolsService, agentService } =
+      createServiceHarness();
+
+    agentOutcomeToolsService.evaluateNegotiation.mockResolvedValueOnce({
+      evaluated: true,
+      domain: "commerce",
+      mode: "async",
+      decision: "propose_intro",
+      confidence: 0.82,
+      summary: "Strong buyer-seller fit. Intro is recommended.",
+      reasons: ["compatibility=0.82", "offer=0.84"],
+      nextActions: [
+        {
+          type: "intro.send_request",
+          reason: "High trust and offer alignment.",
+        },
+      ],
+      scoreBreakdown: {
+        compatibility: 0.82,
+        trust: 0.79,
+        availability: 0.6,
+        language: 1,
+        location: 0.7,
+        constraints: 0.74,
+        offer: 0.84,
+      },
+      bounded: true,
+      roundsUsed: 1,
+    });
+
+    openai.planConversationTurn.mockResolvedValueOnce({
+      specialists: ["intent_parser", "manager"],
+      toolCalls: [
+        {
+          role: "manager",
+          tool: "negotiation.evaluate",
+          input: {
+            domain: "commerce",
+            mode: "async",
+            intentSummary:
+              "I want to buy a used road bike around 400 USD and negotiate the best seller match.",
+            requester: {
+              itemInterests: ["road bike"],
+              priceRange: {
+                min: 300,
+                max: 450,
+                currency: "USD",
+              },
+            },
+            counterpart: {
+              userId: "seller-1",
+              displayName: "Seller One",
+              itemInterests: ["road bike", "cycling"],
+              askingPrice: 410,
+              languages: ["en"],
+              country: "AR",
+              city: "Buenos Aires",
+              trustScore: 79,
+            },
+          },
+        },
+      ],
+      responseGoal: "evaluate fit before sending any visible intro action",
+    });
+    openai.composeConversationResponse.mockResolvedValueOnce(
+      "Great fit. I can move forward with a seller intro.",
+    );
+
+    await service.runAgenticTurn({
+      threadId: IDS.threadId,
+      userId: IDS.userId,
+      content:
+        "I want to buy a used road bike around 400 USD and negotiate the best seller match with a scheduled follow-up.",
+      traceId: "trace-agentic-negotiation",
+    });
+
+    expect(agentOutcomeToolsService.evaluateNegotiation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: IDS.userId,
+        traceId: "trace-agentic-negotiation",
+        packet: expect.objectContaining({
+          domain: "commerce",
+          mode: "async",
+          intentSummary:
+            "I want to buy a used road bike around 400 USD and negotiate the best seller match.",
+          requester: expect.objectContaining({
+            userId: IDS.userId,
+            itemInterests: ["road bike"],
+            priceRange: expect.objectContaining({
+              min: 300,
+              max: 450,
+              currency: "USD",
+            }),
+          }),
+          counterpart: expect.objectContaining({
+            userId: "seller-1",
+            displayName: "Seller One",
+            askingPrice: 410,
+          }),
+        }),
+      }),
+    );
+    expect(agentService.appendWorkflowUpdate).toHaveBeenCalledWith(
+      IDS.threadId,
+      "Negotiation decision: propose intro.",
+      expect.objectContaining({
+        category: "agent_tool_action",
+        traceId: "trace-agentic-negotiation",
+        tool: "negotiation.evaluate",
+      }),
+    );
+  });
+
   it("runs independent tools and specialists in parallel", async () => {
     const { service, openai } = createServiceHarness();
     const toolOne = createDeferred<{
@@ -1172,6 +1312,46 @@ describe("AgentConversationService", () => {
         stage: "fast_path_selected",
       }),
     );
+  });
+
+  it("keeps risk-assessment orchestration stages out of persisted thread history", async () => {
+    const { service, agentService, openai } = createServiceHarness();
+
+    openai.planConversationTurn.mockResolvedValueOnce({
+      specialists: ["intent_parser"],
+      toolCalls: [],
+      responseGoal: "answer clearly",
+    });
+    openai.composeConversationResponse.mockResolvedValueOnce(
+      "I’ll help with this right away.",
+    );
+
+    await service.runAgenticTurn({
+      threadId: IDS.threadId,
+      userId: IDS.userId,
+      content: "Need help finding a match",
+      traceId: "trace-agentic-risk-ephemeral",
+    });
+
+    const persistedRiskStages = agentService.appendWorkflowUpdate.mock.calls
+      .map((call: unknown[]) => call[2] as { stage?: string } | undefined)
+      .filter(
+        (meta: { stage?: string } | undefined) =>
+          meta?.stage === "risk_assessment_pre_tools" ||
+          meta?.stage === "risk_assessment_pre_send" ||
+          meta?.stage === "response_sanitized",
+      );
+    expect(persistedRiskStages).toHaveLength(0);
+
+    const ephemeralRiskStages =
+      agentService.appendEphemeralWorkflowUpdate.mock.calls
+        .map((call: unknown[]) => call[2] as { stage?: string } | undefined)
+        .filter(
+          (meta: { stage?: string } | undefined) =>
+            meta?.stage === "risk_assessment_pre_tools" ||
+            meta?.stage === "risk_assessment_pre_send",
+        );
+    expect(ephemeralRiskStages.length).toBeGreaterThan(0);
   });
 
   it("denies tool execution when the pre-tool risk gate is blocked", async () => {

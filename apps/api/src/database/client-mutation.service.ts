@@ -2,12 +2,15 @@ import {
   ConflictException,
   Injectable,
   InternalServerErrorException,
+  Logger,
 } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "./prisma.service.js";
 
 @Injectable()
 export class ClientMutationService {
+  private readonly logger = new Logger(ClientMutationService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   async run<T>(input: {
@@ -21,63 +24,98 @@ export class ClientMutationService {
     }
     const idempotencyKey = input.idempotencyKey;
 
-    const existing = await this.prisma.clientMutation.findUnique({
-      where: {
-        userId_scope_idempotencyKey: {
-          userId: input.userId,
-          scope: input.scope,
-          idempotencyKey,
+    let existing: {
+      status: string;
+      responseBody: Prisma.JsonValue | null;
+    } | null = null;
+    try {
+      existing = await this.prisma.clientMutation.findUnique({
+        where: {
+          userId_scope_idempotencyKey: {
+            userId: input.userId,
+            scope: input.scope,
+            idempotencyKey,
+          },
         },
-      },
-    });
+      });
+    } catch (error) {
+      if (this.isIdempotencyStoreUnavailable(error)) {
+        this.logStoreUnavailable("findUnique", error, input.scope);
+        return input.handler();
+      }
+      throw error;
+    }
     const cached = this.readCompletedResponse<T>(existing);
     if (cached.found) {
       return cached.value;
     }
 
-    const claim = await this.claimMutation<T>({
-      userId: input.userId,
-      scope: input.scope,
-      idempotencyKey,
-    });
+    let claim: Awaited<ReturnType<typeof this.claimMutation<T>>>;
+    try {
+      claim = await this.claimMutation<T>({
+        userId: input.userId,
+        scope: input.scope,
+        idempotencyKey,
+      });
+    } catch (error) {
+      if (this.isIdempotencyStoreUnavailable(error)) {
+        this.logStoreUnavailable("claim", error, input.scope);
+        return input.handler();
+      }
+      throw error;
+    }
     if (claim.execute === false) {
       return claim.cachedValue;
     }
 
     try {
       const result = await input.handler();
-      await this.prisma.clientMutation.update({
-        where: {
-          userId_scope_idempotencyKey: {
-            userId: input.userId,
-            scope: input.scope,
-            idempotencyKey,
+      try {
+        await this.prisma.clientMutation.update({
+          where: {
+            userId_scope_idempotencyKey: {
+              userId: input.userId,
+              scope: input.scope,
+              idempotencyKey,
+            },
           },
-        },
-        data: {
-          status: "completed",
-          responseBody: this.serializeResult(result),
-          errorCode: null,
-          errorMessage: null,
-        },
-      });
+          data: {
+            status: "completed",
+            responseBody: this.serializeResult(result),
+            errorCode: null,
+            errorMessage: null,
+          },
+        });
+      } catch (error) {
+        if (!this.isIdempotencyStoreUnavailable(error)) {
+          throw error;
+        }
+        this.logStoreUnavailable("update_completed", error, input.scope);
+      }
       return result;
     } catch (error) {
-      await this.prisma.clientMutation.update({
-        where: {
-          userId_scope_idempotencyKey: {
-            userId: input.userId,
-            scope: input.scope,
-            idempotencyKey,
+      try {
+        await this.prisma.clientMutation.update({
+          where: {
+            userId_scope_idempotencyKey: {
+              userId: input.userId,
+              scope: input.scope,
+              idempotencyKey,
+            },
           },
-        },
-        data: {
-          status: "failed",
-          errorCode: this.readErrorCode(error),
-          errorMessage: this.readErrorMessage(error),
-          responseBody: Prisma.JsonNull,
-        },
-      });
+          data: {
+            status: "failed",
+            errorCode: this.readErrorCode(error),
+            errorMessage: this.readErrorMessage(error),
+            responseBody: Prisma.JsonNull,
+          },
+        });
+      } catch (updateError) {
+        if (!this.isIdempotencyStoreUnavailable(updateError)) {
+          throw updateError;
+        }
+        this.logStoreUnavailable("update_failed", updateError, input.scope);
+      }
       throw error;
     }
   }
@@ -199,6 +237,34 @@ export class ClientMutationService {
       error !== null &&
       "code" in error &&
       (error as { code?: unknown }).code === "P2002"
+    );
+  }
+
+  private isIdempotencyStoreUnavailable(error: unknown) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      typeof (error as { code?: unknown }).code === "string"
+    ) {
+      const code = (error as { code: string }).code;
+      return code === "P2021" || code === "P2022";
+    }
+    return false;
+  }
+
+  private logStoreUnavailable(
+    phase: "findUnique" | "claim" | "update_completed" | "update_failed",
+    error: unknown,
+    scope: string,
+  ) {
+    this.logger.warn(
+      JSON.stringify({
+        event: "client_mutation.store_unavailable",
+        phase,
+        scope,
+        code: this.readErrorCode(error),
+      }),
     );
   }
 }

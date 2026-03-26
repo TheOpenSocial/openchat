@@ -89,6 +89,11 @@ type SocialContextPacket = {
 @Injectable()
 export class AgentConversationService {
   private readonly logger = new Logger(AgentConversationService.name);
+  private readonly nonPersistentWorkflowStages = new Set([
+    "risk_assessment_pre_tools",
+    "risk_assessment_pre_send",
+    "response_sanitized",
+  ]);
   private readonly planTimeoutMs = Math.max(
     1000,
     Number(process.env.AGENT_LLM_PLAN_TIMEOUT_MS ?? 4000) || 4000,
@@ -1113,6 +1118,37 @@ export class AgentConversationService {
             output: result,
           };
         }
+        case "negotiation.evaluate": {
+          if (!this.agentOutcomeToolsService) {
+            return {
+              role: call.role,
+              tool: call.tool,
+              status: "failed",
+              reason: "agent_outcome_tools_unavailable",
+            };
+          }
+          const packet = this.coerceNegotiationPacket(userId, call.input);
+          if (!packet) {
+            return {
+              role: call.role,
+              tool: call.tool,
+              status: "failed",
+              reason: "missing_negotiation_packet",
+            };
+          }
+          const result =
+            await this.agentOutcomeToolsService.evaluateNegotiation({
+              userId,
+              traceId,
+              packet,
+            });
+          return {
+            role: call.role,
+            tool: call.tool,
+            status: "executed",
+            output: result,
+          };
+        }
         case "circle.search": {
           if (!this.agentOutcomeToolsService) {
             return {
@@ -1467,6 +1503,21 @@ export class AgentConversationService {
             context: this.coerceRecord(call.input.context),
             topics: this.readStringArray(call.input.topics),
             activities: this.readStringArray(call.input.activities),
+            traceId,
+            workflowRunId:
+              this.readString(call.input.workflowRunId) ?? undefined,
+            memoryClass:
+              this.readMemoryClass(call.input.memoryClass) ?? undefined,
+            memoryKey: this.readString(call.input.memoryKey) ?? undefined,
+            memoryValue: this.readString(call.input.memoryValue) ?? undefined,
+            confidence: this.readNumber(call.input.confidence),
+            safeWritePolicy:
+              this.readMemorySafeWritePolicy(call.input.safeWritePolicy) ??
+              undefined,
+            contradictionPolicy:
+              this.readMemoryContradictionPolicy(
+                call.input.contradictionPolicy,
+              ) ?? undefined,
           });
           return {
             role: call.role,
@@ -1983,6 +2034,7 @@ export class AgentConversationService {
       tool === "intent.parse" ||
       tool === "group.plan" ||
       tool === "intent.persist" ||
+      tool === "negotiation.evaluate" ||
       tool === "intro.send_request" ||
       tool === "intro.accept" ||
       tool === "intro.reject" ||
@@ -2098,6 +2150,11 @@ export class AgentConversationService {
       persisted: this.readTelemetryBoolean(value.persisted),
       planned: this.readTelemetryBoolean(value.planned),
       statusDetail: this.readTelemetryString(value.status),
+      decision: this.readTelemetryString(value.decision),
+      confidence: this.readTelemetryNumber(value.confidence),
+      domain: this.readTelemetryString(value.domain),
+      mode: this.readTelemetryString(value.mode),
+      evaluated: this.readTelemetryBoolean(value.evaluated),
     };
   }
 
@@ -2109,10 +2166,15 @@ export class AgentConversationService {
     return typeof value === "boolean" ? value : null;
   }
 
+  private readTelemetryNumber(value: unknown) {
+    return typeof value === "number" && Number.isFinite(value) ? value : null;
+  }
+
   private isVisibleSocialActionTool(tool: AgentTool) {
     return (
       tool === "intent.persist" ||
       tool === "group.plan" ||
+      tool === "negotiation.evaluate" ||
       tool === "intro.send_request" ||
       tool === "intro.accept" ||
       tool === "intro.reject" ||
@@ -2146,6 +2208,10 @@ export class AgentConversationService {
         return typeof output.groupSizeTarget === "number"
           ? `Created a group plan targeting ${output.groupSizeTarget} people.`
           : "Created a group plan for this social goal.";
+      case "negotiation.evaluate":
+        return typeof output.decision === "string"
+          ? `Negotiation decision: ${output.decision.replaceAll("_", " ")}.`
+          : "Completed a bounded negotiation evaluation.";
       case "intro.send_request":
         return typeof output.requestId === "string"
           ? `Sent an intro request (${output.requestId}).`
@@ -2198,6 +2264,11 @@ export class AgentConversationService {
       "title",
       "status",
       "groupSizeTarget",
+      "decision",
+      "confidence",
+      "domain",
+      "mode",
+      "evaluated",
       "queued",
       "nextRunAt",
       "nextSessionAt",
@@ -2433,6 +2504,207 @@ export class AgentConversationService {
     };
   }
 
+  private coerceNegotiationPacket(
+    userId: string,
+    value: Record<string, unknown>,
+  ):
+    | {
+        id?: string;
+        domain: "social" | "commerce";
+        mode: "sync" | "async";
+        intentSummary: string;
+        requester: {
+          userId: string;
+          displayName?: string;
+          country?: string;
+          city?: string;
+          languages: string[];
+          trustScore?: number;
+          availabilityMode?:
+            | "now"
+            | "later_today"
+            | "flexible"
+            | "away"
+            | "invisible";
+          objectives: string[];
+          constraints: string[];
+          itemInterests: string[];
+          priceRange?: {
+            min: number;
+            max: number;
+            currency?: string;
+          };
+        };
+        counterpart: {
+          userId?: string;
+          displayName?: string;
+          country?: string;
+          city?: string;
+          languages: string[];
+          trustScore?: number;
+          availabilityMode?:
+            | "now"
+            | "later_today"
+            | "flexible"
+            | "away"
+            | "invisible";
+          objectives: string[];
+          constraints: string[];
+          itemInterests: string[];
+          askingPrice?: number;
+          priceRange?: {
+            min: number;
+            max: number;
+            currency?: string;
+          };
+        };
+        policyFlags: Array<
+          | "blocked"
+          | "reported"
+          | "under_review"
+          | "trust_low"
+          | "suspected_spam"
+          | "unsafe_goods"
+        >;
+        metadata: Record<string, unknown>;
+      }
+    | undefined {
+    const packetRecord = this.coerceRecord(value.packet) ?? value;
+    if (!packetRecord) {
+      return undefined;
+    }
+
+    const requesterRecord = this.coerceRecord(packetRecord.requester) ?? {};
+    const counterpartRecord = this.coerceRecord(packetRecord.counterpart) ?? {};
+    const intentSummary =
+      this.readString(packetRecord.intentSummary) ??
+      this.readString(packetRecord.text) ??
+      this.readString(packetRecord.intentText) ??
+      "";
+    if (!intentSummary) {
+      return undefined;
+    }
+
+    const domain = this.readNegotiationDomain(packetRecord.domain) ?? "social";
+    const mode = this.readNegotiationMode(packetRecord.mode) ?? "async";
+    const requesterPriceRange = this.coercePriceRange(
+      requesterRecord.priceRange ?? packetRecord.requesterPriceRange,
+    );
+    const counterpartPriceRange = this.coercePriceRange(
+      counterpartRecord.priceRange ?? packetRecord.counterpartPriceRange,
+    );
+    const counterpartTrust = this.readNumberInRange(
+      counterpartRecord.trustScore ?? packetRecord.counterpartTrustScore,
+      0,
+      100,
+    );
+    const requesterTrust = this.readNumberInRange(
+      requesterRecord.trustScore ?? packetRecord.requesterTrustScore,
+      0,
+      100,
+    );
+    const counterpartAskingPrice = this.readNumberInRange(
+      counterpartRecord.askingPrice ?? packetRecord.askingPrice,
+      0,
+      100_000_000,
+    );
+
+    const policyFlags =
+      this.readStringArray(packetRecord.policyFlags ?? value.policyFlags)
+        ?.map((entry) => this.readNegotiationPolicyFlag(entry))
+        .filter(
+          (
+            entry,
+          ): entry is
+            | "blocked"
+            | "reported"
+            | "under_review"
+            | "trust_low"
+            | "suspected_spam"
+            | "unsafe_goods" => Boolean(entry),
+        ) ?? [];
+
+    return {
+      id: this.readString(packetRecord.id) ?? undefined,
+      domain,
+      mode,
+      intentSummary: intentSummary.slice(0, 500),
+      requester: {
+        userId,
+        displayName: this.readString(requesterRecord.displayName) ?? undefined,
+        country: this.readString(requesterRecord.country) ?? undefined,
+        city: this.readString(requesterRecord.city) ?? undefined,
+        languages: this.readStringArray(requesterRecord.languages) ?? [],
+        trustScore: requesterTrust,
+        availabilityMode:
+          this.readAvailabilityMode(requesterRecord.availabilityMode) ??
+          undefined,
+        objectives: this.readStringArray(requesterRecord.objectives) ?? [],
+        constraints: this.readStringArray(requesterRecord.constraints) ?? [],
+        itemInterests:
+          this.readStringArray(requesterRecord.itemInterests) ?? [],
+        priceRange: requesterPriceRange,
+      },
+      counterpart: {
+        userId:
+          this.readString(counterpartRecord.userId) ??
+          this.readString(packetRecord.candidateUserId) ??
+          undefined,
+        displayName:
+          this.readString(counterpartRecord.displayName) ??
+          this.readString(packetRecord.candidateDisplayName) ??
+          undefined,
+        country:
+          this.readString(counterpartRecord.country) ??
+          this.readString(packetRecord.candidateCountry) ??
+          undefined,
+        city:
+          this.readString(counterpartRecord.city) ??
+          this.readString(packetRecord.candidateCity) ??
+          undefined,
+        languages:
+          this.readStringArray(counterpartRecord.languages) ??
+          this.readStringArray(packetRecord.candidateLanguages) ??
+          [],
+        trustScore: counterpartTrust,
+        availabilityMode:
+          this.readAvailabilityMode(
+            counterpartRecord.availabilityMode ??
+              packetRecord.candidateAvailabilityMode,
+          ) ?? undefined,
+        objectives: this.readStringArray(counterpartRecord.objectives) ?? [],
+        constraints: this.readStringArray(counterpartRecord.constraints) ?? [],
+        itemInterests:
+          this.readStringArray(counterpartRecord.itemInterests) ??
+          this.readStringArray(packetRecord.candidateItemInterests) ??
+          [],
+        askingPrice: counterpartAskingPrice,
+        priceRange: counterpartPriceRange,
+      },
+      policyFlags,
+      metadata: this.coerceRecord(packetRecord.metadata) ?? {},
+    };
+  }
+
+  private coercePriceRange(
+    value: unknown,
+  ): { min: number; max: number; currency?: string } | undefined {
+    const record = this.coerceRecord(value);
+    if (!record) {
+      return undefined;
+    }
+    const min = this.readNumberInRange(record.min, 0, 100_000_000);
+    const max = this.readNumberInRange(record.max, 0, 100_000_000);
+    if (min === undefined || max === undefined || max < min) {
+      return undefined;
+    }
+    return {
+      min,
+      max,
+      currency: this.readString(record.currency) ?? undefined,
+    };
+  }
+
   private coerceProfilePatch(value: unknown):
     | {
         displayName?: string;
@@ -2625,6 +2897,69 @@ export class AgentConversationService {
     return Math.min(Math.max(asInt, min), max);
   }
 
+  private readNumberInRange(value: unknown, min: number, max: number) {
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      return undefined;
+    }
+    return Math.min(Math.max(value, min), max);
+  }
+
+  private readNegotiationDomain(value: unknown): "social" | "commerce" | null {
+    const parsed = this.readString(value);
+    if (parsed === "social" || parsed === "commerce") {
+      return parsed;
+    }
+    return null;
+  }
+
+  private readNegotiationMode(value: unknown): "sync" | "async" | null {
+    const parsed = this.readString(value);
+    if (parsed === "sync" || parsed === "async") {
+      return parsed;
+    }
+    return null;
+  }
+
+  private readNegotiationPolicyFlag(
+    value: unknown,
+  ):
+    | "blocked"
+    | "reported"
+    | "under_review"
+    | "trust_low"
+    | "suspected_spam"
+    | "unsafe_goods"
+    | null {
+    const parsed = this.readString(value);
+    if (
+      parsed === "blocked" ||
+      parsed === "reported" ||
+      parsed === "under_review" ||
+      parsed === "trust_low" ||
+      parsed === "suspected_spam" ||
+      parsed === "unsafe_goods"
+    ) {
+      return parsed;
+    }
+    return null;
+  }
+
+  private readAvailabilityMode(
+    value: unknown,
+  ): "now" | "later_today" | "flexible" | "away" | "invisible" | null {
+    const parsed = this.readString(value);
+    if (
+      parsed === "now" ||
+      parsed === "later_today" ||
+      parsed === "flexible" ||
+      parsed === "away" ||
+      parsed === "invisible"
+    ) {
+      return parsed;
+    }
+    return null;
+  }
+
   private readTone(value: unknown): "neutral" | "friendly" | "urgent" {
     if (value === "friendly" || value === "urgent") {
       return value;
@@ -2733,7 +3068,73 @@ export class AgentConversationService {
     return trimmed.length > 0 ? trimmed : null;
   }
 
+  private readNumber(value: unknown) {
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      return undefined;
+    }
+    return Math.min(Math.max(value, 0), 1);
+  }
+
+  private readMemoryClass(
+    value: unknown,
+  ):
+    | "profile_memory"
+    | "stable_preference"
+    | "inferred_preference"
+    | "relationship_history"
+    | "safety_memory"
+    | "commerce_memory"
+    | "interaction_summary"
+    | "transient_working_memory"
+    | null {
+    const parsed = this.readString(value);
+    if (
+      parsed === "profile_memory" ||
+      parsed === "stable_preference" ||
+      parsed === "inferred_preference" ||
+      parsed === "relationship_history" ||
+      parsed === "safety_memory" ||
+      parsed === "commerce_memory" ||
+      parsed === "interaction_summary" ||
+      parsed === "transient_working_memory"
+    ) {
+      return parsed;
+    }
+    return null;
+  }
+
+  private readMemorySafeWritePolicy(
+    value: unknown,
+  ): "strict" | "allow_with_trace" | "best_effort" | null {
+    const parsed = this.readString(value);
+    if (
+      parsed === "strict" ||
+      parsed === "allow_with_trace" ||
+      parsed === "best_effort"
+    ) {
+      return parsed;
+    }
+    return null;
+  }
+
+  private readMemoryContradictionPolicy(
+    value: unknown,
+  ): "keep_latest" | "suppress_conflict" | "append_conflict_note" | null {
+    const parsed = this.readString(value);
+    if (
+      parsed === "keep_latest" ||
+      parsed === "suppress_conflict" ||
+      parsed === "append_conflict_note"
+    ) {
+      return parsed;
+    }
+    return null;
+  }
+
   private shouldPersistWorkflowStage(stage: string) {
+    if (this.nonPersistentWorkflowStages.has(stage)) {
+      return false;
+    }
     if (
       stage === "response_token" &&
       process.env.AGENT_STREAM_PERSIST_TOKENS !== "true"

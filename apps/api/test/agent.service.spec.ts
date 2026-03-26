@@ -66,4 +66,61 @@ describe("AgentService", () => {
       }),
     );
   });
+
+  it("hides internal workflow stages from default history reads", async () => {
+    const persistedMessages = [
+      {
+        id: "msg-risk",
+        threadId: "thread-1",
+        role: "workflow",
+        content: "Risk check before response send: clean.",
+        createdByUserId: null,
+        createdAt: new Date("2026-03-25T21:00:00.000Z"),
+        metadata: {
+          stage: "risk_assessment_pre_send",
+        },
+      },
+      {
+        id: "msg-plan",
+        threadId: "thread-1",
+        role: "workflow",
+        content: "Plan ready.",
+        createdByUserId: null,
+        createdAt: new Date("2026-03-25T21:00:01.000Z"),
+        metadata: {
+          stage: "plan_ready",
+        },
+      },
+      {
+        id: "msg-agent",
+        threadId: "thread-1",
+        role: "agent",
+        content: "I’m on it.",
+        createdByUserId: null,
+        createdAt: new Date("2026-03-25T21:00:02.000Z"),
+        metadata: null,
+      },
+    ];
+    const prisma: any = {
+      agentMessage: {
+        findMany: vi.fn().mockResolvedValue(persistedMessages),
+      },
+    };
+    const service = new AgentService(prisma);
+
+    const filtered = await service.listThreadMessages("thread-1");
+    expect(filtered.map((message) => message.id)).toEqual([
+      "msg-plan",
+      "msg-agent",
+    ]);
+
+    const unfiltered = await service.listThreadMessages("thread-1", {
+      includeInternalWorkflow: true,
+    });
+    expect(unfiltered.map((message) => message.id)).toEqual([
+      "msg-risk",
+      "msg-plan",
+      "msg-agent",
+    ]);
+  });
 });

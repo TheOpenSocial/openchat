@@ -34,6 +34,7 @@ type RecurringCircleAddMemberBody = zodInfer<
 type zodInfer<T extends { _output: unknown }> = T["_output"];
 
 const DEFAULT_LIST_LIMIT = 50;
+const MUTED_USER_IDS_PREFERENCE_KEY = "global_rules_muted_user_ids";
 
 @Injectable()
 export class RecurringCirclesService {
@@ -195,6 +196,9 @@ export class RecurringCirclesService {
     body: RecurringCircleAddMemberBody,
   ) {
     await this.requireCircleOwnership(circleId, ownerUserId);
+    await this.assertNoBlockedRelationship(ownerUserId, body.userId);
+    await this.assertNoMutedRelationship(ownerUserId, body.userId);
+    await this.assertNoOpenReportRelationship(ownerUserId, body.userId);
 
     return this.prisma.recurringCircleMember.upsert({
       where: {
@@ -549,5 +553,114 @@ export class RecurringCirclesService {
       return;
     }
     await this.launchControlsService.assertActionAllowed(action, userId);
+  }
+
+  private async assertNoBlockedRelationship(
+    userId: string,
+    memberUserId: string,
+  ) {
+    if (userId === memberUserId || !this.prisma.block?.findFirst) {
+      return;
+    }
+    const blockedRelationship = await this.prisma.block.findFirst({
+      where: {
+        OR: [
+          {
+            blockerUserId: userId,
+            blockedUserId: memberUserId,
+          },
+          {
+            blockerUserId: memberUserId,
+            blockedUserId: userId,
+          },
+        ],
+      },
+      select: { id: true },
+    });
+    if (blockedRelationship) {
+      throw new ForbiddenException(
+        "cannot manage recurring circle membership with blocked users",
+      );
+    }
+  }
+
+  private async assertNoOpenReportRelationship(
+    userId: string,
+    memberUserId: string,
+  ) {
+    if (userId === memberUserId || !this.prisma.userReport?.findFirst) {
+      return;
+    }
+    const openReport = await this.prisma.userReport.findFirst({
+      where: {
+        status: "open",
+        OR: [
+          {
+            reporterUserId: userId,
+            targetUserId: memberUserId,
+          },
+          {
+            reporterUserId: memberUserId,
+            targetUserId: userId,
+          },
+        ],
+      },
+      select: { id: true },
+    });
+    if (openReport) {
+      throw new ForbiddenException(
+        "cannot manage recurring circle membership with open reports",
+      );
+    }
+  }
+
+  private async assertNoMutedRelationship(
+    userId: string,
+    memberUserId: string,
+  ) {
+    if (userId === memberUserId || !this.prisma.userPreference?.findMany) {
+      return;
+    }
+    const preferences = await this.prisma.userPreference.findMany({
+      where: {
+        userId: { in: [userId, memberUserId] },
+        key: MUTED_USER_IDS_PREFERENCE_KEY,
+      },
+      select: {
+        userId: true,
+        value: true,
+      },
+    });
+    const mutedByUser = new Set<string>();
+    const mutedByMember = new Set<string>();
+    for (const preference of preferences) {
+      const values = this.readNormalizedStringArrayValue(preference.value);
+      if (preference.userId === userId) {
+        for (const mutedId of values) {
+          mutedByUser.add(mutedId);
+        }
+      }
+      if (preference.userId === memberUserId) {
+        for (const mutedId of values) {
+          mutedByMember.add(mutedId);
+        }
+      }
+    }
+    if (mutedByUser.has(memberUserId) || mutedByMember.has(userId)) {
+      throw new ForbiddenException(
+        "cannot manage recurring circle membership with muted users",
+      );
+    }
+  }
+
+  private readNormalizedStringArrayValue(value: unknown) {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return value
+      .map((entry) =>
+        typeof entry === "string" ? entry.trim().toLowerCase() : "",
+      )
+      .filter((entry) => entry.length > 0);
   }
 }

@@ -21,11 +21,15 @@ function createConsumer() {
         id: "thread-latest",
       }),
     },
+    agentMessage: {
+      findFirst: vi.fn().mockResolvedValue(null),
+    },
     notification: {
       findUnique: vi.fn(),
     },
     auditLog: {
       create: vi.fn().mockResolvedValue({}),
+      findMany: vi.fn().mockResolvedValue([]),
     },
   };
   const agentService: any = {
@@ -41,6 +45,21 @@ function createConsumer() {
   const executionReconciliationService: any = {
     recordIntentTerminalState: vi.fn().mockResolvedValue(undefined),
   };
+  const workflowRuntimeService: any = {
+    buildWorkflowRunId: vi.fn(
+      ({
+        domain,
+        entityType,
+        entityId,
+      }: {
+        domain: string;
+        entityType: string;
+        entityId: string;
+      }) => `${domain}:${entityType}:${entityId}`,
+    ),
+    linkSideEffect: vi.fn().mockResolvedValue(undefined),
+    checkpoint: vi.fn().mockResolvedValue(undefined),
+  };
 
   return {
     prisma,
@@ -48,12 +67,14 @@ function createConsumer() {
     notificationsService,
     deadLetterService,
     executionReconciliationService,
+    workflowRuntimeService,
     consumer: new AsyncAgentFollowupConsumer(
       prisma,
       agentService,
       notificationsService,
       executionReconciliationService,
       deadLetterService,
+      workflowRuntimeService,
     ),
   };
 }
@@ -87,12 +108,12 @@ describe("AsyncAgentFollowupConsumer", () => {
     );
     expect(agentService.createAgentMessage).toHaveBeenCalledWith(
       "thread-latest",
-      expect.stringContaining("Remember you asked earlier"),
+      expect.stringContaining("Quick update"),
     );
     expect(notificationsService.createInAppNotification).toHaveBeenCalledWith(
       "11111111-1111-4111-8111-111111111111",
       "agent_update",
-      expect.stringContaining("Remember you asked earlier"),
+      expect.stringContaining("Quick update"),
     );
   });
 
@@ -145,6 +166,98 @@ describe("AsyncAgentFollowupConsumer", () => {
         intentId: "22222222-2222-4222-8222-222222222222",
         status: "connected",
         source: "jobs.async_agent_followup",
+      }),
+    );
+  });
+
+  it("reuses a recent duplicate thread follow-up during replay", async () => {
+    const { consumer, prisma, agentService, notificationsService } =
+      createConsumer();
+    prisma.agentMessage.findFirst.mockResolvedValueOnce({
+      id: "existing-thread-message",
+    });
+
+    const result = await consumer.process({
+      name: "AsyncAgentFollowup",
+      id: "job-3",
+      data: {
+        version: 1,
+        traceId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        idempotencyKey:
+          "intent-followup:22222222-2222-4222-8222-222222222222:pending_reminder:replay:1",
+        timestamp: "2026-03-20T00:00:00.000Z",
+        type: "AsyncAgentFollowup",
+        payload: {
+          userId: "11111111-1111-4111-8111-111111111111",
+          intentId: "22222222-2222-4222-8222-222222222222",
+          template: "pending_reminder",
+        },
+      },
+    } as any);
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        acknowledged: true,
+      }),
+    );
+    expect(agentService.createAgentMessage).not.toHaveBeenCalled();
+    expect(notificationsService.createInAppNotification).toHaveBeenCalledTimes(
+      1,
+    );
+  });
+
+  it("reuses a recent deduped follow-up notification during replay", async () => {
+    const { consumer, prisma, notificationsService, workflowRuntimeService } =
+      createConsumer();
+    prisma.auditLog.findMany.mockResolvedValueOnce([
+      {
+        entityId: "notification-existing",
+        metadata: {
+          workflowRunId: "social:intent:22222222-2222-4222-8222-222222222222",
+          relation: "followup_notification",
+          template: "pending_reminder",
+          notificationType: "agent_update",
+        },
+      },
+    ]);
+    prisma.notification.findUnique.mockResolvedValueOnce({
+      id: "notification-existing",
+      recipientUserId: "11111111-1111-4111-8111-111111111111",
+      type: "agent_update",
+    });
+
+    const result = await consumer.process({
+      name: "AsyncAgentFollowup",
+      id: "job-4",
+      data: {
+        version: 1,
+        traceId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+        idempotencyKey:
+          "intent-followup:22222222-2222-4222-8222-222222222222:pending_reminder:replay:2",
+        timestamp: "2026-03-20T00:00:00.000Z",
+        type: "AsyncAgentFollowup",
+        payload: {
+          userId: "11111111-1111-4111-8111-111111111111",
+          intentId: "22222222-2222-4222-8222-222222222222",
+          template: "pending_reminder",
+        },
+      },
+    } as any);
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        acknowledged: true,
+      }),
+    );
+    expect(notificationsService.createInAppNotification).not.toHaveBeenCalled();
+    expect(workflowRuntimeService.linkSideEffect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        relation: "followup_notification",
+        entityId: "notification-existing",
+        metadata: expect.objectContaining({
+          deduped: true,
+          notificationType: "agent_update",
+        }),
       }),
     );
   });

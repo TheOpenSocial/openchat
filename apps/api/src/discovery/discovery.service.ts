@@ -31,6 +31,8 @@ interface DiscoverySuggestionEnvelope {
 }
 
 const TONIGHT_HORIZON_HOURS = 24;
+const DISCOVERY_MUTE_USER_IDS_PREFERENCE_KEY = "global_rules_muted_user_ids";
+const DISCOVERY_OPEN_REPORT_SUPPRESSION_THRESHOLD = 3;
 
 @Injectable()
 export class DiscoveryService {
@@ -383,28 +385,57 @@ export class DiscoveryService {
     }
 
     const peerIds = Array.from(peerStats.keys());
-    const blocks = await this.prisma.block.findMany({
-      where: {
-        OR: [
-          {
-            blockerUserId: userId,
-            blockedUserId: {
-              in: peerIds,
+    const [blocks, openReports, mutePreferences] = await Promise.all([
+      this.prisma.block.findMany({
+        where: {
+          OR: [
+            {
+              blockerUserId: userId,
+              blockedUserId: {
+                in: peerIds,
+              },
             },
-          },
-          {
-            blockerUserId: {
-              in: peerIds,
+            {
+              blockerUserId: {
+                in: peerIds,
+              },
+              blockedUserId: userId,
             },
-            blockedUserId: userId,
-          },
-        ],
-      },
-      select: {
-        blockerUserId: true,
-        blockedUserId: true,
-      },
-    });
+          ],
+        },
+        select: {
+          blockerUserId: true,
+          blockedUserId: true,
+        },
+      }),
+      this.prisma.userReport?.findMany
+        ? this.prisma.userReport.findMany({
+            where: {
+              targetUserId: {
+                in: peerIds,
+              },
+              status: "open",
+            },
+            select: {
+              targetUserId: true,
+            },
+          })
+        : Promise.resolve([] as Array<{ targetUserId: string | null }>),
+      this.prisma.userPreference?.findMany
+        ? this.prisma.userPreference.findMany({
+            where: {
+              userId: {
+                in: [userId, ...peerIds],
+              },
+              key: DISCOVERY_MUTE_USER_IDS_PREFERENCE_KEY,
+            },
+            select: {
+              userId: true,
+              value: true,
+            },
+          })
+        : Promise.resolve([] as Array<{ userId: string; value: unknown }>),
+    ]);
     const blockedPeerIds = new Set<string>();
     for (const block of blocks) {
       if (block.blockerUserId === userId) {
@@ -413,11 +444,53 @@ export class DiscoveryService {
         blockedPeerIds.add(block.blockerUserId);
       }
     }
+    const reportCountByPeer = new Map<string, number>();
+    for (const report of openReports) {
+      if (!report.targetUserId) {
+        continue;
+      }
+      reportCountByPeer.set(
+        report.targetUserId,
+        (reportCountByPeer.get(report.targetUserId) ?? 0) + 1,
+      );
+    }
+    const reportedPeerIds = new Set(
+      Array.from(reportCountByPeer.entries())
+        .filter(
+          ([, count]) => count >= DISCOVERY_OPEN_REPORT_SUPPRESSION_THRESHOLD,
+        )
+        .map(([peerId]) => peerId),
+    );
+
+    const mutedByUser = new Map<string, Set<string>>();
+    for (const row of mutePreferences) {
+      const mutedIds = this.readNormalizedStringArrayValue(row.value);
+      if (mutedIds.length === 0) {
+        continue;
+      }
+      mutedByUser.set(row.userId, new Set(mutedIds));
+    }
+    const requesterMuted = mutedByUser.get(userId) ?? new Set<string>();
+    const mutedPeerIds = new Set<string>();
+    const normalizedUserId = userId.toLowerCase();
+    for (const peerId of peerIds) {
+      const normalizedPeerId = peerId.toLowerCase();
+      const peerMutedRequester =
+        mutedByUser.get(peerId)?.has(normalizedUserId) ?? false;
+      if (requesterMuted.has(normalizedPeerId) || peerMutedRequester) {
+        mutedPeerIds.add(peerId);
+      }
+    }
 
     const peerUsers = await this.prisma.user.findMany({
       where: {
         id: {
-          in: peerIds.filter((peerId) => !blockedPeerIds.has(peerId)),
+          in: peerIds.filter(
+            (peerId) =>
+              !blockedPeerIds.has(peerId) &&
+              !reportedPeerIds.has(peerId) &&
+              !mutedPeerIds.has(peerId),
+          ),
         },
       },
       select: {
@@ -963,6 +1036,17 @@ export class DiscoveryService {
     }
     const record = value as Record<string, unknown>;
     return this.readString(record[fieldName]);
+  }
+
+  private readNormalizedStringArrayValue(value: unknown) {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return value
+      .map((item) =>
+        typeof item === "string" ? item.trim().toLowerCase() : "",
+      )
+      .filter((item) => item.length > 0);
   }
 
   private capitalizeLabel(label: string) {

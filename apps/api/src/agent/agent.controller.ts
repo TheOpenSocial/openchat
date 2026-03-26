@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -70,11 +71,19 @@ export class AgentController {
   @Get(":threadId/messages")
   async getMessages(
     @Param("threadId") threadIdParam: string,
+    @Query("includeInternalWorkflow")
+    includeInternalWorkflowParam: string | undefined,
     @ActorUserId() actorUserId: string,
   ) {
     const threadId = parseRequestPayload(uuidSchema, threadIdParam);
+    const includeInternalWorkflow =
+      this.parseOptionalBooleanQuery(includeInternalWorkflowParam) ?? false;
     await this.agentService.assertThreadOwnership(threadId, actorUserId);
-    return ok(await this.agentService.listThreadMessages(threadId));
+    return ok(
+      await this.agentService.listThreadMessages(threadId, {
+        includeInternalWorkflow,
+      }),
+    );
   }
 
   @Post(":threadId/messages")
@@ -249,5 +258,22 @@ export class AgentController {
         reason: payload.reason,
       }),
     );
+  }
+
+  private parseOptionalBooleanQuery(value: string | undefined) {
+    if (typeof value !== "string") {
+      return undefined;
+    }
+    const normalized = value.trim().toLowerCase();
+    if (normalized.length === 0) {
+      return undefined;
+    }
+    if (normalized === "true" || normalized === "1") {
+      return true;
+    }
+    if (normalized === "false" || normalized === "0") {
+      return false;
+    }
+    throw new BadRequestException("boolean query must be true or false");
   }
 }

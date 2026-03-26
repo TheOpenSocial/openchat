@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { ForbiddenException } from "@nestjs/common";
 import { NotificationType } from "@opensocial/types";
 import { RecurringCirclesService } from "../src/recurring-circles/recurring-circles.service.js";
 
@@ -278,6 +279,181 @@ describe("RecurringCirclesService", () => {
         }),
       }),
     );
+  });
+
+  it("rejects recurring circle member add when owner and member are blocked", async () => {
+    const prisma: any = {
+      recurringCircle: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: CIRCLE_ID,
+          ownerUserId: OWNER_USER_ID,
+        }),
+      },
+      block: {
+        findFirst: vi.fn().mockResolvedValue({ id: "block-1" }),
+      },
+      recurringCircleMember: {
+        upsert: vi.fn(),
+      },
+    };
+
+    const service = new RecurringCirclesService(prisma);
+    await expect(
+      service.addMember(CIRCLE_ID, OWNER_USER_ID, {
+        userId: MEMBER_USER_ID,
+        role: "member",
+      }),
+    ).rejects.toThrow(ForbiddenException);
+    expect(prisma.recurringCircleMember.upsert).not.toHaveBeenCalled();
+  });
+
+  it("adds recurring circle member when no block relationship exists", async () => {
+    const prisma: any = {
+      recurringCircle: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: CIRCLE_ID,
+          ownerUserId: OWNER_USER_ID,
+        }),
+      },
+      block: {
+        findFirst: vi.fn().mockResolvedValue(null),
+      },
+      userPreference: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      userReport: {
+        findFirst: vi.fn().mockResolvedValue(null),
+      },
+      recurringCircleMember: {
+        upsert: vi.fn().mockResolvedValue({ id: "member-added" }),
+      },
+    };
+
+    const service = new RecurringCirclesService(prisma);
+    const result = await service.addMember(CIRCLE_ID, OWNER_USER_ID, {
+      userId: MEMBER_USER_ID,
+      role: "member",
+    });
+
+    expect(result).toEqual({ id: "member-added" });
+    expect(prisma.block.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          OR: expect.arrayContaining([
+            expect.objectContaining({
+              blockerUserId: OWNER_USER_ID,
+              blockedUserId: MEMBER_USER_ID,
+            }),
+            expect.objectContaining({
+              blockerUserId: MEMBER_USER_ID,
+              blockedUserId: OWNER_USER_ID,
+            }),
+          ]),
+        }),
+      }),
+    );
+    expect(prisma.recurringCircleMember.upsert).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects recurring circle member add when owner and member are muted", async () => {
+    const prisma: any = {
+      recurringCircle: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: CIRCLE_ID,
+          ownerUserId: OWNER_USER_ID,
+        }),
+      },
+      block: {
+        findFirst: vi.fn().mockResolvedValue(null),
+      },
+      userPreference: {
+        findMany: vi
+          .fn()
+          .mockResolvedValue([
+            { userId: OWNER_USER_ID, value: [MEMBER_USER_ID] },
+          ]),
+      },
+      userReport: {
+        findFirst: vi.fn().mockResolvedValue(null),
+      },
+      recurringCircleMember: {
+        upsert: vi.fn(),
+      },
+    };
+
+    const service = new RecurringCirclesService(prisma);
+    await expect(
+      service.addMember(CIRCLE_ID, OWNER_USER_ID, {
+        userId: MEMBER_USER_ID,
+        role: "member",
+      }),
+    ).rejects.toThrow(ForbiddenException);
+    expect(prisma.recurringCircleMember.upsert).not.toHaveBeenCalled();
+  });
+
+  it("rejects recurring circle member add when member muted owner", async () => {
+    const prisma: any = {
+      recurringCircle: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: CIRCLE_ID,
+          ownerUserId: OWNER_USER_ID,
+        }),
+      },
+      block: {
+        findFirst: vi.fn().mockResolvedValue(null),
+      },
+      userPreference: {
+        findMany: vi
+          .fn()
+          .mockResolvedValue([
+            { userId: MEMBER_USER_ID, value: [OWNER_USER_ID] },
+          ]),
+      },
+      userReport: {
+        findFirst: vi.fn().mockResolvedValue(null),
+      },
+      recurringCircleMember: {
+        upsert: vi.fn(),
+      },
+    };
+
+    const service = new RecurringCirclesService(prisma);
+    await expect(
+      service.addMember(CIRCLE_ID, OWNER_USER_ID, {
+        userId: MEMBER_USER_ID,
+        role: "member",
+      }),
+    ).rejects.toThrow(ForbiddenException);
+    expect(prisma.recurringCircleMember.upsert).not.toHaveBeenCalled();
+  });
+
+  it("rejects recurring circle member add when there is an open report between owner and member", async () => {
+    const prisma: any = {
+      recurringCircle: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: CIRCLE_ID,
+          ownerUserId: OWNER_USER_ID,
+        }),
+      },
+      block: {
+        findFirst: vi.fn().mockResolvedValue(null),
+      },
+      userReport: {
+        findFirst: vi.fn().mockResolvedValue({ id: "report-1" }),
+      },
+      recurringCircleMember: {
+        upsert: vi.fn(),
+      },
+    };
+
+    const service = new RecurringCirclesService(prisma);
+    await expect(
+      service.addMember(CIRCLE_ID, OWNER_USER_ID, {
+        userId: MEMBER_USER_ID,
+        role: "member",
+      }),
+    ).rejects.toThrow(ForbiddenException);
+    expect(prisma.recurringCircleMember.upsert).not.toHaveBeenCalled();
   });
 
   it("auto-generates owner intent and publishes agent workflow update on session open", async () => {

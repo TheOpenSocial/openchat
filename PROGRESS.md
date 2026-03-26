@@ -23,7 +23,241 @@ It is organized as a production-grade build checklist with:
 
 Last verified: 2026-03-20
 
+## Automated Pipeline Bootstrap Task Queue (Priority)
+
+### Agentic Backend Master Queue
+- [x] `ATS-00` Domain coverage matrix and product-policy decision matrix
+  - Goal: map every supported backend domain to explicit validation ownership.
+  - Covers: social 1:1, groups, circles/events, passive discovery, reconnects, trust/verification, memory/retrieval, dating-ready policy surfaces, buy/sell, passive buyer/seller matching.
+  - Close when:
+    - `AGENT_TEST_SUITE.md` lists supported and partially supported domains
+    - unsupported policy gaps are explicit instead of implicit
+    - each domain maps to scenario families and release-gate layers
+  - Progress:
+    - canonical `domainCoverage` matrix is now schema-enforced in `packages/types` and fixture-backed in `apps/api/test/fixtures/agentic-scenarios.json`
+    - matrix now explicitly marks `supported` vs `partial` vs `policy_gated` domains and requires explicit gaps for non-supported domains
+    - scenario-suite regression coverage now asserts stable domain/status ownership (`agentic-scenario-suite.spec.ts`) so coverage drift is caught in CI
+
+- [x] `ATS-01` Workflow execution ledger and stage checkpoints
+  - Goal: make all agentic runs traceable, replayable, and inspectable.
+  - Close when:
+    - every qualifying run has `workflowRunId` + `traceId`
+    - stage checkpoints exist for parse, moderation, ranking, fanout, follow-up, and connection setup
+    - admin can inspect recent workflow runs
+  - Progress:
+    - connection setup now emits explicit `connection_setup` checkpoints for blocked launch-control exits and runtime-failure exits (not only completed/degraded/skipped happy paths)
+    - regression coverage added in `connection-setup.service.spec.ts` for blocked and failed checkpoint emission
+    - intent routing now emits explicit skipped checkpoints for non-processable intents (`cancelled`/`expired`/missing), so trace timelines remain complete on early exits
+    - moderation-gated pipeline exits now emit both moderation and routing-pipeline checkpoints (`blocked`/`degraded` + `skipped`) instead of silently returning
+    - follow-up launch-control skips now emit `followup_enqueue` skipped checkpoints with explicit reason metadata for replay/debug parity
+    - regression coverage added in `intents.service.spec.ts` for moderation skip checkpoints, non-processable skip checkpoints, and launch-control follow-up skip checkpoints
+
+- [x] `ATS-02` Side-effect dedupe and replay safety
+  - Goal: exactly-once visible outcomes under retries and replays.
+  - Close when:
+    - intro requests, follow-ups, notifications, and accepted-request connections are duplicate-safe
+    - replay behavior is classified as replayable / partial / inspect-only
+    - duplicate visible outcomes are test-covered and release-blocking
+  - Progress:
+    - intent fanout now reuses existing `intent_request` rows during replay/retry passes
+    - async follow-up delivery now suppresses recent duplicate thread messages during replay windows
+    - async follow-up delivery now also reuses recent workflow-linked follow-up notifications during replay windows (template/type/workflowRunId dedupe), preventing duplicate user-visible follow-up notifications on retry/replay
+    - connection setup now reuses workflow-linked DM/group notifications and sender-thread updates on replay/retry, preventing duplicate visible outcomes for accepted-request processing while preserving workflow side-effect traceability
+    - group backfill notifications are now emitted through workflow-linked side effects so replay runs can dedupe and audit those user-visible fanouts consistently
+    - added explicit regression coverage for replayed group backfill flows (`connection-setup.service.spec.ts`) to assert no duplicate backfill notifications or sender thread updates on retries
+    - added explicit regression coverage for replayed group-ready flows (`connection-setup.service.spec.ts`) to assert no duplicate participant/group-formed notifications or sender thread updates on retries
+    - admin ops workflow summaries now expose replayability buckets and dedupe integrity counts
+    - intent follow-up suppression paths now produce deterministic workflow evidence (`followup_enqueue` skipped with `launch_controls_disabled`) so dedupe/replay triage does not rely on log inspection
+    - targeted replay/dedupe regression pass is green in backend suite runs (`intents`, `async-agent-followup`, `connection-setup`, scenario suite, and `release:check:api`)
+
+- [x] `ATS-03` Canonical scenario schema and synthetic world fixtures
+  - Goal: replace ad hoc tests with reusable backend-world scenarios.
+  - Close when:
+    - one shared scenario schema exists
+    - one seeded social/opportunity world exists
+    - workflows, evals, and benchmarks reuse the same scenario ids
+  - Progress:
+    - shared scenario and synthetic-world fixtures now exist under `apps/api/test/fixtures/`
+    - schema-backed scenario validation is now part of the backend scenario suite
+    - scenario-backed coverage now includes reconnect policy suppression, passive discovery bundles, inbox prioritization, agent recommendation publishing, delayed widening, group clustering, blocked group messaging, group archival lifecycle, scheduled passive briefings, scheduled reconnect briefings, saved-search delivery, saved-search below-threshold handling, saved-search empty-result suppression, social reminders, quiet-hours reminder rerouting, agent-thread-only reminder mode, accepted-request replay-safe connection setup dedupe, group-ready replay dedupe, and scam/spam moderation review
+    - `reconnect_signal_v1` is now explicitly executed in the scenario suite (not just declared in fixtures), closing a corpus-vs-execution gap for reconnect ranking behavior
+    - eval-runtime fixture parity now includes `eval_workflow_runtime_traceability_v1`, aligning canonical scenario ids with the live eval snapshot contract
+    - added canonical workflow scenario `social_followup_launch_controls_disabled_v1` to cover launch-control async follow-up policy behavior
+    - domain coverage now has explicit release-layer mapping assertions in `agentic-scenario-suite.spec.ts`, ensuring each domain/layer contract is backed by at least one canonical scenario id
+    - layer-target alignment tightened across canonical scenarios for workflow/benchmark/eval routing (`delayed_widening_retry_v1`, `social_reminder_delivery_v1`, `commerce_buyer_seller_negotiation_v1`, `scam_spam_review_v1`)
+    - the current targeted scenario-backed golden suite is green at `420` tests in the targeted backend run
+    - canonical scenario ids now flow through the scenario suite, eval snapshot layer, and benchmark input corpus
+
+- [x] `ATS-04` `AGENT_TEST_SUITE.md` and tagged suite runner
+  - Goal: create the canonical verification and remediation runbook.
+  - Close when:
+    - `AGENT_TEST_SUITE.md` is committed at repo root
+    - suite layers, release gates, artifacts, and remediation loop are documented
+    - a tagged runner plan exists for `contract`, `workflow`, `queue`, `scenario`, `eval`, `benchmark`, `prod-smoke`, and `full`
+  - Progress:
+    - `AGENT_TEST_SUITE.md` documents the workflow spine, current green baseline, fixture corpus, and artifact expectations
+    - `pnpm test:agentic:suite` now runs tagged backend layers and writes JSON artifacts
+    - eval is now integrated into the tagged runner and emits canonical scenario ids in full-run artifacts
+    - tagged runner now auto-loads scenario ids from `apps/api/test/fixtures/agentic-scenarios.json` by `layerTargets`, eliminating hardcoded scenario-id drift as corpus coverage expands
+    - tagged runner artifacts now emit normalized scenario-level records (`runId`, `layer`, `scenarioId`, `workflowRunId`, `traceId`, `status`, `latencyMs`, `failureClass`, `sideEffects`) for machine triage and replay debugging
+    - `@opensocial/types` now includes first-class suite artifact schemas for normalized `records` + summary counters, with contract regression coverage in `agent-test-suite-artifact.contract.spec.ts`
+    - prod-smoke is now integrated as a first-class tagged layer with safe skip/required controls
+    - the latest full backend run is green with artifact `agent-suite-2026-03-25T21-25-10-416Z`
+
+- [x] `ATS-05` Memory taxonomy, provenance, safe-write policy, and compression
+  - Goal: turn memory into a grounded, privacy-bounded backend subsystem.
+  - Close when:
+    - typed memory classes and provenance rules exist
+    - safe-write and contradiction policies are defined
+    - long-thread compression and retrieval bundle strategy are test-covered
+  - Progress:
+    - added canonical memory contract schemas in `@opensocial/types` (`memoryClass`, source/provenance, safe-write policy, contradiction policy, interaction memory envelope)
+    - hardened `PersonalizationService.storeInteractionSummary` with normalized memory envelopes, strict safe-write suppression, contradiction detection (`keep_latest` / `suppress_conflict` / `append_conflict_note`), and provenance-aware context persistence
+    - added retrieval-bundle compression output (`bundle`, `bundleTokenEstimate`) in retrieval context responses to keep long memory context bounded for agent consumers
+    - wired agent `memory.write` tool execution to pass trace-aware provenance and policy metadata through `AgentOutcomeToolsService` / `AgentConversationService`
+    - regression coverage added in `personalization.service.spec.ts` for strict suppression, contradiction policy behavior, and compressed retrieval-bundle output
+
+- [x] `ATS-06` Agent-to-agent and buyer-seller negotiation layer
+  - Goal: move from one-sided ranking into bounded negotiation.
+  - Close when:
+    - negotiation packets and outcomes are structured
+    - social and commerce negotiation scenarios are covered
+    - negotiation quality is part of eval scoring
+  - Progress:
+    - added canonical negotiation contracts in `@opensocial/types` (`negotiationPacket`, `negotiationOutcome`, policy flags, decision/actions)
+    - introduced runtime tool `negotiation.evaluate` across agent tool policy, planner prompt guidance, and fallback planning
+    - implemented bounded negotiation evaluation in `AgentOutcomeToolsService` with policy gating, social/commerce scoring, and deterministic next actions
+    - wired negotiation execution + telemetry visibility in `AgentConversationService` (`agent_tool_action`, audit metadata, analytics properties)
+    - extended canonical fixture corpus with social + commerce negotiation scenarios and added eval scenario `eval_negotiation_quality_v1`
+    - regression coverage added in `agent-outcome-tools.service.spec.ts`, `agent-conversation.service.spec.ts`, `agentic-evals.service.spec.ts`, and `openai-client.spec.ts`
+
+- [x] `ATS-07` Social, passive, discovery, circle/event, dating-ready, and commerce scenario expansion
+  - Goal: reach domain-complete backend coverage.
+  - Close when:
+    - canonical scenario families exist for each domain
+    - blocked-user, scam/spam, no-match, delayed match, and passive opportunity cases are covered
+    - partially supported domains are policy-gated and explicit
+  - Progress:
+    - current backend-supported scenario families now cover passive discovery, inbox prioritization, recommendation publishing, delayed widening, group clustering, blocked/muted/reported 1:1 and group chat suppression, blocked/muted/reported reconnect filtering, group archival on leave, blocked/muted/reported recurring-circle member adds (including reverse mute direction), scheduled passive discovery briefings, scheduled reconnect briefings, saved-search delivery, saved-search below-threshold handling, saved-search empty-result suppression, social reminder delivery modes including quiet-hours rerouting, negotiation decisions (social async defer + commerce intro-ready), scam/spam review, deterministic underage-illegal blocking, and coercive-underage review routing
+    - expanded canonical failure-family scenarios for runtime triage (`workflow_failure_llm_schema_v1`, `workflow_failure_queue_replay_v1`, `workflow_failure_notification_followup_v1`, `workflow_failure_persistence_dedupe_v1`, `workflow_failure_latency_capacity_v1`, `workflow_failure_observability_gap_v1`) so stage-failure classification drift is scenario-backed instead of ad hoc
+    - agent thread history now suppresses internal risk/sanitization orchestration stages by default (`risk_assessment_pre_tools`, `risk_assessment_pre_send`, `response_sanitized`) while still emitting them ephemerally for live stream/debug, reducing technical/noisy workflow artifacts in end-user chat history
+    - async intent acknowledgements and follow-up copies were polished to be background-first and human ("I’ll notify you here…", "Still searching in the background…", "Quick update…"), with regression coverage updated in `intents`, `async-agent-followup`, and end-to-end agentic flow tests
+    - added social async policy scenario coverage for launch-control follow-up suppression (`social_followup_launch_controls_disabled_v1`) with executable workflow assertions
+    - expanded cross-domain layer coverage for passive discovery workflow retries, events/reminders benchmark lane, commerce eval lane, and safety contract/eval lanes via canonical fixture `layerTargets`
+    - canonical domain coverage remains explicit for supported vs partial vs policy-gated surfaces, with dating/commerce gaps documented in fixture `explicitGaps`
+
+- [x] `ATS-08` Eval scorecards and trace grading
+  - Goal: grade workflow quality, not just text outputs.
+  - Close when:
+    - evals score correctness, safety, boundedness, tone, usefulness, negotiation quality, and memory grounding
+    - trace-grade regressions are visible in admin
+  - Progress:
+    - `AgenticEvalsService` now emits dimension-aware scorecards and weighted `traceGrade` output in `ops/agentic-evals`, with explicit constant maps for scorecard dimensions and `TRACE_GRADE_WEIGHTS`
+    - eval dimensions now include `correctness`, `safety`, `boundedness`, `tone`, `usefulness`, `grounding`, `negotiation`, alongside policy/observability/outcomes runtime dimensions in trace-grade
+    - added workflow runtime traceability eval (`eval_workflow_runtime_traceability_v1`) to grade trace/replay integrity alongside behavioral/safety checks
+    - added negotiation-quality eval coverage (`eval_negotiation_quality_v1`) as a first-class scorecard dimension
+    - added missing canonical eval scenarios and fixture wiring:
+      - `eval_tone_agentic_async_ack_v1`
+      - `eval_usefulness_no_match_recovery_v1`
+      - `eval_grounding_profile_memory_consistency_v1`
+    - `ops/agentic-evals` snapshots now include explicit regression signals (`regressions`) plus summary status (`healthy|watch|critical`) and regression counts for triage-ready monitoring
+    - regression coverage expanded in `agentic-evals.service.spec.ts` + `agentic-scenario-suite.spec.ts` for healthy/degraded runtime traceability and the three new eval scenarios
+
+- [x] `ATS-09` Benchmark, concurrency, staging/prod verification lane, and canary gates
+  - Goal: make latency and operational health enforceable.
+  - Close when:
+    - local and prod-connected benchmarks emit machine-readable artifacts
+    - reserved verification users/threads exist
+    - ack/follow-up/fallback/queue thresholds are release-gated
+  - Progress:
+    - benchmark runner now enforces guardrails for ack-within-SLO rate, background follow-up rate, and degraded/fallback rate
+    - benchmark runner now supports controlled concurrency and burst pressure via:
+      - `AGENTIC_BENCH_CONCURRENCY`
+      - `AGENTIC_BENCH_BURST_SIZE`
+      - `AGENTIC_BENCH_MAX_DUPLICATE_SIDE_EFFECT_RATE`
+      - `AGENTIC_BENCH_MAX_QUEUE_LAG_MS`
+    - benchmark artifacts now include explicit guardrail thresholds and pass/fail flags so regressions are machine-checkable in CI
+    - suite records/artifacts now capture benchmark pressure and dedupe signals (`workerIndex`, `burstIndex`, `concurrency`, `burstSize`, `queueLagMs`, `duplicateVisibleSideEffects`, `duplicateVisibleSideEffectRate`, `summary.benchmark.queueLagP95Ms`)
+    - benchmark runner now supports workflow-runtime health guardrails (critical runs + failed/blocked stage counts) sourced from `GET /api/admin/ops/agent-workflows`, with verification-lane defaults set to fail on any critical/failed/blocked drift
+    - benchmark workflow-health guardrails now also enforce `observabilityGap` workflow-run thresholds (`AGENTIC_BENCH_MAX_OBSERVABILITY_GAP_RUNS`) so traceability regressions are canary-gated in verification runs
+    - tagged suite eval layer now tracks the new workflow-runtime traceability scenario id in emitted artifacts
+    - tagged runner now includes a prod-smoke verification lane (`prod-smoke`) wired to deployed smoke scripts with `AGENT_TEST_SUITE_ENABLE_PROD_SMOKE` / `AGENT_TEST_SUITE_REQUIRE_PROD_SMOKE`
+    - added dedicated verification-lane orchestrator `scripts/run-agent-prod-smoke-lane.mjs` (`pnpm staging:smoke:verification-lane`) with required env checks, paced execution, and machine-readable lane artifacts
+    - added strict verification command `pnpm test:agentic:suite:verification` to enforce benchmark + prod-smoke gates together and fail fast when required lane env is missing
+
+- [x] `ATS-10` Admin reliability console
+  - Goal: operator-visible runtime health and replay.
+  - Close when:
+    - recent workflow runs, traces, replays, evals, integrity, and canary health are visible in admin
+    - support can classify current failures without raw log spelunking
+  - Progress:
+    - added additive backend ingestion/read contracts for verification lane artifacts:
+      - `POST /api/admin/ops/verification-runs`
+      - `GET /api/admin/ops/verification-runs`
+    - added additive reliability snapshot endpoint:
+      - `GET /api/admin/ops/agent-reliability`
+      - includes workflow health summary, top suspect stages, failure classes, eval status/regressions, latest verification-lane status, and canary verdict reasons
+    - added backend read surface `GET /api/admin/ops/agent-workflows/details?workflowRunId=...` for trace-explorer style debugging per workflow run
+    - workflow runtime service now supports run-level detail snapshots including linked stage/side-effect integrity and related trace events/failure counts
+    - `GET /api/admin/ops/agent-workflows` now supports replayability/domain/dedupe filters for faster support triage (`replayability`, `domain`, `dedupeOnly`)
+    - workflow runtime summaries now include computed stage-health classification (`healthy|watch|critical`), latest checkpoint, and stage-status counts; admin ops now exposes these as aggregate summary metrics and supports `health` filtering in `GET /api/admin/ops/agent-workflows`
+    - workflow detail snapshots now return additive `insights` (health + latest checkpoint + stage-status counts) and persist health in admin audit breadcrumbs for support triage
+    - admin ops workflow runtime now emits additive `triage` per run (`failureClass`, summary, recommendation), supports `failureClass` filtering on `GET /api/admin/ops/agent-workflows`, and includes aggregate `failureClasses` counters to speed operator root-cause classification without raw log spelunking
+    - admin ops workflow runtime now supports `failuresOnly` filtering and emits `topFailureStages` hot spots in summary payloads (failed/blocked/degraded stage counts) so support can jump directly to dominant failing stages
+    - admin ops workflow runtime now supports `suspectStage` filtering (`GET /api/admin/ops/agent-workflows?suspectStage=fanout`) so support can isolate runs by failing stage family without manual log scans
+    - workflow triage payloads now include additive `suspectStages` and `replayHint` guidance for each run, improving operator replay/debug decision quality in details and list views
+    - `GET /api/admin/ops/agentic-evals` admin audit metadata now records trace-grade status and regression counts for support triage breadcrumbs
+    - regression coverage added in `admin.controller.spec.ts` and `agent-workflow-runtime.service.spec.ts` including error paths for workflow details (`workflowRunId` required, not-found run), plus verification-runs and reliability snapshot contracts
+    - workflow tagged suite remains green in targeted backend verification runs
+
+- [x] `ATS-08/09/10` Closure Matrix (Nothing-Missing Sweep)
+  - Goal: map every close criterion to executable evidence.
+  - `ATS-08` close mapping:
+    - Criteria: eval dimensions complete and regression-visible.
+    - Tests: `apps/api/test/agentic-evals.service.spec.ts`, `apps/api/test/agentic-scenario-suite.spec.ts`.
+    - Endpoints: `GET /api/admin/ops/agentic-evals`.
+    - Artifacts/signals: `scorecard.dimensions`, `traceGrade.weights`, `regressions`.
+    - Status: closed.
+    - Evidence:
+      - `pnpm --filter @opensocial/api test -- test/agentic-evals.service.spec.ts test/agent-test-suite-artifact.contract.spec.ts test/agentic-scenario-suite.spec.ts test/admin.controller.spec.ts`
+      - `pnpm test:agentic:suite -- --layer=eval`
+      - `pnpm test:agentic:suite -- --layer=full`
+  - `ATS-09` close mapping:
+    - Criteria: concurrency and canary thresholds are enforceable and machine-readable.
+    - Tests: `apps/api/test/agent-test-suite-artifact.contract.spec.ts`, benchmark/suite layer runs.
+    - Commands: `pnpm test:agentic:suite -- --layer=benchmark`, `pnpm test:agentic:suite -- --layer=full`, `pnpm test:agentic:suite:verification`.
+    - Artifacts/signals: suite `records.metrics.{concurrency,burstSize,queueLagMs,duplicateVisibleSideEffectRate}`, `summary.benchmark`.
+    - Status: closed.
+    - Evidence:
+      - `pnpm test:agentic:suite -- --layer=benchmark`
+      - `pnpm test:agentic:suite:verification` (executed with local verification env profile)
+      - artifact: `agent-suite-2026-03-26T02-52-12-504Z/full.json`
+  - `ATS-10` close mapping:
+    - Criteria: admin API can explain reliability + canary state without log spelunking.
+    - Tests: `apps/api/test/admin.controller.spec.ts`.
+    - Endpoints: `GET /api/admin/ops/agent-reliability`, `POST /api/admin/ops/verification-runs`, `GET /api/admin/ops/verification-runs`.
+    - Artifacts/signals: canary verdict + reasons, eval regression summary, workflow suspect-stage/failure-class summary, latest verification run.
+    - Status: closed.
+    - Evidence:
+      - `pnpm --filter @opensocial/api test -- test/admin.controller.spec.ts`
+      - `pnpm test:agentic:suite:verification` (includes reliability + verification-run ingestion/read checks in full-lane pass)
+      - artifact: `agent-suite-2026-03-26T02-52-12-504Z/full.json`
+
+- [x] `ATS-11` Full remediation loop
+  - Goal: execute the suite, fix every failure, rerun to green.
+  - Close when:
+    - the full suite runs end to end
+    - every discovered failure has regression protection
+    - final green status is recorded in this file
+  - Progress:
+    - full tagged suite reruns are green after each reliability pass, including the new prod-smoke layer contract
+    - latest full artifact: `agent-suite-2026-03-26T02-04-32-261Z/full.json`
+    - this pass fixed runtime type regressions introduced during ATS-05 memory hardening and added regression tests for safe-write suppression, contradiction handling, and retrieval-bundle compression
+
 ## Implementation Notes
+- 2026-03-26: Started the backend “fully supported” execution pass with a canonical `/api/runtime` API contract and domain-complete scenario expansion. Added intent domain envelopes (`social|passive_discovery|group|event|dating|commerce`) plus workflow/replay metadata in `@opensocial/types`, introduced strict dating consent/verification and commerce listing/offer/escrow/dispute/fulfillment schemas, and wired backend runtime endpoints under `/api/runtime/*` with workflow checkpoint integration. Expanded canonical scenario fixtures to mark `dating_ready` and `commerce` as `supported` (no `partial`/`policy_gated`) and added explicit dating + commerce lifecycle scenarios for workflow/benchmark/eval coverage. Added synthetic world entities for dating + commerce flows, migration `prisma/migrations/20260326_runtime_v2_domains`, backfill script `scripts/backfill-runtime-domains.mjs`, and regression tests for runtime transitions (`runtime.service.spec.ts`).
+- 2026-03-26: Closed `ATS-01/02/03/07` in a backend-only stabilization pass. Added missing workflow checkpoints for early pipeline exits (`intent_not_processable`, moderation-gated skips) and launch-control follow-up suppression, expanded canonical scenario coverage with `social_followup_launch_controls_disabled_v1`, tightened cross-domain layer-target alignment (`workflow`/`benchmark`/`eval`) in the scenario corpus, and added regression assertions that every domain release-layer mapping is backed by canonical scenario ids. Verified green via `pnpm --filter @opensocial/api test -- test/intents.service.spec.ts test/agentic-scenario-suite.spec.ts` and `pnpm release:check:api` (`420` tests passing in API suite run).
+- 2026-03-26: Closed `ATS-08/09/10` with end-to-end backend evidence. Confirmed green baseline (`typecheck`, `lint`, `release:check:api`), green suite layers (`eval`, `benchmark`, `full`), and successful strict verification command execution with a local verification lane profile (minted dev access token + thread/user binding + smoke/incident local thresholds) producing artifact `agent-suite-2026-03-26T02-52-12-504Z/full.json`. This pass finalizes the additive admin reliability contracts, eval-dimension grading/regression visibility, and benchmark/canary artifact fidelity as complete.
 - 2026-03-24: Advanced `TP-04` onboarding quality gate by upgrading benchmark coverage from 4 sample prompts to a 24-transcript EN/ES dataset (`scripts/onboarding-benchmark-dataset.json`) and extending `scripts/benchmark-onboarding.mjs` with quality scoring, generic-persona/generic-summary detection, and threshold enforcement (`ONBOARDING_BENCH_MIN_QUALITY_SCORE`, `ONBOARDING_BENCH_MAX_GENERIC_PERSONA_RATE`) alongside latency/failure gates.
 - 2026-03-24: Continued `TP-04` persona/summary quality tuning by updating onboarding prompt instructions to `onboarding_fast_pass.v2` and `onboarding_inference.v2`, with explicit anti-generic guidance and concrete-detail grounding constraints.
 - 2026-03-23: Advanced `TP-08` session continuity by fixing client refresh handling in mobile/web API layers: refresh `5xx`/transient failures now remain retryable (no forced sign-out), and `401` request retry paths only emit `auth_expired` on hard refresh failure, reducing false “session expired” interruptions during temporary backend/network instability.

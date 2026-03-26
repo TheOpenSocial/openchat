@@ -2,6 +2,11 @@
 import { spawnSync } from "node:child_process";
 
 const checks = [
+  {
+    name: "Runtime naming residue guard",
+    cmd: "node",
+    args: ["scripts/check-runtime-version-residue.mjs"],
+  },
   { name: "API typecheck", cmd: "pnpm", args: ["--filter", "@opensocial/api", "typecheck"] },
   { name: "API lint", cmd: "pnpm", args: ["--filter", "@opensocial/api", "lint"] },
   {
@@ -12,7 +17,15 @@ const checks = [
   {
     name: "API endpoint contracts",
     cmd: "pnpm",
-    args: ["--filter", "@opensocial/api", "test", "--", "test/onboarding-agent.contract.spec.ts"],
+    args: [
+      "--filter",
+      "@opensocial/api",
+      "test",
+      "--",
+      "test/onboarding-agent.contract.spec.ts",
+      "test/runtime.controller.spec.ts",
+      "test/runtime.service.spec.ts",
+    ],
   },
   {
     name: "Agent/OpenAI regressions",

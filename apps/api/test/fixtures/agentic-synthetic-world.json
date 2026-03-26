@@ -1,0 +1,178 @@
+{
+  "version": 1,
+  "users": [
+    {
+      "userId": "user-alice",
+      "displayName": "Alice",
+      "country": "Argentina",
+      "city": "Buenos Aires",
+      "languages": ["en", "es"],
+      "trustScore": 86,
+      "availabilityMode": "now",
+      "tags": ["tennis", "chess", "gaming", "reconnect"]
+    },
+    {
+      "userId": "user-bruno",
+      "displayName": "Bruno",
+      "country": "Spain",
+      "city": "Madrid",
+      "languages": ["es"],
+      "trustScore": 88,
+      "availabilityMode": "now",
+      "tags": ["tennis"]
+    },
+    {
+      "userId": "user-blake",
+      "displayName": "Blake",
+      "country": "Spain",
+      "city": "Madrid",
+      "languages": ["en"],
+      "trustScore": 84,
+      "availabilityMode": "now",
+      "tags": ["boardgames"]
+    },
+    {
+      "userId": "user-casey",
+      "displayName": "Casey",
+      "country": "Spain",
+      "city": "Madrid",
+      "languages": ["en", "es"],
+      "trustScore": 80,
+      "availabilityMode": "now",
+      "tags": ["boardgames"]
+    },
+    {
+      "userId": "user-diego",
+      "displayName": "Diego",
+      "country": "Spain",
+      "city": "Madrid",
+      "languages": ["es"],
+      "trustScore": 83,
+      "availabilityMode": "now",
+      "tags": ["tennis", "local"]
+    },
+    {
+      "userId": "user-emma",
+      "displayName": "Emma",
+      "country": "Germany",
+      "city": "Berlin",
+      "languages": ["de"],
+      "trustScore": 90,
+      "availabilityMode": "now",
+      "tags": ["tennis"]
+    },
+    {
+      "userId": "user-fran",
+      "displayName": "Fran",
+      "country": "Argentina",
+      "city": "Cordoba",
+      "languages": ["es"],
+      "trustScore": 30,
+      "availabilityMode": "now",
+      "tags": ["gaming"]
+    },
+    {
+      "userId": "user-gabi",
+      "displayName": "Gabi",
+      "country": "Argentina",
+      "city": "Cordoba",
+      "languages": ["en", "es"],
+      "trustScore": 82,
+      "availabilityMode": "now",
+      "tags": ["gaming"]
+    },
+    {
+      "userId": "user-hugo",
+      "displayName": "Hugo",
+      "country": "Argentina",
+      "city": "Buenos Aires",
+      "languages": ["es"],
+      "trustScore": 90,
+      "availabilityMode": "later_today",
+      "tags": ["reconnect"]
+    },
+    {
+      "userId": "user-diana",
+      "displayName": "Diana",
+      "country": "Spain",
+      "city": "Madrid",
+      "languages": ["es"],
+      "trustScore": 93,
+      "availabilityMode": "later_today",
+      "tags": ["dating", "cafes", "music"]
+    },
+    {
+      "userId": "user-seller",
+      "displayName": "Seller",
+      "country": "Argentina",
+      "city": "Buenos Aires",
+      "languages": ["en", "es"],
+      "trustScore": 89,
+      "availabilityMode": "flexible",
+      "tags": ["commerce", "console", "cycling"]
+    },
+    {
+      "userId": "user-buyer",
+      "displayName": "Buyer",
+      "country": "Argentina",
+      "city": "Buenos Aires",
+      "languages": ["en"],
+      "trustScore": 86,
+      "availabilityMode": "now",
+      "tags": ["commerce", "gaming", "cycling"]
+    }
+  ],
+  "relationships": [
+    {
+      "sourceUserId": "user-alice",
+      "targetUserId": "user-blake",
+      "type": "blocked"
+    },
+    {
+      "sourceUserId": "user-alice",
+      "targetUserId": "user-hugo",
+      "type": "prior_connection"
+    },
+    {
+      "sourceUserId": "user-alice",
+      "targetUserId": "user-hugo",
+      "type": "reconnect_candidate"
+    },
+    {
+      "sourceUserId": "user-alice",
+      "targetUserId": "user-diana",
+      "type": "dating_candidate"
+    },
+    {
+      "sourceUserId": "user-buyer",
+      "targetUserId": "user-seller",
+      "type": "commerce_candidate"
+    }
+  ],
+  "opportunities": [
+    {
+      "id": "opp-social-tennis",
+      "type": "social",
+      "ownerUserId": "user-bruno",
+      "tags": ["tennis"]
+    },
+    {
+      "id": "opp-reconnect-hugo",
+      "type": "reconnect",
+      "ownerUserId": "user-hugo",
+      "tags": ["reconnect"]
+    },
+    {
+      "id": "opp-dating-intro-diana",
+      "type": "dating",
+      "ownerUserId": "user-diana",
+      "tags": ["dating", "music"]
+    },
+    {
+      "id": "opp-commerce-console-seller",
+      "type": "commerce",
+      "ownerUserId": "user-seller",
+      "tags": ["commerce", "console"]
+    }
+  ]
+}

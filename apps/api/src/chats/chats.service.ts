@@ -27,6 +27,7 @@ const CHAT_MESSAGE_REVIEWLIST = [
   "send nudes",
   "weapon meetup",
 ];
+const MUTE_USER_IDS_PREFERENCE_KEY = "global_rules_muted_user_ids";
 
 type ChatSystemMessageKind =
   | "system"
@@ -145,6 +146,15 @@ export class ChatsService {
       const blocked = await this.isBlockedInChat(chatId, senderUserId);
       if (blocked) {
         throw new ForbiddenException("message sending is blocked in this chat");
+      }
+      const mutedOrReported = await this.isMutedOrReportedInChat(
+        chatId,
+        senderUserId,
+      );
+      if (mutedOrReported) {
+        throw new ForbiddenException(
+          "message sending is suppressed in this chat",
+        );
       }
     }
 
@@ -1038,35 +1048,15 @@ export class ChatsService {
 
   private async isBlockedInChat(chatId: string, senderUserId: string) {
     if (
-      !this.prisma.chat?.findUnique ||
       !this.prisma.connectionParticipant?.findMany ||
       !this.prisma.block?.findMany
     ) {
       return false;
     }
-
-    const chat = await this.prisma.chat.findUnique({
-      where: { id: chatId },
-      select: {
-        connectionId: true,
-      },
-    });
-    if (!chat) {
-      throw new NotFoundException("chat not found");
-    }
-
-    const participants = await this.prisma.connectionParticipant.findMany({
-      where: {
-        connectionId: chat.connectionId,
-        leftAt: null,
-      },
-      select: {
-        userId: true,
-      },
-    });
-    const otherUserIds = participants
-      .map((participant) => participant.userId)
-      .filter((userId) => userId !== senderUserId);
+    const otherUserIds = await this.getOtherParticipantUserIds(
+      chatId,
+      senderUserId,
+    );
     if (otherUserIds.length === 0) {
       return false;
     }
@@ -1090,6 +1080,126 @@ export class ChatsService {
       take: 1,
     });
     return blocks.length > 0;
+  }
+
+  private async isMutedOrReportedInChat(chatId: string, senderUserId: string) {
+    const otherUserIds = await this.getOtherParticipantUserIds(
+      chatId,
+      senderUserId,
+    );
+    if (otherUserIds.length === 0) {
+      return false;
+    }
+
+    const [muteRows, reportRows] = await Promise.all([
+      this.prisma.userPreference?.findMany
+        ? this.prisma.userPreference.findMany({
+            where: {
+              userId: {
+                in: [senderUserId, ...otherUserIds],
+              },
+              key: MUTE_USER_IDS_PREFERENCE_KEY,
+            },
+            select: {
+              userId: true,
+              value: true,
+            },
+          })
+        : Promise.resolve([] as Array<{ userId: string; value: unknown }>),
+      this.prisma.userReport?.findMany
+        ? this.prisma.userReport.findMany({
+            where: {
+              status: "open",
+              OR: [
+                {
+                  reporterUserId: senderUserId,
+                  targetUserId: {
+                    in: otherUserIds,
+                  },
+                },
+                {
+                  reporterUserId: {
+                    in: otherUserIds,
+                  },
+                  targetUserId: senderUserId,
+                },
+              ],
+            },
+            select: {
+              id: true,
+            },
+            take: 1,
+          })
+        : Promise.resolve([] as Array<{ id: string }>),
+    ]);
+
+    if (reportRows.length > 0) {
+      return true;
+    }
+
+    const mutedByUser = new Map<string, Set<string>>();
+    for (const row of muteRows) {
+      const mutedUserIds = this.readNormalizedUserIds(row.value);
+      if (mutedUserIds.length === 0) {
+        continue;
+      }
+      mutedByUser.set(row.userId, new Set(mutedUserIds));
+    }
+
+    const normalizedSenderUserId = senderUserId.toLowerCase();
+    const senderMutedUsers = mutedByUser.get(senderUserId) ?? new Set<string>();
+    return otherUserIds.some((otherUserId) => {
+      const normalizedOtherUserId = otherUserId.toLowerCase();
+      return (
+        senderMutedUsers.has(normalizedOtherUserId) ||
+        (mutedByUser.get(otherUserId)?.has(normalizedSenderUserId) ?? false)
+      );
+    });
+  }
+
+  private async getOtherParticipantUserIds(
+    chatId: string,
+    senderUserId: string,
+  ) {
+    if (
+      !this.prisma.chat?.findUnique ||
+      !this.prisma.connectionParticipant?.findMany
+    ) {
+      return [] as string[];
+    }
+    const chat = await this.prisma.chat.findUnique({
+      where: { id: chatId },
+      select: {
+        connectionId: true,
+      },
+    });
+    if (!chat) {
+      throw new NotFoundException("chat not found");
+    }
+
+    const participants = await this.prisma.connectionParticipant.findMany({
+      where: {
+        connectionId: chat.connectionId,
+        leftAt: null,
+      },
+      select: {
+        userId: true,
+      },
+    });
+    return participants
+      .map((participant) => participant.userId)
+      .filter((userId) => userId !== senderUserId);
+  }
+
+  private readNormalizedUserIds(value: unknown) {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return value
+      .map((item) =>
+        typeof item === "string" ? item.trim().toLowerCase() : "",
+      )
+      .filter((item) => item.length > 0);
   }
 
   private async trackChatMessageAnalyticsSafe(

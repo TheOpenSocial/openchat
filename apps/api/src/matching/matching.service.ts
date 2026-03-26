@@ -52,6 +52,8 @@ const EMBEDDING_MODEL = "text-embedding-3-small";
 const DEFAULT_SEMANTIC_POOL_SIZE = 24;
 const RECENT_INTERACTION_SUPPRESSION_DAYS = 14;
 const DEFAULT_OFFLINE_MIN_ACCOUNT_AGE_DAYS = 7;
+const MUTE_USER_IDS_PREFERENCE_KEY = "global_rules_muted_user_ids";
+const OPEN_REPORT_SUPPRESSION_THRESHOLD = 3;
 
 @Injectable()
 export class MatchingService {
@@ -170,6 +172,7 @@ export class MatchingService {
                   "global_rules_language_preferences",
                   "global_rules_country_preferences",
                   "global_rules_require_verified_users",
+                  MUTE_USER_IDS_PREFERENCE_KEY,
                 ],
               },
             },
@@ -341,6 +344,10 @@ export class MatchingService {
 
     const scored: RetrievedCandidate[] = [];
     for (const user of eligibleUsers) {
+      const openReportCount = reportsByUser.get(user.id) ?? 0;
+      if (openReportCount >= OPEN_REPORT_SUPPRESSION_THRESHOLD) {
+        continue;
+      }
       const labels = labelsByUser.get(user.id) ?? new Set<string>();
       let lexicalOverlapCount = 0;
       for (const label of labels) {
@@ -383,7 +390,7 @@ export class MatchingService {
       const normalizedTrust = this.computeTrustScore({
         trust,
         moderationState: user.profile?.moderationState ?? "clean",
-        openReportCount: reportsByUser.get(user.id) ?? 0,
+        openReportCount,
       });
       const recentInteractionCount = recentInteractionCounts.get(user.id) ?? 0;
       const novelty = this.computeNoveltyScore(recentInteractionCount);
@@ -426,6 +433,7 @@ export class MatchingService {
           availability: user.profile?.availabilityMode ?? "flexible",
           trustScore: trust,
           trustScoreNormalized: normalizedTrust,
+          openReportCount,
           verificationLevel: verificationLevelByUser.get(user.id) ?? null,
           recentInteractionCount,
           noveltySuppressionScore: novelty,
@@ -1342,6 +1350,22 @@ export class MatchingService {
     ) {
       return false;
     }
+    const senderId = input.sender?.id ?? null;
+    if (
+      senderId &&
+      (this.isUserMutedInPreferences(
+        input.preferencesByUser,
+        senderId,
+        user.id,
+      ) ||
+        this.isUserMutedInPreferences(
+          input.preferencesByUser,
+          user.id,
+          senderId,
+        ))
+    ) {
+      return false;
+    }
     if (
       !this.passesOfflineSafetyConstraints({
         intentModality: input.intentModality,
@@ -1705,6 +1729,23 @@ export class MatchingService {
         typeof item === "string" ? item.trim().toLowerCase() : "",
       )
       .filter((item) => item.length > 0);
+  }
+
+  private isUserMutedInPreferences(
+    preferencesByUser: Map<string, Map<string, unknown>>,
+    sourceUserId: string,
+    targetUserId: string,
+  ) {
+    const normalizedTarget = targetUserId.trim().toLowerCase();
+    if (!normalizedTarget) {
+      return false;
+    }
+    const mutedUserIds = this.readNormalizedStringArrayPreference(
+      preferencesByUser,
+      sourceUserId,
+      MUTE_USER_IDS_PREFERENCE_KEY,
+    );
+    return mutedUserIds.includes(normalizedTarget);
   }
 
   private resolveVerificationLevel(input: {

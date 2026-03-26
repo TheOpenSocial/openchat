@@ -289,6 +289,9 @@ importers:
       expo-device:
         specifier: ^55.0.10
         version: 55.0.10(expo@55.0.8)
+      expo-glass-effect:
+        specifier: ~55.0.8
+        version: 55.0.8(expo@55.0.8)(react-native@0.83.2(@babel/core@7.29.0)(@react-native/metro-config@0.84.1(@babel/core@7.29.0))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3)
       expo-haptics:
         specifier: ^55.0.9
         version: 55.0.9(expo@55.0.8)
@@ -3871,6 +3874,13 @@ packages:
 
   expo-font@55.0.4:
     resolution: {integrity: sha512-ZKeGTFffPygvY5dM/9ATM2p7QDkhsaHopH7wFAWgP2lKzqUMS9B/RxCvw5CaObr9Ro7x9YptyeRKX2HmgmMfrg==}
+    peerDependencies:
+      expo: '*'
+      react: 19.2.3
+      react-native: '*'
+
+  expo-glass-effect@55.0.8:
+    resolution: {integrity: sha512-IvUjHb/4t6r2H/LXDjcQ4uDoHrmO2cLOvEb9leLavQ4HX5+P4LRtQrMDMlkWAn5Wo5DkLcG8+1CrQU2nqgogTA==}
     peerDependencies:
       expo: '*'
       react: 19.2.3
@@ -8785,9 +8795,7 @@ snapshots:
       metro-runtime: 0.83.5
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
     optional: true
 
   '@react-native/normalize-colors@0.83.2': {}
@@ -10264,6 +10272,12 @@ snapshots:
     dependencies:
       expo: 55.0.8(patch_hash=1cd7cb6e03a85de4a481fec126192661a85312f017fb58a965796ce73da15723)(@babel/core@7.29.0)(@expo/dom-webview@55.0.3)(react-dom@19.2.3(react@19.2.3))(react-native@0.83.2(@babel/core@7.29.0)(@react-native/metro-config@0.84.1(@babel/core@7.29.0))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3)(typescript@5.9.3)
       fontfaceobserver: 2.3.0
+      react: 19.2.3
+      react-native: 0.83.2(@babel/core@7.29.0)(@react-native/metro-config@0.84.1(@babel/core@7.29.0))(@types/react@19.2.14)(react@19.2.3)
+
+  expo-glass-effect@55.0.8(expo@55.0.8)(react-native@0.83.2(@babel/core@7.29.0)(@react-native/metro-config@0.84.1(@babel/core@7.29.0))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3):
+    dependencies:
+      expo: 55.0.8(patch_hash=1cd7cb6e03a85de4a481fec126192661a85312f017fb58a965796ce73da15723)(@babel/core@7.29.0)(@expo/dom-webview@55.0.3)(react-dom@19.2.3(react@19.2.3))(react-native@0.83.2(@babel/core@7.29.0)(@react-native/metro-config@0.84.1(@babel/core@7.29.0))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3)(typescript@5.9.3)
       react: 19.2.3
       react-native: 0.83.2(@babel/core@7.29.0)(@react-native/metro-config@0.84.1(@babel/core@7.29.0))(@types/react@19.2.14)(react@19.2.3)
 

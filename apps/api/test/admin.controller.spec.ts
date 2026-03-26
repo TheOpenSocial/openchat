@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { agenticScenarioDatasetSchema } from "@opensocial/types";
 import { describe, expect, it, vi } from "vitest";
 import { AdminController } from "../src/admin/admin.controller.js";
 import {
@@ -18,6 +21,16 @@ const DEAD_LETTER_ID = "22222222-2222-4222-8222-222222222222";
 const INTENT_ID = "33333333-3333-4333-8333-333333333333";
 const CHAT_ID = "44444444-4444-4444-8444-444444444444";
 const AGENT_THREAD_ID = "55555555-5555-4555-8555-555555555555";
+const SCENARIO_FIXTURE_PATH = resolve(
+  process.cwd(),
+  "test/fixtures/agentic-scenarios.json",
+);
+
+function loadScenarioDataset() {
+  return agenticScenarioDatasetSchema.parse(
+    JSON.parse(readFileSync(SCENARIO_FIXTURE_PATH, "utf8")),
+  );
+}
 
 function createController(overrides: Partial<Record<string, any>> = {}) {
   const deadLetterService = overrides.deadLetterService ?? {
@@ -166,6 +179,10 @@ function createController(overrides: Partial<Record<string, any>> = {}) {
       scenarios: [],
     }),
   };
+  const workflowRuntimeService = overrides.workflowRuntimeService ?? {
+    listRecentRuns: vi.fn().mockResolvedValue([]),
+    getRunDetails: vi.fn().mockResolvedValue(null),
+  };
 
   return {
     deadLetterService,
@@ -181,6 +198,7 @@ function createController(overrides: Partial<Record<string, any>> = {}) {
     notificationsService,
     chatsService,
     agenticEvalsService,
+    workflowRuntimeService,
     moduleRef,
     controller: new AdminController(
       deadLetterService,
@@ -197,6 +215,7 @@ function createController(overrides: Partial<Record<string, any>> = {}) {
       chatsService,
       moduleRef,
       agenticEvalsService,
+      workflowRuntimeService,
     ),
   };
 }
@@ -215,6 +234,838 @@ describe("AdminController", () => {
         action: "admin.dead_letter_list",
       }),
     );
+  });
+
+  it("returns recent workflow runtime summaries for support role", async () => {
+    const { controller, workflowRuntimeService, adminAuditService } =
+      createController({
+        workflowRuntimeService: {
+          listRecentRuns: vi.fn().mockResolvedValue([
+            {
+              workflowRunId: "social:intent:intent-1",
+              traceId: "trace-1",
+              domain: "social",
+              entityType: "intent",
+              entityId: "intent-1",
+              userId: ADMIN_USER_ID,
+              threadId: null,
+              startedAt: "2026-03-24T00:00:00.000Z",
+              lastActivityAt: "2026-03-24T00:00:05.000Z",
+              summary: "Intent accepted into the agentic workflow runtime.",
+              stages: [
+                {
+                  stage: "parse",
+                  status: "completed",
+                  at: "2026-03-24T00:00:01.000Z",
+                  summary: "Intent parsing completed and persisted.",
+                },
+              ],
+              replayability: "replayable",
+              integrity: {
+                sideEffectCount: 0,
+                dedupedSideEffectCount: 0,
+                reusedRelations: [],
+              },
+              sideEffects: [],
+            },
+          ]),
+          getRunDetails: vi.fn().mockResolvedValue(null),
+        },
+      });
+
+    const response = (await controller.opsAgentWorkflows(
+      ADMIN_USER_ID,
+      "support",
+      "10",
+    )) as any;
+
+    expect(workflowRuntimeService.listRecentRuns).toHaveBeenCalledWith(10);
+    expect(response.data.summary.totalRuns).toBe(1);
+    expect(response.data.summary.replayability.replayable).toBe(1);
+    expect(response.data.summary.health).toEqual({
+      healthy: 1,
+      watch: 0,
+      critical: 0,
+    });
+    expect(response.data.runs[0]?.workflowRunId).toBe("social:intent:intent-1");
+    expect(adminAuditService.recordAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "admin.ops_agent_workflows_view",
+      }),
+    );
+  });
+
+  it("filters workflow runtime summaries by replayability/domain/dedupe", async () => {
+    const { controller, adminAuditService } = createController({
+      workflowRuntimeService: {
+        listRecentRuns: vi.fn().mockResolvedValue([
+          {
+            workflowRunId: "social:intent:intent-1",
+            traceId: "trace-1",
+            domain: "social",
+            entityType: "intent",
+            entityId: "intent-1",
+            userId: ADMIN_USER_ID,
+            threadId: null,
+            startedAt: "2026-03-24T00:00:00.000Z",
+            lastActivityAt: "2026-03-24T00:00:05.000Z",
+            summary: "Social replayable run with dedupe.",
+            stages: [],
+            replayability: "replayable",
+            integrity: {
+              sideEffectCount: 2,
+              dedupedSideEffectCount: 1,
+              reusedRelations: ["intent_request_reused"],
+            },
+            sideEffects: [],
+          },
+          {
+            workflowRunId: "social:intent:intent-2",
+            traceId: "trace-2",
+            domain: "social",
+            entityType: "intent",
+            entityId: "intent-2",
+            userId: ADMIN_USER_ID,
+            threadId: null,
+            startedAt: "2026-03-24T00:01:00.000Z",
+            lastActivityAt: "2026-03-24T00:01:05.000Z",
+            summary: "Social partial run without dedupe.",
+            stages: [],
+            replayability: "partial",
+            integrity: {
+              sideEffectCount: 1,
+              dedupedSideEffectCount: 0,
+              reusedRelations: [],
+            },
+            sideEffects: [],
+          },
+          {
+            workflowRunId: "dating:intent:intent-3",
+            traceId: "trace-3",
+            domain: "dating",
+            entityType: "intent",
+            entityId: "intent-3",
+            userId: ADMIN_USER_ID,
+            threadId: null,
+            startedAt: "2026-03-24T00:02:00.000Z",
+            lastActivityAt: "2026-03-24T00:02:05.000Z",
+            summary: "Dating replayable run.",
+            stages: [],
+            replayability: "replayable",
+            integrity: {
+              sideEffectCount: 1,
+              dedupedSideEffectCount: 0,
+              reusedRelations: [],
+            },
+            sideEffects: [],
+          },
+        ]),
+        getRunDetails: vi.fn().mockResolvedValue(null),
+      },
+    });
+
+    const response = (await controller.opsAgentWorkflows(
+      ADMIN_USER_ID,
+      "support",
+      "20",
+      "replayable",
+      "social",
+      "true",
+    )) as any;
+
+    expect(response.data.summary.totalRuns).toBe(1);
+    expect(response.data.runs).toHaveLength(1);
+    expect(response.data.runs[0]?.workflowRunId).toBe("social:intent:intent-1");
+    expect(adminAuditService.recordAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "admin.ops_agent_workflows_view",
+        metadata: expect.objectContaining({
+          replayabilityFilter: "replayable",
+          domainFilter: "social",
+          dedupeOnly: true,
+          unfilteredRunCount: 3,
+          runCount: 1,
+        }),
+      }),
+    );
+  });
+
+  it("filters workflow runtime summaries by health", async () => {
+    const { controller } = createController({
+      workflowRuntimeService: {
+        listRecentRuns: vi.fn().mockResolvedValue([
+          {
+            workflowRunId: "social:intent:intent-healthy",
+            traceId: "trace-healthy",
+            domain: "social",
+            entityType: "intent",
+            entityId: "intent-healthy",
+            userId: ADMIN_USER_ID,
+            threadId: null,
+            startedAt: "2026-03-24T00:00:00.000Z",
+            lastActivityAt: "2026-03-24T00:00:05.000Z",
+            summary: "Healthy run.",
+            stages: [
+              {
+                stage: "ranking",
+                status: "completed",
+                at: "2026-03-24T00:00:03.000Z",
+                summary: "Ranking done.",
+              },
+            ],
+            replayability: "replayable",
+            integrity: {
+              sideEffectCount: 0,
+              dedupedSideEffectCount: 0,
+              reusedRelations: [],
+            },
+            sideEffects: [],
+          },
+          {
+            workflowRunId: "social:intent:intent-critical",
+            traceId: "trace-critical",
+            domain: "social",
+            entityType: "intent",
+            entityId: "intent-critical",
+            userId: ADMIN_USER_ID,
+            threadId: null,
+            startedAt: "2026-03-24T00:10:00.000Z",
+            lastActivityAt: "2026-03-24T00:10:05.000Z",
+            summary: "Critical run.",
+            stages: [
+              {
+                stage: "fanout",
+                status: "failed",
+                at: "2026-03-24T00:10:03.000Z",
+                summary: "Fanout failed.",
+              },
+            ],
+            replayability: "partial",
+            integrity: {
+              sideEffectCount: 0,
+              dedupedSideEffectCount: 0,
+              reusedRelations: [],
+            },
+            sideEffects: [],
+          },
+        ]),
+        getRunDetails: vi.fn().mockResolvedValue(null),
+      },
+    });
+
+    const response = (await controller.opsAgentWorkflows(
+      ADMIN_USER_ID,
+      "support",
+      "20",
+      undefined,
+      undefined,
+      undefined,
+      "critical",
+    )) as any;
+
+    expect(response.data.summary.totalRuns).toBe(1);
+    expect(response.data.summary.health).toEqual({
+      healthy: 0,
+      watch: 0,
+      critical: 1,
+    });
+    expect(response.data.summary.stageStatusCounts.failed).toBe(1);
+    expect(response.data.runs[0]?.workflowRunId).toBe(
+      "social:intent:intent-critical",
+    );
+    expect(response.data.runs[0]?.health).toBe("critical");
+  });
+
+  it("filters workflow runtime summaries by failure class", async () => {
+    const { controller } = createController({
+      workflowRuntimeService: {
+        listRecentRuns: vi.fn().mockResolvedValue([
+          {
+            workflowRunId: "social:intent:intent-matching",
+            traceId: "trace-matching",
+            domain: "social",
+            entityType: "intent",
+            entityId: "intent-matching",
+            userId: ADMIN_USER_ID,
+            threadId: null,
+            startedAt: "2026-03-24T00:00:00.000Z",
+            lastActivityAt: "2026-03-24T00:00:05.000Z",
+            summary: "Matching run failed in fanout.",
+            stages: [
+              {
+                stage: "fanout",
+                status: "failed",
+                at: "2026-03-24T00:00:03.000Z",
+                summary: "Fanout request failed.",
+              },
+            ],
+            replayability: "partial",
+            integrity: {
+              sideEffectCount: 0,
+              dedupedSideEffectCount: 0,
+              reusedRelations: [],
+            },
+            sideEffects: [],
+          },
+          {
+            workflowRunId: "social:intent:intent-policy",
+            traceId: "trace-policy",
+            domain: "social",
+            entityType: "intent",
+            entityId: "intent-policy",
+            userId: ADMIN_USER_ID,
+            threadId: null,
+            startedAt: "2026-03-24T00:10:00.000Z",
+            lastActivityAt: "2026-03-24T00:10:05.000Z",
+            summary: "Policy blocked run.",
+            stages: [
+              {
+                stage: "moderation",
+                status: "blocked",
+                at: "2026-03-24T00:10:03.000Z",
+                summary: "Blocked by policy gate.",
+              },
+            ],
+            replayability: "partial",
+            integrity: {
+              sideEffectCount: 0,
+              dedupedSideEffectCount: 0,
+              reusedRelations: [],
+            },
+            sideEffects: [],
+          },
+        ]),
+        getRunDetails: vi.fn().mockResolvedValue(null),
+      },
+    });
+
+    const response = (await controller.opsAgentWorkflows(
+      ADMIN_USER_ID,
+      "support",
+      "20",
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      "matching_or_negotiation",
+    )) as any;
+
+    expect(response.data.summary.totalRuns).toBe(1);
+    expect(response.data.summary.failureClasses.matchingOrNegotiation).toBe(1);
+    expect(response.data.summary.failureClasses.moderationOrPolicy).toBe(0);
+    expect(response.data.runs[0]?.workflowRunId).toBe(
+      "social:intent:intent-matching",
+    );
+    expect(response.data.runs[0]?.triage.failureClass).toBe(
+      "matching_or_negotiation",
+    );
+    expect(response.data.runs[0]?.triage.suspectStages).toEqual(["fanout"]);
+    expect(response.data.runs[0]?.triage.replayHint).toContain(
+      "Replay is partial",
+    );
+  });
+
+  it("maps scenario-backed workflow failure families to triage classes", async () => {
+    const scenarioDataset = loadScenarioDataset();
+    const scenarioById = new Map(
+      scenarioDataset.scenarios.map((scenario) => [scenario.id, scenario]),
+    );
+
+    const matrix = [
+      {
+        scenarioId: "workflow_failure_llm_schema_v1",
+        expectedFailureClass: "llm_or_schema",
+        stageStatus: "failed",
+        dedupedSideEffectCount: 0,
+      },
+      {
+        scenarioId: "workflow_failure_queue_replay_v1",
+        expectedFailureClass: "queue_or_replay",
+        stageStatus: "failed",
+        dedupedSideEffectCount: 0,
+      },
+      {
+        scenarioId: "workflow_failure_notification_followup_v1",
+        expectedFailureClass: "notification_or_followup",
+        stageStatus: "failed",
+        dedupedSideEffectCount: 0,
+      },
+      {
+        scenarioId: "workflow_failure_persistence_dedupe_v1",
+        expectedFailureClass: "persistence_or_dedupe",
+        stageStatus: "failed",
+        dedupedSideEffectCount: 1,
+      },
+      {
+        scenarioId: "workflow_failure_latency_capacity_v1",
+        expectedFailureClass: "latency_or_capacity",
+        stageStatus: "degraded",
+        dedupedSideEffectCount: 0,
+      },
+      {
+        scenarioId: "workflow_failure_observability_gap_v1",
+        expectedFailureClass: "observability_gap",
+        stageStatus: "failed",
+        dedupedSideEffectCount: 0,
+      },
+    ] as const;
+
+    const runs = matrix.map((entry, index) => {
+      const scenario = scenarioById.get(entry.scenarioId);
+      if (!scenario) {
+        throw new Error(`missing scenario ${entry.scenarioId}`);
+      }
+      const stage = scenario.expected.workflowStages[0] ?? "unknown";
+      return {
+        workflowRunId: `social:intent:${scenario.id}`,
+        traceId: `trace-failure-family-${index + 1}`,
+        domain: "social",
+        entityType: "intent",
+        entityId: scenario.id,
+        userId: ADMIN_USER_ID,
+        threadId: null,
+        startedAt: "2026-03-24T00:00:00.000Z",
+        lastActivityAt: "2026-03-24T00:00:05.000Z",
+        summary: scenario.utterance,
+        stages: [
+          {
+            stage,
+            status: entry.stageStatus,
+            at: "2026-03-24T00:00:03.000Z",
+            summary: `Scenario ${scenario.id} failure stage`,
+          },
+        ],
+        replayability:
+          entry.stageStatus === "degraded" ? "replayable" : "partial",
+        integrity: {
+          sideEffectCount: entry.dedupedSideEffectCount > 0 ? 1 : 0,
+          dedupedSideEffectCount: entry.dedupedSideEffectCount,
+          reusedRelations:
+            entry.dedupedSideEffectCount > 0 ? ["intent_request_reused"] : [],
+        },
+        sideEffects: [],
+      };
+    });
+
+    const { controller } = createController({
+      workflowRuntimeService: {
+        listRecentRuns: vi.fn().mockResolvedValue(runs),
+        getRunDetails: vi.fn().mockResolvedValue(null),
+      },
+    });
+
+    const response = (await controller.opsAgentWorkflows(
+      ADMIN_USER_ID,
+      "support",
+      "50",
+    )) as any;
+
+    const triageByRunId = new Map<string, any>(
+      response.data.runs.map((run: any) => [run.workflowRunId, run.triage]),
+    );
+
+    for (const entry of matrix) {
+      const scenario = scenarioById.get(entry.scenarioId);
+      if (!scenario) {
+        throw new Error(`missing scenario ${entry.scenarioId}`);
+      }
+      const triage = triageByRunId.get(`social:intent:${scenario.id}`);
+      expect(triage?.failureClass).toBe(entry.expectedFailureClass);
+      expect(Array.isArray(triage?.suspectStages)).toBe(true);
+      expect(String(triage?.replayHint ?? "").length).toBeGreaterThan(0);
+    }
+  });
+
+  it("filters workflow runtime summaries by suspect stage", async () => {
+    const { controller, adminAuditService } = createController({
+      workflowRuntimeService: {
+        listRecentRuns: vi.fn().mockResolvedValue([
+          {
+            workflowRunId: "social:intent:intent-fanout",
+            traceId: "trace-fanout",
+            domain: "social",
+            entityType: "intent",
+            entityId: "intent-fanout",
+            userId: ADMIN_USER_ID,
+            threadId: null,
+            startedAt: "2026-03-24T00:00:00.000Z",
+            lastActivityAt: "2026-03-24T00:00:05.000Z",
+            summary: "Fanout failure run.",
+            stages: [
+              {
+                stage: "fanout",
+                status: "failed",
+                at: "2026-03-24T00:00:03.000Z",
+                summary: "Fanout failed.",
+              },
+            ],
+            replayability: "partial",
+            integrity: {
+              sideEffectCount: 0,
+              dedupedSideEffectCount: 0,
+              reusedRelations: [],
+            },
+            sideEffects: [],
+          },
+          {
+            workflowRunId: "social:intent:intent-moderation",
+            traceId: "trace-moderation",
+            domain: "social",
+            entityType: "intent",
+            entityId: "intent-moderation",
+            userId: ADMIN_USER_ID,
+            threadId: null,
+            startedAt: "2026-03-24T00:10:00.000Z",
+            lastActivityAt: "2026-03-24T00:10:05.000Z",
+            summary: "Moderation blocked run.",
+            stages: [
+              {
+                stage: "moderation",
+                status: "blocked",
+                at: "2026-03-24T00:10:03.000Z",
+                summary: "Moderation blocked.",
+              },
+            ],
+            replayability: "partial",
+            integrity: {
+              sideEffectCount: 0,
+              dedupedSideEffectCount: 0,
+              reusedRelations: [],
+            },
+            sideEffects: [],
+          },
+        ]),
+        getRunDetails: vi.fn().mockResolvedValue(null),
+      },
+    });
+
+    const response = (await controller.opsAgentWorkflows(
+      ADMIN_USER_ID,
+      "support",
+      "20",
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      "fanout",
+    )) as any;
+
+    expect(response.data.summary.totalRuns).toBe(1);
+    expect(response.data.runs).toHaveLength(1);
+    expect(response.data.runs[0]?.workflowRunId).toBe(
+      "social:intent:intent-fanout",
+    );
+    expect(response.data.runs[0]?.triage.suspectStages).toEqual(["fanout"]);
+    expect(adminAuditService.recordAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "admin.ops_agent_workflows_view",
+        metadata: expect.objectContaining({
+          suspectStageFilter: ["fanout"],
+        }),
+      }),
+    );
+  });
+
+  it("filters workflow runtime summaries by failuresOnly and reports top failure stages", async () => {
+    const { controller, adminAuditService } = createController({
+      workflowRuntimeService: {
+        listRecentRuns: vi.fn().mockResolvedValue([
+          {
+            workflowRunId: "social:intent:intent-healthy",
+            traceId: "trace-healthy",
+            domain: "social",
+            entityType: "intent",
+            entityId: "intent-healthy",
+            userId: ADMIN_USER_ID,
+            threadId: null,
+            startedAt: "2026-03-24T00:00:00.000Z",
+            lastActivityAt: "2026-03-24T00:00:05.000Z",
+            summary: "Healthy run.",
+            stages: [
+              {
+                stage: "parse",
+                status: "completed",
+                at: "2026-03-24T00:00:03.000Z",
+                summary: "Parse done.",
+              },
+            ],
+            replayability: "replayable",
+            integrity: {
+              sideEffectCount: 0,
+              dedupedSideEffectCount: 0,
+              reusedRelations: [],
+            },
+            sideEffects: [],
+          },
+          {
+            workflowRunId: "social:intent:intent-critical-1",
+            traceId: "trace-critical-1",
+            domain: "social",
+            entityType: "intent",
+            entityId: "intent-critical-1",
+            userId: ADMIN_USER_ID,
+            threadId: null,
+            startedAt: "2026-03-24T00:10:00.000Z",
+            lastActivityAt: "2026-03-24T00:10:05.000Z",
+            summary: "Critical run 1.",
+            stages: [
+              {
+                stage: "fanout",
+                status: "failed",
+                at: "2026-03-24T00:10:03.000Z",
+                summary: "Fanout failed.",
+              },
+            ],
+            replayability: "partial",
+            integrity: {
+              sideEffectCount: 0,
+              dedupedSideEffectCount: 0,
+              reusedRelations: [],
+            },
+            sideEffects: [],
+          },
+          {
+            workflowRunId: "social:intent:intent-critical-2",
+            traceId: "trace-critical-2",
+            domain: "social",
+            entityType: "intent",
+            entityId: "intent-critical-2",
+            userId: ADMIN_USER_ID,
+            threadId: null,
+            startedAt: "2026-03-24T00:20:00.000Z",
+            lastActivityAt: "2026-03-24T00:20:05.000Z",
+            summary: "Critical run 2.",
+            stages: [
+              {
+                stage: "fanout",
+                status: "failed",
+                at: "2026-03-24T00:20:03.000Z",
+                summary: "Fanout failed.",
+              },
+              {
+                stage: "moderation",
+                status: "blocked",
+                at: "2026-03-24T00:20:04.000Z",
+                summary: "Moderation blocked.",
+              },
+            ],
+            replayability: "partial",
+            integrity: {
+              sideEffectCount: 0,
+              dedupedSideEffectCount: 0,
+              reusedRelations: [],
+            },
+            sideEffects: [],
+          },
+        ]),
+        getRunDetails: vi.fn().mockResolvedValue(null),
+      },
+    });
+
+    const response = (await controller.opsAgentWorkflows(
+      ADMIN_USER_ID,
+      "support",
+      "20",
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      "true",
+    )) as any;
+
+    expect(response.data.summary.totalRuns).toBe(2);
+    expect(response.data.summary.health).toEqual({
+      healthy: 0,
+      watch: 0,
+      critical: 2,
+    });
+    expect(response.data.summary.topFailureStages[0]).toEqual({
+      stage: "fanout",
+      status: "failed",
+      count: 2,
+    });
+    expect(response.data.runs).toHaveLength(2);
+    expect(adminAuditService.recordAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "admin.ops_agent_workflows_view",
+        metadata: expect.objectContaining({
+          failuresOnly: true,
+        }),
+      }),
+    );
+  });
+
+  it("rejects invalid workflow replayability filter", async () => {
+    const { controller } = createController();
+
+    await expect(
+      controller.opsAgentWorkflows(ADMIN_USER_ID, "support", "20", "invalid"),
+    ).rejects.toThrow(
+      "replayability must be replayable, partial, or inspect_only",
+    );
+  });
+
+  it("rejects invalid workflow health filter", async () => {
+    const { controller } = createController();
+
+    await expect(
+      controller.opsAgentWorkflows(
+        ADMIN_USER_ID,
+        "support",
+        "20",
+        undefined,
+        undefined,
+        undefined,
+        "unstable",
+      ),
+    ).rejects.toThrow("health must be healthy, watch, or critical");
+  });
+
+  it("rejects invalid workflow failure class filter", async () => {
+    const { controller } = createController();
+
+    await expect(
+      controller.opsAgentWorkflows(
+        ADMIN_USER_ID,
+        "support",
+        "20",
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        "unknown_class",
+      ),
+    ).rejects.toThrow("failureClass must be one of:");
+  });
+
+  it("rejects invalid failuresOnly query", async () => {
+    const { controller } = createController();
+
+    await expect(
+      controller.opsAgentWorkflows(
+        ADMIN_USER_ID,
+        "support",
+        "20",
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        "sometimes",
+      ),
+    ).rejects.toThrow("boolean query must be true/false");
+  });
+
+  it("returns workflow runtime detail snapshot for support role", async () => {
+    const { controller, workflowRuntimeService, adminAuditService } =
+      createController({
+        workflowRuntimeService: {
+          listRecentRuns: vi.fn().mockResolvedValue([]),
+          getRunDetails: vi.fn().mockResolvedValue({
+            run: {
+              workflowRunId: "social:intent:intent-1",
+              traceId: "trace-1",
+              domain: "social",
+              entityType: "intent",
+              entityId: "intent-1",
+              userId: ADMIN_USER_ID,
+              threadId: null,
+              startedAt: "2026-03-24T00:00:00.000Z",
+              lastActivityAt: "2026-03-24T00:00:05.000Z",
+              summary: "Intent accepted into runtime.",
+              stages: [
+                {
+                  stage: "parse",
+                  status: "completed",
+                  at: "2026-03-24T00:00:01.000Z",
+                  summary: "Parse complete.",
+                },
+              ],
+              replayability: "replayable",
+              integrity: {
+                sideEffectCount: 1,
+                dedupedSideEffectCount: 0,
+                reusedRelations: [],
+              },
+              sideEffects: [
+                {
+                  relation: "intent_request",
+                  entityType: "intent_request",
+                  entityId: "req-1",
+                  at: "2026-03-24T00:00:02.000Z",
+                  summary: "Created intro request.",
+                },
+              ],
+            },
+            trace: {
+              eventCount: 1,
+              failedEventCount: 0,
+              events: [
+                {
+                  id: "audit-1",
+                  action: "intent.pipeline.completed",
+                },
+              ],
+            },
+          }),
+        },
+      });
+
+    const response = (await controller.opsAgentWorkflowDetails(
+      ADMIN_USER_ID,
+      "support",
+      "social:intent:intent-1",
+    )) as any;
+
+    expect(workflowRuntimeService.getRunDetails).toHaveBeenCalledWith(
+      "social:intent:intent-1",
+    );
+    expect(response.data.run.workflowRunId).toBe("social:intent:intent-1");
+    expect(response.data.trace.eventCount).toBe(1);
+    expect(response.data.insights.health).toBe("healthy");
+    expect(response.data.insights.stageStatusCounts.completed).toBe(1);
+    expect(response.data.insights.triage.failureClass).toBe("none");
+    expect(response.data.insights.triage.suspectStages).toEqual([]);
+    expect(response.data.insights.triage.replayHint).toContain(
+      "Replay is available",
+    );
+    expect(adminAuditService.recordAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "admin.ops_agent_workflow_detail_view",
+        entityId: "social:intent:intent-1",
+        metadata: expect.objectContaining({
+          failureClass: "none",
+        }),
+      }),
+    );
+  });
+
+  it("requires workflowRunId for workflow runtime detail snapshot", async () => {
+    const { controller } = createController();
+
+    await expect(
+      controller.opsAgentWorkflowDetails(ADMIN_USER_ID, "support", undefined),
+    ).rejects.toThrow("workflowRunId is required");
+  });
+
+  it("returns not found when workflow runtime detail run does not exist", async () => {
+    const { controller } = createController({
+      workflowRuntimeService: {
+        listRecentRuns: vi.fn().mockResolvedValue([]),
+        getRunDetails: vi.fn().mockResolvedValue(null),
+      },
+    });
+
+    await expect(
+      controller.opsAgentWorkflowDetails(
+        ADMIN_USER_ID,
+        "support",
+        "social:intent:missing",
+      ),
+    ).rejects.toThrow("workflow run not found");
   });
 
   it("rejects moderator role for dead-letter replay actions", async () => {
@@ -361,6 +1212,39 @@ describe("AdminController", () => {
         role: "moderator",
         action: "admin.moderation_agent_risk_list",
       }),
+    );
+  });
+
+  it("falls back when moderation risk queries hit schema drift", async () => {
+    const schemaDriftError = Object.assign(new Error("missing column"), {
+      code: "P2022",
+    });
+    const { controller } = createController({
+      prisma: {
+        moderationFlag: {
+          findMany: vi.fn().mockRejectedValue(schemaDriftError),
+          count: vi.fn().mockResolvedValue(0),
+        },
+      },
+    });
+
+    const result = await controller.moderationAgentRiskFlags(
+      ADMIN_USER_ID,
+      "moderator",
+      "20",
+      "open",
+      "blocked",
+    );
+    const payload = result.data as {
+      totalMatching: number;
+      items: Array<unknown>;
+      degradedReadWarnings: string[];
+    };
+
+    expect(payload.totalMatching).toBe(0);
+    expect(payload.items).toEqual([]);
+    expect(payload.degradedReadWarnings).toContain(
+      "moderation_agent_risk_flags.read",
     );
   });
 
@@ -1351,6 +2235,30 @@ describe("AdminController", () => {
     );
   });
 
+  it("returns ops alerts with schema drift warnings instead of throwing", async () => {
+    const schemaDriftError = Object.assign(new Error("missing table"), {
+      code: "P2021",
+    });
+    const { controller } = createController({
+      prisma: {
+        auditLog: { count: vi.fn().mockResolvedValue(0) },
+        moderationFlag: { count: vi.fn().mockResolvedValue(0) },
+        clientMutation: {
+          findMany: vi.fn().mockRejectedValue(schemaDriftError),
+        },
+      },
+    });
+
+    const result = await controller.opsAlerts(ADMIN_USER_ID, "support");
+    const payload = result.data as {
+      degradedReadWarnings: string[];
+    };
+
+    expect(payload.degradedReadWarnings).toContain(
+      "ops_alerts.onboarding_activation_rows",
+    );
+  });
+
   it("returns agentic eval snapshot for support role", async () => {
     const { controller, adminAuditService, agenticEvalsService } =
       createController({
@@ -1363,7 +2271,15 @@ describe("AdminController", () => {
               failed: 0,
               passRate: 1,
               score: 1,
+              status: "healthy",
+              regressionCount: 0,
             },
+            traceGrade: {
+              grade: "A",
+              status: "healthy",
+              score: 0.95,
+            },
+            regressions: [],
             scenarios: [
               {
                 id: "planning_bounds",
@@ -1390,6 +2306,174 @@ describe("AdminController", () => {
     expect(adminAuditService.recordAction).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "admin.ops_agentic_evals_view",
+        metadata: expect.objectContaining({
+          traceGradeStatus: "healthy",
+          regressionCount: 0,
+        }),
+      }),
+    );
+  });
+
+  it("ingests and lists verification runs for support role", async () => {
+    let cachedRuns: unknown[] = [];
+    const appCacheService = {
+      getJson: vi.fn().mockImplementation(async () => cachedRuns),
+      setJson: vi
+        .fn()
+        .mockImplementation(async (_key: string, value: unknown) => {
+          cachedRuns = Array.isArray(value) ? value : [];
+        }),
+      delete: vi.fn().mockResolvedValue(undefined),
+    };
+    const { controller, adminAuditService } = createController({
+      appCacheService,
+    });
+
+    const ingest = (await controller.ingestVerificationRun(
+      {
+        runId: "agent-suite-2026-03-26T22-00-00-000Z",
+        lane: "verification",
+        layer: "full",
+        status: "passed",
+        canaryVerdict: "healthy",
+        summary: {
+          checks: 12,
+        },
+      },
+      ADMIN_USER_ID,
+      "support",
+    )) as any;
+
+    expect(ingest.data.stored.runId).toBe(
+      "agent-suite-2026-03-26T22-00-00-000Z",
+    );
+    expect(appCacheService.setJson).toHaveBeenCalledTimes(1);
+
+    const listed = (await controller.opsVerificationRuns(
+      ADMIN_USER_ID,
+      "support",
+      "20",
+      "verification",
+      "passed",
+    )) as any;
+
+    expect(listed.data.summary.totalRuns).toBe(1);
+    expect(listed.data.summary.byStatus.passed).toBe(1);
+    expect(listed.data.summary.byLane.verification).toBe(1);
+    expect(listed.data.runs[0]?.runId).toBe(
+      "agent-suite-2026-03-26T22-00-00-000Z",
+    );
+    expect(adminAuditService.recordAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "admin.ops_verification_runs_view",
+      }),
+    );
+  });
+
+  it("returns agent reliability snapshot with canary verdict and verification context", async () => {
+    const appCacheService = {
+      getJson: vi.fn().mockResolvedValue([
+        {
+          runId: "agent-suite-2026-03-26T23-00-00-000Z",
+          lane: "verification",
+          layer: "full",
+          status: "failed",
+          generatedAt: "2026-03-26T23:00:00.000Z",
+          ingestedAt: "2026-03-26T23:00:10.000Z",
+          canaryVerdict: "critical",
+          summary: { reason: "benchmark_threshold_breach" },
+          artifact: null,
+        },
+      ]),
+      setJson: vi.fn().mockResolvedValue(undefined),
+      delete: vi.fn().mockResolvedValue(undefined),
+    };
+    const { controller, adminAuditService, workflowRuntimeService } =
+      createController({
+        appCacheService,
+        workflowRuntimeService: {
+          listRecentRuns: vi.fn().mockResolvedValue([
+            {
+              workflowRunId: "social:intent:intent-critical",
+              traceId: "trace-critical",
+              domain: "social",
+              entityType: "intent",
+              entityId: "intent-critical",
+              userId: ADMIN_USER_ID,
+              threadId: null,
+              startedAt: "2026-03-24T00:10:00.000Z",
+              lastActivityAt: "2026-03-24T00:10:05.000Z",
+              summary: "Critical run.",
+              stages: [
+                {
+                  stage: "fanout",
+                  status: "failed",
+                  at: "2026-03-24T00:10:03.000Z",
+                  summary: "Fanout failed.",
+                },
+              ],
+              replayability: "partial",
+              integrity: {
+                sideEffectCount: 0,
+                dedupedSideEffectCount: 0,
+                reusedRelations: [],
+              },
+              sideEffects: [],
+            },
+          ]),
+          getRunDetails: vi.fn().mockResolvedValue(null),
+        },
+        agenticEvalsService: {
+          runSnapshot: vi.fn().mockResolvedValue({
+            generatedAt: "2026-03-26T23:01:00.000Z",
+            summary: {
+              total: 10,
+              passed: 8,
+              failed: 2,
+              passRate: 0.8,
+              score: 0.82,
+              status: "watch",
+              regressionCount: 1,
+            },
+            traceGrade: {
+              grade: "B",
+              status: "watch",
+              score: 0.82,
+            },
+            regressions: [
+              {
+                key: "dimension_correctness_degraded",
+                status: "triggered",
+                severity: "warning",
+                value: 0.72,
+                threshold: 0.75,
+              },
+            ],
+            scenarios: [],
+          }),
+        },
+      });
+
+    const result = (await controller.opsAgentReliability(
+      ADMIN_USER_ID,
+      "support",
+      "25",
+      "10",
+    )) as any;
+
+    expect(workflowRuntimeService.listRecentRuns).toHaveBeenCalledWith(25);
+    expect(result.data.workflow.totalRuns).toBe(1);
+    expect(result.data.workflow.topFailureStages[0]).toEqual({
+      stage: "fanout",
+      status: "failed",
+      count: 1,
+    });
+    expect(result.data.eval.status).toBe("watch");
+    expect(result.data.verification.latest?.status).toBe("failed");
+    expect(result.data.canary.verdict).toBe("critical");
+    expect(adminAuditService.recordAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "admin.ops_agent_reliability_view",
       }),
     );
   });

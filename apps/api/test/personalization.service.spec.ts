@@ -538,4 +538,123 @@ describe("PersonalizationService", () => {
       result.results.some((item) => item.docType === "interaction_summary"),
     ).toBe(false);
   });
+
+  it("suppresses strict memory writes when confidence is below class threshold", async () => {
+    const prisma = createLifeGraphPrismaMock();
+    const service = new PersonalizationService(prisma);
+    const userId = "11111111-1111-4111-8111-111111111111";
+
+    const result = await service.storeInteractionSummary(userId, {
+      summary: "Likely prefers night tennis sessions.",
+      memory: {
+        class: "stable_preference",
+        confidence: 0.3,
+        safeWritePolicy: "strict",
+        provenance: {
+          sourceType: "model_inference",
+          traceId: "trace-memory-1",
+        },
+      },
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        stored: false,
+        reason: "insufficient_confidence",
+      }),
+    );
+    expect(prisma.retrievalDocument.create).not.toHaveBeenCalled();
+  });
+
+  it("applies contradiction suppression and conflict-note policies for keyed memory writes", async () => {
+    const prisma = createLifeGraphPrismaMock();
+    const service = new PersonalizationService(prisma);
+    const userId = "11111111-1111-4111-8111-111111111111";
+
+    await service.storeInteractionSummary(userId, {
+      summary: "Prefers apex right now.",
+      memory: {
+        class: "inferred_preference",
+        key: "preferred_game",
+        value: "apex",
+        contradictionPolicy: "keep_latest",
+        provenance: {
+          sourceType: "agent_tool",
+          traceId: "trace-memory-2",
+        },
+      },
+    });
+    const suppressed = await service.storeInteractionSummary(userId, {
+      summary: "Prefers valorant instead.",
+      memory: {
+        class: "inferred_preference",
+        key: "preferred_game",
+        value: "valorant",
+        contradictionPolicy: "suppress_conflict",
+        provenance: {
+          sourceType: "agent_tool",
+          traceId: "trace-memory-3",
+        },
+      },
+    });
+    const appended = await service.storeInteractionSummary(userId, {
+      summary: "Updated preference to valorant.",
+      memory: {
+        class: "inferred_preference",
+        key: "preferred_game",
+        value: "valorant",
+        contradictionPolicy: "append_conflict_note",
+        provenance: {
+          sourceType: "agent_tool",
+          traceId: "trace-memory-4",
+        },
+      },
+    });
+
+    expect(suppressed).toEqual(
+      expect.objectContaining({
+        stored: false,
+        reason: "contradiction_suppressed",
+      }),
+    );
+    expect(appended).toEqual(
+      expect.objectContaining({
+        stored: true,
+        docType: "interaction_summary",
+      }),
+    );
+
+    const docs = await prisma.retrievalDocument.findMany({
+      where: { userId, docType: "interaction_summary" },
+    });
+    expect(
+      docs.some((doc: { content: string }) =>
+        doc.content.includes("memory.contradiction_note:"),
+      ),
+    ).toBe(true);
+  });
+
+  it("returns a compressed retrieval bundle for long memory context", async () => {
+    const prisma = createLifeGraphPrismaMock();
+    const service = new PersonalizationService(prisma);
+    const userId = "11111111-1111-4111-8111-111111111111";
+
+    for (let i = 0; i < 8; i += 1) {
+      await service.storeInteractionSummary(userId, {
+        summary: `Apex context ${i} ${"matchmaking ".repeat(50)}`,
+        safe: true,
+      });
+    }
+
+    const result = await service.retrievePersonalizationContext(userId, {
+      query: "apex matchmaking",
+      maxChunks: 8,
+      maxAgeDays: 30,
+    });
+
+    expect(result.bundle.length).toBeGreaterThan(0);
+    expect(result.bundle.length).toBeLessThanOrEqual(1200);
+    expect(result.bundleTokenEstimate).toBeGreaterThan(0);
+    expect(result.bundle.endsWith("...")).toBe(true);
+  });
 });

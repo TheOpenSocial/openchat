@@ -1,10 +1,13 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   ForbiddenException,
   Get,
   Headers,
+  Logger,
   NotFoundException,
+  Optional,
   Param,
   Post,
   Query,
@@ -18,6 +21,8 @@ import {
   adminModerationAgentRiskQuerySchema,
   adminModerationFlagTriageBodySchema,
   adminModerationQueueQuerySchema,
+  adminVerificationRunIngestBodySchema,
+  adminVerificationRunListQuerySchema,
   adminRepairChatFlowBodySchema,
   adminResendNotificationBodySchema,
   adminUserActionBodySchema,
@@ -33,6 +38,7 @@ import { getOpsRuntimeMetricsSnapshot } from "../common/ops-metrics.js";
 import { evaluateSecurityPosture } from "../common/security-posture.js";
 import { parseRequestPayload } from "../common/validation.js";
 import { AnalyticsService } from "../analytics/analytics.service.js";
+import { AgentWorkflowRuntimeService } from "../database/agent-workflow-runtime.service.js";
 import { DatabaseLatencyService } from "../database/database-latency.service.js";
 import { PrismaService } from "../database/prisma.service.js";
 import { IntentsService } from "../intents/intents.service.js";
@@ -46,9 +52,38 @@ import { PublicRoute } from "../auth/public-route.decorator.js";
 import { AgenticEvalsService } from "./agentic-evals.service.js";
 import { type AdminRole, AdminAuditService } from "./admin-audit.service.js";
 
+type VerificationRunRecord = {
+  runId: string;
+  lane: "suite" | "verification" | "prod-smoke";
+  layer: string;
+  status: "passed" | "failed" | "skipped";
+  generatedAt: string;
+  ingestedAt: string;
+  canaryVerdict: "healthy" | "watch" | "critical";
+  summary: Record<string, unknown> | null;
+  artifact: Record<string, unknown> | null;
+};
+
 @PublicRoute()
 @Controller("admin")
 export class AdminController {
+  private readonly logger = new Logger(AdminController.name);
+  private static readonly VERIFICATION_RUN_CACHE_KEY =
+    "ops:agent-verification-runs:v1";
+  private static readonly VERIFICATION_RUN_CACHE_MAX_ITEMS = 200;
+
+  private static readonly WORKFLOW_FAILURE_CLASSES = [
+    "none",
+    "llm_or_schema",
+    "moderation_or_policy",
+    "matching_or_negotiation",
+    "queue_or_replay",
+    "persistence_or_dedupe",
+    "notification_or_followup",
+    "latency_or_capacity",
+    "observability_gap",
+  ] as const;
+
   constructor(
     private readonly deadLetterService: DeadLetterService,
     private readonly outboxRelayService: OutboxRelayService,
@@ -64,6 +99,8 @@ export class AdminController {
     private readonly chatsService: ChatsService,
     private readonly moduleRef: ModuleRef,
     private readonly agenticEvalsService: AgenticEvalsService,
+    @Optional()
+    private readonly workflowRuntimeService?: AgentWorkflowRuntimeService,
   ) {}
 
   @Get("health")
@@ -218,21 +255,34 @@ export class AdminController {
     ]);
     const runtime = getOpsRuntimeMetricsSnapshot();
     const alertWindowStart = new Date(Date.now() - 15 * 60_000);
+    const degradedReadWarnings: string[] = [];
     const [dbLatencyMs, stalledJobCount, openModerationFlags, queueStates] =
       await Promise.all([
         this.measureDbLatencyMs(),
         this.prisma.auditLog?.count
-          ? this.prisma.auditLog.count({
-              where: {
-                action: "queue.job_stalled",
-                createdAt: { gte: alertWindowStart },
-              },
-            })
+          ? this.executeAdminReadWithSchemaFallback(
+              "ops_alerts.audit_log_count",
+              0,
+              () =>
+                this.prisma.auditLog.count({
+                  where: {
+                    action: "queue.job_stalled",
+                    createdAt: { gte: alertWindowStart },
+                  },
+                }),
+              degradedReadWarnings,
+            )
           : 0,
         this.prisma.moderationFlag?.count
-          ? this.prisma.moderationFlag.count({
-              where: { status: "open" },
-            })
+          ? this.executeAdminReadWithSchemaFallback(
+              "ops_alerts.open_moderation_flag_count",
+              0,
+              () =>
+                this.prisma.moderationFlag.count({
+                  where: { status: "open" },
+                }),
+              degradedReadWarnings,
+            )
           : 0,
         Promise.all(
           JOB_QUEUE_NAMES.map((queueName) => this.inspectQueue(queueName)),
@@ -293,23 +343,33 @@ export class AdminController {
     );
 
     const activationRows = this.prisma.clientMutation?.findMany
-      ? await this.prisma.clientMutation.findMany({
-          where: {
-            scope: "intent.create_from_agent",
-            idempotencyKey: {
-              startsWith: "onboarding-carryover:",
-            },
-            createdAt: {
-              gte: new Date(Date.now() - 24 * 60 * 60_000),
-            },
-          },
-          select: {
-            status: true,
-            createdAt: true,
-            updatedAt: true,
-          },
-          take: 5000,
-        })
+      ? await this.executeAdminReadWithSchemaFallback(
+          "ops_alerts.onboarding_activation_rows",
+          [] as Array<{
+            status: string;
+            createdAt: Date;
+            updatedAt: Date;
+          }>,
+          () =>
+            this.prisma.clientMutation.findMany({
+              where: {
+                scope: "intent.create_from_agent",
+                idempotencyKey: {
+                  startsWith: "onboarding-carryover:",
+                },
+                createdAt: {
+                  gte: new Date(Date.now() - 24 * 60 * 60_000),
+                },
+              },
+              select: {
+                status: true,
+                createdAt: true,
+                updatedAt: true,
+              },
+              take: 5000,
+            }),
+          degradedReadWarnings,
+        )
       : [];
     const onboardingActivationStarted = activationRows.length;
     const onboardingActivationFailed = activationRows.filter(
@@ -547,6 +607,7 @@ export class AdminController {
       generatedAt: new Date().toISOString(),
       alertWindowMinutes: 15,
       alerts,
+      degradedReadWarnings,
       summary: {
         status: alerts.length === 0 ? "healthy" : "degraded",
         criticalCount,
@@ -672,10 +733,679 @@ export class AdminController {
       metadata: {
         scenarioCount: snapshot.summary.total,
         passRate: snapshot.summary.passRate,
+        traceGradeStatus:
+          typeof snapshot.traceGrade?.status === "string"
+            ? snapshot.traceGrade.status
+            : null,
+        regressionCount: Array.isArray(snapshot.regressions)
+          ? snapshot.regressions.length
+          : 0,
       },
     });
 
     return ok(snapshot);
+  }
+
+  @Post("ops/verification-runs")
+  async ingestVerificationRun(
+    @Body() body: unknown,
+    @Headers("x-admin-user-id") adminUserIdHeader?: string,
+    @Headers("x-admin-role") adminRoleHeader?: string,
+  ) {
+    const admin = this.parseAdminContext(adminUserIdHeader, adminRoleHeader, [
+      "admin",
+      "support",
+      "moderator",
+    ]);
+    const payload = parseRequestPayload(
+      adminVerificationRunIngestBodySchema,
+      body ?? {},
+    );
+    const generatedAt = payload.generatedAt ?? new Date().toISOString();
+    const ingestedAt = new Date().toISOString();
+    const canaryVerdict =
+      payload.canaryVerdict ??
+      this.resolveVerificationRunCanaryVerdict(payload.status);
+    const existingRuns = await this.readVerificationRuns();
+    const runRecord: VerificationRunRecord = {
+      runId: payload.runId,
+      lane: payload.lane as VerificationRunRecord["lane"],
+      layer: payload.layer,
+      status: payload.status as VerificationRunRecord["status"],
+      generatedAt,
+      ingestedAt,
+      canaryVerdict: canaryVerdict as VerificationRunRecord["canaryVerdict"],
+      summary:
+        payload.summary &&
+        typeof payload.summary === "object" &&
+        !Array.isArray(payload.summary)
+          ? payload.summary
+          : null,
+      artifact:
+        payload.artifact &&
+        typeof payload.artifact === "object" &&
+        !Array.isArray(payload.artifact)
+          ? payload.artifact
+          : null,
+    };
+    const nextRuns: VerificationRunRecord[] = [
+      runRecord,
+      ...existingRuns.filter(
+        (run) => !(run.runId === payload.runId && run.lane === payload.lane),
+      ),
+    ]
+      .sort((left, right) => right.generatedAt.localeCompare(left.generatedAt))
+      .slice(0, AdminController.VERIFICATION_RUN_CACHE_MAX_ITEMS);
+    await this.writeVerificationRuns(nextRuns);
+
+    await this.adminAuditService.recordAction({
+      adminUserId: admin.adminUserId,
+      role: admin.role,
+      action: "admin.ops_verification_run_ingest",
+      entityType: "ops_verification_run",
+      entityId: payload.runId,
+      metadata: {
+        lane: payload.lane,
+        layer: payload.layer,
+        status: payload.status,
+        canaryVerdict,
+      },
+    });
+
+    return ok({
+      stored: runRecord,
+      totalRuns: nextRuns.length,
+    });
+  }
+
+  @Get("ops/verification-runs")
+  async opsVerificationRuns(
+    @Headers("x-admin-user-id") adminUserIdHeader?: string,
+    @Headers("x-admin-role") adminRoleHeader?: string,
+    @Query("limit") limitParam?: string,
+    @Query("lane") laneParam?: string,
+    @Query("status") statusParam?: string,
+  ) {
+    const admin = this.parseAdminContext(adminUserIdHeader, adminRoleHeader, [
+      "admin",
+      "support",
+      "moderator",
+    ]);
+    const query = parseRequestPayload(adminVerificationRunListQuerySchema, {
+      limit: limitParam,
+      lane: laneParam,
+      status: statusParam,
+    });
+    const limit = query.limit ?? 20;
+    const allRuns = await this.readVerificationRuns();
+    const filteredRuns = allRuns.filter((run) => {
+      if (query.lane && run.lane !== query.lane) {
+        return false;
+      }
+      if (query.status && run.status !== query.status) {
+        return false;
+      }
+      return true;
+    });
+    const runs = filteredRuns.slice(0, limit);
+    const byStatus = {
+      passed: runs.filter((run) => run.status === "passed").length,
+      failed: runs.filter((run) => run.status === "failed").length,
+      skipped: runs.filter((run) => run.status === "skipped").length,
+    };
+    const byLane = {
+      suite: runs.filter((run) => run.lane === "suite").length,
+      verification: runs.filter((run) => run.lane === "verification").length,
+      prodSmoke: runs.filter((run) => run.lane === "prod-smoke").length,
+    };
+
+    await this.adminAuditService.recordAction({
+      adminUserId: admin.adminUserId,
+      role: admin.role,
+      action: "admin.ops_verification_runs_view",
+      entityType: "ops_verification_run",
+      metadata: {
+        totalRuns: runs.length,
+        availableRuns: filteredRuns.length,
+        lane: query.lane ?? null,
+        status: query.status ?? null,
+      },
+    });
+
+    return ok({
+      generatedAt: new Date().toISOString(),
+      summary: {
+        totalRuns: runs.length,
+        availableRuns: filteredRuns.length,
+        byStatus,
+        byLane,
+      },
+      runs,
+    });
+  }
+
+  @Get("ops/agent-reliability")
+  async opsAgentReliability(
+    @Headers("x-admin-user-id") adminUserIdHeader?: string,
+    @Headers("x-admin-role") adminRoleHeader?: string,
+    @Query("workflowLimit") workflowLimitParam?: string,
+    @Query("verificationLimit") verificationLimitParam?: string,
+  ) {
+    const admin = this.parseAdminContext(adminUserIdHeader, adminRoleHeader, [
+      "admin",
+      "support",
+      "moderator",
+    ]);
+    const workflowLimit = this.normalizeOpsLimit(workflowLimitParam, 25, 100);
+    const verificationLimit = this.normalizeOpsLimit(
+      verificationLimitParam,
+      10,
+      50,
+    );
+    const runs =
+      (await this.workflowRuntimeService?.listRecentRuns(workflowLimit)) ?? [];
+    const enrichedRuns = runs
+      .map((run) => this.enrichWorkflowRun(run))
+      .map((run) => this.addWorkflowTriage(run));
+    const stageStatusCounts = {
+      started: 0,
+      completed: 0,
+      skipped: 0,
+      blocked: 0,
+      degraded: 0,
+      failed: 0,
+      unknown: 0,
+    };
+    for (const run of enrichedRuns) {
+      stageStatusCounts.started += run.stageStatusCounts.started;
+      stageStatusCounts.completed += run.stageStatusCounts.completed;
+      stageStatusCounts.skipped += run.stageStatusCounts.skipped;
+      stageStatusCounts.blocked += run.stageStatusCounts.blocked;
+      stageStatusCounts.degraded += run.stageStatusCounts.degraded;
+      stageStatusCounts.failed += run.stageStatusCounts.failed;
+      stageStatusCounts.unknown += run.stageStatusCounts.unknown;
+    }
+    const failureClasses = {
+      none: 0,
+      llmOrSchema: 0,
+      moderationOrPolicy: 0,
+      matchingOrNegotiation: 0,
+      queueOrReplay: 0,
+      persistenceOrDedupe: 0,
+      notificationOrFollowup: 0,
+      latencyOrCapacity: 0,
+      observabilityGap: 0,
+    };
+    for (const run of enrichedRuns) {
+      const failureClass = this.classifyWorkflowFailure(run);
+      if (failureClass === "none") {
+        failureClasses.none += 1;
+        continue;
+      }
+      if (failureClass === "llm_or_schema") {
+        failureClasses.llmOrSchema += 1;
+        continue;
+      }
+      if (failureClass === "moderation_or_policy") {
+        failureClasses.moderationOrPolicy += 1;
+        continue;
+      }
+      if (failureClass === "matching_or_negotiation") {
+        failureClasses.matchingOrNegotiation += 1;
+        continue;
+      }
+      if (failureClass === "queue_or_replay") {
+        failureClasses.queueOrReplay += 1;
+        continue;
+      }
+      if (failureClass === "persistence_or_dedupe") {
+        failureClasses.persistenceOrDedupe += 1;
+        continue;
+      }
+      if (failureClass === "notification_or_followup") {
+        failureClasses.notificationOrFollowup += 1;
+        continue;
+      }
+      if (failureClass === "latency_or_capacity") {
+        failureClasses.latencyOrCapacity += 1;
+        continue;
+      }
+      failureClasses.observabilityGap += 1;
+    }
+    const failureStageMap = new Map<
+      string,
+      {
+        stage: string;
+        status: "failed" | "blocked" | "degraded";
+        count: number;
+      }
+    >();
+    for (const run of enrichedRuns) {
+      for (const stage of run.stages) {
+        if (
+          stage.status !== "failed" &&
+          stage.status !== "blocked" &&
+          stage.status !== "degraded"
+        ) {
+          continue;
+        }
+        const status = stage.status as "failed" | "blocked" | "degraded";
+        const key = `${status}:${stage.stage}`;
+        const current = failureStageMap.get(key);
+        if (current) {
+          current.count += 1;
+          continue;
+        }
+        failureStageMap.set(key, {
+          stage: stage.stage,
+          status,
+          count: 1,
+        });
+      }
+    }
+    const topFailureStages = Array.from(failureStageMap.values())
+      .sort((left, right) => {
+        if (right.count !== left.count) {
+          return right.count - left.count;
+        }
+        if (left.status !== right.status) {
+          return left.status.localeCompare(right.status);
+        }
+        return left.stage.localeCompare(right.stage);
+      })
+      .slice(0, 10);
+    const workflowHealth = {
+      healthy: enrichedRuns.filter((run) => run.health === "healthy").length,
+      watch: enrichedRuns.filter((run) => run.health === "watch").length,
+      critical: enrichedRuns.filter((run) => run.health === "critical").length,
+    };
+    const domainSignals = {
+      datingConsentBlockedRuns: enrichedRuns.filter(
+        (run) =>
+          run.domain === "dating" &&
+          run.stages.some(
+            (stage) =>
+              stage.stage === "dating_consent" && stage.status === "blocked",
+          ),
+      ).length,
+      datingEligibilityBlockedRuns: enrichedRuns.filter(
+        (run) =>
+          run.domain === "dating" &&
+          run.stages.some(
+            (stage) =>
+              stage.stage === "dating_eligibility" &&
+              stage.status === "blocked",
+          ),
+      ).length,
+      commerceEscrowFrozenRuns: enrichedRuns.filter(
+        (run) =>
+          run.domain === "commerce" &&
+          run.stages.some(
+            (stage) =>
+              stage.stage === "commerce_escrow" &&
+              (stage.summary ?? "").toLowerCase().includes("frozen"),
+          ),
+      ).length,
+      commerceDisputeRuns: enrichedRuns.filter(
+        (run) =>
+          run.domain === "commerce" &&
+          run.stages.some(
+            (stage) =>
+              stage.stage === "commerce_dispute" &&
+              stage.status === "completed",
+          ),
+      ).length,
+      commerceDedupedSideEffects: enrichedRuns.filter(
+        (run) =>
+          run.domain === "commerce" && run.integrity.dedupedSideEffectCount > 0,
+      ).length,
+    };
+
+    const [evalSnapshot, verificationRuns] = await Promise.all([
+      this.agenticEvalsService.runSnapshot(),
+      this.readVerificationRuns(),
+    ]);
+    const recentVerificationRuns = verificationRuns.slice(0, verificationLimit);
+    const latestVerificationRun = recentVerificationRuns[0] ?? null;
+    const canary = this.resolveAgentReliabilityCanaryVerdict({
+      evalStatus:
+        typeof evalSnapshot.summary?.status === "string"
+          ? evalSnapshot.summary.status
+          : "watch",
+      workflowHealth,
+      latestVerificationRun,
+    });
+
+    await this.adminAuditService.recordAction({
+      adminUserId: admin.adminUserId,
+      role: admin.role,
+      action: "admin.ops_agent_reliability_view",
+      entityType: "ops_agent_reliability",
+      metadata: {
+        workflowRunCount: enrichedRuns.length,
+        verificationRunCount: verificationRuns.length,
+        evalStatus: evalSnapshot.summary?.status ?? null,
+        canaryVerdict: canary.verdict,
+      },
+    });
+
+    return ok({
+      generatedAt: new Date().toISOString(),
+      workflow: {
+        totalRuns: enrichedRuns.length,
+        health: workflowHealth,
+        failureClasses,
+        stageStatusCounts,
+        topFailureStages,
+        domainSignals,
+      },
+      eval: {
+        status: evalSnapshot.summary.status,
+        passRate: evalSnapshot.summary.passRate,
+        score: evalSnapshot.summary.score,
+        regressionCount: evalSnapshot.summary.regressionCount,
+        traceGrade: evalSnapshot.traceGrade,
+        regressions: evalSnapshot.regressions,
+      },
+      verification: {
+        totalRuns: verificationRuns.length,
+        latest: latestVerificationRun,
+        recentRuns: recentVerificationRuns,
+      },
+      canary,
+    });
+  }
+
+  @Get("ops/agent-workflows")
+  async opsAgentWorkflows(
+    @Headers("x-admin-user-id") adminUserIdHeader?: string,
+    @Headers("x-admin-role") adminRoleHeader?: string,
+    @Query("limit") limitParam?: string,
+    @Query("replayability") replayabilityParam?: string,
+    @Query("domain") domainParam?: string,
+    @Query("dedupeOnly") dedupeOnlyParam?: string,
+    @Query("health") healthParam?: string,
+    @Query("failureClass") failureClassParam?: string,
+    @Query("failuresOnly") failuresOnlyParam?: string,
+    @Query("suspectStage") suspectStageParam?: string,
+  ) {
+    const admin = this.parseAdminContext(adminUserIdHeader, adminRoleHeader, [
+      "admin",
+      "support",
+      "moderator",
+    ]);
+    const limit = Number.parseInt(limitParam ?? "20", 10);
+    const replayabilityFilter =
+      this.parseReplayabilityFilter(replayabilityParam);
+    const domainFilter = this.readString(domainParam);
+    const dedupeOnly = this.parseOptionalBooleanQuery(dedupeOnlyParam);
+    const healthFilter = this.parseWorkflowHealthFilter(healthParam);
+    const failureClassFilter =
+      this.parseWorkflowFailureClassFilter(failureClassParam);
+    const failuresOnly = this.parseOptionalBooleanQuery(failuresOnlyParam);
+    const suspectStageFilter =
+      this.parseWorkflowSuspectStageFilter(suspectStageParam);
+    const runs =
+      (await this.workflowRuntimeService?.listRecentRuns(
+        Number.isFinite(limit) ? limit : 20,
+      )) ?? [];
+    const enrichedRuns = runs.map((run) => this.enrichWorkflowRun(run));
+    const filteredRuns = enrichedRuns.filter((run) => {
+      if (replayabilityFilter && run.replayability !== replayabilityFilter) {
+        return false;
+      }
+      if (domainFilter && run.domain !== domainFilter) {
+        return false;
+      }
+      if (dedupeOnly === true && run.integrity.dedupedSideEffectCount === 0) {
+        return false;
+      }
+      if (dedupeOnly === false && run.integrity.dedupedSideEffectCount > 0) {
+        return false;
+      }
+      if (healthFilter && run.health !== healthFilter) {
+        return false;
+      }
+      if (
+        failureClassFilter &&
+        this.classifyWorkflowFailure(run) !== failureClassFilter
+      ) {
+        return false;
+      }
+      if (failuresOnly === true && run.health === "healthy") {
+        return false;
+      }
+      if (failuresOnly === false && run.health !== "healthy") {
+        return false;
+      }
+      if (suspectStageFilter.length > 0) {
+        const suspectStages = this.collectWorkflowSuspectStages(run.stages).map(
+          (stage) => stage.toLowerCase(),
+        );
+        if (
+          !suspectStageFilter.some((candidate) =>
+            suspectStages.includes(candidate),
+          )
+        ) {
+          return false;
+        }
+      }
+      return true;
+    });
+    const stageStatusCounts = {
+      started: 0,
+      completed: 0,
+      skipped: 0,
+      blocked: 0,
+      degraded: 0,
+      failed: 0,
+      unknown: 0,
+    };
+    for (const run of filteredRuns) {
+      stageStatusCounts.started += run.stageStatusCounts.started;
+      stageStatusCounts.completed += run.stageStatusCounts.completed;
+      stageStatusCounts.skipped += run.stageStatusCounts.skipped;
+      stageStatusCounts.blocked += run.stageStatusCounts.blocked;
+      stageStatusCounts.degraded += run.stageStatusCounts.degraded;
+      stageStatusCounts.failed += run.stageStatusCounts.failed;
+      stageStatusCounts.unknown += run.stageStatusCounts.unknown;
+    }
+
+    await this.adminAuditService.recordAction({
+      adminUserId: admin.adminUserId,
+      role: admin.role,
+      action: "admin.ops_agent_workflows_view",
+      entityType: "ops_agent_workflows",
+      metadata: {
+        runCount: filteredRuns.length,
+        unfilteredRunCount: enrichedRuns.length,
+        replayabilityFilter,
+        domainFilter,
+        dedupeOnly,
+        healthFilter,
+        failureClassFilter,
+        failuresOnly,
+        suspectStageFilter:
+          suspectStageFilter.length > 0 ? suspectStageFilter : null,
+      },
+    });
+
+    const failureClasses = {
+      none: 0,
+      llmOrSchema: 0,
+      moderationOrPolicy: 0,
+      matchingOrNegotiation: 0,
+      queueOrReplay: 0,
+      persistenceOrDedupe: 0,
+      notificationOrFollowup: 0,
+      latencyOrCapacity: 0,
+      observabilityGap: 0,
+    };
+    for (const run of filteredRuns) {
+      const failureClass = this.classifyWorkflowFailure(run);
+      if (failureClass === "none") {
+        failureClasses.none += 1;
+        continue;
+      }
+      if (failureClass === "llm_or_schema") {
+        failureClasses.llmOrSchema += 1;
+        continue;
+      }
+      if (failureClass === "moderation_or_policy") {
+        failureClasses.moderationOrPolicy += 1;
+        continue;
+      }
+      if (failureClass === "matching_or_negotiation") {
+        failureClasses.matchingOrNegotiation += 1;
+        continue;
+      }
+      if (failureClass === "queue_or_replay") {
+        failureClasses.queueOrReplay += 1;
+        continue;
+      }
+      if (failureClass === "persistence_or_dedupe") {
+        failureClasses.persistenceOrDedupe += 1;
+        continue;
+      }
+      if (failureClass === "notification_or_followup") {
+        failureClasses.notificationOrFollowup += 1;
+        continue;
+      }
+      if (failureClass === "latency_or_capacity") {
+        failureClasses.latencyOrCapacity += 1;
+        continue;
+      }
+      failureClasses.observabilityGap += 1;
+    }
+    const failureStageMap = new Map<
+      string,
+      {
+        stage: string;
+        status: "failed" | "blocked" | "degraded";
+        count: number;
+      }
+    >();
+    for (const run of filteredRuns) {
+      for (const stage of run.stages) {
+        if (
+          stage.status !== "failed" &&
+          stage.status !== "blocked" &&
+          stage.status !== "degraded"
+        ) {
+          continue;
+        }
+        const status = stage.status as "failed" | "blocked" | "degraded";
+        const key = `${status}:${stage.stage}`;
+        const current = failureStageMap.get(key);
+        if (current) {
+          current.count += 1;
+          continue;
+        }
+        failureStageMap.set(key, {
+          stage: stage.stage,
+          status,
+          count: 1,
+        });
+      }
+    }
+    const topFailureStages = Array.from(failureStageMap.values())
+      .sort((left, right) => {
+        if (right.count !== left.count) {
+          return right.count - left.count;
+        }
+        if (left.status !== right.status) {
+          return left.status.localeCompare(right.status);
+        }
+        return left.stage.localeCompare(right.stage);
+      })
+      .slice(0, 10);
+
+    return ok({
+      generatedAt: new Date().toISOString(),
+      summary: {
+        totalRuns: filteredRuns.length,
+        runsWithCompletedStages: filteredRuns.filter((run) =>
+          run.stages.some((stage) => stage.status === "completed"),
+        ).length,
+        runsWithSideEffects: filteredRuns.filter(
+          (run) => run.sideEffects.length > 0,
+        ).length,
+        replayability: {
+          replayable: filteredRuns.filter(
+            (run) => run.replayability === "replayable",
+          ).length,
+          partial: filteredRuns.filter((run) => run.replayability === "partial")
+            .length,
+          inspectOnly: filteredRuns.filter(
+            (run) => run.replayability === "inspect_only",
+          ).length,
+        },
+        runsWithDedupedSideEffects: filteredRuns.filter(
+          (run) => run.integrity.dedupedSideEffectCount > 0,
+        ).length,
+        health: {
+          healthy: filteredRuns.filter((run) => run.health === "healthy")
+            .length,
+          watch: filteredRuns.filter((run) => run.health === "watch").length,
+          critical: filteredRuns.filter((run) => run.health === "critical")
+            .length,
+        },
+        failureClasses,
+        topFailureStages,
+        stageStatusCounts,
+      },
+      runs: filteredRuns.map((run) => this.addWorkflowTriage(run)),
+    });
+  }
+
+  @Get("ops/agent-workflows/details")
+  async opsAgentWorkflowDetails(
+    @Headers("x-admin-user-id") adminUserIdHeader?: string,
+    @Headers("x-admin-role") adminRoleHeader?: string,
+    @Query("workflowRunId") workflowRunIdParam?: string,
+  ) {
+    const admin = this.parseAdminContext(adminUserIdHeader, adminRoleHeader, [
+      "admin",
+      "support",
+      "moderator",
+    ]);
+    const workflowRunId = workflowRunIdParam?.trim();
+    if (!workflowRunId) {
+      throw new BadRequestException("workflowRunId is required");
+    }
+
+    const details =
+      (await this.workflowRuntimeService?.getRunDetails(workflowRunId)) ?? null;
+    if (!details) {
+      throw new NotFoundException("workflow run not found");
+    }
+
+    await this.adminAuditService.recordAction({
+      adminUserId: admin.adminUserId,
+      role: admin.role,
+      action: "admin.ops_agent_workflow_detail_view",
+      entityType: "ops_agent_workflows",
+      entityId: workflowRunId,
+      metadata: {
+        traceId: details.run.traceId,
+        stageCount: details.run.stages.length,
+        sideEffectCount: details.run.sideEffects.length,
+        traceEventCount: details.trace.eventCount,
+        health: this.enrichWorkflowRun(details.run).health,
+        failureClass: this.classifyWorkflowFailure(
+          this.enrichWorkflowRun(details.run),
+        ),
+      },
+    });
+
+    const enrichedInsights = this.addWorkflowTriage(
+      this.enrichWorkflowRun(details.run),
+    );
+    return ok({
+      generatedAt: new Date().toISOString(),
+      ...details,
+      insights: enrichedInsights,
+    });
   }
 
   @Get("ops/agent-outcomes")
@@ -1408,6 +2138,7 @@ export class AdminController {
     });
     const parsedLimit = payload.limit ?? 100;
     const statusFilter = payload.status ?? "open";
+    const degradedReadWarnings: string[] = [];
 
     const where = {
       entityType: "agent_thread",
@@ -1417,31 +2148,57 @@ export class AdminController {
         : {}),
     };
 
-    const [flags, totalMatching] = await Promise.all([
-      this.prisma.moderationFlag.findMany({
-        where,
-        orderBy: { createdAt: "desc" },
-        take: parsedLimit,
-        select: {
-          id: true,
-          entityType: true,
-          entityId: true,
-          reason: true,
-          status: true,
-          assigneeUserId: true,
-          assignmentNote: true,
-          assignedAt: true,
-          lastDecision: true,
-          triageNote: true,
-          triagedByAdminUserId: true,
-          triagedAt: true,
-          createdAt: true,
+    const { flags, totalMatching } =
+      await this.executeAdminReadWithSchemaFallback(
+        "moderation_agent_risk_flags.read",
+        {
+          flags: [] as Array<{
+            id: string;
+            entityType: string;
+            entityId: string;
+            reason: string;
+            status: string;
+            assigneeUserId: string | null;
+            assignmentNote: string | null;
+            assignedAt: Date | null;
+            lastDecision: string | null;
+            triageNote: string | null;
+            triagedByAdminUserId: string | null;
+            triagedAt: Date | null;
+            createdAt: Date;
+          }>,
+          totalMatching: 0,
         },
-      }),
-      this.prisma.moderationFlag.count({
-        where,
-      }),
-    ]);
+        async () => {
+          const [flags, totalMatching] = await Promise.all([
+            this.prisma.moderationFlag.findMany({
+              where,
+              orderBy: { createdAt: "desc" },
+              take: parsedLimit,
+              select: {
+                id: true,
+                entityType: true,
+                entityId: true,
+                reason: true,
+                status: true,
+                assigneeUserId: true,
+                assignmentNote: true,
+                assignedAt: true,
+                lastDecision: true,
+                triageNote: true,
+                triagedByAdminUserId: true,
+                triagedAt: true,
+                createdAt: true,
+              },
+            }),
+            this.prisma.moderationFlag.count({
+              where,
+            }),
+          ]);
+          return { flags, totalMatching };
+        },
+        degradedReadWarnings,
+      );
 
     const threadIds = Array.from(
       new Set(flags.map((flag) => flag.entityId).filter(Boolean)),
@@ -1537,6 +2294,7 @@ export class AdminController {
         decision: payload.decision ?? null,
       },
       totalMatching,
+      degradedReadWarnings,
       items: flags.map((flag) => ({
         ...flag,
         latestRiskAudit: auditByThreadId.get(flag.entityId) ?? null,
@@ -2358,6 +3116,188 @@ export class AdminController {
     });
   }
 
+  private normalizeOpsLimit(
+    rawValue: string | undefined,
+    fallback: number,
+    max: number,
+  ) {
+    if (!rawValue) {
+      return fallback;
+    }
+    const parsed = Number(rawValue);
+    if (!Number.isFinite(parsed)) {
+      return fallback;
+    }
+    return Math.min(Math.max(Math.floor(parsed), 1), max);
+  }
+
+  private resolveVerificationRunCanaryVerdict(
+    status: "passed" | "failed" | "skipped",
+  ) {
+    if (status === "failed") {
+      return "critical" as const;
+    }
+    if (status === "skipped") {
+      return "watch" as const;
+    }
+    return "healthy" as const;
+  }
+
+  private resolveAgentReliabilityCanaryVerdict(input: {
+    evalStatus: string;
+    workflowHealth: {
+      healthy: number;
+      watch: number;
+      critical: number;
+    };
+    latestVerificationRun: VerificationRunRecord | null;
+  }) {
+    const reasons: string[] = [];
+
+    if (input.latestVerificationRun?.status === "failed") {
+      reasons.push("latest verification lane failed");
+    }
+    if (input.latestVerificationRun?.canaryVerdict === "critical") {
+      reasons.push("latest verification lane marked critical");
+    }
+    if (input.evalStatus === "critical") {
+      reasons.push("eval snapshot is critical");
+    }
+    if (input.workflowHealth.critical > 0) {
+      reasons.push("critical workflow runs detected");
+    }
+    if (reasons.length > 0) {
+      return {
+        verdict: "critical" as const,
+        reasons,
+      };
+    }
+
+    if (!input.latestVerificationRun) {
+      reasons.push("no verification lane run has been ingested");
+    }
+    if (input.latestVerificationRun?.status === "skipped") {
+      reasons.push("latest verification lane was skipped");
+    }
+    if (input.latestVerificationRun?.canaryVerdict === "watch") {
+      reasons.push("latest verification lane marked watch");
+    }
+    if (input.evalStatus === "watch") {
+      reasons.push("eval snapshot is watch");
+    }
+    if (input.workflowHealth.watch > 0) {
+      reasons.push("watch-level workflow runs detected");
+    }
+    if (reasons.length > 0) {
+      return {
+        verdict: "watch" as const,
+        reasons,
+      };
+    }
+
+    return {
+      verdict: "healthy" as const,
+      reasons: ["eval, workflow, and verification signals are healthy"],
+    };
+  }
+
+  private async readVerificationRuns(): Promise<VerificationRunRecord[]> {
+    const value = await this.appCacheService.getJson<unknown[]>(
+      AdminController.VERIFICATION_RUN_CACHE_KEY,
+    );
+    if (!Array.isArray(value)) {
+      return [];
+    }
+
+    return value
+      .map((entry) => this.parseVerificationRunRecord(entry))
+      .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
+      .sort((left, right) => right.generatedAt.localeCompare(left.generatedAt))
+      .slice(0, AdminController.VERIFICATION_RUN_CACHE_MAX_ITEMS);
+  }
+
+  private parseVerificationRunRecord(
+    input: unknown,
+  ): VerificationRunRecord | null {
+    if (!input || typeof input !== "object" || Array.isArray(input)) {
+      return null;
+    }
+    const row = input as Record<string, unknown>;
+    const runId = this.readString(row.runId);
+    const lane =
+      row.lane === "suite" ||
+      row.lane === "verification" ||
+      row.lane === "prod-smoke"
+        ? row.lane
+        : null;
+    const layer = this.readString(row.layer);
+    const status =
+      row.status === "passed" ||
+      row.status === "failed" ||
+      row.status === "skipped"
+        ? row.status
+        : null;
+    const generatedAt = this.readString(row.generatedAt);
+    const ingestedAt = this.readString(row.ingestedAt);
+    const canaryVerdict =
+      row.canaryVerdict === "healthy" ||
+      row.canaryVerdict === "watch" ||
+      row.canaryVerdict === "critical"
+        ? row.canaryVerdict
+        : null;
+    const summary =
+      row.summary &&
+      typeof row.summary === "object" &&
+      !Array.isArray(row.summary)
+        ? (row.summary as Record<string, unknown>)
+        : null;
+    const artifact =
+      row.artifact &&
+      typeof row.artifact === "object" &&
+      !Array.isArray(row.artifact)
+        ? (row.artifact as Record<string, unknown>)
+        : null;
+    if (
+      !runId ||
+      !lane ||
+      !layer ||
+      !status ||
+      !generatedAt ||
+      !ingestedAt ||
+      !canaryVerdict
+    ) {
+      return null;
+    }
+    return {
+      runId,
+      lane,
+      layer,
+      status,
+      generatedAt,
+      ingestedAt,
+      canaryVerdict,
+      summary,
+      artifact,
+    };
+  }
+
+  private async writeVerificationRuns(runs: VerificationRunRecord[]) {
+    const ttlSeconds = Math.max(
+      60,
+      Math.floor(
+        this.parseThreshold(
+          process.env.ADMIN_VERIFICATION_RUN_TTL_SECONDS,
+          60 * 60 * 24 * 14,
+        ),
+      ),
+    );
+    await this.appCacheService.setJson(
+      AdminController.VERIFICATION_RUN_CACHE_KEY,
+      runs.slice(0, AdminController.VERIFICATION_RUN_CACHE_MAX_ITEMS),
+      ttlSeconds,
+    );
+  }
+
   private parseAdminContext(
     adminUserIdHeader: string | undefined,
     adminRoleHeader: string | undefined,
@@ -2408,6 +3348,412 @@ export class AdminController {
       return fallback;
     }
     return parsed;
+  }
+
+  private parseReplayabilityFilter(rawValue: string | undefined) {
+    if (!rawValue) {
+      return null;
+    }
+    const normalized = rawValue.trim();
+    if (
+      normalized === "replayable" ||
+      normalized === "partial" ||
+      normalized === "inspect_only"
+    ) {
+      return normalized;
+    }
+    throw new BadRequestException(
+      "replayability must be replayable, partial, or inspect_only",
+    );
+  }
+
+  private parseWorkflowHealthFilter(rawValue: string | undefined) {
+    if (!rawValue) {
+      return null;
+    }
+    const normalized = rawValue.trim();
+    if (
+      normalized === "healthy" ||
+      normalized === "watch" ||
+      normalized === "critical"
+    ) {
+      return normalized;
+    }
+    throw new BadRequestException("health must be healthy, watch, or critical");
+  }
+
+  private parseWorkflowFailureClassFilter(rawValue: string | undefined) {
+    if (!rawValue) {
+      return null;
+    }
+    const normalized = rawValue.trim();
+    if (
+      (AdminController.WORKFLOW_FAILURE_CLASSES as readonly string[]).includes(
+        normalized,
+      )
+    ) {
+      return normalized as
+        | "none"
+        | "llm_or_schema"
+        | "moderation_or_policy"
+        | "matching_or_negotiation"
+        | "queue_or_replay"
+        | "persistence_or_dedupe"
+        | "notification_or_followup"
+        | "latency_or_capacity"
+        | "observability_gap";
+    }
+    throw new BadRequestException(
+      `failureClass must be one of: ${AdminController.WORKFLOW_FAILURE_CLASSES.join(", ")}`,
+    );
+  }
+
+  private parseWorkflowSuspectStageFilter(rawValue: string | undefined) {
+    if (!rawValue) {
+      return [];
+    }
+    return Array.from(
+      new Set(
+        rawValue
+          .split(",")
+          .map((entry) => entry.trim().toLowerCase())
+          .filter((entry) => entry.length > 0),
+      ),
+    ).slice(0, 10);
+  }
+
+  private enrichWorkflowRun<
+    T extends {
+      replayability: "replayable" | "partial" | "inspect_only";
+      stages: Array<{ stage: string; status: string; at: string }>;
+      health?: "healthy" | "watch" | "critical";
+      latestCheckpoint?: {
+        stage: string;
+        status: string;
+        at: string;
+      } | null;
+      stageStatusCounts?: {
+        started: number;
+        completed: number;
+        skipped: number;
+        blocked: number;
+        degraded: number;
+        failed: number;
+        unknown: number;
+      };
+    },
+  >(run: T) {
+    const stageStatusCounts = {
+      started: run.stageStatusCounts?.started ?? 0,
+      completed: run.stageStatusCounts?.completed ?? 0,
+      skipped: run.stageStatusCounts?.skipped ?? 0,
+      blocked: run.stageStatusCounts?.blocked ?? 0,
+      degraded: run.stageStatusCounts?.degraded ?? 0,
+      failed: run.stageStatusCounts?.failed ?? 0,
+      unknown: run.stageStatusCounts?.unknown ?? 0,
+    };
+
+    if (!run.stageStatusCounts) {
+      for (const stage of run.stages) {
+        if (stage.status === "started") {
+          stageStatusCounts.started += 1;
+          continue;
+        }
+        if (stage.status === "completed") {
+          stageStatusCounts.completed += 1;
+          continue;
+        }
+        if (stage.status === "skipped") {
+          stageStatusCounts.skipped += 1;
+          continue;
+        }
+        if (stage.status === "blocked") {
+          stageStatusCounts.blocked += 1;
+          continue;
+        }
+        if (stage.status === "degraded") {
+          stageStatusCounts.degraded += 1;
+          continue;
+        }
+        if (stage.status === "failed") {
+          stageStatusCounts.failed += 1;
+          continue;
+        }
+        stageStatusCounts.unknown += 1;
+      }
+    }
+
+    const latestCheckpoint =
+      run.latestCheckpoint ??
+      (run.stages.length === 0 ? null : run.stages[run.stages.length - 1]);
+    const health: "healthy" | "watch" | "critical" =
+      run.health ??
+      (stageStatusCounts.failed > 0 || stageStatusCounts.blocked > 0
+        ? "critical"
+        : stageStatusCounts.degraded > 0 ||
+            stageStatusCounts.skipped > 0 ||
+            stageStatusCounts.started > 0 ||
+            run.replayability !== "replayable"
+          ? "watch"
+          : "healthy");
+
+    return {
+      ...run,
+      health,
+      latestCheckpoint,
+      stageStatusCounts,
+    };
+  }
+
+  private addWorkflowTriage<
+    T extends {
+      stageStatusCounts: {
+        started: number;
+        completed: number;
+        skipped: number;
+        blocked: number;
+        degraded: number;
+        failed: number;
+        unknown: number;
+      };
+      replayability: "replayable" | "partial" | "inspect_only";
+      health: "healthy" | "watch" | "critical";
+      integrity: {
+        sideEffectCount: number;
+        dedupedSideEffectCount: number;
+        reusedRelations: string[];
+      };
+      stages: Array<{ stage: string; status: string; at: string }>;
+      latestCheckpoint: {
+        stage: string;
+        status: string;
+        at: string;
+      } | null;
+    },
+  >(run: T) {
+    const failureClass = this.classifyWorkflowFailure(run);
+    const suspectStages = this.collectWorkflowSuspectStages(run.stages);
+    const replayHint = this.buildWorkflowReplayHint({
+      replayability: run.replayability,
+      failureClass,
+      health: run.health,
+    });
+    const recommendation =
+      failureClass === "none"
+        ? "No action needed."
+        : failureClass === "llm_or_schema"
+          ? "Inspect prompt/schema and model output validation in this trace."
+          : failureClass === "moderation_or_policy"
+            ? "Review moderation/policy checkpoints and approval-state transitions."
+            : failureClass === "matching_or_negotiation"
+              ? "Review ranking/negotiation/fanout candidate decisions for this run."
+              : failureClass === "queue_or_replay"
+                ? "Inspect queue lag, replay safety, and run replayability metadata."
+                : failureClass === "persistence_or_dedupe"
+                  ? "Inspect persistence writes and dedupe/reuse side-effect signals."
+                  : failureClass === "notification_or_followup"
+                    ? "Inspect follow-up enqueue/delivery and notification fanout logs."
+                    : failureClass === "latency_or_capacity"
+                      ? "Inspect timeout budgets, queue capacity, and fallback thresholds."
+                      : "Inspect trace events and workflow checkpoints for missing signals.";
+    const summary =
+      failureClass === "none"
+        ? "Workflow run is healthy."
+        : `Primary failure class is ${failureClass}.`;
+
+    return {
+      ...run,
+      triage: {
+        failureClass,
+        summary,
+        recommendation,
+        suspectStages,
+        replayHint,
+      },
+    };
+  }
+
+  private collectWorkflowSuspectStages(
+    stages: Array<{ stage: string; status: string; at: string }>,
+  ) {
+    const unique = new Set<string>();
+    const suspects: string[] = [];
+    for (const stage of stages) {
+      if (
+        stage.status !== "failed" &&
+        stage.status !== "blocked" &&
+        stage.status !== "degraded"
+      ) {
+        continue;
+      }
+      if (unique.has(stage.stage)) {
+        continue;
+      }
+      unique.add(stage.stage);
+      suspects.push(stage.stage);
+      if (suspects.length >= 5) {
+        break;
+      }
+    }
+    return suspects;
+  }
+
+  private buildWorkflowReplayHint(input: {
+    replayability: "replayable" | "partial" | "inspect_only";
+    health: "healthy" | "watch" | "critical";
+    failureClass:
+      | "none"
+      | "llm_or_schema"
+      | "moderation_or_policy"
+      | "matching_or_negotiation"
+      | "queue_or_replay"
+      | "persistence_or_dedupe"
+      | "notification_or_followup"
+      | "latency_or_capacity"
+      | "observability_gap";
+  }) {
+    if (input.replayability === "replayable" && input.failureClass === "none") {
+      return "Replay is available if investigation is needed, but this run is healthy.";
+    }
+    if (input.replayability === "replayable") {
+      return "Replay is available for this run. Start with trace-linked stage checkpoints.";
+    }
+    if (input.replayability === "partial") {
+      return input.failureClass === "queue_or_replay"
+        ? "Replay is partial. Validate queue/retry checkpoints before re-running."
+        : "Replay is partial. Validate missing checkpoints before re-running.";
+    }
+    return input.health === "critical"
+      ? "Inspect-only run. Do not replay yet; fill missing trace/checkpoint instrumentation first."
+      : "Inspect-only run. Add trace/checkpoint coverage before attempting replay.";
+  }
+
+  private classifyWorkflowFailure(input: {
+    stageStatusCounts: {
+      started: number;
+      completed: number;
+      skipped: number;
+      blocked: number;
+      degraded: number;
+      failed: number;
+      unknown: number;
+    };
+    replayability: "replayable" | "partial" | "inspect_only";
+    health: "healthy" | "watch" | "critical";
+    integrity: {
+      sideEffectCount: number;
+      dedupedSideEffectCount: number;
+      reusedRelations: string[];
+    };
+    stages: Array<{ stage: string; status: string; at: string }>;
+  }) {
+    if (input.health === "healthy") {
+      return "none" as const;
+    }
+
+    if (input.stageStatusCounts.blocked > 0) {
+      return "moderation_or_policy" as const;
+    }
+
+    const failedStages = input.stages
+      .filter((stage) => stage.status === "failed")
+      .map((stage) => stage.stage.toLowerCase());
+    const degradedStages = input.stages
+      .filter((stage) => stage.status === "degraded")
+      .map((stage) => stage.stage.toLowerCase());
+    const touchedStages = [...failedStages, ...degradedStages];
+
+    if (
+      touchedStages.some((stage) =>
+        ["parse", "compose", "planning", "schema", "llm", "onboarding"].some(
+          (token) => stage.includes(token),
+        ),
+      )
+    ) {
+      return "llm_or_schema" as const;
+    }
+
+    if (
+      touchedStages.some((stage) =>
+        ["moderation", "policy", "safety", "risk", "approval"].some((token) =>
+          stage.includes(token),
+        ),
+      )
+    ) {
+      return "moderation_or_policy" as const;
+    }
+
+    if (
+      touchedStages.some((stage) =>
+        ["ranking", "match", "negotiation", "fanout", "discovery"].some(
+          (token) => stage.includes(token),
+        ),
+      )
+    ) {
+      return "matching_or_negotiation" as const;
+    }
+
+    if (
+      touchedStages.some((stage) =>
+        ["followup", "notification", "reminder"].some((token) =>
+          stage.includes(token),
+        ),
+      )
+    ) {
+      return "notification_or_followup" as const;
+    }
+
+    if (
+      touchedStages.some((stage) =>
+        ["queue", "retry", "replay", "dead_letter"].some((token) =>
+          stage.includes(token),
+        ),
+      )
+    ) {
+      return "queue_or_replay" as const;
+    }
+
+    if (
+      input.stageStatusCounts.failed > 0 &&
+      (input.integrity.dedupedSideEffectCount > 0 ||
+        input.integrity.reusedRelations.length > 0)
+    ) {
+      return "persistence_or_dedupe" as const;
+    }
+
+    if (
+      input.stageStatusCounts.failed > 0 ||
+      input.stageStatusCounts.unknown > 0
+    ) {
+      return "observability_gap" as const;
+    }
+
+    if (
+      input.stageStatusCounts.degraded > 0 ||
+      input.stageStatusCounts.skipped > 0
+    ) {
+      return "latency_or_capacity" as const;
+    }
+
+    if (input.replayability !== "replayable") {
+      return "queue_or_replay" as const;
+    }
+
+    return "observability_gap" as const;
+  }
+
+  private parseOptionalBooleanQuery(rawValue: string | undefined) {
+    if (!rawValue) {
+      return null;
+    }
+    const normalized = rawValue.trim().toLowerCase();
+    if (["1", "true", "yes", "on"].includes(normalized)) {
+      return true;
+    }
+    if (["0", "false", "no", "off"].includes(normalized)) {
+      return false;
+    }
+    throw new BadRequestException("boolean query must be true/false");
   }
 
   private parseBooleanEnv(
@@ -2477,6 +3823,35 @@ export class AdminController {
       return "Verify group eligibility, current supply, and recent reconciliation events before replaying.";
     }
     return "Inspect the linked trace and user context before replaying this action.";
+  }
+
+  private async executeAdminReadWithSchemaFallback<T>(
+    operation: string,
+    fallbackValue: T,
+    run: () => Promise<T>,
+    warnings: string[],
+  ) {
+    try {
+      return await run();
+    } catch (error) {
+      if (this.isPrismaSchemaDriftError(error)) {
+        warnings.push(operation);
+        this.logger.warn(
+          JSON.stringify({
+            event: "admin.read.schema_drift_fallback",
+            operation,
+            code: this.readString((error as { code?: unknown }).code),
+          }),
+        );
+        return fallbackValue;
+      }
+      throw error;
+    }
+  }
+
+  private isPrismaSchemaDriftError(error: unknown) {
+    const code = this.readString((error as { code?: unknown }).code);
+    return code === "P2021" || code === "P2022";
   }
 
   private async measureDbLatencyMs() {

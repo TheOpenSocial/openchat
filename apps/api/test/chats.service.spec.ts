@@ -79,6 +79,79 @@ describe("ChatsService", () => {
     expect(prisma.chatMessage.create).not.toHaveBeenCalled();
   });
 
+  it("suppresses message sending when another participant muted the sender", async () => {
+    const prisma: any = {
+      chat: {
+        findUnique: vi.fn().mockResolvedValue({ connectionId: "conn-1" }),
+      },
+      connectionParticipant: {
+        findMany: vi
+          .fn()
+          .mockResolvedValue([{ userId: "user-1" }, { userId: "user-2" }]),
+      },
+      block: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      userPreference: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            userId: "user-2",
+            value: ["user-1"],
+          },
+        ]),
+      },
+      userReport: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      chatMessage: {
+        create: vi.fn(),
+      },
+      messageReceipt: {
+        create: vi.fn(),
+      },
+    };
+
+    const service = new ChatsService(prisma);
+    await expect(
+      service.createMessage("chat-1", "user-1", "hello"),
+    ).rejects.toThrow("suppressed");
+    expect(prisma.chatMessage.create).not.toHaveBeenCalled();
+  });
+
+  it("suppresses message sending when there is an open report between participants", async () => {
+    const prisma: any = {
+      chat: {
+        findUnique: vi.fn().mockResolvedValue({ connectionId: "conn-1" }),
+      },
+      connectionParticipant: {
+        findMany: vi
+          .fn()
+          .mockResolvedValue([{ userId: "user-1" }, { userId: "user-2" }]),
+      },
+      block: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      userPreference: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      userReport: {
+        findMany: vi.fn().mockResolvedValue([{ id: "report-1" }]),
+      },
+      chatMessage: {
+        create: vi.fn(),
+      },
+      messageReceipt: {
+        create: vi.fn(),
+      },
+    };
+
+    const service = new ChatsService(prisma);
+    await expect(
+      service.createMessage("chat-1", "user-1", "hello"),
+    ).rejects.toThrow("suppressed");
+    expect(prisma.chatMessage.create).not.toHaveBeenCalled();
+  });
+
   it("soft-deletes own message by masking body", async () => {
     const prisma: any = {
       chatMessage: {

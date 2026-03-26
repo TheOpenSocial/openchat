@@ -14,6 +14,7 @@ import { randomUUID } from "node:crypto";
 import { AnalyticsService } from "../analytics/analytics.service.js";
 import { AgentService } from "../agent/agent.service.js";
 import { recordOpenAIMetric } from "../common/ops-metrics.js";
+import { AgentWorkflowRuntimeService } from "../database/agent-workflow-runtime.service.js";
 import { PrismaService } from "../database/prisma.service.js";
 import { MatchingService } from "../matching/matching.service.js";
 import { NotificationsService } from "../notifications/notifications.service.js";
@@ -98,6 +99,8 @@ export class IntentsService {
     private readonly launchControlsService?: LaunchControlsService,
     @Optional()
     private readonly realtimeEventsService?: RealtimeEventsService,
+    @Optional()
+    private readonly workflowRuntimeService?: AgentWorkflowRuntimeService,
   ) {}
 
   async createIntent(
@@ -384,10 +387,10 @@ export class IntentsService {
     await this.agentService.createAgentMessage(
       threadId,
       intentTexts.length > boundedIntentTexts.length
-        ? `All right. I split this into ${intents.length} focused asks and started in the background with a safe outreach cap. I’ll notify you as soon as I find strong matches.`
+        ? `All right. I split this into ${intents.length} focused asks and started them in the background with a safe outreach cap. I’ll notify you here as soon as I find strong matches.`
         : intents.length === 1
-          ? "All right. I’m on it in the background, and I’ll notify you as soon as I find someone relevant."
-          : `All right. I split this into ${intents.length} focused asks and started them in the background. I’ll notify you as soon as I find strong matches.`,
+          ? "All right. I’m handling this in the background and I’ll notify you here as soon as I find a strong match."
+          : `All right. I split this into ${intents.length} focused asks and started them in the background. I’ll notify you here as soon as I find strong matches.`,
     );
 
     return {
@@ -417,6 +420,35 @@ export class IntentsService {
         confidence: input.parsed.confidence ?? 0.4,
       },
     });
+    const workflowRunId = this.buildIntentWorkflowRunId(intent.id);
+    await this.workflowRuntimeService?.startRun({
+      workflowRunId,
+      traceId: input.traceId,
+      domain: "social",
+      entityType: "intent",
+      entityId: intent.id,
+      userId: input.userId,
+      threadId: input.agentThreadId ?? null,
+      summary: "Intent accepted into the agentic workflow runtime.",
+      metadata: {
+        rawTextPreview: input.rawText.trim().slice(0, 160),
+        intentType: input.parsed.intentType ?? null,
+      },
+    });
+    await this.workflowRuntimeService?.checkpoint({
+      workflowRunId,
+      traceId: input.traceId,
+      stage: "parse",
+      status: "completed",
+      entityType: "intent",
+      entityId: intent.id,
+      userId: input.userId,
+      summary: "Intent parsing completed and persisted.",
+      metadata: {
+        intentType: input.parsed.intentType ?? null,
+        confidence: input.parsed.confidence ?? null,
+      },
+    });
     this.emitIntentUpdatedSafe(intent.userId, intent.id, intent.status);
     await this.trackAnalyticsEventSafe({
       eventType: "intent_created",
@@ -438,8 +470,32 @@ export class IntentsService {
       agentThreadId: input.agentThreadId,
     });
     if (moderationResult.decision !== "clean") {
+      await this.workflowRuntimeService?.checkpoint({
+        workflowRunId,
+        traceId: input.traceId,
+        stage: "moderation",
+        status:
+          moderationResult.decision === "blocked" ? "blocked" : "degraded",
+        entityType: "intent",
+        entityId: intent.id,
+        userId: input.userId,
+        summary: `Intent halted by moderation (${moderationResult.decision}).`,
+        metadata: {
+          moderationDecision: moderationResult.decision,
+        },
+      });
       return moderationResult.intent;
     }
+    await this.workflowRuntimeService?.checkpoint({
+      workflowRunId,
+      traceId: input.traceId,
+      stage: "moderation",
+      status: "completed",
+      entityType: "intent",
+      entityId: intent.id,
+      userId: input.userId,
+      summary: "Intent cleared moderation and queued for routing.",
+    });
 
     await this.captureIntentSignals(input.userId, input.parsed);
     await this.captureIntentEmbedding(intent.id);
@@ -471,6 +527,19 @@ export class IntentsService {
         },
       },
     );
+    await this.workflowRuntimeService?.checkpoint({
+      workflowRunId,
+      traceId: input.traceId,
+      stage: "enqueue_routing",
+      status: "completed",
+      entityType: "intent",
+      entityId: intent.id,
+      userId: input.userId,
+      summary: "Intent-processing job enqueued.",
+      metadata: {
+        idempotencyKey,
+      },
+    });
 
     return intent;
   }
@@ -480,6 +549,7 @@ export class IntentsService {
     traceId: string,
     agentThreadId?: string | null,
   ) {
+    const workflowRunId = this.buildIntentWorkflowRunId(intentId);
     const intent = await this.prisma.intent.findUnique({
       where: { id: intentId },
     });
@@ -497,6 +567,20 @@ export class IntentsService {
           status: intent?.status ?? null,
         }),
       );
+      await this.workflowRuntimeService?.checkpoint({
+        workflowRunId,
+        traceId,
+        stage: "routing_pipeline",
+        status: "skipped",
+        entityType: "intent",
+        entityId: intentId,
+        userId: intent?.userId ?? null,
+        summary: "Routing pipeline skipped because intent is not processable.",
+        metadata: {
+          reason: "intent_not_processable",
+          status: intent?.status ?? null,
+        },
+      });
       return { intentId, fanoutCount: 0, skipped: true };
     }
     if (intent.safetyState === "blocked" || intent.safetyState === "review") {
@@ -509,6 +593,34 @@ export class IntentsService {
           status: intent.status,
         }),
       );
+      await this.workflowRuntimeService?.checkpoint({
+        workflowRunId,
+        traceId,
+        stage: "moderation",
+        status: intent.safetyState === "blocked" ? "blocked" : "degraded",
+        entityType: "intent",
+        entityId: intentId,
+        userId: intent.userId,
+        summary: `Routing halted by moderation state ${intent.safetyState}.`,
+        metadata: {
+          moderationState: intent.safetyState,
+          status: intent.status,
+        },
+      });
+      await this.workflowRuntimeService?.checkpoint({
+        workflowRunId,
+        traceId,
+        stage: "routing_pipeline",
+        status: "skipped",
+        entityType: "intent",
+        entityId: intentId,
+        userId: intent.userId,
+        summary: `Routing pipeline skipped because moderation state is ${intent.safetyState}.`,
+        metadata: {
+          reason: `moderation_${intent.safetyState}`,
+          status: intent.status,
+        },
+      });
       return {
         intentId,
         fanoutCount: 0,
@@ -533,6 +645,20 @@ export class IntentsService {
         agentThreadId: workflowThreadId ?? null,
       }),
     );
+    await this.workflowRuntimeService?.checkpoint({
+      workflowRunId,
+      traceId,
+      stage: "ranking",
+      status: "started",
+      entityType: "intent",
+      entityId: intentId,
+      userId: intent.userId,
+      summary: "Candidate retrieval and ranking started.",
+      metadata: {
+        routingEscalationLevel,
+        threadId: workflowThreadId ?? null,
+      },
+    });
     const candidates = await this.matchingService.retrieveCandidates(
       intent.userId,
       parsedIntent,
@@ -542,6 +668,19 @@ export class IntentsService {
         traceId,
       },
     );
+    await this.workflowRuntimeService?.checkpoint({
+      workflowRunId,
+      traceId,
+      stage: "ranking",
+      status: "completed",
+      entityType: "intent",
+      entityId: intentId,
+      userId: intent.userId,
+      summary: `Candidate retrieval completed with ${candidates.length} candidate(s).`,
+      metadata: {
+        candidateCount: candidates.length,
+      },
+    });
 
     await this.prisma.$transaction([
       ...candidates.map((candidate) =>
@@ -591,8 +730,29 @@ export class IntentsService {
     });
 
     if (fanout.length > 0) {
-      const requestRows: Prisma.IntentRequestCreateManyInput[] = fanout.map(
-        (candidate) => ({
+      const existingRequests = this.prisma.intentRequest.findMany
+        ? await this.prisma.intentRequest.findMany({
+            where: {
+              intentId,
+              recipientUserId: {
+                in: fanout.map((candidate) => candidate.userId),
+              },
+            },
+            select: {
+              id: true,
+              recipientUserId: true,
+              status: true,
+            },
+          })
+        : [];
+      const existingRequestByRecipientId = new Map(
+        existingRequests.map((request) => [request.recipientUserId, request]),
+      );
+      const newRequestRows: Prisma.IntentRequestCreateManyInput[] = fanout
+        .filter(
+          (candidate) => !existingRequestByRecipientId.has(candidate.userId),
+        )
+        .map((candidate) => ({
           id: randomUUID(),
           intentId,
           senderUserId: intent.userId,
@@ -601,56 +761,118 @@ export class IntentsService {
           relevanceFeatures: candidate.rationale as Prisma.InputJsonValue,
           expiresAt: new Date(Date.now() + 20 * 60_000),
           status: "pending",
-        }),
-      );
-      await this.prisma.intentRequest.createMany({
-        data: requestRows,
-        skipDuplicates: true,
-      });
+        }));
+      if (newRequestRows.length > 0) {
+        await this.prisma.intentRequest.createMany({
+          data: newRequestRows,
+          skipDuplicates: true,
+        });
+      }
+      for (const row of newRequestRows) {
+        if (!row.id) {
+          continue;
+        }
+        await this.workflowRuntimeService?.linkSideEffect({
+          workflowRunId,
+          traceId,
+          relation: "intent_request_created",
+          entityType: "intent_request",
+          entityId: row.id,
+          userId: intent.userId,
+          summary: "Created fanout request for a ranked candidate.",
+          metadata: {
+            recipientUserId: row.recipientUserId,
+            intentId,
+          },
+        });
+      }
+      for (const request of existingRequests) {
+        await this.workflowRuntimeService?.linkSideEffect({
+          workflowRunId,
+          traceId,
+          relation: "intent_request_reused",
+          entityType: "intent_request",
+          entityId: request.id,
+          userId: intent.userId,
+          summary: "Reused an existing fanout request during replay or retry.",
+          metadata: {
+            recipientUserId: request.recipientUserId,
+            intentId,
+            status: request.status,
+          },
+        });
+      }
 
       await this.prisma.intent.update({
         where: { id: intentId },
         data: { status: "fanout" },
       });
       this.emitIntentUpdatedSafe(intent.userId, intentId, "fanout");
-      for (const row of requestRows) {
+      for (const row of newRequestRows) {
         if (row.id) {
           this.emitRequestCreatedSafe(row.recipientUserId, row.id, intentId);
         }
       }
-      await this.trackAnalyticsEventSafe({
-        eventType: "request_sent",
-        actorUserId: intent.userId,
-        entityType: "intent",
-        entityId: intentId,
-        properties: {
-          requestCount: fanout.length,
-          fanoutCap,
-          candidateCount: candidates.length,
-          recipientUserIds: fanout.map((candidate) => candidate.userId),
-          routingEscalationLevel,
-        },
-      });
+      if (newRequestRows.length > 0) {
+        await this.trackAnalyticsEventSafe({
+          eventType: "request_sent",
+          actorUserId: intent.userId,
+          entityType: "intent",
+          entityId: intentId,
+          properties: {
+            requestCount: newRequestRows.length,
+            fanoutCap,
+            candidateCount: candidates.length,
+            recipientUserIds: newRequestRows.map(
+              (candidate) => candidate.recipientUserId,
+            ),
+            routingEscalationLevel,
+            reusedRequestCount: existingRequests.length,
+          },
+        });
+      }
 
       await Promise.all(
-        fanout.map((candidate) =>
+        newRequestRows.map((candidate) =>
           this.notificationsService.createInAppNotification(
-            candidate.userId,
+            candidate.recipientUserId,
             NotificationType.REQUEST_RECEIVED,
             "Someone wants to connect with you right now.",
           ),
         ),
       );
+      await this.workflowRuntimeService?.checkpoint({
+        workflowRunId,
+        traceId,
+        stage: "fanout",
+        status: "completed",
+        entityType: "intent",
+        entityId: intentId,
+        userId: intent.userId,
+        summary:
+          newRequestRows.length > 0
+            ? `Sent ${newRequestRows.length} new request(s) across the first wave.`
+            : `Reused ${existingRequests.length} existing request(s) across the first wave.`,
+        metadata: {
+          fanoutCount: newRequestRows.length,
+          fanoutCap,
+          candidateCount: candidates.length,
+          reusedRequestCount: existingRequests.length,
+        },
+      });
 
-      if (workflowThreadId) {
+      if (workflowThreadId && newRequestRows.length > 0) {
         await this.agentService.appendWorkflowUpdate(
           workflowThreadId,
-          `I found ${fanout.length} candidates and sent requests${fanoutCap < candidates.length ? ` (fanout cap applied: ${fanoutCap})` : ""}. I will update you when someone accepts.`,
+          `I found ${newRequestRows.length} candidates and sent requests${fanoutCap < candidates.length ? ` (fanout cap applied: ${fanoutCap})` : ""}. I will update you when someone accepts.`,
           {
             intentId,
-            fanoutCount: fanout.length,
+            workflowRunId,
+            traceId,
+            fanoutCount: newRequestRows.length,
             fanoutCap,
             candidateCount: candidates.length,
+            reusedRequestCount: existingRequests.length,
           },
         );
       }
@@ -697,6 +919,23 @@ export class IntentsService {
         NotificationType.AGENT_UPDATE,
         "I found potential matches, but outreach is temporarily capped. I will retry shortly.",
       );
+      await this.workflowRuntimeService?.checkpoint({
+        workflowRunId,
+        traceId,
+        stage: "fanout",
+        status: "degraded",
+        entityType: "intent",
+        entityId: intentId,
+        userId: intent.userId,
+        summary:
+          "Candidates found but outreach cap prevented immediate fanout.",
+        metadata: {
+          candidateCount: candidates.length,
+          fanoutCap,
+          pendingOutgoingCount: quotaSnapshot.pendingOutgoingCount,
+          dailyOutgoingCount: quotaSnapshot.dailyOutgoingCount,
+        },
+      });
 
       await this.enqueueAsyncAgentFollowup({
         userId: intent.userId,
@@ -745,7 +984,7 @@ export class IntentsService {
         if (workflowThreadId) {
           await this.agentService.appendWorkflowUpdate(
             workflowThreadId,
-            `I still could not find matches, so I widened your filters (level ${timeoutEscalation.targetLevel}) and queued another search now.`,
+            `Quick update: no strong matches yet, so I broadened the search and queued another pass (level ${timeoutEscalation.targetLevel}).`,
             {
               intentId,
               fanoutCount: 0,
@@ -758,8 +997,23 @@ export class IntentsService {
         await this.notificationsService.createInAppNotification(
           intent.userId,
           NotificationType.AGENT_UPDATE,
-          "No strong matches yet. I widened your filters and will retry automatically.",
+          "Still searching in the background. I broadened the criteria and started another pass.",
         );
+        await this.workflowRuntimeService?.checkpoint({
+          workflowRunId,
+          traceId,
+          stage: "matching_retry",
+          status: "degraded",
+          entityType: "intent",
+          entityId: intentId,
+          userId: intent.userId,
+          summary:
+            "No strong matches yet; filters widened and retry scheduled.",
+          metadata: {
+            routingEscalationLevel: timeoutEscalation.targetLevel,
+            ageMinutes: timeoutEscalation.ageMinutes,
+          },
+        });
 
         await this.enqueueAsyncAgentFollowup({
           userId: intent.userId,
@@ -770,7 +1024,7 @@ export class IntentsService {
           notificationType: NotificationType.AGENT_UPDATE,
           delayMs: 45_000,
           message:
-            "I widened your filters after timeout and started another matching pass.",
+            "Quick update: I broadened the criteria and started another background pass.",
         });
         await this.enqueueDelayedRoutingRetry({
           intentId,
@@ -789,7 +1043,7 @@ export class IntentsService {
         if (workflowThreadId) {
           await this.agentService.appendWorkflowUpdate(
             workflowThreadId,
-            "I could not find strong matches yet. I can widen filters if you want.",
+            "No strong match yet. If you want, I can broaden the search and keep going.",
             {
               intentId,
               fanoutCount: 0,
@@ -800,8 +1054,19 @@ export class IntentsService {
         await this.notificationsService.createInAppNotification(
           intent.userId,
           NotificationType.AGENT_UPDATE,
-          "No strong matches yet; try broadening your request.",
+          "No strong match yet. Want me to broaden the search and keep going?",
         );
+        await this.workflowRuntimeService?.checkpoint({
+          workflowRunId,
+          traceId,
+          stage: "matching_retry",
+          status: "degraded",
+          entityType: "intent",
+          entityId: intentId,
+          userId: intent.userId,
+          summary:
+            "No strong matches found; background follow-up and retry scheduled.",
+        });
 
         await this.enqueueAsyncAgentFollowup({
           userId: intent.userId,
@@ -835,6 +1100,22 @@ export class IntentsService {
         agentThreadId: workflowThreadId ?? null,
       }),
     );
+    await this.workflowRuntimeService?.checkpoint({
+      workflowRunId,
+      traceId,
+      stage: "routing_pipeline",
+      status: "completed",
+      entityType: "intent",
+      entityId: intentId,
+      userId: intent.userId,
+      summary: `Routing pipeline finished with outcome ${routingOutcome}.`,
+      metadata: {
+        candidateCount: candidates.length,
+        fanoutCount: fanout.length,
+        fanoutCap,
+        outcome: routingOutcome,
+      },
+    });
     return {
       intentId,
       fanoutCount: fanout.length,
@@ -1049,6 +1330,16 @@ export class IntentsService {
     });
     if (retryIntent) {
       this.emitIntentUpdatedSafe(retryIntent.userId, intentId, "parsed");
+      await this.workflowRuntimeService?.checkpoint({
+        workflowRunId: this.buildIntentWorkflowRunId(intentId),
+        traceId,
+        stage: "replay_enqueue",
+        status: "completed",
+        entityType: "intent",
+        entityId: intentId,
+        userId: retryIntent.userId,
+        summary: "Manual replay requested for intent routing.",
+      });
     }
     const idempotencyKey = this.buildIntentProcessingIdempotencyKey(
       intentId,
@@ -1282,6 +1573,22 @@ export class IntentsService {
           template: input.template,
         }),
       );
+      await this.workflowRuntimeService?.checkpoint({
+        workflowRunId: this.buildIntentWorkflowRunId(input.intentId),
+        traceId: input.traceId,
+        stage: "followup_enqueue",
+        status: "skipped",
+        entityType: "intent",
+        entityId: input.intentId,
+        userId: input.userId,
+        summary:
+          "Skipped async follow-up enqueue because launch controls disabled followups.",
+        metadata: {
+          template: input.template,
+          notificationType: input.notificationType ?? null,
+          reason: "launch_controls_disabled",
+        },
+      });
       return;
     }
 
@@ -1316,6 +1623,32 @@ export class IntentsService {
           delay: 1000,
         },
       },
+    );
+    await this.workflowRuntimeService?.checkpoint({
+      workflowRunId: this.buildIntentWorkflowRunId(input.intentId),
+      traceId: input.traceId,
+      stage: "followup_enqueue",
+      status: "completed",
+      entityType: "intent",
+      entityId: input.intentId,
+      userId: input.userId,
+      summary: `Queued async follow-up template ${input.template}.`,
+      metadata: {
+        template: input.template,
+        notificationType: input.notificationType ?? null,
+        delayMs: input.delayMs,
+        idempotencyKey,
+      },
+    });
+  }
+
+  private buildIntentWorkflowRunId(intentId: string) {
+    return (
+      this.workflowRuntimeService?.buildWorkflowRunId({
+        domain: "social",
+        entityType: "intent",
+        entityId: intentId,
+      }) ?? `social:intent:${intentId}`
     );
   }
 

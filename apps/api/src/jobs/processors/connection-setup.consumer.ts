@@ -55,6 +55,7 @@ export class ConnectionSetupConsumer extends WorkerHost {
         const result =
           await this.connectionSetupService.setupFromAcceptedRequest(
             payload.payload.requestId,
+            payload.traceId,
           );
         this.logger.log(
           JSON.stringify({

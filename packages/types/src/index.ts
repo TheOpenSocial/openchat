@@ -190,6 +190,374 @@ export const asyncAgentFollowupJobSchema = queueEnvelopeSchema.extend({
   }),
 });
 
+export const agentTestSuiteLayerSchema = z.enum([
+  "contract",
+  "workflow",
+  "queue",
+  "scenario",
+  "eval",
+  "benchmark",
+  "prod-smoke",
+  "full",
+]);
+
+export const agentTestSuiteFailureClassSchema = z.enum([
+  "llm_or_schema",
+  "moderation_or_policy",
+  "matching_or_negotiation",
+  "queue_or_replay",
+  "persistence_or_dedupe",
+  "notification_or_followup",
+  "latency_or_capacity",
+  "observability_gap",
+]);
+
+export const agenticEvalDimensionSchema = z.enum([
+  "correctness",
+  "safety",
+  "boundedness",
+  "tone",
+  "usefulness",
+  "grounding",
+  "policy",
+  "observability",
+  "outcomes",
+  "negotiation",
+]);
+
+export const negotiationDomainSchema = z.enum(["social", "commerce"]);
+export const negotiationModeSchema = z.enum(["sync", "async"]);
+export const negotiationPolicyFlagSchema = z.enum([
+  "blocked",
+  "reported",
+  "under_review",
+  "trust_low",
+  "suspected_spam",
+  "unsafe_goods",
+]);
+
+export const negotiationPartySchema = z.object({
+  userId: z.string().min(1).max(120).optional(),
+  displayName: z.string().min(1).max(120).optional(),
+  country: z.string().max(120).optional(),
+  city: z.string().max(120).optional(),
+  languages: z.array(z.string().min(1).max(32)).default([]),
+  trustScore: z.number().min(0).max(100).optional(),
+  availabilityMode: z.nativeEnum(UserAvailabilityMode).optional(),
+  objectives: z.array(z.string().min(1).max(120)).default([]),
+  constraints: z.array(z.string().min(1).max(120)).default([]),
+  itemInterests: z.array(z.string().min(1).max(120)).default([]),
+  priceRange: z
+    .object({
+      min: z.number().nonnegative(),
+      max: z.number().nonnegative(),
+      currency: z.string().min(1).max(16).optional(),
+    })
+    .optional(),
+  askingPrice: z.number().nonnegative().optional(),
+});
+
+export const negotiationPacketSchema = z.object({
+  id: z.string().min(1).max(120).optional(),
+  domain: negotiationDomainSchema.default("social"),
+  mode: negotiationModeSchema.default("async"),
+  intentSummary: z.string().min(1).max(500),
+  requester: negotiationPartySchema,
+  counterpart: negotiationPartySchema,
+  policyFlags: z.array(negotiationPolicyFlagSchema).default([]),
+  metadata: z.record(z.string(), z.unknown()).default({}),
+});
+
+export const negotiationDecisionSchema = z.enum([
+  "propose_intro",
+  "defer_async",
+  "needs_clarification",
+  "decline",
+]);
+
+export const negotiationActionSchema = z.object({
+  type: z.enum([
+    "intro.send_request",
+    "followup.schedule",
+    "candidate.search",
+    "workflow.write",
+    "none",
+  ]),
+  reason: z.string().min(1).max(240),
+});
+
+export const negotiationOutcomeSchema = z.object({
+  packetId: z.string().min(1).max(120).nullable().default(null),
+  domain: negotiationDomainSchema,
+  mode: negotiationModeSchema,
+  decision: negotiationDecisionSchema,
+  confidence: z.number().min(0).max(1),
+  summary: z.string().min(1).max(400),
+  reasons: z.array(z.string().min(1).max(240)).min(1).max(8),
+  nextActions: z.array(negotiationActionSchema).max(4).default([]),
+  scoreBreakdown: z.object({
+    compatibility: z.number().min(0).max(1),
+    trust: z.number().min(0).max(1),
+    availability: z.number().min(0).max(1),
+    language: z.number().min(0).max(1),
+    location: z.number().min(0).max(1),
+    constraints: z.number().min(0).max(1),
+    offer: z.number().min(0).max(1),
+  }),
+  bounded: z.boolean().default(true),
+  roundsUsed: z.number().int().min(1).max(6).default(1),
+});
+
+export const agenticScenarioUserStateSchema = z.object({
+  userId: z.string().min(1).max(120),
+  availabilityMode: z.nativeEnum(UserAvailabilityMode).optional(),
+  country: z.string().max(120).optional(),
+  city: z.string().max(120).optional(),
+  languages: z.array(z.string().min(1).max(32)).default([]),
+  trustScore: z.number().min(0).max(100).optional(),
+  blockedUserIds: z.array(z.string().min(1).max(120)).default([]),
+  tags: z.array(z.string().min(1).max(64)).default([]),
+});
+
+export const agenticScenarioCandidateSchema = z.object({
+  userId: z.string().min(1).max(120),
+  displayName: z.string().min(1).max(120),
+  availabilityMode: z.nativeEnum(UserAvailabilityMode).optional(),
+  country: z.string().max(120).optional(),
+  city: z.string().max(120).optional(),
+  languages: z.array(z.string().min(1).max(32)).default([]),
+  trustScore: z.number().min(0).max(100).optional(),
+  blocked: z.boolean().optional(),
+  sharedTopics: z.array(z.string().min(1).max(120)).default([]),
+  priorInteraction: z.boolean().optional(),
+});
+
+export const agenticScenarioExpectedSideEffectSchema = z.object({
+  relation: z.string().min(1).max(120),
+  entityType: z.string().min(1).max(120),
+  mode: z
+    .enum(["exactly_once", "deduped", "best_effort"])
+    .default("best_effort"),
+});
+
+export const agenticDomainCoverageDomainSchema = z.enum([
+  "social",
+  "passive_discovery",
+  "groups_and_circles",
+  "events_and_reminders",
+  "dating_ready",
+  "commerce",
+  "safety_moderation",
+  "eval_runtime",
+]);
+
+export const agenticDomainCoverageStatusSchema = z.enum([
+  "supported",
+  "partial",
+  "policy_gated",
+]);
+
+export const agenticDomainCoverageEntrySchema = z
+  .object({
+    domain: agenticDomainCoverageDomainSchema,
+    status: agenticDomainCoverageStatusSchema,
+    summary: z.string().min(1).max(500),
+    scenarioIds: z.array(z.string().min(1).max(120)).default([]),
+    releaseGateLayers: z.array(agentTestSuiteLayerSchema).min(1),
+    explicitGaps: z.array(z.string().min(1).max(240)).default([]),
+  })
+  .superRefine((entry, ctx) => {
+    if (entry.status === "supported" && entry.scenarioIds.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["scenarioIds"],
+        message: "supported domains must reference at least one scenario id",
+      });
+    }
+    if (entry.status !== "supported" && entry.explicitGaps.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["explicitGaps"],
+        message:
+          "partial/policy-gated domains must declare explicit uncovered gaps",
+      });
+    }
+  });
+
+export const agenticScenarioSchema = z.object({
+  id: z.string().min(1).max(120),
+  family: z.string().min(1).max(120),
+  layerTargets: z.array(agentTestSuiteLayerSchema).min(1),
+  utterance: z.string().min(1).max(1000),
+  userState: agenticScenarioUserStateSchema,
+  candidatePool: z.array(agenticScenarioCandidateSchema).default([]),
+  expected: z.object({
+    workflowStages: z.array(z.string().min(1).max(120)).default([]),
+    sideEffects: z.array(agenticScenarioExpectedSideEffectSchema).default([]),
+    followupTemplate: z
+      .enum(["pending_reminder", "no_match_yet", "progress_update"])
+      .optional(),
+    primaryOutcome: z.string().min(1).max(120),
+  }),
+});
+
+export const agenticScenarioDatasetSchema = z
+  .object({
+    version: z.literal(1),
+    domainCoverage: z.array(agenticDomainCoverageEntrySchema).min(1),
+    scenarios: z.array(agenticScenarioSchema).min(1),
+  })
+  .superRefine((dataset, ctx) => {
+    const scenarioIds = new Set(
+      dataset.scenarios.map((scenario) => scenario.id),
+    );
+    const domainValues = new Set(
+      dataset.domainCoverage.map((entry) => entry.domain),
+    );
+
+    for (const domain of agenticDomainCoverageDomainSchema.options) {
+      if (!domainValues.has(domain)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["domainCoverage"],
+          message: `missing domainCoverage entry for domain '${domain}'`,
+        });
+      }
+    }
+
+    dataset.domainCoverage.forEach((entry, index) => {
+      entry.scenarioIds.forEach((scenarioId, scenarioIndex) => {
+        if (!scenarioIds.has(scenarioId)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["domainCoverage", index, "scenarioIds", scenarioIndex],
+            message: `unknown scenario id '${scenarioId}'`,
+          });
+        }
+      });
+    });
+  });
+
+export const agenticSyntheticWorldSchema = z.object({
+  version: z.literal(1),
+  users: z.array(
+    z.object({
+      userId: z.string().min(1).max(120),
+      displayName: z.string().min(1).max(120),
+      country: z.string().max(120).optional(),
+      city: z.string().max(120).optional(),
+      languages: z.array(z.string().min(1).max(32)).default([]),
+      trustScore: z.number().min(0).max(100).optional(),
+      availabilityMode: z.nativeEnum(UserAvailabilityMode).optional(),
+      tags: z.array(z.string().min(1).max(64)).default([]),
+    }),
+  ),
+  relationships: z.array(
+    z.object({
+      sourceUserId: z.string().min(1).max(120),
+      targetUserId: z.string().min(1).max(120),
+      type: z.enum([
+        "prior_connection",
+        "blocked",
+        "reported",
+        "reconnect_candidate",
+        "dating_candidate",
+        "commerce_candidate",
+      ]),
+    }),
+  ),
+  opportunities: z.array(
+    z.object({
+      id: z.string().min(1).max(120),
+      type: z.enum([
+        "social",
+        "reconnect",
+        "passive_discovery",
+        "dating",
+        "commerce",
+      ]),
+      ownerUserId: z.string().min(1).max(120),
+      tags: z.array(z.string().min(1).max(64)).default([]),
+    }),
+  ),
+});
+
+export const agentTestSuiteArtifactCaseSchema = z.object({
+  id: z.string().min(1).max(160),
+  scenarioId: z.string().min(1).max(120).nullable().default(null),
+  scenarioIds: z.array(z.string().min(1).max(120)).default([]),
+  workflowRunId: z.string().min(1).max(255).nullable().default(null),
+  traceId: z.string().min(1).max(255).nullable().default(null),
+  status: z.enum(["passed", "failed", "skipped"]),
+  latencyMs: z.number().nonnegative().nullable().default(null),
+  failureClass: agentTestSuiteFailureClassSchema.nullable().default(null),
+  summary: z.string().max(500).nullable().default(null),
+  sideEffects: z.array(z.string().min(1).max(120)).default([]),
+});
+
+export const agentTestSuiteArtifactRecordSchema = z.object({
+  runId: z.string().min(1).max(120),
+  layer: agentTestSuiteLayerSchema,
+  checkId: z.string().min(1).max(160),
+  summary: z.string().max(500).nullable().default(null),
+  scenarioId: z.string().min(1).max(120).nullable().default(null),
+  workflowRunId: z.string().min(1).max(255).nullable().default(null),
+  traceId: z.string().min(1).max(255).nullable().default(null),
+  status: z.enum(["passed", "failed", "skipped"]),
+  latencyMs: z.number().nonnegative().nullable().default(null),
+  failureClass: agentTestSuiteFailureClassSchema.nullable().default(null),
+  sideEffects: z.array(z.string().min(1).max(120)).default([]),
+  metrics: z
+    .object({
+      ackWithinSlo: z.boolean().optional(),
+      backgroundFollowupDetected: z.boolean().optional(),
+      ackDetectedMs: z.number().nonnegative().nullable().optional(),
+      queueLagMs: z.number().nonnegative().nullable().optional(),
+      duplicateVisibleSideEffects: z.number().int().nonnegative().optional(),
+      duplicateVisibleSideEffectRate: z.number().min(0).max(1).optional(),
+      workerIndex: z.number().int().min(1).optional(),
+      burstIndex: z.number().int().min(1).optional(),
+      concurrency: z.number().int().min(1).optional(),
+      burstSize: z.number().int().min(1).optional(),
+    })
+    .catchall(z.unknown())
+    .optional(),
+});
+
+const agentTestSuiteArtifactCounterSchema = z.object({
+  total: z.number().int().nonnegative(),
+  passed: z.number().int().nonnegative(),
+  failed: z.number().int().nonnegative(),
+  skipped: z.number().int().nonnegative(),
+});
+
+export const agentTestSuiteArtifactSummarySchema = z.object({
+  caseCounts: agentTestSuiteArtifactCounterSchema,
+  recordCounts: agentTestSuiteArtifactCounterSchema,
+  failureClasses: z
+    .record(z.string().min(1).max(64), z.number().int().nonnegative())
+    .default({}),
+  benchmark: z
+    .object({
+      runCount: z.number().int().nonnegative(),
+      concurrency: z.number().int().min(1).optional(),
+      burstSize: z.number().int().min(1).optional(),
+      duplicateVisibleSideEffectRate: z.number().min(0).max(1).optional(),
+      queueLagP95Ms: z.number().nonnegative().optional(),
+    })
+    .optional(),
+});
+
+export const agentTestSuiteArtifactSchema = z.object({
+  runId: z.string().min(1).max(120),
+  generatedAt: isoDateTimeSchema,
+  layer: agentTestSuiteLayerSchema,
+  status: z.enum(["passed", "failed", "skipped"]),
+  cases: z.array(agentTestSuiteArtifactCaseSchema),
+  records: z.array(agentTestSuiteArtifactRecordSchema).default([]),
+  summary: agentTestSuiteArtifactSummarySchema.optional(),
+});
+
 export const authGoogleCallbackBodySchema = z.object({
   code: z.string().min(1),
   /** When true, email must match `ADMIN_CONSOLE_ALLOWED_EMAILS` on the API. */
@@ -344,10 +712,64 @@ export const lifeGraphBehaviorSignalBodySchema = z.object({
   context: z.record(z.string(), z.unknown()).optional(),
 });
 
+export const memoryClassSchema = z.enum([
+  "profile_memory",
+  "stable_preference",
+  "inferred_preference",
+  "relationship_history",
+  "safety_memory",
+  "commerce_memory",
+  "interaction_summary",
+  "transient_working_memory",
+]);
+
+export const memorySourceTypeSchema = z.enum([
+  "explicit_user_input",
+  "user_profile_edit",
+  "interaction_observation",
+  "agent_tool",
+  "model_inference",
+  "system_event",
+]);
+
+export const memorySafeWritePolicySchema = z.enum([
+  "strict",
+  "allow_with_trace",
+  "best_effort",
+]);
+
+export const memoryContradictionPolicySchema = z.enum([
+  "keep_latest",
+  "suppress_conflict",
+  "append_conflict_note",
+]);
+
+export const memoryWriteProvenanceSchema = z.object({
+  sourceType: memorySourceTypeSchema,
+  sourceId: z.string().min(1).max(255).optional(),
+  traceId: z.string().min(1).max(255).optional(),
+  workflowRunId: z.string().min(1).max(255).optional(),
+  toolName: z.string().min(1).max(120).optional(),
+  model: z.string().min(1).max(120).optional(),
+  observedAt: isoDateTimeSchema.optional(),
+});
+
+export const interactionMemoryWriteSchema = z.object({
+  class: memoryClassSchema.optional(),
+  key: z.string().min(1).max(160).optional(),
+  value: z.string().min(1).max(400).optional(),
+  confidence: z.number().min(0).max(1).optional(),
+  safeWritePolicy: memorySafeWritePolicySchema.optional(),
+  contradictionPolicy: memoryContradictionPolicySchema.optional(),
+  compressible: z.boolean().optional(),
+  provenance: memoryWriteProvenanceSchema.optional(),
+});
+
 export const retrievalInteractionSummaryBodySchema = z.object({
   summary: z.string().min(1).max(4000),
   safe: z.boolean().optional(),
   context: z.record(z.string(), z.unknown()).optional(),
+  memory: interactionMemoryWriteSchema.optional(),
 });
 
 export const retrievalContextQueryBodySchema = z.object({
@@ -468,6 +890,211 @@ export const createIntentFromAgentMessageBodySchema = z.object({
   content: z.string().min(1),
   allowDecomposition: z.boolean().optional(),
   maxIntents: z.number().int().min(1).max(5).optional(),
+});
+
+export const intentDomainSchema = z.enum([
+  "social",
+  "passive_discovery",
+  "group",
+  "event",
+  "dating",
+  "commerce",
+]);
+
+export const workflowReplayabilitySchema = z.enum([
+  "replayable",
+  "partial",
+  "inspect_only",
+]);
+
+export const workflowStageStatusSchema = z.enum([
+  "started",
+  "completed",
+  "skipped",
+  "blocked",
+  "degraded",
+  "failed",
+]);
+
+export const workflowStageStateSchema = z.object({
+  stage: z.string().min(1),
+  status: workflowStageStatusSchema,
+  reason: z.string().min(1).optional(),
+});
+
+export const workflowSideEffectIntegritySchema = z.object({
+  sideEffectCount: z.number().int().nonnegative(),
+  dedupedSideEffectCount: z.number().int().nonnegative(),
+  reusedRelations: z.array(z.string().min(1)).default([]),
+});
+
+export const createRuntimeIntentBodySchema = z.object({
+  userId: uuidSchema,
+  rawText: z.string().min(1),
+  domain: intentDomainSchema,
+  agentThreadId: uuidSchema.optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+});
+
+export const intentResponseSchema = z.object({
+  intentId: uuidSchema,
+  domain: intentDomainSchema,
+  status: z.string().min(1),
+  workflowRunId: z.string().min(1),
+  traceId: z.string().min(1),
+  replayability: workflowReplayabilitySchema,
+  stage: workflowStageStateSchema,
+  sideEffectIntegrity: workflowSideEffectIntegritySchema,
+});
+
+export const datingVerificationStateSchema = z.enum([
+  "unverified",
+  "verified",
+  "rejected",
+]);
+
+export const datingConsentStateSchema = z.enum([
+  "granted",
+  "revoked",
+  "pending",
+]);
+
+export const datingConsentScopeSchema = z.enum([
+  "dm_intro",
+  "group_intro",
+  "event_intro",
+]);
+
+export const createDatingConsentBodySchema = z.object({
+  userId: uuidSchema,
+  targetUserId: uuidSchema,
+  scope: datingConsentScopeSchema,
+  consentState: datingConsentStateSchema,
+  verificationState: datingVerificationStateSchema.default("verified"),
+  reason: z.string().min(1).max(500).optional(),
+  expiresAt: isoDateTimeSchema.optional(),
+});
+
+export const datingConsentResponseSchema = z.object({
+  consentId: z.string().min(1),
+  userId: uuidSchema,
+  targetUserId: uuidSchema,
+  scope: datingConsentScopeSchema,
+  consentState: datingConsentStateSchema,
+  verificationState: datingVerificationStateSchema,
+  workflowRunId: z.string().min(1),
+  traceId: z.string().min(1),
+  replayability: workflowReplayabilitySchema,
+});
+
+export const commerceListingStateSchema = z.enum([
+  "active",
+  "paused",
+  "removed",
+  "fulfilled",
+]);
+
+export const createCommerceListingBodySchema = z.object({
+  sellerUserId: uuidSchema,
+  title: z.string().min(1).max(160),
+  description: z.string().max(2_000).optional(),
+  category: z.string().min(1).max(80),
+  price: z.number().nonnegative(),
+  currency: z.string().min(1).max(16),
+  quantity: z.number().int().positive().optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+});
+
+export const commerceListingResponseSchema = z.object({
+  listingId: z.string().min(1),
+  sellerUserId: uuidSchema,
+  state: commerceListingStateSchema,
+  workflowRunId: z.string().min(1),
+  traceId: z.string().min(1),
+  replayability: workflowReplayabilitySchema,
+});
+
+export const commerceOfferStateSchema = z.enum([
+  "proposed",
+  "countered",
+  "accepted",
+  "rejected",
+  "expired",
+  "cancelled",
+  "escrowed",
+  "fulfilled",
+  "disputed",
+]);
+
+export const commerceEscrowStateSchema = z.enum([
+  "not_started",
+  "pending_funding",
+  "funded",
+  "released",
+  "refunded",
+  "frozen",
+]);
+
+export const createCommerceOfferBodySchema = z.object({
+  buyerUserId: uuidSchema,
+  sellerUserId: uuidSchema,
+  listingId: z.string().min(1),
+  offerPrice: z.number().nonnegative(),
+  currency: z.string().min(1).max(16),
+  message: z.string().max(1_000).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+});
+
+export const respondCommerceOfferBodySchema = z.object({
+  actorUserId: uuidSchema,
+  action: z.enum([
+    "accept",
+    "reject",
+    "counter",
+    "dispute",
+    "fulfill",
+    "cancel",
+  ]),
+  counterPrice: z.number().nonnegative().optional(),
+  reason: z.string().max(500).optional(),
+});
+
+export const commerceOfferResponseSchema = z.object({
+  offerId: z.string().min(1),
+  listingId: z.string().min(1),
+  buyerUserId: uuidSchema,
+  sellerUserId: uuidSchema,
+  state: commerceOfferStateSchema,
+  escrowState: commerceEscrowStateSchema,
+  workflowRunId: z.string().min(1),
+  traceId: z.string().min(1),
+  replayability: workflowReplayabilitySchema,
+});
+
+export const workflowRunResponseSchema = z.object({
+  workflowRunId: z.string().min(1),
+  traceId: z.string().nullable(),
+  domain: z.string().nullable(),
+  replayability: workflowReplayabilitySchema,
+  health: z.enum(["healthy", "watch", "critical"]),
+  stages: z.array(
+    z.object({
+      stage: z.string().min(1),
+      status: workflowStageStatusSchema,
+      at: isoDateTimeSchema,
+      summary: z.string().nullable(),
+    }),
+  ),
+  sideEffects: z.array(
+    z.object({
+      relation: z.string().min(1),
+      entityType: z.string().min(1),
+      entityId: z.string().min(1),
+      at: isoDateTimeSchema,
+      summary: z.string().nullable(),
+    }),
+  ),
+  integrity: workflowSideEffectIntegritySchema,
 });
 
 export const searchQuerySchema = z.object({
@@ -729,6 +1356,23 @@ export const adminAgentActionDebugQuerySchema = z.object({
   actorUserId: uuidSchema.optional(),
   threadId: uuidSchema.optional(),
   traceId: z.string().min(1).max(120).optional(),
+});
+
+export const adminVerificationRunIngestBodySchema = z.object({
+  runId: z.string().min(1).max(160),
+  lane: z.enum(["suite", "verification", "prod-smoke"]).default("suite"),
+  layer: agentTestSuiteLayerSchema,
+  status: z.enum(["passed", "failed", "skipped"]),
+  generatedAt: isoDateTimeSchema.optional(),
+  canaryVerdict: z.enum(["healthy", "watch", "critical"]).optional(),
+  summary: z.record(z.string(), z.unknown()).optional(),
+  artifact: z.record(z.string(), z.unknown()).optional(),
+});
+
+export const adminVerificationRunListQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+  lane: z.enum(["suite", "verification", "prod-smoke"]).optional(),
+  status: z.enum(["passed", "failed", "skipped"]).optional(),
 });
 
 export const adminModerationFlagTriageBodySchema = z

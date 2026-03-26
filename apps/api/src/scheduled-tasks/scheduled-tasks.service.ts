@@ -35,6 +35,7 @@ type ScheduledTaskStatus = zodInfer<typeof scheduledTaskStatusSchema>;
 type zodInfer<T extends { _output: unknown }> = T["_output"];
 
 type TaskDeliveryMode =
+  | "none"
   | "notification"
   | "agent_thread"
   | "notification_and_agent_thread";
@@ -408,6 +409,7 @@ export class ScheduledTasksService {
     );
     const maxResults = this.readInt(config.maxResults, 5, 1, 10);
     const minResults = this.readInt(config.minResults, 1, 0, 10);
+    const suppressWhenEmpty = this.readBoolean(config.suppressWhenEmpty, false);
     const deliveryMode = this.readDeliveryMode(
       config.deliveryMode,
       "agent_thread",
@@ -447,6 +449,15 @@ export class ScheduledTasksService {
       );
       total = data.tonight.suggestions.length;
       payload = data as unknown as Prisma.InputJsonValue;
+    }
+
+    if (total === 0 && suppressWhenEmpty) {
+      return {
+        summary: `Saved search '${savedSearch.title}' has no new results yet.`,
+        payload,
+        deliveryMode: "none",
+        notificationType: NotificationType.AGENT_UPDATE,
+      };
     }
 
     if (total < minResults) {
@@ -547,6 +558,14 @@ export class ScheduledTasksService {
       config.deliveryMode,
       "notification",
     );
+    const context = this.toRecord(config.context);
+    const quietHoursActive = this.readBoolean(context.quietHoursActive, false);
+    const resolvedDeliveryMode =
+      quietHoursActive &&
+      (deliveryMode === "notification" ||
+        deliveryMode === "notification_and_agent_thread")
+        ? "agent_thread"
+        : deliveryMode;
     const message =
       template === "resume_dormant_chats"
         ? "Reminder: you have dormant chats that may be worth reviving."
@@ -557,9 +576,9 @@ export class ScheduledTasksService {
       summary: message,
       payload: {
         template,
-        context: this.toRecord(config.context),
+        context,
       } as Prisma.InputJsonValue,
-      deliveryMode,
+      deliveryMode: resolvedDeliveryMode,
       notificationType: NotificationType.REMINDER,
     };
   }
@@ -753,10 +772,20 @@ export class ScheduledTasksService {
     return Math.max(min, Math.min(max, parsed));
   }
 
+  private readBoolean(value: unknown, fallback: boolean) {
+    if (typeof value !== "boolean") {
+      return fallback;
+    }
+    return value;
+  }
+
   private readDeliveryMode(
     value: unknown,
     fallback: TaskDeliveryMode,
   ): TaskDeliveryMode {
+    if (value === "none") {
+      return value;
+    }
     if (value === "notification" || value === "agent_thread") {
       return value;
     }
