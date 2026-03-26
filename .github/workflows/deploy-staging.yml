@@ -179,6 +179,7 @@ jobs:
 
       - name: Verify backend golden suite lane
         if: ${{ inputs.run_post_deploy_verification }}
+        timeout-minutes: 30
         env:
           STAGING_EQUALS_PROD: "true"
           BACKEND_OPS_TARGET: "staging"
@@ -197,4 +198,4 @@ jobs:
           PLAYGROUND_ADMIN_API_KEY: ${{ secrets.STAGING_SMOKE_ADMIN_API_KEY || secrets.SMOKE_ADMIN_API_KEY }}
         run: |
           set -euo pipefail
-          pnpm test:backend:ops-pack
+          timeout 28m pnpm test:backend:ops-pack
