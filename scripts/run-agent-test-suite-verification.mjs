@@ -111,7 +111,12 @@ function collectMissing(envMap) {
     .map(([key]) => key);
 }
 
-async function tryBootstrapMissingEnvFromPlayground(currentEnv, missingKeys) {
+async function tryBootstrapEnvFromPlayground(
+  currentEnv,
+  missingKeys,
+  options = {},
+) {
+  const forceRefresh = options.forceRefresh === true;
   const baseUrl = (
     process.env.PLAYGROUND_BASE_URL ||
     process.env.SMOKE_BASE_URL ||
@@ -123,7 +128,7 @@ async function tryBootstrapMissingEnvFromPlayground(currentEnv, missingKeys) {
   const rotateProbeToken =
     process.env.PLAYGROUND_BOOTSTRAP_ROTATE_PROBE_TOKEN === "1";
 
-  if (!baseUrl || !adminUserId || missingKeys.length === 0) {
+  if (!baseUrl || !adminUserId || (!forceRefresh && missingKeys.length === 0)) {
     return currentEnv;
   }
 
@@ -151,7 +156,15 @@ async function tryBootstrapMissingEnvFromPlayground(currentEnv, missingKeys) {
 
     const merged = { ...currentEnv };
     for (const key of Object.keys(currentEnv)) {
-      if (merged[key]) {
+      const shouldReplace =
+        forceRefresh &&
+        (key === "SMOKE_ACCESS_TOKEN" ||
+          key === "SMOKE_USER_ID" ||
+          key === "SMOKE_AGENT_THREAD_ID" ||
+          key === "AGENTIC_BENCH_ACCESS_TOKEN" ||
+          key === "AGENTIC_BENCH_USER_ID" ||
+          key === "AGENTIC_BENCH_THREAD_ID");
+      if (merged[key] && !shouldReplace) {
         continue;
       }
       const value = envFromBootstrap[key];
@@ -165,12 +178,40 @@ async function tryBootstrapMissingEnvFromPlayground(currentEnv, missingKeys) {
   }
 }
 
+async function benchAccessTokenIsValid(envMap) {
+  const baseUrl = envMap.SMOKE_BASE_URL?.trim();
+  const accessToken = envMap.AGENTIC_BENCH_ACCESS_TOKEN?.trim();
+  const threadId = envMap.AGENTIC_BENCH_THREAD_ID?.trim();
+  if (!baseUrl || !accessToken || !threadId) {
+    return false;
+  }
+  try {
+    const response = await fetch(
+      `${baseUrl.replace(/\/+$/, "")}/api/agent/threads/${threadId}/messages`,
+      {
+        method: "GET",
+        headers: {
+          authorization: `Bearer ${accessToken}`,
+        },
+      },
+    );
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 let hydratedEnv = { ...resolvedEnv };
 const initialMissing = collectMissing(hydratedEnv);
-hydratedEnv = await tryBootstrapMissingEnvFromPlayground(
+hydratedEnv = await tryBootstrapEnvFromPlayground(
   hydratedEnv,
   initialMissing,
 );
+if (!(await benchAccessTokenIsValid(hydratedEnv))) {
+  hydratedEnv = await tryBootstrapEnvFromPlayground(hydratedEnv, [], {
+    forceRefresh: true,
+  });
+}
 const missing = collectMissing(hydratedEnv);
 
 if (missing.length > 0) {
