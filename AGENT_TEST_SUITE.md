@@ -281,6 +281,7 @@ pnpm test:agentic:suite -- --layer=prod-smoke
 pnpm test:agentic:suite -- --layer=full
 pnpm staging:smoke:verification-lane
 pnpm test:agentic:suite:verification
+pnpm test:agentic:suite:verification:failed
 pnpm test:backend:ops-pack
 ```
 
@@ -331,6 +332,12 @@ Current runner artifact behavior:
   - `AGENT_TEST_SUITE_ENABLE_PROD_SMOKE=1` (run smoke lane)
   - `AGENT_TEST_SUITE_REQUIRE_PROD_SMOKE=1` (fail if smoke lane is not enabled/passing)
 - strict verification lane command (`pnpm test:agentic:suite:verification`) enforces benchmark and prod-smoke requirements in one pass and fails fast when required env vars are missing
+- strict verification now runs in staged mode (`contract -> workflow -> queue -> scenario -> eval -> benchmark -> prod-smoke`) and writes a summary artifact at `.artifacts/agent-test-suite/verification-latest.json`
+- strict verification retries only failing stages once per run; if a stage still fails, the run fails with explicit failed-stage reporting
+- rerun-only-failures flow is available via:
+  - `pnpm test:agentic:suite:verification:failed`
+  - or `AGENT_TEST_SUITE_RERUN_FAILED_ONLY=1 pnpm test:agentic:suite:verification`
+  - optionally pin stages explicitly with `AGENT_TEST_SUITE_ONLY_STAGES=benchmark,prod-smoke`
 - strict verification now supports temporary staging=prod env resolution (`STAGING_EQUALS_PROD=true`) so missing `STAGING_*` verification keys can resolve from `PROD_*`/`PRODUCTION_*` aliases during parity windows
 - local verification profile (for localhost-only smoke realism without staging credentials) can be run by supplying:
   - a valid local access token/session and user/thread ids for `AGENTIC_BENCH_*` and `SMOKE_*`

@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
 import { spawnSync } from "node:child_process";
 
 const stageEqualsProd = process.env.STAGING_EQUALS_PROD === "true";
@@ -319,50 +321,191 @@ if (missing.length > 0) {
   process.exit(1);
 }
 
-const result = spawnSync(
-  "node",
-  ["scripts/run-agent-test-suite.mjs", "--layer=full"],
-  {
-    cwd: process.cwd(),
-    encoding: "utf8",
-    env: {
-      ...process.env,
-      AGENT_TEST_SUITE_REQUIRE_BENCHMARK: "1",
-      AGENT_TEST_SUITE_ENABLE_PROD_SMOKE: "1",
-      AGENT_TEST_SUITE_REQUIRE_PROD_SMOKE: "1",
-      AGENTIC_BENCH_ENABLE_WORKFLOW_HEALTH: "1",
-      AGENTIC_BENCH_REQUIRE_WORKFLOW_HEALTH: "1",
-      ...hydratedEnv,
-      AGENTIC_BENCH_ADMIN_USER_ID:
-        process.env.AGENTIC_BENCH_ADMIN_USER_ID ??
-        process.env.SMOKE_ADMIN_USER_ID ??
-        hydratedEnv.SMOKE_ADMIN_USER_ID,
-      AGENTIC_BENCH_ADMIN_ROLE:
-        process.env.AGENTIC_BENCH_ADMIN_ROLE ??
-        process.env.SMOKE_ADMIN_ROLE ??
-        "support",
-      AGENTIC_BENCH_ADMIN_API_KEY:
-        process.env.AGENTIC_BENCH_ADMIN_API_KEY ?? process.env.SMOKE_ADMIN_API_KEY,
-      AGENTIC_BENCH_MAX_CRITICAL_WORKFLOW_RUNS:
-        process.env.AGENTIC_BENCH_MAX_CRITICAL_WORKFLOW_RUNS ?? "0",
-      AGENTIC_BENCH_MAX_FAILED_STAGE_COUNT:
-        process.env.AGENTIC_BENCH_MAX_FAILED_STAGE_COUNT ?? "0",
-      AGENTIC_BENCH_MAX_BLOCKED_STAGE_COUNT:
-        process.env.AGENTIC_BENCH_MAX_BLOCKED_STAGE_COUNT ?? "0",
-      AGENTIC_BENCH_MAX_OBSERVABILITY_GAP_RUNS:
-        process.env.AGENTIC_BENCH_MAX_OBSERVABILITY_GAP_RUNS ?? "0",
-    },
-    shell: process.platform === "win32",
-  },
+const stageSequence = [
+  "contract",
+  "workflow",
+  "queue",
+  "scenario",
+  "eval",
+  "benchmark",
+  "prod-smoke",
+];
+
+const runIdPrefix =
+  process.env.AGENT_TEST_SUITE_VERIFICATION_RUN_ID ??
+  `verification-${new Date().toISOString().replace(/[:.]/g, "-")}`;
+const summaryArtifactPath = path.resolve(
+  process.cwd(),
+  process.env.AGENT_TEST_SUITE_VERIFICATION_ARTIFACT_PATH ??
+    ".artifacts/agent-test-suite/verification-latest.json",
 );
+const rerunFailedOnly =
+  process.env.AGENT_TEST_SUITE_RERUN_FAILED_ONLY === "1";
+const retryFailedStagesOnce =
+  process.env.AGENT_TEST_SUITE_RETRY_FAILED_STAGES_ONCE !== "0";
 
-if (result.stdout) {
-  process.stdout.write(result.stdout);
-}
-if (result.stderr) {
-  process.stderr.write(result.stderr);
+function buildSuiteEnv() {
+  return {
+    ...process.env,
+    AGENT_TEST_SUITE_REQUIRE_BENCHMARK: "1",
+    AGENT_TEST_SUITE_ENABLE_PROD_SMOKE: "1",
+    AGENT_TEST_SUITE_REQUIRE_PROD_SMOKE: "1",
+    AGENTIC_BENCH_ENABLE_WORKFLOW_HEALTH: "1",
+    AGENTIC_BENCH_REQUIRE_WORKFLOW_HEALTH: "1",
+    ...hydratedEnv,
+    AGENTIC_BENCH_ADMIN_USER_ID:
+      process.env.AGENTIC_BENCH_ADMIN_USER_ID ??
+      process.env.SMOKE_ADMIN_USER_ID ??
+      hydratedEnv.SMOKE_ADMIN_USER_ID,
+    AGENTIC_BENCH_ADMIN_ROLE:
+      process.env.AGENTIC_BENCH_ADMIN_ROLE ??
+      process.env.SMOKE_ADMIN_ROLE ??
+      "support",
+    AGENTIC_BENCH_ADMIN_API_KEY:
+      process.env.AGENTIC_BENCH_ADMIN_API_KEY ?? process.env.SMOKE_ADMIN_API_KEY,
+    AGENTIC_BENCH_MAX_CRITICAL_WORKFLOW_RUNS:
+      process.env.AGENTIC_BENCH_MAX_CRITICAL_WORKFLOW_RUNS ?? "0",
+    AGENTIC_BENCH_MAX_FAILED_STAGE_COUNT:
+      process.env.AGENTIC_BENCH_MAX_FAILED_STAGE_COUNT ?? "0",
+    AGENTIC_BENCH_MAX_BLOCKED_STAGE_COUNT:
+      process.env.AGENTIC_BENCH_MAX_BLOCKED_STAGE_COUNT ?? "0",
+    AGENTIC_BENCH_MAX_OBSERVABILITY_GAP_RUNS:
+      process.env.AGENTIC_BENCH_MAX_OBSERVABILITY_GAP_RUNS ?? "0",
+  };
 }
 
-if (result.status !== 0) {
-  process.exit(result.status ?? 1);
+function parseFailedOnlyStages(rawValue) {
+  if (typeof rawValue !== "string" || rawValue.trim().length === 0) {
+    return [];
+  }
+  return rawValue
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => stageSequence.includes(value));
+}
+
+function loadFailedStagesFromLatestSummary() {
+  try {
+    const raw = readFileSync(summaryArtifactPath, "utf8");
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") {
+      return [];
+    }
+    const failed = Array.isArray(parsed.failedAfterRetry)
+      ? parsed.failedAfterRetry
+      : Array.isArray(parsed.failedFirstPass)
+        ? parsed.failedFirstPass
+        : [];
+    return failed
+      .map((value) => (typeof value === "string" ? value.trim() : ""))
+      .filter((value) => stageSequence.includes(value));
+  } catch {
+    return [];
+  }
+}
+
+function runLayer(layer, attempt, env) {
+  const startedAt = Date.now();
+  const layerRunId = `${runIdPrefix}-${layer}-a${attempt}`;
+  const result = spawnSync(
+    "node",
+    ["scripts/run-agent-test-suite.mjs", `--layer=${layer}`],
+    {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      env: {
+        ...env,
+        AGENT_TEST_SUITE_RUN_ID: layerRunId,
+      },
+      shell: process.platform === "win32",
+    },
+  );
+  if (result.stdout) {
+    process.stdout.write(result.stdout);
+  }
+  if (result.stderr) {
+    process.stderr.write(result.stderr);
+  }
+  return {
+    layer,
+    attempt,
+    status: result.status === 0 ? "passed" : "failed",
+    exitCode: result.status ?? 1,
+    latencyMs: Date.now() - startedAt,
+    runId: layerRunId,
+  };
+}
+
+function writeSummary(summary) {
+  mkdirSync(path.dirname(summaryArtifactPath), { recursive: true });
+  writeFileSync(summaryArtifactPath, JSON.stringify(summary, null, 2));
+  console.log(`verification summary artifact: ${summaryArtifactPath}`);
+}
+
+const stagesFromEnv = parseFailedOnlyStages(
+  process.env.AGENT_TEST_SUITE_ONLY_STAGES,
+);
+const stagesFromLatestSummary =
+  rerunFailedOnly && stagesFromEnv.length === 0
+    ? loadFailedStagesFromLatestSummary()
+    : [];
+const firstPassStages =
+  rerunFailedOnly
+    ? stagesFromEnv.length > 0
+      ? stagesFromEnv
+      : stagesFromLatestSummary.length > 0
+        ? stagesFromLatestSummary
+        : stageSequence
+    : stageSequence;
+const suiteEnv = buildSuiteEnv();
+
+const records = [];
+const failedFirstPass = [];
+
+console.log("verification lane stages:");
+console.log(`- rerunFailedOnly: ${rerunFailedOnly}`);
+console.log(`- retryFailedStagesOnce: ${retryFailedStagesOnce}`);
+console.log(`- stages: ${firstPassStages.join(", ")}`);
+console.log("");
+
+for (const layer of firstPassStages) {
+  console.log(`==> verification stage ${layer} (attempt 1)`);
+  const record = runLayer(layer, 1, suiteEnv);
+  records.push(record);
+  if (record.status === "failed") {
+    failedFirstPass.push(layer);
+  }
+}
+
+const failedAfterRetry = [...failedFirstPass];
+if (retryFailedStagesOnce && failedFirstPass.length > 0) {
+  for (const layer of failedFirstPass) {
+    console.log(`==> verification stage ${layer} (attempt 2)`);
+    const retryRecord = runLayer(layer, 2, suiteEnv);
+    records.push(retryRecord);
+    if (retryRecord.status === "passed") {
+      const index = failedAfterRetry.indexOf(layer);
+      if (index >= 0) {
+        failedAfterRetry.splice(index, 1);
+      }
+    }
+  }
+}
+
+const summary = {
+  runId: runIdPrefix,
+  generatedAt: new Date().toISOString(),
+  status: failedAfterRetry.length === 0 ? "passed" : "failed",
+  rerunFailedOnly,
+  retryFailedStagesOnce,
+  stagesAttempted: firstPassStages,
+  failedFirstPass,
+  failedAfterRetry,
+  records,
+};
+
+writeSummary(summary);
+
+if (failedAfterRetry.length > 0) {
+  process.exit(1);
 }
