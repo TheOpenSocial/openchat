@@ -207,7 +207,8 @@ jobs:
   verify-staging:
     if: ${{ inputs.run_post_deploy_verification }}
     needs: [deploy-staging]
-    runs-on: [self-hosted, linux, x64, opensocial-ci]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
     environment: staging
     steps:
       - name: Checkout
