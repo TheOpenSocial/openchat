@@ -10,6 +10,8 @@ import { PrismaService } from "./prisma.service.js";
 @Injectable()
 export class ClientMutationService {
   private readonly logger = new Logger(ClientMutationService.name);
+  private static readonly IN_FLIGHT_WAIT_TIMEOUT_MS = 600;
+  private static readonly IN_FLIGHT_WAIT_INTERVAL_MS = 75;
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -176,10 +178,58 @@ export class ClientMutationService {
           });
           return { execute: true };
         }
+        if (existing?.status === "processing") {
+          const joined = await this.waitForInFlightCompletion<T>({
+            userId: input.userId,
+            scope: input.scope,
+            idempotencyKey: input.idempotencyKey,
+          });
+          if (joined.found) {
+            return {
+              execute: false,
+              cachedValue: joined.value,
+            };
+          }
+        }
         throw new ConflictException("request is already processing");
       }
       throw error;
     }
+  }
+
+  private async waitForInFlightCompletion<T>(input: {
+    userId: string;
+    scope: string;
+    idempotencyKey: string;
+  }): Promise<{ found: true; value: T } | { found: false }> {
+    const startedAt = Date.now();
+    while (
+      Date.now() - startedAt <
+      ClientMutationService.IN_FLIGHT_WAIT_TIMEOUT_MS
+    ) {
+      await this.delay(ClientMutationService.IN_FLIGHT_WAIT_INTERVAL_MS);
+      const row = await this.prisma.clientMutation.findUnique({
+        where: {
+          userId_scope_idempotencyKey: {
+            userId: input.userId,
+            scope: input.scope,
+            idempotencyKey: input.idempotencyKey,
+          },
+        },
+      });
+      const cached = this.readCompletedResponse<T>(row);
+      if (cached.found) {
+        return cached;
+      }
+      if (row?.status === "failed") {
+        return { found: false };
+      }
+    }
+    return { found: false };
+  }
+
+  private async delay(ms: number) {
+    await new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   private readCompletedResponse<T>(

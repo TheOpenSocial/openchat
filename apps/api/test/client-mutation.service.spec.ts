@@ -161,6 +161,51 @@ describe("ClientMutationService", () => {
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
+  it("joins an in-flight mutation when it completes shortly after duplicate claim", async () => {
+    const { prisma, rows } = createPrismaMock();
+    rows.set("user-1:agent.respond:join-key", {
+      userId: "user-1",
+      scope: "agent.respond",
+      idempotencyKey: "join-key",
+      status: "processing",
+      responseBody: null,
+      errorCode: null,
+      errorMessage: null,
+    });
+
+    let findCount = 0;
+    prisma.clientMutation.findUnique = vi.fn(async ({ where }: any) => {
+      findCount += 1;
+      const key = `${where.userId_scope_idempotencyKey.userId}:${where.userId_scope_idempotencyKey.scope}:${where.userId_scope_idempotencyKey.idempotencyKey}`;
+      if (findCount === 2) {
+        rows.set(key, {
+          userId: "user-1",
+          scope: "agent.respond",
+          idempotencyKey: "join-key",
+          status: "completed",
+          responseBody: { traceId: "trace-join-1", agentMessageId: "msg-1" },
+          errorCode: null,
+          errorMessage: null,
+        });
+      }
+      return rows.get(key) ?? null;
+    });
+
+    const service = new ClientMutationService(prisma);
+
+    const result = await service.run({
+      userId: "user-1",
+      scope: "agent.respond",
+      idempotencyKey: "join-key",
+      handler: vi.fn(),
+    });
+
+    expect(result).toEqual({
+      traceId: "trace-join-1",
+      agentMessageId: "msg-1",
+    });
+  });
+
   it("allows retry after transient failure for agent.respond scope", async () => {
     const { prisma } = createPrismaMock();
     const service = new ClientMutationService(prisma);
