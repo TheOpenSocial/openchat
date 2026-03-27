@@ -261,8 +261,15 @@ jobs:
           echo
           echo "== Container logs (tail 120) =="
           DEPLOY_PHASE=ps ./scripts/deploy-production.sh || true
-          docker compose -f docker-compose.prod.yml --env-file .env.production logs --tail=120 api || true
-          docker compose -f docker-compose.prod.yml --env-file .env.production logs --tail=120 nginx || true
+          if [[ -d "${DEPLOY_PATH}" ]]; then
+            (
+              cd "${DEPLOY_PATH}"
+              docker compose -f docker-compose.prod.yml --env-file "${REMOTE_ENV_FILE}" logs --tail=120 api || true
+              docker compose -f docker-compose.prod.yml --env-file "${REMOTE_ENV_FILE}" logs --tail=120 nginx || true
+            )
+          else
+            echo "deploy path not found on runner: ${DEPLOY_PATH}"
+          fi
 
   verify-staging:
     if: ${{ inputs.run_post_deploy_verification }}
@@ -323,6 +330,57 @@ jobs:
           curl -sS -m 8 -X POST -H "content-type: application/json" -d '{}' -o /tmp/probe-bootstrap.json -w "probe_smoke_exchange_http=%{http_code}\n" "${SMOKE_BASE_URL}/api/admin/ops/smoke-session/exchange" || true
           head -c 200 /tmp/probe-bootstrap.json || true
           echo
+
+      - name: Wait for staging API health before bootstrap
+        env:
+          SMOKE_BASE_URL: https://api.opensocial.so
+          DEPLOY_PATH: ${{ secrets.STAGING_DEPLOY_PATH }}
+          REMOTE_ENV_FILE: .env.production
+          LOCAL_DEPLOY: ${{ secrets.STAGING_LOCAL_DEPLOY || '0' }}
+          DEPLOY_HOST: ${{ secrets.STAGING_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.STAGING_DEPLOY_USER || 'ec2-user' }}
+          STAGING_DEPLOY_SSH_KEY: ${{ secrets.STAGING_DEPLOY_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          max_attempts=24
+          sleep_seconds=5
+          echo "Waiting for ${SMOKE_BASE_URL}/api/health to return 200..."
+          for attempt in $(seq 1 "$max_attempts"); do
+            http_code="$(curl -sS -m 8 -o /tmp/wait-health.json -w "%{http_code}" "${SMOKE_BASE_URL}/api/health" || true)"
+            if [[ "$http_code" == "200" ]]; then
+              echo "API health is ready on attempt ${attempt}/${max_attempts}."
+              exit 0
+            fi
+            preview="$(head -c 220 /tmp/wait-health.json 2>/dev/null || true)"
+            echo "attempt ${attempt}/${max_attempts}: api health http=${http_code:-none} body=${preview:-<empty>}"
+            sleep "$sleep_seconds"
+          done
+
+          echo "API did not become healthy in time; collecting deploy-path diagnostics."
+          if [[ "${LOCAL_DEPLOY:-0}" == "1" ]]; then
+            if [[ -d "${DEPLOY_PATH}" ]]; then
+              (
+                cd "${DEPLOY_PATH}"
+                docker compose -f docker-compose.prod.yml --env-file "${REMOTE_ENV_FILE}" ps || true
+                docker compose -f docker-compose.prod.yml --env-file "${REMOTE_ENV_FILE}" logs --tail=220 api || true
+                docker compose -f docker-compose.prod.yml --env-file "${REMOTE_ENV_FILE}" logs --tail=120 nginx || true
+              )
+            else
+              echo "deploy path not found on runner: ${DEPLOY_PATH}"
+            fi
+          else
+            if [[ -n "${STAGING_DEPLOY_SSH_KEY:-}" ]]; then
+              ssh_key_path="/tmp/staging_verify_key"
+              printf "%s\n" "${STAGING_DEPLOY_SSH_KEY}" > "${ssh_key_path}"
+              chmod 600 "${ssh_key_path}"
+              ssh -i "${ssh_key_path}" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "${DEPLOY_USER}@${DEPLOY_HOST}" \
+                "set -euo pipefail; cd '${DEPLOY_PATH}'; docker compose -f docker-compose.prod.yml --env-file '${REMOTE_ENV_FILE}' ps || true; docker compose -f docker-compose.prod.yml --env-file '${REMOTE_ENV_FILE}' logs --tail=220 api || true; docker compose -f docker-compose.prod.yml --env-file '${REMOTE_ENV_FILE}' logs --tail=120 nginx || true" \
+                || true
+            else
+              echo "STAGING_DEPLOY_SSH_KEY unavailable; skipping remote diagnostics."
+            fi
+          fi
+          exit 1
 
       - name: Bootstrap smoke session token
         env:
