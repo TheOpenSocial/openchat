@@ -20,6 +20,18 @@ function persistEnv(key, value) {
   }
 }
 
+async function readPayload(response) {
+  const raw = await response.text();
+  if (!raw || raw.trim().length === 0) {
+    return { payload: null, raw: "" };
+  }
+  try {
+    return { payload: JSON.parse(raw), raw };
+  } catch {
+    return { payload: null, raw };
+  }
+}
+
 async function main() {
   console.log("Smoke session bootstrap");
   console.log(`- baseUrl: ${baseUrl || "(unset)"}`);
@@ -100,7 +112,7 @@ async function main() {
         headers: candidate.headers,
         body: JSON.stringify({}),
       });
-      const payload = await response.json();
+      const { payload, raw } = await readPayload(response);
 
       const tryPersistPayload = (isOk, candidatePayload, label) => {
         if (
@@ -144,7 +156,8 @@ async function main() {
           headers: candidate.headers,
           body: JSON.stringify({}),
         });
-        const fallbackPayload = await fallbackResponse.json();
+        const { payload: fallbackPayload, raw: fallbackRaw } =
+          await readPayload(fallbackResponse);
         if (
           tryPersistPayload(
             fallbackResponse.ok,
@@ -154,10 +167,18 @@ async function main() {
         ) {
           return;
         }
+        const fallbackPreview = fallbackPayload
+          ? JSON.stringify(fallbackPayload).slice(0, 400)
+          : fallbackRaw.slice(0, 400);
+        console.warn(
+          `smoke bootstrap fallback failed via ${candidate.label}_no_api (${fallbackResponse.status}): ${fallbackPreview || "(empty response body)"}`,
+        );
       }
 
-      const preview = JSON.stringify(payload).slice(0, 400);
-      lastFailure = `smoke bootstrap failed via ${candidate.label} (${response.status}): ${preview}`;
+      const preview = payload
+        ? JSON.stringify(payload).slice(0, 400)
+        : raw.slice(0, 400);
+      lastFailure = `smoke bootstrap failed via ${candidate.label} (${response.status}): ${preview || "(empty response body)"}`;
       console.warn(lastFailure);
     }
 
