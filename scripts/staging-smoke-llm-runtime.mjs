@@ -217,6 +217,49 @@ async function runLlmRuntimeHealthSmoke() {
   };
 }
 
+function normalizeLlmHealthSnapshot(payload) {
+  const root = payload?.data ?? {};
+  const onboarding = root.onboarding ?? {};
+  const byMode = onboarding.byMode ?? {};
+  const fastMode = byMode.fast ?? {};
+  const richMode = byMode.rich ?? {};
+  const onboardingCalls = Number(onboarding.calls ?? 0);
+  const onboardingFallbacks =
+    Number(fastMode.fallbacks ?? 0) + Number(richMode.fallbacks ?? 0);
+  const onboardingUnavailable =
+    Number(fastMode.unavailable ?? 0) + Number(richMode.unavailable ?? 0);
+  const openaiCalls = Number(root.openai?.calls ?? 0);
+  const openaiErrorRate = Number(root.openai?.errorRate ?? 0);
+  const openaiErrors = Math.max(0, Math.round(openaiErrorRate * openaiCalls));
+  return {
+    onboardingCalls,
+    onboardingFallbacks,
+    onboardingUnavailable,
+    openaiCalls,
+    openaiErrors,
+    raw: root,
+  };
+}
+
+function computeRuntimeWindow(before, after) {
+  if (!before || !after) {
+    return null;
+  }
+  return {
+    onboardingCalls: Math.max(0, after.onboardingCalls - before.onboardingCalls),
+    onboardingFallbacks: Math.max(
+      0,
+      after.onboardingFallbacks - before.onboardingFallbacks,
+    ),
+    onboardingUnavailable: Math.max(
+      0,
+      after.onboardingUnavailable - before.onboardingUnavailable,
+    ),
+    openaiCalls: Math.max(0, after.openaiCalls - before.openaiCalls),
+    openaiErrors: Math.max(0, after.openaiErrors - before.openaiErrors),
+  };
+}
+
 function printResult(result) {
   if (result.skipped) {
     console.log(`- [SKIP] ${result.id}: ${result.reason}`);
@@ -239,6 +282,19 @@ async function main() {
   console.log(`- probeToken: ${probeToken ? "set" : "unset"}`);
   console.log(`- accessToken: ${accessToken ? "set" : "unset"}`);
   console.log("");
+
+  const runtimeBefore = await runLlmRuntimeHealthSmoke();
+  let runtimeBeforeSnapshot = null;
+  if (!runtimeBefore.skipped && runtimeBefore.ok) {
+    runtimeBeforeSnapshot = normalizeLlmHealthSnapshot(runtimeBefore.body);
+    console.log(
+      `- runtime baseline: onboardingCalls=${runtimeBeforeSnapshot.onboardingCalls}, onboardingFallbacks=${runtimeBeforeSnapshot.onboardingFallbacks}, onboardingUnavailable=${runtimeBeforeSnapshot.onboardingUnavailable}, openaiCalls=${runtimeBeforeSnapshot.openaiCalls}, openaiErrors=${runtimeBeforeSnapshot.openaiErrors}`,
+    );
+  } else if (!runtimeBefore.skipped) {
+    console.log(
+      "- runtime baseline unavailable; falling back to post-run cumulative checks",
+    );
+  }
 
   const checks = [
     await runOnboardingProbe(
@@ -307,15 +363,34 @@ async function main() {
   const llmHealth = checks.find((check) => check.id === "llm_runtime_health");
   if (llmHealth && !llmHealth.skipped && llmHealth.body?.data) {
     const health = llmHealth.body.data;
-    const fallbackRate = Number(health.onboarding?.fallbackRate ?? 0);
-    const unavailableRate = Number(health.onboarding?.unavailableRate ?? 0);
-    const openaiErrorRate = Number(health.openai?.errorRate ?? 0);
+    const normalizedAfter = normalizeLlmHealthSnapshot(llmHealth.body);
+    const runtimeWindow = computeRuntimeWindow(
+      runtimeBeforeSnapshot,
+      normalizedAfter,
+    );
+    const fallbackRate =
+      runtimeWindow && runtimeWindow.onboardingCalls > 0
+        ? runtimeWindow.onboardingFallbacks / runtimeWindow.onboardingCalls
+        : Number(health.onboarding?.fallbackRate ?? 0);
+    const unavailableRate =
+      runtimeWindow && runtimeWindow.onboardingCalls > 0
+        ? runtimeWindow.onboardingUnavailable / runtimeWindow.onboardingCalls
+        : Number(health.onboarding?.unavailableRate ?? 0);
+    const openaiErrorRate =
+      runtimeWindow && runtimeWindow.openaiCalls > 0
+        ? runtimeWindow.openaiErrors / runtimeWindow.openaiCalls
+        : Number(health.openai?.errorRate ?? 0);
     const anyCircuitOpen = Boolean(health.budget?.anyCircuitOpen);
     const byModel = Array.isArray(health.onboarding?.byModel)
       ? health.onboarding.byModel
       : [];
     const fastModel = process.env.ONBOARDING_LLM_FAST_MODEL?.trim();
     const richModel = process.env.ONBOARDING_LLM_RICH_MODEL?.trim();
+    if (runtimeWindow) {
+      console.log(
+        `Runtime health window: onboardingCallsDelta=${runtimeWindow.onboardingCalls}, onboardingFallbacksDelta=${runtimeWindow.onboardingFallbacks}, onboardingUnavailableDelta=${runtimeWindow.onboardingUnavailable}, openaiCallsDelta=${runtimeWindow.openaiCalls}, openaiErrorsDelta=${runtimeWindow.openaiErrors}`,
+      );
+    }
     console.log(
       `Runtime health: onboardingFallbackRate=${fallbackRate.toFixed(3)}, onboardingUnavailableRate=${unavailableRate.toFixed(3)}, openaiErrorRate=${openaiErrorRate.toFixed(3)}, circuitOpen=${anyCircuitOpen}`,
     );
