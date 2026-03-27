@@ -189,6 +189,7 @@ async function tryBootstrapEnvFromPlayground(
       const shouldReplace =
         forceRefresh &&
         (key === "SMOKE_ACCESS_TOKEN" ||
+          key === "SMOKE_REFRESH_TOKEN" ||
           key === "SMOKE_USER_ID" ||
           key === "SMOKE_AGENT_THREAD_ID" ||
           key === "AGENTIC_BENCH_ACCESS_TOKEN" ||
