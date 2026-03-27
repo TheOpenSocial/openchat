@@ -82,11 +82,16 @@ async function main() {
     console.log("smoke session bootstrapped and exported");
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    const cause =
+      error && typeof error === "object" && "cause" in error
+        ? String(error.cause)
+        : "";
+    const combined = `${message}${cause ? ` (cause: ${cause})` : ""}`;
     if (required) {
-      console.error(`smoke bootstrap request failed: ${message}`);
+      console.error(`smoke bootstrap request failed: ${combined}`);
       process.exit(1);
     }
-    console.warn(`smoke bootstrap request failed: ${message}`);
+    console.warn(`smoke bootstrap request failed: ${combined}`);
   }
 }
 
