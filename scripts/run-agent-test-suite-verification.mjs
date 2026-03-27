@@ -79,6 +79,12 @@ const resolvedEnv = {
     "PROD_SMOKE_ACCESS_TOKEN",
     "PRODUCTION_SMOKE_ACCESS_TOKEN",
   ),
+  SMOKE_REFRESH_TOKEN: readWithStagingProdFallback(
+    "SMOKE_REFRESH_TOKEN",
+    "STAGING_SMOKE_REFRESH_TOKEN",
+    "PROD_SMOKE_REFRESH_TOKEN",
+    "PRODUCTION_SMOKE_REFRESH_TOKEN",
+  ),
   SMOKE_ADMIN_USER_ID: readWithStagingProdFallback(
     "SMOKE_ADMIN_USER_ID",
     "STAGING_SMOKE_ADMIN_USER_ID",
@@ -105,9 +111,11 @@ const resolvedEnv = {
   ),
 };
 
+const OPTIONAL_ENV_KEYS = new Set(["SMOKE_REFRESH_TOKEN"]);
+
 function collectMissing(envMap) {
   return Object.entries(envMap)
-    .filter(([, value]) => value.length === 0)
+    .filter(([key, value]) => value.length === 0 && !OPTIONAL_ENV_KEYS.has(key))
     .map(([key]) => key);
 }
 
@@ -237,6 +245,49 @@ async function benchAccessTokenIsValid(envMap) {
   }
 }
 
+async function tryRefreshSmokeSession(envMap) {
+  const baseUrl = envMap.SMOKE_BASE_URL?.trim();
+  const refreshToken = envMap.SMOKE_REFRESH_TOKEN?.trim();
+  if (!baseUrl || !refreshToken) {
+    return envMap;
+  }
+  const smokeHostHeader = (
+    process.env.SMOKE_HOST_HEADER ||
+    process.env.PLAYGROUND_HOST_HEADER ||
+    ""
+  ).trim();
+  try {
+    const response = await fetch(`${baseUrl.replace(/\/+$/, "")}/api/auth/refresh`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...(smokeHostHeader ? { Host: smokeHostHeader } : {}),
+      },
+      body: JSON.stringify({
+        refreshToken,
+        deviceId: "admin-playground",
+        deviceName: "Admin Playground",
+      }),
+    });
+    const payload = await response.json();
+    if (!response.ok || !payload?.success || !payload?.data?.accessToken) {
+      return envMap;
+    }
+    return {
+      ...envMap,
+      SMOKE_ACCESS_TOKEN: String(payload.data.accessToken).trim(),
+      AGENTIC_BENCH_ACCESS_TOKEN: String(payload.data.accessToken).trim(),
+      SMOKE_REFRESH_TOKEN:
+        typeof payload.data.refreshToken === "string" &&
+        payload.data.refreshToken.trim().length > 0
+          ? payload.data.refreshToken.trim()
+          : refreshToken,
+    };
+  } catch {
+    return envMap;
+  }
+}
+
 let hydratedEnv = { ...resolvedEnv };
 const initialMissing = collectMissing(hydratedEnv);
 hydratedEnv = await tryBootstrapEnvFromPlayground(
@@ -251,6 +302,9 @@ if (!(await benchAccessTokenIsValid(hydratedEnv))) {
     forceRefresh: true,
     required: process.env.PLAYGROUND_BOOTSTRAP_REQUIRED === "1",
   });
+}
+if (!(await benchAccessTokenIsValid(hydratedEnv))) {
+  hydratedEnv = await tryRefreshSmokeSession(hydratedEnv);
 }
 const missing = collectMissing(hydratedEnv);
 
