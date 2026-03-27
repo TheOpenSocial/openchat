@@ -107,6 +107,36 @@ jobs:
           chmod +x scripts/deploy-production.sh
           DEPLOY_PHASE=sync ./scripts/deploy-production.sh
 
+      - name: Hydrate DATABASE_URL from existing deploy env (fallback)
+        if: ${{ env.DATABASE_URL == '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          candidate_path="${DEPLOY_PATH}/${REMOTE_ENV_FILE}"
+          db_value=""
+          if [[ -f "$candidate_path" ]]; then
+            db_line="$(grep -m1 '^DATABASE_URL=' "$candidate_path" || true)"
+            if [[ -n "$db_line" ]]; then
+              db_value="${db_line#DATABASE_URL=}"
+            fi
+          fi
+          if [[ -z "$db_value" && "${LOCAL_DEPLOY:-0}" != "1" ]]; then
+            db_line_remote="$(
+              ssh -i "$SSH_KEY_PATH" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "${DEPLOY_USER}@${DEPLOY_HOST}" \
+                "set -euo pipefail; f='${DEPLOY_PATH}/${REMOTE_ENV_FILE}'; if [[ -f \"\$f\" ]]; then grep -m1 '^DATABASE_URL=' \"\$f\" || true; fi" \
+              || true
+            )"
+            if [[ -n "$db_line_remote" ]]; then
+              db_value="${db_line_remote#DATABASE_URL=}"
+            fi
+          fi
+          if [[ -n "$db_value" ]]; then
+            echo "DATABASE_URL=$db_value" >> "$GITHUB_ENV"
+            echo "Hydrated DATABASE_URL from existing deploy env file."
+            exit 0
+          fi
+          echo "DATABASE_URL fallback not found in local or remote deploy env file."
+
       - name: Validate required staging deploy secrets
         shell: bash
         run: |
