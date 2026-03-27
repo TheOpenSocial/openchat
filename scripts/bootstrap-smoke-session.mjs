@@ -49,6 +49,9 @@ async function main() {
         ...(hostHeader ? { Host: hostHeader } : {}),
         "x-application-key": applicationKey,
         "x-application-token": applicationToken,
+        ...(adminUserId ? { "x-admin-user-id": adminUserId } : {}),
+        ...(adminRole ? { "x-admin-role": adminRole } : {}),
+        ...(adminApiKey ? { "x-admin-api-key": adminApiKey } : {}),
       },
       label: "application_exchange",
     });

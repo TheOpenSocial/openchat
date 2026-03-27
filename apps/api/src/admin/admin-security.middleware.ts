@@ -12,7 +12,7 @@ function isEnabled() {
 }
 
 function isApplicationExchangePath(path: string) {
-  return path === "/api/admin/ops/smoke-session/exchange";
+  return path.includes("/admin/ops/smoke-session/exchange");
 }
 
 function parseAllowedAdminUsers() {
