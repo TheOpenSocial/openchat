@@ -165,6 +165,16 @@ jobs:
         if: ${{ inputs.run_post_deploy_verification }}
         run: pnpm install --frozen-lockfile=false
 
+      - name: Refresh smoke session token
+        if: ${{ inputs.run_post_deploy_verification }}
+        env:
+          SMOKE_BASE_URL: https://api.opensocial.so
+          SMOKE_REFRESH_TOKEN: ${{ secrets.STAGING_SMOKE_REFRESH_TOKEN || secrets.SMOKE_REFRESH_TOKEN || secrets.PROD_SMOKE_REFRESH_TOKEN }}
+          SMOKE_REFRESH_REQUIRED: "0"
+        run: |
+          set -euo pipefail
+          node scripts/refresh-smoke-session.mjs
+
       - name: Verify incident-readiness gates
         if: ${{ inputs.run_post_deploy_verification }}
         env:
@@ -173,6 +183,7 @@ jobs:
           SMOKE_ADMIN_ROLE: ${{ secrets.STAGING_SMOKE_ADMIN_ROLE || secrets.SMOKE_ADMIN_ROLE || 'support' }}
           SMOKE_ADMIN_API_KEY: ${{ secrets.STAGING_SMOKE_ADMIN_API_KEY || secrets.SMOKE_ADMIN_API_KEY }}
           SMOKE_ACCESS_TOKEN: ${{ secrets.STAGING_SMOKE_ACCESS_TOKEN || secrets.SMOKE_ACCESS_TOKEN }}
+          SMOKE_REFRESH_TOKEN: ${{ secrets.STAGING_SMOKE_REFRESH_TOKEN || secrets.SMOKE_REFRESH_TOKEN || secrets.PROD_SMOKE_REFRESH_TOKEN }}
           SMOKE_TIMEOUT_MS: "15000"
           INCIDENT_VERIFY_REQUIRE_HEALTHY: "true"
           INCIDENT_VERIFY_FAIL_ON_WARNING: "false"
@@ -192,6 +203,7 @@ jobs:
           SMOKE_ADMIN_ROLE: ${{ secrets.STAGING_SMOKE_ADMIN_ROLE || secrets.SMOKE_ADMIN_ROLE || 'admin' }}
           SMOKE_ADMIN_API_KEY: ${{ secrets.STAGING_SMOKE_ADMIN_API_KEY || secrets.SMOKE_ADMIN_API_KEY }}
           SMOKE_ACCESS_TOKEN: ${{ secrets.STAGING_SMOKE_ACCESS_TOKEN || secrets.SMOKE_ACCESS_TOKEN }}
+          SMOKE_REFRESH_TOKEN: ${{ secrets.STAGING_SMOKE_REFRESH_TOKEN || secrets.SMOKE_REFRESH_TOKEN || secrets.PROD_SMOKE_REFRESH_TOKEN }}
           SMOKE_USER_ID: ${{ secrets.STAGING_SMOKE_USER_ID || secrets.SMOKE_USER_ID }}
           SMOKE_AGENT_THREAD_ID: ${{ secrets.STAGING_SMOKE_AGENT_THREAD_ID || secrets.SMOKE_AGENT_THREAD_ID }}
           AGENTIC_VERIFICATION_LANE_ID: ${{ secrets.STAGING_AGENTIC_VERIFICATION_LANE_ID || secrets.AGENTIC_VERIFICATION_LANE_ID || secrets.PROD_AGENTIC_VERIFICATION_LANE_ID }}
