@@ -30,6 +30,14 @@ const maxOnboardingUnavailableRate = Number(
 const maxOpenAIErrorRate = Number(
   process.env.SMOKE_MAX_OPENAI_ERROR_RATE || 0.2,
 );
+const minOnboardingCallsForRate = Math.max(
+  1,
+  Number(process.env.SMOKE_MIN_ONBOARDING_CALLS_FOR_RATE || 8),
+);
+const minOpenAICallsForRate = Math.max(
+  1,
+  Number(process.env.SMOKE_MIN_OPENAI_CALLS_FOR_RATE || 8),
+);
 const allowCircuitOpen = process.env.SMOKE_ALLOW_OPENAI_CIRCUIT_OPEN === "true";
 const enforceOnboardingModelBuckets =
   process.env.SMOKE_ENFORCE_ONBOARDING_MODEL_BUCKETS !== "false";
@@ -284,6 +292,9 @@ async function main() {
   console.log(`- timeoutMs: ${timeoutMs}`);
   console.log(`- probeToken: ${probeToken ? "set" : "unset"}`);
   console.log(`- accessToken: ${accessToken ? "set" : "unset"}`);
+  console.log(
+    `- rate gates: onboarding>=${minOnboardingCallsForRate} calls, openai>=${minOpenAICallsForRate} calls`,
+  );
   console.log("");
 
   const runtimeBefore = await runLlmRuntimeHealthSmoke();
@@ -387,6 +398,10 @@ async function main() {
     const byModel = Array.isArray(health.onboarding?.byModel)
       ? health.onboarding.byModel
       : [];
+    const onboardingCallsForRate =
+      runtimeWindow?.onboardingCalls ?? Number(health.onboarding?.calls ?? 0);
+    const openaiCallsForRate =
+      runtimeWindow?.openaiCalls ?? Number(health.openai?.calls ?? 0);
     const fastModel = process.env.ONBOARDING_LLM_FAST_MODEL?.trim();
     const richModel = process.env.ONBOARDING_LLM_RICH_MODEL?.trim();
     if (runtimeWindow) {
@@ -398,19 +413,27 @@ async function main() {
       `Runtime health: onboardingFallbackRate=${fallbackRate.toFixed(3)}, onboardingUnavailableRate=${unavailableRate.toFixed(3)}, openaiErrorRate=${openaiErrorRate.toFixed(3)}, circuitOpen=${anyCircuitOpen}`,
     );
 
-    if (fallbackRate > maxOnboardingFallbackRate) {
+    if (onboardingCallsForRate < minOnboardingCallsForRate) {
+      console.log(
+        `Skipping onboarding rate gates: only ${onboardingCallsForRate} onboarding call(s) in scope (< ${minOnboardingCallsForRate}).`,
+      );
+    } else if (fallbackRate > maxOnboardingFallbackRate) {
       console.error(
         `Onboarding fallback rate too high: ${fallbackRate} > ${maxOnboardingFallbackRate}`,
       );
       process.exit(1);
-    }
-    if (unavailableRate > maxOnboardingUnavailableRate) {
+    } else if (unavailableRate > maxOnboardingUnavailableRate) {
       console.error(
         `Onboarding unavailable rate too high: ${unavailableRate} > ${maxOnboardingUnavailableRate}`,
       );
       process.exit(1);
     }
-    if (openaiErrorRate > maxOpenAIErrorRate) {
+
+    if (openaiCallsForRate < minOpenAICallsForRate) {
+      console.log(
+        `Skipping OpenAI error-rate gate: only ${openaiCallsForRate} OpenAI call(s) in scope (< ${minOpenAICallsForRate}).`,
+      );
+    } else if (openaiErrorRate > maxOpenAIErrorRate) {
       console.error(
         `OpenAI error rate too high: ${openaiErrorRate} > ${maxOpenAIErrorRate}`,
       );
