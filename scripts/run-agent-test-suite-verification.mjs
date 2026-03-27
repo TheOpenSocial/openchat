@@ -472,6 +472,23 @@ async function hydrateStageCredentials(layer) {
   if (!tokenSensitiveStages.has(layer)) {
     return;
   }
+  const mustRotateBeforeStage =
+    layer === "prod-smoke" &&
+    process.env.AGENT_TEST_SUITE_FORCE_TOKEN_REFRESH_BEFORE_PROD_SMOKE !== "0";
+  if (mustRotateBeforeStage) {
+    hydratedEnv = await tryBootstrapEnvFromPlayground(hydratedEnv, [], {
+      forceRefresh: true,
+      required: process.env.PLAYGROUND_BOOTSTRAP_REQUIRED === "1",
+    });
+    hydratedEnv = await tryRefreshSmokeSession(hydratedEnv);
+    if (!(await benchAccessTokenIsValid(hydratedEnv))) {
+      throw new Error(
+        `stage ${layer} requires a fresh smoke token, but forced refresh failed`,
+      );
+    }
+    suiteEnv = buildSuiteEnv();
+    return;
+  }
   if (await benchAccessTokenIsValid(hydratedEnv)) {
     suiteEnv = buildSuiteEnv();
     return;
