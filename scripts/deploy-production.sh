@@ -7,6 +7,7 @@ DEPLOY_PATH="${DEPLOY_PATH:-/opt/opensocial}"
 REMOTE_ENV_FILE="${REMOTE_ENV_FILE:-.env.production}"
 DEPLOY_MODE="${DEPLOY_MODE:-build}"
 DEPLOY_PHASE="${DEPLOY_PHASE:-all}"
+DEPLOY_SERVICES="${DEPLOY_SERVICES:-api admin web}"
 API_IMAGE="${API_IMAGE:-}"
 ADMIN_IMAGE="${ADMIN_IMAGE:-}"
 WEB_IMAGE="${WEB_IMAGE:-}"
@@ -134,13 +135,19 @@ sync_local_checkout() {
 }
 
 run_pull_or_build() {
+  # shellcheck disable=SC2206
+  local services=( $DEPLOY_SERVICES )
+  if [[ ${#services[@]} -eq 0 ]]; then
+    services=(api admin web)
+  fi
+
   if [[ "$DEPLOY_MODE" == "images" ]]; then
     run_registry_login
-    run_pull_service api
-    run_pull_service admin
-    run_pull_service web
+    for service in "${services[@]}"; do
+      run_pull_service "$service"
+    done
   else
-    COMPOSE_BAKE=true compose_cmd build api admin web
+    COMPOSE_BAKE=true compose_cmd build "${services[@]}"
   fi
 }
 
@@ -281,6 +288,7 @@ ssh "${ssh_opts[@]}" "$REMOTE_TARGET" \
    DEPLOY_PATH='$DEPLOY_PATH' \
    REMOTE_ENV_FILE='$REMOTE_ENV_FILE' \
    DEPLOY_MODE='$DEPLOY_MODE' \
+   DEPLOY_SERVICES='$DEPLOY_SERVICES' \
    DEPLOY_PHASE='$DEPLOY_PHASE' \
    API_IMAGE='$API_IMAGE' \
    ADMIN_IMAGE='$ADMIN_IMAGE' \

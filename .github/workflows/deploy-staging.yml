@@ -47,6 +47,7 @@ jobs:
       DEPLOY_USER: ${{ secrets.STAGING_DEPLOY_USER || 'ec2-user' }}
       SSH_KEY_PATH: /tmp/staging_deploy_key
       DEPLOY_MODE: ${{ inputs.deploy_mode }}
+      DEPLOY_SERVICES: api
       API_IMAGE: ${{ inputs.api_image }}
       ADMIN_IMAGE: ${{ inputs.admin_image }}
       WEB_IMAGE: ${{ inputs.web_image }}
@@ -290,9 +291,11 @@ jobs:
         uses: actions/setup-node@v5
         with:
           node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install deps (post-deploy verification)
-        run: pnpm install --frozen-lockfile=false
+        run: pnpm install --frozen-lockfile=false --prefer-offline
 
       - name: Debug verify context and route probes
         env:
