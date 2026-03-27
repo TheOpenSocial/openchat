@@ -247,7 +247,20 @@ async function main() {
 
   const failed = checks.filter((check) => !check.skipped && !check.ok);
   if (failed.length > 0) {
+    const failedSummary = failed
+      .map((check) => `${check.id}:${check.status ?? "ERR"}`)
+      .join(", ");
     console.error(`\nSmoke failed: ${failed.length} checks failed.`);
+    console.error(`Failed checks: ${failedSummary}`);
+    for (const check of failed) {
+      const preview =
+        check.body && typeof check.body === "object"
+          ? JSON.stringify(check.body).slice(0, 300)
+          : null;
+      if (preview) {
+        console.error(`- ${check.id} body: ${preview}`);
+      }
+    }
     process.exit(1);
   }
 

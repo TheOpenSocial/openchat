@@ -183,9 +183,13 @@ async function main() {
 
   const failed = results.filter((result) => !result.ok);
   if (failed.length > 0) {
+    const failedSummary = failed
+      .map((result) => `${result.id}:${result.status ?? "ERR"}`)
+      .join(", ");
     console.error(
       `Smoke verification failed: ${failed.length}/${results.length} checks failed.`,
     );
+    console.error(`Failed checks: ${failedSummary}`);
     process.exitCode = 1;
     return;
   }

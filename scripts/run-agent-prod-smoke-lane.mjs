@@ -122,6 +122,12 @@ async function main() {
   console.log(`prod smoke lane artifact written to ${artifactPath}`);
 
   if (status === "failed") {
+    const failedStep = steps.find((step) => step.status === "failed");
+    if (failedStep) {
+      console.error(
+        `prod smoke lane failed at step=${failedStep.id} summary="${failedStep.summary}" exitCode=${failedStep.exitCode}`,
+      );
+    }
     process.exit(1);
   }
 }
