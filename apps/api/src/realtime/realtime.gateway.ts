@@ -9,7 +9,7 @@ import {
   uuidSchema,
 } from "@opensocial/types";
 import { randomUUID } from "node:crypto";
-import { Optional } from "@nestjs/common";
+import { Inject, Optional, forwardRef } from "@nestjs/common";
 import {
   ConnectedSocket,
   MessageBody,
@@ -49,14 +49,19 @@ export class RealtimeGateway
 
   @WebSocketServer()
   server!: Server;
+  private readonly chatsService?: ChatsService;
 
   constructor(
-    @Optional() private readonly chatsService?: ChatsService,
+    @Optional()
+    @Inject(forwardRef(() => ChatsService))
+    chatsService?: unknown,
     @Optional()
     private readonly launchControlsService?: LaunchControlsService,
     @Optional()
     private readonly authService?: AuthService,
-  ) {}
+  ) {
+    this.chatsService = chatsService as ChatsService | undefined;
+  }
 
   async handleConnection(client: Socket) {
     const handshakeAuthPayload = this.extractConnectionAuthPayload(client);
