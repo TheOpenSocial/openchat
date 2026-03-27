@@ -40,9 +40,12 @@ jobs:
       group: deploy-staging
       cancel-in-progress: false
     env:
-      LOCAL_DEPLOY: "1"
+      LOCAL_DEPLOY: ${{ secrets.STAGING_LOCAL_DEPLOY || '0' }}
       DEPLOY_PATH: ${{ secrets.STAGING_DEPLOY_PATH }}
       REMOTE_ENV_FILE: .env.production
+      DEPLOY_HOST: ${{ secrets.STAGING_DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.STAGING_DEPLOY_USER || 'ec2-user' }}
+      SSH_KEY_PATH: ${{ runner.temp }}/staging_deploy_key
       DEPLOY_MODE: ${{ inputs.deploy_mode }}
       API_IMAGE: ${{ inputs.api_image }}
       ADMIN_IMAGE: ${{ inputs.admin_image }}
@@ -73,6 +76,20 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+
+      - name: Prepare deploy SSH key
+        if: ${{ env.LOCAL_DEPLOY != '1' }}
+        shell: bash
+        env:
+          STAGING_DEPLOY_SSH_KEY: ${{ secrets.STAGING_DEPLOY_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${STAGING_DEPLOY_SSH_KEY:-}" ]]; then
+            echo "STAGING_DEPLOY_SSH_KEY secret is required when LOCAL_DEPLOY != 1" >&2
+            exit 1
+          fi
+          printf "%s\n" "$STAGING_DEPLOY_SSH_KEY" > "$SSH_KEY_PATH"
+          chmod 600 "$SSH_KEY_PATH"
 
       - name: Sync deploy workspace
         shell: bash
@@ -161,7 +178,7 @@ jobs:
           echo "whoami=$(whoami)"
           echo "pwd=$(pwd)"
           date -u +"utc=%Y-%m-%dT%H:%M:%SZ"
-          for key in AWS_PROFILE AWS_DEFAULT_PROFILE AWS_REGION AWS_DEFAULT_REGION LOCAL_DEPLOY DEPLOY_PATH REMOTE_ENV_FILE DEPLOY_MODE; do
+          for key in AWS_PROFILE AWS_DEFAULT_PROFILE AWS_REGION AWS_DEFAULT_REGION LOCAL_DEPLOY DEPLOY_HOST DEPLOY_USER DEPLOY_PATH REMOTE_ENV_FILE DEPLOY_MODE; do
             value="${!key-}"
             if [ -n "$value" ]; then
               echo "$key=$value"
