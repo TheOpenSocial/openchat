@@ -27,6 +27,20 @@ interface OnboardingInferenceState {
   latencyMs: Histogram;
 }
 
+interface ModerationDecisionState {
+  total: number;
+  byRiskLevel: {
+    allow: number;
+    review: number;
+    block: number;
+  };
+  bySource: {
+    rules: number;
+    openai: number;
+    human: number;
+  };
+}
+
 const DEFAULT_HISTOGRAM_SAMPLE_SIZE = 500;
 
 const state = {
@@ -68,6 +82,19 @@ const state = {
     byMode: new Map<string, OnboardingInferenceState>(),
     byModel: new Map<string, OnboardingInferenceState>(),
   },
+  moderation: {
+    total: 0,
+    byRiskLevel: {
+      allow: 0,
+      review: 0,
+      block: 0,
+    },
+    bySource: {
+      rules: 0,
+      openai: 0,
+      human: 0,
+    },
+  } as ModerationDecisionState,
 };
 
 export function recordHttpRequestMetric(
@@ -197,6 +224,15 @@ export function recordOnboardingInferenceMetric(input: {
   }
 }
 
+export function recordModerationDecisionMetric(input: {
+  riskLevel: "allow" | "review" | "block";
+  source: "rules" | "openai" | "human";
+}) {
+  state.moderation.total += 1;
+  state.moderation.byRiskLevel[input.riskLevel] += 1;
+  state.moderation.bySource[input.source] += 1;
+}
+
 export function getOpsRuntimeMetricsSnapshot() {
   const httpRequestCount = state.http.latencyMs.count;
   const queueMetrics = Array.from(state.queues.entries()).map(
@@ -283,12 +319,14 @@ export function getOpsRuntimeMetricsSnapshot() {
       unavailableRate:
         state.onboardingInference.calls === 0
           ? 0
-          : state.onboardingInference.unavailable / state.onboardingInference.calls,
+          : state.onboardingInference.unavailable /
+            state.onboardingInference.calls,
       fallbacks: state.onboardingInference.fallbacks,
       fallbackRate:
         state.onboardingInference.calls === 0
           ? 0
-          : state.onboardingInference.fallbacks / state.onboardingInference.calls,
+          : state.onboardingInference.fallbacks /
+            state.onboardingInference.calls,
       latencyMs: summarizeHistogram(state.onboardingInference.latencyMs),
       byMode: Array.from(state.onboardingInference.byMode.entries()).map(
         ([mode, modeState]) => ({
@@ -314,10 +352,21 @@ export function getOpsRuntimeMetricsSnapshot() {
               : modelState.unavailable / modelState.calls,
           fallbacks: modelState.fallbacks,
           fallbackRate:
-            modelState.calls === 0 ? 0 : modelState.fallbacks / modelState.calls,
+            modelState.calls === 0
+              ? 0
+              : modelState.fallbacks / modelState.calls,
           latencyMs: summarizeHistogram(modelState.latencyMs),
         }),
       ),
+    },
+    moderation: {
+      total: state.moderation.total,
+      byRiskLevel: {
+        ...state.moderation.byRiskLevel,
+      },
+      bySource: {
+        ...state.moderation.bySource,
+      },
     },
   };
 }
@@ -351,6 +400,13 @@ export function resetOpsRuntimeMetrics() {
   state.onboardingInference.latencyMs = createHistogram();
   state.onboardingInference.byMode.clear();
   state.onboardingInference.byModel.clear();
+  state.moderation.total = 0;
+  state.moderation.byRiskLevel.allow = 0;
+  state.moderation.byRiskLevel.review = 0;
+  state.moderation.byRiskLevel.block = 0;
+  state.moderation.bySource.rules = 0;
+  state.moderation.bySource.openai = 0;
+  state.moderation.bySource.human = 0;
 }
 
 function createHistogram(

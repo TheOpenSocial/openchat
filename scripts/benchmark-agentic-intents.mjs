@@ -44,10 +44,9 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-const baseUrl = (process.env.AGENTIC_BENCH_URL ?? "http://localhost:3000").replace(
-  /\/$/,
-  "",
-);
+const baseUrl = (
+  process.env.AGENTIC_BENCH_URL ?? "http://localhost:3000"
+).replace(/\/$/, "");
 const benchHostHeader =
   process.env.AGENTIC_BENCH_HOST_HEADER?.trim() ||
   process.env.SMOKE_HOST_HEADER?.trim() ||
@@ -62,8 +61,14 @@ const delayMs = Number(process.env.AGENTIC_BENCH_DELAY_MS ?? 750);
 const ackSloMs = Number(process.env.AGENTIC_BENCH_ACK_SLO_MS ?? 1800);
 const bgWaitMs = Number(process.env.AGENTIC_BENCH_BACKGROUND_WAIT_MS ?? 30000);
 const pollMs = Number(process.env.AGENTIC_BENCH_POLL_MS ?? 1200);
-const concurrency = Math.max(1, Number(process.env.AGENTIC_BENCH_CONCURRENCY ?? 1));
-const burstSize = Math.max(1, Number(process.env.AGENTIC_BENCH_BURST_SIZE ?? 1));
+const concurrency = Math.max(
+  1,
+  Number(process.env.AGENTIC_BENCH_CONCURRENCY ?? 1),
+);
+const burstSize = Math.max(
+  1,
+  Number(process.env.AGENTIC_BENCH_BURST_SIZE ?? 1),
+);
 const artifactPath = process.env.AGENTIC_BENCH_ARTIFACT_PATH?.trim() ?? "";
 const minAckWithinSloRate = Number(
   process.env.AGENTIC_BENCH_MIN_ACK_WITHIN_SLO_RATE ?? 1,
@@ -71,11 +76,15 @@ const minAckWithinSloRate = Number(
 const minBackgroundFollowupRate = Number(
   process.env.AGENTIC_BENCH_MIN_BACKGROUND_FOLLOWUP_RATE ?? 0.8,
 );
-const maxDegradedRate = Number(process.env.AGENTIC_BENCH_MAX_DEGRADED_RATE ?? 0.2);
+const maxDegradedRate = Number(
+  process.env.AGENTIC_BENCH_MAX_DEGRADED_RATE ?? 0.2,
+);
 const maxDuplicateSideEffectRate = Number(
   process.env.AGENTIC_BENCH_MAX_DUPLICATE_SIDE_EFFECT_RATE ?? 0,
 );
-const maxQueueLagMs = Number(process.env.AGENTIC_BENCH_MAX_QUEUE_LAG_MS ?? 6000);
+const maxQueueLagMs = Number(
+  process.env.AGENTIC_BENCH_MAX_QUEUE_LAG_MS ?? 6000,
+);
 const enableWorkflowHealth =
   (process.env.AGENTIC_BENCH_ENABLE_WORKFLOW_HEALTH ?? "0") === "1";
 const requireWorkflowHealth =
@@ -114,8 +123,7 @@ const datasetPath =
   process.env.AGENTIC_BENCH_DATASET ??
   path.resolve(process.cwd(), "apps/api/test/fixtures/agentic-scenarios.json");
 const threadIds = (() => {
-  const configured = process.env.AGENTIC_BENCH_THREAD_IDS
-    ?.split(",")
+  const configured = process.env.AGENTIC_BENCH_THREAD_IDS?.split(",")
     .map((value) => value.trim())
     .filter((value) => value.length > 0);
   if (configured && configured.length > 0) {
@@ -248,7 +256,8 @@ async function requestJson(pathname, init = {}) {
     } catch (error) {
       lastError = error;
       const message = error instanceof Error ? error.message : String(error);
-      const isAbort = error && typeof error === "object" && error.name === "AbortError";
+      const isAbort =
+        error && typeof error === "object" && error.name === "AbortError";
       const isFetchFailure =
         isAbort ||
         message.includes("fetch failed") ||
@@ -272,13 +281,19 @@ async function requestJson(pathname, init = {}) {
   }
 
   const rawMessage =
-    lastError instanceof Error ? lastError.message : String(lastError ?? "unknown error");
+    lastError instanceof Error
+      ? lastError.message
+      : String(lastError ?? "unknown error");
   throw new Error(
     `request failed for ${pathname} after ${requestRetryCount + 1} attempts: ${rawMessage}`,
   );
 }
 
-async function requestJsonWithStepRetry(pathname, init = {}, stepLabel = "request") {
+async function requestJsonWithStepRetry(
+  pathname,
+  init = {},
+  stepLabel = "request",
+) {
   let attempt = 0;
   const maxStepAttempts = 3;
   let lastError = null;
@@ -295,7 +310,9 @@ async function requestJsonWithStepRetry(pathname, init = {}, stepLabel = "reques
     }
   }
   const message =
-    lastError instanceof Error ? lastError.message : String(lastError ?? "unknown error");
+    lastError instanceof Error
+      ? lastError.message
+      : String(lastError ?? "unknown error");
   throw new Error(`${stepLabel} failed for ${pathname}: ${message}`);
 }
 
@@ -318,14 +335,19 @@ async function fetchWorkflowHealthSnapshot() {
   });
 
   try {
-    const summary = await requestJson(`/api/admin/ops/agent-workflows?${query.toString()}`, {
-      method: "GET",
-      headers: {
-        "x-admin-user-id": adminUserId.trim(),
-        "x-admin-role": adminRole.trim() || "support",
-        ...(adminApiKey.trim() ? { "x-admin-api-key": adminApiKey.trim() } : {}),
+    const summary = await requestJson(
+      `/api/admin/ops/agent-workflows?${query.toString()}`,
+      {
+        method: "GET",
+        headers: {
+          "x-admin-user-id": adminUserId.trim(),
+          "x-admin-role": adminRole.trim() || "support",
+          ...(adminApiKey.trim()
+            ? { "x-admin-api-key": adminApiKey.trim() }
+            : {}),
+        },
       },
-    });
+    );
     const health = summary?.summary?.health ?? {};
     const stageStatusCounts = summary?.summary?.stageStatusCounts ?? {};
     const failureClasses = summary?.summary?.failureClasses ?? {};
@@ -427,7 +449,9 @@ async function loadDataset() {
     return entries;
   }
 
-  throw new Error(`Dataset must be a non-empty array or canonical scenario corpus: ${datasetPath}`);
+  throw new Error(
+    `Dataset must be a non-empty array or canonical scenario corpus: ${datasetPath}`,
+  );
 }
 
 function buildForwardedIp(runNumber, workerIndex, burstIndex) {
@@ -437,7 +461,9 @@ function buildForwardedIp(runNumber, workerIndex, burstIndex) {
 }
 
 function normalizeMessageContent(message) {
-  const raw = String(message?.content ?? message?.body ?? "").trim().toLowerCase();
+  const raw = String(message?.content ?? message?.body ?? "")
+    .trim()
+    .toLowerCase();
   return raw.replace(/\s+/g, " ");
 }
 
@@ -460,11 +486,7 @@ function countDuplicateVisibleSideEffects(messages) {
 }
 
 async function runOne(index, scenario, options) {
-  const {
-    workerIndex,
-    burstIndex,
-    threadId: selectedThreadId,
-  } = options;
+  const { workerIndex, burstIndex, threadId: selectedThreadId } = options;
   const { scenarioId, prompt } = scenario;
   const forwardedFor = useUniqueForwardedIp
     ? buildForwardedIp(index + 1, workerIndex, burstIndex)
@@ -480,17 +502,21 @@ async function runOne(index, scenario, options) {
   const beforeCount = beforeMessages.length;
   const startedAt = Date.now();
 
-  const createIntentResult = await requestJsonWithStepRetry("/api/intents/from-agent", {
-    method: "POST",
-    ...(requestHeaders ? { headers: requestHeaders } : {}),
-    body: JSON.stringify({
-      threadId: selectedThreadId,
-      userId,
-      content: prompt,
-      allowDecomposition: true,
-      maxIntents: 3,
-    }),
-  }, "intent creation");
+  const createIntentResult = await requestJsonWithStepRetry(
+    "/api/intents/from-agent",
+    {
+      method: "POST",
+      ...(requestHeaders ? { headers: requestHeaders } : {}),
+      body: JSON.stringify({
+        threadId: selectedThreadId,
+        userId,
+        content: prompt,
+        allowDecomposition: true,
+        maxIntents: 3,
+      }),
+    },
+    "intent creation",
+  );
 
   const ackLatencyMs = Date.now() - startedAt;
   const intentId = createIntentResult?.intentId ?? null;
@@ -498,7 +524,8 @@ async function runOne(index, scenario, options) {
   let ackMessage = null;
   let ackDetectedAt = null;
 
-  const ackDetectionDeadline = Date.now() + Math.max(1500, Math.floor(ackSloMs * 2));
+  const ackDetectionDeadline =
+    Date.now() + Math.max(1500, Math.floor(ackSloMs * 2));
   while (Date.now() < ackDetectionDeadline) {
     let current = null;
     try {
@@ -550,11 +577,12 @@ async function runOne(index, scenario, options) {
     );
     nonUserMessages = current.slice(beforeCount).filter(isNonUserMessage);
   }
-  const duplicateVisibleSideEffects = countDuplicateVisibleSideEffects(
-    nonUserMessages,
-  );
+  const duplicateVisibleSideEffects =
+    countDuplicateVisibleSideEffects(nonUserMessages);
   const queueLagMs =
-    ackDetectedAt === null ? null : Math.max(0, ackDetectedAt - startedAt - ackLatencyMs);
+    ackDetectedAt === null
+      ? null
+      : Math.max(0, ackDetectedAt - startedAt - ackLatencyMs);
 
   return {
     run: index + 1,
@@ -581,32 +609,35 @@ async function runBurst(batch, burstIndex, runStartOffset) {
   const maxWorkers = Math.max(1, Math.min(concurrency, batch.length));
   let cursor = 0;
 
-  const workers = Array.from({ length: maxWorkers }, async (_, workerCursor) => {
-    const workerIndex = workerCursor + 1;
-    while (cursor < batch.length) {
-      const localIndex = cursor;
-      cursor += 1;
-      const scenario = batch[localIndex];
-      const selectedThreadId =
-        threadIds[(workerIndex - 1) % Math.max(1, threadIds.length)];
-      if (!selectedThreadId) {
-        throw new Error(
-          "No thread id available for benchmark worker. Set AGENTIC_BENCH_THREAD_ID or AGENTIC_BENCH_THREAD_IDS.",
+  const workers = Array.from(
+    { length: maxWorkers },
+    async (_, workerCursor) => {
+      const workerIndex = workerCursor + 1;
+      while (cursor < batch.length) {
+        const localIndex = cursor;
+        cursor += 1;
+        const scenario = batch[localIndex];
+        const selectedThreadId =
+          threadIds[(workerIndex - 1) % Math.max(1, threadIds.length)];
+        if (!selectedThreadId) {
+          throw new Error(
+            "No thread id available for benchmark worker. Set AGENTIC_BENCH_THREAD_ID or AGENTIC_BENCH_THREAD_IDS.",
+          );
+        }
+        const result = await runOne(runStartOffset + localIndex, scenario, {
+          workerIndex,
+          burstIndex,
+          threadId: selectedThreadId,
+        });
+        results.push(result);
+        console.log(
+          `[run ${result.run}] worker=${result.workerIndex} burst=${result.burstIndex} scenario=${result.scenarioId} ack=${result.ackLatencyMs}ms (${result.ackWithinSlo ? "within_slo" : "over_slo"}) ` +
+            `queueLag=${result.queueLagMs ?? "n/a"}ms duplicates=${result.duplicateVisibleSideEffects} ` +
+            `ackMessage="${summarizeMessage(result.ackMessage)}" backgroundFollowup=${result.backgroundFollowupDetected ? "yes" : "no"}`,
         );
       }
-      const result = await runOne(runStartOffset + localIndex, scenario, {
-        workerIndex,
-        burstIndex,
-        threadId: selectedThreadId,
-      });
-      results.push(result);
-      console.log(
-        `[run ${result.run}] worker=${result.workerIndex} burst=${result.burstIndex} scenario=${result.scenarioId} ack=${result.ackLatencyMs}ms (${result.ackWithinSlo ? "within_slo" : "over_slo"}) ` +
-          `queueLag=${result.queueLagMs ?? "n/a"}ms duplicates=${result.duplicateVisibleSideEffects} ` +
-          `ackMessage="${summarizeMessage(result.ackMessage)}" backgroundFollowup=${result.backgroundFollowupDetected ? "yes" : "no"}`,
-      );
-    }
-  });
+    },
+  );
 
   await Promise.all(workers);
   return results.sort((left, right) => left.run - right.run);
@@ -674,11 +705,14 @@ async function main() {
   const queueLagValues = results
     .map((item) => item.queueLagMs)
     .filter((value) => typeof value === "number");
-  const queueLagP95Ms = queueLagValues.length === 0 ? 0 : percentile(queueLagValues, 95);
-  const ackWithinSloRate = results.length === 0 ? 0 : ackWithinSloCount / results.length;
+  const queueLagP95Ms =
+    queueLagValues.length === 0 ? 0 : percentile(queueLagValues, 95);
+  const ackWithinSloRate =
+    results.length === 0 ? 0 : ackWithinSloCount / results.length;
   const backgroundFollowupRate =
     results.length === 0 ? 0 : backgroundCount / results.length;
-  const degradedRate = results.length === 0 ? 1 : degradedCount / results.length;
+  const degradedRate =
+    results.length === 0 ? 1 : degradedCount / results.length;
   const workflowHealth = await fetchWorkflowHealthSnapshot();
   const guardrail = {
     concurrency,

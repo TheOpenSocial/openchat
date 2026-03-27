@@ -32,9 +32,7 @@ const client = new Client({ connectionString: process.env.DATABASE_URL });
 try {
   await client.connect();
 
-  const userRes = await client.query(
-    "select id from users limit 1",
-  );
+  const userRes = await client.query("select id from users limit 1");
   const userId = userRes.rows[0]?.id;
   if (!userId) {
     throw new Error("no users found");
@@ -81,7 +79,8 @@ try {
     stdio: "inherit",
     env: {
       ...process.env,
-      AGENTIC_BENCH_URL: process.env.AGENTIC_BENCH_URL || "http://localhost:3000",
+      AGENTIC_BENCH_URL:
+        process.env.AGENTIC_BENCH_URL || "http://localhost:3000",
       AGENTIC_BENCH_ACCESS_TOKEN: token,
       AGENTIC_BENCH_USER_ID: userId,
       AGENTIC_BENCH_THREAD_ID: threadId,

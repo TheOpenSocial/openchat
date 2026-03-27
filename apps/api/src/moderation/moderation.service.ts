@@ -3,10 +3,15 @@ import { OpenAIClient } from "@opensocial/openai";
 import { Prisma } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { AnalyticsService } from "../analytics/analytics.service.js";
+import { recordModerationDecisionMetric } from "../common/ops-metrics.js";
 import { PrismaService } from "../database/prisma.service.js";
 import { RealtimeEventsService } from "../realtime/realtime-events.service.js";
 
 const STRIKE_PREFERENCE_KEY = "moderation.strikes.v1";
+const MODERATION_DECISION_KEY_PREFIX = "moderation.decision.v1";
+const MODERATION_POLICY_VERSION = "moderation.policy.v1.strict";
+const MODERATION_SYSTEM_USER_ID = "00000000-0000-4000-8000-000000000000";
+const DEFAULT_MODERATION_DECISION_RETENTION_DAYS = 180;
 const AUTO_STRIKE_REASON_TERMS = [
   "abuse",
   "harassment",
@@ -49,6 +54,42 @@ interface StrikeState {
 }
 
 type ModerationRiskDecision = "clean" | "review" | "blocked";
+
+type UnifiedRiskLevel = "allow" | "review" | "block";
+type ModerationDecisionSource = "rules" | "openai" | "human";
+
+interface ModerationDecisionRecord {
+  id: string;
+  idempotencyKey: string;
+  contentRef: string;
+  contentType: string;
+  actorUserId: string | null;
+  surface: string;
+  riskLevel: UnifiedRiskLevel;
+  decisionSource: ModerationDecisionSource;
+  policyVersion: string;
+  reasons: string[];
+  evidenceRefs: string[];
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+  decidedAt: string;
+  reviewedAt: string | null;
+  reviewerUserId: string | null;
+  reviewNote: string | null;
+}
+
+interface SubmitModerationInput {
+  contentRef: string;
+  contentType: "chat_message" | "avatar_image" | string;
+  actorUserId?: string;
+  surface: string;
+  content?: string;
+  metadata?: Record<string, unknown>;
+  evidenceRefs?: string[];
+  strictMode?: boolean;
+  traceId?: string;
+  idempotencyKey?: string;
+}
 
 export interface ContentRiskAssessment {
   decision: ModerationRiskDecision;
@@ -380,6 +421,224 @@ export class ModerationService {
     };
   }
 
+  async submitForModeration(
+    input: SubmitModerationInput,
+  ): Promise<ModerationDecisionRecord> {
+    const idempotencyKey =
+      input.idempotencyKey?.trim() ||
+      `${input.contentType}:${input.contentRef}:${input.surface}`;
+    const existing = await this.findDecisionByIdempotencyKey(idempotencyKey);
+    if (existing) {
+      return existing;
+    }
+
+    const strictMode = Boolean(input.strictMode);
+    let deterministicDecision: ModerationRiskDecision = "clean";
+    let reasons: string[] = [];
+
+    if (input.contentType === "avatar_image") {
+      const avatarAssessment = this.assessAvatarRisk(input.metadata);
+      deterministicDecision = avatarAssessment.decision;
+      reasons = avatarAssessment.reasons;
+    } else {
+      const textAssessment = this.assessContentRisk({
+        content: input.content ?? "",
+        context: input.surface,
+        surface: input.surface,
+      });
+      deterministicDecision = textAssessment.decision;
+      reasons = textAssessment.reasons;
+    }
+
+    let finalDecision = deterministicDecision;
+    let decisionSource: ModerationDecisionSource = "rules";
+
+    if (this.shouldUseOpenAIModeration()) {
+      try {
+        const contentForAssist =
+          input.contentType === "avatar_image"
+            ? this.buildAvatarModerationPrompt(input)
+            : (input.content ?? "");
+        const assisted = await this.openAIClient.assistModeration(
+          {
+            content: contentForAssist,
+            context: input.surface,
+          },
+          input.traceId?.trim() || randomUUID(),
+        );
+        finalDecision = this.pickMoreRestrictiveRiskDecision(
+          deterministicDecision,
+          assisted.decision,
+        );
+        if (assisted.decision !== "clean") {
+          reasons.push(`openai_decision:${assisted.decision}`);
+        }
+        const normalizedReason = this.normalizeReasonToken(assisted.reason);
+        if (normalizedReason) {
+          reasons.push(`openai_reason:${normalizedReason}`);
+        }
+        decisionSource = "openai";
+      } catch (error) {
+        this.logger.warn(
+          `openai moderation assist failed; deterministic fallback used: ${String(error)}`,
+        );
+        if (strictMode && finalDecision === "clean") {
+          finalDecision = "review";
+          reasons.push("strict_fallback_review");
+        }
+      }
+    } else if (strictMode && finalDecision === "clean" && !input.content) {
+      finalDecision = "review";
+      reasons.push("strict_ambiguous_review");
+    }
+
+    const nowIso = new Date().toISOString();
+    const decisionRecord: ModerationDecisionRecord = {
+      id: randomUUID(),
+      idempotencyKey,
+      contentRef: input.contentRef,
+      contentType: input.contentType,
+      actorUserId: input.actorUserId ?? null,
+      surface: input.surface,
+      riskLevel: this.toUnifiedRiskLevel(finalDecision),
+      decisionSource,
+      policyVersion: MODERATION_POLICY_VERSION,
+      reasons:
+        reasons.length > 0 ? Array.from(new Set(reasons)) : ["no_risk_signal"],
+      evidenceRefs: Array.from(new Set(input.evidenceRefs ?? [])),
+      metadata: input.metadata ?? null,
+      createdAt: nowIso,
+      decidedAt: nowIso,
+      reviewedAt: null,
+      reviewerUserId: null,
+      reviewNote: null,
+    };
+
+    await this.saveModerationDecision(decisionRecord);
+    await this.writeDecisionArtifacts(decisionRecord);
+    recordModerationDecisionMetric({
+      riskLevel: decisionRecord.riskLevel,
+      source: decisionRecord.decisionSource,
+    });
+    return decisionRecord;
+  }
+
+  async getDecision(contentRef: string) {
+    if (!this.prisma.userPreference?.findMany) {
+      return null;
+    }
+    const rows = await this.prisma.userPreference.findMany({
+      where: {
+        userId: MODERATION_SYSTEM_USER_ID,
+        key: {
+          startsWith: `${MODERATION_DECISION_KEY_PREFIX}:`,
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      take: 200,
+      select: {
+        value: true,
+      },
+    });
+
+    for (const row of rows) {
+      const parsed = this.parseModerationDecisionRecord(row.value);
+      if (parsed && parsed.contentRef === contentRef) {
+        return parsed;
+      }
+    }
+    return null;
+  }
+
+  async submitHumanReview(input: {
+    decisionId: string;
+    action: "approve" | "reject" | "escalate";
+    reviewerUserId: string;
+    note?: string;
+  }) {
+    const existing = await this.findDecisionById(input.decisionId);
+    if (!existing) {
+      return null;
+    }
+
+    const resolvedRiskLevel: UnifiedRiskLevel =
+      input.action === "approve"
+        ? "allow"
+        : input.action === "reject"
+          ? "block"
+          : "review";
+
+    const updated: ModerationDecisionRecord = {
+      ...existing,
+      riskLevel: resolvedRiskLevel,
+      decisionSource: "human",
+      reviewedAt: new Date().toISOString(),
+      reviewerUserId: input.reviewerUserId,
+      reviewNote: input.note?.trim() ?? null,
+      reasons: Array.from(
+        new Set([...existing.reasons, `human_action:${input.action}`]),
+      ),
+    };
+
+    await this.saveModerationDecision(updated);
+    await this.writeDecisionArtifacts(updated);
+    recordModerationDecisionMetric({
+      riskLevel: updated.riskLevel,
+      source: updated.decisionSource,
+    });
+    return updated;
+  }
+
+  async cleanupExpiredDecisions(input?: { retentionDays?: number }) {
+    if (!this.prisma.userPreference?.deleteMany) {
+      return {
+        deletedCount: 0,
+        retentionDays: this.resolveModerationDecisionRetentionDays(
+          input?.retentionDays,
+        ),
+      };
+    }
+    const retentionDays = this.resolveModerationDecisionRetentionDays(
+      input?.retentionDays,
+    );
+    const cutoff = new Date(Date.now() - retentionDays * 86_400_000);
+    const result = await this.prisma.userPreference.deleteMany({
+      where: {
+        userId: MODERATION_SYSTEM_USER_ID,
+        key: {
+          startsWith: `${MODERATION_DECISION_KEY_PREFIX}:`,
+        },
+        createdAt: {
+          lt: cutoff,
+        },
+      },
+    });
+
+    if (this.prisma.auditLog?.create) {
+      await this.prisma.auditLog.create({
+        data: {
+          actorUserId: null,
+          actorType: "system",
+          action: "moderation.decisions_retention_cleanup",
+          entityType: "moderation_decision",
+          metadata: {
+            retentionDays,
+            cutoff: cutoff.toISOString(),
+            deletedCount: result.count,
+          } as Prisma.InputJsonValue,
+        },
+      });
+    }
+
+    return {
+      deletedCount: result.count,
+      retentionDays,
+      cutoff: cutoff.toISOString(),
+    };
+  }
+
   assessContentRisk(input: {
     content: string;
     context?: string;
@@ -583,6 +842,209 @@ export class ModerationService {
     };
   }
 
+  private assessAvatarRisk(metadata?: Record<string, unknown>) {
+    const reasons: string[] = [];
+    const mimeType = this.readString(metadata?.mimeType);
+    const magicMimeType = this.readString(metadata?.magicMimeType);
+    const byteSize = this.readFiniteNumber(metadata?.byteSize);
+    const allowedMimeTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+    if (!mimeType || !allowedMimeTypes.has(mimeType.toLowerCase())) {
+      reasons.push("unsupported_mime_type");
+      return { decision: "blocked" as ModerationRiskDecision, reasons };
+    }
+
+    if (magicMimeType === "unknown") {
+      reasons.push("unknown_binary_signature");
+      return { decision: "blocked" as ModerationRiskDecision, reasons };
+    }
+    if (
+      magicMimeType &&
+      magicMimeType !== "unknown" &&
+      magicMimeType.toLowerCase() !== mimeType.toLowerCase()
+    ) {
+      reasons.push("mime_magic_mismatch");
+      return { decision: "blocked" as ModerationRiskDecision, reasons };
+    }
+
+    if (typeof byteSize === "number") {
+      if (byteSize <= 0) {
+        reasons.push("invalid_byte_size");
+        return { decision: "blocked" as ModerationRiskDecision, reasons };
+      }
+      if (byteSize > 10 * 1024 * 1024) {
+        reasons.push("avatar_too_large");
+        return { decision: "blocked" as ModerationRiskDecision, reasons };
+      }
+    } else {
+      reasons.push("missing_byte_size");
+      return { decision: "review" as ModerationRiskDecision, reasons };
+    }
+
+    reasons.push("avatar_metadata_ok");
+    return { decision: "clean" as ModerationRiskDecision, reasons };
+  }
+
+  private buildAvatarModerationPrompt(input: SubmitModerationInput) {
+    const mimeType = this.readString(input.metadata?.mimeType) ?? "unknown";
+    const byteSize = this.readFiniteNumber(input.metadata?.byteSize) ?? -1;
+    const storageKey = this.readString(input.metadata?.storageKey) ?? "unknown";
+    const magicMimeType =
+      this.readString(input.metadata?.magicMimeType) ?? "unknown";
+    const byteSampleSha256 =
+      this.readString(input.metadata?.byteSampleSha256) ?? "none";
+    const byteSampleLength =
+      this.readFiniteNumber(input.metadata?.byteSampleLength) ?? -1;
+    return [
+      "Avatar image moderation request.",
+      `surface=${input.surface}`,
+      `contentRef=${input.contentRef}`,
+      `mimeType=${mimeType}`,
+      `magicMimeType=${magicMimeType}`,
+      `byteSize=${byteSize}`,
+      `byteSampleLength=${byteSampleLength}`,
+      `byteSampleSha256=${byteSampleSha256}`,
+      `storageKey=${storageKey}`,
+    ].join(" ");
+  }
+
+  private async writeDecisionArtifacts(decision: ModerationDecisionRecord) {
+    if (decision.riskLevel !== "allow" && this.prisma.moderationFlag?.create) {
+      await this.prisma.moderationFlag.create({
+        data: {
+          entityType: decision.contentType,
+          entityId: decision.contentRef,
+          reason: `decision:${decision.riskLevel}:${decision.reasons.join(",")}`,
+          status: "open",
+        },
+      });
+    }
+
+    if (this.prisma.auditLog?.create) {
+      await this.prisma.auditLog.create({
+        data: {
+          actorUserId: decision.actorUserId,
+          actorType: decision.decisionSource === "human" ? "admin" : "system",
+          action: "moderation.decision_recorded",
+          entityType: decision.contentType,
+          entityId: decision.contentRef,
+          metadata: {
+            riskLevel: decision.riskLevel,
+            decisionSource: decision.decisionSource,
+            policyVersion: decision.policyVersion,
+            reasons: decision.reasons,
+            evidenceRefs: decision.evidenceRefs,
+            idempotencyKey: decision.idempotencyKey,
+          } as Prisma.InputJsonValue,
+        },
+      });
+    }
+  }
+
+  private async saveModerationDecision(decision: ModerationDecisionRecord) {
+    if (!this.prisma.userPreference?.create) {
+      return;
+    }
+    await this.prisma.userPreference.create({
+      data: {
+        userId: MODERATION_SYSTEM_USER_ID,
+        key: `${MODERATION_DECISION_KEY_PREFIX}:${decision.idempotencyKey}`,
+        value: decision as unknown as Prisma.InputJsonValue,
+      },
+    });
+  }
+
+  private async findDecisionByIdempotencyKey(idempotencyKey: string) {
+    if (!this.prisma.userPreference?.findFirst) {
+      return null;
+    }
+    const existing = await this.prisma.userPreference.findFirst({
+      where: {
+        userId: MODERATION_SYSTEM_USER_ID,
+        key: `${MODERATION_DECISION_KEY_PREFIX}:${idempotencyKey}`,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      select: {
+        value: true,
+      },
+    });
+    return this.parseModerationDecisionRecord(existing?.value ?? null);
+  }
+
+  private async findDecisionById(decisionId: string) {
+    if (!this.prisma.userPreference?.findMany) {
+      return null;
+    }
+    const rows = await this.prisma.userPreference.findMany({
+      where: {
+        userId: MODERATION_SYSTEM_USER_ID,
+        key: {
+          startsWith: `${MODERATION_DECISION_KEY_PREFIX}:`,
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      take: 200,
+      select: {
+        value: true,
+      },
+    });
+    for (const row of rows) {
+      const parsed = this.parseModerationDecisionRecord(row.value);
+      if (parsed && parsed.id === decisionId) {
+        return parsed;
+      }
+    }
+    return null;
+  }
+
+  private parseModerationDecisionRecord(value: Prisma.JsonValue | null) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return null;
+    }
+    const raw = value as Record<string, unknown>;
+    const id = this.readString(raw.id);
+    const idempotencyKey = this.readString(raw.idempotencyKey);
+    const contentRef = this.readString(raw.contentRef);
+    const contentType = this.readString(raw.contentType);
+    const surface = this.readString(raw.surface);
+    const riskLevel = this.readString(raw.riskLevel);
+    const decisionSource = this.readString(raw.decisionSource);
+    if (
+      !id ||
+      !idempotencyKey ||
+      !contentRef ||
+      !contentType ||
+      !surface ||
+      !riskLevel ||
+      !decisionSource
+    ) {
+      return null;
+    }
+    if (!["allow", "review", "block"].includes(riskLevel)) {
+      return null;
+    }
+    if (!["rules", "openai", "human"].includes(decisionSource)) {
+      return null;
+    }
+    return raw as unknown as ModerationDecisionRecord;
+  }
+
+  private toUnifiedRiskLevel(
+    decision: ModerationRiskDecision,
+  ): UnifiedRiskLevel {
+    if (decision === "blocked") {
+      return "block";
+    }
+    if (decision === "review") {
+      return "review";
+    }
+    return "allow";
+  }
+
   private pickMoreRestrictiveRiskDecision(
     current: ModerationRiskDecision,
     next: ModerationRiskDecision,
@@ -607,6 +1069,14 @@ export class ModerationService {
       .slice(0, 100);
   }
 
+  private readString(value: unknown) {
+    if (typeof value !== "string") {
+      return null;
+    }
+    const normalized = value.trim();
+    return normalized.length > 0 ? normalized : null;
+  }
+
   private async loadStrikeState(userId: string) {
     if (!this.prisma.userPreference?.findFirst) {
       return {
@@ -629,9 +1099,10 @@ export class ModerationService {
       },
     });
 
+    const parsedState = this.parseStrikeState(existing?.value ?? null);
     return {
       preferenceId: existing?.id ?? null,
-      state: this.parseStrikeState(existing?.value ?? null),
+      state: this.applyStrikeDecayWindow(parsedState),
     };
   }
 
@@ -737,6 +1208,45 @@ export class ModerationService {
     };
   }
 
+  private applyStrikeDecayWindow(state: StrikeState): StrikeState {
+    const windowDays = this.resolveStrikeDecayWindowDays();
+    if (windowDays <= 0) {
+      return state;
+    }
+    const cutoff = Date.now() - windowDays * 86_400_000;
+    const knownHistoryCount = state.history.reduce(
+      (sum, entry) => sum + Math.max(1, Math.floor(entry.severity)),
+      0,
+    );
+    const carryForwardCount = Math.max(0, state.count - knownHistoryCount);
+    const filteredHistory = state.history.filter((entry) => {
+      const issuedAtMs = new Date(entry.issuedAt).getTime();
+      return Number.isFinite(issuedAtMs) && issuedAtMs >= cutoff;
+    });
+    const filteredKnownCount = filteredHistory.reduce(
+      (sum, entry) => sum + Math.max(1, Math.floor(entry.severity)),
+      0,
+    );
+    const decayedCount = carryForwardCount + filteredKnownCount;
+    return {
+      ...state,
+      count: decayedCount,
+      history: filteredHistory,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  private resolveStrikeDecayWindowDays() {
+    const raw = Number.parseInt(
+      process.env.MODERATION_STRIKE_DECAY_WINDOW_DAYS ?? "30",
+      10,
+    );
+    if (!Number.isFinite(raw)) {
+      return 30;
+    }
+    return Math.max(0, raw);
+  }
+
   private readFiniteNumber(value: unknown) {
     if (typeof value !== "number" || !Number.isFinite(value)) {
       return null;
@@ -769,6 +1279,20 @@ export class ModerationService {
       return false;
     }
     return fallback;
+  }
+
+  private resolveModerationDecisionRetentionDays(value?: number) {
+    if (typeof value === "number" && Number.isFinite(value) && value >= 1) {
+      return Math.floor(value);
+    }
+    const fromEnv = Number.parseInt(
+      process.env.MODERATION_DECISION_RETENTION_DAYS ?? "",
+      10,
+    );
+    if (Number.isFinite(fromEnv) && fromEnv >= 1) {
+      return fromEnv;
+    }
+    return DEFAULT_MODERATION_DECISION_RETENTION_DAYS;
   }
 
   private async trackAnalyticsEventSafe(input: {

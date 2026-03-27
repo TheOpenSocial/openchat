@@ -26,12 +26,23 @@ export function ModerationAgentRiskPanel({
   setAssignReason,
   setAssigneeUserId,
   setTriageAction,
+  setTriageDecisionId,
   setTriageFlagId,
+  setTriageHumanReviewAction,
   setTriageReason,
   setTriageTargetUserId,
+  submitDecisionReview,
+  decisionReviewAction,
+  decisionReviewId,
+  decisionReviewNote,
+  setDecisionReviewAction,
+  setDecisionReviewId,
+  setDecisionReviewNote,
   triageAction,
+  triageDecisionId,
   triageAgentRiskFlag,
   triageFlagId,
+  triageHumanReviewAction,
   triageReason,
   triageTargetUserId,
 }: {
@@ -59,12 +70,25 @@ export function ModerationAgentRiskPanel({
   setTriageAction: (
     value: "resolve" | "reopen" | "escalate_strike" | "restrict_user",
   ) => void;
+  setTriageDecisionId: (value: string) => void;
   setTriageFlagId: (value: string) => void;
+  setTriageHumanReviewAction: (
+    value: "approve" | "reject" | "escalate",
+  ) => void;
   setTriageReason: (value: string) => void;
   setTriageTargetUserId: (value: string) => void;
+  submitDecisionReview: () => Promise<unknown>;
+  decisionReviewAction: "approve" | "reject" | "escalate";
+  decisionReviewId: string;
+  decisionReviewNote: string;
+  setDecisionReviewAction: (value: "approve" | "reject" | "escalate") => void;
+  setDecisionReviewId: (value: string) => void;
+  setDecisionReviewNote: (value: string) => void;
   triageAction: "resolve" | "reopen" | "escalate_strike" | "restrict_user";
+  triageDecisionId: string;
   triageAgentRiskFlag: () => Promise<unknown>;
   triageFlagId: string;
+  triageHumanReviewAction: "approve" | "reject" | "escalate";
   triageReason: string;
   triageTargetUserId: string;
 }) {
@@ -243,6 +267,35 @@ export function ModerationAgentRiskPanel({
               value={triageReason}
             />
           </label>
+          <label className={adminLabelClass}>
+            decision id (optional)
+            <input
+              className={adminInputClass}
+              onChange={(event) =>
+                setTriageDecisionId(event.currentTarget.value)
+              }
+              value={triageDecisionId}
+            />
+          </label>
+          <label className={adminLabelClass}>
+            human review action (decision id only)
+            <select
+              className={adminInputClass}
+              onChange={(event) =>
+                setTriageHumanReviewAction(
+                  event.currentTarget.value as
+                    | "approve"
+                    | "reject"
+                    | "escalate",
+                )
+              }
+              value={triageHumanReviewAction}
+            >
+              <option value="approve">approve</option>
+              <option value="reject">reject</option>
+              <option value="escalate">escalate</option>
+            </select>
+          </label>
           <button
             className={adminButtonClass}
             onClick={() => void triageAgentRiskFlag()}
@@ -285,6 +338,57 @@ export function ModerationAgentRiskPanel({
             type="button"
           >
             Record assignment
+          </button>
+        </div>
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-muted-foreground">
+            Direct decision review
+          </p>
+          <label className={adminLabelClass}>
+            decision id
+            <input
+              className={adminInputClass}
+              onChange={(event) =>
+                setDecisionReviewId(event.currentTarget.value)
+              }
+              value={decisionReviewId}
+            />
+          </label>
+          <label className={adminLabelClass}>
+            action
+            <select
+              className={adminInputClass}
+              onChange={(event) =>
+                setDecisionReviewAction(
+                  event.currentTarget.value as
+                    | "approve"
+                    | "reject"
+                    | "escalate",
+                )
+              }
+              value={decisionReviewAction}
+            >
+              <option value="approve">approve</option>
+              <option value="reject">reject</option>
+              <option value="escalate">escalate</option>
+            </select>
+          </label>
+          <label className={adminLabelClass}>
+            note (optional)
+            <input
+              className={adminInputClass}
+              onChange={(event) =>
+                setDecisionReviewNote(event.currentTarget.value)
+              }
+              value={decisionReviewNote}
+            />
+          </label>
+          <button
+            className={adminButtonClass}
+            onClick={() => void submitDecisionReview()}
+            type="button"
+          >
+            Submit decision review
           </button>
         </div>
       </div>

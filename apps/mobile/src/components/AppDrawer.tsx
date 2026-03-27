@@ -241,12 +241,12 @@ export function AppDrawer({
           }}
         >
           <Pressable
-          accessibilityLabel={t("homeDrawerDismissMenu", locale)}
-          accessibilityRole="button"
-          className="flex-1"
-          onPress={onClose}
-          testID="home-drawer-scrim"
-        />
+            accessibilityLabel={t("homeDrawerDismissMenu", locale)}
+            accessibilityRole="button"
+            className="flex-1"
+            onPress={onClose}
+            testID="home-drawer-scrim"
+          />
         </Animated.View>
       </View>
     </Modal>

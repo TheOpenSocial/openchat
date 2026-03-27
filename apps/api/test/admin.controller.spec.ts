@@ -157,6 +157,11 @@ function createController(overrides: Partial<Record<string, any>> = {}) {
       userStatus: "active",
       action: "warn",
     }),
+    submitHumanReview: vi.fn().mockResolvedValue({
+      id: "decision-1",
+      riskLevel: "allow",
+      decisionSource: "human",
+    }),
   };
   const personalizationService = overrides.personalizationService ?? {
     getGlobalRules: vi.fn().mockResolvedValue({}),
@@ -1541,6 +1546,109 @@ describe("AdminController", () => {
     );
   });
 
+  it("links triage with human moderation decision when decisionId is provided", async () => {
+    const { controller, prisma, moderationService } = createController({
+      prisma: {
+        moderationFlag: {
+          findUnique: vi.fn().mockResolvedValue({
+            id: DEAD_LETTER_ID,
+            entityType: "chat_message",
+            entityId: CHAT_ID,
+            reason: "decision:review:review_term_scam",
+            status: "open",
+            createdAt: new Date("2026-03-20T18:07:00.000Z"),
+          }),
+          update: vi.fn().mockResolvedValue({
+            id: DEAD_LETTER_ID,
+            entityType: "chat_message",
+            entityId: CHAT_ID,
+            reason: "decision:review:review_term_scam",
+            status: "resolved",
+            createdAt: new Date("2026-03-20T18:07:00.000Z"),
+          }),
+        },
+      },
+      moderationService: {
+        issueStrike: vi.fn().mockResolvedValue({}),
+        submitHumanReview: vi.fn().mockResolvedValue({
+          id: "decision-123",
+          riskLevel: "allow",
+          decisionSource: "human",
+        }),
+      },
+    });
+
+    const result = await controller.triageModerationFlag(
+      DEAD_LETTER_ID,
+      {
+        action: "resolve",
+        decisionId: "decision-123",
+        reason: "approved after moderator review",
+      },
+      ADMIN_USER_ID,
+      "moderator",
+    );
+
+    expect(moderationService.submitHumanReview).toHaveBeenCalledWith(
+      expect.objectContaining({
+        decisionId: "decision-123",
+        action: "approve",
+        reviewerUserId: ADMIN_USER_ID,
+      }),
+    );
+    const payload = result.data as { humanReviewResult: { id: string } };
+    expect(payload.humanReviewResult.id).toBe("decision-123");
+    expect(prisma.moderationFlag.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "resolved",
+        }),
+      }),
+    );
+  });
+
+  it("submits direct human review decisions from admin endpoint", async () => {
+    const { controller, moderationService, adminAuditService } =
+      createController({
+        moderationService: {
+          issueStrike: vi.fn().mockResolvedValue({}),
+          submitHumanReview: vi.fn().mockResolvedValue({
+            id: "decision-abc",
+            riskLevel: "block",
+            decisionSource: "human",
+          }),
+        },
+      });
+
+    const result = await controller.submitModerationDecisionReview(
+      "decision-abc",
+      {
+        action: "reject",
+        note: "policy-confirmed abuse",
+      },
+      ADMIN_USER_ID,
+      "support",
+    );
+
+    expect(moderationService.submitHumanReview).toHaveBeenCalledWith(
+      expect.objectContaining({
+        decisionId: "decision-abc",
+        action: "reject",
+        reviewerUserId: ADMIN_USER_ID,
+        note: "policy-confirmed abuse",
+      }),
+    );
+    expect(adminAuditService.recordAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "admin.moderation_decision_review",
+        entityType: "moderation_decision",
+        entityId: "decision-abc",
+      }),
+    );
+    const payload = result.data as { decision: { id: string } };
+    expect(payload.decision.id).toBe("decision-abc");
+  });
+
   it("builds a moderation summary snapshot", async () => {
     const { controller, adminAuditService } = createController({
       prisma: {
@@ -1950,6 +2058,7 @@ describe("AdminController", () => {
         user: { count: vi.fn().mockResolvedValue(50) },
         userReport: { count: vi.fn().mockResolvedValue(2) },
         moderationFlag: { count: vi.fn().mockResolvedValue(1) },
+        auditLog: { count: vi.fn().mockResolvedValue(1) },
         userProfile: { count: vi.fn().mockResolvedValue(1) },
         notification: {
           count: vi.fn().mockResolvedValueOnce(10).mockResolvedValueOnce(4),
@@ -1964,7 +2073,12 @@ describe("AdminController", () => {
       openaiLatencyCost: { calls: number };
       openaiBudget: { clientCount: number };
       dbLatency: { pingMs: number | null };
-      moderationRates: { reports24h: number };
+      moderationRates: {
+        reports24h: number;
+        moderationDecisionReviews24h: number;
+        overturnRate24h: number;
+      };
+      queueDepth: Array<{ queue: string; waiting: number }>;
       pushDeliverySuccess: { pushSent24h: number; pushRead24h: number };
       onboardingInference: { calls: number };
     };
@@ -1979,6 +2093,13 @@ describe("AdminController", () => {
     expect(payload.openaiBudget.clientCount).toBeGreaterThanOrEqual(0);
     expect(payload.dbLatency.pingMs).not.toBeNull();
     expect(payload.moderationRates.reports24h).toBe(2);
+    expect(payload.moderationRates.moderationDecisionReviews24h).toBe(1);
+    expect(payload.moderationRates.overturnRate24h).toBeGreaterThanOrEqual(0);
+    expect(payload.queueDepth).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ queue: "notification" }),
+      ]),
+    );
     expect(payload.pushDeliverySuccess.pushSent24h).toBe(10);
     expect(payload.pushDeliverySuccess.pushRead24h).toBe(4);
     expect(payload.onboardingInference.calls).toBe(1);
@@ -2129,12 +2250,17 @@ describe("AdminController", () => {
     const result = await controller.opsMetrics(ADMIN_USER_ID, "support");
     const payload = result.data as {
       dbLatency: { pingMs: number | null };
-      moderationRates: { reports24h: number; moderationFlags24h: number };
+      moderationRates: {
+        reports24h: number;
+        moderationFlags24h: number;
+        moderationDecisionReviews24h: number;
+      };
     };
 
     expect(payload.dbLatency.pingMs).toBe(12);
     expect(payload.moderationRates.reports24h).toBe(1);
     expect(payload.moderationRates.moderationFlags24h).toBe(2);
+    expect(payload.moderationRates.moderationDecisionReviews24h).toBe(0);
     expect(prisma.user.count).not.toHaveBeenCalled();
     expect(appCacheService.setJson).not.toHaveBeenCalled();
   });

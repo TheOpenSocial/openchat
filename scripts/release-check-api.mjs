@@ -7,8 +7,16 @@ const checks = [
     cmd: "node",
     args: ["scripts/check-runtime-version-residue.mjs"],
   },
-  { name: "API typecheck", cmd: "pnpm", args: ["--filter", "@opensocial/api", "typecheck"] },
-  { name: "API lint", cmd: "pnpm", args: ["--filter", "@opensocial/api", "lint"] },
+  {
+    name: "API typecheck",
+    cmd: "pnpm",
+    args: ["--filter", "@opensocial/api", "typecheck"],
+  },
+  {
+    name: "API lint",
+    cmd: "pnpm",
+    args: ["--filter", "@opensocial/api", "lint"],
+  },
   {
     name: "OpenAI package contracts",
     cmd: "pnpm",
@@ -30,7 +38,14 @@ const checks = [
   {
     name: "Agent/OpenAI regressions",
     cmd: "pnpm",
-    args: ["--filter", "@opensocial/api", "test", "--", "test/openai-client.spec.ts", "test/agent-conversation.service.spec.ts"],
+    args: [
+      "--filter",
+      "@opensocial/api",
+      "test",
+      "--",
+      "test/openai-client.spec.ts",
+      "test/agent-conversation.service.spec.ts",
+    ],
   },
 ];
 

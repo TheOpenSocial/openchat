@@ -77,4 +77,45 @@ describe("InboxController", () => {
       process.env.INBOX_EXPIRE_STALE_CRON_KEY = previousCronKey;
     }
   });
+
+  it("auto-enqueues moderation retention cleanup on expire-stale cron run", async () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    const previousCronKey = process.env.INBOX_EXPIRE_STALE_CRON_KEY;
+    process.env.NODE_ENV = "production";
+    process.env.INBOX_EXPIRE_STALE_CRON_KEY = "super-secret-cron-key";
+
+    try {
+      const inboxService = {
+        expireStaleRequests: vi.fn().mockResolvedValue({ expiredCount: 3 }),
+      };
+      const cleanupQueue = {
+        add: vi.fn().mockResolvedValue({ id: "cleanup-job-1" }),
+      };
+      const controller = new InboxController(
+        inboxService as any,
+        cleanupQueue as any,
+      );
+
+      const result = await controller.expireStale("super-secret-cron-key");
+      expect(result).toEqual({
+        success: true,
+        data: {
+          expiredCount: 3,
+          moderationRetentionCleanupEnqueued: true,
+          moderationRetentionCleanupJobId: "cleanup-job-1",
+        },
+      });
+      expect(cleanupQueue.add).toHaveBeenCalledWith(
+        "ModerationDecisionRetentionCleanup",
+        expect.objectContaining({
+          retentionDays: expect.any(Number),
+          idempotencyKey: expect.stringContaining("moderation-retention:auto:"),
+        }),
+        expect.any(Object),
+      );
+    } finally {
+      process.env.NODE_ENV = previousNodeEnv;
+      process.env.INBOX_EXPIRE_STALE_CRON_KEY = previousCronKey;
+    }
+  });
 });

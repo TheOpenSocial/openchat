@@ -317,7 +317,9 @@ async function main() {
     }
   }
   const totalFailed = all.filter((item) => !item.ok).length;
-  console.log(`benchmark finished totalRuns=${all.length} failed=${totalFailed}`);
+  console.log(
+    `benchmark finished totalRuns=${all.length} failed=${totalFailed}`,
+  );
   if (breached) {
     process.exitCode = 1;
   }

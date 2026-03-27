@@ -27,7 +27,9 @@ const maxOnboardingFallbackRate = Number(
 const maxOnboardingUnavailableRate = Number(
   process.env.SMOKE_MAX_ONBOARDING_UNAVAILABLE_RATE || 0.2,
 );
-const maxOpenAIErrorRate = Number(process.env.SMOKE_MAX_OPENAI_ERROR_RATE || 0.2);
+const maxOpenAIErrorRate = Number(
+  process.env.SMOKE_MAX_OPENAI_ERROR_RATE || 0.2,
+);
 const allowCircuitOpen = process.env.SMOKE_ALLOW_OPENAI_CIRCUIT_OPEN === "true";
 const enforceOnboardingModelBuckets =
   process.env.SMOKE_ENFORCE_ONBOARDING_MODEL_BUCKETS !== "false";
@@ -98,7 +100,9 @@ async function requestJson(path, init = {}) {
 
   const durationMs = Date.now() - requestStartedAt;
   const errorMessage =
-    lastError instanceof Error ? lastError.message : String(lastError ?? "unknown_error");
+    lastError instanceof Error
+      ? lastError.message
+      : String(lastError ?? "unknown_error");
   return {
     ok: false,
     status: 0,
@@ -159,19 +163,22 @@ async function runAgentRespondSmoke() {
     };
   }
 
-  const result = await requestJson(`/api/agent/threads/${agentThreadId}/respond`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${accessToken}`,
-      "Idempotency-Key": `smoke-${Date.now()}`,
+  const result = await requestJson(
+    `/api/agent/threads/${agentThreadId}/respond`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+        "Idempotency-Key": `smoke-${Date.now()}`,
+      },
+      body: JSON.stringify({
+        userId,
+        content:
+          "Please help me find a safe local meetup. Also review this phrase: weapon meetup.",
+      }),
     },
-    body: JSON.stringify({
-      userId,
-      content:
-        "Please help me find a safe local meetup. Also review this phrase: weapon meetup.",
-    }),
-  });
+  );
 
   return {
     id: "agent_respond_moderation_path",
@@ -195,7 +202,8 @@ async function runLlmRuntimeHealthSmoke() {
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "x-admin-user-id":
-        process.env.SMOKE_ADMIN_USER_ID || "11111111-1111-4111-8111-111111111111",
+        process.env.SMOKE_ADMIN_USER_ID ||
+        "11111111-1111-4111-8111-111111111111",
       "x-admin-role": process.env.SMOKE_ADMIN_ROLE || "support",
       ...(process.env.SMOKE_ADMIN_API_KEY
         ? { "x-admin-api-key": process.env.SMOKE_ADMIN_API_KEY }
@@ -215,7 +223,9 @@ function printResult(result) {
     return;
   }
   const mark = result.ok ? "PASS" : "FAIL";
-  console.log(`- [${mark}] ${result.id} (${result.status}) in ${result.durationMs}ms`);
+  console.log(
+    `- [${mark}] ${result.id} (${result.status}) in ${result.durationMs}ms`,
+  );
   if (!result.ok) {
     console.log(`  body: ${JSON.stringify(result.body).slice(0, 300)}`);
   }
@@ -268,14 +278,18 @@ async function main() {
     .filter((check) => check.id.startsWith("onboarding_") && !check.skipped)
     .map((check) => check.durationMs);
   const agentLatencies = checks
-    .filter((check) => check.id === "agent_respond_moderation_path" && !check.skipped)
+    .filter(
+      (check) => check.id === "agent_respond_moderation_path" && !check.skipped,
+    )
     .map((check) => check.durationMs);
 
   const onboardingP95 = percentile(onboardingLatencies, 95);
   const agentP95 = percentile(agentLatencies, 95);
 
   console.log("");
-  console.log(`Latency summary: onboarding p95=${onboardingP95}ms, agent p95=${agentP95}ms`);
+  console.log(
+    `Latency summary: onboarding p95=${onboardingP95}ms, agent p95=${agentP95}ms`,
+  );
 
   if (onboardingLatencies.length > 0 && onboardingP95 > onboardingP95Ms) {
     console.error(
@@ -284,7 +298,9 @@ async function main() {
     process.exit(1);
   }
   if (agentLatencies.length > 0 && agentP95 > agentP95Ms) {
-    console.error(`Agent latency SLO breach: p95=${agentP95}ms > ${agentP95Ms}ms`);
+    console.error(
+      `Agent latency SLO breach: p95=${agentP95}ms > ${agentP95Ms}ms`,
+    );
     process.exit(1);
   }
 

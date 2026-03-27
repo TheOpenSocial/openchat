@@ -22,7 +22,8 @@ async function main() {
   console.log(`- required: ${required ? "yes" : "no"}`);
 
   if (!baseUrl || !refreshToken) {
-    const message = "skipping refresh: SMOKE_BASE_URL or SMOKE_REFRESH_TOKEN is missing";
+    const message =
+      "skipping refresh: SMOKE_BASE_URL or SMOKE_REFRESH_TOKEN is missing";
     if (required) {
       console.error(message);
       process.exit(1);

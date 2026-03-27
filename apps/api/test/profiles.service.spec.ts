@@ -1,9 +1,16 @@
 import { BadRequestException } from "@nestjs/common";
+import { S3Client } from "@aws-sdk/client-s3";
 import { NotificationType } from "@opensocial/types";
 import { describe, expect, it, vi } from "vitest";
 import { ProfilesService } from "../src/profiles/profiles.service.js";
 
-function createService(prisma: any) {
+function createService(
+  prisma: any,
+  overrides: {
+    moderationService?: any;
+    launchControlsService?: any;
+  } = {},
+) {
   const queue = {
     add: vi.fn().mockResolvedValue({ id: "job-1" }),
   };
@@ -17,6 +24,8 @@ function createService(prisma: any) {
   const analyticsService = {
     trackEvent: vi.fn().mockResolvedValue({}),
   };
+  const moderationService = overrides.moderationService ?? undefined;
+  const launchControlsService = overrides.launchControlsService ?? undefined;
 
   return {
     queue,
@@ -29,6 +38,8 @@ function createService(prisma: any) {
       matchingService as any,
       queue as any,
       analyticsService as any,
+      moderationService,
+      launchControlsService,
     ),
   };
 }
@@ -215,6 +226,136 @@ describe("ProfilesService", () => {
     expect(typeof result.uploadToken).toBe("string");
   });
 
+  it("accepts MEDIA_SIGNING_SECRET as media signing secret alias", async () => {
+    const oldNodeEnv = process.env.NODE_ENV;
+    const oldMediaUploadSigningSecret = process.env.MEDIA_UPLOAD_SIGNING_SECRET;
+    const oldMediaSigningSecret = process.env.MEDIA_SIGNING_SECRET;
+    const oldS3SecretKey = process.env.S3_SECRET_KEY;
+    const oldPresignedUploadsEnabled = process.env.S3_PRESIGNED_UPLOADS_ENABLED;
+    process.env.NODE_ENV = "production";
+    delete process.env.MEDIA_UPLOAD_SIGNING_SECRET;
+    process.env.MEDIA_SIGNING_SECRET = "alias-secret";
+    delete process.env.S3_SECRET_KEY;
+    process.env.S3_PRESIGNED_UPLOADS_ENABLED = "false";
+
+    const prisma: any = {
+      userProfileImage: {
+        create: vi.fn().mockResolvedValue({
+          id: "img-1",
+        }),
+      },
+    };
+    const { service } = createService(prisma);
+
+    try {
+      const result = await service.createPhotoUploadIntent(
+        "11111111-1111-4111-8111-111111111111",
+        {
+          fileName: "avatar.png",
+          mimeType: "image/png",
+          byteSize: 123_456,
+        },
+      );
+      expect(typeof result.uploadToken).toBe("string");
+    } finally {
+      process.env.NODE_ENV = oldNodeEnv;
+      process.env.MEDIA_UPLOAD_SIGNING_SECRET = oldMediaUploadSigningSecret;
+      process.env.MEDIA_SIGNING_SECRET = oldMediaSigningSecret;
+      process.env.S3_SECRET_KEY = oldS3SecretKey;
+      process.env.S3_PRESIGNED_UPLOADS_ENABLED = oldPresignedUploadsEnabled;
+    }
+  });
+
+  it("requires dedicated media signing secret in production", async () => {
+    const oldNodeEnv = process.env.NODE_ENV;
+    const oldMediaUploadSigningSecret = process.env.MEDIA_UPLOAD_SIGNING_SECRET;
+    const oldMediaSigningSecret = process.env.MEDIA_SIGNING_SECRET;
+    const oldS3SecretKey = process.env.S3_SECRET_KEY;
+    const oldPresignedUploadsEnabled = process.env.S3_PRESIGNED_UPLOADS_ENABLED;
+    process.env.NODE_ENV = "production";
+    delete process.env.MEDIA_UPLOAD_SIGNING_SECRET;
+    delete process.env.MEDIA_SIGNING_SECRET;
+    process.env.S3_SECRET_KEY = "legacy-fallback-secret";
+    process.env.S3_PRESIGNED_UPLOADS_ENABLED = "false";
+
+    const prisma: any = {
+      userProfileImage: {
+        create: vi.fn().mockResolvedValue({
+          id: "img-1",
+        }),
+      },
+    };
+    const { service } = createService(prisma);
+
+    try {
+      await expect(
+        service.createPhotoUploadIntent(
+          "11111111-1111-4111-8111-111111111111",
+          {
+            fileName: "avatar.png",
+            mimeType: "image/png",
+            byteSize: 123_456,
+          },
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    } finally {
+      process.env.NODE_ENV = oldNodeEnv;
+      process.env.MEDIA_UPLOAD_SIGNING_SECRET = oldMediaUploadSigningSecret;
+      process.env.MEDIA_SIGNING_SECRET = oldMediaSigningSecret;
+      process.env.S3_SECRET_KEY = oldS3SecretKey;
+      process.env.S3_PRESIGNED_UPLOADS_ENABLED = oldPresignedUploadsEnabled;
+    }
+  });
+
+  it("rejects completion when uploaded object metadata mismatches S3", async () => {
+    const oldPresignedUploadsEnabled = process.env.S3_PRESIGNED_UPLOADS_ENABLED;
+    process.env.S3_PRESIGNED_UPLOADS_ENABLED = "true";
+    const sendSpy = vi
+      .spyOn(S3Client.prototype as any, "send")
+      .mockResolvedValue({
+        ContentLength: 100_000,
+        ContentType: "image/png",
+      });
+
+    const prisma: any = {
+      userProfileImage: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "img-1",
+          userId: "11111111-1111-4111-8111-111111111111",
+          status: "pending_upload",
+          originalUrl:
+            "profiles/11111111-1111-4111-8111-111111111111/avatar.png",
+        }),
+      },
+    };
+
+    const { service } = createService(prisma);
+    const uploadToken = (service as any).createUploadToken({
+      imageId: "img-1",
+      userId: "11111111-1111-4111-8111-111111111111",
+      storageKey: "profiles/11111111-1111-4111-8111-111111111111/avatar.png",
+      mimeType: "image/png",
+      byteSize: 120_000,
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+
+    try {
+      await expect(
+        service.confirmPhotoUpload(
+          "11111111-1111-4111-8111-111111111111",
+          "img-1",
+          {
+            uploadToken,
+            byteSize: 120_000,
+          },
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    } finally {
+      sendSpy.mockRestore();
+      process.env.S3_PRESIGNED_UPLOADS_ENABLED = oldPresignedUploadsEnabled;
+    }
+  });
+
   it("queues media-processing when upload is confirmed", async () => {
     const prisma: any = {
       userProfileImage: {
@@ -299,7 +440,7 @@ describe("ProfilesService", () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it("approves profile photos and creates CDN + thumbnail URLs", async () => {
+  it("marks uploaded profile photos as pending review", async () => {
     const oldCdnBase = process.env.MEDIA_CDN_BASE_URL;
     process.env.MEDIA_CDN_BASE_URL = "https://cdn.example.com/media";
 
@@ -315,11 +456,10 @@ describe("ProfilesService", () => {
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
         update: vi.fn().mockResolvedValue({
           id: "img-1",
-          status: "approved",
+          status: "pending_review",
           originalUrl:
-            "https://cdn.example.com/media/profiles/11111111-1111-4111-8111-111111111111/avatar.png",
-          thumbUrl:
-            "https://cdn.example.com/media/profiles/11111111-1111-4111-8111-111111111111/avatar.png?variant=avatar_256",
+            "profiles/11111111-1111-4111-8111-111111111111/avatar.png",
+          thumbUrl: null,
         }),
       },
       moderationFlag: {
@@ -330,21 +470,28 @@ describe("ProfilesService", () => {
     const { service } = createService(prisma);
     const result = await service.processProfilePhoto("img-1");
 
-    expect(result.moderationResult).toBe("approved");
-    expect(prisma.userProfileImage.updateMany).toHaveBeenCalled();
+    expect(result.moderationResult).toBe("pending_review");
     expect(prisma.userProfileImage.update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          status: "approved",
+          status: "pending_review",
+          thumbUrl: null,
         }),
       }),
     );
-    expect(prisma.moderationFlag.create).not.toHaveBeenCalled();
+    expect(prisma.moderationFlag.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          reason: "profile_image_pending_review",
+          status: "open",
+        }),
+      }),
+    );
 
     process.env.MEDIA_CDN_BASE_URL = oldCdnBase;
   });
 
-  it("flags rejected photos in moderation", async () => {
+  it("marks suspiciously named photos as pending review instead of auto-reject", async () => {
     const prisma: any = {
       userProfileImage: {
         findUnique: vi.fn().mockResolvedValue({
@@ -356,7 +503,7 @@ describe("ProfilesService", () => {
         }),
         update: vi.fn().mockResolvedValue({
           id: "img-2",
-          status: "rejected",
+          status: "pending_review",
           thumbUrl: null,
         }),
       },
@@ -368,7 +515,7 @@ describe("ProfilesService", () => {
     const { service, notificationsService } = createService(prisma);
     const result = await service.processProfilePhoto("img-2");
 
-    expect(result.moderationResult).toBe("rejected");
+    expect(result.moderationResult).toBe("pending_review");
     expect(prisma.moderationFlag.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -380,8 +527,74 @@ describe("ProfilesService", () => {
     expect(notificationsService.createInAppNotification).toHaveBeenCalledWith(
       "11111111-1111-4111-8111-111111111111",
       NotificationType.MODERATION_NOTICE,
-      expect.stringContaining("rejected"),
+      expect.stringContaining("under review"),
     );
+  });
+
+  it("passes byte-signature metadata to avatar moderation decision", async () => {
+    const oldPresignedUploadsEnabled = process.env.S3_PRESIGNED_UPLOADS_ENABLED;
+    process.env.S3_PRESIGNED_UPLOADS_ENABLED = "true";
+
+    const sendSpy = vi
+      .spyOn(S3Client.prototype as any, "send")
+      .mockResolvedValueOnce({
+        ContentLength: 1024,
+        ContentType: "image/png",
+      })
+      .mockResolvedValueOnce({
+        Body: {
+          transformToByteArray: async () =>
+            Uint8Array.from([
+              0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00,
+              0x00,
+            ]),
+        },
+      });
+
+    const prisma: any = {
+      userProfileImage: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "img-byte-meta",
+          userId: "11111111-1111-4111-8111-111111111111",
+          status: "processing",
+          originalUrl:
+            "profiles/11111111-1111-4111-8111-111111111111/avatar.png",
+        }),
+        update: vi.fn().mockResolvedValue({
+          id: "img-byte-meta",
+          status: "approved",
+          thumbUrl: null,
+        }),
+      },
+      moderationFlag: {
+        create: vi.fn().mockResolvedValue({}),
+      },
+    };
+    const moderationService = {
+      submitForModeration: vi.fn().mockResolvedValue({
+        riskLevel: "allow",
+      }),
+    };
+
+    try {
+      const { service } = createService(prisma, { moderationService });
+      await service.processProfilePhoto("img-byte-meta");
+
+      expect(moderationService.submitForModeration).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            mimeType: "image/png",
+            magicMimeType: "image/png",
+            byteSize: 1024,
+            byteSampleLength: 12,
+            byteSampleSha256: expect.any(String),
+          }),
+        }),
+      );
+    } finally {
+      sendSpy.mockRestore();
+      process.env.S3_PRESIGNED_UPLOADS_ENABLED = oldPresignedUploadsEnabled;
+    }
   });
 
   it("returns fallback avatar when user has no approved photos", async () => {

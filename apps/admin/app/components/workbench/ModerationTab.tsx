@@ -27,6 +27,9 @@ export function ModerationTab({
   blockerUserId,
   createBlock,
   createReport,
+  decisionReviewAction,
+  decisionReviewId,
+  decisionReviewNote,
   loadAgentRiskFlags,
   loadAuditLogs,
   loadModerationQueue,
@@ -59,18 +62,26 @@ export function ModerationTab({
   setModerationQueueReasonQuery,
   setModerationQueueSnapshot,
   setModerationQueueStatusQuery,
+  setDecisionReviewAction,
+  setDecisionReviewId,
+  setDecisionReviewNote,
   setReportDetails,
   setReportReason,
   setReporterUserId,
   setTargetUserId,
   setTriageAction,
+  setTriageDecisionId,
   setTriageFlagId,
+  setTriageHumanReviewAction,
   setTriageReason,
   setTriageTargetUserId,
+  submitDecisionReview,
   targetUserId,
   triageAction,
+  triageDecisionId,
   triageAgentRiskFlag,
   triageFlagId,
+  triageHumanReviewAction,
   triageReason,
   triageTargetUserId,
 }: {
@@ -93,6 +104,9 @@ export function ModerationTab({
   blockerUserId: string;
   createBlock: () => Promise<unknown>;
   createReport: () => Promise<unknown>;
+  decisionReviewAction: "approve" | "reject" | "escalate";
+  decisionReviewId: string;
+  decisionReviewNote: string;
   loadAgentRiskFlags: () => Promise<unknown>;
   loadAuditLogs: () => Promise<unknown>;
   loadModerationQueue: () => Promise<unknown>;
@@ -127,6 +141,9 @@ export function ModerationTab({
   setModerationQueueStatusQuery: (
     value: "open" | "resolved" | "dismissed",
   ) => void;
+  setDecisionReviewAction: (value: "approve" | "reject" | "escalate") => void;
+  setDecisionReviewId: (value: string) => void;
+  setDecisionReviewNote: (value: string) => void;
   setReportDetails: (value: string) => void;
   setReportReason: (value: string) => void;
   setReporterUserId: (value: string) => void;
@@ -134,13 +151,20 @@ export function ModerationTab({
   setTriageAction: (
     value: "resolve" | "reopen" | "escalate_strike" | "restrict_user",
   ) => void;
+  setTriageDecisionId: (value: string) => void;
   setTriageFlagId: (value: string) => void;
+  setTriageHumanReviewAction: (
+    value: "approve" | "reject" | "escalate",
+  ) => void;
   setTriageReason: (value: string) => void;
   setTriageTargetUserId: (value: string) => void;
+  submitDecisionReview: () => Promise<unknown>;
   targetUserId: string;
   triageAction: "resolve" | "reopen" | "escalate_strike" | "restrict_user";
+  triageDecisionId: string;
   triageAgentRiskFlag: () => Promise<unknown>;
   triageFlagId: string;
+  triageHumanReviewAction: "approve" | "reject" | "escalate";
   triageReason: string;
   triageTargetUserId: string;
 }) {
@@ -216,12 +240,23 @@ export function ModerationTab({
         setAssignReason={setAssignReason}
         setAssigneeUserId={setAssigneeUserId}
         setTriageAction={setTriageAction}
+        setTriageDecisionId={setTriageDecisionId}
         setTriageFlagId={setTriageFlagId}
+        setTriageHumanReviewAction={setTriageHumanReviewAction}
         setTriageReason={setTriageReason}
         setTriageTargetUserId={setTriageTargetUserId}
+        submitDecisionReview={submitDecisionReview}
+        decisionReviewAction={decisionReviewAction}
+        decisionReviewId={decisionReviewId}
+        decisionReviewNote={decisionReviewNote}
+        setDecisionReviewAction={setDecisionReviewAction}
+        setDecisionReviewId={setDecisionReviewId}
+        setDecisionReviewNote={setDecisionReviewNote}
         triageAction={triageAction}
+        triageDecisionId={triageDecisionId}
         triageAgentRiskFlag={triageAgentRiskFlag}
         triageFlagId={triageFlagId}
+        triageHumanReviewAction={triageHumanReviewAction}
         triageReason={triageReason}
         triageTargetUserId={triageTargetUserId}
       />

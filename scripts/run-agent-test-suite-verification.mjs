@@ -138,8 +138,11 @@ async function tryBootstrapEnvFromPlayground(
   const adminUserId = (process.env.PLAYGROUND_ADMIN_USER_ID || "").trim();
   const adminRole = (process.env.PLAYGROUND_ADMIN_ROLE || "admin").trim();
   const adminApiKey = (process.env.PLAYGROUND_ADMIN_API_KEY || "").trim();
-  const playgroundHostHeader =
-    (process.env.PLAYGROUND_HOST_HEADER || process.env.SMOKE_HOST_HEADER || "").trim();
+  const playgroundHostHeader = (
+    process.env.PLAYGROUND_HOST_HEADER ||
+    process.env.SMOKE_HOST_HEADER ||
+    ""
+  ).trim();
   const rotateProbeToken =
     process.env.PLAYGROUND_BOOTSTRAP_ROTATE_PROBE_TOKEN === "1";
 
@@ -171,7 +174,11 @@ async function tryBootstrapEnvFromPlayground(
     );
     const payload = await response.json();
     const envFromBootstrap = payload?.data?.env ?? {};
-    if (!response.ok || !payload?.success || typeof envFromBootstrap !== "object") {
+    if (
+      !response.ok ||
+      !payload?.success ||
+      typeof envFromBootstrap !== "object"
+    ) {
       const bootstrapEndpointUnavailable = response.status === 404;
       if (bootstrapEndpointUnavailable) {
         return currentEnv;
@@ -217,7 +224,9 @@ async function tryBootstrapEnvFromPlayground(
   } catch (error) {
     if (required) {
       const message = error instanceof Error ? error.message : String(error);
-      throw new Error(`playground bootstrap required but request failed: ${message}`);
+      throw new Error(
+        `playground bootstrap required but request failed: ${message}`,
+      );
     }
     return currentEnv;
   }
@@ -264,18 +273,21 @@ async function tryRefreshSmokeSession(envMap) {
     ""
   ).trim();
   try {
-    const response = await fetch(`${baseUrl.replace(/\/+$/, "")}/api/auth/refresh`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        ...(smokeHostHeader ? { Host: smokeHostHeader } : {}),
+    const response = await fetch(
+      `${baseUrl.replace(/\/+$/, "")}/api/auth/refresh`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...(smokeHostHeader ? { Host: smokeHostHeader } : {}),
+        },
+        body: JSON.stringify({
+          refreshToken,
+          deviceId: "admin-playground",
+          deviceName: "Admin Playground",
+        }),
       },
-      body: JSON.stringify({
-        refreshToken,
-        deviceId: "admin-playground",
-        deviceName: "Admin Playground",
-      }),
-    });
+    );
     const payload = await response.json();
     if (!response.ok || !payload?.success || !payload?.data?.accessToken) {
       return envMap;
@@ -297,13 +309,9 @@ async function tryRefreshSmokeSession(envMap) {
 
 let hydratedEnv = { ...resolvedEnv };
 const initialMissing = collectMissing(hydratedEnv);
-hydratedEnv = await tryBootstrapEnvFromPlayground(
-  hydratedEnv,
-  initialMissing,
-  {
-    required: process.env.PLAYGROUND_BOOTSTRAP_REQUIRED === "1",
-  },
-);
+hydratedEnv = await tryBootstrapEnvFromPlayground(hydratedEnv, initialMissing, {
+  required: process.env.PLAYGROUND_BOOTSTRAP_REQUIRED === "1",
+});
 if (!(await benchAccessTokenIsValid(hydratedEnv))) {
   hydratedEnv = await tryBootstrapEnvFromPlayground(hydratedEnv, [], {
     forceRefresh: true,
@@ -340,8 +348,7 @@ const summaryArtifactPath = path.resolve(
   process.env.AGENT_TEST_SUITE_VERIFICATION_ARTIFACT_PATH ??
     ".artifacts/agent-test-suite/verification-latest.json",
 );
-const rerunFailedOnly =
-  process.env.AGENT_TEST_SUITE_RERUN_FAILED_ONLY === "1";
+const rerunFailedOnly = process.env.AGENT_TEST_SUITE_RERUN_FAILED_ONLY === "1";
 const retryFailedStagesOnce =
   process.env.AGENT_TEST_SUITE_RETRY_FAILED_STAGES_ONCE !== "0";
 const tokenSensitiveStages = new Set(["benchmark", "prod-smoke"]);
@@ -364,7 +371,8 @@ function buildSuiteEnv() {
       process.env.SMOKE_ADMIN_ROLE ??
       "support",
     AGENTIC_BENCH_ADMIN_API_KEY:
-      process.env.AGENTIC_BENCH_ADMIN_API_KEY ?? process.env.SMOKE_ADMIN_API_KEY,
+      process.env.AGENTIC_BENCH_ADMIN_API_KEY ??
+      process.env.SMOKE_ADMIN_API_KEY,
     AGENTIC_BENCH_MAX_CRITICAL_WORKFLOW_RUNS:
       process.env.AGENTIC_BENCH_MAX_CRITICAL_WORKFLOW_RUNS ?? "0",
     AGENTIC_BENCH_MAX_FAILED_STAGE_COUNT:
@@ -451,14 +459,13 @@ const stagesFromLatestSummary =
   rerunFailedOnly && stagesFromEnv.length === 0
     ? loadFailedStagesFromLatestSummary()
     : [];
-const firstPassStages =
-  rerunFailedOnly
-    ? stagesFromEnv.length > 0
-      ? stagesFromEnv
-      : stagesFromLatestSummary.length > 0
-        ? stagesFromLatestSummary
-        : stageSequence
-    : stageSequence;
+const firstPassStages = rerunFailedOnly
+  ? stagesFromEnv.length > 0
+    ? stagesFromEnv
+    : stagesFromLatestSummary.length > 0
+      ? stagesFromLatestSummary
+      : stageSequence
+  : stageSequence;
 let suiteEnv = buildSuiteEnv();
 
 async function hydrateStageCredentials(layer) {

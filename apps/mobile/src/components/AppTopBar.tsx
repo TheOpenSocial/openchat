@@ -24,10 +24,7 @@ export function AppTopBar({
 
   return (
     <View
-      className={cn(
-        "bg-canvas px-4",
-        compact ? "pb-2 pt-1" : "pb-3.5 pt-2",
-      )}
+      className={cn("bg-canvas px-4", compact ? "pb-2 pt-1" : "pb-3.5 pt-2")}
     >
       <View className="flex-row items-start justify-between gap-3">
         <View className="min-w-0 flex-1 flex-row items-start gap-2.5">

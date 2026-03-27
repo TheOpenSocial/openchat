@@ -1,3 +1,4 @@
+import { InjectQueue } from "@nestjs/bullmq";
 import {
   ForbiddenException,
   Injectable,
@@ -7,10 +8,12 @@ import {
 } from "@nestjs/common";
 import { OpenAIClient } from "@opensocial/openai";
 import { Prisma } from "@prisma/client";
+import { Queue } from "bullmq";
 import { randomUUID } from "node:crypto";
 import { AnalyticsService } from "../analytics/analytics.service.js";
 import { PrismaService } from "../database/prisma.service.js";
 import { LaunchControlsService } from "../launch-controls/launch-controls.service.js";
+import { ModerationService } from "../moderation/moderation.service.js";
 
 const MESSAGE_IDEMPOTENCY_TTL_MS = 60 * 60 * 1000;
 const CHAT_SYNC_MAX_LIMIT = 200;
@@ -54,9 +57,14 @@ export class ChatsService {
   constructor(
     private readonly prisma: PrismaService,
     @Optional()
+    @InjectQueue("moderation")
+    private readonly moderationQueue?: Queue,
+    @Optional()
     private readonly analyticsService?: AnalyticsService,
     @Optional()
     private readonly launchControlsService?: LaunchControlsService,
+    @Optional()
+    private readonly moderationService?: ModerationService,
   ) {
     this.openAIClient = new OpenAIClient({
       apiKey: process.env.OPENAI_API_KEY ?? "",
@@ -125,22 +133,37 @@ export class ChatsService {
       await this.assertActiveParticipant(chatId, senderUserId);
       const strictModerationEnabled =
         await this.isModerationStrictnessEnabled();
-      const moderation = await this.evaluateMessageModeration(
-        body,
-        strictModerationEnabled,
-      );
-      if (moderation.decision === "blocked") {
+      const moderationSurfaceEnabled =
+        await this.isMessageModerationSurfaceEnabled();
+      const prefilterModeration = this.evaluateTextModeration(body, false);
+      if (prefilterModeration.decision === "blocked") {
         await this.recordBlockedMessageModeration(
           chatId,
           senderUserId,
-          moderation.matchedTerms,
+          prefilterModeration.matchedTerms,
         );
         throw new ForbiddenException("message blocked by moderation policy");
       }
-      if (moderation.decision === "review") {
-        messageBody = "[hidden by moderation]";
+      if (moderationSurfaceEnabled && strictModerationEnabled) {
         moderationState = "review";
-        pendingReviewTerms = moderation.matchedTerms;
+      } else {
+        const moderation = await this.evaluateMessageModeration(
+          body,
+          strictModerationEnabled,
+        );
+        if (moderation.decision === "blocked") {
+          await this.recordBlockedMessageModeration(
+            chatId,
+            senderUserId,
+            moderation.matchedTerms,
+          );
+          throw new ForbiddenException("message blocked by moderation policy");
+        }
+        if (moderation.decision === "review") {
+          messageBody = "[hidden by moderation]";
+          moderationState = "review";
+          pendingReviewTerms = moderation.matchedTerms;
+        }
       }
 
       const blocked = await this.isBlockedInChat(chatId, senderUserId);
@@ -183,6 +206,19 @@ export class ChatsService {
         senderUserId,
         message.id,
       );
+      if (
+        (await this.isModerationStrictnessEnabled()) &&
+        (await this.isMessageModerationSurfaceEnabled())
+      ) {
+        await this.enqueueMessageModeration(
+          message.id,
+          chatId,
+          senderUserId,
+          body,
+        );
+      } else {
+        await this.deliverMessageToRecipients(chatId, message.id, senderUserId);
+      }
     }
 
     if (!options?.isSystem && pendingReviewTerms.length > 0) {
@@ -237,7 +273,11 @@ export class ChatsService {
       uniqueMessages.map((message) => message.id),
     );
 
-    return uniqueMessages.map((message) => ({
+    const visibleMessages = uniqueMessages.filter((message) =>
+      this.isMessageVisibleToViewer(message, viewerUserId),
+    );
+
+    return visibleMessages.map((message) => ({
       ...message,
       status: statusByMessageId.get(message.id) ?? {
         state: "sent",
@@ -478,7 +518,9 @@ export class ChatsService {
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       take: cappedLimit,
     });
-    const uniqueMessages = this.dedupeMessages(messages);
+    const uniqueMessages = this.dedupeMessages(messages).filter((message) =>
+      this.isMessageVisibleToViewer(message, userId),
+    );
     const statusByMessageId = await this.buildMessageStatusMap(
       chatId,
       uniqueMessages.map((message) => message.id),
@@ -490,6 +532,9 @@ export class ChatsService {
             chatId,
             senderUserId: {
               not: userId,
+            },
+            moderationState: {
+              not: "review",
             },
             receipts: {
               none: {
@@ -619,6 +664,80 @@ export class ChatsService {
     }
   }
 
+  async processQueuedMessageModeration(
+    messageId: string,
+    chatId: string,
+    senderUserId: string,
+    body: string,
+  ) {
+    if (!this.moderationService || !this.prisma.chatMessage?.update) {
+      return null;
+    }
+
+    const strictModerationEnabled = await this.isModerationStrictnessEnabled();
+    const decision = await this.moderationService.submitForModeration({
+      contentRef: messageId,
+      contentType: "chat_message",
+      actorUserId: senderUserId,
+      surface: "chat_message",
+      content: body,
+      strictMode: strictModerationEnabled,
+      idempotencyKey: `chat_message:${messageId}`,
+      evidenceRefs: [messageId],
+      metadata: {
+        chatId,
+      },
+    });
+
+    if (decision.riskLevel === "allow") {
+      const updated = await this.prisma.chatMessage.update({
+        where: { id: messageId },
+        data: {
+          moderationState: "clean",
+        },
+      });
+      await this.deliverMessageToRecipients(chatId, messageId, senderUserId);
+      return updated;
+    }
+
+    if (decision.riskLevel === "block") {
+      const updated = await this.prisma.chatMessage.update({
+        where: { id: messageId },
+        data: {
+          body: "[hidden by moderation]",
+          moderationState: "blocked",
+        },
+      });
+      await this.createSystemMessage(
+        chatId,
+        senderUserId,
+        "moderation_hidden",
+        "blocked by moderation policy",
+        {
+          idempotencyKey: `chat-message-blocked:${messageId}`,
+        },
+      );
+      return updated;
+    }
+
+    const updated = await this.prisma.chatMessage.update({
+      where: { id: messageId },
+      data: {
+        moderationState: "review",
+      },
+    });
+    await this.createSystemMessage(
+      chatId,
+      senderUserId,
+      "moderation_hidden",
+      "pending manual review",
+      {
+        idempotencyKey: `chat-message-review:${messageId}`,
+      },
+    );
+    return updated;
+  }
+
   private async assertActiveParticipant(chatId: string, userId: string) {
     if (!this.prisma.chat?.findUnique) {
       return;
@@ -663,6 +782,125 @@ export class ChatsService {
       }
     }
     return Array.from(dedupedMessages.values());
+  }
+
+  private isMessageVisibleToViewer(
+    message: {
+      senderUserId?: string;
+      moderationState?: "clean" | "flagged" | "blocked" | "review";
+    },
+    viewerUserId?: string,
+  ) {
+    if (!viewerUserId) {
+      return true;
+    }
+    if (message.moderationState !== "review") {
+      return true;
+    }
+    return message.senderUserId === viewerUserId;
+  }
+
+  private async enqueueMessageModeration(
+    messageId: string,
+    chatId: string,
+    senderUserId: string,
+    body: string,
+  ) {
+    const idempotencyKey = `chat-message-moderation:${messageId}`;
+    if (!this.moderationQueue) {
+      return;
+    }
+    await this.moderationQueue.add(
+      "ChatMessageModerationRequested",
+      {
+        version: 1,
+        traceId: randomUUID(),
+        idempotencyKey,
+        timestamp: new Date().toISOString(),
+        type: "ChatMessageModerationRequested",
+        payload: {
+          messageId,
+          chatId,
+          senderUserId,
+          body,
+        },
+      },
+      {
+        jobId: idempotencyKey,
+        attempts: 3,
+        removeOnComplete: 500,
+        backoff: {
+          type: "exponential",
+          delay: 1000,
+        },
+      },
+    );
+  }
+
+  private async deliverMessageToRecipients(
+    chatId: string,
+    messageId: string,
+    senderUserId: string,
+  ) {
+    if (
+      !this.prisma.chat?.findUnique ||
+      !this.prisma.connectionParticipant?.findMany ||
+      !this.prisma.messageReceipt?.createMany
+    ) {
+      return;
+    }
+    const chat = await this.prisma.chat.findUnique({
+      where: { id: chatId },
+      select: { connectionId: true },
+    });
+    if (!chat) {
+      return;
+    }
+    const participants = await this.prisma.connectionParticipant.findMany({
+      where: {
+        connectionId: chat.connectionId,
+        leftAt: null,
+        userId: {
+          not: senderUserId,
+        },
+      },
+      select: { userId: true },
+    });
+    if (participants.length === 0) {
+      return;
+    }
+
+    const existingReceipts = this.prisma.messageReceipt?.findMany
+      ? await this.prisma.messageReceipt.findMany({
+          where: {
+            messageId,
+            userId: {
+              in: participants.map((participant) => participant.userId),
+            },
+          },
+          select: {
+            userId: true,
+          },
+        })
+      : [];
+    const existingUserIds = new Set(
+      existingReceipts.map((item) => item.userId),
+    );
+    const pendingParticipants = participants.filter(
+      (participant) => !existingUserIds.has(participant.userId),
+    );
+    if (pendingParticipants.length === 0) {
+      return;
+    }
+
+    const now = new Date();
+    await this.prisma.messageReceipt.createMany({
+      data: pendingParticipants.map((participant) => ({
+        messageId,
+        userId: participant.userId,
+        deliveredAt: now,
+      })),
+    });
   }
 
   private async buildMessageStatusMap(chatId: string, messageIds: string[]) {
@@ -963,6 +1201,16 @@ export class ChatsService {
     }
     const snapshot = await this.launchControlsService.getSnapshot();
     return !snapshot.globalKillSwitch && snapshot.enableModerationStrictness;
+  }
+
+  private async isMessageModerationSurfaceEnabled() {
+    if (!this.launchControlsService) {
+      return true;
+    }
+    const snapshot = await this.launchControlsService.getSnapshot();
+    return (
+      !snapshot.globalKillSwitch && (snapshot.enableModerationMessages ?? true)
+    );
   }
 
   private async recordBlockedMessageModeration(

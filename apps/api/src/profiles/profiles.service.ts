@@ -1,5 +1,12 @@
 import { InjectQueue } from "@nestjs/bullmq";
 import {
+  GetObjectCommand,
+  HeadObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import {
   BadRequestException,
   Injectable,
   Logger,
@@ -15,9 +22,12 @@ import {
   randomUUID,
   timingSafeEqual,
 } from "node:crypto";
+import { Readable } from "node:stream";
 import { AnalyticsService } from "../analytics/analytics.service.js";
 import { PrismaService } from "../database/prisma.service.js";
+import { LaunchControlsService } from "../launch-controls/launch-controls.service.js";
 import { MatchingService } from "../matching/matching.service.js";
+import { ModerationService } from "../moderation/moderation.service.js";
 import { NotificationsService } from "../notifications/notifications.service.js";
 
 type ProfileUpdatePayload = {
@@ -80,6 +90,10 @@ export class ProfilesService {
     private readonly mediaProcessingQueue: Queue,
     @Optional()
     private readonly analyticsService?: AnalyticsService,
+    @Optional()
+    private readonly moderationService?: ModerationService,
+    @Optional()
+    private readonly launchControlsService?: LaunchControlsService,
   ) {}
 
   async getProfile(userId: string) {
@@ -570,7 +584,7 @@ export class ProfilesService {
         byteSize: input.byteSize,
         expiresAt,
       }),
-      uploadUrl: this.buildSignedUploadUrl(
+      uploadUrl: await this.buildSignedUploadUrl(
         storageKey,
         input.mimeType,
         expiresAt,
@@ -618,6 +632,11 @@ export class ProfilesService {
       mimeType,
       byteSize: metadata.byteSize,
     });
+    await this.verifyUploadedObjectInStorage(
+      image.originalUrl,
+      mimeType,
+      metadata.byteSize,
+    );
 
     await this.prisma.userProfileImage.update({
       where: { id: image.id },
@@ -668,63 +687,93 @@ export class ProfilesService {
       throw new NotFoundException("profile image not found");
     }
 
-    const moderationResult = this.evaluatePhotoModeration(image.originalUrl);
+    const avatarModerationEnabled =
+      await this.isAvatarModerationSurfaceEnabled();
+    const objectMetadata = await this.readUploadedObjectMetadata(
+      image.originalUrl,
+    );
+    const byteSize = objectMetadata?.ContentLength;
+    const mimeType =
+      objectMetadata?.ContentType?.split(";")[0]?.trim().toLowerCase() ??
+      this.mimeTypeFromStorageKey(image.originalUrl);
+    const byteSample = await this.readUploadedObjectSample(image.originalUrl);
+    const magicMimeType = byteSample
+      ? this.detectImageMimeFromBytes(byteSample)
+      : null;
+    const byteSampleSha256 = byteSample
+      ? createHash("sha256").update(byteSample).digest("hex")
+      : null;
 
-    if (moderationResult !== "approved") {
-      const updated = await this.prisma.userProfileImage.update({
-        where: { id: image.id },
-        data: {
-          status: moderationResult,
-          thumbUrl: null,
-        },
-      });
+    const decision =
+      avatarModerationEnabled && this.moderationService
+        ? await this.moderationService.submitForModeration({
+            contentRef: image.id,
+            contentType: "avatar_image",
+            actorUserId: image.userId,
+            surface: "profile_avatar",
+            strictMode: true,
+            idempotencyKey: `avatar_image:${image.id}`,
+            evidenceRefs: [image.originalUrl],
+            metadata: {
+              imageId: image.id,
+              storageKey: image.originalUrl,
+              mimeType,
+              byteSize: typeof byteSize === "number" ? byteSize : undefined,
+              magicMimeType,
+              byteSampleSha256,
+              byteSampleLength: byteSample?.byteLength ?? 0,
+            },
+          })
+        : null;
 
-      await this.prisma.moderationFlag.create({
-        data: {
-          entityType: "user_profile_image",
-          entityId: image.id,
-          reason: `profile_image_${moderationResult}`,
-          status: moderationResult === "pending_review" ? "open" : "resolved",
-        },
-      });
-
-      await this.notificationsService.createInAppNotification(
-        image.userId,
-        NotificationType.MODERATION_NOTICE,
-        moderationResult === "pending_review"
-          ? "Your profile photo is under review before it can be shown."
-          : "Your profile photo was rejected by safety filters. Try another image.",
-      );
-
-      return {
-        ...updated,
-        moderationResult,
-      };
-    }
-
-    const storageKey = image.originalUrl;
-    const originalDeliveryUrl = this.buildCdnUrl(storageKey);
-    const thumbUrl = `${this.buildCdnUrl(storageKey)}?variant=avatar_256`;
-
-    await this.prisma.userProfileImage.updateMany({
-      where: {
-        userId: image.userId,
-        id: { not: image.id },
-        status: { in: ["approved", "processing", "pending_upload", "pending"] },
-      },
-      data: {
-        status: "replaced",
-      },
-    });
+    const moderationResult =
+      decision?.riskLevel === "allow"
+        ? ("approved" as const)
+        : decision?.riskLevel === "block"
+          ? ("blocked" as const)
+          : ("pending_review" as const);
 
     const updated = await this.prisma.userProfileImage.update({
       where: { id: image.id },
       data: {
-        status: "approved",
-        originalUrl: originalDeliveryUrl,
-        thumbUrl,
+        status:
+          moderationResult === "approved"
+            ? "approved"
+            : moderationResult === "blocked"
+              ? "rejected"
+              : "pending_review",
+        thumbUrl: null,
       },
     });
+
+    if (moderationResult !== "approved" && this.prisma.moderationFlag?.create) {
+      await this.prisma.moderationFlag.create({
+        data: {
+          entityType: "user_profile_image",
+          entityId: image.id,
+          reason:
+            moderationResult === "blocked"
+              ? "profile_image_blocked"
+              : "profile_image_pending_review",
+          status: "open",
+        },
+      });
+    }
+
+    if (moderationResult === "pending_review") {
+      await this.notificationsService.createInAppNotification(
+        image.userId,
+        NotificationType.MODERATION_NOTICE,
+        "Your profile photo is under review before it can be shown.",
+      );
+    }
+    if (moderationResult === "blocked") {
+      await this.notificationsService.createInAppNotification(
+        image.userId,
+        NotificationType.MODERATION_NOTICE,
+        "Your profile photo could not be approved under safety policy.",
+      );
+    }
 
     return {
       ...updated,
@@ -878,11 +927,27 @@ export class ProfilesService {
     return "image/jpeg";
   }
 
-  private buildSignedUploadUrl(
+  private async buildSignedUploadUrl(
     storageKey: string,
     mimeType: ProfilePhotoMimeType,
     expiresAt: Date,
   ) {
+    if (this.shouldUseAwsPresignedUploads()) {
+      const bucket = process.env.S3_BUCKET ?? "opensocial-media";
+      const expiresInSeconds = Math.max(
+        1,
+        Math.floor((expiresAt.getTime() - Date.now()) / 1000),
+      );
+      const command = new PutObjectCommand({
+        Bucket: bucket,
+        Key: storageKey,
+        ContentType: mimeType,
+      });
+      return getSignedUrl(this.createS3Client(), command, {
+        expiresIn: expiresInSeconds,
+      });
+    }
+
     const endpoint = (
       process.env.S3_ENDPOINT ?? "http://localhost:9000"
     ).replace(/\/+$/, "");
@@ -896,6 +961,195 @@ export class ProfilesService {
       .slice(0, 32);
 
     return `${endpoint}/${bucket}/${storageKey}?upload=1&mime=${encodeURIComponent(mimeType)}&expires=${encodeURIComponent(expiresAt.toISOString())}&sig=${signature}`;
+  }
+
+  private shouldUseAwsPresignedUploads() {
+    const configured =
+      process.env.S3_PRESIGNED_UPLOADS_ENABLED?.trim().toLowerCase();
+    if (configured === "true" || configured === "1" || configured === "yes") {
+      return true;
+    }
+    if (configured === "false" || configured === "0" || configured === "no") {
+      return false;
+    }
+    return process.env.NODE_ENV === "production";
+  }
+
+  private createS3Client() {
+    const endpoint = process.env.S3_ENDPOINT?.trim();
+    const s3AccessKey = process.env.S3_ACCESS_KEY?.trim();
+    const s3SecretKey = process.env.S3_SECRET_KEY?.trim();
+    const region =
+      process.env.AWS_REGION?.trim() ??
+      process.env.AWS_DEFAULT_REGION?.trim() ??
+      "us-east-1";
+    const useStaticCredentials =
+      typeof s3AccessKey === "string" &&
+      s3AccessKey.length > 0 &&
+      typeof s3SecretKey === "string" &&
+      s3SecretKey.length > 0;
+
+    return new S3Client({
+      region,
+      endpoint: endpoint && endpoint.length > 0 ? endpoint : undefined,
+      forcePathStyle: true,
+      credentials: useStaticCredentials
+        ? {
+            accessKeyId: s3AccessKey,
+            secretAccessKey: s3SecretKey,
+          }
+        : undefined,
+    });
+  }
+
+  private async verifyUploadedObjectInStorage(
+    storageKey: string,
+    expectedMimeType: ProfilePhotoMimeType,
+    expectedByteSize: number,
+  ) {
+    if (!this.shouldUseAwsPresignedUploads()) {
+      return;
+    }
+
+    const bucket = process.env.S3_BUCKET ?? "opensocial-media";
+    let objectMetadata:
+      | {
+          ContentLength?: number;
+          ContentType?: string;
+        }
+      | undefined;
+
+    try {
+      objectMetadata = await this.createS3Client().send(
+        new HeadObjectCommand({
+          Bucket: bucket,
+          Key: storageKey,
+        }),
+      );
+    } catch (error) {
+      const statusCode = (
+        error as { $metadata?: { httpStatusCode?: number } } | undefined
+      )?.$metadata?.httpStatusCode;
+      if (statusCode === 404) {
+        throw new BadRequestException("uploaded object not found");
+      }
+      throw new BadRequestException("could not verify uploaded object");
+    }
+
+    if (objectMetadata?.ContentLength !== expectedByteSize) {
+      throw new BadRequestException("uploaded object metadata mismatch");
+    }
+
+    const normalizeMimeType = (value: string | undefined) =>
+      (value ?? "").split(";")[0].trim().toLowerCase();
+    if (
+      normalizeMimeType(objectMetadata?.ContentType) !==
+      normalizeMimeType(expectedMimeType)
+    ) {
+      throw new BadRequestException("uploaded object metadata mismatch");
+    }
+  }
+
+  private async readUploadedObjectMetadata(storageKey: string) {
+    if (!this.shouldUseAwsPresignedUploads()) {
+      return null;
+    }
+    const bucket = process.env.S3_BUCKET ?? "opensocial-media";
+    try {
+      return await this.createS3Client().send(
+        new HeadObjectCommand({
+          Bucket: bucket,
+          Key: storageKey,
+        }),
+      );
+    } catch (error) {
+      this.logger.warn(
+        `could not read object metadata for moderation decision: ${String(error)}`,
+      );
+      return null;
+    }
+  }
+
+  private async readUploadedObjectSample(storageKey: string) {
+    if (!this.shouldUseAwsPresignedUploads()) {
+      return null;
+    }
+    const bucket = process.env.S3_BUCKET ?? "opensocial-media";
+    try {
+      const response = await this.createS3Client().send(
+        new GetObjectCommand({
+          Bucket: bucket,
+          Key: storageKey,
+          Range: "bytes=0-65535",
+        }),
+      );
+      const body = response.Body;
+      if (!body) {
+        return null;
+      }
+      if (body instanceof Readable) {
+        const chunks: Buffer[] = [];
+        for await (const chunk of body) {
+          chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        }
+        return Buffer.concat(chunks);
+      }
+      if (
+        typeof (body as { transformToByteArray?: () => Promise<Uint8Array> })
+          .transformToByteArray === "function"
+      ) {
+        const bytes = await (
+          body as { transformToByteArray: () => Promise<Uint8Array> }
+        ).transformToByteArray();
+        return Buffer.from(bytes);
+      }
+      return null;
+    } catch (error) {
+      this.logger.warn(
+        `could not read object bytes for moderation decision: ${String(error)}`,
+      );
+      return null;
+    }
+  }
+
+  private detectImageMimeFromBytes(bytes: Buffer) {
+    if (bytes.length < 12) {
+      return null;
+    }
+    if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+      return "image/jpeg";
+    }
+    if (
+      bytes[0] === 0x89 &&
+      bytes[1] === 0x50 &&
+      bytes[2] === 0x4e &&
+      bytes[3] === 0x47
+    ) {
+      return "image/png";
+    }
+    if (
+      bytes[0] === 0x52 &&
+      bytes[1] === 0x49 &&
+      bytes[2] === 0x46 &&
+      bytes[3] === 0x46 &&
+      bytes[8] === 0x57 &&
+      bytes[9] === 0x45 &&
+      bytes[10] === 0x42 &&
+      bytes[11] === 0x50
+    ) {
+      return "image/webp";
+    }
+    return "unknown";
+  }
+
+  private async isAvatarModerationSurfaceEnabled() {
+    if (!this.launchControlsService) {
+      return true;
+    }
+    const snapshot = await this.launchControlsService.getSnapshot();
+    return (
+      !snapshot.globalKillSwitch && (snapshot.enableModerationAvatars ?? true)
+    );
   }
 
   private createUploadToken(input: {
@@ -982,14 +1236,15 @@ export class ProfilesService {
 
   private readMediaUploadSigningSecret() {
     const secret =
-      process.env.MEDIA_UPLOAD_SIGNING_SECRET ?? process.env.S3_SECRET_KEY;
+      process.env.MEDIA_UPLOAD_SIGNING_SECRET ??
+      process.env.MEDIA_SIGNING_SECRET;
     if (typeof secret === "string" && secret.trim().length > 0) {
       return secret.trim();
     }
 
     if (process.env.NODE_ENV === "production") {
       throw new BadRequestException(
-        "MEDIA_UPLOAD_SIGNING_SECRET must be configured",
+        "MEDIA_UPLOAD_SIGNING_SECRET (or MEDIA_SIGNING_SECRET) must be configured",
       );
     }
 
@@ -1014,28 +1269,6 @@ export class ProfilesService {
     const normalizedStorageKey = storageKey.replace(/^\/+/, "");
 
     return `${base}/${normalizedStorageKey}`;
-  }
-
-  private evaluatePhotoModeration(storageKey: string) {
-    const normalized = storageKey.toLowerCase();
-
-    if (
-      ["nsfw", "nude", "gore", "violence", "weapon"].some((term) =>
-        normalized.includes(term),
-      )
-    ) {
-      return "rejected" as const;
-    }
-
-    if (
-      ["review", "impersonation", "suspicious"].some((term) =>
-        normalized.includes(term),
-      )
-    ) {
-      return "pending_review" as const;
-    }
-
-    return "approved" as const;
   }
 
   private async moderateProfileTextFields(

@@ -13,10 +13,12 @@ const argMap = new Map(
     }),
 );
 
-const layer = argMap.get("layer") ?? process.env.AGENT_TEST_SUITE_LAYER ?? "full";
+const layer =
+  argMap.get("layer") ?? process.env.AGENT_TEST_SUITE_LAYER ?? "full";
 const requireBenchmark =
-  (argMap.get("require-benchmark") ?? process.env.AGENT_TEST_SUITE_REQUIRE_BENCHMARK ?? "0") ===
-  "1";
+  (argMap.get("require-benchmark") ??
+    process.env.AGENT_TEST_SUITE_REQUIRE_BENCHMARK ??
+    "0") === "1";
 const enableProdSmoke =
   (argMap.get("enable-prod-smoke") ??
     process.env.AGENT_TEST_SUITE_ENABLE_PROD_SMOKE ??
@@ -70,7 +72,10 @@ const scenarioFixture = loadScenarioFixture();
 const scenarioById = new Map(
   scenarioFixture.scenarios.map((scenario) => [scenario.id, scenario]),
 );
-const scenarioLayerScenarioIds = scenarioIdsForLayer(scenarioFixture, "scenario");
+const scenarioLayerScenarioIds = scenarioIdsForLayer(
+  scenarioFixture,
+  "scenario",
+);
 const benchmarkLayerScenarioIds = scenarioIdsForLayer(
   scenarioFixture,
   "benchmark",
@@ -135,7 +140,8 @@ const layerChecks = {
   workflow: [
     {
       id: "agent-workflow-foundation",
-      summary: "Intent, workflow runtime, follow-up, connection, and admin ops workflow coverage",
+      summary:
+        "Intent, workflow runtime, follow-up, connection, and admin ops workflow coverage",
       cmd: "pnpm",
       args: [
         "--filter",
@@ -174,7 +180,13 @@ const layerChecks = {
       id: "scenario-corpus-suite",
       summary: "Canonical backend scenario corpus",
       cmd: "pnpm",
-      args: ["--filter", "@opensocial/api", "test", "--", "test/agentic-scenario-suite.spec.ts"],
+      args: [
+        "--filter",
+        "@opensocial/api",
+        "test",
+        "--",
+        "test/agentic-scenario-suite.spec.ts",
+      ],
       scenarioIds: scenarioLayerScenarioIds,
     },
   ],
@@ -269,8 +281,8 @@ function inferFailureClass(id) {
 function benchmarkEnvAvailable() {
   return Boolean(
     process.env.AGENTIC_BENCH_ACCESS_TOKEN &&
-      process.env.AGENTIC_BENCH_USER_ID &&
-      process.env.AGENTIC_BENCH_THREAD_ID,
+    process.env.AGENTIC_BENCH_USER_ID &&
+    process.env.AGENTIC_BENCH_THREAD_ID,
   );
 }
 
@@ -319,8 +331,10 @@ function runBenchmark(check) {
   try {
     benchmarkArtifact = JSON.parse(readFileSync(artifactPath, "utf8"));
     scenarioIds = Array.isArray(benchmarkArtifact?.scenarioIds)
-      ? benchmarkArtifact.scenarioIds.filter((value) => typeof value === "string")
-      : check.scenarioIds ?? [];
+      ? benchmarkArtifact.scenarioIds.filter(
+          (value) => typeof value === "string",
+        )
+      : (check.scenarioIds ?? []);
   } catch {
     benchmarkArtifact = null;
     scenarioIds = check.scenarioIds ?? [];
@@ -513,7 +527,8 @@ function buildBenchmarkRecords(entry) {
     .map((result) => {
       const scenarioId =
         typeof result?.scenarioId === "string" ? result.scenarioId : null;
-      const intentId = typeof result?.intentId === "string" ? result.intentId : null;
+      const intentId =
+        typeof result?.intentId === "string" ? result.intentId : null;
       const ackLatencyMs =
         typeof result?.ackLatencyMs === "number" ? result.ackLatencyMs : null;
       const ackWithinSlo = Boolean(result?.ackWithinSlo);
@@ -533,7 +548,10 @@ function buildBenchmarkRecords(entry) {
       const queueLagPass = queueLagMs === null || queueLagMs <= maxQueueLagMs;
       const duplicatePass = duplicateVisibleSideEffects === 0;
       const scenarioStatus =
-        ackWithinSlo && backgroundFollowupDetected && queueLagPass && duplicatePass
+        ackWithinSlo &&
+        backgroundFollowupDetected &&
+        queueLagPass &&
+        duplicatePass
           ? "passed"
           : "failed";
       return {
@@ -560,9 +578,7 @@ function buildBenchmarkRecords(entry) {
                 ? "latency_or_capacity"
                 : null,
         sideEffects: [
-          ackWithinSlo
-            ? "ack_within_slo"
-            : "ack_over_slo",
+          ackWithinSlo ? "ack_within_slo" : "ack_over_slo",
           backgroundFollowupDetected
             ? "background_followup_detected"
             : "background_followup_missing",
@@ -575,7 +591,9 @@ function buildBenchmarkRecords(entry) {
           ackWithinSlo,
           backgroundFollowupDetected,
           ackDetectedMs:
-            typeof result?.ackDetectedMs === "number" ? result.ackDetectedMs : null,
+            typeof result?.ackDetectedMs === "number"
+              ? result.ackDetectedMs
+              : null,
           queueLagMs,
           duplicateVisibleSideEffects,
           duplicateVisibleSideEffectRate:
@@ -674,7 +692,9 @@ const benchmarkCase = cases.find((entry) => entry.id === "agentic-benchmark");
 const benchmarkRecordQueueLagValues = records
   .filter((record) => record.checkId === "agentic-benchmark")
   .map((record) =>
-    typeof record.metrics?.queueLagMs === "number" ? record.metrics.queueLagMs : null,
+    typeof record.metrics?.queueLagMs === "number"
+      ? record.metrics.queueLagMs
+      : null,
   )
   .filter((value) => typeof value === "number")
   .sort((left, right) => left - right);
@@ -682,10 +702,7 @@ const benchmarkQueueLagP95Ms =
   benchmarkRecordQueueLagValues.length === 0
     ? null
     : benchmarkRecordQueueLagValues[
-        Math.max(
-          0,
-          Math.ceil(benchmarkRecordQueueLagValues.length * 0.95) - 1,
-        )
+        Math.max(0, Math.ceil(benchmarkRecordQueueLagValues.length * 0.95) - 1)
       ];
 const benchmarkSummary =
   benchmarkCase && benchmarkCase.metadata?.guardrail
@@ -703,8 +720,8 @@ const benchmarkSummary =
             ? benchmarkCase.metadata.guardrail.burstSize
             : undefined,
         duplicateVisibleSideEffectRate:
-          typeof benchmarkCase.metadata.guardrail.duplicateVisibleSideEffectRate ===
-          "number"
+          typeof benchmarkCase.metadata.guardrail
+            .duplicateVisibleSideEffectRate === "number"
             ? benchmarkCase.metadata.guardrail.duplicateVisibleSideEffectRate
             : undefined,
         queueLagP95Ms:

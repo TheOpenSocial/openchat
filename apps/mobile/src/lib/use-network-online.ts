@@ -22,8 +22,8 @@ export function useNetworkOnline(skip: boolean): boolean {
         if (cancelled) {
           return;
         }
-        const NetInfo =
-          (await import("@react-native-community/netinfo")).default;
+        const NetInfo = (await import("@react-native-community/netinfo"))
+          .default;
 
         const apply = (
           connected: boolean | null,

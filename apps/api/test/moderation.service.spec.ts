@@ -327,6 +327,157 @@ describe("ModerationService", () => {
     }
   });
 
+  it("submits and reuses idempotent moderation decisions", async () => {
+    const prisma: any = {
+      userPreference: {
+        findFirst: vi.fn().mockResolvedValue(null),
+        create: vi.fn().mockResolvedValue({ id: "pref-1" }),
+      },
+      moderationFlag: {
+        create: vi.fn().mockResolvedValue({ id: "flag-1" }),
+      },
+      auditLog: {
+        create: vi.fn().mockResolvedValue({ id: "audit-1" }),
+      },
+    };
+    const service = new ModerationService(prisma);
+
+    const decisionA = await service.submitForModeration({
+      contentRef: "33333333-3333-4333-8333-333333333333",
+      contentType: "chat_message",
+      actorUserId: "11111111-1111-4111-8111-111111111111",
+      surface: "chat_message",
+      content: "normal chat",
+      idempotencyKey: "chat_message:33333333-3333-4333-8333-333333333333",
+    });
+
+    prisma.userPreference.findFirst.mockResolvedValue({
+      value: decisionA,
+    });
+
+    const decisionB = await service.submitForModeration({
+      contentRef: "33333333-3333-4333-8333-333333333333",
+      contentType: "chat_message",
+      actorUserId: "11111111-1111-4111-8111-111111111111",
+      surface: "chat_message",
+      content: "normal chat",
+      idempotencyKey: "chat_message:33333333-3333-4333-8333-333333333333",
+    });
+
+    expect(decisionA.idempotencyKey).toBe(decisionB.idempotencyKey);
+    expect(prisma.userPreference.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("applies human moderation review actions", async () => {
+    const existingDecision = {
+      id: "decision-1",
+      idempotencyKey: "chat_message:msg-1",
+      contentRef: "33333333-3333-4333-8333-333333333333",
+      contentType: "chat_message",
+      actorUserId: "11111111-1111-4111-8111-111111111111",
+      surface: "chat_message",
+      riskLevel: "review",
+      decisionSource: "rules",
+      policyVersion: "moderation.policy.v1.strict",
+      reasons: ["review_term:underage meetup"],
+      evidenceRefs: ["msg-1"],
+      metadata: null,
+      createdAt: "2026-03-01T00:00:00.000Z",
+      decidedAt: "2026-03-01T00:00:00.000Z",
+      reviewedAt: null,
+      reviewerUserId: null,
+      reviewNote: null,
+    };
+    const prisma: any = {
+      userPreference: {
+        findMany: vi.fn().mockResolvedValue([{ value: existingDecision }]),
+        create: vi.fn().mockResolvedValue({ id: "pref-2" }),
+      },
+      moderationFlag: {
+        create: vi.fn().mockResolvedValue({ id: "flag-2" }),
+      },
+      auditLog: {
+        create: vi.fn().mockResolvedValue({ id: "audit-2" }),
+      },
+    };
+
+    const service = new ModerationService(prisma);
+    const reviewed = await service.submitHumanReview({
+      decisionId: "decision-1",
+      action: "reject",
+      reviewerUserId: "22222222-2222-4222-8222-222222222222",
+      note: "Confirmed abuse",
+    });
+
+    expect(reviewed?.decisionSource).toBe("human");
+    expect(reviewed?.riskLevel).toBe("block");
+    expect(prisma.userPreference.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("blocks avatar moderation when mime type and binary signature mismatch", async () => {
+    const prisma: any = {
+      userPreference: {
+        findFirst: vi.fn().mockResolvedValue(null),
+        create: vi.fn().mockResolvedValue({ id: "pref-avatar-1" }),
+      },
+      moderationFlag: {
+        create: vi.fn().mockResolvedValue({ id: "flag-avatar-1" }),
+      },
+      auditLog: {
+        create: vi.fn().mockResolvedValue({ id: "audit-avatar-1" }),
+      },
+    };
+    const service = new ModerationService(prisma);
+
+    const decision = await service.submitForModeration({
+      contentRef: "avatar-1",
+      contentType: "avatar_image",
+      actorUserId: "11111111-1111-4111-8111-111111111111",
+      surface: "profile_avatar",
+      strictMode: true,
+      metadata: {
+        mimeType: "image/png",
+        magicMimeType: "image/jpeg",
+        byteSize: 2048,
+        storageKey: "profiles/11111111-1111-4111-8111-111111111111/avatar.png",
+      },
+      idempotencyKey: "avatar_image:avatar-1",
+    });
+
+    expect(decision.riskLevel).toBe("block");
+    expect(decision.reasons).toEqual(
+      expect.arrayContaining(["mime_magic_mismatch"]),
+    );
+  });
+
+  it("cleans up expired moderation decisions using retention window", async () => {
+    const prisma: any = {
+      userPreference: {
+        deleteMany: vi.fn().mockResolvedValue({ count: 12 }),
+      },
+      auditLog: {
+        create: vi.fn().mockResolvedValue({ id: "audit-cleanup" }),
+      },
+    };
+    const service = new ModerationService(prisma);
+    const result = await service.cleanupExpiredDecisions({
+      retentionDays: 90,
+    });
+
+    expect(prisma.userPreference.deleteMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          key: expect.objectContaining({
+            startsWith: "moderation.decision.v1:",
+          }),
+        }),
+      }),
+    );
+    expect(prisma.auditLog.create).toHaveBeenCalledTimes(1);
+    expect(result.deletedCount).toBe(12);
+    expect(result.retentionDays).toBe(90);
+  });
+
   it("supports unblocking previously blocked users", async () => {
     const prisma: any = {
       block: {

@@ -6,7 +6,8 @@ import { spawnSync } from "node:child_process";
 
 const target = (process.env.BACKEND_OPS_TARGET || "production").trim();
 const dryRun = process.env.BACKEND_OPS_DRY_RUN === "1";
-const includeReleaseCheck = process.env.BACKEND_OPS_INCLUDE_RELEASE_CHECK !== "0";
+const includeReleaseCheck =
+  process.env.BACKEND_OPS_INCLUDE_RELEASE_CHECK !== "0";
 const includeVerification =
   process.env.BACKEND_OPS_INCLUDE_VERIFICATION !== "0";
 const includeProdSmoke = process.env.BACKEND_OPS_INCLUDE_PROD_SMOKE !== "0";
@@ -65,7 +66,9 @@ function runCommand(step) {
   const startedAt = Date.now();
   const effectiveEnv = {
     ...process.env,
-    ...(target === "staging" ? { STAGING_EQUALS_PROD: stageEqualsProd ? "true" : "false" } : {}),
+    ...(target === "staging"
+      ? { STAGING_EQUALS_PROD: stageEqualsProd ? "true" : "false" }
+      : {}),
   };
 
   if (dryRun) {

@@ -20,6 +20,7 @@ import {
   adminModerationFlagAssignBodySchema,
   adminModerationAgentRiskQuerySchema,
   adminModerationFlagTriageBodySchema,
+  adminModerationDecisionReviewBodySchema,
   adminModerationQueueQuerySchema,
   adminVerificationRunIngestBodySchema,
   adminVerificationRunListQuerySchema,
@@ -245,6 +246,9 @@ export class AdminController {
     ]);
     const runtime = getOpsRuntimeMetricsSnapshot();
     const counts = await this.getCachedOpsMetricCounts();
+    const queueDepthSnapshot = await Promise.all(
+      JOB_QUEUE_NAMES.map((queueName) => this.inspectQueue(queueName)),
+    );
 
     const moderationIncidentRatePer100Users =
       counts.totalUsers === 0
@@ -254,6 +258,10 @@ export class AdminController {
           100;
     const pushReadRate24h =
       counts.pushSent24h === 0 ? 0 : counts.pushRead24h / counts.pushSent24h;
+    const moderationOverturnRate24h =
+      counts.moderationFlags24h === 0
+        ? 0
+        : counts.moderationDecisionReviews24h / counts.moderationFlags24h;
 
     await this.adminAuditService.recordAction({
       adminUserId: admin.adminUserId,
@@ -262,6 +270,7 @@ export class AdminController {
       entityType: "ops_metrics",
       metadata: {
         queueCount: runtime.queues.length,
+        queueDepthSnapshotCount: queueDepthSnapshot.length,
       },
     });
 
@@ -281,16 +290,27 @@ export class AdminController {
         skipped: queue.skipped,
         failureRate: queue.failureRate,
       })),
+      queueDepth: queueDepthSnapshot.map((entry) => ({
+        queue: entry.queue,
+        available: entry.available,
+        waiting: entry.counts?.waiting ?? 0,
+        active: entry.counts?.active ?? 0,
+        delayed: entry.counts?.delayed ?? 0,
+        failed: entry.counts?.failed ?? 0,
+      })),
       dbLatency: {
         pingMs: counts.dbLatencyMs,
       },
       openaiLatencyCost: runtime.openai,
       openaiBudget: getOpenAIBudgetGuardrailSnapshot(),
+      moderationRuntime: runtime.moderation,
       moderationRates: {
         reports24h: counts.reports24h,
         moderationFlags24h: counts.moderationFlags24h,
+        moderationDecisionReviews24h: counts.moderationDecisionReviews24h,
         blockedProfiles: counts.blockedProfiles,
         incidentRatePer100Users: moderationIncidentRatePer100Users,
+        overturnRate24h: moderationOverturnRate24h,
       },
       pushDeliverySuccess: {
         pushSent24h: counts.pushSent24h,
@@ -367,38 +387,72 @@ export class AdminController {
     const runtime = getOpsRuntimeMetricsSnapshot();
     const alertWindowStart = new Date(Date.now() - 15 * 60_000);
     const degradedReadWarnings: string[] = [];
-    const [dbLatencyMs, stalledJobCount, openModerationFlags, queueStates] =
-      await Promise.all([
-        this.measureDbLatencyMs(),
-        this.prisma.auditLog?.count
-          ? this.executeAdminReadWithSchemaFallback(
-              "ops_alerts.audit_log_count",
-              0,
-              () =>
-                this.prisma.auditLog.count({
-                  where: {
-                    action: "queue.job_stalled",
-                    createdAt: { gte: alertWindowStart },
-                  },
-                }),
-              degradedReadWarnings,
-            )
-          : 0,
-        this.prisma.moderationFlag?.count
-          ? this.executeAdminReadWithSchemaFallback(
-              "ops_alerts.open_moderation_flag_count",
-              0,
-              () =>
-                this.prisma.moderationFlag.count({
-                  where: { status: "open" },
-                }),
-              degradedReadWarnings,
-            )
-          : 0,
-        Promise.all(
-          JOB_QUEUE_NAMES.map((queueName) => this.inspectQueue(queueName)),
-        ),
-      ]);
+    const [
+      dbLatencyMs,
+      stalledJobCount,
+      openModerationFlags,
+      staleModerationFlags1h,
+      staleModerationFlags24h,
+      queueStates,
+    ] = await Promise.all([
+      this.measureDbLatencyMs(),
+      this.prisma.auditLog?.count
+        ? this.executeAdminReadWithSchemaFallback(
+            "ops_alerts.audit_log_count",
+            0,
+            () =>
+              this.prisma.auditLog.count({
+                where: {
+                  action: "queue.job_stalled",
+                  createdAt: { gte: alertWindowStart },
+                },
+              }),
+            degradedReadWarnings,
+          )
+        : 0,
+      this.prisma.moderationFlag?.count
+        ? this.executeAdminReadWithSchemaFallback(
+            "ops_alerts.open_moderation_flag_count",
+            0,
+            () =>
+              this.prisma.moderationFlag.count({
+                where: { status: "open" },
+              }),
+            degradedReadWarnings,
+          )
+        : 0,
+      this.prisma.moderationFlag?.count
+        ? this.executeAdminReadWithSchemaFallback(
+            "ops_alerts.stale_moderation_flags_1h",
+            0,
+            () =>
+              this.prisma.moderationFlag.count({
+                where: {
+                  status: "open",
+                  createdAt: { lt: new Date(Date.now() - 60 * 60_000) },
+                },
+              }),
+            degradedReadWarnings,
+          )
+        : 0,
+      this.prisma.moderationFlag?.count
+        ? this.executeAdminReadWithSchemaFallback(
+            "ops_alerts.stale_moderation_flags_24h",
+            0,
+            () =>
+              this.prisma.moderationFlag.count({
+                where: {
+                  status: "open",
+                  createdAt: { lt: new Date(Date.now() - 24 * 60 * 60_000) },
+                },
+              }),
+            degradedReadWarnings,
+          )
+        : 0,
+      Promise.all(
+        JOB_QUEUE_NAMES.map((queueName) => this.inspectQueue(queueName)),
+      ),
+    ]);
 
     const queueBacklogThreshold = this.parseThreshold(
       process.env.ALERT_QUEUE_BACKLOG_THRESHOLD,
@@ -427,6 +481,14 @@ export class AdminController {
     const moderationBacklogThreshold = this.parseThreshold(
       process.env.ALERT_MODERATION_BACKLOG_THRESHOLD,
       150,
+    );
+    const staleModerationBacklog1hThreshold = this.parseThreshold(
+      process.env.ALERT_STALE_MODERATION_1H_THRESHOLD,
+      25,
+    );
+    const staleModerationBacklog24hThreshold = this.parseThreshold(
+      process.env.ALERT_STALE_MODERATION_24H_THRESHOLD,
+      5,
     );
     const onboardingFallbackRateThreshold = this.parseThreshold(
       process.env.ALERT_ONBOARDING_FALLBACK_RATE_THRESHOLD,
@@ -617,6 +679,30 @@ export class AdminController {
               message: `Open moderation queue backlog is high (${openModerationFlags}).`,
               value: openModerationFlags,
               threshold: moderationBacklogThreshold,
+            },
+          ]
+        : []),
+      ...(staleModerationFlags1h >= staleModerationBacklog1hThreshold
+        ? [
+            {
+              key: "moderation_sla_1h_breach",
+              status: "triggered" as const,
+              severity: "warning" as const,
+              message: `Open moderation flags older than 1 hour are high (${staleModerationFlags1h}).`,
+              value: staleModerationFlags1h,
+              threshold: staleModerationBacklog1hThreshold,
+            },
+          ]
+        : []),
+      ...(staleModerationFlags24h >= staleModerationBacklog24hThreshold
+        ? [
+            {
+              key: "moderation_sla_24h_breach",
+              status: "triggered" as const,
+              severity: "critical" as const,
+              message: `Open moderation flags older than 24 hours are high (${staleModerationFlags24h}).`,
+              value: staleModerationFlags24h,
+              threshold: staleModerationBacklog24hThreshold,
             },
           ]
         : []),
@@ -1982,6 +2068,61 @@ export class AdminController {
     return ok(await this.outboxRelayService.relayPendingEvents(200));
   }
 
+  @Post("maintenance/moderation-retention")
+  async runModerationRetentionCleanup(
+    @Headers("x-admin-user-id") adminUserIdHeader?: string,
+    @Headers("x-admin-role") adminRoleHeader?: string,
+  ) {
+    const admin = this.parseAdminContext(adminUserIdHeader, adminRoleHeader, [
+      "admin",
+      "support",
+    ]);
+    const queue = this.resolveQueue("cleanup");
+    if (!queue) {
+      throw new NotFoundException("cleanup queue unavailable");
+    }
+    const retentionDays = Number.parseInt(
+      process.env.MODERATION_DECISION_RETENTION_DAYS ?? "180",
+      10,
+    );
+    const idempotencyKey = `moderation-retention:${new Date().toISOString().slice(0, 10)}`;
+    const job = await queue.add(
+      "ModerationDecisionRetentionCleanup",
+      {
+        version: 1,
+        traceId: randomUUID(),
+        idempotencyKey,
+        timestamp: new Date().toISOString(),
+        retentionDays:
+          Number.isFinite(retentionDays) && retentionDays >= 1
+            ? retentionDays
+            : 180,
+      },
+      {
+        jobId: idempotencyKey,
+        attempts: 2,
+        removeOnComplete: 500,
+      },
+    );
+    await this.adminAuditService.recordAction({
+      adminUserId: admin.adminUserId,
+      role: admin.role,
+      action: "admin.moderation_retention_cleanup_enqueued",
+      entityType: "moderation_decision",
+      metadata: {
+        queue: "cleanup",
+        jobName: "ModerationDecisionRetentionCleanup",
+        jobId: job.id ? String(job.id) : null,
+      },
+    });
+    return ok({
+      enqueued: true,
+      queue: "cleanup",
+      jobName: "ModerationDecisionRetentionCleanup",
+      jobId: job.id ? String(job.id) : null,
+    });
+  }
+
   @Get("jobs/queues")
   async queueOverview(
     @Headers("x-admin-user-id") adminUserIdHeader?: string,
@@ -2043,14 +2184,26 @@ export class AdminController {
         reasonContains: payload.reasonContains ?? null,
       },
     });
-    return ok(
-      await this.adminAuditService.listModerationQueue({
-        limit: parsedLimit,
-        status: payload.status,
-        entityType: payload.entityType,
-        reasonContains: payload.reasonContains,
-      }),
-    );
+    const queue = await this.adminAuditService.listModerationQueue({
+      limit: parsedLimit,
+      status: payload.status,
+      entityType: payload.entityType,
+      reasonContains: payload.reasonContains,
+    });
+    const queueWithPriority = queue.map((flag) => {
+      const ageMs = Date.now() - flag.createdAt.getTime();
+      const slaBand = this.resolveModerationSlaBand(ageMs);
+      return {
+        ...flag,
+        queuePriority: this.resolveModerationQueuePriority(
+          flag.reason,
+          slaBand,
+        ),
+        slaBand,
+        ageMinutes: Math.max(0, Math.floor(ageMs / 60_000)),
+      };
+    });
+    return ok(queueWithPriority);
   }
 
   @Get("moderation/summary")
@@ -2595,6 +2748,7 @@ export class AdminController {
     let nextStatus = flag.status;
     let strikeResult: unknown = null;
     let restrictionResult: unknown = null;
+    let humanReviewResult: unknown = null;
 
     switch (payload.action) {
       case "resolve": {
@@ -2681,6 +2835,25 @@ export class AdminController {
       },
     });
 
+    if (payload.decisionId) {
+      const mappedAction =
+        payload.humanReviewAction ??
+        (payload.action === "resolve"
+          ? "approve"
+          : payload.action === "reopen"
+            ? "escalate"
+            : "reject");
+      humanReviewResult = await this.moderationService.submitHumanReview({
+        decisionId: payload.decisionId,
+        action: mappedAction,
+        reviewerUserId: admin.adminUserId,
+        note: payload.reason,
+      });
+      if (!humanReviewResult) {
+        throw new NotFoundException("moderation decision not found");
+      }
+    }
+
     await this.adminAuditService.recordAction({
       adminUserId: admin.adminUserId,
       role: admin.role,
@@ -2694,6 +2867,8 @@ export class AdminController {
         triageReason: payload.reason ?? null,
         targetUserId: payload.targetUserId ?? null,
         strikeSeverity: payload.strikeSeverity ?? null,
+        decisionId: payload.decisionId ?? null,
+        humanReviewAction: payload.humanReviewAction ?? null,
       },
     });
 
@@ -2702,6 +2877,53 @@ export class AdminController {
       action: payload.action,
       strikeResult,
       restrictionResult,
+      humanReviewResult,
+    });
+  }
+
+  @Post("moderation/decisions/:decisionId/review")
+  async submitModerationDecisionReview(
+    @Param("decisionId") decisionId: string,
+    @Body() body: unknown,
+    @Headers("x-admin-user-id") adminUserIdHeader?: string,
+    @Headers("x-admin-role") adminRoleHeader?: string,
+  ) {
+    const admin = this.parseAdminContext(adminUserIdHeader, adminRoleHeader, [
+      "admin",
+      "support",
+      "moderator",
+    ]);
+    const payload = parseRequestPayload(
+      adminModerationDecisionReviewBodySchema,
+      {
+        ...(body && typeof body === "object" ? body : {}),
+      },
+    );
+    const reviewed = await this.moderationService.submitHumanReview({
+      decisionId: decisionId.trim(),
+      action: payload.action,
+      reviewerUserId: admin.adminUserId,
+      note: payload.note,
+    });
+    if (!reviewed) {
+      throw new NotFoundException("moderation decision not found");
+    }
+
+    await this.adminAuditService.recordAction({
+      adminUserId: admin.adminUserId,
+      role: admin.role,
+      action: "admin.moderation_decision_review",
+      entityType: "moderation_decision",
+      entityId: decisionId.trim(),
+      metadata: {
+        action: payload.action,
+        note: payload.note ?? null,
+      },
+    });
+
+    return ok({
+      action: payload.action,
+      decision: reviewed,
     });
   }
 
@@ -3510,6 +3732,42 @@ export class AdminController {
     return parsed;
   }
 
+  private resolveModerationSlaBand(ageMs: number) {
+    if (ageMs >= 24 * 60 * 60_000) {
+      return "critical_24h";
+    }
+    if (ageMs >= 60 * 60_000) {
+      return "warning_1h";
+    }
+    if (ageMs >= 15 * 60_000) {
+      return "watch_15m";
+    }
+    return "fresh";
+  }
+
+  private resolveModerationQueuePriority(reason: string, slaBand: string) {
+    const normalizedReason = reason.toLowerCase();
+    const hasCriticalSignal = [
+      "violence",
+      "threat",
+      "terror",
+      "sexual",
+      "child",
+      "exploit",
+      "underage",
+    ].some((token) => normalizedReason.includes(token));
+    if (slaBand === "critical_24h") {
+      return "p0";
+    }
+    if (hasCriticalSignal || slaBand === "warning_1h") {
+      return "p1";
+    }
+    if (slaBand === "watch_15m") {
+      return "p2";
+    }
+    return "p3";
+  }
+
   private parseReplayabilityFilter(rawValue: string | undefined) {
     if (!rawValue) {
       return null;
@@ -4090,12 +4348,16 @@ export class AdminController {
       totalUsers: number;
       reports24h: number;
       moderationFlags24h: number;
+      moderationDecisionReviews24h?: number;
       blockedProfiles: number;
       pushSent24h: number;
       pushRead24h: number;
     }>(cacheKey);
     if (cached) {
-      return cached;
+      return {
+        ...cached,
+        moderationDecisionReviews24h: cached.moderationDecisionReviews24h ?? 0,
+      };
     }
 
     const windowStart = new Date(Date.now() - 24 * 60 * 60_000);
@@ -4104,6 +4366,7 @@ export class AdminController {
       totalUsers,
       reports24h,
       moderationFlags24h,
+      moderationDecisionReviews24h,
       blockedProfiles,
       pushSent24h,
       pushRead24h,
@@ -4118,6 +4381,14 @@ export class AdminController {
       this.prisma.moderationFlag?.count
         ? this.prisma.moderationFlag.count({
             where: { createdAt: { gte: windowStart } },
+          })
+        : 0,
+      this.prisma.auditLog?.count
+        ? this.prisma.auditLog.count({
+            where: {
+              action: "admin.moderation_decision_review",
+              createdAt: { gte: windowStart },
+            },
           })
         : 0,
       this.prisma.userProfile?.count
@@ -4149,6 +4420,7 @@ export class AdminController {
       totalUsers,
       reports24h,
       moderationFlags24h,
+      moderationDecisionReviews24h,
       blockedProfiles,
       pushSent24h,
       pushRead24h,
