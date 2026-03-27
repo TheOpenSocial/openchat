@@ -45,7 +45,7 @@ jobs:
       REMOTE_ENV_FILE: .env.production
       DEPLOY_HOST: ${{ secrets.STAGING_DEPLOY_HOST }}
       DEPLOY_USER: ${{ secrets.STAGING_DEPLOY_USER || 'ec2-user' }}
-      SSH_KEY_PATH: ${{ runner.temp }}/staging_deploy_key
+      SSH_KEY_PATH: /tmp/staging_deploy_key
       DEPLOY_MODE: ${{ inputs.deploy_mode }}
       API_IMAGE: ${{ inputs.api_image }}
       ADMIN_IMAGE: ${{ inputs.admin_image }}
