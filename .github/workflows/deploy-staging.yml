@@ -431,6 +431,7 @@ jobs:
         env:
           STAGING_EQUALS_PROD: "true"
           BACKEND_OPS_TARGET: "staging"
+          BACKEND_OPS_INCLUDE_MODERATION_DRILL: "0"
           SMOKE_BASE_URL: https://api.opensocial.so
           SMOKE_HOST_HEADER: ${{ secrets.STAGING_SMOKE_HOST_HEADER }}
           SMOKE_ADMIN_USER_ID: ${{ secrets.STAGING_SMOKE_ADMIN_USER_ID || secrets.SMOKE_ADMIN_USER_ID }}
