@@ -11,6 +11,14 @@ const agentThreadId = process.env.SMOKE_AGENT_THREAD_ID;
 const userId = process.env.SMOKE_USER_ID;
 
 const timeoutMs = Number(process.env.SMOKE_TIMEOUT_MS || 12000);
+const requestRetryCount = Math.max(
+  0,
+  Number(process.env.SMOKE_REQUEST_RETRY_COUNT || 2),
+);
+const requestRetryDelayMs = Math.max(
+  100,
+  Number(process.env.SMOKE_REQUEST_RETRY_DELAY_MS || 350),
+);
 const onboardingP95Ms = Number(process.env.SMOKE_ONBOARDING_P95_MS || 4000);
 const agentP95Ms = Number(process.env.SMOKE_AGENT_P95_MS || 6000);
 const maxOnboardingFallbackRate = Number(
@@ -24,31 +32,85 @@ const allowCircuitOpen = process.env.SMOKE_ALLOW_OPENAI_CIRCUIT_OPEN === "true";
 const enforceOnboardingModelBuckets =
   process.env.SMOKE_ENFORCE_ONBOARDING_MODEL_BUCKETS !== "false";
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 async function requestJson(path, init = {}) {
-  const startedAt = Date.now();
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetch(`${baseUrl}${path}`, {
-      ...init,
-      signal: controller.signal,
-      headers: {
-        Accept: "application/json",
-        ...(smokeHostHeader ? { Host: smokeHostHeader } : {}),
-        ...(init.headers || {}),
-      },
-    });
-    const durationMs = Date.now() - startedAt;
-    let body = null;
+  const requestStartedAt = Date.now();
+  let lastError = null;
+
+  for (let attempt = 0; attempt <= requestRetryCount; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const headers = {
+      Accept: "application/json",
+      ...(smokeHostHeader ? { Host: smokeHostHeader } : {}),
+      ...(init.headers || {}),
+    };
+
     try {
-      body = await response.json();
-    } catch {
-      body = null;
+      const response = await fetch(`${baseUrl}${path}`, {
+        ...init,
+        signal: controller.signal,
+        headers,
+      });
+
+      const durationMs = Date.now() - requestStartedAt;
+      let body = null;
+      try {
+        body = await response.json();
+      } catch {
+        body = null;
+      }
+
+      const transientStatus =
+        response.status === 408 ||
+        response.status === 425 ||
+        response.status === 429 ||
+        response.status >= 500;
+      if (!response.ok && transientStatus && attempt < requestRetryCount) {
+        await sleep(requestRetryDelayMs * (attempt + 1));
+        continue;
+      }
+
+      return { ok: response.ok, status: response.status, body, durationMs };
+    } catch (error) {
+      lastError = error;
+      const isAbort =
+        error && typeof error === "object" && error.name === "AbortError";
+      const message = error instanceof Error ? error.message : String(error);
+      const transientError =
+        isAbort ||
+        message.includes("fetch failed") ||
+        message.includes("ECONNRESET") ||
+        message.includes("ECONNREFUSED") ||
+        message.includes("ETIMEDOUT") ||
+        message.includes("ENOTFOUND");
+
+      if (transientError && attempt < requestRetryCount) {
+        await sleep(requestRetryDelayMs * (attempt + 1));
+        continue;
+      }
+      break;
+    } finally {
+      clearTimeout(timeout);
     }
-    return { ok: response.ok, status: response.status, body, durationMs };
-  } finally {
-    clearTimeout(timeout);
   }
+
+  const durationMs = Date.now() - requestStartedAt;
+  const errorMessage =
+    lastError instanceof Error ? lastError.message : String(lastError ?? "unknown_error");
+  return {
+    ok: false,
+    status: 0,
+    body: {
+      success: false,
+      error: {
+        code: "request_failed",
+        message: errorMessage,
+      },
+    },
+    durationMs,
+  };
 }
 
 function percentile(values, p) {
