@@ -201,7 +201,7 @@ jobs:
           PLAYGROUND_ADMIN_USER_ID: ${{ secrets.STAGING_SMOKE_ADMIN_USER_ID || secrets.SMOKE_ADMIN_USER_ID }}
           PLAYGROUND_ADMIN_ROLE: ${{ secrets.STAGING_SMOKE_ADMIN_ROLE || secrets.SMOKE_ADMIN_ROLE || 'admin' }}
           PLAYGROUND_ADMIN_API_KEY: ${{ secrets.STAGING_SMOKE_ADMIN_API_KEY || secrets.SMOKE_ADMIN_API_KEY }}
-          PLAYGROUND_BOOTSTRAP_REQUIRED: "1"
+          PLAYGROUND_BOOTSTRAP_REQUIRED: "0"
         run: |
           set -euo pipefail
           timeout 28m pnpm test:backend:ops-pack

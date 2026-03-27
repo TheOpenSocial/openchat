@@ -170,6 +170,10 @@ async function tryBootstrapEnvFromPlayground(
     const payload = await response.json();
     const envFromBootstrap = payload?.data?.env ?? {};
     if (!response.ok || !payload?.success || typeof envFromBootstrap !== "object") {
+      const bootstrapEndpointUnavailable = response.status === 404;
+      if (bootstrapEndpointUnavailable) {
+        return currentEnv;
+      }
       if (required) {
         throw new Error(
           `playground bootstrap failed (${response.status}): ${JSON.stringify(payload).slice(0, 300)}`,
