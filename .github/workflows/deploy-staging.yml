@@ -66,6 +66,15 @@ jobs:
       GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
       GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
       GOOGLE_REDIRECT_URI: https://api.opensocial.so/api/auth/google/callback
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
+      S3_ACCESS_KEY: ${{ secrets.S3_ACCESS_KEY }}
+      S3_SECRET_KEY: ${{ secrets.S3_SECRET_KEY }}
+      S3_BUCKET: ${{ secrets.S3_BUCKET }}
+      MEDIA_CDN_BASE_URL: ${{ secrets.MEDIA_CDN_BASE_URL }}
+      S3_PRESIGNED_UPLOADS_ENABLED: ${{ secrets.S3_PRESIGNED_UPLOADS_ENABLED }}
+      MEDIA_SIGNING_SECRET: ${{ secrets.MEDIA_SIGNING_SECRET }}
+      MEDIA_UPLOAD_SIGNING_SECRET: ${{ secrets.MEDIA_UPLOAD_SIGNING_SECRET }}
       ADMIN_API_KEY: ${{ secrets.STAGING_SMOKE_ADMIN_API_KEY || secrets.SMOKE_ADMIN_API_KEY }}
       PLAYGROUND_ENABLED: "true"
       PLAYGROUND_MUTATIONS_ENABLED: "true"
@@ -335,6 +344,7 @@ jobs:
           AGENTIC_BENCH_REQUEST_RETRY_DELAY_MS: "250"
           AGENT_TEST_SUITE_RERUN_FAILED_ONLY: "1"
           AGENT_TEST_SUITE_RETRY_FAILED_STAGES_ONCE: "0"
+          AGENT_TEST_SUITE_ONLY_STAGES: "prod-smoke"
           AGENT_TEST_SUITE_VERIFICATION_ARTIFACT_PATH: /tmp/openchat-agent-suite-verification-latest.json
           PLAYGROUND_ADMIN_USER_ID: ${{ secrets.STAGING_SMOKE_ADMIN_USER_ID || secrets.SMOKE_ADMIN_USER_ID }}
           PLAYGROUND_ADMIN_ROLE: ${{ secrets.STAGING_SMOKE_ADMIN_ROLE || secrets.SMOKE_ADMIN_ROLE || 'admin' }}
