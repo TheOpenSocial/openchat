@@ -133,7 +133,7 @@ describe("Deployment pipeline artifacts", () => {
 
   it("passes DATABASE_URL secret from GitHub Actions into deploy/rollback jobs", () => {
     expect(stagingWorkflow).toContain(
-      "DATABASE_URL: ${{ secrets.DATABASE_URL }}",
+      "DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL || secrets.DATABASE_URL }}",
     );
     expect(productionWorkflow).toContain(
       "DATABASE_URL: ${{ secrets.DATABASE_URL }}",
