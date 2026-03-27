@@ -246,7 +246,10 @@ function computeRuntimeWindow(before, after) {
     return null;
   }
   return {
-    onboardingCalls: Math.max(0, after.onboardingCalls - before.onboardingCalls),
+    onboardingCalls: Math.max(
+      0,
+      after.onboardingCalls - before.onboardingCalls,
+    ),
     onboardingFallbacks: Math.max(
       0,
       after.onboardingFallbacks - before.onboardingFallbacks,
