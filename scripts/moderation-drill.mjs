@@ -14,12 +14,18 @@ const adminAccessToken = process.env.SMOKE_ACCESS_TOKEN;
 const timeoutMs = Number(process.env.SMOKE_TIMEOUT_MS || 15000);
 
 const existingFlagId = process.env.MODERATION_DRILL_EXISTING_FLAG_ID?.trim();
-const reporterUserId = process.env.MODERATION_DRILL_REPORTER_USER_ID?.trim();
+const reporterUserId =
+  process.env.MODERATION_DRILL_REPORTER_USER_ID?.trim() ||
+  process.env.SMOKE_USER_ID?.trim() ||
+  "";
 const reporterAccessToken =
   process.env.MODERATION_DRILL_ACCESS_TOKEN?.trim() ||
   process.env.SMOKE_ACCESS_TOKEN?.trim() ||
   "";
-const targetUserId = process.env.MODERATION_DRILL_TARGET_USER_ID?.trim();
+const targetUserId =
+  process.env.MODERATION_DRILL_TARGET_USER_ID?.trim() ||
+  process.env.SMOKE_ADMIN_USER_ID?.trim() ||
+  "";
 const entityType = process.env.MODERATION_DRILL_ENTITY_TYPE?.trim() || "user";
 const entityId =
   process.env.MODERATION_DRILL_ENTITY_ID?.trim() ||
