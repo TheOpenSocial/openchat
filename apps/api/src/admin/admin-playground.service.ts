@@ -144,6 +144,7 @@ export class AdminPlaygroundService {
     const env = {
       SMOKE_BASE_URL: baseUrl,
       SMOKE_ACCESS_TOKEN: tokens.accessToken,
+      SMOKE_REFRESH_TOKEN: tokens.refreshToken,
       SMOKE_USER_ID: smokeUserId,
       SMOKE_AGENT_THREAD_ID: smokeThreadId,
       SMOKE_ADMIN_USER_ID: smokeAdminUserId,

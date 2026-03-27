@@ -51,6 +51,7 @@ import { PersonalizationService } from "../personalization/personalization.servi
 import { PublicRoute } from "../auth/public-route.decorator.js";
 import { AgenticEvalsService } from "./agentic-evals.service.js";
 import { type AdminRole, AdminAuditService } from "./admin-audit.service.js";
+import { AdminPlaygroundService } from "./admin-playground.service.js";
 
 type VerificationRunRecord = {
   runId: string;
@@ -99,9 +100,44 @@ export class AdminController {
     private readonly chatsService: ChatsService,
     private readonly moduleRef: ModuleRef,
     private readonly agenticEvalsService: AgenticEvalsService,
+    private readonly adminPlaygroundService: AdminPlaygroundService,
     @Optional()
     private readonly workflowRuntimeService?: AgentWorkflowRuntimeService,
   ) {}
+
+  @Post("ops/smoke-session")
+  async issueSmokeSession(
+    @Body() body: unknown,
+    @Headers("x-admin-user-id") adminUserIdHeader?: string,
+    @Headers("x-admin-role") adminRoleHeader?: string,
+  ) {
+    const admin = this.parseAdminContext(adminUserIdHeader, adminRoleHeader, [
+      "admin",
+    ]);
+    const payload =
+      body && typeof body === "object" && !Array.isArray(body)
+        ? (body as Record<string, unknown>)
+        : {};
+    const laneId =
+      typeof payload.laneId === "string" && payload.laneId.trim().length > 0
+        ? payload.laneId.trim()
+        : undefined;
+    const smokeBaseUrl =
+      typeof payload.smokeBaseUrl === "string" &&
+      payload.smokeBaseUrl.trim().length > 0
+        ? payload.smokeBaseUrl.trim()
+        : undefined;
+
+    const session = await this.adminPlaygroundService.bootstrap(
+      {
+        laneId,
+        smokeBaseUrl,
+      },
+      admin,
+    );
+
+    return ok(session);
+  }
 
   @Get("health")
   async health(
