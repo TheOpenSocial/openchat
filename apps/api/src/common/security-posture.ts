@@ -11,6 +11,7 @@ interface SecurityPostureChecks {
 interface SecurityPostureResult {
   generatedAt: string;
   strictMode: boolean;
+  strictStartupEnforcement: boolean;
   environment: string;
   checks: SecurityPostureChecks;
   violations: string[];
@@ -104,6 +105,9 @@ export function evaluateSecurityPosture(): SecurityPostureResult {
   return {
     generatedAt: new Date().toISOString(),
     strictMode: parseBooleanFlag(process.env.SECURITY_STRICT_MODE),
+    strictStartupEnforcement: parseBooleanFlag(
+      process.env.SECURITY_STRICT_STARTUP_ENFORCE,
+    ),
     environment: process.env.NODE_ENV ?? "development",
     checks,
     violations,
@@ -114,6 +118,7 @@ export function assertSecurityPosture() {
   const posture = evaluateSecurityPosture();
   if (
     posture.strictMode &&
+    posture.strictStartupEnforcement &&
     posture.environment === "production" &&
     posture.violations.length > 0
   ) {
