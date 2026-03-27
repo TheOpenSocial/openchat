@@ -288,9 +288,22 @@ async function main() {
       );
     }
     if (requireHealthySummary && alertsSummary.status !== "healthy") {
-      summaryIssues.push(
-        `alert summary status is not healthy (${alertsSummary.status})`,
-      );
+      const warningCount = alertsSummary.warningCount ?? 0;
+      const criticalCount = alertsSummary.criticalCount ?? 0;
+      const degradedWithOnlyWarnings =
+        alertsSummary.status === "degraded" &&
+        criticalCount === 0 &&
+        warningCount > 0;
+
+      if (degradedWithOnlyWarnings && !failOnWarning) {
+        console.warn(
+          "Incident readiness warning: degraded summary due to warnings only; continuing because INCIDENT_VERIFY_FAIL_ON_WARNING=false",
+        );
+      } else {
+        summaryIssues.push(
+          `alert summary status is not healthy (${alertsSummary.status})`,
+        );
+      }
     }
   }
 
