@@ -11,6 +11,10 @@ function isEnabled() {
   return process.env.ADMIN_SECURITY_ENABLED !== "false";
 }
 
+function isApplicationExchangePath(path: string) {
+  return path === "/api/admin/ops/smoke-session/exchange";
+}
+
 function parseAllowedAdminUsers() {
   const raw = process.env.ADMIN_ALLOWED_USER_IDS?.trim();
   if (!raw) {
@@ -83,6 +87,14 @@ export function adminSecurityMiddleware(
 
   const path = (request.path || request.originalUrl || "").toLowerCase();
   if (!path.startsWith("/api/admin")) {
+    next();
+    return;
+  }
+
+  if (
+    isApplicationExchangePath(path) &&
+    process.env.SMOKE_SESSION_APPLICATION_ENABLED === "true"
+  ) {
     next();
     return;
   }

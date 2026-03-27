@@ -29,7 +29,7 @@ import {
   uuidSchema,
 } from "@opensocial/types";
 import type { Queue } from "bullmq";
-import { randomUUID } from "node:crypto";
+import { randomUUID, timingSafeEqual } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { ChatsService } from "../chats/chats.service.js";
 import { AppCacheService } from "../common/app-cache.service.js";
@@ -106,6 +106,76 @@ export class AdminController {
     private readonly adminPlaygroundService?: AdminPlaygroundService,
   ) {}
 
+  @Post("ops/smoke-session/exchange")
+  async issueSmokeSessionWithApplicationCredentials(
+    @Body() body: unknown,
+    @Headers("x-application-key") applicationKeyHeader?: string,
+    @Headers("x-application-token") applicationTokenHeader?: string,
+  ) {
+    if (process.env.SMOKE_SESSION_APPLICATION_ENABLED !== "true") {
+      throw new ForbiddenException("application exchange is disabled");
+    }
+    if (!this.adminPlaygroundService) {
+      throw new NotFoundException("playground service unavailable");
+    }
+
+    const expectedKey = process.env.SMOKE_SESSION_APPLICATION_KEY?.trim() ?? "";
+    const expectedToken =
+      process.env.SMOKE_SESSION_APPLICATION_TOKEN?.trim() ?? "";
+    const providedKey = applicationKeyHeader?.trim() ?? "";
+    const providedToken = applicationTokenHeader?.trim() ?? "";
+
+    if (!expectedKey || !expectedToken) {
+      throw new ForbiddenException(
+        "application exchange credentials are not configured",
+      );
+    }
+    if (
+      !this.safeEqual(providedKey, expectedKey) ||
+      !this.safeEqual(providedToken, expectedToken)
+    ) {
+      throw new ForbiddenException(
+        "application exchange credentials are invalid",
+      );
+    }
+
+    const adminUserId =
+      process.env.PLAYGROUND_SMOKE_ADMIN_USER_ID?.trim() ??
+      process.env.SMOKE_ADMIN_USER_ID?.trim() ??
+      "11111111-1111-4111-8111-111111111111";
+    const adminRoleRaw = process.env.PLAYGROUND_SMOKE_ADMIN_ROLE?.trim();
+    const adminRole: AdminRole =
+      adminRoleRaw === "support" || adminRoleRaw === "moderator"
+        ? adminRoleRaw
+        : "admin";
+
+    const payload =
+      body && typeof body === "object" && !Array.isArray(body)
+        ? (body as Record<string, unknown>)
+        : {};
+    const laneId =
+      typeof payload.laneId === "string" && payload.laneId.trim().length > 0
+        ? payload.laneId.trim()
+        : undefined;
+    const smokeBaseUrl =
+      typeof payload.smokeBaseUrl === "string" &&
+      payload.smokeBaseUrl.trim().length > 0
+        ? payload.smokeBaseUrl.trim()
+        : undefined;
+
+    const session = await this.adminPlaygroundService.bootstrap(
+      {
+        laneId,
+        smokeBaseUrl,
+      },
+      {
+        adminUserId,
+        role: adminRole,
+      },
+    );
+
+    return ok(session);
+  }
   @Post("ops/smoke-session")
   async issueSmokeSession(
     @Body() body: unknown,
@@ -3396,6 +3466,15 @@ export class AdminController {
       adminUserId,
       role,
     };
+  }
+
+  private safeEqual(left: string, right: string) {
+    const leftBuffer = Buffer.from(left);
+    const rightBuffer = Buffer.from(right);
+    if (leftBuffer.length !== rightBuffer.length) {
+      return false;
+    }
+    return timingSafeEqual(leftBuffer, rightBuffer);
   }
 
   private parseAdminRole(roleHeader: string | undefined): AdminRole {

@@ -52,7 +52,9 @@ const benchHostHeader =
   process.env.AGENTIC_BENCH_HOST_HEADER?.trim() ||
   process.env.SMOKE_HOST_HEADER?.trim() ||
   "";
-const accessToken = process.env.AGENTIC_BENCH_ACCESS_TOKEN ?? "";
+let accessToken = process.env.AGENTIC_BENCH_ACCESS_TOKEN ?? "";
+let smokeRefreshToken = process.env.SMOKE_REFRESH_TOKEN?.trim() ?? "";
+let accessTokenRefreshAttempted = false;
 const userId = process.env.AGENTIC_BENCH_USER_ID ?? "";
 const threadId = process.env.AGENTIC_BENCH_THREAD_ID ?? "";
 const runs = Number(process.env.AGENTIC_BENCH_RUNS ?? 5);
@@ -149,17 +151,52 @@ function unwrapResponse(payload) {
   return payload;
 }
 
+async function tryRefreshAccessToken() {
+  if (!smokeRefreshToken || !baseUrl) {
+    return false;
+  }
+  try {
+    const response = await fetch(`${baseUrl}/api/auth/refresh`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...(benchHostHeader ? { Host: benchHostHeader } : {}),
+      },
+      body: JSON.stringify({
+        refreshToken: smokeRefreshToken,
+        deviceId: "agentic-benchmark",
+        deviceName: "Agentic Benchmark",
+      }),
+    });
+    const text = await response.text();
+    const payload = text ? JSON.parse(text) : null;
+    if (!response.ok || !payload?.success || !payload?.data?.accessToken) {
+      return false;
+    }
+    accessToken = String(payload.data.accessToken).trim();
+    if (
+      typeof payload.data.refreshToken === "string" &&
+      payload.data.refreshToken.trim().length > 0
+    ) {
+      smokeRefreshToken = payload.data.refreshToken.trim();
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function requestJson(pathname, init = {}) {
-  const headers = {
-    "content-type": "application/json",
-    authorization: `Bearer ${accessToken}`,
-    ...(benchHostHeader ? { Host: benchHostHeader } : {}),
-    ...(init.headers ?? {}),
-  };
   let attempt = 0;
   let lastError = null;
 
   while (attempt <= requestRetryCount) {
+    const headers = {
+      "content-type": "application/json",
+      authorization: `Bearer ${accessToken}`,
+      ...(benchHostHeader ? { Host: benchHostHeader } : {}),
+      ...(init.headers ?? {}),
+    };
     const controller = new AbortController();
     const timeoutHandle = setTimeout(() => {
       controller.abort();
@@ -180,6 +217,18 @@ async function requestJson(pathname, init = {}) {
         response.status === 429;
 
       if (!response.ok) {
+        if (
+          response.status === 401 &&
+          !accessTokenRefreshAttempted &&
+          (await tryRefreshAccessToken())
+        ) {
+          console.warn(
+            `[bench] access token expired on ${pathname}; refreshed token and retrying`,
+          );
+          accessTokenRefreshAttempted = true;
+          attempt += 1;
+          continue;
+        }
         if (isTransientStatus && attempt < requestRetryCount) {
           const retryAttempt = attempt + 1;
           console.warn(
