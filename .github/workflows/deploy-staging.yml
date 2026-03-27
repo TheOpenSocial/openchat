@@ -152,6 +152,41 @@ jobs:
           chmod +x scripts/deploy-production.sh
           DEPLOY_PHASE=ps ./scripts/deploy-production.sh
 
+      - name: Debug deploy context
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "== Runner context =="
+          echo "hostname=$(hostname)"
+          echo "whoami=$(whoami)"
+          echo "pwd=$(pwd)"
+          date -u +"utc=%Y-%m-%dT%H:%M:%SZ"
+          for key in AWS_PROFILE AWS_DEFAULT_PROFILE AWS_REGION AWS_DEFAULT_REGION LOCAL_DEPLOY DEPLOY_PATH REMOTE_ENV_FILE DEPLOY_MODE; do
+            value="${!key-}"
+            if [ -n "$value" ]; then
+              echo "$key=$value"
+            else
+              echo "$key=<unset>"
+            fi
+          done
+          if command -v aws >/dev/null 2>&1; then
+            echo "aws_cli=present"
+            aws --version || true
+            aws sts get-caller-identity || true
+          else
+            echo "aws_cli=missing"
+          fi
+          echo "== Local container probes =="
+          curl -sS -m 5 -o /tmp/api-health.json -w "api_3000_health_http=%{http_code}\n" http://127.0.0.1:3000/api/health || true
+          head -c 200 /tmp/api-health.json || true
+          echo
+          curl -sS -m 5 -o /tmp/admin-3001-health.json -w "admin_3001_health_http=%{http_code}\n" http://127.0.0.1:3001 || true
+          head -c 200 /tmp/admin-3001-health.json || true
+          echo
+          curl -sS -m 5 -o /tmp/public-api-health.json -w "public_api_health_http=%{http_code}\n" https://api.opensocial.so/api/health || true
+          head -c 200 /tmp/public-api-health.json || true
+          echo
+
   verify-staging:
     if: ${{ inputs.run_post_deploy_verification }}
     needs: [deploy-staging]
@@ -173,6 +208,43 @@ jobs:
 
       - name: Install deps (post-deploy verification)
         run: pnpm install --frozen-lockfile=false
+
+      - name: Debug verify context and route probes
+        env:
+          SMOKE_BASE_URL: https://api.opensocial.so
+        run: |
+          set -euo pipefail
+          echo "== Verify runner context =="
+          echo "hostname=$(hostname)"
+          echo "whoami=$(whoami)"
+          echo "pwd=$(pwd)"
+          date -u +"utc=%Y-%m-%dT%H:%M:%SZ"
+          for key in AWS_PROFILE AWS_DEFAULT_PROFILE AWS_REGION AWS_DEFAULT_REGION SMOKE_BASE_URL; do
+            value="${!key-}"
+            if [ -n "$value" ]; then
+              echo "$key=$value"
+            else
+              echo "$key=<unset>"
+            fi
+          done
+          if command -v aws >/dev/null 2>&1; then
+            echo "aws_cli=present"
+            aws --version || true
+            aws sts get-caller-identity || true
+          else
+            echo "aws_cli=missing"
+          fi
+          echo "== DNS and route probes =="
+          getent hosts api.opensocial.so || true
+          curl -sS -m 8 -o /tmp/probe-health.json -w "probe_health_http=%{http_code}\n" "${SMOKE_BASE_URL}/api/health" || true
+          head -c 200 /tmp/probe-health.json || true
+          echo
+          curl -sS -m 8 -o /tmp/probe-admin-health.json -w "probe_admin_health_http=%{http_code}\n" "${SMOKE_BASE_URL}/api/admin/health" || true
+          head -c 200 /tmp/probe-admin-health.json || true
+          echo
+          curl -sS -m 8 -X POST -H "content-type: application/json" -d '{}' -o /tmp/probe-bootstrap.json -w "probe_smoke_exchange_http=%{http_code}\n" "${SMOKE_BASE_URL}/api/admin/ops/smoke-session/exchange" || true
+          head -c 200 /tmp/probe-bootstrap.json || true
+          echo
 
       - name: Bootstrap smoke session token
         env:
