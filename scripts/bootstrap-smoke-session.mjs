@@ -10,6 +10,15 @@ const adminApiKey = (process.env.SMOKE_ADMIN_API_KEY || "").trim();
 const applicationKey = (process.env.SMOKE_APPLICATION_KEY || "").trim();
 const applicationToken = (process.env.SMOKE_APPLICATION_TOKEN || "").trim();
 const required = process.env.SMOKE_BOOTSTRAP_REQUIRED !== "0";
+const maxAttempts = Math.max(
+  1,
+  Number.parseInt(process.env.SMOKE_BOOTSTRAP_MAX_ATTEMPTS ?? "6", 10) || 6,
+);
+const retryDelayMs = Math.max(
+  0,
+  Number.parseInt(process.env.SMOKE_BOOTSTRAP_RETRY_DELAY_MS ?? "5000", 10) ||
+    5000,
+);
 
 function persistEnv(key, value) {
   if (!value) return;
@@ -106,80 +115,91 @@ async function main() {
 
   try {
     let lastFailure = null;
-    for (const candidate of candidateRequests) {
-      const response = await fetch(candidate.url, {
-        method: "POST",
-        headers: candidate.headers,
-        body: JSON.stringify({}),
-      });
-      const { payload, raw } = await readPayload(response);
-
-      const tryPersistPayload = (isOk, candidatePayload, label) => {
-        if (
-          isOk &&
-          candidatePayload?.success &&
-          typeof candidatePayload?.data?.env === "object"
-        ) {
-          const envPayload = candidatePayload.data.env;
-          const keys = [
-            "SMOKE_ACCESS_TOKEN",
-            "SMOKE_REFRESH_TOKEN",
-            "SMOKE_USER_ID",
-            "SMOKE_AGENT_THREAD_ID",
-            "SMOKE_ADMIN_USER_ID",
-            "AGENTIC_BENCH_ACCESS_TOKEN",
-            "AGENTIC_BENCH_USER_ID",
-            "AGENTIC_BENCH_THREAD_ID",
-            "AGENTIC_VERIFICATION_LANE_ID",
-            "ONBOARDING_PROBE_TOKEN",
-          ];
-          for (const key of keys) {
-            const value = envPayload[key];
-            if (typeof value === "string" && value.trim().length > 0) {
-              persistEnv(key, value.trim());
-            }
-          }
-          console.log(`smoke session bootstrapped and exported via ${label}`);
-          return true;
-        }
-        return false;
-      };
-
-      if (tryPersistPayload(response.ok, payload, candidate.label)) {
-        return;
-      }
-
-      if (response.status === 404 && candidate.url.includes("/api/")) {
-        const fallbackUrl = candidate.url.replace("/api/", "/");
-        const fallbackResponse = await fetch(fallbackUrl, {
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      for (const candidate of candidateRequests) {
+        const response = await fetch(candidate.url, {
           method: "POST",
           headers: candidate.headers,
           body: JSON.stringify({}),
         });
-        const { payload: fallbackPayload, raw: fallbackRaw } =
-          await readPayload(fallbackResponse);
-        if (
-          tryPersistPayload(
-            fallbackResponse.ok,
-            fallbackPayload,
-            `${candidate.label}_no_api`,
-          )
-        ) {
+        const { payload, raw } = await readPayload(response);
+
+        const tryPersistPayload = (isOk, candidatePayload, label) => {
+          if (
+            isOk &&
+            candidatePayload?.success &&
+            typeof candidatePayload?.data?.env === "object"
+          ) {
+            const envPayload = candidatePayload.data.env;
+            const keys = [
+              "SMOKE_ACCESS_TOKEN",
+              "SMOKE_REFRESH_TOKEN",
+              "SMOKE_USER_ID",
+              "SMOKE_AGENT_THREAD_ID",
+              "SMOKE_ADMIN_USER_ID",
+              "AGENTIC_BENCH_ACCESS_TOKEN",
+              "AGENTIC_BENCH_USER_ID",
+              "AGENTIC_BENCH_THREAD_ID",
+              "AGENTIC_VERIFICATION_LANE_ID",
+              "ONBOARDING_PROBE_TOKEN",
+            ];
+            for (const key of keys) {
+              const value = envPayload[key];
+              if (typeof value === "string" && value.trim().length > 0) {
+                persistEnv(key, value.trim());
+              }
+            }
+            console.log(`smoke session bootstrapped and exported via ${label}`);
+            return true;
+          }
+          return false;
+        };
+
+        if (tryPersistPayload(response.ok, payload, candidate.label)) {
           return;
         }
-        const fallbackPreview = fallbackPayload
-          ? JSON.stringify(fallbackPayload).slice(0, 400)
-          : fallbackRaw.slice(0, 400);
-        console.warn(
-          `smoke bootstrap fallback failed via ${candidate.label}_no_api (${fallbackResponse.status}): ${fallbackPreview || "(empty response body)"}`,
-        );
+
+        if (response.status === 404 && candidate.url.includes("/api/")) {
+          const fallbackUrl = candidate.url.replace("/api/", "/");
+          const fallbackResponse = await fetch(fallbackUrl, {
+            method: "POST",
+            headers: candidate.headers,
+            body: JSON.stringify({}),
+          });
+          const { payload: fallbackPayload, raw: fallbackRaw } =
+            await readPayload(fallbackResponse);
+          if (
+            tryPersistPayload(
+              fallbackResponse.ok,
+              fallbackPayload,
+              `${candidate.label}_no_api`,
+            )
+          ) {
+            return;
+          }
+          const fallbackPreview = fallbackPayload
+            ? JSON.stringify(fallbackPayload).slice(0, 400)
+            : fallbackRaw.slice(0, 400);
+          console.warn(
+            `smoke bootstrap fallback failed via ${candidate.label}_no_api (${fallbackResponse.status}): ${fallbackPreview || "(empty response body)"}`,
+          );
+        }
+
+        const preview = payload
+          ? JSON.stringify(payload).slice(0, 400)
+          : raw.slice(0, 400);
+        lastFailure = `smoke bootstrap failed via ${candidate.label} (${response.status}): ${preview || "(empty response body)"}`;
+        console.warn(lastFailure);
       }
 
-      const preview = payload
-        ? JSON.stringify(payload).slice(0, 400)
-        : raw.slice(0, 400);
-      lastFailure = `smoke bootstrap failed via ${candidate.label} (${response.status}): ${preview || "(empty response body)"}`;
-      console.warn(lastFailure);
+      if (attempt < maxAttempts) {
+        console.warn(
+          `smoke bootstrap retry ${attempt}/${maxAttempts} failed; waiting ${retryDelayMs}ms before next attempt`,
+        );
+        await new Promise((resolve) => {
+          setTimeout(resolve, retryDelayMs);
+        });
+      }
     }
 
     if (required) {
