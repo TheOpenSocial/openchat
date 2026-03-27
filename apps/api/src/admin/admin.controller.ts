@@ -100,9 +100,10 @@ export class AdminController {
     private readonly chatsService: ChatsService,
     private readonly moduleRef: ModuleRef,
     private readonly agenticEvalsService: AgenticEvalsService,
-    private readonly adminPlaygroundService: AdminPlaygroundService,
     @Optional()
     private readonly workflowRuntimeService?: AgentWorkflowRuntimeService,
+    @Optional()
+    private readonly adminPlaygroundService?: AdminPlaygroundService,
   ) {}
 
   @Post("ops/smoke-session")
@@ -127,6 +128,10 @@ export class AdminController {
       payload.smokeBaseUrl.trim().length > 0
         ? payload.smokeBaseUrl.trim()
         : undefined;
+
+    if (!this.adminPlaygroundService) {
+      throw new NotFoundException("playground service unavailable");
+    }
 
     const session = await this.adminPlaygroundService.bootstrap(
       {
