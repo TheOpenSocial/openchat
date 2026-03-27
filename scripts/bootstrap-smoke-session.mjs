@@ -102,34 +102,58 @@ async function main() {
       });
       const payload = await response.json();
 
-      if (
-        response.ok &&
-        payload?.success &&
-        typeof payload?.data?.env === "object"
-      ) {
-        const envPayload = payload.data.env;
-        const keys = [
-          "SMOKE_ACCESS_TOKEN",
-          "SMOKE_REFRESH_TOKEN",
-          "SMOKE_USER_ID",
-          "SMOKE_AGENT_THREAD_ID",
-          "SMOKE_ADMIN_USER_ID",
-          "AGENTIC_BENCH_ACCESS_TOKEN",
-          "AGENTIC_BENCH_USER_ID",
-          "AGENTIC_BENCH_THREAD_ID",
-          "AGENTIC_VERIFICATION_LANE_ID",
-          "ONBOARDING_PROBE_TOKEN",
-        ];
-        for (const key of keys) {
-          const value = envPayload[key];
-          if (typeof value === "string" && value.trim().length > 0) {
-            persistEnv(key, value.trim());
+      const tryPersistPayload = (isOk, candidatePayload, label) => {
+        if (
+          isOk &&
+          candidatePayload?.success &&
+          typeof candidatePayload?.data?.env === "object"
+        ) {
+          const envPayload = candidatePayload.data.env;
+          const keys = [
+            "SMOKE_ACCESS_TOKEN",
+            "SMOKE_REFRESH_TOKEN",
+            "SMOKE_USER_ID",
+            "SMOKE_AGENT_THREAD_ID",
+            "SMOKE_ADMIN_USER_ID",
+            "AGENTIC_BENCH_ACCESS_TOKEN",
+            "AGENTIC_BENCH_USER_ID",
+            "AGENTIC_BENCH_THREAD_ID",
+            "AGENTIC_VERIFICATION_LANE_ID",
+            "ONBOARDING_PROBE_TOKEN",
+          ];
+          for (const key of keys) {
+            const value = envPayload[key];
+            if (typeof value === "string" && value.trim().length > 0) {
+              persistEnv(key, value.trim());
+            }
           }
+          console.log(`smoke session bootstrapped and exported via ${label}`);
+          return true;
         }
-        console.log(
-          `smoke session bootstrapped and exported via ${candidate.label}`,
-        );
+        return false;
+      };
+
+      if (tryPersistPayload(response.ok, payload, candidate.label)) {
         return;
+      }
+
+      if (response.status === 404 && candidate.url.includes("/api/")) {
+        const fallbackUrl = candidate.url.replace("/api/", "/");
+        const fallbackResponse = await fetch(fallbackUrl, {
+          method: "POST",
+          headers: candidate.headers,
+          body: JSON.stringify({}),
+        });
+        const fallbackPayload = await fallbackResponse.json();
+        if (
+          tryPersistPayload(
+            fallbackResponse.ok,
+            fallbackPayload,
+            `${candidate.label}_no_api`,
+          )
+        ) {
+          return;
+        }
       }
 
       const preview = JSON.stringify(payload).slice(0, 400);
