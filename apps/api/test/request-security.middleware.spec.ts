@@ -113,6 +113,41 @@ describe("requestSecurityMiddleware", () => {
     );
   });
 
+  it("isolates abuse throttling by authenticated token instead of shared ip", () => {
+    process.env.ABUSE_THROTTLE_MAX_SCORE = "8";
+    process.env.ABUSE_THROTTLE_BLOCK_MS = "60000";
+
+    const sharedIp = "203.0.113.100";
+    const next = vi.fn();
+
+    const firstUserRequest = createRequest({
+      method: "POST",
+      path: "/api/profiles/11111111-1111-4111-8111-111111111111/photos/upload-intent",
+      ip: sharedIp,
+      headers: {
+        authorization: "Bearer first-user-token",
+      },
+    });
+    const secondUserRequest = createRequest({
+      method: "POST",
+      path: "/api/profiles/22222222-2222-4222-8222-222222222222/photos/upload-intent",
+      ip: sharedIp,
+      headers: {
+        authorization: "Bearer second-user-token",
+      },
+    });
+
+    const firstResponse = createResponse();
+    const secondResponse = createResponse();
+
+    requestSecurityMiddleware(firstUserRequest, firstResponse, next);
+    requestSecurityMiddleware(secondUserRequest, secondResponse, next);
+
+    expect(firstResponse.status).not.toHaveBeenCalled();
+    expect(secondResponse.status).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledTimes(2);
+  });
+
   it("does not abuse-throttle trusted admin reads", () => {
     process.env.ABUSE_THROTTLE_MAX_SCORE = "8";
     process.env.ABUSE_THROTTLE_BLOCK_MS = "60000";

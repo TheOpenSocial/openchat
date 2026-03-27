@@ -1,5 +1,7 @@
+import { createHash } from "node:crypto";
 import { Logger } from "@nestjs/common";
 import type { NextFunction, Request, Response } from "express";
+import { extractAccessTokenForHttp } from "./auth-context.js";
 
 interface CounterWindow {
   windowStartedAt: number;
@@ -125,6 +127,18 @@ function resolveClientIp(request: Request) {
     }
   }
   return request.ip || request.socket?.remoteAddress || "unknown-ip";
+}
+
+function fingerprintAccessToken(token: string) {
+  return createHash("sha256").update(token).digest("hex").slice(0, 16);
+}
+
+function resolveAbuseIdentity(request: Request, ip: string) {
+  const accessToken = extractAccessTokenForHttp(request as any);
+  if (!accessToken) {
+    return `ip:${ip}`;
+  }
+  return `token:${fingerprintAccessToken(accessToken)}`;
 }
 
 function isWriteMethod(method: string) {
@@ -294,6 +308,7 @@ export function requestSecurityMiddleware(
   const method = request.method.toUpperCase();
   const path = normalizePath(request);
   const ip = resolveClientIp(request);
+  const abuseIdentity = resolveAbuseIdentity(request, ip);
   const traceId = (request as Request & { traceId?: string }).traceId ?? null;
   const isWrite = isWriteMethod(method);
   const isAuth = isAuthPath(path);
@@ -418,7 +433,7 @@ export function requestSecurityMiddleware(
     return;
   }
 
-  const abuseKey = `abuse:${ip}`;
+  const abuseKey = `abuse:${abuseIdentity}`;
   const abuseWindow = getOrInitWindow(
     abuseCounters,
     abuseKey,
@@ -452,6 +467,7 @@ export function requestSecurityMiddleware(
         event: "security.abuse_throttled",
         traceId,
         ip,
+        abuseIdentity,
         method,
         path,
         score: abuseWindow.count,
