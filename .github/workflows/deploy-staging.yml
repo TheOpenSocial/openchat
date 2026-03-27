@@ -177,10 +177,19 @@ jobs:
           SMOKE_ADMIN_USER_ID: ${{ secrets.STAGING_SMOKE_ADMIN_USER_ID || secrets.SMOKE_ADMIN_USER_ID }}
           SMOKE_ADMIN_ROLE: ${{ secrets.STAGING_SMOKE_ADMIN_ROLE || secrets.SMOKE_ADMIN_ROLE || 'admin' }}
           SMOKE_ADMIN_API_KEY: ${{ secrets.STAGING_SMOKE_ADMIN_API_KEY || secrets.SMOKE_ADMIN_API_KEY }}
-          SMOKE_BOOTSTRAP_REQUIRED: "1"
+          SMOKE_BOOTSTRAP_REQUIRED: "0"
         run: |
           set -euo pipefail
           node scripts/bootstrap-smoke-session.mjs
+
+      - name: Refresh smoke session token
+        env:
+          SMOKE_BASE_URL: ${{ secrets.STAGING_API_BASE_URL || 'https://api.opensocial.so' }}
+          SMOKE_REFRESH_TOKEN: ${{ env.SMOKE_REFRESH_TOKEN || secrets.STAGING_SMOKE_REFRESH_TOKEN || secrets.SMOKE_REFRESH_TOKEN || secrets.PROD_SMOKE_REFRESH_TOKEN }}
+          SMOKE_REFRESH_REQUIRED: "0"
+        run: |
+          set -euo pipefail
+          node scripts/refresh-smoke-session.mjs
 
       - name: Verify incident-readiness gates
         env:
