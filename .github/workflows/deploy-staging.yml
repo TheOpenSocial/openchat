@@ -34,7 +34,7 @@ env:
 
 jobs:
   deploy-staging:
-    runs-on: [self-hosted, linux, x64, opensocial-prod]
+    runs-on: [self-hosted, linux, x64, opensocial-ci]
     environment: staging
     concurrency:
       group: deploy-staging
@@ -207,7 +207,7 @@ jobs:
   verify-staging:
     if: ${{ inputs.run_post_deploy_verification }}
     needs: [deploy-staging]
-    runs-on: [self-hosted, linux, x64, opensocial-prod]
+    runs-on: [self-hosted, linux, x64, opensocial-ci]
     environment: staging
     steps:
       - name: Checkout
