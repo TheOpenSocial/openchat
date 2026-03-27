@@ -3,6 +3,7 @@
 import { appendFileSync } from "node:fs";
 
 const baseUrl = (process.env.SMOKE_BASE_URL || "").trim().replace(/\/+$/, "");
+const hostHeader = (process.env.SMOKE_HOST_HEADER || "").trim();
 const adminUserId = (process.env.SMOKE_ADMIN_USER_ID || "").trim();
 const adminRole = (process.env.SMOKE_ADMIN_ROLE || "admin").trim();
 const adminApiKey = (process.env.SMOKE_ADMIN_API_KEY || "").trim();
@@ -23,6 +24,7 @@ async function main() {
   console.log(`- adminUserId: ${adminUserId ? "set" : "unset"}`);
   console.log(`- adminRole: ${adminRole}`);
   console.log(`- adminApiKey: ${adminApiKey ? "set" : "unset"}`);
+  console.log(`- hostHeader: ${hostHeader || "(unset)"}`);
 
   if (!baseUrl || !adminUserId) {
     const message = "missing SMOKE_BASE_URL or SMOKE_ADMIN_USER_ID";
@@ -39,6 +41,7 @@ async function main() {
       method: "POST",
       headers: {
         "content-type": "application/json",
+        ...(hostHeader ? { Host: hostHeader } : {}),
         "x-admin-user-id": adminUserId,
         "x-admin-role": adminRole,
         ...(adminApiKey ? { "x-admin-api-key": adminApiKey } : {}),
