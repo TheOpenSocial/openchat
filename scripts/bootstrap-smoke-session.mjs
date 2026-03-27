@@ -58,6 +58,17 @@ async function main() {
   }
   if (adminUserId) {
     candidateRequests.push({
+      url: `${baseUrl}/api/admin/playground/bootstrap`,
+      headers: {
+        "content-type": "application/json",
+        ...(hostHeader ? { Host: hostHeader } : {}),
+        "x-admin-user-id": adminUserId,
+        "x-admin-role": adminRole,
+        ...(adminApiKey ? { "x-admin-api-key": adminApiKey } : {}),
+      },
+      label: "admin_playground_bootstrap",
+    });
+    candidateRequests.push({
       url: `${baseUrl}/api/admin/ops/smoke-session`,
       headers: {
         "content-type": "application/json",
