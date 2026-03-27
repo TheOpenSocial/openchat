@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Body,
+  ConflictException,
   Controller,
   Get,
   Headers,
@@ -125,21 +126,43 @@ export class AgentController {
       "agent response user does not match authenticated user",
     );
 
-    const result = await this.clientMutationService.run({
-      userId: payload.userId,
-      scope: "agent.respond",
-      idempotencyKey: readIdempotencyKeyHeader(idempotencyKeyHeader),
-      handler: () =>
-        this.agentConversationService.runAgenticTurn({
-          threadId,
-          userId: payload.userId,
-          content: payload.content,
-          traceId: payload.traceId,
-          streamResponseTokens: payload.streamResponseTokens,
-          voiceTranscript: payload.voiceTranscript,
-          attachments: payload.attachments,
-        }),
-    });
+    let result: Awaited<
+      ReturnType<typeof this.agentConversationService.runAgenticTurn>
+    >;
+    try {
+      result = await this.clientMutationService.run({
+        userId: payload.userId,
+        scope: "agent.respond",
+        idempotencyKey: readIdempotencyKeyHeader(idempotencyKeyHeader),
+        handler: () =>
+          this.agentConversationService.runAgenticTurn({
+            threadId,
+            userId: payload.userId,
+            content: payload.content,
+            traceId: payload.traceId,
+            streamResponseTokens: payload.streamResponseTokens,
+            voiceTranscript: payload.voiceTranscript,
+            attachments: payload.attachments,
+          }),
+      });
+    } catch (error) {
+      if (
+        error instanceof ConflictException &&
+        error.message === "request is already processing"
+      ) {
+        return ok(
+          {
+            traceId: payload.traceId ?? null,
+            status: "processing",
+            assistantMessage: null,
+            userMessageId: null,
+            agentMessageId: null,
+          },
+          payload.traceId,
+        );
+      }
+      throw error;
+    }
 
     return ok(result, result.traceId);
   }

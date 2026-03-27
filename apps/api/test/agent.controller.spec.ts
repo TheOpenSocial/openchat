@@ -1,4 +1,4 @@
-import { ForbiddenException } from "@nestjs/common";
+import { ConflictException, ForbiddenException } from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
 import { AgentController } from "../src/agent/agent.controller.js";
 
@@ -168,6 +168,42 @@ describe("AgentController", () => {
       scope: "agent.respond",
       idempotencyKey: "mobile-outbox-1",
       handler: expect.any(Function),
+    });
+  });
+
+  it("returns processing envelope when duplicate agent respond is already in flight", async () => {
+    const threadId = "11111111-1111-4111-8111-111111111111";
+    const userId = "22222222-2222-4222-8222-222222222222";
+    const { controller } = createController({
+      clientMutationService: {
+        run: vi
+          .fn()
+          .mockRejectedValue(
+            new ConflictException("request is already processing"),
+          ),
+      },
+    });
+
+    const result = await controller.respond(
+      threadId,
+      {
+        userId,
+        content: "find someone nearby",
+        traceId: "trace-inflight",
+      },
+      userId,
+    );
+
+    expect(result).toEqual({
+      success: true,
+      data: {
+        traceId: "trace-inflight",
+        status: "processing",
+        assistantMessage: null,
+        userMessageId: null,
+        agentMessageId: null,
+      },
+      traceId: "trace-inflight",
     });
   });
 
