@@ -607,6 +607,9 @@ export class ProfilesService {
       sha256?: string;
     },
   ) {
+    this.logger.log(
+      `profile photo confirm started imageId=${imageId} userId=${userId} byteSize=${metadata.byteSize}`,
+    );
     const image = await this.prisma.userProfileImage.findFirst({
       where: { id: imageId, userId },
     });
@@ -632,10 +635,16 @@ export class ProfilesService {
       mimeType,
       byteSize: metadata.byteSize,
     });
+    this.logger.log(
+      `profile photo token verified imageId=${image.id} userId=${userId} storageKey=${image.originalUrl} mimeType=${mimeType}`,
+    );
     await this.verifyUploadedObjectInStorage(
       image.originalUrl,
       mimeType,
       metadata.byteSize,
+    );
+    this.logger.log(
+      `profile photo storage verified imageId=${image.id} userId=${userId}`,
     );
 
     await this.prisma.userProfileImage.update({
@@ -646,29 +655,14 @@ export class ProfilesService {
     });
 
     const idempotencyKey = `profile-photo-uploaded:${image.id}`;
-    await this.mediaProcessingQueue.add(
-      "ProfilePhotoUploaded",
-      {
-        version: 1,
-        traceId: randomUUID(),
-        idempotencyKey,
-        timestamp: new Date().toISOString(),
-        type: "ProfilePhotoUploaded",
-        payload: {
-          imageId: image.id,
-          userId,
-          mimeType,
-        },
-      },
-      {
-        jobId: idempotencyKey,
-        attempts: 3,
-        removeOnComplete: 500,
-        backoff: {
-          type: "exponential",
-          delay: 1000,
-        },
-      },
+    await this.enqueueOrProcessProfilePhotoUpload({
+      idempotencyKey,
+      imageId: image.id,
+      userId,
+      mimeType,
+    });
+    this.logger.log(
+      `profile photo confirm completed imageId=${image.id} userId=${userId} status=processing`,
     );
 
     return {
@@ -679,6 +673,7 @@ export class ProfilesService {
   }
 
   async processProfilePhoto(imageId: string) {
+    this.logger.log(`profile photo processing started imageId=${imageId}`);
     const image = await this.prisma.userProfileImage.findUnique({
       where: { id: imageId },
     });
@@ -703,28 +698,38 @@ export class ProfilesService {
     const byteSampleSha256 = byteSample
       ? createHash("sha256").update(byteSample).digest("hex")
       : null;
+    this.logger.log(
+      `profile photo metadata imageId=${image.id} userId=${image.userId} mimeType=${mimeType} byteSize=${typeof byteSize === "number" ? byteSize : "unknown"} moderationEnabled=${avatarModerationEnabled}`,
+    );
 
-    const decision =
-      avatarModerationEnabled && this.moderationService
-        ? await this.moderationService.submitForModeration({
-            contentRef: image.id,
-            contentType: "avatar_image",
-            actorUserId: image.userId,
-            surface: "profile_avatar",
-            strictMode: true,
-            idempotencyKey: `avatar_image:${image.id}`,
-            evidenceRefs: [image.originalUrl],
-            metadata: {
-              imageId: image.id,
-              storageKey: image.originalUrl,
-              mimeType,
-              byteSize: typeof byteSize === "number" ? byteSize : undefined,
-              magicMimeType,
-              byteSampleSha256,
-              byteSampleLength: byteSample?.byteLength ?? 0,
-            },
-          })
-        : null;
+    let decision = null as { riskLevel?: "allow" | "block" | string } | null;
+
+    if (avatarModerationEnabled && this.moderationService) {
+      try {
+        decision = await this.moderationService.submitForModeration({
+          contentRef: image.id,
+          contentType: "avatar_image",
+          actorUserId: image.userId,
+          surface: "profile_avatar",
+          strictMode: true,
+          idempotencyKey: `avatar_image:${image.id}`,
+          evidenceRefs: [image.originalUrl],
+          metadata: {
+            imageId: image.id,
+            storageKey: image.originalUrl,
+            mimeType,
+            byteSize: typeof byteSize === "number" ? byteSize : undefined,
+            magicMimeType,
+            byteSampleSha256,
+            byteSampleLength: byteSample?.byteLength ?? 0,
+          },
+        });
+      } catch (error) {
+        this.logger.error(
+          `avatar moderation failed for profile image ${image.id}; defaulting to pending review: ${String(error)}`,
+        );
+      }
+    }
 
     const moderationResult =
       decision?.riskLevel === "allow"
@@ -761,19 +766,23 @@ export class ProfilesService {
     }
 
     if (moderationResult === "pending_review") {
-      await this.notificationsService.createInAppNotification(
+      await this.safeCreateInAppNotification(
         image.userId,
         NotificationType.MODERATION_NOTICE,
         "Your profile photo is under review before it can be shown.",
       );
     }
     if (moderationResult === "blocked") {
-      await this.notificationsService.createInAppNotification(
+      await this.safeCreateInAppNotification(
         image.userId,
         NotificationType.MODERATION_NOTICE,
         "Your profile photo could not be approved under safety policy.",
       );
     }
+
+    this.logger.log(
+      `profile photo processing completed imageId=${image.id} userId=${image.userId} moderationResult=${moderationResult}`,
+    );
 
     return {
       ...updated,
@@ -833,6 +842,24 @@ export class ProfilesService {
       }
     } catch {
       // Embedding generation is best-effort and should not block profile edits.
+    }
+  }
+
+  private async safeCreateInAppNotification(
+    userId: string,
+    type: NotificationType,
+    message: string,
+  ) {
+    try {
+      await this.notificationsService.createInAppNotification(
+        userId,
+        type,
+        message,
+      );
+    } catch (error) {
+      this.logger.warn(
+        `could not create in-app notification for user ${userId}: ${String(error)}`,
+      );
     }
   }
 
@@ -1150,6 +1177,47 @@ export class ProfilesService {
     return (
       !snapshot.globalKillSwitch && (snapshot.enableModerationAvatars ?? true)
     );
+  }
+
+  private async enqueueOrProcessProfilePhotoUpload(input: {
+    idempotencyKey: string;
+    imageId: string;
+    userId: string;
+    mimeType: ProfilePhotoMimeType;
+  }) {
+    try {
+      await this.mediaProcessingQueue.add(
+        "ProfilePhotoUploaded",
+        {
+          version: 1,
+          traceId: randomUUID(),
+          idempotencyKey: input.idempotencyKey,
+          timestamp: new Date().toISOString(),
+          type: "ProfilePhotoUploaded",
+          payload: {
+            imageId: input.imageId,
+            userId: input.userId,
+            mimeType: input.mimeType,
+          },
+        },
+        {
+          jobId: input.idempotencyKey,
+          attempts: 3,
+          removeOnComplete: 500,
+          backoff: {
+            type: "exponential",
+            delay: 1000,
+          },
+        },
+      );
+      return;
+    } catch (error) {
+      this.logger.error(
+        `media-processing enqueue failed for profile image ${input.imageId}; falling back to inline processing: ${String(error)}`,
+      );
+    }
+
+    await this.processProfilePhoto(input.imageId);
   }
 
   private createUploadToken(input: {

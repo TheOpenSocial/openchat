@@ -23,7 +23,7 @@ type HomeScreenLayoutProps = {
   visibleBanner: { text: string; tone: BannerTone } | null;
   onPressHome: () => void;
   onPressNotifications: () => void;
-  onPressProfile: () => void;
+  onPressSettings: () => void;
   onTabChange: (tab: HomeTab) => void;
   unreadChatsCount: number;
   homeContent: ReactNode;
@@ -42,7 +42,7 @@ export function HomeScreenLayout({
   offlineNoticeText,
   onPressHome,
   onPressNotifications,
-  onPressProfile,
+  onPressSettings,
   onTabChange,
   overlay,
   profileContent,
@@ -89,7 +89,7 @@ export function HomeScreenLayout({
             hasNotifications={hasNotifications}
             onPressHome={onPressHome}
             onPressNotifications={onPressNotifications}
-            onPressProfile={onPressProfile}
+            onPressSettings={onPressSettings}
             title={title}
           >
             <View

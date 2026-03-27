@@ -7,7 +7,7 @@ import {
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -24,6 +24,7 @@ import Animated, { FadeInUp } from "react-native-reanimated";
 
 import { PrimaryButton } from "../components/PrimaryButton";
 import { hapticSelection } from "../lib/haptics";
+import { useLoadingModal } from "../hooks/useLoadingModal";
 import type { UserProfileDraft } from "../types";
 import { useSelfProfileData } from "./profile/useProfileData";
 
@@ -280,6 +281,7 @@ export function ProfileScreen({
   userId,
 }: ProfileScreenProps) {
   const {
+    avatarUploading,
     error,
     loading,
     profile,
@@ -314,6 +316,18 @@ export function ProfileScreen({
     () => (profile.name.trim().charAt(0) || "U").toUpperCase(),
     [profile.name],
   );
+  const shouldUseNativePhotoCrop = Platform.OS !== "ios";
+  const { hide, loadingModal, show } = useLoadingModal({
+    initialMessage: "Uploading and saving your profile picture",
+  });
+
+  useEffect(() => {
+    if (avatarUploading) {
+      show("Uploading and saving your profile picture");
+      return;
+    }
+    hide();
+  }, [avatarUploading, hide, show]);
 
   const beginBioEdit = () => {
     setBioDraft(profile.bio ?? "");
@@ -338,6 +352,10 @@ export function ProfileScreen({
   };
 
   const pickAndUploadAvatar = async (source: "camera" | "library") => {
+    if (avatarUploading) {
+      return;
+    }
+
     const permission =
       source === "camera"
         ? await ImagePicker.requestCameraPermissionsAsync()
@@ -355,31 +373,46 @@ export function ProfileScreen({
     const result =
       source === "camera"
         ? await ImagePicker.launchCameraAsync({
-            allowsEditing: true,
-            aspect: [1, 1],
+            allowsEditing: shouldUseNativePhotoCrop,
+            ...(shouldUseNativePhotoCrop
+              ? { aspect: [9, 16] as [number, number] }
+              : {}),
             quality: 0.85,
           })
         : await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ["images"],
-            allowsEditing: true,
-            aspect: [1, 1],
+            allowsEditing: shouldUseNativePhotoCrop,
+            ...(shouldUseNativePhotoCrop
+              ? { aspect: [9, 16] as [number, number] }
+              : {}),
             quality: 0.85,
           });
 
     if (result.canceled || !result.assets[0]) return;
 
-    await updateAvatar({
-      uri: result.assets[0].uri,
-      mimeType: result.assets[0].mimeType ?? null,
-      fileSize:
-        typeof result.assets[0].fileSize === "number"
-          ? result.assets[0].fileSize
-          : null,
-    });
-    hapticSelection();
+    try {
+      await updateAvatar({
+        uri: result.assets[0].uri,
+        mimeType: result.assets[0].mimeType ?? null,
+        fileSize:
+          typeof result.assets[0].fileSize === "number"
+            ? result.assets[0].fileSize
+            : null,
+      });
+      hapticSelection();
+    } catch (error) {
+      Alert.alert(
+        "Photo not uploaded",
+        error instanceof Error ? error.message : "Try again in a moment.",
+      );
+    }
   };
 
   const openAvatarActions = () => {
+    if (avatarUploading) {
+      return;
+    }
+
     Alert.alert("Profile photo", "Choose how to update your photo.", [
       {
         text: "Take photo",
@@ -446,6 +479,7 @@ export function ProfileScreen({
 
   return (
     <View className="flex-1 bg-[#0b0d10] pt-2">
+      {loadingModal}
       <LinearGradient
         colors={["#0f1216", "#0b0d10", "#090a0d"]}
         end={{ x: 0.8, y: 1 }}
@@ -583,7 +617,10 @@ export function ProfileScreen({
                 <View className="items-center">
                   <View className="overflow-hidden rounded-full border border-white/45 bg-white/18">
                     {profile.avatarUrl ? (
-                      <Pressable onPress={openAvatarActions}>
+                      <Pressable
+                        disabled={avatarUploading}
+                        onPress={openAvatarActions}
+                      >
                         <Image
                           source={{ uri: profile.avatarUrl }}
                           className="h-24 w-24"
@@ -592,6 +629,7 @@ export function ProfileScreen({
                       </Pressable>
                     ) : (
                       <Pressable
+                        disabled={avatarUploading}
                         className="h-24 w-24 items-center justify-center"
                         onPress={openAvatarActions}
                       >

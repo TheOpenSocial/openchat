@@ -13,7 +13,7 @@ interface AppShellProps {
   subtitle?: string;
   onPressHome: () => void;
   onPressNotifications: () => void;
-  onPressProfile: () => void;
+  onPressSettings: () => void;
 }
 
 export function AppShell({
@@ -22,7 +22,7 @@ export function AppShell({
   hasNotifications = false,
   onPressHome,
   onPressNotifications,
-  onPressProfile,
+  onPressSettings,
   subtitle,
   title,
 }: AppShellProps) {
@@ -47,7 +47,7 @@ export function AppShell({
           hasNotifications={hasNotifications}
           onPressHome={onPressHome}
           onPressNotifications={onPressNotifications}
-          onPressProfile={onPressProfile}
+          onPressSettings={onPressSettings}
           subtitle={subtitle}
           title={title}
           topInset={insets.top}

@@ -682,8 +682,8 @@ export function OnboardingFlow({
     }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
-      allowsEditing: true,
-      aspect: [1, 1],
+      allowsEditing: Platform.OS !== "ios",
+      ...(Platform.OS !== "ios" ? { aspect: [9, 16] as [number, number] } : {}),
       quality: 0.85,
     });
     if (result.canceled || !result.assets[0]) return;

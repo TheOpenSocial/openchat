@@ -1,15 +1,28 @@
-import { useMemo } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 import { View } from "react-native";
 
 import systemBlob from "../../assets/brand/gradient-blob.json";
 
-export function SystemBlobAnimation({
+export type SystemBlobAnimationHandle = {
+  pause?: () => void;
+  play?: (startFrame?: number, endFrame?: number) => void;
+  setSpeed?: (speed: number) => void;
+};
+
+function SystemBlobAnimationComponent({
   size = 196,
   lottieRef,
+  startDelayMs = 0,
+  rotationDeg = 0,
+  staticFrame = false,
 }: {
   size?: number;
-  lottieRef?: { current: { pause?: () => void; play?: () => void } | null };
+  lottieRef?: { current: SystemBlobAnimationHandle | null };
+  startDelayMs?: number;
+  rotationDeg?: number;
+  staticFrame?: boolean;
 }) {
+  const innerRef = useRef<SystemBlobAnimationHandle | null>(null);
   const LottieView = useMemo<any>(() => {
     try {
       return (
@@ -20,6 +33,29 @@ export function SystemBlobAnimation({
       return null;
     }
   }, []);
+
+  useEffect(() => {
+    const targetRef = innerRef.current;
+    if (!targetRef || staticFrame) {
+      return;
+    }
+    targetRef.pause?.();
+    const timerId = setTimeout(
+      () => {
+        targetRef.play?.();
+      },
+      Math.max(0, startDelayMs),
+    );
+
+    return () => clearTimeout(timerId);
+  }, [startDelayMs, staticFrame]);
+
+  const assignRef = (instance: SystemBlobAnimationHandle | null) => {
+    innerRef.current = instance;
+    if (lottieRef) {
+      lottieRef.current = instance;
+    }
+  };
 
   if (!LottieView) {
     return (
@@ -36,11 +72,17 @@ export function SystemBlobAnimation({
 
   return (
     <LottieView
-      autoPlay
-      loop
-      ref={lottieRef as never}
+      autoPlay={!staticFrame && startDelayMs === 0}
+      loop={!staticFrame}
+      ref={assignRef as never}
       source={systemBlob}
-      style={{ width: size, height: size }}
+      style={{
+        width: size,
+        height: size,
+        transform: [{ rotate: `${rotationDeg}deg` }],
+      }}
     />
   );
 }
+
+export const SystemBlobAnimation = memo(SystemBlobAnimationComponent);

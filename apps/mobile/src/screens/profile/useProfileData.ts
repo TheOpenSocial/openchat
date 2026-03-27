@@ -20,6 +20,7 @@ type SelfProfileInput = {
 export function useSelfProfileData(input: SelfProfileInput) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [profileRecord, setProfileRecord] = useState<Record<
     string,
@@ -89,6 +90,7 @@ export function useSelfProfileData(input: SelfProfileInput) {
 
   const save = useCallback(
     async (updates: {
+      displayName?: string;
       bio?: string;
       city?: string;
       country?: string;
@@ -104,6 +106,7 @@ export function useSelfProfileData(input: SelfProfileInput) {
         await api.updateProfile(
           input.userId,
           {
+            displayName: updates.displayName,
             bio: updates.bio,
             city: updates.city,
             country: updates.country,
@@ -230,7 +233,7 @@ export function useSelfProfileData(input: SelfProfileInput) {
       mimeType?: string | null;
       fileSize?: number | null;
     }) => {
-      setSaving(true);
+      setAvatarUploading(true);
       setError(null);
       try {
         await uploadProfilePhotoFromPickerAsset(
@@ -243,13 +246,14 @@ export function useSelfProfileData(input: SelfProfileInput) {
         setError(String(nextError));
         throw nextError;
       } finally {
-        setSaving(false);
+        setAvatarUploading(false);
       }
     },
     [input.accessToken, input.userId, reload],
   );
 
   return {
+    avatarUploading,
     error,
     loading,
     profile,

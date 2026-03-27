@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View } from "react-native";
+import Animated, { FadeInRight } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ChatMessageRecord } from "../lib/api";
@@ -18,6 +19,7 @@ import {
   type OtherProfileContext,
 } from "./OtherUserProfileScreen";
 import { ProfileScreen } from "./ProfileScreen";
+import { SettingsScreen } from "./SettingsScreen";
 import { ChatsListScreen } from "./ChatsListScreen";
 import { HomeScreenLayout } from "./home/HomeScreenLayout";
 import { mergeChatMessages } from "./home/domain/chat-utils";
@@ -194,6 +196,7 @@ export function HomeScreen({
     userId: string;
     context: OtherProfileContext;
   } | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
     setChatStorageReady(false);
@@ -483,6 +486,26 @@ export function HomeScreen({
     return <View className="flex-1 bg-red-600" testID="home-layout-debug" />;
   }
 
+  if (settingsOpen) {
+    return (
+      <View className="flex-1 bg-[#050506]" style={{ flex: 1 }}>
+        <Animated.View entering={FadeInRight.duration(220)} style={{ flex: 1 }}>
+          <SettingsScreen
+            accessToken={session.accessToken}
+            displayName={session.displayName}
+            email={session.email}
+            initialDraft={initialProfile}
+            onClose={() => {
+              setSettingsOpen(false);
+            }}
+            onProfileUpdated={onProfileUpdated}
+            userId={session.userId}
+          />
+        </Animated.View>
+      </View>
+    );
+  }
+
   return (
     <HomeScreenLayout
       activeTab={activeTab}
@@ -574,10 +597,6 @@ export function HomeScreen({
       onPressNotifications={() => {
         hapticSelection();
       }}
-      onPressProfile={() => {
-        hapticSelection();
-        setActiveTab("profile");
-      }}
       onTabChange={(tab) => {
         hapticSelection();
         setActiveTab(tab);
@@ -646,6 +665,10 @@ export function HomeScreen({
           userId={session.userId}
         />
       }
+      onPressSettings={() => {
+        hapticSelection();
+        setSettingsOpen(true);
+      }}
       shellContentBottomInset={shellContentBottomInset}
       skipNetwork={skipNetwork}
       title={

@@ -412,6 +412,77 @@ describe("ProfilesService", () => {
     );
   });
 
+  it("falls back to inline processing when media queue enqueue fails", async () => {
+    const prisma: any = {
+      userProfileImage: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "img-1",
+          userId: "11111111-1111-4111-8111-111111111111",
+          status: "pending_upload",
+          originalUrl:
+            "profiles/11111111-1111-4111-8111-111111111111/avatar.png",
+        }),
+        findUnique: vi.fn().mockResolvedValue({
+          id: "img-1",
+          userId: "11111111-1111-4111-8111-111111111111",
+          status: "processing",
+          originalUrl:
+            "profiles/11111111-1111-4111-8111-111111111111/avatar.png",
+        }),
+        update: vi
+          .fn()
+          .mockResolvedValueOnce({})
+          .mockResolvedValueOnce({ id: "img-1", status: "pending_review" }),
+      },
+      moderationFlag: {
+        create: vi.fn().mockResolvedValue({}),
+      },
+    };
+
+    const { service, queue } = createService(prisma, {
+      launchControlsService: {
+        getSnapshot: vi.fn().mockResolvedValue({
+          globalKillSwitch: false,
+          enableModerationAvatars: false,
+        }),
+      },
+    });
+    queue.add.mockRejectedValueOnce(new Error("redis unavailable"));
+
+    const uploadToken = (service as any).createUploadToken({
+      imageId: "img-1",
+      userId: "11111111-1111-4111-8111-111111111111",
+      storageKey: "profiles/11111111-1111-4111-8111-111111111111/avatar.png",
+      mimeType: "image/png",
+      byteSize: 120_000,
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+
+    const result = await service.confirmPhotoUpload(
+      "11111111-1111-4111-8111-111111111111",
+      "img-1",
+      {
+        uploadToken,
+        byteSize: 120_000,
+      },
+    );
+
+    expect(result.status).toBe("processing");
+    expect(queue.add).toHaveBeenCalledTimes(1);
+    expect(prisma.userProfileImage.findUnique).toHaveBeenCalledWith({
+      where: { id: "img-1" },
+    });
+    expect(prisma.userProfileImage.update).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        where: { id: "img-1" },
+        data: expect.objectContaining({
+          status: "pending_review",
+        }),
+      }),
+    );
+  });
+
   it("rejects upload confirmation with invalid token", async () => {
     const prisma: any = {
       userProfileImage: {
@@ -595,6 +666,85 @@ describe("ProfilesService", () => {
       sendSpy.mockRestore();
       process.env.S3_PRESIGNED_UPLOADS_ENABLED = oldPresignedUploadsEnabled;
     }
+  });
+
+  it("falls back to pending review when avatar moderation throws", async () => {
+    const prisma: any = {
+      userProfileImage: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "img-moderation-fail",
+          userId: "11111111-1111-4111-8111-111111111111",
+          status: "processing",
+          originalUrl:
+            "profiles/11111111-1111-4111-8111-111111111111/avatar.png",
+        }),
+        update: vi.fn().mockResolvedValue({
+          id: "img-moderation-fail",
+          status: "pending_review",
+          thumbUrl: null,
+        }),
+      },
+      moderationFlag: {
+        create: vi.fn().mockResolvedValue({}),
+      },
+    };
+
+    const { service, notificationsService } = createService(prisma, {
+      moderationService: {
+        submitForModeration: vi
+          .fn()
+          .mockRejectedValue(new Error("moderation unavailable")),
+      },
+    });
+
+    const result = await service.processProfilePhoto("img-moderation-fail");
+
+    expect(result.moderationResult).toBe("pending_review");
+    expect(prisma.userProfileImage.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "img-moderation-fail" },
+        data: expect.objectContaining({
+          status: "pending_review",
+        }),
+      }),
+    );
+    expect(notificationsService.createInAppNotification).toHaveBeenCalledWith(
+      "11111111-1111-4111-8111-111111111111",
+      NotificationType.MODERATION_NOTICE,
+      expect.stringContaining("under review"),
+    );
+  });
+
+  it("does not fail profile photo processing when moderation notice delivery throws", async () => {
+    const prisma: any = {
+      userProfileImage: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "img-notification-fail",
+          userId: "11111111-1111-4111-8111-111111111111",
+          status: "processing",
+          originalUrl:
+            "profiles/11111111-1111-4111-8111-111111111111/avatar.png",
+        }),
+        update: vi.fn().mockResolvedValue({
+          id: "img-notification-fail",
+          status: "pending_review",
+          thumbUrl: null,
+        }),
+      },
+      moderationFlag: {
+        create: vi.fn().mockResolvedValue({}),
+      },
+    };
+
+    const { service, notificationsService } = createService(prisma);
+    notificationsService.createInAppNotification.mockRejectedValueOnce(
+      new Error("notifications unavailable"),
+    );
+
+    const result = await service.processProfilePhoto("img-notification-fail");
+
+    expect(result.moderationResult).toBe("pending_review");
+    expect(prisma.userProfileImage.update).toHaveBeenCalled();
   });
 
   it("returns fallback avatar when user has no approved photos", async () => {

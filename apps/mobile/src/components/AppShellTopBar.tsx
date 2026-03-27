@@ -12,7 +12,7 @@ interface AppShellTopBarProps {
   hasNotifications?: boolean;
   onPressHome: () => void;
   onPressNotifications: () => void;
-  onPressProfile: () => void;
+  onPressSettings: () => void;
 }
 
 export function AppShellTopBar({
@@ -20,7 +20,7 @@ export function AppShellTopBar({
   hasNotifications = false,
   onPressHome,
   onPressNotifications,
-  onPressProfile,
+  onPressSettings,
   subtitle,
   topInset,
   title,
@@ -83,6 +83,23 @@ export function AppShellTopBar({
 
         <View className="flex-row items-center gap-3">
           <Pressable
+            accessibilityLabel="Settings"
+            accessibilityRole="button"
+            className="h-9 w-9 items-center justify-center"
+            hitSlop={8}
+            onPress={() => dismissAnd(onPressSettings)}
+            style={({ pressed }) => ({
+              opacity: pressed ? appTheme.motion.pressOpacity : 1,
+            })}
+            testID="app-shell-settings"
+          >
+            <Ionicons
+              color="rgba(255,255,255,0.78)"
+              name="settings-outline"
+              size={19}
+            />
+          </Pressable>
+          <Pressable
             accessibilityLabel="Notifications"
             accessibilityRole="button"
             className="h-9 w-9 items-center justify-center"
@@ -103,23 +120,6 @@ export function AppShellTopBar({
                 <View className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-white" />
               ) : null}
             </View>
-          </Pressable>
-          <Pressable
-            accessibilityLabel="Profile"
-            accessibilityRole="button"
-            className="h-9 w-9 items-center justify-center"
-            hitSlop={8}
-            onPress={() => dismissAnd(onPressProfile)}
-            style={({ pressed }) => ({
-              opacity: pressed ? appTheme.motion.pressOpacity : 1,
-            })}
-            testID="app-shell-profile"
-          >
-            <Ionicons
-              color="rgba(255,255,255,0.72)"
-              name="person-outline"
-              size={19}
-            />
           </Pressable>
         </View>
       </View>
