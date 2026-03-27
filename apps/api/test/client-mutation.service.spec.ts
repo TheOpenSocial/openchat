@@ -139,9 +139,9 @@ describe("ClientMutationService", () => {
 
   it("throws conflict while a matching mutation is still processing", async () => {
     const { prisma, rows } = createPrismaMock();
-    rows.set("user-1:agent.respond:processing-key", {
+    rows.set("user-1:intent.create:processing-key", {
       userId: "user-1",
-      scope: "agent.respond",
+      scope: "intent.create",
       idempotencyKey: "processing-key",
       status: "processing",
       responseBody: null,
@@ -154,7 +154,7 @@ describe("ClientMutationService", () => {
     await expect(
       service.run({
         userId: "user-1",
-        scope: "agent.respond",
+        scope: "intent.create",
         idempotencyKey: "processing-key",
         handler: vi.fn(),
       }),

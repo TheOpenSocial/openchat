@@ -12,6 +12,7 @@ export class ClientMutationService {
   private readonly logger = new Logger(ClientMutationService.name);
   private static readonly IN_FLIGHT_WAIT_TIMEOUT_MS = 600;
   private static readonly IN_FLIGHT_WAIT_INTERVAL_MS = 75;
+  private static readonly AGENT_RESPOND_IN_FLIGHT_WAIT_TIMEOUT_MS = 5000;
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -202,11 +203,12 @@ export class ClientMutationService {
     scope: string;
     idempotencyKey: string;
   }): Promise<{ found: true; value: T } | { found: false }> {
+    const timeoutMs =
+      input.scope === "agent.respond"
+        ? ClientMutationService.AGENT_RESPOND_IN_FLIGHT_WAIT_TIMEOUT_MS
+        : ClientMutationService.IN_FLIGHT_WAIT_TIMEOUT_MS;
     const startedAt = Date.now();
-    while (
-      Date.now() - startedAt <
-      ClientMutationService.IN_FLIGHT_WAIT_TIMEOUT_MS
-    ) {
+    while (Date.now() - startedAt < timeoutMs) {
       await this.delay(ClientMutationService.IN_FLIGHT_WAIT_INTERVAL_MS);
       const row = await this.prisma.clientMutation.findUnique({
         where: {
