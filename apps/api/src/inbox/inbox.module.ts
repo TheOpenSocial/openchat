@@ -11,6 +11,7 @@ import { InboxService } from "./inbox.service.js";
 @Module({
   imports: [
     BullModule.registerQueue({ name: "connection-setup" }),
+    BullModule.registerQueue({ name: "cleanup" }),
     NotificationsModule,
     PersonalizationModule,
     ExecutionReconciliationModule,

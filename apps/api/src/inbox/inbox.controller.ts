@@ -1,9 +1,11 @@
+import { InjectQueue } from "@nestjs/bullmq";
 import {
   Body,
   Controller,
   ForbiddenException,
   Get,
   Headers,
+  Optional,
   Param,
   Post,
 } from "@nestjs/common";
@@ -12,7 +14,8 @@ import {
   cancelIntentRequestBodySchema,
   uuidSchema,
 } from "@opensocial/types";
-import { timingSafeEqual } from "node:crypto";
+import { Queue } from "bullmq";
+import { randomUUID, timingSafeEqual } from "node:crypto";
 import { ok } from "../common/api-response.js";
 import { ActorUserId } from "../common/actor-user-id.decorator.js";
 import { assertActorOwnsUser } from "../common/auth-context.js";
@@ -21,7 +24,12 @@ import { InboxService } from "./inbox.service.js";
 
 @Controller("inbox/requests")
 export class InboxController {
-  constructor(private readonly inboxService: InboxService) {}
+  constructor(
+    private readonly inboxService: InboxService,
+    @Optional()
+    @InjectQueue("cleanup")
+    private readonly cleanupQueue?: Queue,
+  ) {}
 
   @Get(":userId")
   async listPending(
@@ -80,7 +88,16 @@ export class InboxController {
   @Post("expire-stale")
   async expireStale(@Headers("x-cron-key") cronKeyHeader?: string | string[]) {
     this.assertCronAccessAllowed(cronKeyHeader);
-    return ok(await this.inboxService.expireStaleRequests());
+    const staleResult = await this.inboxService.expireStaleRequests();
+    const cleanupResult = await this.enqueueDailyModerationRetentionCleanup();
+    if (!cleanupResult) {
+      return ok(staleResult);
+    }
+    return ok({
+      ...staleResult,
+      moderationRetentionCleanupEnqueued: cleanupResult.enqueued,
+      moderationRetentionCleanupJobId: cleanupResult.jobId,
+    });
   }
 
   @Post("bulk")
@@ -130,5 +147,38 @@ export class InboxController {
       return false;
     }
     return timingSafeEqual(leftBuffer, rightBuffer);
+  }
+
+  private async enqueueDailyModerationRetentionCleanup() {
+    if (!this.cleanupQueue) {
+      return null;
+    }
+    const retentionDays = Number.parseInt(
+      process.env.MODERATION_DECISION_RETENTION_DAYS ?? "180",
+      10,
+    );
+    const idempotencyKey = `moderation-retention:auto:${new Date().toISOString().slice(0, 10)}`;
+    const job = await this.cleanupQueue.add(
+      "ModerationDecisionRetentionCleanup",
+      {
+        version: 1,
+        traceId: randomUUID(),
+        idempotencyKey,
+        timestamp: new Date().toISOString(),
+        retentionDays:
+          Number.isFinite(retentionDays) && retentionDays >= 1
+            ? retentionDays
+            : 180,
+      },
+      {
+        jobId: idempotencyKey,
+        attempts: 2,
+        removeOnComplete: 500,
+      },
+    );
+    return {
+      enqueued: true,
+      jobId: job.id ? String(job.id) : null,
+    };
   }
 }

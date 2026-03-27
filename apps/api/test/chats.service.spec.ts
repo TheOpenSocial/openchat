@@ -406,13 +406,79 @@ describe("ChatsService", () => {
     expect(prisma.moderationFlag.create).toHaveBeenCalledTimes(1);
   });
 
-  it("blocks review-grade messages when moderation strictness flag is enabled", async () => {
+  it("queues strict-mode messages for shadow moderation when strictness is enabled", async () => {
     const prisma: any = {
-      moderationFlag: {
+      chat: {
+        findUnique: vi.fn().mockResolvedValue({ connectionId: "conn-1" }),
+      },
+      connectionParticipant: {
+        findFirst: vi.fn().mockResolvedValue({ id: "participant-1" }),
+        findMany: vi
+          .fn()
+          .mockResolvedValue([{ userId: "user-1" }, { userId: "user-2" }]),
+      },
+      block: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      userPreference: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      userReport: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      chatMessage: {
+        create: vi.fn().mockResolvedValue({ id: "msg-1", body: "hello" }),
+      },
+      messageReceipt: {
         create: vi.fn().mockResolvedValue({}),
       },
-      auditLog: {
-        create: vi.fn().mockResolvedValue({}),
+    };
+    const queue: any = {
+      add: vi.fn().mockResolvedValue({ id: "job-1" }),
+    };
+    const launchControlsService: any = {
+      getSnapshot: vi.fn().mockResolvedValue({
+        globalKillSwitch: false,
+        enableModerationStrictness: true,
+        enableModerationMessages: true,
+      }),
+    };
+
+    const service = new ChatsService(
+      prisma,
+      queue,
+      undefined,
+      launchControlsService,
+    );
+    await service.createMessage("chat-1", "user-1", "hello");
+    expect(queue.add).toHaveBeenCalledWith(
+      "ChatMessageModerationRequested",
+      expect.objectContaining({
+        type: "ChatMessageModerationRequested",
+        payload: expect.objectContaining({
+          messageId: "msg-1",
+          chatId: "chat-1",
+          senderUserId: "user-1",
+        }),
+      }),
+      expect.any(Object),
+    );
+    expect(prisma.chatMessage.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          moderationState: "review",
+        }),
+      }),
+    );
+  });
+
+  it("delivers queued message to recipients after moderation allow", async () => {
+    const prisma: any = {
+      chatMessage: {
+        update: vi.fn().mockResolvedValue({
+          id: "msg-1",
+          moderationState: "clean",
+        }),
       },
       chat: {
         findUnique: vi.fn().mockResolvedValue({ connectionId: "conn-1" }),
@@ -422,30 +488,46 @@ describe("ChatsService", () => {
           .fn()
           .mockResolvedValue([{ userId: "user-1" }, { userId: "user-2" }]),
       },
-      block: {
+      messageReceipt: {
+        createMany: vi.fn().mockResolvedValue({ count: 1 }),
         findMany: vi.fn().mockResolvedValue([]),
       },
-      chatMessage: {
-        create: vi.fn(),
-      },
-      messageReceipt: {
-        create: vi.fn(),
-      },
     };
-    const launchControlsService: any = {
-      getSnapshot: vi.fn().mockResolvedValue({
-        globalKillSwitch: false,
-        enableModerationStrictness: true,
+    const moderationService: any = {
+      submitForModeration: vi.fn().mockResolvedValue({
+        id: "decision-1",
+        idempotencyKey: "chat_message:msg-1",
+        contentRef: "msg-1",
+        contentType: "chat_message",
+        actorUserId: "user-1",
+        surface: "chat_message",
+        riskLevel: "allow",
       }),
     };
 
-    const service = new ChatsService(prisma, undefined, launchControlsService);
-    await expect(
-      service.createMessage("chat-1", "user-1", "Looking for underage meetup"),
-    ).rejects.toThrow("moderation");
+    const service = new ChatsService(
+      prisma,
+      undefined,
+      undefined,
+      undefined,
+      moderationService,
+    );
+    await service.processQueuedMessageModeration(
+      "msg-1",
+      "chat-1",
+      "user-1",
+      "hello",
+    );
 
-    expect(prisma.chatMessage.create).not.toHaveBeenCalled();
-    expect(prisma.moderationFlag.create).toHaveBeenCalledTimes(1);
+    expect(prisma.chatMessage.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "msg-1" },
+        data: expect.objectContaining({
+          moderationState: "clean",
+        }),
+      }),
+    );
+    expect(prisma.messageReceipt.createMany).toHaveBeenCalledTimes(1);
   });
 
   it("blocks messages when OpenAI moderation assist returns blocked", async () => {

@@ -178,6 +178,17 @@ export const profilePhotoUploadedJobSchema = queueEnvelopeSchema.extend({
   }),
 });
 
+export const chatMessageModerationRequestedJobSchema =
+  queueEnvelopeSchema.extend({
+    type: z.literal("ChatMessageModerationRequested"),
+    payload: z.object({
+      messageId: uuidSchema,
+      chatId: uuidSchema,
+      senderUserId: uuidSchema,
+      body: z.string().min(1),
+    }),
+  });
+
 export const asyncAgentFollowupJobSchema = queueEnvelopeSchema.extend({
   type: z.literal("AsyncAgentFollowup"),
   payload: z.object({
@@ -1470,6 +1481,8 @@ export const adminModerationFlagTriageBodySchema = z
     targetUserId: uuidSchema.optional(),
     strikeSeverity: z.number().int().min(1).max(3).optional(),
     strikeReason: z.string().min(1).max(500).optional(),
+    decisionId: z.string().min(1).max(255).optional(),
+    humanReviewAction: z.enum(["approve", "reject", "escalate"]).optional(),
   })
   .superRefine((value, ctx) => {
     const requiresTargetUser =
@@ -1482,6 +1495,11 @@ export const adminModerationFlagTriageBodySchema = z
       });
     }
   });
+
+export const adminModerationDecisionReviewBodySchema = z.object({
+  action: z.enum(["approve", "reject", "escalate"]),
+  note: z.string().min(1).max(500).optional(),
+});
 
 export const adminModerationFlagAssignBodySchema = z.object({
   assigneeUserId: uuidSchema,
@@ -1575,6 +1593,8 @@ export const launchControlsUpdateBodySchema = z
     enablePersonalization: z.boolean().optional(),
     enableDiscovery: z.boolean().optional(),
     enableModerationStrictness: z.boolean().optional(),
+    enableModerationMessages: z.boolean().optional(),
+    enableModerationAvatars: z.boolean().optional(),
     enableAiParsing: z.boolean().optional(),
     enableRealtimeChat: z.boolean().optional(),
     enableScheduledTasks: z.boolean().optional(),
@@ -1915,6 +1935,7 @@ export const supportedQueueSchemas = {
   ModerationFlagged: moderationFlaggedJobSchema,
   NotificationDispatch: notificationDispatchJobSchema,
   ProfilePhotoUploaded: profilePhotoUploadedJobSchema,
+  ChatMessageModerationRequested: chatMessageModerationRequestedJobSchema,
   AsyncAgentFollowup: asyncAgentFollowupJobSchema,
   ScheduledTaskDispatch: scheduledTaskDispatchJobSchema,
   ScheduledTaskRun: scheduledTaskRunJobSchema,

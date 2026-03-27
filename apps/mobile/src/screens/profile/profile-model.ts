@@ -5,12 +5,32 @@ export type ProfilePreferences = {
   format?: string;
   style?: string;
   availability?: string;
+  notifications?: string;
+  autonomy?: string;
+  memory?: string;
+  reachability?: string;
 };
 
 export type ProfileContext = {
   reason?: string;
   sharedTopics: string[];
   lastInteraction?: string;
+};
+
+export type ProfileGraphSignal = {
+  label: string;
+  strength: string;
+  kind: string;
+};
+
+export type ProfileGraphSummary = {
+  nodeCount: number;
+  edgeCount: number;
+  topSignals: ProfileGraphSignal[];
+  nodeGroups: Array<{
+    kind: string;
+    labels: string[];
+  }>;
 };
 
 export type ProfileViewModel = {
@@ -23,6 +43,7 @@ export type ProfileViewModel = {
   preferences: ProfilePreferences;
   persona?: string;
   systemUnderstanding: string[];
+  graph: ProfileGraphSummary;
   context?: ProfileContext;
 };
 
@@ -48,6 +69,32 @@ function asStringArray(value: unknown): string[] {
   return value
     .map((item) => asString(item))
     .filter((item): item is string => Boolean(item));
+}
+
+function asNumber(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return null;
+  }
+  return value;
+}
+
+function titleCase(value: string): string {
+  return value
+    .split(/[_\s]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function preferenceLabel(
+  value: string | undefined,
+  fallback: string,
+  map?: Record<string, string>,
+) {
+  if (!value) {
+    return fallback;
+  }
+  return map?.[value] ?? titleCase(value);
 }
 
 function pickInterests(record: Record<string, unknown>): string[] {
@@ -80,6 +127,71 @@ function derivePersona(
   return "Builder";
 }
 
+function summarizeGraph(
+  record: Record<string, unknown> | null,
+): ProfileGraphSummary {
+  const nodes = Array.isArray(record?.nodes) ? record.nodes : [];
+  const edges = Array.isArray(record?.edges) ? record.edges : [];
+
+  const topSignals = edges
+    .map((item) => asObject(item))
+    .filter((item): item is Record<string, unknown> => Boolean(item))
+    .map((edge) => {
+      const targetNode = asObject(edge.targetNode);
+      const rawWeight = asNumber(edge.weight) ?? 0;
+
+      return {
+        label: asString(targetNode?.label) ?? "Unknown",
+        strength:
+          rawWeight >= 0.75
+            ? "Strong"
+            : rawWeight >= 0.45
+              ? "Active"
+              : rawWeight > 0
+                ? "Emerging"
+                : "Muted",
+        kind: preferenceLabel(asString(edge.edgeType), "Signal"),
+        weight: rawWeight,
+      };
+    })
+    .sort((left, right) => right.weight - left.weight)
+    .slice(0, 4)
+    .map(({ kind, label, strength }) => ({
+      kind,
+      label,
+      strength,
+    }));
+
+  const groupedNodes = new Map<string, string[]>();
+  for (const item of nodes) {
+    const node = asObject(item);
+    if (!node) continue;
+    const kind = preferenceLabel(asString(node.nodeType), "Signal");
+    const label = asString(node.label);
+    if (!label) continue;
+    const existing = groupedNodes.get(kind) ?? [];
+    if (!existing.includes(label)) {
+      existing.push(label);
+      groupedNodes.set(kind, existing);
+    }
+  }
+
+  const nodeGroups = Array.from(groupedNodes.entries())
+    .map(([kind, labels]) => ({
+      kind,
+      labels: labels.slice(0, 4),
+    }))
+    .sort((left, right) => right.labels.length - left.labels.length)
+    .slice(0, 3);
+
+  return {
+    nodeCount: nodes.length,
+    edgeCount: edges.length,
+    topSignals,
+    nodeGroups,
+  };
+}
+
 export function normalizeSelfProfile(args: {
   userId: string;
   displayName: string;
@@ -88,10 +200,12 @@ export function normalizeSelfProfile(args: {
   profileRecord: Record<string, unknown> | null;
   trustRecord: Record<string, unknown> | null;
   lifeGraphRecord: Record<string, unknown> | null;
+  globalRulesRecord: Record<string, unknown> | null;
 }): ProfileViewModel {
   const profile = args.profileRecord ?? {};
   const trust = args.trustRecord ?? {};
   const lifeGraph = args.lifeGraphRecord ?? {};
+  const globalRules = args.globalRulesRecord ?? {};
   const city = asString(profile.city) ?? args.draft.city ?? undefined;
   const country = asString(profile.country) ?? args.draft.country ?? undefined;
   const interests = pickInterests(profile);
@@ -141,6 +255,39 @@ export function normalizeSelfProfile(args: {
         asString(profile.availability) ??
         asString(lifeGraph.availabilityHint) ??
         "Evenings and weekends",
+      notifications: preferenceLabel(
+        asString(globalRules.notificationMode) ??
+          (args.draft.notificationMode === "digest" ? "digest" : "immediate"),
+        "Live",
+        {
+          immediate: "Live",
+          digest: "Digest",
+          quiet: "Quiet",
+        },
+      ),
+      autonomy: preferenceLabel(
+        asString(globalRules.agentAutonomy),
+        "Suggest Only",
+        {
+          manual: "Manual",
+          suggest_only: "Suggest Only",
+          auto_non_risky: "Auto Non-Risky",
+        },
+      ),
+      memory: preferenceLabel(asString(globalRules.memoryMode), "Standard", {
+        minimal: "Minimal",
+        standard: "Standard",
+        extended: "Extended",
+      }),
+      reachability: preferenceLabel(
+        asString(globalRules.reachable),
+        "Available Only",
+        {
+          always: "Always On",
+          available_only: "Available Only",
+          do_not_disturb: "Do Not Disturb",
+        },
+      ),
     },
     persona: derivePersona(
       socialMode,
@@ -148,6 +295,7 @@ export function normalizeSelfProfile(args: {
       finalInterests,
     ),
     systemUnderstanding: understanding,
+    graph: summarizeGraph(args.lifeGraphRecord),
   };
 }
 
@@ -196,6 +344,7 @@ export function normalizeOtherProfile(args: {
     },
     persona,
     systemUnderstanding: [],
+    graph: summarizeGraph(null),
     context: {
       reason:
         args.contextReason ??

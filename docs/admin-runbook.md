@@ -20,14 +20,21 @@
 - `GET /api/admin/ops/metrics`
 - `GET /api/admin/ops/alerts`
 - `GET /api/admin/ops/llm-runtime-health` (primary onboarding/agentic runtime triage snapshot)
+- In `ops/metrics`, track:
+  - `queueDepth` (`waiting`, `active`, `delayed`, `failed`) per queue for backlog pressure
+  - `moderationRates.moderationDecisionReviews24h` and `moderationRates.overturnRate24h`
+  - `moderationRuntime.bySource.human` to monitor human-review load vs automated decisions
 
 3. Queue state
 - `GET /api/admin/jobs/queues`
 - `GET /api/admin/jobs/dead-letters`
+- Queue workers with dead-letter capture include `moderation` and `cleanup`; replay from dead letters when terminal retries are exhausted.
 
 4. Moderation backlog
 - `GET /api/admin/moderation/queue`
 - `pnpm moderation:drill` for end-to-end operator verification in staging/prod
+- Daily retention cleanup auto-enqueues on `POST /api/inbox/requests/expire-stale` cron path.
+- Manual backstop: `POST /api/admin/maintenance/moderation-retention`
 
 5. Backend launch evidence pack
 - `pnpm test:backend:ops-pack`
@@ -40,6 +47,10 @@
 - Repair chat flow: `POST /api/admin/chats/:chatId/repair`
 - Deactivate account: `POST /api/admin/users/:userId/deactivate`
 - Restrict account: `POST /api/admin/users/:userId/restrict`
+- Submit direct human moderation decision: `POST /api/admin/moderation/decisions/:decisionId/review`
+- Triage + link to moderation decision in one action:
+  - `POST /api/admin/moderation/flags/:flagId/triage`
+  - body supports optional `decisionId` and `humanReviewAction` (`approve`, `reject`, `escalate`)
 
 ## Moderation drill
 - Default command: `pnpm moderation:drill`
@@ -64,6 +75,7 @@ Escalate to incident runbook when:
 - queue backlog breaches alert thresholds
 - moderation backlog breaches threshold
 - realtime or auth outage impacts core flow
+- OpenAI circuit is open (`/api/admin/ops/llm-runtime-health` budget section) and moderation queue backlog is rising.
 
 ## Onboarding inference lifecycle contract
 Treat onboarding infer responses as additive but stable when `lifecycle` is present:

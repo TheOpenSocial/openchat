@@ -23,6 +23,8 @@
     "prisma:migrate:drift-check": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/opensocial} prisma validate --config ../../prisma.config.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1018.0",
+    "@aws-sdk/s3-request-presigner": "^3.1018.0",
     "@nestjs/bullmq": "^11.0.3",
     "@nestjs/common": "^11.0.11",
     "@nestjs/config": "^4.0.2",

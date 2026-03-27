@@ -8,7 +8,7 @@ import { OverviewTab } from "./OverviewTab";
 import { PersonalizationTab } from "./PersonalizationTab";
 import { UserInspectorTab } from "./UserInspectorTab";
 
-interface BuildWorkbenchTabPropsArgs {
+export interface BuildWorkbenchTabPropsArgs {
   agentProps: ComponentProps<typeof AgentTab>;
   chatsProps: ComponentProps<typeof ChatsTab>;
   intentsProps: ComponentProps<typeof IntentsTab>;

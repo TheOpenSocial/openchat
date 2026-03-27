@@ -273,6 +273,13 @@ export function ModerationOperationsPanels({
                   </div>
                   <p className="mt-3 text-sm text-foreground">{flag.reason}</p>
                   <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                    {flag.queuePriority ? (
+                      <p>Priority: {flag.queuePriority}</p>
+                    ) : null}
+                    {flag.slaBand ? <p>SLA band: {flag.slaBand}</p> : null}
+                    {typeof flag.ageMinutes === "number" ? (
+                      <p>Age: {flag.ageMinutes} min</p>
+                    ) : null}
                     {flag.assigneeUserId ? (
                       <p>Assignee: {flag.assigneeUserId}</p>
                     ) : null}

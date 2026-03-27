@@ -17,7 +17,7 @@ Registered in `apps/api/src/jobs/jobs.module.ts`:
 - `digests`
 - `admin-maintenance`
 
-Current active producers/consumers are implemented for `intent-processing`, `notification`, `connection-setup`, `media-processing`, and `admin-maintenance`.
+Current active producers/consumers are implemented for `intent-processing`, `notification`, `connection-setup`, `moderation`, `media-processing`, `cleanup`, and `admin-maintenance`.
 
 ## Envelope schema
 All typed queue messages use the envelope below (`queueEnvelopeSchema`):
@@ -135,6 +135,39 @@ Validation entrypoint: `apps/api/src/jobs/queue-validation.ts`.
 ```
 
 - Default limit in consumer: `100`
+
+### 7) `ChatMessageModerationRequested`
+- Queue: `moderation`
+- Producer: `ChatsService.createMessage` (strict moderation shadow-delivery path)
+- Consumer: `ModerationConsumer`
+- Payload:
+
+```ts
+{
+  messageId: string,      // UUID
+  chatId: string,         // UUID
+  senderUserId: string,   // UUID
+  body: string
+}
+```
+
+- Idempotency key: `chat-message-moderation:<messageId>`
+
+### 8) `ModerationDecisionRetentionCleanup`
+- Queue: `cleanup`
+- Producer: `POST /api/admin/maintenance/moderation-retention`
+- Consumer: `CleanupConsumer`
+- Payload (lightweight internal contract):
+
+```ts
+{
+  version: 1,
+  traceId: string,        // UUID
+  idempotencyKey: string,
+  timestamp: string,      // ISO datetime
+  retentionDays: number
+}
+```
 
 ## Retry and backoff defaults
 For typed producer jobs:

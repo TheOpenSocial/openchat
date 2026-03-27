@@ -12,6 +12,9 @@ export interface ModerationFlagRow {
   triageNote?: string | null;
   triagedByAdminUserId?: string | null;
   triagedAt?: string | null;
+  queuePriority?: "p0" | "p1" | "p2" | "p3";
+  slaBand?: "fresh" | "watch_15m" | "warning_1h" | "critical_24h";
+  ageMinutes?: number;
   latestRiskAudit?: {
     id: string;
     metadata: unknown;

@@ -81,6 +81,15 @@ export function useModerationWorkbench({
   >("resolve");
   const [triageTargetUserId, setTriageTargetUserId] = useState("");
   const [triageReason, setTriageReason] = useState("");
+  const [triageDecisionId, setTriageDecisionId] = useState("");
+  const [triageHumanReviewAction, setTriageHumanReviewAction] = useState<
+    "approve" | "reject" | "escalate"
+  >("approve");
+  const [decisionReviewId, setDecisionReviewId] = useState("");
+  const [decisionReviewAction, setDecisionReviewAction] = useState<
+    "approve" | "reject" | "escalate"
+  >("approve");
+  const [decisionReviewNote, setDecisionReviewNote] = useState("");
   const [assignFlagId, setAssignFlagId] = useState("");
   const [assigneeUserId, setAssigneeUserId] = useState("");
   const [assignReason, setAssignReason] = useState("");
@@ -227,6 +236,10 @@ export function useModerationWorkbench({
     if (triageTargetUserId.trim()) {
       body.targetUserId = triageTargetUserId.trim();
     }
+    if (triageDecisionId.trim()) {
+      body.decisionId = triageDecisionId.trim();
+      body.humanReviewAction = triageHumanReviewAction;
+    }
 
     return runAction(
       "Triage moderation flag",
@@ -243,10 +256,40 @@ export function useModerationWorkbench({
     );
   };
 
+  const submitDecisionReview = () => {
+    if (!decisionReviewId.trim()) {
+      setBanner({ tone: "error", text: "Provide a moderation decision id." });
+      return Promise.resolve(null);
+    }
+
+    return runAction(
+      "Submit moderation decision review",
+      () =>
+        requestApi(
+          "POST",
+          `/admin/moderation/decisions/${decisionReviewId.trim()}/review`,
+          {
+            body: {
+              action: decisionReviewAction,
+              ...(decisionReviewNote.trim()
+                ? { note: decisionReviewNote.trim() }
+                : {}),
+            },
+          },
+        ),
+      "Moderation decision review submitted.",
+      (payload) => {
+        setModerationSnapshot(payload);
+        void loadAgentRiskFlags();
+      },
+    );
+  };
+
   const primeTriageFromFlag = (flag: ModerationFlagRow) => {
     setTriageFlagId(flag.id);
     setAssignFlagId(flag.id);
     setTriageReason(flag.reason);
+    setTriageDecisionId("");
     setAssignReason(flag.assignmentNote ?? "");
     setAssigneeUserId(flag.assigneeUserId ?? "");
   };
@@ -308,6 +351,9 @@ export function useModerationWorkbench({
     blockerUserId,
     createBlock,
     createReport,
+    decisionReviewAction,
+    decisionReviewId,
+    decisionReviewNote,
     loadAgentRiskFlags,
     loadAuditLogs,
     loadModerationQueue,
@@ -341,18 +387,26 @@ export function useModerationWorkbench({
     setModerationQueueSnapshot,
     setModerationQueueStatusQuery,
     setModerationSnapshot,
+    setDecisionReviewAction,
+    setDecisionReviewId,
+    setDecisionReviewNote,
     setReportDetails,
     setReportReason,
     setReporterUserId,
     setTargetUserId,
     setTriageAction,
+    setTriageDecisionId,
     setTriageFlagId,
+    setTriageHumanReviewAction,
     setTriageReason,
     setTriageTargetUserId,
+    submitDecisionReview,
     targetUserId,
     triageAction,
+    triageDecisionId,
     triageAgentRiskFlag,
     triageFlagId,
+    triageHumanReviewAction,
     triageReason,
     triageTargetUserId,
   };

@@ -29,6 +29,10 @@ export function useSelfProfileData(input: SelfProfileInput) {
     string,
     unknown
   > | null>(null);
+  const [globalRulesRecord, setGlobalRulesRecord] = useState<Record<
+    string,
+    unknown
+  > | null>(null);
   const [lifeGraphRecord, setLifeGraphRecord] = useState<Record<
     string,
     unknown
@@ -38,13 +42,15 @@ export function useSelfProfileData(input: SelfProfileInput) {
     setLoading(true);
     setError(null);
     try {
-      const [profile, trust, lifeGraph] = await Promise.all([
+      const [profile, trust, globalRules, lifeGraph] = await Promise.all([
         api.getProfile(input.userId, input.accessToken).catch(() => null),
         api.getTrustProfile(input.userId, input.accessToken).catch(() => null),
+        api.getGlobalRules(input.userId, input.accessToken).catch(() => null),
         api.getLifeGraph(input.userId, input.accessToken).catch(() => null),
       ]);
       setProfileRecord(profile);
       setTrustRecord(trust);
+      setGlobalRulesRecord(globalRules);
       setLifeGraphRecord(lifeGraph);
     } catch (nextError) {
       setError(String(nextError));
@@ -67,12 +73,14 @@ export function useSelfProfileData(input: SelfProfileInput) {
         profileRecord,
         trustRecord,
         lifeGraphRecord,
+        globalRulesRecord,
       }),
     [
       input.displayName,
       input.email,
       input.initialDraft,
       input.userId,
+      globalRulesRecord,
       lifeGraphRecord,
       profileRecord,
       trustRecord,
@@ -88,6 +96,7 @@ export function useSelfProfileData(input: SelfProfileInput) {
       socialMode?: "one_to_one" | "group" | "either";
       preferOneToOne?: boolean;
       allowGroupInvites?: boolean;
+      notificationMode?: "immediate" | "digest" | "quiet";
     }) => {
       setSaving(true);
       setError(null);
@@ -135,6 +144,63 @@ export function useSelfProfileData(input: SelfProfileInput) {
           );
         }
 
+        if (updates.notificationMode) {
+          const currentRules = globalRulesRecord ?? {};
+          await api.setGlobalRules(
+            input.userId,
+            {
+              whoCanContact:
+                currentRules.whoCanContact === "verified_only" ||
+                currentRules.whoCanContact === "trusted_only"
+                  ? currentRules.whoCanContact
+                  : "anyone",
+              reachable:
+                currentRules.reachable === "always" ||
+                currentRules.reachable === "do_not_disturb"
+                  ? currentRules.reachable
+                  : "available_only",
+              intentMode:
+                currentRules.intentMode === "one_to_one" ||
+                currentRules.intentMode === "group"
+                  ? currentRules.intentMode
+                  : "balanced",
+              modality:
+                currentRules.modality === "online" ||
+                currentRules.modality === "offline"
+                  ? currentRules.modality
+                  : "either",
+              languagePreferences: Array.isArray(
+                currentRules.languagePreferences,
+              )
+                ? currentRules.languagePreferences.filter(
+                    (value): value is string => typeof value === "string",
+                  )
+                : ["en"],
+              countryPreferences: Array.isArray(currentRules.countryPreferences)
+                ? currentRules.countryPreferences.filter(
+                    (value): value is string => typeof value === "string",
+                  )
+                : [],
+              requireVerifiedUsers:
+                typeof currentRules.requireVerifiedUsers === "boolean"
+                  ? currentRules.requireVerifiedUsers
+                  : false,
+              notificationMode: updates.notificationMode,
+              agentAutonomy:
+                currentRules.agentAutonomy === "manual" ||
+                currentRules.agentAutonomy === "auto_non_risky"
+                  ? currentRules.agentAutonomy
+                  : "suggest_only",
+              memoryMode:
+                currentRules.memoryMode === "minimal" ||
+                currentRules.memoryMode === "extended"
+                  ? currentRules.memoryMode
+                  : "standard",
+            },
+            input.accessToken,
+          );
+        }
+
         await reload();
       } catch (nextError) {
         setError(String(nextError));
@@ -143,7 +209,7 @@ export function useSelfProfileData(input: SelfProfileInput) {
         setSaving(false);
       }
     },
-    [input.accessToken, input.userId, reload],
+    [globalRulesRecord, input.accessToken, input.userId, reload],
   );
 
   const refreshUnderstanding = useCallback(async () => {

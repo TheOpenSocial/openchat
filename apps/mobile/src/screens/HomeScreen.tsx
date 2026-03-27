@@ -572,10 +572,7 @@ export function HomeScreen({
         setActiveTab("home");
       }}
       onPressNotifications={() => {
-        setBanner({
-          tone: "info",
-          text: "No new notifications right now.",
-        });
+        hapticSelection();
       }}
       onPressProfile={() => {
         hapticSelection();

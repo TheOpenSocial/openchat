@@ -20,6 +20,8 @@ const SETTING_KEYS = {
   enablePersonalization: "launch.enable_personalization",
   enableDiscovery: "launch.enable_discovery",
   enableModerationStrictness: "launch.enable_moderation_strictness",
+  enableModerationMessages: "launch.enable_moderation_messages",
+  enableModerationAvatars: "launch.enable_moderation_avatars",
   enableAiParsing: "launch.enable_ai_parsing",
   enableRealtimeChat: "launch.enable_realtime_chat",
   enableScheduledTasks: "launch.enable_scheduled_tasks",
@@ -36,6 +38,8 @@ export type LaunchAction =
   | "personalization"
   | "discovery"
   | "moderation_strictness"
+  | "moderation_messages"
+  | "moderation_avatars"
   | "ai_parsing"
   | "realtime_chat"
   | "scheduled_tasks"
@@ -54,6 +58,8 @@ export interface LaunchControlsSnapshot {
   enablePersonalization: boolean;
   enableDiscovery: boolean;
   enableModerationStrictness: boolean;
+  enableModerationMessages: boolean;
+  enableModerationAvatars: boolean;
   enableAiParsing: boolean;
   enableRealtimeChat: boolean;
   enableScheduledTasks: boolean;
@@ -100,6 +106,10 @@ export class LaunchControlsService {
       enableModerationStrictness:
         overrides.enableModerationStrictness ??
         defaults.enableModerationStrictness,
+      enableModerationMessages:
+        overrides.enableModerationMessages ?? defaults.enableModerationMessages,
+      enableModerationAvatars:
+        overrides.enableModerationAvatars ?? defaults.enableModerationAvatars,
       enableAiParsing: overrides.enableAiParsing ?? defaults.enableAiParsing,
       enableRealtimeChat:
         overrides.enableRealtimeChat ?? defaults.enableRealtimeChat,
@@ -174,6 +184,8 @@ export class LaunchControlsService {
     enablePersonalization?: boolean;
     enableDiscovery?: boolean;
     enableModerationStrictness?: boolean;
+    enableModerationMessages?: boolean;
+    enableModerationAvatars?: boolean;
     enableAiParsing?: boolean;
     enableRealtimeChat?: boolean;
     enableScheduledTasks?: boolean;
@@ -192,6 +204,8 @@ export class LaunchControlsService {
       ["enablePersonalization", input.enablePersonalization],
       ["enableDiscovery", input.enableDiscovery],
       ["enableModerationStrictness", input.enableModerationStrictness],
+      ["enableModerationMessages", input.enableModerationMessages],
+      ["enableModerationAvatars", input.enableModerationAvatars],
       ["enableAiParsing", input.enableAiParsing],
       ["enableRealtimeChat", input.enableRealtimeChat],
       ["enableScheduledTasks", input.enableScheduledTasks],
@@ -250,6 +264,12 @@ export class LaunchControlsService {
     }
     if (action === "moderation_strictness") {
       return snapshot.enableModerationStrictness;
+    }
+    if (action === "moderation_messages") {
+      return snapshot.enableModerationMessages;
+    }
+    if (action === "moderation_avatars") {
+      return snapshot.enableModerationAvatars;
     }
     if (action === "ai_parsing") {
       return snapshot.enableAiParsing;
@@ -315,6 +335,12 @@ export class LaunchControlsService {
       enableModerationStrictness: this.readBoolean(
         byKey.get(SETTING_KEYS.enableModerationStrictness),
       ),
+      enableModerationMessages: this.readBoolean(
+        byKey.get(SETTING_KEYS.enableModerationMessages),
+      ),
+      enableModerationAvatars: this.readBoolean(
+        byKey.get(SETTING_KEYS.enableModerationAvatars),
+      ),
       enableAiParsing: this.readBoolean(
         byKey.get(SETTING_KEYS.enableAiParsing),
       ),
@@ -374,6 +400,14 @@ export class LaunchControlsService {
       enableModerationStrictness: this.readBooleanFromEnv(
         "FEATURE_ENABLE_MODERATION_STRICTNESS",
         false,
+      ),
+      enableModerationMessages: this.readBooleanFromEnv(
+        "FEATURE_ENABLE_MODERATION_MESSAGES",
+        true,
+      ),
+      enableModerationAvatars: this.readBooleanFromEnv(
+        "FEATURE_ENABLE_MODERATION_AVATARS",
+        true,
       ),
       enableAiParsing: this.readBooleanFromEnv(
         "FEATURE_ENABLE_AI_PARSING",

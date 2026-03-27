@@ -4,7 +4,7 @@
 - In CI/CD, runtime secrets (including `OPENAI_API_KEY`) must come from GitHub Environment Secrets, not committed files.
 - Required for OAuth callback correctness: `GOOGLE_REDIRECT_URI`.
 - Optional local defaults can exist only in `.env.example`.
-- Optional media variables: `MEDIA_CDN_BASE_URL`, `MEDIA_UPLOAD_SIGNING_SECRET`.
+- Optional media variables: `MEDIA_CDN_BASE_URL`, `MEDIA_UPLOAD_SIGNING_SECRET` (or `MEDIA_SIGNING_SECRET` alias), `S3_PRESIGNED_UPLOADS_ENABLED`.
 - Optional operational hardening variables:
   - `INBOX_EXPIRE_STALE_CRON_KEY` (required in production to enable `POST /api/inbox/requests/expire-stale`)
   - `REALTIME_ALLOW_INSECURE_USER_ID` (dev/test only; ignored in production)
