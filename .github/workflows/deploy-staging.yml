@@ -34,7 +34,7 @@ env:
 
 jobs:
   deploy-staging:
-    runs-on: [self-hosted, linux, x64, opensocial-ci]
+    runs-on: [self-hosted, linux, x64, opensocial-prod]
     environment: staging
     concurrency:
       group: deploy-staging
