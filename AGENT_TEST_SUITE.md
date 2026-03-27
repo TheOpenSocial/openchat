@@ -332,6 +332,7 @@ Current runner artifact behavior:
   - `AGENT_TEST_SUITE_ENABLE_PROD_SMOKE=1` (run smoke lane)
   - `AGENT_TEST_SUITE_REQUIRE_PROD_SMOKE=1` (fail if smoke lane is not enabled/passing)
 - strict verification lane command (`pnpm test:agentic:suite:verification`) enforces benchmark and prod-smoke requirements in one pass and fails fast when required env vars are missing
+- strict verification revalidates benchmark/smoke access credentials immediately before `benchmark` and `prod-smoke` stages, and attempts bootstrap/session refresh so stale tokens fail early with explicit credential errors
 - strict verification now runs in staged mode (`contract -> workflow -> queue -> scenario -> eval -> benchmark -> prod-smoke`) and writes a summary artifact at `.artifacts/agent-test-suite/verification-latest.json`
 - strict verification retries only failing stages once per run; if a stage still fails, the run fails with explicit failed-stage reporting
 - rerun-only-failures flow is available via:

@@ -5,6 +5,7 @@ import {
   Controller,
   Get,
   Headers,
+  Logger,
   MessageEvent,
   Param,
   Post,
@@ -30,6 +31,8 @@ import { AgentService } from "./agent.service.js";
 
 @Controller("agent/threads")
 export class AgentController {
+  private readonly logger = new Logger(AgentController.name);
+
   constructor(
     private readonly agentService: AgentService,
     private readonly agentConversationService: AgentConversationService,
@@ -126,26 +129,56 @@ export class AgentController {
       "agent response user does not match authenticated user",
     );
 
-    let result: Awaited<
-      ReturnType<typeof this.agentConversationService.runAgenticTurn>
-    >;
-    try {
-      result = await this.clientMutationService.run({
-        userId: payload.userId,
-        scope: "agent.respond",
-        idempotencyKey: readIdempotencyKeyHeader(idempotencyKeyHeader),
-        handler: () =>
-          this.agentConversationService.runAgenticTurn({
-            threadId,
-            userId: payload.userId,
-            content: payload.content,
-            traceId: payload.traceId,
-            streamResponseTokens: payload.streamResponseTokens,
-            voiceTranscript: payload.voiceTranscript,
-            attachments: payload.attachments,
-          }),
+    const runPromise = this.clientMutationService.run({
+      userId: payload.userId,
+      scope: "agent.respond",
+      idempotencyKey: readIdempotencyKeyHeader(idempotencyKeyHeader),
+      handler: () =>
+        this.agentConversationService.runAgenticTurn({
+          threadId,
+          userId: payload.userId,
+          content: payload.content,
+          traceId: payload.traceId,
+          streamResponseTokens: payload.streamResponseTokens,
+          voiceTranscript: payload.voiceTranscript,
+          attachments: payload.attachments,
+        }),
+    });
+    const runWithOutcome = runPromise
+      .then((value) => ({ status: "ok" as const, value }))
+      .catch((error) => ({ status: "error" as const, error }));
+    const budgetMs = this.readAgentRespondSyncBudgetMs();
+    const outcome = await Promise.race([
+      runWithOutcome,
+      this.delay(budgetMs).then(() => ({ status: "timeout" as const })),
+    ]);
+
+    if (outcome.status === "timeout") {
+      void runWithOutcome.then((backgroundOutcome) => {
+        if (backgroundOutcome.status === "error") {
+          this.logger.warn(
+            `agent.respond background completion failed after timeout: ${
+              backgroundOutcome.error instanceof Error
+                ? backgroundOutcome.error.message
+                : String(backgroundOutcome.error)
+            }`,
+          );
+        }
       });
-    } catch (error) {
+      return ok(
+        {
+          traceId: payload.traceId ?? null,
+          status: "processing",
+          assistantMessage: null,
+          userMessageId: null,
+          agentMessageId: null,
+        },
+        payload.traceId,
+      );
+    }
+
+    if (outcome.status === "error") {
+      const error = outcome.error;
       if (
         error instanceof ConflictException &&
         error.message === "request is already processing"
@@ -164,6 +197,7 @@ export class AgentController {
       throw error;
     }
 
+    const result = outcome.value;
     return ok(result, result.traceId);
   }
 
@@ -298,5 +332,17 @@ export class AgentController {
       return false;
     }
     throw new BadRequestException("boolean query must be true or false");
+  }
+
+  private readAgentRespondSyncBudgetMs() {
+    const raw = Number(process.env.AGENT_RESPOND_SYNC_BUDGET_MS || 4000);
+    if (!Number.isFinite(raw) || raw < 1000) {
+      return 4000;
+    }
+    return raw;
+  }
+
+  private async delay(ms: number) {
+    await new Promise((resolve) => setTimeout(resolve, ms));
   }
 }

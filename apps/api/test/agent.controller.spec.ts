@@ -207,6 +207,62 @@ describe("AgentController", () => {
     });
   });
 
+  it("returns processing envelope when respond exceeds sync budget", async () => {
+    const threadId = "11111111-1111-4111-8111-111111111111";
+    const userId = "22222222-2222-4222-8222-222222222222";
+    const previousBudget = process.env.AGENT_RESPOND_SYNC_BUDGET_MS;
+    process.env.AGENT_RESPOND_SYNC_BUDGET_MS = "1000";
+
+    try {
+      const { controller } = createController({
+        clientMutationService: {
+          run: vi.fn(
+            () =>
+              new Promise((resolve) =>
+                setTimeout(
+                  () =>
+                    resolve({
+                      traceId: "trace-late",
+                      userMessageId: "msg-user",
+                      agentMessageId: "msg-agent",
+                    }),
+                  1200,
+                ),
+              ),
+          ),
+        },
+      });
+
+      const result = await controller.respond(
+        threadId,
+        {
+          userId,
+          content: "find someone nearby",
+          traceId: "trace-timeout",
+        },
+        userId,
+      );
+
+      expect(result).toEqual({
+        success: true,
+        data: {
+          traceId: "trace-timeout",
+          status: "processing",
+          assistantMessage: null,
+          userMessageId: null,
+          agentMessageId: null,
+        },
+        traceId: "trace-timeout",
+      });
+    } finally {
+      if (previousBudget === undefined) {
+        delete process.env.AGENT_RESPOND_SYNC_BUDGET_MS;
+      } else {
+        process.env.AGENT_RESPOND_SYNC_BUDGET_MS = previousBudget;
+      }
+    }
+  });
+
   it("rejects respond when payload user does not match authenticated actor", async () => {
     const threadId = "11111111-1111-4111-8111-111111111111";
     const actorUserId = "22222222-2222-4222-8222-222222222222";

@@ -344,6 +344,7 @@ const rerunFailedOnly =
   process.env.AGENT_TEST_SUITE_RERUN_FAILED_ONLY === "1";
 const retryFailedStagesOnce =
   process.env.AGENT_TEST_SUITE_RETRY_FAILED_STAGES_ONCE !== "0";
+const tokenSensitiveStages = new Set(["benchmark", "prod-smoke"]);
 
 function buildSuiteEnv() {
   return {
@@ -458,7 +459,32 @@ const firstPassStages =
         ? stagesFromLatestSummary
         : stageSequence
     : stageSequence;
-const suiteEnv = buildSuiteEnv();
+let suiteEnv = buildSuiteEnv();
+
+async function hydrateStageCredentials(layer) {
+  if (!tokenSensitiveStages.has(layer)) {
+    return;
+  }
+  if (await benchAccessTokenIsValid(hydratedEnv)) {
+    suiteEnv = buildSuiteEnv();
+    return;
+  }
+  hydratedEnv = await tryBootstrapEnvFromPlayground(hydratedEnv, [], {
+    forceRefresh: true,
+    required: process.env.PLAYGROUND_BOOTSTRAP_REQUIRED === "1",
+  });
+  if (await benchAccessTokenIsValid(hydratedEnv)) {
+    suiteEnv = buildSuiteEnv();
+    return;
+  }
+  hydratedEnv = await tryRefreshSmokeSession(hydratedEnv);
+  if (!(await benchAccessTokenIsValid(hydratedEnv))) {
+    throw new Error(
+      `stage ${layer} requires a valid AGENTIC_BENCH_ACCESS_TOKEN, but token validation failed before execution`,
+    );
+  }
+  suiteEnv = buildSuiteEnv();
+}
 
 const records = [];
 const failedFirstPass = [];
@@ -471,6 +497,23 @@ console.log("");
 
 for (const layer of firstPassStages) {
   console.log(`==> verification stage ${layer} (attempt 1)`);
+  try {
+    await hydrateStageCredentials(layer);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(message);
+    records.push({
+      layer,
+      attempt: 1,
+      status: "failed",
+      exitCode: 1,
+      latencyMs: 0,
+      runId: `${runIdPrefix}-${layer}-a1`,
+      failureReason: message,
+    });
+    failedFirstPass.push(layer);
+    continue;
+  }
   const record = runLayer(layer, 1, suiteEnv);
   records.push(record);
   if (record.status === "failed") {
@@ -482,6 +525,22 @@ const failedAfterRetry = [...failedFirstPass];
 if (retryFailedStagesOnce && failedFirstPass.length > 0) {
   for (const layer of failedFirstPass) {
     console.log(`==> verification stage ${layer} (attempt 2)`);
+    try {
+      await hydrateStageCredentials(layer);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(message);
+      records.push({
+        layer,
+        attempt: 2,
+        status: "failed",
+        exitCode: 1,
+        latencyMs: 0,
+        runId: `${runIdPrefix}-${layer}-a2`,
+        failureReason: message,
+      });
+      continue;
+    }
     const retryRecord = runLayer(layer, 2, suiteEnv);
     records.push(retryRecord);
     if (retryRecord.status === "passed") {
