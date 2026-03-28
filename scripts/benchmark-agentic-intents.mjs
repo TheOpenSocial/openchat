@@ -135,8 +135,21 @@ const useUniqueForwardedIp =
   process.env.AGENTIC_BENCH_USE_UNIQUE_IP === "false"
     ? false
     : /^(http:\/\/localhost|http:\/\/127\.0\.0\.1)/.test(baseUrl);
+let globalForwardedIpSequence = 0;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function nextGlobalForwardedHeader() {
+  if (!useUniqueForwardedIp) {
+    return {};
+  }
+  globalForwardedIpSequence += 1;
+  const thirdOctet = 10 + (globalForwardedIpSequence % 200);
+  const fourthOctet = 10 + (Math.floor(globalForwardedIpSequence / 200) % 200);
+  return {
+    "x-forwarded-for": `198.51.${thirdOctet}.${fourthOctet}`,
+  };
+}
 
 function percentile(values, p) {
   if (!values.length) {
@@ -203,6 +216,7 @@ async function requestJson(pathname, init = {}) {
       "content-type": "application/json",
       authorization: `Bearer ${accessToken}`,
       ...(benchHostHeader ? { Host: benchHostHeader } : {}),
+      ...nextGlobalForwardedHeader(),
       ...(init.headers ?? {}),
     };
     const controller = new AbortController();
