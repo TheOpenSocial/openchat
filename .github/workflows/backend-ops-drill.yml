@@ -32,6 +32,8 @@ jobs:
       BACKEND_OPS_INCLUDE_VERIFICATION: "1"
       BACKEND_OPS_INCLUDE_PROD_SMOKE: ${{ inputs.include_prod_smoke && '1' || '0' }}
       BACKEND_OPS_INCLUDE_MODERATION_DRILL: "1"
+      AGENT_TEST_SUITE_ONLY_STAGES: ${{ inputs.include_prod_smoke && 'contract,workflow,queue,scenario,eval,benchmark,prod-smoke' || 'contract,workflow,queue,scenario,eval' }}
+      AGENT_TEST_SUITE_RETRY_FAILED_STAGES_ONCE: "1"
       SMOKE_BASE_URL: https://api.opensocial.so
       SMOKE_HOST_HEADER: ${{ secrets.STAGING_SMOKE_HOST_HEADER }}
       SMOKE_ADMIN_USER_ID: ${{ secrets.STAGING_SMOKE_ADMIN_USER_ID || secrets.SMOKE_ADMIN_USER_ID }}
