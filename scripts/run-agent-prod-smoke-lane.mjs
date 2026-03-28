@@ -11,6 +11,7 @@ const adminUserId = process.env.SMOKE_ADMIN_USER_ID?.trim() || "";
 const agentThreadId = process.env.SMOKE_AGENT_THREAD_ID?.trim() || "";
 const userId = process.env.SMOKE_USER_ID?.trim() || "";
 const probeToken = process.env.ONBOARDING_PROBE_TOKEN?.trim() || "";
+const refreshToken = process.env.SMOKE_REFRESH_TOKEN?.trim() || "";
 const paceMs = Number(process.env.AGENTIC_VERIFICATION_LANE_PACE_MS ?? 1500);
 const runId =
   process.env.AGENTIC_PROD_SMOKE_RUN_ID ??
@@ -88,11 +89,56 @@ function runCommand(step) {
   };
 }
 
+async function refreshSmokeSession() {
+  if (!baseUrl || !refreshToken) {
+    return;
+  }
+
+  const response = await fetch(`${baseUrl}/api/auth/refresh`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      refreshToken: process.env.SMOKE_REFRESH_TOKEN || refreshToken,
+      deviceId: "staging-verification-lane",
+      deviceName: "Staging Verification Lane",
+    }),
+  });
+
+  let payload = null;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+
+  if (!response.ok || !payload?.success || !payload?.data?.accessToken) {
+    const preview = payload ? JSON.stringify(payload).slice(0, 200) : "null";
+    throw new Error(
+      `smoke session refresh failed (${response.status}): ${preview}`,
+    );
+  }
+
+  process.env.SMOKE_ACCESS_TOKEN = String(payload.data.accessToken).trim();
+  process.env.AGENTIC_BENCH_ACCESS_TOKEN = process.env.SMOKE_ACCESS_TOKEN;
+  if (
+    typeof payload.data.refreshToken === "string" &&
+    payload.data.refreshToken.trim().length > 0
+  ) {
+    process.env.SMOKE_REFRESH_TOKEN = payload.data.refreshToken.trim();
+  }
+}
+
 async function main() {
   const startedAt = Date.now();
   const steps = [];
 
   for (let index = 0; index < commands.length; index += 1) {
+    if (commands[index].id === "smoke_llm_runtime") {
+      await refreshSmokeSession();
+      console.log("smoke session refreshed before smoke_llm_runtime");
+    }
     const step = runCommand(commands[index]);
     steps.push(step);
     if (step.status === "failed") {
