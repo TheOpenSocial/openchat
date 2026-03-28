@@ -8,10 +8,15 @@ const laneId = process.env.AGENTIC_VERIFICATION_LANE_ID?.trim() || "";
 const baseUrl = process.env.SMOKE_BASE_URL?.trim() || "";
 const accessToken = process.env.SMOKE_ACCESS_TOKEN?.trim() || "";
 const adminUserId = process.env.SMOKE_ADMIN_USER_ID?.trim() || "";
+const adminRole = process.env.SMOKE_ADMIN_ROLE?.trim() || "admin";
+const adminApiKey = process.env.SMOKE_ADMIN_API_KEY?.trim() || "";
 const agentThreadId = process.env.SMOKE_AGENT_THREAD_ID?.trim() || "";
 const userId = process.env.SMOKE_USER_ID?.trim() || "";
 const probeToken = process.env.ONBOARDING_PROBE_TOKEN?.trim() || "";
 const refreshToken = process.env.SMOKE_REFRESH_TOKEN?.trim() || "";
+const smokeHostHeader = process.env.SMOKE_HOST_HEADER?.trim() || "";
+const applicationKey = process.env.SMOKE_APPLICATION_KEY?.trim() || "";
+const applicationToken = process.env.SMOKE_APPLICATION_TOKEN?.trim() || "";
 const paceMs = Number(process.env.AGENTIC_VERIFICATION_LANE_PACE_MS ?? 1500);
 const runId =
   process.env.AGENTIC_PROD_SMOKE_RUN_ID ??
@@ -25,10 +30,7 @@ const artifactPath = path.resolve(
 const required = [
   ["AGENTIC_VERIFICATION_LANE_ID", laneId],
   ["SMOKE_BASE_URL", baseUrl],
-  ["SMOKE_ACCESS_TOKEN", accessToken],
   ["SMOKE_ADMIN_USER_ID", adminUserId],
-  ["SMOKE_AGENT_THREAD_ID", agentThreadId],
-  ["SMOKE_USER_ID", userId],
   ["ONBOARDING_PROBE_TOKEN", probeToken],
 ];
 
@@ -98,6 +100,7 @@ async function refreshSmokeSession() {
     method: "POST",
     headers: {
       "content-type": "application/json",
+      ...(smokeHostHeader ? { Host: smokeHostHeader } : {}),
     },
     body: JSON.stringify({
       refreshToken: process.env.SMOKE_REFRESH_TOKEN || refreshToken,
@@ -134,25 +137,160 @@ async function refreshSmokeSession() {
   return { refreshed: true, reason: "ok" };
 }
 
+async function bootstrapSmokeSession() {
+  if (!baseUrl || !adminUserId) {
+    return { bootstrapped: false, reason: "missing_base_or_admin_user" };
+  }
+
+  const headers = {
+    "content-type": "application/json",
+    "x-admin-user-id": adminUserId,
+    "x-admin-role": adminRole,
+    ...(smokeHostHeader ? { Host: smokeHostHeader } : {}),
+    ...(adminApiKey ? { "x-admin-api-key": adminApiKey } : {}),
+    ...(applicationKey ? { "x-application-key": applicationKey } : {}),
+    ...(applicationToken ? { "x-application-token": applicationToken } : {}),
+  };
+
+  const response = await fetch(`${baseUrl}/api/admin/ops/smoke-session/exchange`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({}),
+  });
+
+  let payload = null;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+
+  const envPayload = payload?.data?.env;
+  if (!response.ok || !payload?.success || typeof envPayload !== "object") {
+    const preview = payload ? JSON.stringify(payload).slice(0, 240) : "null";
+    return {
+      bootstrapped: false,
+      reason: `bootstrap_failed_${response.status}`,
+      detail: preview,
+    };
+  }
+
+  const keys = [
+    "SMOKE_ACCESS_TOKEN",
+    "SMOKE_REFRESH_TOKEN",
+    "SMOKE_USER_ID",
+    "SMOKE_AGENT_THREAD_ID",
+    "AGENTIC_BENCH_ACCESS_TOKEN",
+    "AGENTIC_BENCH_USER_ID",
+    "AGENTIC_BENCH_THREAD_ID",
+  ];
+  for (const key of keys) {
+    const value = envPayload[key];
+    if (typeof value === "string" && value.trim().length > 0) {
+      process.env[key] = value.trim();
+    }
+  }
+
+  return { bootstrapped: true, reason: "ok" };
+}
+
+async function smokeAccessTokenIsValid() {
+  const runtimeBaseUrl = process.env.SMOKE_BASE_URL?.trim() || baseUrl;
+  const runtimeToken = process.env.SMOKE_ACCESS_TOKEN?.trim() || "";
+  const runtimeThreadId = process.env.SMOKE_AGENT_THREAD_ID?.trim() || "";
+
+  if (!runtimeBaseUrl || !runtimeToken || !runtimeThreadId) {
+    return false;
+  }
+
+  try {
+    const response = await fetch(
+      `${runtimeBaseUrl}/api/agent/threads/${runtimeThreadId}/messages`,
+      {
+        method: "GET",
+        headers: {
+          authorization: `Bearer ${runtimeToken}`,
+          ...(smokeHostHeader ? { Host: smokeHostHeader } : {}),
+        },
+      },
+    );
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function ensureSmokeSessionReady() {
+  if (await smokeAccessTokenIsValid()) {
+    return { ok: true, reason: "existing_token_valid" };
+  }
+
+  const refreshResult = await refreshSmokeSession();
+  if (refreshResult.refreshed && (await smokeAccessTokenIsValid())) {
+    return { ok: true, reason: "refreshed_token_valid" };
+  }
+
+  const bootstrapResult = await bootstrapSmokeSession();
+  if (bootstrapResult.bootstrapped && (await smokeAccessTokenIsValid())) {
+    return { ok: true, reason: "bootstrapped_token_valid" };
+  }
+
+  const detail = [
+    refreshResult.reason,
+    refreshResult.detail,
+    bootstrapResult.reason,
+    bootstrapResult.detail,
+  ]
+    .filter((value) => typeof value === "string" && value.length > 0)
+    .join(" | ");
+  return { ok: false, reason: "unable_to_acquire_valid_token", detail };
+}
+
 async function main() {
   const startedAt = Date.now();
   const steps = [];
 
+  const sessionReady = await ensureSmokeSessionReady();
+  if (!sessionReady.ok) {
+    console.error(
+      `prod smoke lane could not initialize smoke session: ${sessionReady.reason}${sessionReady.detail ? ` detail=${sessionReady.detail}` : ""}`,
+    );
+    process.exit(1);
+  }
+  console.log(`smoke session initialized: ${sessionReady.reason}`);
+
+  const postBootstrapRequired = [
+    ["SMOKE_ACCESS_TOKEN", process.env.SMOKE_ACCESS_TOKEN?.trim() || accessToken],
+    ["SMOKE_USER_ID", process.env.SMOKE_USER_ID?.trim() || userId],
+    ["SMOKE_AGENT_THREAD_ID", process.env.SMOKE_AGENT_THREAD_ID?.trim() || agentThreadId],
+  ];
+  const postBootstrapMissing = postBootstrapRequired
+    .filter(([, value]) => !value)
+    .map(([key]) => key);
+  if (postBootstrapMissing.length > 0) {
+    console.error(
+      `prod smoke lane missing required smoke session values after initialization: ${postBootstrapMissing.join(", ")}`,
+    );
+    process.exit(1);
+  }
+
   for (let index = 0; index < commands.length; index += 1) {
     if (commands[index].id === "smoke_llm_runtime") {
-      const refreshResult = await refreshSmokeSession();
-      if (refreshResult.refreshed) {
-        console.log("smoke session refreshed before smoke_llm_runtime");
-      } else {
+      const runtimeSessionResult = await ensureSmokeSessionReady();
+      if (!runtimeSessionResult.ok) {
         const detailSuffix =
-          typeof refreshResult.detail === "string" &&
-          refreshResult.detail.length > 0
-            ? ` detail=${refreshResult.detail}`
+          typeof runtimeSessionResult.detail === "string" &&
+          runtimeSessionResult.detail.length > 0
+            ? ` detail=${runtimeSessionResult.detail}`
             : "";
-        console.warn(
-          `smoke session refresh skipped before smoke_llm_runtime reason=${refreshResult.reason}${detailSuffix}`,
+        console.error(
+          `smoke session unavailable before smoke_llm_runtime reason=${runtimeSessionResult.reason}${detailSuffix}`,
         );
+        process.exit(1);
       }
+      console.log(
+        `smoke session ready before smoke_llm_runtime (${runtimeSessionResult.reason})`,
+      );
     }
     const step = runCommand(commands[index]);
     steps.push(step);
