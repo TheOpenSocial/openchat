@@ -91,7 +91,7 @@ function runCommand(step) {
 
 async function refreshSmokeSession() {
   if (!baseUrl || !refreshToken) {
-    return;
+    return { refreshed: false, reason: "missing_base_or_refresh_token" };
   }
 
   const response = await fetch(`${baseUrl}/api/auth/refresh`, {
@@ -115,9 +115,11 @@ async function refreshSmokeSession() {
 
   if (!response.ok || !payload?.success || !payload?.data?.accessToken) {
     const preview = payload ? JSON.stringify(payload).slice(0, 200) : "null";
-    throw new Error(
-      `smoke session refresh failed (${response.status}): ${preview}`,
-    );
+    return {
+      refreshed: false,
+      reason: `refresh_failed_${response.status}`,
+      detail: preview,
+    };
   }
 
   process.env.SMOKE_ACCESS_TOKEN = String(payload.data.accessToken).trim();
@@ -128,6 +130,8 @@ async function refreshSmokeSession() {
   ) {
     process.env.SMOKE_REFRESH_TOKEN = payload.data.refreshToken.trim();
   }
+
+  return { refreshed: true, reason: "ok" };
 }
 
 async function main() {
@@ -136,8 +140,19 @@ async function main() {
 
   for (let index = 0; index < commands.length; index += 1) {
     if (commands[index].id === "smoke_llm_runtime") {
-      await refreshSmokeSession();
-      console.log("smoke session refreshed before smoke_llm_runtime");
+      const refreshResult = await refreshSmokeSession();
+      if (refreshResult.refreshed) {
+        console.log("smoke session refreshed before smoke_llm_runtime");
+      } else {
+        const detailSuffix =
+          typeof refreshResult.detail === "string" &&
+          refreshResult.detail.length > 0
+            ? ` detail=${refreshResult.detail}`
+            : "";
+        console.warn(
+          `smoke session refresh skipped before smoke_llm_runtime reason=${refreshResult.reason}${detailSuffix}`,
+        );
+      }
     }
     const step = runCommand(commands[index]);
     steps.push(step);
