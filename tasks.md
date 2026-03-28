@@ -10,19 +10,13 @@ Last refreshed: 2026-03-28
 `EPIC D — Launch Security and Reliability Closure`
 
 ## Now
-- [ ] `D-01` Rotate temporary probe/debug credentials
-  - Rotate verification-lane probe/debug tokens and confirm GitHub secret scope parity.
-  - Evidence:
-    - deployed verification lane green
-    - `pnpm test:agentic:suite:verification`
-
-## Next
 - [ ] `D-02` Record moderation and trust-sensitive operator drill evidence
   - Run and archive moderation drill and trust-sensitive lifecycle operator evidence in staging/prod.
   - Evidence:
     - `pnpm moderation:drill`
     - `pnpm test:backend:ops-pack`
 
+## Next
 - [ ] `D-03` Finalize launch smoke matrix and runbook evidence
   - Record explicit pass/fail evidence, rollback points, monitors, and first-24h owner map.
   - Evidence:

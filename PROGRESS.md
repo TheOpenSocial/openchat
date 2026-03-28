@@ -97,6 +97,7 @@ Priority order:
     - `pnpm test:agentic:suite -- --layer=workflow`
   - Artifact/endpoint:
     - onboarding activation contract responses
+    - `POST /api/onboarding/activation-bootstrap`
   - Last updated: 2026-03-28
 
 ### EPIC C — Golden Suite and Operator Confidence
@@ -147,7 +148,9 @@ Priority order:
 - 2026-03-28: golden-suite `scenario` lane green with artifact `.artifacts/agent-test-suite/agent-suite-2026-03-28T18-06-11-826Z/scenario.json` (`482` tests).
 - 2026-03-28: golden-suite `eval` lane green with artifact `.artifacts/agent-test-suite/agent-suite-2026-03-28T18-06-29-833Z/eval.json` (`482` tests), closing `A-03`.
 - 2026-03-28: onboarding activation and starter-bootstrap contract green locally (`14` tests) and golden-suite `workflow` lane green with artifact `.artifacts/agent-test-suite/agent-suite-2026-03-28T18-07-15-606Z/workflow.json` (`482` tests), closing `B-01`.
+- 2026-03-28: extended post-onboarding activation with a real backend bootstrap payload at `POST /api/onboarding/activation-bootstrap`, returning activation plan state, primary thread summary, passive discovery preview, inbox suggestions, and replay-safe execution status from `client_mutations`. Verified with `pnpm --filter @opensocial/api exec vitest run test/onboarding.service.spec.ts test/onboarding-flow.contract.spec.ts`, `pnpm --filter @opensocial/api lint`, and `pnpm release:check:api`.
 - 2026-03-28: launch-ops repo evidence tightened. Added `docs/backend-launch-smoke-matrix.md`, linked release/ops runbooks, and upgraded `scripts/run-backend-ops-pack.mjs` to validate required runbooks, emit per-step env readiness, and produce a final `shipVerdict`. Verified locally with `BACKEND_OPS_DRY_RUN=1 pnpm test:backend:ops-pack`.
+- 2026-03-28: rotated verification-lane probe/debug credentials (`ONBOARDING_PROBE_TOKEN`, `SMOKE_SESSION_APPLICATION_KEY`, `SMOKE_SESSION_APPLICATION_TOKEN`, `STAGING_SMOKE_SESSION_APPLICATION_KEY`, `STAGING_SMOKE_SESSION_APPLICATION_TOKEN`, `SMOKE_ADMIN_API_KEY`), confirmed refreshed GitHub secret timestamps, and revalidated deployed staging with green `Deploy Staging` run `23692569711` including smoke bootstrap, refresh, incident gates, and the backend golden suite lane.
 
 ---
 
