@@ -341,6 +341,51 @@ function runBenchmark(check) {
   }
   const workflowHealthFailed =
     benchmarkArtifact?.guardrail?.workflowHealthPass === false;
+  if (result.status !== 0) {
+    const guardrail = benchmarkArtifact?.guardrail ?? null;
+    const workflowHealth = benchmarkArtifact?.workflowHealth ?? null;
+    const results = Array.isArray(benchmarkArtifact?.results)
+      ? benchmarkArtifact.results
+      : [];
+    const sampleResults = results.slice(0, 3).map((entry) => ({
+      scenarioId: entry?.scenarioId ?? null,
+      ackLatencyMs:
+        typeof entry?.ackLatencyMs === "number" ? entry.ackLatencyMs : null,
+      ackWithinSlo: Boolean(entry?.ackWithinSlo),
+      backgroundFollowupDetected: Boolean(entry?.backgroundFollowupDetected),
+      duplicateVisibleSideEffects:
+        typeof entry?.duplicateVisibleSideEffects === "number"
+          ? entry.duplicateVisibleSideEffects
+          : null,
+      queueLagMs:
+        typeof entry?.queueLagMs === "number" ? entry.queueLagMs : null,
+      error:
+        typeof entry?.error === "string" && entry.error.length > 0
+          ? entry.error
+          : null,
+    }));
+    console.error("[agentic-benchmark] benchmark stage failed");
+    if (guardrail) {
+      console.error(
+        `[agentic-benchmark] guardrail=${JSON.stringify(guardrail)}`,
+      );
+    }
+    if (workflowHealth) {
+      console.error(
+        `[agentic-benchmark] workflowHealth=${JSON.stringify(workflowHealth)}`,
+      );
+    }
+    if (sampleResults.length > 0) {
+      console.error(
+        `[agentic-benchmark] sampleResults=${JSON.stringify(sampleResults)}`,
+      );
+    }
+    if (!benchmarkArtifact) {
+      console.error(
+        "[agentic-benchmark] benchmark artifact missing or unreadable",
+      );
+    }
+  }
   const failureClass =
     result.status === 0
       ? null
