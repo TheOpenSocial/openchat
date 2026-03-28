@@ -20,7 +20,7 @@ const checks = [
   {
     name: "OpenAI package contracts",
     cmd: "pnpm",
-    args: ["--filter", "@opensocial/openai", "test"],
+    args: ["--filter", "@opensocial/openai", "exec", "vitest", "run"],
   },
   {
     name: "API endpoint contracts",
@@ -28,8 +28,9 @@ const checks = [
     args: [
       "--filter",
       "@opensocial/api",
-      "test",
-      "--",
+      "exec",
+      "vitest",
+      "run",
       "test/onboarding-agent.contract.spec.ts",
       "test/runtime.controller.spec.ts",
       "test/runtime.service.spec.ts",
@@ -41,8 +42,9 @@ const checks = [
     args: [
       "--filter",
       "@opensocial/api",
-      "test",
-      "--",
+      "exec",
+      "vitest",
+      "run",
       "test/openai-client.spec.ts",
       "test/agent-conversation.service.spec.ts",
     ],
