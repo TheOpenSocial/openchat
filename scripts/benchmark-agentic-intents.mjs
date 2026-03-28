@@ -570,12 +570,20 @@ async function runOne(index, scenario, options) {
     await sleep(pollMs);
   }
   if (nonUserMessages.length === 0) {
-    const current = await requestJsonWithStepRetry(
-      `/api/agent/threads/${selectedThreadId}/messages`,
-      requestHeaders ? { headers: requestHeaders } : {},
-      "final message refresh",
-    );
-    nonUserMessages = current.slice(beforeCount).filter(isNonUserMessage);
+    try {
+      const current = await requestJson(
+        `/api/agent/threads/${selectedThreadId}/messages`,
+        requestHeaders ? { headers: requestHeaders } : {},
+      );
+      nonUserMessages = current.slice(beforeCount).filter(isNonUserMessage);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : String(error ?? "unknown");
+      console.warn(
+        `[bench] final message refresh skipped due to transient failure: ${message}`,
+      );
+      nonUserMessages = [];
+    }
   }
   const duplicateVisibleSideEffects =
     countDuplicateVisibleSideEffects(nonUserMessages);
