@@ -443,7 +443,7 @@ jobs:
           PLAYGROUND_HOST_HEADER: ${{ secrets.STAGING_SMOKE_HOST_HEADER }}
           AGENTIC_BENCH_URL: ${{ env.AGENTIC_BENCH_URL || 'https://api.opensocial.so' }}
           AGENTIC_BENCH_HOST_HEADER: ${{ secrets.STAGING_SMOKE_HOST_HEADER }}
-          AGENTIC_BENCH_USE_UNIQUE_IP: "false"
+          AGENTIC_BENCH_USE_UNIQUE_IP: "true"
           AGENTIC_BENCH_RUNS: "1"
           AGENTIC_BENCH_DELAY_MS: "2000"
           AGENTIC_BENCH_POLL_MS: "5000"

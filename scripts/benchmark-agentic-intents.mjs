@@ -488,15 +488,26 @@ function countDuplicateVisibleSideEffects(messages) {
 async function runOne(index, scenario, options) {
   const { workerIndex, burstIndex, threadId: selectedThreadId } = options;
   const { scenarioId, prompt } = scenario;
-  const forwardedFor = useUniqueForwardedIp
-    ? buildForwardedIp(index + 1, workerIndex, burstIndex)
-    : null;
-  const requestHeaders = forwardedFor
-    ? { "x-forwarded-for": forwardedFor }
-    : undefined;
+  let requestSequence = 0;
+  const nextRequestHeaders = () => {
+    if (!useUniqueForwardedIp) {
+      return undefined;
+    }
+    requestSequence += 1;
+    const forwardedFor = buildForwardedIp(
+      index + requestSequence,
+      workerIndex,
+      burstIndex,
+    );
+    return { "x-forwarded-for": forwardedFor };
+  };
+  const nextRequestInit = () => {
+    const headers = nextRequestHeaders();
+    return headers ? { headers } : {};
+  };
   const beforeMessages = await requestJsonWithStepRetry(
     `/api/agent/threads/${selectedThreadId}/messages`,
-    requestHeaders ? { headers: requestHeaders } : {},
+    nextRequestInit(),
     "before-messages lookup",
   );
   const beforeCount = beforeMessages.length;
@@ -506,7 +517,7 @@ async function runOne(index, scenario, options) {
     "/api/intents/from-agent",
     {
       method: "POST",
-      ...(requestHeaders ? { headers: requestHeaders } : {}),
+      ...nextRequestInit(),
       body: JSON.stringify({
         threadId: selectedThreadId,
         userId,
@@ -531,7 +542,7 @@ async function runOne(index, scenario, options) {
     try {
       current = await requestJson(
         `/api/agent/threads/${selectedThreadId}/messages`,
-        requestHeaders ? { headers: requestHeaders } : {},
+        nextRequestInit(),
       );
     } catch {
       await sleep(pollMs);
@@ -555,7 +566,7 @@ async function runOne(index, scenario, options) {
     try {
       current = await requestJson(
         `/api/agent/threads/${selectedThreadId}/messages`,
-        requestHeaders ? { headers: requestHeaders } : {},
+        nextRequestInit(),
       );
     } catch {
       await sleep(pollMs);
@@ -573,7 +584,7 @@ async function runOne(index, scenario, options) {
     try {
       const current = await requestJson(
         `/api/agent/threads/${selectedThreadId}/messages`,
-        requestHeaders ? { headers: requestHeaders } : {},
+        nextRequestInit(),
       );
       nonUserMessages = current.slice(beforeCount).filter(isNonUserMessage);
     } catch (error) {
