@@ -1191,6 +1191,7 @@ describe("IntentsService", () => {
       "Find tennis partners tonight",
       expect.any(String),
       "thread-1",
+      { deterministicParse: true },
     );
     expect(service.createIntent).toHaveBeenNthCalledWith(
       2,
@@ -1198,6 +1199,7 @@ describe("IntentsService", () => {
       "Also find a study buddy tomorrow.",
       expect.any(String),
       "thread-1",
+      { deterministicParse: true },
     );
     expect(result.intentCount).toBe(2);
     expect(result.intentIds).toEqual(["intent-1", "intent-2"]);
@@ -1228,6 +1230,7 @@ describe("IntentsService", () => {
       "Find tennis partners tonight; Also find a study buddy tomorrow.",
       expect.any(String),
       "thread-1",
+      { deterministicParse: true },
     );
     expect(result.intentCount).toBe(1);
   });

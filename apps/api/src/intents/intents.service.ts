@@ -108,16 +108,27 @@ export class IntentsService {
     rawText: string,
     traceId: string,
     agentThreadId?: string,
+    options: {
+      deterministicParse?: boolean;
+    } = {},
   ) {
-    const parseStartedAt = Date.now();
-    const parsed = await this.parseIntentWithBudget(rawText, traceId);
-    if (process.env.OPENAI_API_KEY) {
-      recordOpenAIMetric({
-        operation: "intent_parsing",
-        latencyMs: Date.now() - parseStartedAt,
-        ok: true,
-      });
-    }
+    const parsed = options.deterministicParse
+      ? this.buildDeterministicParsedIntent(rawText)
+      : await (async () => {
+          const parseStartedAt = Date.now();
+          const parsedResult = await this.parseIntentWithBudget(
+            rawText,
+            traceId,
+          );
+          if (process.env.OPENAI_API_KEY) {
+            recordOpenAIMetric({
+              operation: "intent_parsing",
+              latencyMs: Date.now() - parseStartedAt,
+              ok: true,
+            });
+          }
+          return parsedResult;
+        })();
 
     return this.persistIntentWithParsedPayload({
       userId,
@@ -374,6 +385,9 @@ export class IntentsService {
         intentText,
         scopedTraceId,
         threadId,
+        {
+          deterministicParse: true,
+        },
       );
       intents.push(intent);
     }
