@@ -51,6 +51,18 @@ const benchHostHeader =
   process.env.AGENTIC_BENCH_HOST_HEADER?.trim() ||
   process.env.SMOKE_HOST_HEADER?.trim() ||
   "";
+const benchApplicationKey =
+  process.env.AGENTIC_BENCH_APPLICATION_KEY?.trim() ||
+  process.env.SMOKE_APPLICATION_KEY?.trim() ||
+  "";
+const benchApplicationToken =
+  process.env.AGENTIC_BENCH_APPLICATION_TOKEN?.trim() ||
+  process.env.SMOKE_APPLICATION_TOKEN?.trim() ||
+  "";
+const benchVerificationLaneId =
+  process.env.AGENTIC_BENCH_VERIFICATION_LANE_ID?.trim() ||
+  process.env.AGENTIC_VERIFICATION_LANE_ID?.trim() ||
+  "";
 let accessToken = process.env.AGENTIC_BENCH_ACCESS_TOKEN ?? "";
 let smokeRefreshToken = process.env.SMOKE_REFRESH_TOKEN?.trim() ?? "";
 let accessTokenRefreshAttempted = false;
@@ -216,6 +228,13 @@ async function requestJson(pathname, init = {}) {
       "content-type": "application/json",
       authorization: `Bearer ${accessToken}`,
       ...(benchHostHeader ? { Host: benchHostHeader } : {}),
+      ...(benchApplicationKey ? { "x-application-key": benchApplicationKey } : {}),
+      ...(benchApplicationToken
+        ? { "x-application-token": benchApplicationToken }
+        : {}),
+      ...(benchVerificationLaneId
+        ? { "x-verification-lane-id": benchVerificationLaneId }
+        : {}),
       ...nextGlobalForwardedHeader(),
       ...(init.headers ?? {}),
     };

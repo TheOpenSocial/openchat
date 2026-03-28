@@ -168,6 +168,14 @@ function isPlaygroundPath(path: string) {
   return path.startsWith("/api/admin/playground/");
 }
 
+function isVerificationBypassPath(path: string) {
+  return (
+    path.startsWith("/api/intents") ||
+    path.startsWith("/api/agent/threads/") ||
+    path.startsWith("/api/admin/ops/agent-workflows")
+  );
+}
+
 function getSingleHeader(
   header: string | string[] | undefined,
 ): string | undefined {
@@ -201,6 +209,41 @@ function isTrustedAdminRequest(request: Request, path: string) {
 
   const adminApiKey = getSingleHeader(request.headers["x-admin-api-key"]);
   return typeof adminApiKey === "string" && adminApiKey === requiredApiKey;
+}
+
+function isVerificationBypassRequest(request: Request, path: string) {
+  if (process.env.REQUEST_SECURITY_VERIFICATION_BYPASS_ENABLED !== "true") {
+    return false;
+  }
+  if (!isVerificationBypassPath(path)) {
+    return false;
+  }
+
+  const expectedKey = process.env.SMOKE_SESSION_APPLICATION_KEY?.trim();
+  const expectedToken = process.env.SMOKE_SESSION_APPLICATION_TOKEN?.trim();
+  const expectedLaneId = process.env.AGENTIC_VERIFICATION_LANE_ID?.trim();
+  if (!expectedKey || !expectedToken || !expectedLaneId) {
+    return false;
+  }
+
+  const applicationKey = getSingleHeader(request.headers["x-application-key"]);
+  const applicationToken = getSingleHeader(
+    request.headers["x-application-token"],
+  );
+  const laneId = getSingleHeader(request.headers["x-verification-lane-id"]);
+  if (
+    typeof applicationKey !== "string" ||
+    typeof applicationToken !== "string" ||
+    typeof laneId !== "string"
+  ) {
+    return false;
+  }
+
+  return (
+    applicationKey === expectedKey &&
+    applicationToken === expectedToken &&
+    laneId === expectedLaneId
+  );
 }
 
 function getOrInitWindow(
@@ -313,6 +356,12 @@ export function requestSecurityMiddleware(
   const isWrite = isWriteMethod(method);
   const isAuth = isAuthPath(path);
   const isPlayground = isPlaygroundPath(path);
+  const isVerificationBypass = isVerificationBypassRequest(request, path);
+
+  if (isVerificationBypass) {
+    next();
+    return;
+  }
 
   if (isPlayground) {
     const playgroundIdentity =

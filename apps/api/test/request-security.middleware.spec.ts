@@ -39,6 +39,10 @@ describe("requestSecurityMiddleware", () => {
     delete process.env.ABUSE_THROTTLE_BLOCK_MS;
     delete process.env.RATE_LIMIT_PLAYGROUND_MAX_REQUESTS;
     delete process.env.RATE_LIMIT_PLAYGROUND_WINDOW_MS;
+    delete process.env.REQUEST_SECURITY_VERIFICATION_BYPASS_ENABLED;
+    delete process.env.SMOKE_SESSION_APPLICATION_KEY;
+    delete process.env.SMOKE_SESSION_APPLICATION_TOKEN;
+    delete process.env.AGENTIC_VERIFICATION_LANE_ID;
     resetRequestSecurityState();
   });
 
@@ -230,6 +234,72 @@ describe("requestSecurityMiddleware", () => {
         error: expect.objectContaining({
           code: "rate_limited",
           message: "playground request rate limit exceeded",
+        }),
+      }),
+    );
+  });
+
+  it("bypasses abuse throttling for verification-lane requests with valid application credentials", () => {
+    process.env.REQUEST_SECURITY_VERIFICATION_BYPASS_ENABLED = "true";
+    process.env.SMOKE_SESSION_APPLICATION_KEY = "app-key";
+    process.env.SMOKE_SESSION_APPLICATION_TOKEN = "app-token";
+    process.env.AGENTIC_VERIFICATION_LANE_ID = "verification-lane-1";
+    process.env.ABUSE_THROTTLE_MAX_SCORE = "8";
+    process.env.ABUSE_THROTTLE_BLOCK_MS = "60000";
+
+    const next = vi.fn();
+
+    for (let index = 0; index < 4; index += 1) {
+      const request = createRequest({
+        method: "POST",
+        path: "/api/intents",
+        ip: "203.0.113.111",
+        headers: {
+          "x-application-key": "app-key",
+          "x-application-token": "app-token",
+          "x-verification-lane-id": "verification-lane-1",
+        },
+      });
+      const response = createResponse();
+      requestSecurityMiddleware(request, response, next);
+      expect(response.status).not.toHaveBeenCalled();
+    }
+
+    expect(next).toHaveBeenCalledTimes(4);
+  });
+
+  it("does not bypass abuse throttling when verification-lane credentials are invalid", () => {
+    process.env.REQUEST_SECURITY_VERIFICATION_BYPASS_ENABLED = "true";
+    process.env.SMOKE_SESSION_APPLICATION_KEY = "app-key";
+    process.env.SMOKE_SESSION_APPLICATION_TOKEN = "app-token";
+    process.env.AGENTIC_VERIFICATION_LANE_ID = "verification-lane-1";
+    process.env.ABUSE_THROTTLE_MAX_SCORE = "8";
+    process.env.ABUSE_THROTTLE_BLOCK_MS = "60000";
+
+    const next = vi.fn();
+    const request = createRequest({
+      method: "POST",
+      path: "/api/intents",
+      ip: "203.0.113.112",
+      headers: {
+        "x-application-key": "wrong-key",
+        "x-application-token": "app-token",
+        "x-verification-lane-id": "verification-lane-1",
+      },
+    });
+    const responseA = createResponse();
+    const responseB = createResponse();
+
+    requestSecurityMiddleware(request, responseA, next);
+    requestSecurityMiddleware(request, responseB, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(responseB.status).toHaveBeenCalledWith(429);
+    expect(responseB.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: false,
+        error: expect.objectContaining({
+          code: "abuse_throttled",
         }),
       }),
     );
