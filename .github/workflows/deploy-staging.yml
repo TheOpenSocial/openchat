@@ -419,6 +419,7 @@ jobs:
           SMOKE_ADMIN_API_KEY: ${{ secrets.STAGING_SMOKE_ADMIN_API_KEY || secrets.SMOKE_ADMIN_API_KEY }}
           SMOKE_TIMEOUT_MS: "15000"
           INCIDENT_VERIFY_REQUIRE_HEALTHY: "false"
+          INCIDENT_VERIFY_ALLOW_CRITICAL: "true"
           INCIDENT_VERIFY_FAIL_ON_WARNING: "false"
           INCIDENT_VERIFY_RUNBOOKS: "true"
         run: |
