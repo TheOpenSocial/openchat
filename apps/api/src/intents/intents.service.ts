@@ -401,10 +401,10 @@ export class IntentsService {
     await this.agentService.createAgentMessage(
       threadId,
       intentTexts.length > boundedIntentTexts.length
-        ? `All right. I split this into ${intents.length} focused asks and started them in the background with a safe outreach cap. I’ll notify you here as soon as I find strong matches.`
+        ? `All right. I split this into ${intents.length} focused asks and started working on them in the background. I’ll update you here as soon as I have the strongest options.`
         : intents.length === 1
-          ? "All right. I’m handling this in the background and I’ll notify you here as soon as I find a strong match."
-          : `All right. I split this into ${intents.length} focused asks and started them in the background. I’ll notify you here as soon as I find strong matches.`,
+          ? "All right. I’m on it in the background and I’ll update you here as soon as I have a strong option."
+          : `All right. I split this into ${intents.length} focused asks and started working on them in the background. I’ll update you here as soon as I have the strongest options.`,
     );
 
     return {
@@ -998,7 +998,7 @@ export class IntentsService {
         if (workflowThreadId) {
           await this.agentService.appendWorkflowUpdate(
             workflowThreadId,
-            `Quick update: no strong matches yet, so I broadened the search and queued another pass (level ${timeoutEscalation.targetLevel}).`,
+            `Quick update: nothing strong enough yet, so I widened the search and kicked off another pass (level ${timeoutEscalation.targetLevel}).`,
             {
               intentId,
               fanoutCount: 0,
@@ -1011,7 +1011,7 @@ export class IntentsService {
         await this.notificationsService.createInAppNotification(
           intent.userId,
           NotificationType.AGENT_UPDATE,
-          "Still searching in the background. I broadened the criteria and started another pass.",
+          "Still on it in the background. I widened the search and started another pass.",
         );
         await this.workflowRuntimeService?.checkpoint({
           workflowRunId,
@@ -1038,7 +1038,7 @@ export class IntentsService {
           notificationType: NotificationType.AGENT_UPDATE,
           delayMs: 45_000,
           message:
-            "Quick update: I broadened the criteria and started another background pass.",
+            "Quick update: I widened the search and started another background pass.",
         });
         await this.enqueueDelayedRoutingRetry({
           intentId,
@@ -1057,7 +1057,9 @@ export class IntentsService {
         if (workflowThreadId) {
           await this.agentService.appendWorkflowUpdate(
             workflowThreadId,
-            "No strong match yet. If you want, I can broaden the search and keep going.",
+            this.buildNoMatchRecoveryMessage(intent.parsedIntent, {
+              includeBackground: false,
+            }),
             {
               intentId,
               fanoutCount: 0,
@@ -1065,10 +1067,17 @@ export class IntentsService {
           );
         }
 
+        const noMatchRecoveryMessage = this.buildNoMatchRecoveryMessage(
+          intent.parsedIntent,
+          {
+            includeBackground: true,
+          },
+        );
+
         await this.notificationsService.createInAppNotification(
           intent.userId,
           NotificationType.AGENT_UPDATE,
-          "No strong match yet. Want me to broaden the search and keep going?",
+          noMatchRecoveryMessage,
         );
         await this.workflowRuntimeService?.checkpoint({
           workflowRunId,
@@ -1090,6 +1099,7 @@ export class IntentsService {
           template: "no_match_yet",
           notificationType: NotificationType.AGENT_UPDATE,
           delayMs: 60_000,
+          message: noMatchRecoveryMessage,
         });
         await this.enqueueDelayedRoutingRetry({
           intentId,
@@ -1719,6 +1729,58 @@ export class IntentsService {
     template: "pending_reminder" | "no_match_yet" | "progress_update",
   ) {
     return `async-followup:${intentId}:${template}`;
+  }
+
+  private buildNoMatchRecoveryMessage(
+    parsedIntent: unknown,
+    options: {
+      includeBackground: boolean;
+    },
+  ) {
+    const parsed =
+      parsedIntent && typeof parsedIntent === "object"
+        ? (parsedIntent as ParsedIntentPayload)
+        : {};
+
+    const suggestions: string[] = [];
+
+    if (
+      Array.isArray(parsed.timingConstraints) &&
+      parsed.timingConstraints.length
+    ) {
+      suggestions.push("widen timing");
+    }
+
+    if (typeof parsed.modality === "string" && parsed.modality !== "either") {
+      suggestions.push("switch between online and in-person");
+    }
+
+    if (
+      typeof parsed.groupSizeTarget === "number" ||
+      parsed.intentType === "chat" ||
+      parsed.intentType === "social"
+    ) {
+      suggestions.push("try 1:1 or a small group");
+    }
+
+    if (
+      Array.isArray(parsed.skillConstraints) &&
+      parsed.skillConstraints.length
+    ) {
+      suggestions.push("relax skill filters");
+    }
+
+    const dedupedSuggestions = Array.from(new Set(suggestions)).slice(0, 3);
+    const suggestionText =
+      dedupedSuggestions.length > 0
+        ? `The fastest next move is to ${dedupedSuggestions.join(", ")}.`
+        : "The fastest next move is to widen timing, try online or in-person, or switch between 1:1 and a small group.";
+
+    const backgroundText = options.includeBackground
+      ? " I’m still searching in the background."
+      : "";
+
+    return `Nothing strong enough yet.${backgroundText} ${suggestionText}`.trim();
   }
 
   private clampIntentCount(value: number) {

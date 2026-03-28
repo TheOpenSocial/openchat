@@ -2,6 +2,13 @@
 
 This document is the canonical backend verification and remediation runbook for OpenSocial's agentic runtime.
 
+Roadmap ownership:
+- `PROGRESS.md` is the durable execution roadmap
+- `tasks.md` is the immediate implementation slice
+- `AGENT_TEST_SUITE.md` is verification policy only
+
+This file should not become a second backlog or product roadmap.
+
 The suite exists to prove that the backend can:
 - understand intent
 - negotiate or defer intelligently
@@ -17,6 +24,11 @@ The suite exists to prove that the backend can:
 - Exactly-once for user-visible side effects.
 - Safe degradation over silent failure.
 - Operator-visible health is part of correctness.
+
+## Verification Scope
+- This document defines release gates, suite layers, artifacts, remediation flow, and execution cadence.
+- Product prioritization, feature sequencing, and launch backlog ownership belong in `PROGRESS.md`.
+- The immediate coding queue belongs in `tasks.md`.
 
 ## Current Foundation
 - Workflow execution tracking is active in the backend through `workflowRunId`, `traceId`, stage checkpoints, and linked side effects.
@@ -204,6 +216,25 @@ Validates:
 - replay success rate
 
 Prod-connected verification must use reserved users/threads and controlled pacing.
+
+## Execution Cadence
+- `CI` should stay on cheap verification only:
+  - package contracts
+  - API regressions
+  - `test:agentic:suite -- --layer=contract`
+- `Deploy Staging` should default to the core verification lane:
+  - `contract`
+  - `workflow`
+  - `queue`
+  - `scenario`
+  - `eval`
+- Expensive live checks should be explicit opt-in only:
+  - `benchmark`
+  - `prod-smoke`
+- The staging workflow now exposes `verification_tier`:
+  - `core` runs the default low-cost backend lane
+  - `full` adds live benchmark and prod-smoke verification
+- Use `full` only when validating deploy-readiness, investigating regressions, or preparing a release candidate.
 
 ## Mandatory Scenario Families
 - social 1:1

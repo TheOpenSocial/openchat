@@ -512,7 +512,7 @@ describe("Agentic communication E2E flow", () => {
       threadId: IDS.threadA,
       content: "Find me one tennis partner tonight",
     });
-    expect(agentMessages[1]?.content).toContain("I’ll notify you");
+    expect(agentMessages[1]?.content).toContain("I’ll update you here");
 
     const pipeline = await intentsService.processIntentPipeline(
       IDS.intentA,
@@ -541,8 +541,10 @@ describe("Agentic communication E2E flow", () => {
       data: followupJob?.data,
     } as any);
     expect(
-      agentMessages.some((message) =>
-        message.content.toLowerCase().includes("still in progress"),
+      agentMessages.some(
+        (message) =>
+          message.content.toLowerCase().includes("still in motion") ||
+          message.content.toLowerCase().includes("quick update"),
       ),
     ).toBe(true);
 

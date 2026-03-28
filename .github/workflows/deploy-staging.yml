@@ -28,6 +28,14 @@ on:
         required: false
         default: true
         type: boolean
+      verification_tier:
+        description: "Verification depth for post-deploy checks"
+        required: false
+        default: core
+        type: choice
+        options:
+          - core
+          - full
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -460,6 +468,7 @@ jobs:
           INCIDENT_VERIFY_REQUIRE_HEALTHY: "false"
           INCIDENT_VERIFY_ALLOW_CRITICAL: "true"
           INCIDENT_VERIFY_FAIL_ON_WARNING: "false"
+          AGENT_TEST_SUITE_ONLY_STAGES: ${{ inputs.verification_tier == 'full' && 'contract,workflow,queue,scenario,eval,benchmark,prod-smoke' || 'contract,workflow,queue,scenario,eval' }}
           AGENT_TEST_SUITE_RERUN_FAILED_ONLY: "0"
           AGENT_TEST_SUITE_RETRY_FAILED_STAGES_ONCE: "1"
           AGENT_TEST_SUITE_VERIFICATION_ARTIFACT_PATH: /tmp/openchat-agent-suite-verification-latest.json

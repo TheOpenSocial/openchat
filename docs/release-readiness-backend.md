@@ -2,6 +2,10 @@
 
 This is the backend launch summary for first release windows.
 
+Primary linked evidence:
+- `docs/backend-launch-smoke-matrix.md`
+- `docs/backend-launch-ops-pack.md`
+
 ## Known limits
 
 - Verification lane requires pre-provisioned smoke users/threads and protected tokens.
@@ -53,4 +57,4 @@ pnpm test:backend:ops-pack
 
 ## Ship / no-ship rule
 
-Ship only when all required commands pass and the latest ops-pack artifact status is `passed`.
+Ship only when all required commands pass, the latest ops-pack artifact status is `passed`, and its `shipVerdict` is `ship_ready`.

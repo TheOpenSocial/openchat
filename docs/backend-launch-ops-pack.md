@@ -2,6 +2,11 @@
 
 This runbook is the backend-first execution path for launch readiness with reproducible evidence.
 
+Companion documents:
+- `docs/backend-launch-smoke-matrix.md`
+- `docs/release-readiness-backend.md`
+- `docs/staging-smoke-checklist.md`
+
 ## Goal
 
 Prove the backend is green on release gates, Golden Suite verification, smoke lane checks, and moderation operator drills with machine-readable artifacts.
@@ -14,6 +19,12 @@ pnpm test:backend:ops-pack
 
 Artifact output:
 - `.artifacts/backend-ops-pack/<run-id>.json`
+
+Artifact also records:
+- runbook file readiness
+- per-step env coverage
+- final `shipVerdict`
+- blocking reasons when the pack fails
 
 ## Default steps
 
@@ -63,6 +74,7 @@ STAGING_EQUALS_PROD=true BACKEND_OPS_TARGET=staging pnpm test:backend:ops-pack
 - `test:agentic:suite:verification` passes with required benchmark + prod-smoke gates.
 - moderation drill passes with report -> flag -> assign -> triage -> audit verification.
 - ops-pack artifact status is `passed`.
+- ops-pack artifact `shipVerdict` is `ship_ready`.
 
 ## Rollback criteria
 

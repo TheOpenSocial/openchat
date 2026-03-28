@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
@@ -14,6 +14,8 @@ const includeProdSmoke = process.env.BACKEND_OPS_INCLUDE_PROD_SMOKE !== "0";
 const includeModerationDrill =
   process.env.BACKEND_OPS_INCLUDE_MODERATION_DRILL !== "0";
 const stageEqualsProd = process.env.STAGING_EQUALS_PROD === "true";
+const requireRunbooks = process.env.BACKEND_OPS_REQUIRE_RUNBOOKS !== "0";
+const requireEnvReadiness = process.env.BACKEND_OPS_REQUIRE_ENV !== "0";
 
 const runId =
   process.env.BACKEND_OPS_RUN_ID ??
@@ -25,6 +27,45 @@ const artifactPath = path.resolve(
 );
 
 const commands = [];
+
+const requiredRunbookFiles = [
+  "docs/backend-launch-ops-pack.md",
+  "docs/backend-launch-smoke-matrix.md",
+  "docs/release-readiness-backend.md",
+  "docs/staging-smoke-checklist.md",
+  "docs/incident-runbook.md",
+  "docs/admin-runbook.md",
+  "docs/queue-replay-runbook.md",
+];
+
+const stepEnvRequirements = {
+  agentic_suite_verification: [
+    "SMOKE_BASE_URL",
+    "SMOKE_ACCESS_TOKEN",
+    "SMOKE_ADMIN_USER_ID",
+    "SMOKE_AGENT_THREAD_ID",
+    "SMOKE_USER_ID",
+    "AGENTIC_BENCH_ACCESS_TOKEN",
+    "AGENTIC_BENCH_USER_ID",
+    "AGENTIC_BENCH_THREAD_ID",
+    "AGENTIC_VERIFICATION_LANE_ID",
+    "ONBOARDING_PROBE_TOKEN",
+  ],
+  agentic_prod_smoke_lane: [
+    "SMOKE_BASE_URL",
+    "SMOKE_ACCESS_TOKEN",
+    "SMOKE_USER_ID",
+    "SMOKE_AGENT_THREAD_ID",
+    "AGENTIC_VERIFICATION_LANE_ID",
+  ],
+  moderation_drill: [
+    "SMOKE_BASE_URL",
+    "SMOKE_ADMIN_USER_ID",
+    "MODERATION_DRILL_REPORTER_USER_ID",
+    "MODERATION_DRILL_ACCESS_TOKEN",
+    "MODERATION_DRILL_TARGET_USER_ID",
+  ],
+};
 
 if (includeReleaseCheck) {
   commands.push({
@@ -100,29 +141,96 @@ function runCommand(step) {
   };
 }
 
+function findMissingEnv(stepId) {
+  const requiredKeys = stepEnvRequirements[stepId] ?? [];
+  return requiredKeys.filter((key) => {
+    const value = process.env[key];
+    return typeof value !== "string" || value.trim().length === 0;
+  });
+}
+
+function verifyRunbooks() {
+  return requiredRunbookFiles.map((file) => ({
+    file,
+    exists: existsSync(path.resolve(process.cwd(), file)),
+  }));
+}
+
 async function main() {
   const startedAt = Date.now();
   const steps = [];
+  const runbookChecks = verifyRunbooks();
+  const missingRunbooks = runbookChecks.filter((check) => !check.exists);
+  const envReadiness = commands.map((step) => ({
+    stepId: step.id,
+    requiredEnv: stepEnvRequirements[step.id] ?? [],
+    missingEnv: findMissingEnv(step.id),
+  }));
+  const envReadinessFailures = envReadiness.filter(
+    (readiness) => readiness.missingEnv.length > 0,
+  );
 
   console.log("Backend ops pack");
   console.log(`- target: ${target}`);
   console.log(`- stageEqualsProd: ${stageEqualsProd}`);
   console.log(`- dryRun: ${dryRun}`);
+  console.log(`- requireRunbooks: ${requireRunbooks}`);
+  console.log(`- requireEnvReadiness: ${requireEnvReadiness}`);
   console.log(`- artifactPath: ${artifactPath}`);
   console.log("");
+  console.log("Runbook checks:");
+  for (const check of runbookChecks) {
+    console.log(`- ${check.exists ? "ok" : "missing"} ${check.file}`);
+  }
+  if (missingRunbooks.length > 0 && requireRunbooks) {
+    console.error("");
+    console.error(
+      `Missing required runbook files: ${missingRunbooks.map((check) => check.file).join(", ")}`,
+    );
+  }
+  console.log("");
+  console.log("Env readiness:");
+  for (const readiness of envReadiness) {
+    console.log(
+      `- ${readiness.stepId}: ${
+        readiness.missingEnv.length === 0
+          ? "ready"
+          : `missing ${readiness.missingEnv.join(", ")}`
+      }`,
+    );
+  }
+  console.log("");
 
-  for (const step of commands) {
-    console.log(`Running ${step.id}: ${step.summary}`);
-    const result = runCommand(step);
-    steps.push(result);
-    if (result.status === "failed") {
-      break;
+  if (
+    (missingRunbooks.length === 0 || !requireRunbooks) &&
+    (envReadinessFailures.length === 0 || !requireEnvReadiness)
+  ) {
+    for (const step of commands) {
+      console.log(`Running ${step.id}: ${step.summary}`);
+      const result = runCommand(step);
+      steps.push(result);
+      if (result.status === "failed") {
+        break;
+      }
     }
+  } else if (envReadinessFailures.length > 0 && requireEnvReadiness) {
+    console.error("");
+    console.error(
+      `Missing required environment for launch evidence: ${envReadinessFailures
+        .map(
+          (readiness) =>
+            `${readiness.stepId} -> ${readiness.missingEnv.join(", ")}`,
+        )
+        .join(" | ")}`,
+    );
   }
 
-  const status = steps.some((step) => step.status === "failed")
-    ? "failed"
-    : "passed";
+  const status =
+    (requireRunbooks && missingRunbooks.length > 0) ||
+    (requireEnvReadiness && envReadinessFailures.length > 0) ||
+    steps.some((step) => step.status === "failed")
+      ? "failed"
+      : "passed";
   const artifact = {
     runId,
     generatedAt: new Date().toISOString(),
@@ -130,7 +238,25 @@ async function main() {
     status,
     stageEqualsProd,
     dryRun,
+    requireRunbooks,
+    requireEnvReadiness,
     totalLatencyMs: Date.now() - startedAt,
+    runbookChecks,
+    envReadiness,
+    shipVerdict: status === "passed" ? "ship_ready" : "blocked",
+    blockedReasons: [
+      ...(missingRunbooks.length > 0 && requireRunbooks
+        ? ["missing_runbook_files"]
+        : []),
+      ...(envReadinessFailures.length > 0 && requireEnvReadiness
+        ? envReadinessFailures.map(
+            (readiness) => `missing_env:${readiness.stepId}`,
+          )
+        : []),
+      ...steps
+        .filter((step) => step.status === "failed")
+        .map((step) => `step_failed:${step.id}`),
+    ],
     steps,
   };
 

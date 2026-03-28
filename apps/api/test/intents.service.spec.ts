@@ -840,14 +840,14 @@ describe("IntentsService", () => {
     expect(notificationsService.createInAppNotification).toHaveBeenCalledWith(
       "11111111-1111-4111-8111-111111111111",
       "agent_update",
-      expect.stringContaining("broadened"),
+      expect.stringContaining("widened"),
     );
     expect(notificationQueue.add).toHaveBeenCalledWith(
       "AsyncAgentFollowup",
       expect.objectContaining({
         payload: expect.objectContaining({
           template: "progress_update",
-          message: expect.stringContaining("broadened the criteria"),
+          message: expect.stringContaining("widened the search"),
         }),
       }),
       expect.objectContaining({
@@ -920,13 +920,14 @@ describe("IntentsService", () => {
     expect(notificationsService.createInAppNotification).toHaveBeenCalledWith(
       "11111111-1111-4111-8111-111111111111",
       "agent_update",
-      expect.stringContaining("broaden the search"),
+      expect.stringContaining("The fastest next move"),
     );
     expect(notificationQueue.add).toHaveBeenCalledWith(
       "AsyncAgentFollowup",
       expect.objectContaining({
         payload: expect.objectContaining({
           template: "no_match_yet",
+          message: expect.stringContaining("1:1 or a small group"),
         }),
       }),
       expect.objectContaining({
@@ -1119,7 +1120,7 @@ describe("IntentsService", () => {
     expect(notificationsService.createInAppNotification).toHaveBeenCalledWith(
       "11111111-1111-4111-8111-111111111111",
       "agent_update",
-      expect.stringContaining("broaden the search"),
+      expect.stringContaining("The fastest next move"),
     );
     expect(notificationQueue.add).not.toHaveBeenCalledWith(
       "AsyncAgentFollowup",
@@ -1261,7 +1262,7 @@ describe("IntentsService", () => {
     expect(result.intentCount).toBe(1);
     expect(agentService.createAgentMessage).toHaveBeenCalledWith(
       "thread-1",
-      expect.stringContaining("safe outreach cap"),
+      expect.stringContaining("started working on them in the background"),
     );
   });
 

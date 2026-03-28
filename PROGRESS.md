@@ -1,12 +1,11 @@
-# OpenSocial — Master Implementation Plan
+# OpenSocial — Backend Continuation Roadmap
 
-This file is the execution source of truth for coding agents.
-It is organized as a production-grade build checklist with:
-- epics
-- concrete tasks
-- dependencies
-- acceptance criteria
-- implementation notes
+This file is the durable execution source of truth for coding agents.
+
+Operating model:
+- `PROGRESS.md`: long-running roadmap, status, evidence, blockers
+- `tasks.md`: immediate implementation slice only
+- `AGENT_TEST_SUITE.md`: verification cadence, release gates, suite semantics
 
 ## Status Legend
 - [ ] not started
@@ -14,14 +13,146 @@ It is organized as a production-grade build checklist with:
 - [x] complete
 - [!] blocked / needs decision
 
-## Verification Checklist
-- [x] `pnpm format:check`
-- [x] `pnpm lint`
-- [x] `pnpm typecheck`
-- [x] `pnpm test`
-- [x] `pnpm db:drift-check`
+## 1. Verification Status Snapshot
+- [x] `pnpm --filter @opensocial/api typecheck`
+- [x] `pnpm --filter @opensocial/api lint`
+- [x] `pnpm release:check:api`
+- [x] `pnpm test:agentic:suite -- --layer=contract`
+- [x] `pnpm test:agentic:suite:verification` in deployed verification environment
+- [x] `pnpm test:backend:ops-pack` in deployed verification environment
+- [x] staging deploy verification green with default core lane (`contract,workflow,queue,scenario,eval`)
+- [x] full live verification green in GitHub Actions when explicitly requested
 
-Last verified: 2026-03-20
+Last verified: 2026-03-28
+Latest known green deploy verification:
+- GitHub Actions `Deploy Staging` run `23690582624`
+
+## 2. Current Product Objective
+Close the gap between backend correctness and product quality.
+
+Chosen default:
+- backend-first
+- golden suite remains mandatory
+- expensive live verification stays opt-in rather than default
+- next phase focuses on agentic product quality and launch-readiness closure
+
+Priority order:
+1. agent reply quality and async behavior
+2. post-onboarding activation closure
+3. launch security and smoke matrix evidence
+4. moderation and trust-sensitive operator drills
+5. admin maintainability only where it supports backend operability
+
+## 3. Epics With Numbered Milestones
+
+### EPIC A — Agentic Product Quality
+- [x] `A-01` Async acknowledgement quality hardening
+  - Goal: make acknowledgements and background-progress replies feel agentic, calm, and human.
+  - Close when:
+    - async ack responses are no longer generic/system-sounding
+    - progress replies feel background-first rather than system-narrated
+    - mobile-facing backend payloads remain stable
+  - Evidence command:
+    - `pnpm --filter @opensocial/api exec vitest run test/intents.service.spec.ts test/async-agent-followup.consumer.spec.ts test/agent-followup-chat-flow.spec.ts test/agentic-communication.e2e.spec.ts`
+  - Artifact/endpoint:
+    - backend agent acknowledgement and follow-up runtime flows
+  - Last updated: 2026-03-28
+
+- [x] `A-02` No-match recovery usefulness hardening
+  - Goal: make no-match recovery calm, useful, and action-oriented instead of a dead end.
+  - Close when:
+    - no-match responses recommend concrete next moves
+    - delayed widening and follow-up copy stay proactive
+    - scenario/eval coverage stays green with the updated recovery behavior
+  - Evidence command:
+    - `pnpm --filter @opensocial/api exec vitest run test/intents.service.spec.ts test/async-agent-followup.consumer.spec.ts test/agent-followup-chat-flow.spec.ts test/agentic-scenario-suite.spec.ts test/agentic-evals.service.spec.ts`
+  - Artifact/endpoint:
+    - canonical no-match recovery behavior in backend intent and follow-up flows
+  - Last updated: 2026-03-28
+
+- [x] `A-03` Memory-grounded response consistency
+  - Goal: keep replies and follow-ups aligned with persisted profile memory and interaction summaries.
+  - Close when:
+    - memory-grounded follow-ups remain consistent with persisted profile state
+    - contradiction handling and compressed retrieval behavior stay aligned with user-facing outputs
+    - eval coverage stays green for grounding and consistency scenarios
+  - Evidence command:
+    - `pnpm --filter @opensocial/api test -- test/personalization.service.spec.ts test/agentic-evals.service.spec.ts`
+    - `pnpm test:agentic:suite -- --layer=eval`
+  - Artifact/endpoint:
+    - canonical eval artifacts under `.artifacts/agent-test-suite/`
+    - memory-grounded reply behavior under backend runtime flows
+  - Last updated: 2026-03-28
+
+### EPIC B — Post-Onboarding Activation
+- [x] `B-01` Post-onboarding first-value closure
+  - Goal: finish the backend path from onboarding completion to first useful experience.
+  - Close when:
+    - onboarding completion deterministically yields activation state
+    - starter intent bootstrap remains replay-safe
+    - first recommendations/home/chat bootstrap payloads are validated end to end
+    - restart-safe resume reads do not duplicate first-action side effects
+  - Evidence command:
+    - `pnpm --filter @opensocial/api test -- test/onboarding.service.spec.ts test/onboarding-flow.contract.spec.ts`
+    - `pnpm test:agentic:suite -- --layer=workflow`
+  - Artifact/endpoint:
+    - onboarding activation contract responses
+  - Last updated: 2026-03-28
+
+### EPIC C — Golden Suite and Operator Confidence
+- [~] `C-01` Cheap-by-default verification discipline
+  - Goal: keep the suite green while making the expensive live lane intentional.
+  - Close when:
+    - CI runs only cheap golden-suite coverage by default
+    - staging deploy defaults to `contract,workflow,queue,scenario,eval`
+    - `benchmark` and `prod-smoke` are opt-in only for release-candidate or regression investigations
+    - verification artifacts and latest run ids are archived as evidence
+  - Evidence command:
+    - `pnpm test:agentic:suite -- --layer=contract`
+    - `pnpm test:agentic:suite:verification`
+    - `pnpm test:backend:ops-pack`
+  - Artifact/endpoint:
+    - GitHub Actions deploy verification runs
+    - `.artifacts/agent-test-suite/verification-latest.json`
+    - `.artifacts/backend-ops-pack/*.json`
+  - Last updated: 2026-03-28
+
+### EPIC D — Launch Security and Reliability Closure
+- [ ] `D-01` Secret rotation and launch evidence closure
+  - Goal: remove temporary probe/debug credential risk and finish operator launch evidence.
+  - Close when:
+    - temporary probe/debug credentials are rotated
+    - staging/prod secret scope parity is re-confirmed
+    - moderation and trust-sensitive drills are archived
+    - launch smoke matrix and readiness runbook are complete
+  - Evidence command:
+    - `pnpm moderation:drill`
+    - `pnpm test:agentic:suite:verification`
+    - `pnpm test:backend:ops-pack`
+  - Artifact/endpoint:
+    - deploy verification artifacts
+    - runbook docs and drill evidence
+  - Last updated: 2026-03-28
+
+## 4. Open Blockers / External Dependencies
+- GitHub/environment secret rotation is still operational work, not fully closed in repo evidence.
+- Moderation and trust-sensitive drills require deployed-environment execution evidence, not just local tests.
+- Launch smoke matrix and first-24h operator map still need durable runbook evidence.
+
+## 5. Evidence Log
+- 2026-03-28: staging deploy verification green with `Deploy Staging` run `23690582624`, including `Verify backend golden suite lane`.
+- 2026-03-28: staging verification cadence reduced so default deploys run core backend verification while `benchmark` and `prod-smoke` remain explicit opt-in.
+- 2026-03-28: roadmap ownership normalized across `PROGRESS.md`, `tasks.md`, and `AGENT_TEST_SUITE.md`.
+- 2026-03-28: `A-01` and `A-02` backend product-quality slice green locally with updated async acknowledgements, background-progress copy, and action-oriented no-match recovery (`73` tests across intent, follow-up, chat-flow, scenario, and eval coverage).
+- 2026-03-28: golden-suite `scenario` lane green with artifact `.artifacts/agent-test-suite/agent-suite-2026-03-28T18-06-11-826Z/scenario.json` (`482` tests).
+- 2026-03-28: golden-suite `eval` lane green with artifact `.artifacts/agent-test-suite/agent-suite-2026-03-28T18-06-29-833Z/eval.json` (`482` tests), closing `A-03`.
+- 2026-03-28: onboarding activation and starter-bootstrap contract green locally (`14` tests) and golden-suite `workflow` lane green with artifact `.artifacts/agent-test-suite/agent-suite-2026-03-28T18-07-15-606Z/workflow.json` (`482` tests), closing `B-01`.
+- 2026-03-28: launch-ops repo evidence tightened. Added `docs/backend-launch-smoke-matrix.md`, linked release/ops runbooks, and upgraded `scripts/run-backend-ops-pack.mjs` to validate required runbooks, emit per-step env readiness, and produce a final `shipVerdict`. Verified locally with `BACKEND_OPS_DRY_RUN=1 pnpm test:backend:ops-pack`.
+
+---
+
+## Historical Execution Log
+The sections below retain milestone history, detailed evidence, and prior implementation notes. They remain valuable for continuity, but the active roadmap above is the current source of truth.
 
 ## Automated Pipeline Bootstrap Task Queue (Priority)
 

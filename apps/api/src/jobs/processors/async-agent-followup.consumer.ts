@@ -329,22 +329,28 @@ export class AsyncAgentFollowupConsumer extends WorkerHost {
     rawText: string,
   ) {
     if (template === "no_match_yet") {
-      return "No strong match yet. Want me to broaden the search?";
+      return "Nothing strong enough yet. I’m still searching in the background. The fastest next move is to widen timing, try online or in-person, or switch between 1:1 and a small group.";
     }
 
     if (template === "progress_update") {
-      return `Quick update: ${counts.accepted} accepted and ${counts.pending} still pending.`;
+      if (counts.accepted > 0 && counts.pending > 0) {
+        return `Quick update: ${counts.accepted} accepted, and I still have ${counts.pending} more in motion.`;
+      }
+      if (counts.accepted > 0) {
+        return `Quick update: ${counts.accepted} accepted so far. I’m staying on top of the next best options too.`;
+      }
+      return `Quick update: I still have ${counts.pending} in motion and I’m watching for the strongest response.`;
     }
 
     if (counts.accepted > 0 && counts.pending > 0) {
-      return `Quick update on "${rawText.slice(0, 48)}": ${counts.accepted} accepted and ${counts.pending} still pending.`;
+      return `Quick update on "${rawText.slice(0, 48)}": ${counts.accepted} accepted, and ${counts.pending} are still in motion.`;
     }
 
     if (counts.accepted > 0 && counts.pending === 0) {
-      return `Great news: ${counts.accepted} accepted so far. I can send another wave if you want.`;
+      return `Good news: ${counts.accepted} accepted so far. If you want, I can line up another wave after this.`;
     }
 
-    return `Still in progress: ${counts.pending} pending invite${counts.pending === 1 ? "" : "s"}. I’ll keep you posted.`;
+    return `Still in motion: ${counts.pending} pending invite${counts.pending === 1 ? "" : "s"}. I’ll keep you posted here.`;
   }
 
   private async resolveLatestThreadIdForUser(userId: string) {

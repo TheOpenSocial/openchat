@@ -1,141 +1,37 @@
-# OpenSocial Backend Tasks
+# OpenSocial Immediate Backend Tasks
 
-This file is the execution checklist for **remaining backend work** after the current checkpoint commit (`e4f602f`).
+This file is the rolling execution slice for the **next implementation pass only**.
+Durable planning, historical evidence, and closure state live in `PROGRESS.md`.
+Verification cadence and release gates live in `AGENT_TEST_SUITE.md`.
 
-## 0) Golden Suite + Verification Lane (finish to true green on deployed env)
-- [ ] Run strict verification lane against deployed environment:
-  - `pnpm test:agentic:suite:verification`
-- [ ] Run backend ops pack end-to-end with real env:
-  - `pnpm test:backend:ops-pack`
-- [ ] Confirm artifact generation and archive latest run ids:
-  - `.artifacts/agent-test-suite/<run-id>/full.json`
-  - `.artifacts/backend-ops-pack/<run-id>.json`
-- [ ] Ensure staging/prod secret parity is stable (no missing verification keys).
+Last refreshed: 2026-03-28
 
-Close when:
-- strict verification is green in CI/deploy environment (not only local)
-- ops-pack passes all enabled stages (release check, verification lane, smoke lane, moderation drill)
+## Active Epic
+`EPIC D — Launch Security and Reliability Closure`
 
-## 1) Onboarding Inference Launch Closure (TP-04, TP-05, TP-06, TP-07)
-- [x] `TP-04` Improve rich persona/summary quality on EN/ES benchmark corpus (20+ transcripts), reduce generic outputs below threshold.
-- [x] `TP-05` Finalize and document fast/rich model-routing policy with measurable p95 latency + quality acceptance gates.
-- [x] `TP-06` Lock deploy parity for onboarding env vars across staging/prod/rollback.
-- [x] `TP-07` Validate observability dashboards/alerts for onboarding success, timeout, fallback, and per-model latency buckets.
+## Now
+- [ ] `D-01` Rotate temporary probe/debug credentials
+  - Rotate verification-lane probe/debug tokens and confirm GitHub secret scope parity.
+  - Evidence:
+    - deployed verification lane green
+    - `pnpm test:agentic:suite:verification`
 
-Close when:
-- onboarding benchmark thresholds pass with documented evidence
-- env parity checklist is reproducible and verified after deploy/rollback
-- alerting and dashboards are populated with non-missing buckets
+## Next
+- [ ] `D-02` Record moderation and trust-sensitive operator drill evidence
+  - Run and archive moderation drill and trust-sensitive lifecycle operator evidence in staging/prod.
+  - Evidence:
+    - `pnpm moderation:drill`
+    - `pnpm test:backend:ops-pack`
 
-## 2) Session/Auth Reliability Closure (TP-08)
-- [x] Complete refresh-token reliability verification across mobile/web API flows.
-- [x] Ensure hard logout only happens on definitive refresh failure.
-- [x] Add/finish E2E + integration coverage for 401 retry + refresh behavior.
+- [ ] `D-03` Finalize launch smoke matrix and runbook evidence
+  - Record explicit pass/fail evidence, rollback points, monitors, and first-24h owner map.
+  - Evidence:
+    - `pnpm test:backend:ops-pack`
+    - runbook artifact references in `PROGRESS.md`
 
-Close when:
-- no false `session expired` regressions in integration/E2E tests
-- retry/refresh behavior is deterministic and covered in CI
+- [ ] Admin maintainability cleanup only if it helps backend operability
+  - Keep admin refactor secondary unless it directly improves ops visibility, replay/debug, or verification workflows.
 
-Evidence (2026-03-26):
-- `apps/api/test/auth.service.spec.ts` covers successful refresh rotation, rotated-key refresh compatibility, context mismatch non-revoking refresh, transient refresh-store errors without forced revoke, and definitive mismatch path that revokes session.
-
-## 3) Onboarding Contract Coverage (TP-09)
-- [x] Add/finish API + client integration contract tests for:
-  - transcript capture -> infer-fast/infer -> persona confirmation -> persistence.
-- [x] Assert lifecycle contract:
-  - `infer-started`, `infer-processing`, `infer-success`, `infer-fallback`.
-
-Close when:
-- onboarding contract tests are green and blocking in CI
-
-## 4) Secret Hygiene + Launch Security Cleanup (TP-10)
-- [ ] Rotate temporary debug/probe tokens used during setup/testing.
-- [ ] Verify no sensitive values remain in docs/log artifacts committed to repo.
-- [ ] Re-confirm GitHub secrets scopes (repo/staging/production) after rotation.
-
-Close when:
-- rotated credentials are active
-- no leaked secrets in repository history/docs/artifacts for current branch
-
-## 5) Release Ops Completion (TP-11, TP-12)
-- [ ] `TP-11` Execute full launch smoke matrix on staging + production with explicit pass/fail evidence and rollback decision points.
-- [ ] `TP-12` Finalize launch readiness runbook (limits, fallbacks, monitors, kill switches, first-24h owner map).
-
-Close when:
-- smoke matrix runs are documented and green
-- runbook is final and usable by on-call without tribal knowledge
-
-## 6) Post-Onboarding Activation Flow Closure (TP-13, TP-14, TP-15)
-- [x] `TP-13` Validate typed activation state contract from backend on every onboarding completion path.
-- [x] `TP-14` Confirm activation handoff/resume behavior is reliable from backend perspective (idempotent responses, restart-safe state reads).
-- [x] `TP-15` Ensure starter-intent bootstrap is persisted with deterministic fallback when LLM output is weak/empty.
-
-Evidence (2026-03-26):
-- Activation plan contract now returns deterministic replay identity (`idempotencyKey`, `activationFingerprint`) from backend in `onboardingActivationPlanResponseSchema` and `OnboardingService.buildActivationPlan`.
-- Added weak/empty LLM output fallback coverage + stable activation identity regression checks in `apps/api/test/onboarding.service.spec.ts`.
-- Added onboarding carryover replay-safe bootstrap contract test in `apps/api/test/onboarding-flow.contract.spec.ts` proving `intent.create_from_agent` dedupe with activation idempotency key.
-- Added restart-safe activation identity test across service re-instantiation in `apps/api/test/onboarding.service.spec.ts` (same input -> same `idempotencyKey` and `activationFingerprint`).
-- Added activation handoff retry contract test in `apps/api/test/onboarding-flow.contract.spec.ts` proving starter-intent bootstrap handler runs once under repeated retries with identical onboarding carryover key.
-
-Close when:
-- activation contract is deterministic and covered by integration tests
-- no duplicate first-action side effects under retries/replays
-
-## 7) Trust/Matching Feature Completion (TF-01 to TF-06)
-- [x] `TF-01` Ship first-class backend support path for user controls:
-  - `languagePreferences`, `countryPreferences`, verified-only matching, contact style.
-- [x] `TF-02` Add reliability signals into ranking (reply rate, acceptance rate, follow-through, moderation incidents) with bounded weights and admin visibility.
-- [x] `TF-03` Implement sparse-market adaptation strategy switching (intro/group/circle/follow-up by supply density).
-- [x] `TF-04` Add bilingual/translation-tolerance matching behavior with explicit opt-in translation policy.
-- [x] `TF-05` Add market-stage strategy controls (`empty`, `seed`, `healthy`) to adjust ranking/widening behavior by region.
-- [ ] `TF-06` Run production operator drills for trust-sensitive lifecycle paths with real-user smoke evidence.
-
-Evidence (2026-03-26):
-- Matching runtime updated with reliability scoring, translation opt-in bridge, and market-stage strategy controls in `apps/api/src/matching/matching.service.ts`.
-- Global rules contract extended with `translationOptIn` in `packages/types/src/index.ts` and `apps/api/src/personalization/personalization.service.ts`.
-- Regression coverage added in `apps/api/test/matching.service.spec.ts` and `apps/api/test/personalization.service.spec.ts`.
-
-Close when:
-- ranking strategy behavior is measurable, explainable, and regression-tested
-- operator drills prove trust-sensitive flows work end-to-end in deployed env
-
-## 8) Moderation Drill Closure (M-06)
-- [ ] Complete and record staging/prod moderation drill:
-  - report -> flag -> triage -> enforcement -> audit verification.
-
-Close when:
-- moderation drill evidence is documented and reproducible
-
-## 9) “Fully Supported” Claim Gate (program-level)
-- [ ] Confirm domain coverage metadata has no `partial` or `policy_gated`.
-- [ ] Confirm full Golden Suite + verification lane + burn-in canary are green.
-- [ ] Confirm admin reliability APIs can explain failures without raw log spelunking.
-
-Close when:
-- release claim “fully supported” is evidence-backed and reproducible.
-
-## 10) Command Checklist (backend gate commands)
-- [x] `pnpm --filter @opensocial/types typecheck`
-- [x] `pnpm --filter @opensocial/openai test`
-- [x] `pnpm --filter @opensocial/api typecheck`
-- [x] `pnpm --filter @opensocial/api lint`
-- [x] `pnpm release:check:api`
-- [x] `pnpm test:agentic:suite -- --layer=contract`
-- [x] `pnpm test:agentic:suite -- --layer=workflow`
-- [x] `pnpm test:agentic:suite -- --layer=queue`
-- [x] `pnpm test:agentic:suite -- --layer=scenario`
-- [x] `pnpm test:agentic:suite -- --layer=eval`
-- [x] `pnpm test:agentic:suite -- --layer=benchmark`
-- [x] `pnpm test:agentic:suite -- --layer=prod-smoke`
-- [x] `pnpm test:agentic:suite -- --layer=full`
-- [ ] `pnpm test:agentic:suite:verification`
-- [ ] `pnpm test:backend:ops-pack`
-
-Local artifact evidence (2026-03-26):
-- `benchmark`: `.artifacts/agent-test-suite/agent-suite-2026-03-26T15-14-29-649Z/benchmark.json`
-- `prod-smoke`: `.artifacts/agent-test-suite/agent-suite-2026-03-26T15-16-10-501Z/prod-smoke.json`
-- `full`: `.artifacts/agent-test-suite/agent-suite-2026-03-26T15-14-37-392Z/full.json`
-- `verification` + `backend:ops-pack` currently blocked locally by missing verification env vars:
-  `AGENTIC_BENCH_ACCESS_TOKEN`, `AGENTIC_BENCH_USER_ID`, `AGENTIC_BENCH_THREAD_ID`,
-  `AGENTIC_VERIFICATION_LANE_ID`, `SMOKE_BASE_URL`, `SMOKE_ACCESS_TOKEN`,
-  `SMOKE_ADMIN_USER_ID`, `SMOKE_AGENT_THREAD_ID`, `SMOKE_USER_ID`, `ONBOARDING_PROBE_TOKEN`.
+## Notes
+- Do not add durable historical status here.
+- When a task is completed, move the permanent evidence into `PROGRESS.md` and refresh this file with the next incomplete slice.

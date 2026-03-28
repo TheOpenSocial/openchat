@@ -37,7 +37,9 @@ Optional automation (full backend launch pack):
 - Command: `pnpm test:backend:ops-pack`
 - Runs: release gate + Golden Suite verification lane + smoke lane + moderation drill.
 - Writes machine-readable artifact at `.artifacts/backend-ops-pack/<run-id>.json`.
+- Validates required backend launch runbooks are present and records per-step env readiness plus final `shipVerdict`.
 - Useful for TP-11/TP-12 readiness and launch go/no-go evidence.
+- Cross-check operator expectations in `docs/backend-launch-smoke-matrix.md`.
 - For temporary staging=prod parity:
   - `STAGING_EQUALS_PROD=true BACKEND_OPS_TARGET=staging pnpm test:backend:ops-pack`
   - verification scripts will resolve `STAGING_*` keys from `PROD_*`/`PRODUCTION_*` aliases when staging keys are missing.
