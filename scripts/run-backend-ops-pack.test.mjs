@@ -144,7 +144,7 @@ test("ingestVerificationRunArtifact posts verification history when credentials 
   assert.equal(requests[0].init.headers["x-admin-api-key"], "admin-key");
   assert.equal(requests[0].body.runId, "backend-ops-pack-test");
   assert.equal(requests[0].body.lane, "suite");
-  assert.equal(requests[0].body.layer, "verification");
+  assert.equal(requests[0].body.layer, "full");
 });
 
 test("ingestVerificationRunArtifact is deterministic in dry-run mode", async () => {

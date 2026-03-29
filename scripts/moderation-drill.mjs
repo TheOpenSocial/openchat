@@ -588,9 +588,31 @@ async function waitForAuditEntries(flagId, reportId) {
       const reportAudit = drillArtifact.evidence.reportCreated
         ? findAuditLog(
             logs,
-            (entry) =>
-              entry.action === "moderation.report_submitted" &&
-              entry.entityId === (reportId || flagId),
+            (entry) => {
+              if (entry.action !== "moderation.report_submitted") {
+                return false;
+              }
+              const metadata =
+                entry.metadata && typeof entry.metadata === "object"
+                  ? entry.metadata
+                  : null;
+              const metadataReportId =
+                metadata && typeof metadata.reportId === "string"
+                  ? metadata.reportId
+                  : null;
+              const metadataTargetUserId =
+                metadata && typeof metadata.targetUserId === "string"
+                  ? metadata.targetUserId
+                  : null;
+              return (
+                metadataReportId === reportId ||
+                entry.entityId === reportId ||
+                entry.entityId === flagId ||
+                entry.entityId === entityId ||
+                entry.entityId === targetUserId ||
+                entry.entityId === metadataTargetUserId
+              );
+            },
           )
         : null;
       const assignmentAudit = findAuditLog(

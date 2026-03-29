@@ -37,6 +37,16 @@ const verificationRunIngestLaneByStepId = {
   moderation_drill: "verification",
 };
 
+function verificationLayerForStep(stepId) {
+  if (stepId === "release_check_api") {
+    return "contract";
+  }
+  if (stepId === "agentic_prod_smoke_lane") {
+    return "prod-smoke";
+  }
+  return "full";
+}
+
 const requiredRunbookFiles = [
   "docs/backend-launch-ops-pack.md",
   "docs/backend-launch-smoke-matrix.md",
@@ -257,7 +267,7 @@ export async function ingestVerificationRunArtifact(artifact, options = {}) {
     {
       runId: artifact.runId,
       lane: runLabel,
-      layer: artifact.layer ?? "verification",
+      layer: artifact.layer ?? "full",
       status: artifact.status,
       generatedAt: artifact.generatedAt,
       canaryVerdict: artifact.status === "passed" ? "healthy" : "critical",
@@ -383,12 +393,7 @@ async function main() {
               runId: `${runId}:${step.id}`,
               target,
               status: result.status,
-              layer:
-                step.id === "release_check_api"
-                  ? "contract"
-                  : step.id === "agentic_prod_smoke_lane"
-                    ? "prod-smoke"
-                    : "verification",
+              layer: verificationLayerForStep(step.id),
               stageEqualsProd,
               dryRun,
               requireRunbooks,
@@ -405,12 +410,7 @@ async function main() {
             },
             lane:
               verificationRunIngestLaneByStepId[step.id] ?? "verification",
-            layer:
-              step.id === "release_check_api"
-                ? "contract"
-                : step.id === "agentic_prod_smoke_lane"
-                  ? "prod-smoke"
-                  : "verification",
+            layer: verificationLayerForStep(step.id),
             runId: `${runId}:${step.id}`,
             status: result.status,
             generatedAt: new Date().toISOString(),
