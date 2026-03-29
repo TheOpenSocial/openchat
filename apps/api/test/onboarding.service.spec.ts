@@ -349,6 +349,19 @@ describe("OnboardingService activation plan", () => {
         hasPrimaryThread: true,
         hasDiscoveryCandidates: true,
         recommendationReady: true,
+        usefulnessScore: expect.any(Number),
+        usefulnessBand: expect.stringMatching(/^(low|medium|high)$/),
+        usefulnessSignals: expect.arrayContaining([
+          "activation_context",
+          "profile_context",
+          "memory_context",
+          "recommendation_ready",
+          "execution_cached",
+        ]),
+        nextAction: "execute_recommended_action",
+        actionableNow: false,
+        resumeStrategy: "execute_now",
+        recommendedChannel: "agent_thread_seed",
         activationReason: "activation_ready",
       }),
     );
@@ -361,9 +374,16 @@ describe("OnboardingService activation plan", () => {
     );
     expect(result.discovery.tonightCount).toBe(1);
     expect(result.execution.status).toBe("completed");
+    expect(result.execution.deterministicActionHash).toHaveLength(16);
+    expect(result.execution.replaySafe).toBe(true);
+    expect(result.execution.resumeState).toBe("completed_cached");
+    expect(result.execution.shouldExecuteNow).toBe(false);
+    expect(result.execution.resumeHint).toContain("already completed");
     expect(result.execution.cachedResponse?.intentId).toBe(
       "intent-activation-1",
     );
+    expect(result.execution.lastMutationAt).toBeNull();
+    expect(result.execution.failure).toBeNull();
   });
 
   it("keeps activation bootstrap idle until onboarding is complete", async () => {
@@ -395,12 +415,25 @@ describe("OnboardingService activation plan", () => {
         hasPrimaryThread: false,
         hasDiscoveryCandidates: false,
         recommendationReady: false,
+        usefulnessScore: 0,
+        usefulnessBand: "low",
+        usefulnessSignals: [],
+        nextAction: "refresh_activation_context",
+        actionableNow: false,
+        resumeStrategy: "refresh_context",
+        recommendedChannel: "none",
         activationReason: "onboarding_incomplete",
       }),
     );
     expect(result.memoryHighlights).toEqual([]);
     expect(result.discovery.tonightCount).toBe(0);
     expect(result.execution.status).toBe("idle");
+    expect(result.execution.resumeState).toBe("not_started");
+    expect(result.execution.shouldExecuteNow).toBe(true);
+    expect(result.execution.replaySafe).toBe(true);
+    expect(result.execution.hasCachedResponse).toBe(false);
+    expect(result.execution.cachedResponse).toBeNull();
+    expect(result.execution.failure).toBeNull();
   });
 
   it("normalizes generic rich persona/summary into concrete output", async () => {

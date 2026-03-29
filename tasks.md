@@ -7,9 +7,18 @@ Verification cadence and release gates live in `AGENT_TEST_SUITE.md`.
 Last refreshed: 2026-03-29
 
 ## Active Epic
-`Launch Evidence Closure`
+`Backend Gap Closure + Launch Evidence`
 
 ## Now
+- [ ] Tighten remaining code-addressable backend gaps in parallel
+  - Activation follow-through quality
+  - Agent outcome usefulness and recovery quality
+  - Memory retrieval/contradiction quality
+  - Operator explainability payloads
+  - Evidence:
+    - focused backend tests per slice
+    - `pnpm release:check:api`
+
 - [ ] Return to launch evidence closure after memory pass
   - Run one fresh deployed `Backend Ops Drill` after the moderation-drill refresh fallback and artifact-upload workflow fixes.
   - Evidence:

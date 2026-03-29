@@ -52,6 +52,14 @@ type OnboardingActivationExecuteInput = {
   maxIntents?: number;
 };
 
+type ClientMutationRow = {
+  status: string;
+  responseBody: Prisma.JsonValue | null;
+  errorCode?: string | null;
+  errorMessage?: string | null;
+  updatedAt?: Date | null;
+};
+
 const GENERIC_PERSONA_LABELS = new Set([
   "connector",
   "explorer",
@@ -437,24 +445,43 @@ export class OnboardingService {
             this.discoveryService?.getInboxSuggestions(input.userId, limit) ??
               null,
           ]);
+    const usefulness = this.buildActivationUsefulnessSnapshot({
+      profileSignalCount: this.countActivationSignals(enrichedInput),
+      memorySignalCount: memoryHighlights.length,
+      hasPrimaryThread: Boolean(primaryThread),
+      hasDiscoveryCandidates:
+        (discovery?.tonight.suggestions.length ?? 0) +
+          (discovery?.reconnects.reconnects.length ?? 0) +
+          (discovery?.groups.groups.length ?? 0) +
+          (inboxSuggestions?.suggestions.length ?? 0) >
+        0,
+      recommendationReady:
+        baseActivation.state !== "idle" &&
+        baseActivation.recommendedAction.text.trim().length > 0,
+      executionStatus: execution.status,
+      hasActivationContext,
+    });
 
     return {
       onboardingState,
       activation,
       readiness: {
         hasActivationContext,
-        profileSignalCount: this.countActivationSignals(enrichedInput),
+        profileSignalCount: usefulness.profileSignalCount,
         memorySignalCount: memoryHighlights.length,
-        hasPrimaryThread: Boolean(primaryThread),
-        hasDiscoveryCandidates:
-          (discovery?.tonight.suggestions.length ?? 0) +
-            (discovery?.reconnects.reconnects.length ?? 0) +
-            (discovery?.groups.groups.length ?? 0) +
-            (inboxSuggestions?.suggestions.length ?? 0) >
-          0,
-        recommendationReady:
-          activation.state !== "idle" &&
-          activation.recommendedAction.text.trim().length > 0,
+        hasPrimaryThread: usefulness.hasPrimaryThread,
+        hasDiscoveryCandidates: usefulness.hasDiscoveryCandidates,
+        recommendationReady: usefulness.recommendationReady,
+        usefulnessScore: usefulness.usefulnessScore,
+        usefulnessBand: usefulness.usefulnessBand,
+        usefulnessSignals: usefulness.usefulnessSignals,
+        nextAction: usefulness.nextAction,
+        actionableNow: usefulness.actionableNow,
+        resumeStrategy: usefulness.resumeStrategy,
+        recommendedChannel:
+          activation.state === "idle"
+            ? "none"
+            : activation.recommendedAction.kind,
         activationReason: this.resolveActivationReason({
           onboardingState,
           activationState: activation.state,
@@ -521,6 +548,16 @@ export class OnboardingService {
           created: true as const,
         };
 
+    const preMutation = await this.prisma?.clientMutation.findUnique({
+      where: {
+        userId_scope_idempotencyKey: {
+          userId: input.userId,
+          scope: "intent.create_from_agent",
+          idempotencyKey: input.idempotencyKey,
+        },
+      },
+    });
+
     const result = await this.clientMutationService.run({
       userId: input.userId,
       scope: "intent.create_from_agent",
@@ -536,12 +573,38 @@ export class OnboardingService {
           },
         ),
     });
+    const postMutation = await this.prisma?.clientMutation.findUnique({
+      where: {
+        userId_scope_idempotencyKey: {
+          userId: input.userId,
+          scope: "intent.create_from_agent",
+          idempotencyKey: input.idempotencyKey,
+        },
+      },
+    });
+    const resumedFrom = this.resolveActivationExecutionResumeSource(
+      preMutation as ClientMutationRow | null | undefined,
+    );
 
     return {
       execution: {
         scope: "intent.create_from_agent" as const,
         idempotencyKey: input.idempotencyKey,
-        status: "completed" as const,
+        deterministicActionHash: this.extractDeterministicActionHash(
+          input.idempotencyKey,
+        ),
+        replaySafe: true,
+        status: this.normalizeExecutionStatus(postMutation?.status),
+        resumedFrom,
+        hadExistingMutation: Boolean(preMutation),
+        resumeState: this.resolveActivationResumeState(
+          this.normalizeExecutionStatus(postMutation?.status),
+        ),
+        resumeHint: this.buildActivationResumeHint(
+          this.normalizeExecutionStatus(postMutation?.status),
+          Boolean(postMutation?.responseBody),
+        ),
+        lastMutationAt: postMutation?.updatedAt?.toISOString() ?? null,
       },
       thread: threadInfo,
       result,
@@ -1006,15 +1069,10 @@ export class OnboardingService {
 
   private buildActivationExecutionSnapshot(
     idempotencyKey: string,
-    row:
-      | {
-          status: string;
-          responseBody: Prisma.JsonValue | null;
-        }
-      | null
-      | undefined,
+    row: ClientMutationRow | null | undefined,
   ): OnboardingActivationBootstrapResponse["execution"] {
     const status = this.normalizeExecutionStatus(row?.status);
+    const resumeState = this.resolveActivationResumeState(status);
     const cachedResponse =
       row?.responseBody &&
       typeof row.responseBody === "object" &&
@@ -1038,7 +1096,24 @@ export class OnboardingService {
     return {
       scope: "intent.create_from_agent",
       idempotencyKey,
+      deterministicActionHash:
+        this.extractDeterministicActionHash(idempotencyKey),
+      replaySafe: true,
       status,
+      resumeState,
+      shouldExecuteNow: status === "idle" || status === "failed",
+      resumeHint: this.buildActivationResumeHint(
+        status,
+        cachedResponse !== null,
+      ),
+      lastMutationAt: row?.updatedAt ? row.updatedAt.toISOString() : null,
+      failure:
+        status === "failed"
+          ? {
+              code: this.readStringValue(row?.errorCode) ?? null,
+              message: this.readStringValue(row?.errorMessage) ?? null,
+            }
+          : null,
       hasCachedResponse: status === "completed" && cachedResponse !== null,
       cachedResponse,
     };
@@ -1057,6 +1132,168 @@ export class OnboardingService {
       return "failed";
     }
     return "idle";
+  }
+
+  private resolveActivationResumeState(
+    status: OnboardingActivationBootstrapResponse["execution"]["status"],
+  ): OnboardingActivationBootstrapResponse["execution"]["resumeState"] {
+    if (status === "processing") {
+      return "inflight";
+    }
+    if (status === "completed") {
+      return "completed_cached";
+    }
+    if (status === "failed") {
+      return "failed_previous";
+    }
+    return "not_started";
+  }
+
+  private buildActivationResumeHint(
+    status: OnboardingActivationBootstrapResponse["execution"]["status"],
+    hasCachedResponse: boolean,
+  ) {
+    if (status === "processing") {
+      return "First action is in flight. Resume by polling activation-bootstrap until execution completes.";
+    }
+    if (status === "completed" && hasCachedResponse) {
+      return "First action already completed and can be resumed from cached execution metadata.";
+    }
+    if (status === "failed") {
+      return "Previous first-action execution failed. Review failure details and retry with the same idempotency key.";
+    }
+    return "No prior execution found. Execute the recommended first action when ready.";
+  }
+
+  private extractDeterministicActionHash(idempotencyKey: string) {
+    const parts = idempotencyKey.split(":").filter(Boolean);
+    const candidate = parts[parts.length - 1];
+    return candidate && candidate.length >= 8
+      ? candidate
+      : createHash("sha256").update(idempotencyKey).digest("hex").slice(0, 16);
+  }
+
+  private resolveActivationExecutionResumeSource(
+    row: ClientMutationRow | null | undefined,
+  ):
+    | "new_execution"
+    | "cached_completion"
+    | "inflight_resume"
+    | "failed_retry" {
+    if (row?.status === "completed") {
+      return "cached_completion";
+    }
+    if (row?.status === "processing") {
+      return "inflight_resume";
+    }
+    if (row?.status === "failed") {
+      return "failed_retry";
+    }
+    return "new_execution";
+  }
+
+  private buildActivationUsefulnessSnapshot(input: {
+    profileSignalCount: number;
+    memorySignalCount: number;
+    hasPrimaryThread: boolean;
+    hasDiscoveryCandidates: boolean;
+    recommendationReady: boolean;
+    executionStatus: OnboardingActivationBootstrapResponse["execution"]["status"];
+    hasActivationContext: boolean;
+  }): {
+    profileSignalCount: number;
+    memorySignalCount: number;
+    hasPrimaryThread: boolean;
+    hasDiscoveryCandidates: boolean;
+    recommendationReady: boolean;
+    usefulnessScore: number;
+    usefulnessBand: OnboardingActivationBootstrapResponse["readiness"]["usefulnessBand"];
+    usefulnessSignals: string[];
+    nextAction: OnboardingActivationBootstrapResponse["readiness"]["nextAction"];
+    actionableNow: boolean;
+    resumeStrategy: OnboardingActivationBootstrapResponse["readiness"]["resumeStrategy"];
+  } {
+    const usefulnessSignals: string[] = [];
+    if (input.hasActivationContext) {
+      usefulnessSignals.push("activation_context");
+    }
+    if (input.profileSignalCount > 0) {
+      usefulnessSignals.push("profile_context");
+    }
+    if (input.memorySignalCount > 0) {
+      usefulnessSignals.push("memory_context");
+    }
+    if (input.hasDiscoveryCandidates) {
+      usefulnessSignals.push("discovery_supply");
+    }
+    if (input.hasPrimaryThread) {
+      usefulnessSignals.push("thread_ready");
+    }
+    if (input.recommendationReady) {
+      usefulnessSignals.push("recommendation_ready");
+    }
+    if (input.executionStatus === "completed") {
+      usefulnessSignals.push("execution_cached");
+    }
+    if (input.executionStatus === "processing") {
+      usefulnessSignals.push("execution_inflight");
+    }
+    if (input.executionStatus === "failed") {
+      usefulnessSignals.push("execution_failed");
+    }
+
+    const rawScore =
+      input.profileSignalCount * 8 +
+      input.memorySignalCount * 12 +
+      (input.hasPrimaryThread ? 10 : 0) +
+      (input.hasDiscoveryCandidates ? 20 : 0) +
+      (input.recommendationReady ? 20 : 0) +
+      (input.executionStatus === "completed"
+        ? 15
+        : input.executionStatus === "processing"
+          ? 5
+          : input.executionStatus === "failed"
+            ? -15
+            : 0);
+    const usefulnessScore = this.clampScore(rawScore);
+    const usefulnessBand: OnboardingActivationBootstrapResponse["readiness"]["usefulnessBand"] =
+      usefulnessScore >= 70 ? "high" : usefulnessScore >= 40 ? "medium" : "low";
+    const nextAction: OnboardingActivationBootstrapResponse["readiness"]["nextAction"] =
+      input.executionStatus === "processing"
+        ? "wait_for_inflight_execution"
+        : input.executionStatus === "failed"
+          ? "review_failed_execution"
+          : input.recommendationReady
+            ? "execute_recommended_action"
+            : "refresh_activation_context";
+    const actionableNow =
+      input.recommendationReady && input.executionStatus === "idle";
+    const resumeStrategy: OnboardingActivationBootstrapResponse["readiness"]["resumeStrategy"] =
+      input.executionStatus === "processing"
+        ? "wait_for_completion"
+        : input.executionStatus === "failed"
+          ? "review_failure"
+          : input.recommendationReady
+            ? "execute_now"
+            : "refresh_context";
+
+    return {
+      profileSignalCount: input.profileSignalCount,
+      memorySignalCount: input.memorySignalCount,
+      hasPrimaryThread: input.hasPrimaryThread,
+      hasDiscoveryCandidates: input.hasDiscoveryCandidates,
+      recommendationReady: input.recommendationReady,
+      usefulnessScore,
+      usefulnessBand,
+      usefulnessSignals: usefulnessSignals.slice(0, 8),
+      nextAction,
+      actionableNow,
+      resumeStrategy,
+    };
+  }
+
+  private clampScore(value: number) {
+    return Math.min(100, Math.max(0, Math.round(value)));
   }
 
   private readStringValue(value: unknown): string | null {

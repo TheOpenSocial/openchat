@@ -255,6 +255,11 @@ const RETRIEVAL_DEFAULT_MAX_AGE_DAYS = 30;
 const RETRIEVAL_MAX_DOC_SCAN = 50;
 const RETRIEVAL_CHUNK_WORD_TARGET = 90;
 const RETRIEVAL_BUNDLE_MAX_CHARS = 1_200;
+const MEMORY_GOVERNANCE_PRIORITY: Record<MemoryGovernanceTier, number> = {
+  explicit_only: 3,
+  inferable: 2,
+  ephemeral: 1,
+};
 const MEMORY_MIN_CONFIDENCE_BY_CLASS: Record<MemoryClass, number> = {
   profile_memory: 0.5,
   stable_preference: 0.7,
@@ -1262,6 +1267,7 @@ export class PersonalizationService {
     const docById = new Map(
       documents.map((document) => [document.id, document]),
     );
+    const preferredMemoryByKey = this.buildPreferredMemoryByKey(documents);
     const queryTokens = this.tokenizeForMatching(input.query);
     const scoredChunks = chunkRows
       .map((chunk) => {
@@ -1272,7 +1278,7 @@ export class PersonalizationService {
         if (this.isUnsafeContent(chunk.content)) {
           return null;
         }
-        const memoryMetadata = this.readMemoryMetadata(chunk.content);
+        const memoryMetadata = this.readMemoryMetadata(document.content);
         if (
           memoryMetadata &&
           (memoryMetadata.state === "suppressed" ||
@@ -1291,6 +1297,11 @@ export class PersonalizationService {
           document.createdAt,
           maxAgeDays,
           memoryMetadata,
+          document.id,
+          memoryMetadata?.key
+            ? (preferredMemoryByKey.get(memoryMetadata.key.toLowerCase()) ??
+                null)
+            : null,
         );
 
         return {
@@ -1305,12 +1316,20 @@ export class PersonalizationService {
             memoryMetadata,
             document.docType,
           ),
+          memoryKey: memoryMetadata?.key ?? null,
+          governanceTier: memoryMetadata?.governanceTier ?? null,
+          domain: memoryMetadata?.domain ?? null,
+          sourceSurface: memoryMetadata?.sourceSurface ?? null,
         };
       })
       .filter((item): item is NonNullable<typeof item> => item != null)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, maxChunks);
-    const bundle = this.buildRetrievalBundleText(scoredChunks);
+      .sort((a, b) => b.score - a.score);
+    const selectedChunks = this.selectTopRetrievalChunks(
+      scoredChunks,
+      maxChunks,
+    );
+    const retrievalSummary = this.buildRetrievalSummary(selectedChunks);
+    const bundle = this.buildRetrievalBundleText(selectedChunks);
     const bundleTokenEstimate = this.estimateTokenCount(bundle);
 
     return {
@@ -1319,7 +1338,16 @@ export class PersonalizationService {
       maxChunks,
       maxAgeDays,
       staleCutoff,
-      results: scoredChunks,
+      results: selectedChunks.map((item) => ({
+        documentId: item.documentId,
+        docType: item.docType,
+        chunkIndex: item.chunkIndex,
+        tokenCount: item.tokenCount,
+        score: item.score,
+        createdAt: item.createdAt,
+        excerpt: item.excerpt,
+      })),
+      summary: retrievalSummary,
       bundle,
       bundleTokenEstimate,
     };
@@ -1950,6 +1978,150 @@ export class PersonalizationService {
     return this.compressSummary(raw, RETRIEVAL_BUNDLE_MAX_CHARS);
   }
 
+  private selectTopRetrievalChunks(
+    chunks: Array<{
+      documentId: string;
+      docType: string;
+      chunkIndex: number;
+      tokenCount: number;
+      score: number;
+      createdAt: Date;
+      excerpt: string;
+      memoryKey: string | null;
+      governanceTier: MemoryGovernanceTier | null;
+      domain: MemoryDomain | null;
+      sourceSurface: MemorySourceSurface | null;
+    }>,
+    maxChunks: number,
+  ) {
+    const selected: typeof chunks = [];
+    const seenMemoryKeys = new Set<string>();
+
+    for (const chunk of chunks) {
+      const normalizedKey = chunk.memoryKey?.trim().toLowerCase() ?? null;
+      if (normalizedKey && seenMemoryKeys.has(normalizedKey)) {
+        continue;
+      }
+      selected.push(chunk);
+      if (normalizedKey) {
+        seenMemoryKeys.add(normalizedKey);
+      }
+      if (selected.length >= maxChunks) {
+        break;
+      }
+    }
+
+    return selected;
+  }
+
+  private buildRetrievalSummary(
+    results: Array<{
+      governanceTier: MemoryGovernanceTier | null;
+      domain: MemoryDomain | null;
+      sourceSurface: MemorySourceSurface | null;
+    }>,
+  ) {
+    const explicitCount = results.filter(
+      (item) => item.governanceTier === "explicit_only",
+    ).length;
+    const inferableCount = results.filter(
+      (item) => item.governanceTier === "inferable",
+    ).length;
+    const domainCounts = new Map<string, number>();
+    const surfaceCounts = new Map<string, number>();
+
+    for (const item of results) {
+      const domain = item.domain ?? "interaction";
+      const surface = item.sourceSurface ?? "system_event";
+      domainCounts.set(domain, (domainCounts.get(domain) ?? 0) + 1);
+      surfaceCounts.set(surface, (surfaceCounts.get(surface) ?? 0) + 1);
+    }
+
+    const topDomain =
+      Array.from(domainCounts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ??
+      "interaction";
+    const topSourceSurface =
+      Array.from(surfaceCounts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ??
+      "system_event";
+
+    return {
+      resultCount: results.length,
+      explicitCount,
+      inferableCount,
+      topDomain,
+      topSourceSurface,
+    };
+  }
+
+  private buildPreferredMemoryByKey(
+    documents: Array<{
+      id: string;
+      createdAt: Date;
+      content: string;
+    }>,
+  ) {
+    const preferredMemoryByKey = new Map<
+      string,
+      {
+        documentId: string;
+        governanceTier: MemoryGovernanceTier | null;
+        value: string | null;
+        createdAt: Date;
+        confidence: number | null;
+      }
+    >();
+
+    for (const document of documents) {
+      const metadata = this.readMemoryMetadata(document.content);
+      if (!metadata?.key || !metadata.value) {
+        continue;
+      }
+      const normalizedKey = metadata.key.toLowerCase();
+      const candidate = {
+        documentId: document.id,
+        governanceTier: metadata.governanceTier,
+        value: metadata.value,
+        createdAt: document.createdAt,
+        confidence: metadata.confidence,
+      };
+      const existing = preferredMemoryByKey.get(normalizedKey);
+      if (!existing || this.compareMemoryPrecedence(candidate, existing) > 0) {
+        preferredMemoryByKey.set(normalizedKey, candidate);
+      }
+    }
+
+    return preferredMemoryByKey;
+  }
+
+  private compareMemoryPrecedence(
+    left: {
+      governanceTier: MemoryGovernanceTier | null;
+      createdAt: Date;
+      confidence: number | null;
+    },
+    right: {
+      governanceTier: MemoryGovernanceTier | null;
+      createdAt: Date;
+      confidence: number | null;
+    },
+  ) {
+    const governanceDelta =
+      (MEMORY_GOVERNANCE_PRIORITY[left.governanceTier ?? "inferable"] ?? 0) -
+      (MEMORY_GOVERNANCE_PRIORITY[right.governanceTier ?? "inferable"] ?? 0);
+    if (governanceDelta !== 0) {
+      return governanceDelta;
+    }
+    const freshnessDelta = left.createdAt.getTime() - right.createdAt.getTime();
+    if (freshnessDelta !== 0) {
+      return freshnessDelta;
+    }
+    const confidenceDelta = (left.confidence ?? 0) - (right.confidence ?? 0);
+    if (confidenceDelta !== 0) {
+      return confidenceDelta;
+    }
+    return 0;
+  }
+
   private resolveRetrievalDocType(memoryClass: MemoryClass, safe: boolean) {
     if (!safe) {
       return RETRIEVAL_DOC_TYPE_INTERACTION_FLAGGED;
@@ -2137,6 +2309,14 @@ export class PersonalizationService {
         | "expired"
         | null;
     } | null,
+    documentId?: string,
+    preferredMemory?: {
+      documentId: string;
+      governanceTier: MemoryGovernanceTier | null;
+      value: string | null;
+      createdAt: Date;
+      confidence: number | null;
+    } | null,
   ) {
     const chunkTokens = this.tokenizeForMatching(chunkContent);
     let overlap = 0;
@@ -2149,25 +2329,37 @@ export class PersonalizationService {
       0,
       (Date.now() - createdAt.getTime()) / (24 * 60 * 60_000),
     );
-    const freshnessWindowDays =
-      memoryMetadata?.governanceTier === "explicit_only"
-        ? maxAgeDays * 1.75
-        : memoryMetadata?.governanceTier === "inferable"
-          ? maxAgeDays * 0.85
-          : maxAgeDays;
-    const freshnessBoost = Math.max(0, 1 - ageDays / freshnessWindowDays);
+    const governanceTier = memoryMetadata?.governanceTier ?? null;
+    const isExplicitMemory = governanceTier === "explicit_only";
+    const isInferableMemory = governanceTier === "inferable";
+    const freshnessWindowDays = isExplicitMemory
+      ? maxAgeDays * 1.9
+      : isInferableMemory
+        ? maxAgeDays * 0.65
+        : maxAgeDays;
+    const freshnessBoost =
+      Math.max(0, 1 - ageDays / freshnessWindowDays) *
+      (isExplicitMemory ? 1.6 : isInferableMemory ? 0.55 : 1);
+    const staleInferablePenalty =
+      isInferableMemory && ageDays > maxAgeDays * 0.45
+        ? this.clampNumber(
+            ((ageDays - maxAgeDays * 0.45) / (maxAgeDays * 0.55)) * 0.95,
+            0,
+            1.25,
+          )
+        : 0;
     const docTypeBoost =
       docType === RETRIEVAL_DOC_TYPE_PROFILE_SUMMARY
-        ? 1.15
+        ? 1.35
         : docType === RETRIEVAL_DOC_TYPE_PREFERENCE_MEMORY
-          ? 1
+          ? 1.15
           : docType === RETRIEVAL_DOC_TYPE_RELATIONSHIP_MEMORY
-            ? 0.7
+            ? 0.8
             : docType === RETRIEVAL_DOC_TYPE_SAFETY_MEMORY
-              ? 0.45
+              ? 0.55
               : docType === RETRIEVAL_DOC_TYPE_COMMERCE_MEMORY
-                ? 0.4
-                : 0.2;
+                ? 0.5
+                : 0.12;
     const domainBoost =
       memoryMetadata?.domain === "profile"
         ? 0.5
@@ -2181,25 +2373,39 @@ export class PersonalizationService {
                 ? 0.1
                 : 0;
     const governanceBoost =
-      memoryMetadata?.governanceTier === "explicit_only"
-        ? 1.25
-        : memoryMetadata?.governanceTier === "inferable"
-          ? 0.2
+      governanceTier === "explicit_only"
+        ? 2
+        : governanceTier === "inferable"
+          ? 0.1
           : 0;
     const sourceBoost =
       memoryMetadata?.sourceType === "explicit_user_input" ||
       memoryMetadata?.sourceType === "user_profile_edit"
-        ? 0.35
+        ? 0.9
         : memoryMetadata?.sourceSurface === "dm_chat"
-          ? 0.18
+          ? 0.24
           : memoryMetadata?.sourceSurface === "agent_chat"
-            ? 0.12
+            ? 0.16
             : memoryMetadata?.sourceSurface === "group_chat"
-              ? 0.08
+              ? 0.1
               : 0;
     const confidenceBoost = memoryMetadata?.confidence
-      ? memoryMetadata.confidence * 0.6
+      ? memoryMetadata.confidence *
+        (isExplicitMemory ? 1 : isInferableMemory ? 0.25 : 0.15)
       : 0;
+    const summaryNarrative =
+      this.parseSummaryLine(chunkContent)?.toLowerCase() ?? "";
+    const explicitNarrativeBoost =
+      summaryNarrative.includes("explicitly") ||
+      summaryNarrative.includes("explicit preference") ||
+      summaryNarrative.includes("profile edit")
+        ? 0.85
+        : 0;
+    const inferredNarrativePenalty =
+      summaryNarrative.includes("inference") ||
+      summaryNarrative.includes("inferred")
+        ? 0.45
+        : 0;
     const normalizedQuery = query.trim().toLowerCase();
     const exactKeyMatch =
       memoryMetadata?.key &&
@@ -2224,19 +2430,44 @@ export class PersonalizationService {
         ? 0.35
         : 0;
     const supersededPenalty = memoryMetadata?.state === "superseded" ? 0.55 : 0;
+    const preferredMemoryPenalty =
+      memoryMetadata?.key &&
+      preferredMemory &&
+      preferredMemory.documentId !== documentId &&
+      preferredMemory.value?.toLowerCase() !==
+        memoryMetadata.value?.toLowerCase()
+        ? isExplicitMemory
+          ? 0.6
+          : isInferableMemory
+            ? 1.6
+            : 0.4
+        : 0;
+    const preferredMemoryBoost =
+      preferredMemory?.documentId === documentId
+        ? isExplicitMemory
+          ? 0.45
+          : isInferableMemory
+            ? 0.2
+            : 0.1
+        : 0;
     return (
       overlap * 2 +
-      freshnessBoost +
+      freshnessBoost -
+      staleInferablePenalty +
       docTypeBoost +
       domainBoost +
       governanceBoost +
       sourceBoost +
       confidenceBoost +
+      explicitNarrativeBoost -
+      inferredNarrativePenalty +
       exactKeyMatch +
       semanticKeyMatch +
       exactValueMatch +
       chunkContainsValue -
-      supersededPenalty
+      supersededPenalty -
+      preferredMemoryBoost -
+      preferredMemoryPenalty
     );
   }
 

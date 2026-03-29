@@ -807,6 +807,13 @@ describe("PersonalizationService", () => {
 
     expect(result.results.length).toBeGreaterThan(0);
     expect(result.results[0]?.excerpt.toLowerCase()).toContain("prefers apex");
+    expect(result.summary).toEqual(
+      expect.objectContaining({
+        explicitCount: 1,
+        inferableCount: 1,
+        topDomain: "preference",
+      }),
+    );
     expect(
       result.results.some((item) =>
         item.excerpt.toLowerCase().includes("suppressed"),
@@ -862,5 +869,100 @@ describe("PersonalizationService", () => {
 
     expect(result.results[0]?.docType).toBe("preference_memory");
     expect(result.results[0]?.excerpt.toLowerCase()).toContain("tennis");
+  });
+
+  it("prefers explicit memory over fresher conflicting inference and bounds stale inferred memory", async () => {
+    const prisma = createLifeGraphPrismaMock();
+    const service = new PersonalizationService(prisma);
+    const userId = "11111111-1111-4111-8111-222222222222";
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-03-18T10:00:00.000Z"));
+      await service.storeInteractionSummary(userId, {
+        summary: "The user explicitly said they like tennis after work.",
+        memory: {
+          class: "stable_preference",
+          governanceTier: "explicit_only",
+          key: "conversation.preference.likes",
+          value: "tennis",
+          confidence: 0.97,
+          safeWritePolicy: "strict",
+          contradictionPolicy: "keep_latest",
+          consent: {
+            basis: "explicit_user_message",
+            explicit: true,
+          },
+          provenance: {
+            sourceType: "explicit_user_input",
+            sourceSurface: "dm_chat",
+            traceId: "trace-explicit-tennis",
+          },
+        },
+      });
+
+      vi.setSystemTime(new Date("2026-03-20T10:00:00.000Z"));
+      await service.storeInteractionSummary(userId, {
+        summary: "A newer inference says the user likes valorant.",
+        memory: {
+          class: "inferred_preference",
+          governanceTier: "inferable",
+          key: "conversation.preference.likes",
+          value: "valorant",
+          confidence: 0.54,
+          contradictionPolicy: "keep_latest",
+          provenance: {
+            sourceType: "interaction_observation",
+            sourceSurface: "group_chat",
+            traceId: "trace-inferred-valorant",
+          },
+        },
+      });
+
+      vi.setSystemTime(new Date("2026-02-10T10:00:00.000Z"));
+      await service.storeInteractionSummary(userId, {
+        summary: "An old inference says the user likes chess.",
+        memory: {
+          class: "inferred_preference",
+          governanceTier: "inferable",
+          key: "conversation.preference.likes",
+          value: "chess",
+          confidence: 0.34,
+          contradictionPolicy: "keep_latest",
+          provenance: {
+            sourceType: "interaction_observation",
+            sourceSurface: "agent_chat",
+            traceId: "trace-inferred-chess",
+          },
+        },
+      });
+
+      vi.setSystemTime(new Date("2026-03-29T10:00:00.000Z"));
+      const result = await service.retrievePersonalizationContext(userId, {
+        query: "what game does the user like",
+        maxChunks: 3,
+        maxAgeDays: 30,
+      });
+
+      expect(result.results[0]?.excerpt.toLowerCase()).toContain("tennis");
+      expect(
+        result.results.findIndex((item) =>
+          item.excerpt.toLowerCase().includes("valorant"),
+        ),
+      ).toBe(-1);
+      expect(
+        result.results.some((item) =>
+          item.excerpt.toLowerCase().includes("chess"),
+        ),
+      ).toBe(false);
+      expect(result.summary).toEqual(
+        expect.objectContaining({
+          explicitCount: 1,
+          inferableCount: 0,
+          topSourceSurface: "dm_chat",
+        }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

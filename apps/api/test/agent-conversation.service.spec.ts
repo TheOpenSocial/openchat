@@ -167,6 +167,13 @@ function createServiceHarness() {
           excerpt: "Explicit preference: evening design sessions.",
         },
       ],
+      summary: {
+        resultCount: 1,
+        explicitCount: 1,
+        inferableCount: 0,
+        topDomain: "preference",
+        topSourceSurface: "dm_chat",
+      },
       bundle:
         "preference_memory (score=0.92): Explicit preference: evening design sessions.",
       bundleTokenEstimate: 14,
@@ -813,6 +820,12 @@ describe("AgentConversationService", () => {
       "Explicit preference: evening design sessions.",
     ]);
     expect(socialContext.memoryContext?.bundle).toContain("preference_memory");
+    expect(socialContext.memoryContext?.summary).toEqual(
+      expect.objectContaining({
+        explicitCount: 1,
+        topDomain: "preference",
+      }),
+    );
 
     await (service as any).executeToolCall(
       IDS.threadId,
@@ -837,6 +850,71 @@ describe("AgentConversationService", () => {
         maxChunks: 3,
       }),
     );
+  });
+
+  it("prioritizes explicit memory highlights over generic summaries in social context", async () => {
+    const { service, personalizationService } = createServiceHarness();
+    personalizationService.retrievePersonalizationContext.mockResolvedValueOnce(
+      {
+        userId: IDS.userId,
+        query: "current social context",
+        maxChunks: 4,
+        maxAgeDays: 90,
+        staleCutoff: new Date("2025-12-20T11:00:00.000Z"),
+        results: [
+          {
+            documentId: "doc-2",
+            docType: "interaction_summary",
+            chunkIndex: 0,
+            tokenCount: 12,
+            score: 1.8,
+            createdAt: new Date("2026-03-20T10:30:00.000Z"),
+            excerpt: "Generic context about recent planning chatter.",
+          },
+          {
+            documentId: "doc-1",
+            docType: "preference_memory",
+            chunkIndex: 0,
+            tokenCount: 12,
+            score: 0.92,
+            createdAt: new Date("2026-03-20T09:00:00.000Z"),
+            excerpt: "Explicit preference: evening design sessions.",
+          },
+          {
+            documentId: "doc-3",
+            docType: "profile_summary",
+            chunkIndex: 0,
+            tokenCount: 12,
+            score: 1.1,
+            createdAt: new Date("2026-03-20T08:00:00.000Z"),
+            excerpt: "Profile summary: Buenos Aires design focus.",
+          },
+        ],
+        summary: {
+          resultCount: 3,
+          explicitCount: 1,
+          inferableCount: 0,
+          topDomain: "profile",
+          topSourceSurface: "dm_chat",
+        },
+        bundle:
+          "interaction_summary (score=1.80): Generic context about recent planning chatter.",
+        bundleTokenEstimate: 14,
+      },
+    );
+
+    const socialContext = await (service as any).buildSocialContextPacket({
+      userId: IDS.userId,
+      threadId: IDS.threadId,
+      existingMessageCount: 1,
+    });
+
+    expect(socialContext.memoryHighlights).toEqual([
+      "Profile summary: Buenos Aires design focus.",
+      "Explicit preference: evening design sessions.",
+      "Generic context about recent planning chatter.",
+    ]);
+    expect(socialContext.memoryContext?.summary.topDomain).toBe("profile");
   });
 
   it("executes bounded negotiation evaluation and records the decision", async () => {

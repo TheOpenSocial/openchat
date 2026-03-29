@@ -95,6 +95,12 @@ const preflightChecks = [
     args: ["scripts/check-runtime-version-residue.mjs"],
   },
   {
+    id: "prisma-client-generate",
+    summary: "Prisma client generation baseline",
+    cmd: "pnpm",
+    args: ["db:generate"],
+  },
+  {
     id: "types-package-build",
     summary: "Types package build baseline",
     cmd: "pnpm",
@@ -247,11 +253,7 @@ const layerChecks = {
 };
 
 function commandForLayer(selectedLayer) {
-  const baselineChecks = [
-    preflightChecks[0],
-    preflightChecks[1],
-    preflightChecks[2],
-  ].filter(Boolean);
+  const baselineChecks = preflightChecks.slice(0, 4);
 
   if (selectedLayer === "full") {
     return [

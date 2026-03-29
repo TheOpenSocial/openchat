@@ -46,6 +46,18 @@ Priority order:
 5. admin maintainability only where it supports backend operability
 6. long-term memory ingestion and governance closure
 
+## 2A. Backend Gap Matrix
+
+| Area | Status | Why it matters | Current state | Next code move |
+| --- | --- | --- | --- | --- |
+| Runtime + golden suite backbone | Done | Core API correctness and regression control | Canonical runtime, contract lane, workflow/scenario/eval lanes, and verification discipline are in place | Keep green; no structural code gap |
+| Post-onboarding activation | Strong but incomplete | Users need a deterministic path from onboarding to first value | Bootstrap and activation-execute exist, but usefulness/readiness metadata can be stronger | Improve activation follow-through, replay-safe execution detail, and resume semantics |
+| Agent outcome quality | Strong but incomplete | The product depends on useful next actions, not just valid replies | Async/no-match behavior improved, but follow-up usefulness and next-action quality still have room | Tighten intent/follow-up guidance and more grounded recovery behavior |
+| Long-term memory and retrieval | Strong but incomplete | Agent quality depends on explicit, fresh, trustworthy memory winning consistently | Governance, ingestion, admin debug, and retrieval ranking exist, but contradiction/ranking quality can still improve | Improve retrieval ranking bounds, stale-memory suppression, and agent context quality |
+| Operator explainability | Strong but incomplete | Support/admin must answer "why did this happen?" without log spelunking | Memory debug and reliability surfaces exist, but one-shot explainability can be clearer | Add richer explainability/failure summaries and drill-down helpers |
+| Launch evidence and trust drills | Release-blocking | Launch claims require deployed evidence, not only local green tests | Repo-side fixes are in place; fresh staging deploy + backend ops drill are still pending | Finish deploy, run ops drill, archive evidence |
+| Admin frontend maintainability | Deferred | Important for sustained UI velocity, but not launch-critical backend work | Monolith finding remains valid | Refactor later, after backend launch blockers close |
+
 ## 3. Epics With Numbered Milestones
 
 ### EPIC A — Agentic Product Quality

@@ -1240,6 +1240,33 @@ export const onboardingActivationExecutionStatusSchema = z.enum([
   "failed",
 ]);
 
+export const onboardingActivationResumeStateSchema = z.enum([
+  "not_started",
+  "inflight",
+  "completed_cached",
+  "failed_previous",
+]);
+
+export const onboardingActivationUsefulnessBandSchema = z.enum([
+  "low",
+  "medium",
+  "high",
+]);
+
+export const onboardingActivationNextActionSchema = z.enum([
+  "execute_recommended_action",
+  "wait_for_inflight_execution",
+  "refresh_activation_context",
+  "review_failed_execution",
+]);
+
+export const onboardingActivationResumeStrategySchema = z.enum([
+  "execute_now",
+  "wait_for_completion",
+  "review_failure",
+  "refresh_context",
+]);
+
 export const onboardingActivationBootstrapResponseSchema = z.object({
   onboardingState: z.string().min(1),
   activation: onboardingActivationPlanResponseSchema,
@@ -1250,6 +1277,13 @@ export const onboardingActivationBootstrapResponseSchema = z.object({
     hasPrimaryThread: z.boolean(),
     hasDiscoveryCandidates: z.boolean(),
     recommendationReady: z.boolean(),
+    usefulnessScore: z.number().int().min(0).max(100),
+    usefulnessBand: onboardingActivationUsefulnessBandSchema,
+    usefulnessSignals: z.array(z.string().min(1).max(64)).max(8),
+    nextAction: onboardingActivationNextActionSchema,
+    actionableNow: z.boolean(),
+    resumeStrategy: onboardingActivationResumeStrategySchema,
+    recommendedChannel: z.enum(["agent_thread_seed", "intent_create", "none"]),
     activationReason: z.enum([
       "onboarding_incomplete",
       "missing_context",
@@ -1294,7 +1328,19 @@ export const onboardingActivationBootstrapResponseSchema = z.object({
   execution: z.object({
     scope: z.literal("intent.create_from_agent"),
     idempotencyKey: z.string().min(1),
+    deterministicActionHash: z.string().min(8),
+    replaySafe: z.boolean(),
     status: onboardingActivationExecutionStatusSchema,
+    resumeState: onboardingActivationResumeStateSchema,
+    shouldExecuteNow: z.boolean(),
+    resumeHint: z.string().min(1),
+    lastMutationAt: isoDateTimeSchema.nullable(),
+    failure: z
+      .object({
+        code: z.string().min(1).nullable(),
+        message: z.string().min(1).nullable(),
+      })
+      .nullable(),
     hasCachedResponse: z.boolean(),
     cachedResponse: z
       .object({
@@ -1311,7 +1357,19 @@ export const onboardingActivationExecuteResponseSchema = z.object({
   execution: z.object({
     scope: z.literal("intent.create_from_agent"),
     idempotencyKey: z.string().min(1),
+    deterministicActionHash: z.string().min(8),
+    replaySafe: z.boolean(),
     status: onboardingActivationExecutionStatusSchema,
+    resumedFrom: z.enum([
+      "new_execution",
+      "cached_completion",
+      "inflight_resume",
+      "failed_retry",
+    ]),
+    hadExistingMutation: z.boolean(),
+    resumeState: onboardingActivationResumeStateSchema,
+    resumeHint: z.string().min(1),
+    lastMutationAt: isoDateTimeSchema.nullable(),
   }),
   thread: z.object({
     id: uuidSchema,

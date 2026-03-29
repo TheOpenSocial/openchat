@@ -119,9 +119,36 @@ describe("AgenticEvalsService", () => {
       }),
       composeConversationResponse: vi
         .fn()
-        .mockResolvedValue(
-          "I’ll keep searching in the background and send a quick update here. If you want, I can widen filters for timing or group size.",
-        ),
+        .mockImplementation(async (input: any) => {
+          const userMessage = String(input?.userMessage ?? "").toLowerCase();
+          if (userMessage.includes("from my dms")) {
+            return "From your recent conversations, I’d focus on English or Spanish tennis intros after work and keep the next step light and social.";
+          }
+          if (userMessage.includes("hiking group chat")) {
+            return "Your group-chat signals point toward a weekend hiking plan, so I’d bias toward a small group intro for Saturday.";
+          }
+          if (
+            userMessage.includes("save it to memory") ||
+            userMessage.includes("home address")
+          ) {
+            return "I can't store unsafe or sensitive claims like that as durable memory. I’d keep it out of long-term memory and treat it as a safety issue instead.";
+          }
+          if (
+            userMessage.includes(
+              "why did you think i preferred spanish tennis intros",
+            )
+          ) {
+            return "That came from prior conversation memory with a moderate confidence signal. If newer context conflicts with it, I’d update the memory and prefer the newer source.";
+          }
+          if (
+            userMessage.includes(
+              "you used to think i wanted spanish tennis intros",
+            )
+          ) {
+            return "Your latest update says English only, so I’d use the newer memory and keep the next intro in English.";
+          }
+          return "I’ll keep searching in the background and send a quick update here. If you want, I can widen filters for timing or group size.";
+        }),
       assistModeration: vi.fn().mockResolvedValue({ decision: "blocked" }),
       parseIntent: vi.fn().mockResolvedValue({
         version: 1,
@@ -159,16 +186,21 @@ describe("AgenticEvalsService", () => {
         "eval_tone_agentic_async_ack_v1",
         "eval_usefulness_no_match_recovery_v1",
         "eval_grounding_profile_memory_consistency_v1",
+        "eval_memory_dm_inference_quality_v1",
+        "eval_memory_group_inference_quality_v1",
+        "eval_memory_unsafe_suppression_v1",
+        "eval_memory_disputed_explainability_v1",
+        "eval_memory_grounding_after_contradiction_v1",
       ]),
     );
     expect(snapshot.scorecard).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ dimension: "safety", total: 2 }),
-        expect.objectContaining({ dimension: "observability", total: 1 }),
+        expect.objectContaining({ dimension: "safety", total: 3 }),
+        expect.objectContaining({ dimension: "observability", total: 2 }),
         expect.objectContaining({ dimension: "negotiation", total: 1 }),
         expect.objectContaining({ dimension: "tone", total: 1 }),
         expect.objectContaining({ dimension: "usefulness", total: 1 }),
-        expect.objectContaining({ dimension: "grounding", total: 1 }),
+        expect.objectContaining({ dimension: "grounding", total: 4 }),
       ]),
     );
     expect(snapshot.traceGrade).toEqual(
@@ -186,6 +218,23 @@ describe("AgenticEvalsService", () => {
     );
     expect(Array.isArray(snapshot.regressions)).toBe(true);
     expect(snapshot.regressions).toHaveLength(0);
+    expect(snapshot.explainability).toEqual(
+      expect.objectContaining({
+        summary: expect.any(String),
+        primaryRiskDimension: null,
+        regressionCounts: expect.objectContaining({
+          total: 0,
+          critical: 0,
+          warning: 0,
+        }),
+        operatorActions: expect.arrayContaining([
+          expect.objectContaining({
+            id: "inspect_eval_trace",
+            endpoint: "/api/admin/ops/agentic-evals",
+          }),
+        ]),
+      }),
+    );
     expect(analyticsService.getAgentOutcomeMetrics).toHaveBeenCalledWith({
       days: 14,
       followupEngagementHours: 24,
@@ -255,9 +304,36 @@ describe("AgenticEvalsService", () => {
       }),
       composeConversationResponse: vi
         .fn()
-        .mockResolvedValue(
-          "I’ll continue searching and keep you posted. We can widen filters or adjust timing if needed.",
-        ),
+        .mockImplementation(async (input: any) => {
+          const userMessage = String(input?.userMessage ?? "").toLowerCase();
+          if (userMessage.includes("from my dms")) {
+            return "From your recent conversations, I’d focus on English or Spanish tennis intros after work and keep the next step light and social.";
+          }
+          if (userMessage.includes("hiking group chat")) {
+            return "Your group-chat signals point toward a weekend hiking plan, so I’d bias toward a small group intro for Saturday.";
+          }
+          if (
+            userMessage.includes("save it to memory") ||
+            userMessage.includes("home address")
+          ) {
+            return "I can't store unsafe or sensitive claims like that as durable memory. I’d keep it out of long-term memory and treat it as a safety issue instead.";
+          }
+          if (
+            userMessage.includes(
+              "why did you think i preferred spanish tennis intros",
+            )
+          ) {
+            return "That came from prior conversation memory with a moderate confidence signal. If newer context conflicts with it, I’d update the memory and prefer the newer source.";
+          }
+          if (
+            userMessage.includes(
+              "you used to think i wanted spanish tennis intros",
+            )
+          ) {
+            return "Your latest update says English only, so I’d use the newer memory and keep the next intro in English.";
+          }
+          return "I’ll continue searching and keep you posted. We can widen filters or adjust timing if needed.";
+        }),
       assistModeration: vi.fn().mockResolvedValue({ decision: "blocked" }),
       parseIntent: vi.fn().mockResolvedValue({
         version: 1,
@@ -294,6 +370,23 @@ describe("AgenticEvalsService", () => {
           severity: "warning",
         }),
       ]),
+    );
+    expect(snapshot.explainability).toEqual(
+      expect.objectContaining({
+        primaryRiskDimension: "correctness",
+        failingDimensions: expect.arrayContaining([
+          expect.objectContaining({
+            dimension: "correctness",
+            severity: "warning",
+          }),
+        ]),
+        failedScenarios: expect.arrayContaining([
+          expect.objectContaining({
+            id: "workflow_runtime_traceability",
+            dimension: "correctness",
+          }),
+        ]),
+      }),
     );
   });
 });

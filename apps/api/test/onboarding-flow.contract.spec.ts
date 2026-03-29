@@ -370,6 +370,21 @@ describe("Onboarding flow contract", () => {
           hasPrimaryThread: true,
           hasDiscoveryCandidates: true,
           recommendationReady: true,
+          usefulnessScore: 82,
+          usefulnessBand: "high",
+          usefulnessSignals: [
+            "activation_context",
+            "profile_context",
+            "memory_context",
+            "discovery_supply",
+            "thread_ready",
+            "recommendation_ready",
+            "execution_cached",
+          ],
+          nextAction: "execute_recommended_action",
+          actionableNow: false,
+          resumeStrategy: "execute_now",
+          recommendedChannel: "agent_thread_seed",
           activationReason: "activation_ready",
         },
         memoryHighlights: [
@@ -406,7 +421,15 @@ describe("Onboarding flow contract", () => {
           scope: "intent.create_from_agent",
           idempotencyKey:
             "onboarding-carryover:11111111-1111-4111-8111-111111111111:abc123efab456789",
+          deterministicActionHash: "abc123efab456789",
+          replaySafe: true,
           status: "completed",
+          resumeState: "completed_cached",
+          shouldExecuteNow: false,
+          resumeHint:
+            "First action already completed and can be resumed from cached execution metadata.",
+          lastMutationAt: null,
+          failure: null,
           hasCachedResponse: true,
           cachedResponse: {
             threadId: "22222222-2222-4222-8222-222222222222",
@@ -431,10 +454,17 @@ describe("Onboarding flow contract", () => {
     expect(data.activation.state).toBe("ready");
     expect(data.readiness.activationReason).toBe("activation_ready");
     expect(data.readiness.memorySignalCount).toBe(2);
+    expect(data.readiness.usefulnessBand).toBe("high");
+    expect(data.readiness.nextAction).toBe("execute_recommended_action");
+    expect(data.readiness.actionableNow).toBe(false);
+    expect(data.readiness.resumeStrategy).toBe("execute_now");
+    expect(data.readiness.recommendedChannel).toBe("agent_thread_seed");
     expect(data.memoryHighlights).toHaveLength(2);
     expect(data.primaryThread.id).toBe("22222222-2222-4222-8222-222222222222");
     expect(data.discovery.topTonight).toHaveLength(1);
     expect(data.execution.status).toBe("completed");
+    expect(data.execution.resumeState).toBe("completed_cached");
+    expect(data.execution.replaySafe).toBe(true);
   });
 
   it("executes activation recommendation through a replay-safe onboarding endpoint", async () => {
@@ -445,7 +475,15 @@ describe("Onboarding flow contract", () => {
           scope: "intent.create_from_agent",
           idempotencyKey:
             "onboarding-carryover:11111111-1111-4111-8111-111111111111:abc123efab456789",
+          deterministicActionHash: "abc123efab456789",
+          replaySafe: true,
           status: "completed",
+          resumedFrom: "new_execution",
+          hadExistingMutation: false,
+          resumeState: "completed_cached",
+          resumeHint:
+            "First action already completed and can be resumed from cached execution metadata.",
+          lastMutationAt: "2026-03-29T05:00:00.000Z",
         },
         thread: {
           id: "22222222-2222-4222-8222-222222222222",
@@ -477,6 +515,11 @@ describe("Onboarding flow contract", () => {
 
     const data = response.data as any;
     expect(data.execution.status).toBe("completed");
+    expect(data.execution.replaySafe).toBe(true);
+    expect(data.execution.resumedFrom).toBe("new_execution");
+    expect(data.execution.resumeState).toBe("completed_cached");
+    expect(data.execution.resumeHint).toContain("already completed");
+    expect(data.execution.lastMutationAt).toBe("2026-03-29T05:00:00.000Z");
     expect(data.thread.created).toBe(false);
     expect(data.result.intentCount).toBe(1);
     expect(

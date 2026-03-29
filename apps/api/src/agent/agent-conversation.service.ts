@@ -90,6 +90,13 @@ type SocialContextPacket = {
   memoryHighlights: string[];
   memoryContext?: {
     bundle: string;
+    summary: {
+      resultCount: number;
+      explicitCount: number;
+      inferableCount: number;
+      topDomain: string;
+      topSourceSurface: string;
+    };
     topResults: Array<{
       documentId: string;
       docType: string;
@@ -743,6 +750,12 @@ export class AgentConversationService {
           )
         : null;
     const memoryHighlights = (rankedMemory?.results ?? [])
+      .slice()
+      .sort(
+        (left, right) =>
+          this.rankMemoryContextResult(right) -
+          this.rankMemoryContextResult(left),
+      )
       .map((result) => this.toShortMemoryHighlight(result.excerpt))
       .filter((value): value is string => value.length > 0)
       .slice(0, 3);
@@ -798,6 +811,7 @@ export class AgentConversationService {
       memoryContext: rankedMemory
         ? {
             bundle: rankedMemory.bundle,
+            summary: rankedMemory.summary,
             topResults: rankedMemory.results.slice(0, 4).map((result) => ({
               documentId: result.documentId,
               docType: result.docType,
@@ -817,6 +831,30 @@ export class AgentConversationService {
     return normalized.length <= 160
       ? normalized
       : `${normalized.slice(0, 157)}...`;
+  }
+
+  private rankMemoryContextResult(result: {
+    docType: string;
+    score: number;
+    createdAt: Date;
+  }) {
+    const docTypePriority =
+      result.docType === "profile_summary"
+        ? 4.5
+        : result.docType === "preference_memory"
+          ? 4
+          : result.docType === "relationship_memory"
+            ? 3
+            : result.docType === "safety_memory"
+              ? 2.5
+              : result.docType === "commerce_memory"
+                ? 2
+                : 1;
+    const freshnessBoost = Math.max(
+      0,
+      1 - (Date.now() - result.createdAt.getTime()) / (45 * 24 * 60 * 60_000),
+    );
+    return docTypePriority + result.score * 0.45 + freshnessBoost * 0.75;
   }
 
   private async withTimeout<T>(

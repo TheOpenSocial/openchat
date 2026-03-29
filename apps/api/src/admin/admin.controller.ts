@@ -1490,6 +1490,40 @@ export class AdminController {
           run.domain === "commerce" && run.integrity.dedupedSideEffectCount > 0,
       ).length,
     };
+    const memorySignals = {
+      memoryIngestionFailedRuns: enrichedRuns.filter((run) =>
+        run.stages.some(
+          (stage) =>
+            stage.stage.toLowerCase().includes("memory") &&
+            stage.status === "failed",
+        ),
+      ).length,
+      memoryIngestionBlockedRuns: enrichedRuns.filter((run) =>
+        run.stages.some(
+          (stage) =>
+            stage.stage.toLowerCase().includes("memory") &&
+            stage.status === "blocked",
+        ),
+      ).length,
+      memoryIngestionDegradedRuns: enrichedRuns.filter((run) =>
+        run.stages.some(
+          (stage) =>
+            stage.stage.toLowerCase().includes("memory") &&
+            stage.status === "degraded",
+        ),
+      ).length,
+      memoryConflictRuns: enrichedRuns.filter((run) =>
+        run.stages.some((stage) => {
+          const normalized = stage.stage.toLowerCase();
+          return (
+            (normalized.includes("memory") &&
+              (normalized.includes("contradiction") ||
+                normalized.includes("conflict"))) ||
+            (stage.summary ?? "").toLowerCase().includes("contradiction")
+          );
+        }),
+      ).length,
+    };
 
     const [evalSnapshot, verificationRuns] = await Promise.all([
       this.agenticEvalsService.runSnapshot(),
@@ -1504,6 +1538,16 @@ export class AdminController {
           : "watch",
       workflowHealth,
       latestVerificationRun,
+    });
+    const failureClassSummary = this.buildFailureClassSummary(failureClasses);
+    const explainability = this.buildAgentReliabilityExplainability({
+      workflowHealth,
+      failureClassSummary,
+      topFailureStages,
+      latestVerificationRun,
+      evalSnapshot,
+      canaryVerdict: canary.verdict,
+      memorySignals,
     });
 
     await this.adminAuditService.recordAction({
@@ -1525,9 +1569,11 @@ export class AdminController {
         totalRuns: enrichedRuns.length,
         health: workflowHealth,
         failureClasses,
+        failureClassSummary,
         stageStatusCounts,
         topFailureStages,
         domainSignals,
+        memorySignals,
       },
       eval: {
         status: evalSnapshot.summary.status,
@@ -1536,6 +1582,8 @@ export class AdminController {
         regressionCount: evalSnapshot.summary.regressionCount,
         traceGrade: evalSnapshot.traceGrade,
         regressions: evalSnapshot.regressions,
+        explainability:
+          (evalSnapshot as { explainability?: unknown }).explainability ?? null,
       },
       verification: {
         totalRuns: verificationRuns.length,
@@ -1543,6 +1591,7 @@ export class AdminController {
         recentRuns: recentVerificationRuns,
       },
       canary,
+      explainability,
     });
   }
 
@@ -4237,6 +4286,167 @@ export class AdminController {
     return input.health === "critical"
       ? "Inspect-only run. Do not replay yet; fill missing trace/checkpoint instrumentation first."
       : "Inspect-only run. Add trace/checkpoint coverage before attempting replay.";
+  }
+
+  private buildFailureClassSummary(failureClasses: {
+    none: number;
+    llmOrSchema: number;
+    moderationOrPolicy: number;
+    matchingOrNegotiation: number;
+    queueOrReplay: number;
+    persistenceOrDedupe: number;
+    notificationOrFollowup: number;
+    latencyOrCapacity: number;
+    observabilityGap: number;
+  }) {
+    const entries = [
+      {
+        class: "llm_or_schema",
+        count: failureClasses.llmOrSchema,
+        hint: "Inspect planning/compose/schema traces and model-output validation.",
+      },
+      {
+        class: "moderation_or_policy",
+        count: failureClasses.moderationOrPolicy,
+        hint: "Inspect moderation decisions, policy gates, and approval transitions.",
+      },
+      {
+        class: "matching_or_negotiation",
+        count: failureClasses.matchingOrNegotiation,
+        hint: "Inspect ranking, candidate fanout, and negotiation stage outcomes.",
+      },
+      {
+        class: "queue_or_replay",
+        count: failureClasses.queueOrReplay,
+        hint: "Inspect queue lag, retries, dedupe keys, and replayability signals.",
+      },
+      {
+        class: "persistence_or_dedupe",
+        count: failureClasses.persistenceOrDedupe,
+        hint: "Inspect write paths, idempotency keys, and side-effect reuse metadata.",
+      },
+      {
+        class: "notification_or_followup",
+        count: failureClasses.notificationOrFollowup,
+        hint: "Inspect follow-up scheduling and notification enqueue/delivery events.",
+      },
+      {
+        class: "latency_or_capacity",
+        count: failureClasses.latencyOrCapacity,
+        hint: "Inspect timeout budgets, queue pressure, and fallback thresholds.",
+      },
+      {
+        class: "observability_gap",
+        count: failureClasses.observabilityGap,
+        hint: "Add missing checkpoints and trace events before replaying.",
+      },
+      {
+        class: "none",
+        count: failureClasses.none,
+        hint: "No workflow failures classified for these runs.",
+      },
+    ] as const;
+
+    return entries
+      .filter((entry) => entry.count > 0)
+      .sort((left, right) => right.count - left.count);
+  }
+
+  private buildAgentReliabilityExplainability(input: {
+    workflowHealth: { healthy: number; watch: number; critical: number };
+    failureClassSummary: Array<{
+      class: string;
+      count: number;
+      hint: string;
+    }>;
+    topFailureStages: Array<{
+      stage: string;
+      status: "failed" | "blocked" | "degraded";
+      count: number;
+    }>;
+    latestVerificationRun: VerificationRunRecord | null;
+    evalSnapshot: {
+      summary: {
+        status?: string;
+        regressionCount?: number;
+      };
+    };
+    canaryVerdict: "healthy" | "watch" | "critical";
+    memorySignals: {
+      memoryIngestionFailedRuns: number;
+      memoryIngestionBlockedRuns: number;
+      memoryIngestionDegradedRuns: number;
+      memoryConflictRuns: number;
+    };
+  }) {
+    const primaryFailureClass = input.failureClassSummary[0] ?? null;
+    const primaryFailureStage = input.topFailureStages[0] ?? null;
+    const verificationStatus = input.latestVerificationRun?.status ?? "unknown";
+    const evalStatus = input.evalSnapshot.summary.status ?? "watch";
+    const memoryPressure =
+      input.memorySignals.memoryIngestionFailedRuns +
+      input.memorySignals.memoryIngestionBlockedRuns +
+      input.memorySignals.memoryIngestionDegradedRuns;
+
+    const summary =
+      input.canaryVerdict === "healthy"
+        ? "Reliability is healthy. No immediate operator intervention required."
+        : input.canaryVerdict === "critical"
+          ? `Reliability is critical. Primary failure class: ${primaryFailureClass?.class ?? "unknown"}; verification status: ${verificationStatus}.`
+          : `Reliability is watch. Primary failure class: ${primaryFailureClass?.class ?? "none"}; eval status: ${evalStatus}.`;
+
+    const nextActions = [
+      {
+        id: "open_failure_class_runs",
+        label: "Open workflow runs for the primary failure class",
+        endpoint: primaryFailureClass
+          ? `/api/admin/ops/agent-workflows?failureClass=${primaryFailureClass.class}&failuresOnly=true`
+          : "/api/admin/ops/agent-workflows?failuresOnly=true",
+        reason: primaryFailureClass
+          ? primaryFailureClass.hint
+          : "No dominant failure class; inspect all non-healthy runs.",
+      },
+      {
+        id: "open_latest_verification",
+        label: "Inspect latest verification lane run",
+        endpoint: "/api/admin/ops/verification-runs?limit=10",
+        reason:
+          verificationStatus === "failed"
+            ? "Latest verification run failed and is currently gating canary confidence."
+            : "Verify recent run stability before rollout.",
+      },
+      {
+        id: "open_eval_regressions",
+        label: "Inspect eval regressions",
+        endpoint: "/api/admin/ops/agentic-evals",
+        reason:
+          (input.evalSnapshot.summary.regressionCount ?? 0) > 0
+            ? "Eval regressions are active and can explain user-facing quality drift."
+            : "No active eval regressions; use this view to confirm trace-grade stability.",
+      },
+    ];
+    if (memoryPressure > 0 || input.memorySignals.memoryConflictRuns > 0) {
+      nextActions.push({
+        id: "open_memory_pipeline_health",
+        label: "Inspect memory pipeline health",
+        endpoint:
+          "/api/admin/ops/agent-workflows?suspectStage=memory&failuresOnly=true",
+        reason:
+          "Memory-stage degradation/conflicts detected; verify ingestion and contradiction handling traces.",
+      });
+    }
+
+    return {
+      summary,
+      canaryVerdict: input.canaryVerdict,
+      primaryFailureClass,
+      primaryFailureStage,
+      verificationStatus,
+      evalStatus,
+      memorySignals: input.memorySignals,
+      workflowHealth: input.workflowHealth,
+      nextActions,
+    };
   }
 
   private classifyWorkflowFailure(input: {

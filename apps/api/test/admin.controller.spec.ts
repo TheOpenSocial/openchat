@@ -2732,6 +2732,25 @@ describe("AdminController", () => {
               score: 0.95,
             },
             regressions: [],
+            explainability: {
+              summary: "Eval suite is healthy.",
+              primaryRiskDimension: null,
+              regressionCounts: {
+                total: 0,
+                critical: 0,
+                warning: 0,
+              },
+              failingDimensions: [],
+              failedScenarios: [],
+              operatorActions: [
+                {
+                  id: "inspect_eval_trace",
+                  label: "Inspect latest eval traces",
+                  reason: "Trace-level review confirms drift source.",
+                  endpoint: "/api/admin/ops/agentic-evals",
+                },
+              ],
+            },
             scenarios: [
               {
                 id: "planning_bounds",
@@ -2755,6 +2774,16 @@ describe("AdminController", () => {
     expect(payload.summary.total).toBe(5);
     expect(payload.summary.passRate).toBe(1);
     expect(payload.scenarios[0]?.id).toBe("planning_bounds");
+    expect((result.data as any).explainability).toEqual(
+      expect.objectContaining({
+        summary: "Eval suite is healthy.",
+        operatorActions: expect.arrayContaining([
+          expect.objectContaining({
+            id: "inspect_eval_trace",
+          }),
+        ]),
+      }),
+    );
     expect(adminAuditService.recordAction).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "admin.ops_agentic_evals_view",
@@ -2901,6 +2930,11 @@ describe("AdminController", () => {
                 threshold: 0.75,
               },
             ],
+            explainability: {
+              summary:
+                "Eval suite is watch. Monitor correctness regressions before release.",
+              primaryRiskDimension: "correctness",
+            },
             scenarios: [],
           }),
         },
@@ -2923,6 +2957,37 @@ describe("AdminController", () => {
     expect(result.data.eval.status).toBe("watch");
     expect(result.data.verification.latest?.status).toBe("failed");
     expect(result.data.canary.verdict).toBe("critical");
+    expect(result.data.workflow.failureClassSummary[0]).toEqual(
+      expect.objectContaining({
+        class: "matching_or_negotiation",
+        count: 1,
+      }),
+    );
+    expect(result.data.workflow.memorySignals).toEqual(
+      expect.objectContaining({
+        memoryIngestionFailedRuns: 0,
+        memoryIngestionBlockedRuns: 0,
+        memoryIngestionDegradedRuns: 0,
+        memoryConflictRuns: 0,
+      }),
+    );
+    expect(result.data.explainability).toEqual(
+      expect.objectContaining({
+        canaryVerdict: "critical",
+        primaryFailureClass: expect.objectContaining({
+          class: "matching_or_negotiation",
+        }),
+        verificationStatus: "failed",
+        nextActions: expect.arrayContaining([
+          expect.objectContaining({
+            id: "open_failure_class_runs",
+          }),
+          expect.objectContaining({
+            id: "open_latest_verification",
+          }),
+        ]),
+      }),
+    );
     expect(adminAuditService.recordAction).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "admin.ops_agent_reliability_view",
