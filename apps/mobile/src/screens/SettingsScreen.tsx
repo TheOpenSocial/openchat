@@ -1,15 +1,17 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Image,
+  LayoutChangeEvent,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -18,6 +20,7 @@ import { CalmTextField } from "../components/CalmTextField";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { useLoadingModal } from "../hooks/useLoadingModal";
 import { hapticSelection } from "../lib/haptics";
+import { appTheme } from "../theme";
 import type { UserProfileDraft } from "../types";
 import { useSelfProfileData } from "./profile/useProfileData";
 import { joinDisplayName, splitDisplayName } from "./settings/domain/name";
@@ -46,8 +49,17 @@ function NameAvatar({
   uploading: boolean;
 }) {
   return (
-    <Pressable className="items-center" disabled={uploading} onPress={onPress}>
-      <View className="h-32 w-32 items-center justify-center overflow-hidden rounded-[40px] border border-white/10 bg-white/[0.05]">
+    <Pressable
+      accessibilityHint="Opens options to take or choose a new profile photo."
+      accessibilityLabel="Change profile photo"
+      accessibilityRole="button"
+      accessibilityState={{ busy: uploading, disabled: uploading }}
+      className="items-center"
+      disabled={uploading}
+      hitSlop={12}
+      onPress={onPress}
+    >
+      <View className="h-32 w-32 items-center justify-center overflow-hidden rounded-[40px] border border-hairline bg-surfaceMuted/85">
         {avatarUrl ? (
           <Image
             className="h-full w-full"
@@ -55,20 +67,16 @@ function NameAvatar({
             source={{ uri: avatarUrl }}
           />
         ) : (
-          <View className="h-full w-full items-center justify-center bg-white/[0.04]">
-            <Text className="text-[32px] font-semibold tracking-[-0.04em] text-white/90">
+          <View className="h-full w-full items-center justify-center bg-surfaceMuted/70">
+            <Text className="text-[32px] font-semibold tracking-[-0.04em] text-ink">
               {fallbackInitials}
             </Text>
           </View>
         )}
       </View>
-      <View className="mt-4 flex-row items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-2">
-        <Ionicons
-          color="rgba(255,255,255,0.82)"
-          name="camera-outline"
-          size={15}
-        />
-        <Text className="text-[12px] font-medium text-white/76">
+      <View className="mt-4 flex-row items-center gap-2 rounded-full border border-hairline bg-surfaceMuted/85 px-3 py-2">
+        <Ionicons color={appTheme.colors.ink} name="camera-outline" size={15} />
+        <Text className="text-[12px] font-medium text-ink/90">
           {uploading ? "Uploading photo" : "Change photo"}
         </Text>
       </View>
@@ -87,13 +95,13 @@ function SectionLabel({
 }) {
   return (
     <View className="gap-2">
-      <Text className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/36">
+      <Text className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
         {eyebrow}
       </Text>
-      <Text className="text-[32px] font-semibold tracking-[-0.05em] text-white/96">
+      <Text className="text-[32px] font-semibold tracking-[-0.05em] text-ink">
         {title}
       </Text>
-      <Text className="max-w-[310px] text-[14px] leading-[21px] text-white/52">
+      <Text className="max-w-[310px] text-[14px] leading-[21px] text-muted">
         {subtitle}
       </Text>
     </View>
@@ -124,6 +132,9 @@ export function SettingsScreen({
   );
   const [firstName, setFirstName] = useState(initialName.firstName);
   const [lastName, setLastName] = useState(initialName.lastName);
+  const firstNameRef = useRef<TextInput>(null);
+  const lastNameRef = useRef<TextInput>(null);
+  const [footerHeight, setFooterHeight] = useState(0);
 
   const shouldUseNativePhotoCrop = Platform.OS !== "ios";
   const { hide, loadingModal, show } = useLoadingModal({
@@ -180,6 +191,15 @@ export function SettingsScreen({
       currentName.lastName !== lastName.trim()
     );
   }, [displayName, firstName, lastName, profile.name]);
+
+  const scrollBottomPadding = footerHeight > 0 ? footerHeight + 24 : 164;
+
+  const handleFooterLayout = useCallback((event: LayoutChangeEvent) => {
+    const nextHeight = Math.ceil(event.nativeEvent.layout.height);
+    setFooterHeight((currentHeight) =>
+      currentHeight === nextHeight ? currentHeight : nextHeight,
+    );
+  }, []);
 
   const handleAvatarPick = useCallback(
     async (source: AvatarSource) => {
@@ -311,8 +331,13 @@ export function SettingsScreen({
       >
         <View className="flex-row items-center justify-between px-5 pb-2 pt-2">
           <Pressable
-            className="h-9 w-9 items-center justify-center"
+            accessibilityHint="Returns to the previous screen."
+            accessibilityLabel="Close settings"
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !onClose }}
+            className="h-11 w-11 items-center justify-center"
             disabled={!onClose}
+            hitSlop={8}
             onPress={() => {
               if (!onClose) {
                 return;
@@ -323,12 +348,12 @@ export function SettingsScreen({
             testID="settings-close"
           >
             <Ionicons
-              color={onClose ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0)"}
+              color={onClose ? appTheme.colors.ink : "rgba(236,236,236,0)"}
               name="chevron-back"
               size={20}
             />
           </Pressable>
-          <Text className="text-[13px] font-semibold uppercase tracking-[0.12em] text-white/48">
+          <Text className="text-[13px] font-semibold uppercase tracking-[0.12em] text-muted">
             Settings
           </Text>
           <View className="h-9 w-9" />
@@ -336,12 +361,16 @@ export function SettingsScreen({
 
         <View style={{ flex: 1 }}>
           <ScrollView
+            automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
+            contentInsetAdjustmentBehavior="never"
             style={{ flex: 1 }}
             contentContainerStyle={{
-              paddingBottom: 164,
+              flexGrow: 1,
+              paddingBottom: scrollBottomPadding,
               paddingHorizontal: 20,
               paddingTop: 12,
             }}
+            keyboardDismissMode="interactive"
             keyboardShouldPersistTaps="handled"
           >
             <View style={{ gap: 40 }}>
@@ -367,23 +396,39 @@ export function SettingsScreen({
                   autoCapitalize="words"
                   autoCorrect={false}
                   containerClassName="gap-2"
+                  accessibilityHint="Enter your given name."
                   editable={!saving}
+                  accessibilityLabel="First name"
+                  inputClassName="text-ink"
                   label="First name"
+                  onSubmitEditing={() => {
+                    lastNameRef.current?.focus();
+                  }}
                   onChangeText={setFirstName}
                   placeholder="Your first name"
+                  placeholderTextColor={appTheme.colors.muted}
+                  selectionColor={appTheme.colors.ink}
                   returnKeyType="next"
+                  ref={firstNameRef}
+                  blurOnSubmit={false}
                   value={firstName}
                 />
                 <CalmTextField
                   autoCapitalize="words"
                   autoCorrect={false}
                   containerClassName="gap-2"
+                  accessibilityHint="Enter your family name."
                   editable={!saving}
+                  accessibilityLabel="Last name"
                   helperText="We currently save this as one display name under the hood."
+                  inputClassName="text-ink"
                   label="Last name"
                   onChangeText={setLastName}
                   placeholder="Your last name"
+                  placeholderTextColor={appTheme.colors.muted}
+                  selectionColor={appTheme.colors.ink}
                   returnKeyType="done"
+                  ref={lastNameRef}
                   value={lastName}
                 />
               </View>
@@ -397,7 +442,10 @@ export function SettingsScreen({
           </ScrollView>
         </View>
 
-        <View className="border-t border-white/[0.06] bg-[#050506]/95 px-5 pb-8 pt-5">
+        <View
+          className="border-t border-hairline bg-surfaceMuted/95 px-5 pb-8 pt-5"
+          onLayout={handleFooterLayout}
+        >
           <PrimaryButton
             disabled={!hasChanges || saving || avatarUploading}
             label="Save changes"

@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef } from "react";
 import { View } from "react-native";
 
 import systemBlob from "../../assets/brand/gradient-blob.json";
@@ -39,6 +39,12 @@ function SystemBlobAnimationComponent({
     if (!targetRef || staticFrame) {
       return;
     }
+
+    if (startDelayMs <= 0) {
+      targetRef.play?.();
+      return;
+    }
+
     targetRef.pause?.();
     const timerId = setTimeout(
       () => {
@@ -50,12 +56,15 @@ function SystemBlobAnimationComponent({
     return () => clearTimeout(timerId);
   }, [startDelayMs, staticFrame]);
 
-  const assignRef = (instance: SystemBlobAnimationHandle | null) => {
-    innerRef.current = instance;
-    if (lottieRef) {
-      lottieRef.current = instance;
-    }
-  };
+  const assignRef = useCallback(
+    (instance: SystemBlobAnimationHandle | null) => {
+      innerRef.current = instance;
+      if (lottieRef) {
+        lottieRef.current = instance;
+      }
+    },
+    [lottieRef],
+  );
 
   if (!LottieView) {
     return (

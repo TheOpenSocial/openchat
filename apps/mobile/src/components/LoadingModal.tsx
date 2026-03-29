@@ -1,8 +1,8 @@
-import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
-import { createRef, memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Modal, StyleSheet, View } from "react-native";
 import Animated, {
+  cancelAnimation,
   Easing,
   interpolate,
   useAnimatedStyle,
@@ -12,10 +12,7 @@ import Animated, {
   type SharedValue,
 } from "react-native-reanimated";
 
-import {
-  SystemBlobAnimation,
-  type SystemBlobAnimationHandle,
-} from "./SystemBlobAnimation";
+import { SystemBlobAnimation } from "./SystemBlobAnimation";
 import { TypingText } from "./TypingText";
 
 type LoadingModalProps = {
@@ -36,13 +33,11 @@ const OrbitingBlob = memo(function OrbitingBlob({
   rotationDeg,
   startDelayMs,
   progress,
-  lottieRef,
 }: {
   phaseOffsetDeg: number;
   rotationDeg: number;
   startDelayMs: number;
   progress: SharedValue<number>;
-  lottieRef?: { current: SystemBlobAnimationHandle | null };
 }) {
   const animatedStyle = useAnimatedStyle(() => {
     const angleDeg = progress.value + phaseOffsetDeg;
@@ -64,7 +59,6 @@ const OrbitingBlob = memo(function OrbitingBlob({
   return (
     <Animated.View className="absolute" style={animatedStyle}>
       <SystemBlobAnimation
-        lottieRef={lottieRef}
         rotationDeg={rotationDeg}
         size={148}
         startDelayMs={startDelayMs}
@@ -89,14 +83,21 @@ export function LoadingModal({ visible, message }: LoadingModalProps) {
       })),
     [],
   );
-  const lottieRefs = useMemo(
-    () => [
-      createRef<SystemBlobAnimationHandle>(),
-      createRef<SystemBlobAnimationHandle>(),
-      createRef<SystemBlobAnimationHandle>(),
-    ],
-    [],
-  );
+
+  useEffect(() => {
+    orbitProgress.value = withRepeat(
+      withTiming(FULL_ROTATION_DEG, {
+        duration: ORBITAL_DURATION_MS,
+        easing: ORBITAL_EASING,
+      }),
+      -1,
+      false,
+    );
+
+    return () => {
+      cancelAnimation(orbitProgress);
+    };
+  }, [orbitProgress]);
 
   useEffect(() => {
     if (hideTimeoutRef.current) {
@@ -124,20 +125,6 @@ export function LoadingModal({ visible, message }: LoadingModalProps) {
   }, [opacity, visible]);
 
   useEffect(() => {
-    orbitProgress.value = 0;
-    orbitProgress.value = renderVisible
-      ? withRepeat(
-          withTiming(FULL_ROTATION_DEG, {
-            duration: ORBITAL_DURATION_MS,
-            easing: ORBITAL_EASING,
-          }),
-          -1,
-          false,
-        )
-      : withTiming(0, { duration: 220, easing: Easing.out(Easing.cubic) });
-  }, [orbitProgress, renderVisible]);
-
-  useEffect(() => {
     return () => {
       if (hideTimeoutRef.current) {
         clearTimeout(hideTimeoutRef.current);
@@ -163,23 +150,17 @@ export function LoadingModal({ visible, message }: LoadingModalProps) {
     >
       <Animated.View className="flex-1 bg-black" style={overlayStyle}>
         <LinearGradient
-          colors={["#000000", "#020202", "#000000"]}
+          colors={["#000000", "#040404", "#000000"]}
           end={{ x: 0.5, y: 1 }}
           start={{ x: 0.5, y: 0 }}
           style={StyleSheet.absoluteFillObject}
         />
-        <BlurView
-          intensity={8}
-          style={StyleSheet.absoluteFillObject}
-          tint="dark"
-        />
 
         <View className="flex-1 items-center justify-center px-6">
           <View className="h-[220px] w-[280px] items-center justify-center">
-            {blobConfigs.map((config, index) => (
+            {blobConfigs.map((config) => (
               <OrbitingBlob
                 key={config.id}
-                lottieRef={lottieRefs[index]}
                 phaseOffsetDeg={config.phaseOffsetDeg}
                 progress={orbitProgress}
                 rotationDeg={config.rotationDeg}
