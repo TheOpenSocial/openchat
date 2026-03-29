@@ -436,4 +436,57 @@ describe("Onboarding flow contract", () => {
     expect(data.discovery.topTonight).toHaveLength(1);
     expect(data.execution.status).toBe("completed");
   });
+
+  it("executes activation recommendation through a replay-safe onboarding endpoint", async () => {
+    const userId = "11111111-1111-4111-8111-111111111111";
+    const onboardingService: any = {
+      executeActivationRecommendation: vi.fn().mockResolvedValue({
+        execution: {
+          scope: "intent.create_from_agent",
+          idempotencyKey:
+            "onboarding-carryover:11111111-1111-4111-8111-111111111111:abc123efab456789",
+          status: "completed",
+        },
+        thread: {
+          id: "22222222-2222-4222-8222-222222222222",
+          created: false,
+        },
+        result: {
+          threadId: "22222222-2222-4222-8222-222222222222",
+          messageId: "33333333-3333-4333-8333-333333333333",
+          intentId: "44444444-4444-4444-8444-444444444444",
+          status: "parsed",
+          intentCount: 1,
+          intentIds: ["44444444-4444-4444-8444-444444444444"],
+          traceId: "trace-activation-execute",
+        },
+      }),
+    };
+    const onboardingController = new OnboardingController(onboardingService);
+
+    const response = await onboardingController.activationExecute(
+      {
+        userId,
+        threadId: "22222222-2222-4222-8222-222222222222",
+        idempotencyKey:
+          "onboarding-carryover:11111111-1111-4111-8111-111111111111:abc123efab456789",
+        content: "Help me find football plans in Buenos Aires.",
+      },
+      userId,
+    );
+
+    const data = response.data as any;
+    expect(data.execution.status).toBe("completed");
+    expect(data.thread.created).toBe(false);
+    expect(data.result.intentCount).toBe(1);
+    expect(
+      onboardingService.executeActivationRecommendation,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId,
+        threadId: "22222222-2222-4222-8222-222222222222",
+        content: "Help me find football plans in Buenos Aires.",
+      }),
+    );
+  });
 });

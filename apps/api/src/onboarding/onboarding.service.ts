@@ -19,7 +19,9 @@ import { z } from "zod";
 import { AgentService } from "../agent/agent.service.js";
 import { recordOnboardingInferenceMetric } from "../common/ops-metrics.js";
 import { PrismaService } from "../database/prisma.service.js";
+import { ClientMutationService } from "../database/client-mutation.service.js";
 import { DiscoveryService } from "../discovery/discovery.service.js";
+import { IntentsService } from "../intents/intents.service.js";
 import { PersonalizationService } from "../personalization/personalization.service.js";
 
 type OnboardingInferResponse = z.infer<typeof onboardingInferResponseSchema>;
@@ -41,6 +43,14 @@ type OnboardingActivationBootstrapInput = z.infer<
 type OnboardingActivationBootstrapResponse = z.infer<
   typeof onboardingActivationBootstrapResponseSchema
 >;
+type OnboardingActivationExecuteInput = {
+  userId: string;
+  threadId?: string;
+  idempotencyKey: string;
+  content: string;
+  allowDecomposition?: boolean;
+  maxIntents?: number;
+};
 
 const GENERIC_PERSONA_LABELS = new Set([
   "connector",
@@ -95,6 +105,10 @@ export class OnboardingService {
     private readonly agentService?: AgentService,
     @Optional()
     private readonly personalizationService?: PersonalizationService,
+    @Optional()
+    private readonly clientMutationService?: ClientMutationService,
+    @Optional()
+    private readonly intentsService?: IntentsService,
   ) {
     for (const model of this.fastModelCandidates) {
       this.fastOpenaiByModel.set(
@@ -478,6 +492,59 @@ export class OnboardingService {
           })) ?? [],
       },
       execution,
+    };
+  }
+
+  async executeActivationRecommendation(
+    input: OnboardingActivationExecuteInput,
+  ) {
+    if (
+      !this.clientMutationService ||
+      !this.intentsService ||
+      !this.agentService
+    ) {
+      throw new BadRequestException(
+        "activation execution dependencies are unavailable",
+      );
+    }
+
+    const existingThread = input.threadId
+      ? { id: input.threadId, created: false as const }
+      : await this.agentService.findPrimaryThreadSummaryForUser(input.userId);
+    const threadInfo = existingThread
+      ? {
+          id: existingThread.id,
+          created: false as const,
+        }
+      : {
+          id: (await this.agentService.createThread(input.userId, "Main")).id,
+          created: true as const,
+        };
+
+    const result = await this.clientMutationService.run({
+      userId: input.userId,
+      scope: "intent.create_from_agent",
+      idempotencyKey: input.idempotencyKey,
+      handler: () =>
+        this.intentsService!.createIntentFromAgentMessage(
+          threadInfo.id,
+          input.userId,
+          input.content,
+          {
+            allowDecomposition: input.allowDecomposition,
+            maxIntents: input.maxIntents,
+          },
+        ),
+    });
+
+    return {
+      execution: {
+        scope: "intent.create_from_agent" as const,
+        idempotencyKey: input.idempotencyKey,
+        status: "completed" as const,
+      },
+      thread: threadInfo,
+      result,
     };
   }
 

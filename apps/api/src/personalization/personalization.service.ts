@@ -1300,7 +1300,11 @@ export class PersonalizationService {
           tokenCount: chunk.tokenCount,
           score,
           createdAt: document.createdAt,
-          excerpt: this.trimPreview(chunk.content, 280),
+          excerpt: this.buildRetrievalExcerpt(
+            chunk.content,
+            memoryMetadata,
+            document.docType,
+          ),
         };
       })
       .filter((item): item is NonNullable<typeof item> => item != null)
@@ -2083,9 +2087,31 @@ export class PersonalizationService {
       text
         .toLowerCase()
         .split(/[^a-z0-9]+/g)
-        .map((token) => token.trim())
+        .map((token) => this.normalizeMatchToken(token.trim()))
         .filter((token) => token.length >= 3),
     );
+  }
+
+  private normalizeMatchToken(token: string) {
+    if (!token) {
+      return "";
+    }
+    if (token.endsWith("ies") && token.length > 4) {
+      return `${token.slice(0, -3)}y`;
+    }
+    if ((token.endsWith("ses") || token.endsWith("xes")) && token.length > 4) {
+      return token.slice(0, -2);
+    }
+    if (token.endsWith("s") && !token.endsWith("ss") && token.length > 3) {
+      return token.slice(0, -1);
+    }
+    if (token.startsWith("prefer")) {
+      return "prefer";
+    }
+    if (token.startsWith("lik")) {
+      return "like";
+    }
+    return token;
   }
 
   private scoreChunkForQuery(
@@ -2156,9 +2182,9 @@ export class PersonalizationService {
                 : 0;
     const governanceBoost =
       memoryMetadata?.governanceTier === "explicit_only"
-        ? 0.9
+        ? 1.25
         : memoryMetadata?.governanceTier === "inferable"
-          ? 0.35
+          ? 0.2
           : 0;
     const sourceBoost =
       memoryMetadata?.sourceType === "explicit_user_input" ||
@@ -2223,6 +2249,74 @@ export class PersonalizationService {
       return content;
     }
     return `${content.slice(0, maxLength).trimEnd()}...`;
+  }
+
+  private buildRetrievalExcerpt(
+    chunkContent: string,
+    memoryMetadata:
+      | {
+          governanceTier: MemoryGovernanceTier | null;
+          domain: MemoryDomain | null;
+          key: string | null;
+          value: string | null;
+          sourceSurface: MemorySourceSurface | null;
+          sourceType: MemorySourceType | null;
+          confidence: number | null;
+          state:
+            | "active"
+            | "superseded"
+            | "suppressed"
+            | "flagged_for_review"
+            | "expired"
+            | null;
+        }
+      | null
+      | undefined,
+    docType: string,
+  ) {
+    const summary = this.parseSummaryLine(chunkContent);
+    if (!memoryMetadata?.key || !memoryMetadata?.value) {
+      return this.trimPreview(chunkContent, 280);
+    }
+
+    const value = memoryMetadata.value.trim();
+    const loweredKey = memoryMetadata.key.toLowerCase();
+    const loweredValue = value.toLowerCase();
+    let lead: string | null = null;
+
+    if (
+      docType === RETRIEVAL_DOC_TYPE_PREFERENCE_MEMORY ||
+      loweredKey.includes("preference") ||
+      loweredKey.includes("likes") ||
+      loweredKey.includes("avoid")
+    ) {
+      lead = loweredKey.includes("avoid")
+        ? `prefers to avoid ${loweredValue}`
+        : `prefers ${loweredValue}`;
+    } else if (loweredKey.includes("location")) {
+      lead = `location: ${value}`;
+    } else if (loweredKey.includes("language")) {
+      lead = `languages: ${value}`;
+    } else if (loweredKey.includes("relationship")) {
+      lead = `relationship context: ${value}`;
+    } else if (loweredKey.includes("budget")) {
+      lead = `budget context: ${value}`;
+    } else if (
+      loweredKey.includes("boundary") ||
+      loweredKey.includes("safety")
+    ) {
+      lead = `safety boundary: ${value}`;
+    }
+
+    if (!lead) {
+      return this.trimPreview(chunkContent, 280);
+    }
+
+    if (!summary) {
+      return this.trimPreview(lead, 280);
+    }
+
+    return this.trimPreview(`${lead}. ${summary}`, 280);
   }
 
   private stableStringify(value: unknown) {

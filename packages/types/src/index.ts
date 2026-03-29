@@ -1211,6 +1211,15 @@ export const onboardingActivationBootstrapBodySchema =
     limit: z.number().int().min(1).max(5).optional(),
   });
 
+export const onboardingActivationExecuteBodySchema = z.object({
+  userId: uuidSchema,
+  threadId: uuidSchema.optional(),
+  idempotencyKey: z.string().min(1),
+  content: z.string().min(1),
+  allowDecomposition: z.boolean().optional(),
+  maxIntents: z.number().int().min(1).max(5).optional(),
+});
+
 export const onboardingActivationPlanResponseSchema = z.object({
   state: z.enum(["idle", "pending", "ready", "failed"]),
   source: z.enum(["llm", "fallback"]),
@@ -1295,6 +1304,27 @@ export const onboardingActivationBootstrapResponseSchema = z.object({
         intentCount: z.number().int().nonnegative().nullable().optional(),
       })
       .nullable(),
+  }),
+});
+
+export const onboardingActivationExecuteResponseSchema = z.object({
+  execution: z.object({
+    scope: z.literal("intent.create_from_agent"),
+    idempotencyKey: z.string().min(1),
+    status: onboardingActivationExecutionStatusSchema,
+  }),
+  thread: z.object({
+    id: uuidSchema,
+    created: z.boolean(),
+  }),
+  result: z.object({
+    threadId: uuidSchema,
+    messageId: uuidSchema,
+    intentId: uuidSchema,
+    status: z.string().min(1),
+    intentCount: z.number().int().nonnegative(),
+    intentIds: z.array(uuidSchema),
+    traceId: z.string().min(1),
   }),
 });
 

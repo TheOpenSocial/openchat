@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 
+import { mkdirSync, writeFileSync } from "node:fs";
+import path from "node:path";
 import process from "node:process";
+import { randomUUID } from "node:crypto";
 
 const baseUrl = (process.env.SMOKE_BASE_URL || "http://localhost:3001").replace(
   /\/+$/,
@@ -17,6 +20,33 @@ const smokeApplicationToken =
 const timeoutMs = Number(process.env.SMOKE_TIMEOUT_MS || 15000);
 
 const existingFlagId = process.env.MODERATION_DRILL_EXISTING_FLAG_ID?.trim();
+const runId =
+  process.env.MODERATION_DRILL_RUN_ID?.trim() ||
+  `moderation-drill-${new Date().toISOString().replace(/[:.]/g, "-")}-${randomUUID().slice(0, 8)}`;
+const artifactDir = path.resolve(
+  process.cwd(),
+  process.env.MODERATION_DRILL_ARTIFACT_DIR?.trim() ||
+    ".artifacts/moderation-drill",
+);
+const artifactPath = path.resolve(artifactDir, `${runId}.json`);
+const queuePollTimeoutMs = Number(
+  process.env.MODERATION_DRILL_QUEUE_POLL_TIMEOUT_MS || 10_000,
+);
+const queuePollIntervalMs = Number(
+  process.env.MODERATION_DRILL_QUEUE_POLL_INTERVAL_MS || 500,
+);
+const auditPollTimeoutMs = Number(
+  process.env.MODERATION_DRILL_AUDIT_POLL_TIMEOUT_MS || 12_000,
+);
+const auditPollIntervalMs = Number(
+  process.env.MODERATION_DRILL_AUDIT_POLL_INTERVAL_MS || 600,
+);
+const enforcementPollTimeoutMs = Number(
+  process.env.MODERATION_DRILL_ENFORCEMENT_POLL_TIMEOUT_MS || 8_000,
+);
+const enforcementPollIntervalMs = Number(
+  process.env.MODERATION_DRILL_ENFORCEMENT_POLL_INTERVAL_MS || 500,
+);
 let reporterUserId =
   process.env.MODERATION_DRILL_REPORTER_USER_ID?.trim() ||
   process.env.SMOKE_USER_ID?.trim() ||
@@ -56,6 +86,112 @@ const strikeSeverity = Number(
 );
 const auditLimit = Number(process.env.MODERATION_DRILL_AUDIT_LIMIT || 250);
 const queueLimit = Number(process.env.MODERATION_DRILL_QUEUE_LIMIT || 250);
+
+const drillArtifact = {
+  runId,
+  generatedAt: new Date().toISOString(),
+  baseUrl,
+  config: {
+    adminUserId,
+    adminRole,
+    entityType,
+    entityId,
+    triageAction,
+    queueLimit,
+    auditLimit,
+    queuePollTimeoutMs,
+    queuePollIntervalMs,
+    auditPollTimeoutMs,
+    auditPollIntervalMs,
+    enforcementPollTimeoutMs,
+    enforcementPollIntervalMs,
+  },
+  ids: {
+    flagId: null,
+    reportId: null,
+    reporterUserId: null,
+    targetUserId: null,
+    assignToUserId,
+  },
+  timings: {
+    totalMs: 0,
+    reportMs: null,
+    queuePollMs: null,
+    assignmentMs: null,
+    triageMs: null,
+    auditPollMs: null,
+    enforcementPollMs: null,
+  },
+  attempts: {
+    queuePolls: 0,
+    auditPolls: 0,
+    enforcementPolls: 0,
+  },
+  evidence: {
+    reportCreated: false,
+    queueVerified: false,
+    assignmentVerified: false,
+    triageVerified: false,
+    auditVerified: false,
+    enforcementVerified: null,
+  },
+  enforcementPath: null,
+  failureReason: null,
+  steps: [],
+  success: false,
+};
+
+function persistArtifact() {
+  mkdirSync(artifactDir, { recursive: true });
+  writeFileSync(artifactPath, JSON.stringify(drillArtifact, null, 2));
+}
+
+function recordStep(step) {
+  drillArtifact.steps.push({
+    at: new Date().toISOString(),
+    ...step,
+  });
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function pollUntil(label, poller, options) {
+  const startedAt = Date.now();
+  const timeoutMs = Math.max(1, Number(options.timeoutMs || 0));
+  const intervalMs = Math.max(1, Number(options.intervalMs || 250));
+  let attempts = 0;
+  let lastError = null;
+
+  while (Date.now() - startedAt <= timeoutMs) {
+    attempts += 1;
+    try {
+      const result = await poller(attempts);
+      if (result.found) {
+        return {
+          ...result,
+          attempts,
+          elapsedMs: Date.now() - startedAt,
+          lastError,
+        };
+      }
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+    }
+    if (Date.now() - startedAt + intervalMs > timeoutMs) {
+      break;
+    }
+    await sleep(intervalMs);
+  }
+
+  return {
+    found: false,
+    attempts,
+    elapsedMs: Date.now() - startedAt,
+    lastError,
+  };
+}
 
 function buildHeaders({
   admin = false,
@@ -188,6 +324,7 @@ async function resolveFlagId() {
   requireEnv("MODERATION_DRILL_ACCESS_TOKEN", reporterAccessToken);
   requireEnv("MODERATION_DRILL_ENTITY_ID", entityId);
 
+  const reportStartedAt = Date.now();
   let reportResult = await requestJson("POST", "/api/moderation/reports", {
     accessToken: reporterAccessToken,
     forwardedIndex: 0,
@@ -221,6 +358,7 @@ async function resolveFlagId() {
       },
     });
   }
+  drillArtifact.timings.reportMs = Date.now() - reportStartedAt;
   const reportData = parseDataEnvelope(reportResult, "create report");
   const flagId =
     reportData && typeof reportData === "object"
@@ -239,6 +377,25 @@ async function resolveFlagId() {
   console.log(
     `Created moderation report${typeof reportId === "string" ? ` ${reportId}` : ""} and flag ${flagId}.`,
   );
+
+  drillArtifact.ids.flagId = flagId;
+  drillArtifact.ids.reportId = typeof reportId === "string" ? reportId : null;
+  drillArtifact.ids.reporterUserId = reporterUserId;
+  drillArtifact.ids.targetUserId = targetUserId;
+  drillArtifact.evidence.reportCreated = true;
+  drillArtifact.enforcementPath = {
+    triageAction: triageAction || "resolve",
+    targetUserId: targetUserId || null,
+    outcome: null,
+  };
+  recordStep({
+    stage: "report",
+    status: "completed",
+    flagId,
+    reportId: typeof reportId === "string" ? reportId : null,
+    reportAuth: reporterAccessToken ? "present" : "missing",
+    durationMs: drillArtifact.timings.reportMs,
+  });
 
   return {
     flagId,
@@ -309,7 +466,41 @@ async function loadModerationQueue() {
   return data;
 }
 
+async function waitForModerationQueueFlag(flagId) {
+  const result = await pollUntil(
+    `moderation queue flag ${flagId}`,
+    async () => {
+      const queue = await loadModerationQueue();
+      const queuedFlag = queue.find((flag) => flag?.id === flagId);
+      if (!queuedFlag) {
+        return { found: false, queueCount: queue.length };
+      }
+      return { found: true, queueCount: queue.length, queuedFlag };
+    },
+    {
+      timeoutMs: queuePollTimeoutMs,
+      intervalMs: queuePollIntervalMs,
+    },
+  );
+  drillArtifact.attempts.queuePolls = result.attempts;
+  drillArtifact.timings.queuePollMs = result.elapsedMs;
+  if (!result.found) {
+    throw new Error(
+      `moderation flag ${flagId} not found in open queue after ${result.attempts} attempts`,
+    );
+  }
+  recordStep({
+    stage: "queue_visibility",
+    status: "completed",
+    flagId,
+    attempts: result.attempts,
+    durationMs: result.elapsedMs,
+  });
+  return result.queuedFlag;
+}
+
 async function assignFlag(flagId) {
+  const startedAt = Date.now();
   const result = await requestJson(
     "POST",
     `/api/admin/moderation/flags/${flagId}/assign`,
@@ -323,10 +514,20 @@ async function assignFlag(flagId) {
       },
     },
   );
-  return parseDataEnvelope(result, "assign moderation flag");
+  drillArtifact.timings.assignmentMs = Date.now() - startedAt;
+  const data = parseDataEnvelope(result, "assign moderation flag");
+  recordStep({
+    stage: "assignment",
+    status: "completed",
+    flagId,
+    assigneeUserId: data?.assigneeUserId ?? null,
+    durationMs: drillArtifact.timings.assignmentMs,
+  });
+  return data;
 }
 
 async function triageFlag(flagId) {
+  const startedAt = Date.now();
   const body = {
     action: triageAction,
     reason: triageReason,
@@ -349,7 +550,17 @@ async function triageFlag(flagId) {
       body,
     },
   );
-  return parseDataEnvelope(result, "triage moderation flag");
+  drillArtifact.timings.triageMs = Date.now() - startedAt;
+  const data = parseDataEnvelope(result, "triage moderation flag");
+  recordStep({
+    stage: "triage",
+    status: "completed",
+    flagId,
+    action: triageAction,
+    flagStatus: data?.flag?.status ?? null,
+    durationMs: drillArtifact.timings.triageMs,
+  });
+  return data;
 }
 
 async function loadAuditLogs() {
@@ -369,6 +580,69 @@ async function loadAuditLogs() {
   return data;
 }
 
+async function waitForAuditEntries(flagId, reportId) {
+  const result = await pollUntil(
+    `moderation audit log entries for ${flagId}`,
+    async () => {
+      const logs = await loadAuditLogs();
+      const reportAudit = drillArtifact.evidence.reportCreated
+        ? findAuditLog(
+            logs,
+            (entry) =>
+              entry.action === "moderation.report_submitted" &&
+              entry.entityId === (reportId || flagId),
+          )
+        : null;
+      const assignmentAudit = findAuditLog(
+        logs,
+        (entry) =>
+          entry.action === "admin.moderation_flag_assigned" &&
+          entry.entityId === flagId,
+      );
+      const triageAudit = findAuditLog(
+        logs,
+        (entry) =>
+          entry.action === "admin.action" &&
+          entry.entityId === flagId &&
+          entry.metadata &&
+          typeof entry.metadata === "object" &&
+          entry.metadata.action === "admin.moderation_flag_triage",
+      );
+      const found = Boolean(
+        (!drillArtifact.evidence.reportCreated || reportAudit) &&
+          assignmentAudit &&
+          triageAudit,
+      );
+      return {
+        found,
+        logs,
+        reportAudit,
+        assignmentAudit,
+        triageAudit,
+      };
+    },
+    {
+      timeoutMs: auditPollTimeoutMs,
+      intervalMs: auditPollIntervalMs,
+    },
+  );
+  drillArtifact.attempts.auditPolls = result.attempts;
+  drillArtifact.timings.auditPollMs = result.elapsedMs;
+  if (!result.found) {
+    throw new Error(
+      `required audit entries not found after ${result.attempts} attempts${result.lastError ? ` (${result.lastError})` : ""}`,
+    );
+  }
+  recordStep({
+    stage: "audit_visibility",
+    status: "completed",
+    flagId,
+    attempts: result.attempts,
+    durationMs: result.elapsedMs,
+  });
+  return result;
+}
+
 async function loadUsers() {
   const result = await requestJson("GET", `/api/admin/users?limit=250`, {
     admin: true,
@@ -380,6 +654,48 @@ async function loadUsers() {
     throw new Error("admin users payload is not an array");
   }
   return data;
+}
+
+async function waitForEnforcement(flagId) {
+  if (triageAction !== "restrict_user") {
+    return null;
+  }
+  const result = await pollUntil(
+    `moderation enforcement state for ${targetUserId}`,
+    async () => {
+      const users = await loadUsers();
+      const targetUser = users.find((user) => user?.id === targetUserId);
+      if (!targetUser) {
+        return { found: false, users };
+      }
+      return {
+        found: targetUser.profile?.moderationState === "blocked",
+        users,
+        targetUser,
+      };
+    },
+    {
+      timeoutMs: enforcementPollTimeoutMs,
+      intervalMs: enforcementPollIntervalMs,
+    },
+  );
+  drillArtifact.attempts.enforcementPolls = result.attempts;
+  drillArtifact.timings.enforcementPollMs = result.elapsedMs;
+  if (!result.found) {
+    throw new Error(
+      `restrict_user did not set moderationState=blocked for ${targetUserId} after ${result.attempts} attempts`,
+    );
+  }
+  recordStep({
+    stage: "enforcement",
+    status: "completed",
+    flagId,
+    targetUserId,
+    enforcement: "blocked_profile",
+    attempts: result.attempts,
+    durationMs: result.elapsedMs,
+  });
+  return result.targetUser;
 }
 
 function findAuditLog(logs, predicate) {
@@ -394,32 +710,16 @@ function findAuditLog(logs, predicate) {
 async function main() {
   printConfig();
 
-  const summary = {
-    reportCreated: false,
-    flagId: null,
-    queueVerified: false,
-    assignmentVerified: false,
-    triageVerified: false,
-    enforcementVerified: null,
-    auditVerified: false,
-  };
+  const { flagId, reportId } = await resolveFlagId();
 
-  const { flagId, reportId, reportCreated } = await resolveFlagId();
-  summary.flagId = flagId;
-  summary.reportCreated = reportCreated;
-
-  const queue = await loadModerationQueue();
-  const queuedFlag = queue.find((flag) => flag?.id === flagId);
-  if (!queuedFlag) {
-    throw new Error(`moderation flag ${flagId} not found in open queue`);
-  }
-  summary.queueVerified = true;
+  await waitForModerationQueueFlag(flagId);
+  drillArtifact.evidence.queueVerified = true;
 
   const assignment = await assignFlag(flagId);
   if (assignment?.assigneeUserId !== assignToUserId) {
     throw new Error(`assignment did not persist assignee ${assignToUserId}`);
   }
-  summary.assignmentVerified = true;
+  drillArtifact.evidence.assignmentVerified = true;
 
   const triage = await triageFlag(flagId);
   const triagedFlag = triage?.flag;
@@ -439,58 +739,15 @@ async function main() {
   ) {
     throw new Error(`${triageAction} did not resolve the flag`);
   }
-  summary.triageVerified = true;
+  drillArtifact.evidence.triageVerified = true;
 
-  const logs = await loadAuditLogs();
-  const reportAudit = reportCreated
-    ? findAuditLog(
-        logs,
-        (entry) =>
-          entry.action === "moderation.report_submitted" &&
-          entry.entityId === (reportId || flagId),
-      )
-    : null;
-  const assignmentAudit = findAuditLog(
-    logs,
-    (entry) =>
-      entry.action === "admin.moderation_flag_assigned" &&
-      entry.entityId === flagId,
-  );
-  const triageAudit = findAuditLog(
-    logs,
-    (entry) =>
-      entry.action === "admin.action" &&
-      entry.entityId === flagId &&
-      entry.metadata &&
-      typeof entry.metadata === "object" &&
-      entry.metadata.action === "admin.moderation_flag_triage",
-  );
-
-  if (reportCreated && !reportAudit) {
-    throw new Error("report audit record was not found");
-  }
-  if (!assignmentAudit) {
-    throw new Error("assignment audit record was not found");
-  }
-  if (!triageAudit) {
-    throw new Error("triage audit record was not found");
-  }
+  const auditWait = await waitForAuditEntries(flagId, reportId);
+  const { logs } = auditWait;
 
   if (triageAction === "restrict_user") {
     requireEnv("MODERATION_DRILL_TARGET_USER_ID", targetUserId);
-    const users = await loadUsers();
-    const targetUser = users.find((user) => user?.id === targetUserId);
-    if (!targetUser) {
-      throw new Error(
-        `target user ${targetUserId} not found in admin user list for enforcement verification`,
-      );
-    }
-    if (targetUser.profile?.moderationState !== "blocked") {
-      throw new Error(
-        `restrict_user did not set moderationState=blocked for ${targetUserId}`,
-      );
-    }
-    summary.enforcementVerified = "blocked_profile";
+    await waitForEnforcement(flagId);
+    drillArtifact.evidence.enforcementVerified = "blocked_profile";
   } else if (triageAction === "escalate_strike") {
     const strikeAudit = findAuditLog(
       logs,
@@ -501,14 +758,46 @@ async function main() {
     if (!strikeAudit) {
       throw new Error("strike issuance audit record was not found");
     }
-    summary.enforcementVerified = "strike_audit";
+    drillArtifact.evidence.enforcementVerified = "strike_audit";
+    recordStep({
+      stage: "enforcement",
+      status: "completed",
+      flagId,
+      enforcement: "strike_audit",
+      durationMs: 0,
+    });
   }
 
-  summary.auditVerified = true;
+  drillArtifact.evidence.auditVerified = true;
+  drillArtifact.success = true;
+  drillArtifact.enforcementPath = {
+    triageAction,
+    targetUserId: targetUserId || null,
+    outcome: drillArtifact.evidence.enforcementVerified,
+  };
+  drillArtifact.ids.flagId = flagId;
+  drillArtifact.ids.reportId = reportId;
+  drillArtifact.timings.totalMs = Date.now() - new Date(drillArtifact.generatedAt).getTime();
+  persistArtifact();
 
   console.log("");
   console.log("Moderation drill passed.");
-  console.log(JSON.stringify(summary, null, 2));
+  console.log(JSON.stringify(drillArtifact, null, 2));
 }
 
-await main();
+try {
+  await main();
+} catch (error) {
+  drillArtifact.success = false;
+  drillArtifact.failureReason =
+    error instanceof Error ? error.message : String(error);
+  drillArtifact.timings.totalMs =
+    Date.now() - new Date(drillArtifact.generatedAt).getTime();
+  try {
+    persistArtifact();
+  } catch {}
+  console.error("");
+  console.error("Moderation drill failed.");
+  console.error(drillArtifact.failureReason);
+  process.exitCode = 1;
+}

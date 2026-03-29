@@ -9,6 +9,10 @@ import {
   Headers,
 } from "@nestjs/common";
 import {
+  onboardingActivationExecuteBodySchema,
+  onboardingActivationExecuteResponseSchema,
+  onboardingActivationBootstrapBodySchema,
+  onboardingActivationBootstrapResponseSchema,
   onboardingActivationPlanBodySchema,
   onboardingInferBodySchema,
 } from "@opensocial/types";
@@ -100,6 +104,62 @@ export class OnboardingController {
       );
     }
     return ok(await this.onboardingService.buildActivationPlan(payload));
+  }
+
+  @Post("activation-bootstrap")
+  async activationBootstrap(
+    @Body() body: unknown,
+    @ActorUserId() actorUserId: string,
+  ) {
+    const payload = parseRequestPayload(
+      onboardingActivationBootstrapBodySchema,
+      body,
+    );
+    assertActorOwnsUser(
+      actorUserId,
+      payload.userId,
+      "onboarding target does not match authenticated user",
+    );
+    if (this.launchControlsService) {
+      await this.launchControlsService.assertActionAllowed(
+        "discovery",
+        payload.userId,
+      );
+    }
+    return ok(
+      parseRequestPayload(
+        onboardingActivationBootstrapResponseSchema,
+        await this.onboardingService.buildActivationBootstrap(payload),
+      ),
+    );
+  }
+
+  @Post("activation-execute")
+  async activationExecute(
+    @Body() body: unknown,
+    @ActorUserId() actorUserId: string,
+  ) {
+    const payload = parseRequestPayload(
+      onboardingActivationExecuteBodySchema,
+      body,
+    );
+    assertActorOwnsUser(
+      actorUserId,
+      payload.userId,
+      "onboarding target does not match authenticated user",
+    );
+    if (this.launchControlsService) {
+      await this.launchControlsService.assertActionAllowed(
+        "new_intents",
+        payload.userId,
+      );
+    }
+    return ok(
+      parseRequestPayload(
+        onboardingActivationExecuteResponseSchema,
+        await this.onboardingService.executeActivationRecommendation(payload),
+      ),
+    );
   }
 
   @PublicRoute()

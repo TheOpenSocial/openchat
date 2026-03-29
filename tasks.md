@@ -17,7 +17,7 @@ Last refreshed: 2026-03-29
     - uploaded workflow artifacts (`.artifacts/backend-ops-pack/*.json`, `.artifacts/agent-test-suite/*.json`)
   - Status note:
     - all planned long-term memory, activation-readiness, and operator explainability coding slices are now complete and locally green; remaining work is deployed-environment evidence.
-    - the latest repo-side blocker fixes are in `scripts/moderation-drill.mjs`, `scripts/run-agent-test-suite.mjs`, `scripts/run-backend-ops-pack.mjs`, and the backend GitHub workflows; rerun live ops evidence after commit/deploy.
+    - the latest repo-side blocker fixes are in `apps/api/src/onboarding/onboarding.controller.ts`, `apps/api/src/onboarding/onboarding.service.ts`, `apps/api/src/chats/chats.service.ts`, `scripts/moderation-drill.mjs`, `scripts/run-agent-test-suite.mjs`, `scripts/run-backend-ops-pack.mjs`, and the backend GitHub workflows; rerun live ops evidence after commit/deploy.
     - ops-pack now publishes final verification history into `ops/verification-runs` when live admin env is present, so the next green run should close both artifact and admin-reliability evidence together.
 
 ## Next

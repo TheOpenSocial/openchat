@@ -27,7 +27,7 @@ Last verified: 2026-03-29
 Latest known green deploy verification:
 - GitHub Actions `Deploy Staging` run `23692569711`
 Current launch blocker:
-- rerun `Backend Ops Drill` after the moderation-drill refresh fallback and workflow artifact archival fixes land in a deployed environment
+- rerun `Backend Ops Drill` after the latest moderation-drill artifact/polling hardening, activation-execute backend contract, and retrieval-ranking fixes land in a deployed environment
 
 ## 2. Current Product Objective
 Close the gap between backend correctness and product quality.
@@ -206,6 +206,8 @@ Priority order:
 - 2026-03-28: fixed the remaining backend ops-drill implementation blocker in repo by teaching `scripts/moderation-drill.mjs` to refresh the reporter smoke session through the application-credential exchange endpoint when the stored bearer token is stale. Verified with `node --check scripts/moderation-drill.mjs`. Live GitHub evidence still needs one rerun after commit/deploy.
 - 2026-03-29: improved real-world backend memory quality and first-session activation quality. `AgentConversationService` now uses ranked personalization retrieval for agent memory context instead of raw latest-doc reads, `OnboardingService` now folds learned memory highlights into activation bootstrap/readiness, and retrieval now excludes `superseded` memory from normal bundles. Verified with `pnpm --filter @opensocial/types build`, `pnpm --filter @opensocial/api exec vitest run test/agent-conversation.service.spec.ts test/onboarding.service.spec.ts test/onboarding-flow.contract.spec.ts test/personalization.service.spec.ts`, and `pnpm release:check:api`.
 - 2026-03-29: upgraded launch-ops evidence plumbing. `scripts/run-backend-ops-pack.mjs` now supports per-step timeouts and ingests the final ops-pack artifact into `POST /api/admin/ops/verification-runs` when admin env is present, so operator evidence is visible in admin reliability surfaces instead of only in CI artifacts. Verified with `BACKEND_OPS_DRY_RUN=1 BACKEND_OPS_REQUIRE_ENV=0 node scripts/run-backend-ops-pack.mjs`.
+- 2026-03-29: completed the next backend product/operator slice. Added `POST /api/onboarding/activation-execute` for replay-safe first-action execution, deepened DM/group memory extraction with clause-aware preference/location/language/relationship/budget/safety detection, and hardened moderation drill evidence with bounded polling plus structured `.artifacts/moderation-drill/*.json` output. Verified with `node --test scripts/moderation-drill.test.mjs`, `node --test scripts/run-backend-ops-pack.test.mjs`, `pnpm --filter @opensocial/api exec vitest run test/personalization.service.spec.ts test/chats.service.spec.ts test/onboarding-flow.contract.spec.ts test/onboarding.service.spec.ts test/agent-conversation.service.spec.ts test/admin.controller.spec.ts`, and `pnpm --filter @opensocial/api exec tsc --noEmit`.
+- 2026-03-29: closed the retrieval-ranking regression surfaced during integration. Explicit durable preferences now rank above older inferred summaries even when query wording differs (`like` vs `likes` / `prefer*` variants), and retrieval/debug excerpts now render human-readable memory leads such as `prefers apex`. Verified with `node scripts/run-agent-test-suite.mjs --layer=contract` and `pnpm release:check:api`.
 
 ---
 

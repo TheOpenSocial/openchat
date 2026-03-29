@@ -14,6 +14,7 @@ import { AnalyticsService } from "../analytics/analytics.service.js";
 import { PrismaService } from "../database/prisma.service.js";
 import { LaunchControlsService } from "../launch-controls/launch-controls.service.js";
 import { ModerationService } from "../moderation/moderation.service.js";
+import { PersonalizationService } from "../personalization/personalization.service.js";
 
 const MESSAGE_IDEMPOTENCY_TTL_MS = 60 * 60 * 1000;
 const CHAT_SYNC_MAX_LIMIT = 200;
@@ -44,6 +45,24 @@ interface TextModerationResult {
   matchedTerms: string[];
 }
 
+type StructuredMemoryCandidate = {
+  class:
+    | "stable_preference"
+    | "profile_memory"
+    | "relationship_history"
+    | "safety_memory"
+    | "commerce_memory";
+  governanceTier: "explicit_only" | "inferable";
+  key: string;
+  value: string;
+  confidence: number;
+  contradictionPolicy:
+    | "keep_latest"
+    | "append_conflict_note"
+    | "suppress_conflict";
+  summary: string;
+};
+
 @Injectable()
 export class ChatsService {
   private readonly logger = new Logger(ChatsService.name);
@@ -65,6 +84,8 @@ export class ChatsService {
     private readonly launchControlsService?: LaunchControlsService,
     @Optional()
     private readonly moderationService?: ModerationService,
+    @Optional()
+    private readonly personalizationService?: PersonalizationService,
   ) {
     this.openAIClient = new OpenAIClient({
       apiKey: process.env.OPENAI_API_KEY ?? "",
@@ -239,6 +260,22 @@ export class ChatsService {
       );
     }
 
+    if (!options?.isSystem) {
+      await this.ingestMessageMemorySafe({
+        chatId,
+        senderUserId,
+        messageId: message.id,
+        body,
+        moderationState:
+          moderationState === "review"
+            ? "review"
+            : moderationState === "blocked"
+              ? "blocked"
+              : "clean",
+        moderationReasonTokens: pendingReviewTerms,
+      });
+    }
+
     if (idempotencyCacheKey) {
       this.messageIdempotencyCache.set(idempotencyCacheKey, {
         message,
@@ -286,6 +323,553 @@ export class ChatsService {
         pendingCount: 0,
       },
     }));
+  }
+
+  private async ingestMessageMemorySafe(input: {
+    chatId: string;
+    senderUserId: string;
+    messageId: string;
+    body: string;
+    moderationState: "clean" | "review" | "blocked";
+    moderationReasonTokens: string[];
+  }) {
+    if (!this.personalizationService) {
+      return;
+    }
+
+    const chat = await this.prisma.chat.findUnique({
+      where: { id: input.chatId },
+      select: {
+        id: true,
+        type: true,
+        connectionId: true,
+      },
+    });
+    if (!chat) {
+      return;
+    }
+
+    const participants = this.prisma.connectionParticipant?.findMany
+      ? await this.prisma.connectionParticipant.findMany({
+          where: {
+            connectionId: chat.connectionId,
+            leftAt: null,
+          },
+          select: {
+            userId: true,
+          },
+        })
+      : [];
+    const actorUserIds = Array.from(
+      new Set(
+        [
+          input.senderUserId,
+          ...participants.map((participant) => participant.userId),
+        ].filter(Boolean),
+      ),
+    );
+
+    const summary = this.buildMemorySummaryFromMessage(input.body);
+    if (!summary) {
+      return;
+    }
+
+    const extractedMemories = this.extractStructuredMemoriesFromMessage(
+      input.body,
+    );
+
+    try {
+      await this.personalizationService.storeInteractionSummary(
+        input.senderUserId,
+        {
+          summary,
+          safe: input.moderationState === "clean",
+          context: {
+            source: "chat_message",
+            sourceSurface: chat.type === "group" ? "group_chat" : "dm_chat",
+            sourceEntityId: chat.id,
+            messageId: input.messageId,
+            chatId: chat.id,
+            actorUserIds,
+            moderationDecision: input.moderationState,
+            moderationReasonTokens: input.moderationReasonTokens,
+          },
+          memory: {
+            class: "interaction_summary",
+            governanceTier: "inferable",
+            confidence: 0.45,
+            moderation: {
+              decision: input.moderationState,
+              reasonTokens: input.moderationReasonTokens,
+            },
+            provenance: {
+              sourceType: "interaction_observation",
+              sourceSurface: chat.type === "group" ? "group_chat" : "dm_chat",
+              messageId: input.messageId,
+              chatId: chat.id,
+              sourceEntityId: chat.id,
+              actorUserIds,
+            },
+          },
+        },
+      );
+
+      for (const extractedMemory of extractedMemories.slice(0, 3)) {
+        await this.personalizationService.storeInteractionSummary(
+          input.senderUserId,
+          {
+            summary: extractedMemory.summary,
+            safe: input.moderationState === "clean",
+            context: {
+              source: "chat_message",
+              sourceSurface: chat.type === "group" ? "group_chat" : "dm_chat",
+              sourceEntityId: chat.id,
+              messageId: input.messageId,
+              chatId: chat.id,
+              actorUserIds,
+              moderationDecision: input.moderationState,
+              moderationReasonTokens: input.moderationReasonTokens,
+              sourceText: input.body.slice(0, 500),
+            },
+            memory: {
+              class: extractedMemory.class,
+              governanceTier: extractedMemory.governanceTier,
+              key: extractedMemory.key,
+              value: extractedMemory.value,
+              confidence: extractedMemory.confidence,
+              safeWritePolicy: "strict",
+              contradictionPolicy: extractedMemory.contradictionPolicy,
+              consent: {
+                basis: "explicit_user_message",
+                explicit: true,
+                sourceText: input.body.slice(0, 500),
+              },
+              moderation: {
+                decision: input.moderationState,
+                reasonTokens: input.moderationReasonTokens,
+              },
+              provenance: {
+                sourceType: "explicit_user_input",
+                sourceSurface: chat.type === "group" ? "group_chat" : "dm_chat",
+                messageId: input.messageId,
+                chatId: chat.id,
+                sourceEntityId: chat.id,
+                actorUserIds,
+              },
+            },
+          },
+        );
+      }
+    } catch (error) {
+      this.logger.warn(
+        `chat memory ingestion failed for chat ${input.chatId}: ${String(error)}`,
+      );
+    }
+  }
+
+  private buildMemorySummaryFromMessage(body: string) {
+    const normalized = body.replace(/\s+/g, " ").trim();
+    if (normalized.length < 12) {
+      return "";
+    }
+    return normalized.length <= 280
+      ? normalized
+      : `${normalized.slice(0, 277).trimEnd()}...`;
+  }
+
+  private extractStructuredMemoriesFromMessage(body: string) {
+    const normalized = this.normalizeMemoryExtractionInput(body);
+    if (normalized.length < 12) {
+      return [];
+    }
+
+    const clauses = this.splitMemoryClauses(normalized);
+
+    const memories = [
+      ...this.extractPreferenceMemories(clauses),
+      ...this.extractLocationMemories(clauses),
+      ...this.extractLanguageMemories(clauses),
+      ...this.extractRelationshipMemories(clauses),
+      ...this.extractCommerceMemories(clauses),
+      ...this.extractSafetyMemories(clauses),
+    ];
+
+    return this.rankAndDeduplicateStructuredMemories(memories).slice(0, 4);
+  }
+
+  private normalizeMemoryExtractionInput(body: string) {
+    return body.replace(/\s+/g, " ").trim();
+  }
+
+  private splitMemoryClauses(body: string) {
+    return body
+      .split(
+        /(?<=[.!?])\s+|;\s+|,\s+(?=(?:(?:and|but|so)\s+)?(?:i|my|we|please|don't|do not|i'm|i am)\b)/i,
+      )
+      .map((clause) => clause.replace(/^(?:and|but|so)\s+/i, "").trim())
+      .filter(Boolean);
+  }
+
+  private extractPreferenceMemories(clauses: string[]) {
+    const memories: StructuredMemoryCandidate[] = [];
+    const preferencePatterns = [
+      {
+        regex:
+          /^(?:i like|i love|i enjoy|i prefer|my favorite is|i'm into|i am into)\s+(.+)$/i,
+        key: "conversation.preference.likes",
+        summaryVerb: "likes",
+      },
+      {
+        regex:
+          /^(?:i dislike|i don't like|i do not like|i hate|i'm not into|i am not into)\s+(.+)$/i,
+        key: "conversation.preference.avoids",
+        summaryVerb: "avoids",
+      },
+    ] as const;
+
+    for (const clause of clauses) {
+      for (const pattern of preferencePatterns) {
+        const match = clause.match(pattern.regex);
+        if (!match) {
+          continue;
+        }
+        const value = this.normalizePreferenceValue(match[1]);
+        if (!value || this.isGenericMemoryValue(value)) {
+          continue;
+        }
+        const confidence = this.scorePreferenceConfidence(value, clause);
+        if (confidence < 0.84) {
+          continue;
+        }
+        memories.push({
+          class: "stable_preference",
+          governanceTier: "explicit_only",
+          key: pattern.key,
+          value,
+          confidence,
+          contradictionPolicy: "keep_latest",
+          summary: `Explicitly stated preference: ${pattern.summaryVerb} ${value}.`,
+        });
+      }
+    }
+
+    return memories;
+  }
+
+  private extractLocationMemories(clauses: string[]) {
+    const memories: StructuredMemoryCandidate[] = [];
+    for (const clause of clauses) {
+      const match = clause.match(
+        /^(?:i live in|i'm in|i am in|i'm based in|i am based in|i'm from|i am from|i live near)\s+(.+)$/i,
+      );
+      if (!match) {
+        continue;
+      }
+      const value = this.normalizeLocationValue(match[1]);
+      if (!value || this.isGenericLocationValue(value)) {
+        continue;
+      }
+      memories.push({
+        class: "profile_memory",
+        governanceTier: "explicit_only",
+        key: "profile.location",
+        value,
+        confidence: this.scoreLocationConfidence(value),
+        contradictionPolicy: "keep_latest",
+        summary: `Explicitly stated profile fact: location ${value}.`,
+      });
+    }
+    return memories;
+  }
+
+  private extractLanguageMemories(clauses: string[]) {
+    const memories: StructuredMemoryCandidate[] = [];
+    for (const clause of clauses) {
+      const match = clause.match(
+        /^(?:i speak|i can speak|i'm fluent in|i am fluent in|my languages are)\s+(.+)$/i,
+      );
+      if (!match) {
+        continue;
+      }
+      const value = this.normalizeLanguageValue(match[1]);
+      if (!value || this.isGenericMemoryValue(value)) {
+        continue;
+      }
+      memories.push({
+        class: "profile_memory",
+        governanceTier: "explicit_only",
+        key: "profile.languages",
+        value,
+        confidence: this.scoreLanguageConfidence(value),
+        contradictionPolicy: "keep_latest",
+        summary: `Explicitly stated profile fact: languages ${value}.`,
+      });
+    }
+    return memories;
+  }
+
+  private extractRelationshipMemories(clauses: string[]) {
+    const memories: StructuredMemoryCandidate[] = [];
+    for (const clause of clauses) {
+      const match = clause.match(
+        /^(?:i know|i already know|we met|i met|i work with|i've worked with|i work with)\s+(.+)$/i,
+      );
+      if (!match) {
+        continue;
+      }
+      const [personPart, contextPart] = this.extractRelationshipParts(match[1]);
+      const person = this.normalizeExtractedValue(personPart);
+      const context = this.normalizeExtractedValue(contextPart);
+      if (!person || this.isGenericMemoryValue(person)) {
+        continue;
+      }
+      const value = context ? `${person} via ${context}` : person;
+      memories.push({
+        class: "relationship_history",
+        governanceTier: "inferable",
+        key: "relationship.prior_context",
+        value,
+        confidence: context ? 0.8 : 0.72,
+        contradictionPolicy: "append_conflict_note",
+        summary: context
+          ? `Relationship context: already knows ${person} via ${context}.`
+          : `Relationship context: already knows ${person}.`,
+      });
+    }
+    return memories;
+  }
+
+  private extractCommerceMemories(clauses: string[]) {
+    const memories: StructuredMemoryCandidate[] = [];
+    for (const clause of clauses) {
+      const match = clause.match(
+        /^(?:my budget is|i can spend|budget around|up to)\s+\$?([0-9]{2,6})(?:\s*(usd|eur|ars|gbp))?/i,
+      );
+      if (!match) {
+        continue;
+      }
+      const amount = this.normalizeExtractedValue(match[1] ?? "");
+      const currency = this.normalizeExtractedValue(
+        match[2] ?? "",
+      ).toUpperCase();
+      if (!amount) {
+        continue;
+      }
+      memories.push({
+        class: "commerce_memory",
+        governanceTier: "inferable",
+        key: "commerce.budget",
+        value: `${amount} ${currency || "USD"}`.trim(),
+        confidence: 0.84,
+        contradictionPolicy: "keep_latest",
+        summary: `Commerce context: budget ${amount} ${currency || "USD"}.`,
+      });
+    }
+    return memories;
+  }
+
+  private extractSafetyMemories(clauses: string[]) {
+    const memories: StructuredMemoryCandidate[] = [];
+    for (const clause of clauses) {
+      const match = clause.match(
+        /^(?:please avoid|don't match me with|do not match me with|i am not comfortable with|i'm not comfortable with|i do not want)\s+(.+)$/i,
+      );
+      if (!match) {
+        continue;
+      }
+      const value = this.normalizeSafetyValue(match[1]);
+      if (!value || this.isGenericMemoryValue(value)) {
+        continue;
+      }
+      memories.push({
+        class: "safety_memory",
+        governanceTier: "explicit_only",
+        key: "safety.boundary",
+        value,
+        confidence: 0.96,
+        contradictionPolicy: "suppress_conflict",
+        summary: `Explicit safety boundary: avoid ${value}.`,
+      });
+    }
+    return memories;
+  }
+
+  private rankAndDeduplicateStructuredMemories(
+    memories: StructuredMemoryCandidate[],
+  ) {
+    const deduped = new Map<string, StructuredMemoryCandidate>();
+    for (const memory of memories) {
+      const signature = [
+        memory.class,
+        memory.key,
+        memory.value.trim().toLowerCase(),
+      ].join("|");
+      const existing = deduped.get(signature);
+      if (!existing || existing.confidence < memory.confidence) {
+        deduped.set(signature, memory);
+      }
+    }
+
+    const confidenceThresholdByGovernance: Record<
+      StructuredMemoryCandidate["governanceTier"],
+      number
+    > = {
+      explicit_only: 0.84,
+      inferable: 0.72,
+    };
+
+    return Array.from(deduped.values())
+      .filter(
+        (memory) =>
+          memory.confidence >=
+          confidenceThresholdByGovernance[memory.governanceTier],
+      )
+      .sort((left, right) => {
+        if (right.confidence !== left.confidence) {
+          return right.confidence - left.confidence;
+        }
+        const priority = {
+          safety_memory: 0,
+          profile_memory: 1,
+          stable_preference: 2,
+          relationship_history: 3,
+          commerce_memory: 4,
+        } as const;
+        return priority[left.class] - priority[right.class];
+      });
+  }
+
+  private normalizeExtractedValue(value: string) {
+    return value
+      .replace(/\s+/g, " ")
+      .replace(
+        /\b(a lot|very much|right now|today|tonight|currently|for now|at the moment|really|kind of|sort of|please|just)\b/gi,
+        "",
+      )
+      .replace(/^[,;:\-\s]+|[,;:\-\s]+$/g, "")
+      .trim();
+  }
+
+  private normalizePreferenceValue(value: string) {
+    return this.normalizeStructuredListValue(value);
+  }
+
+  private normalizeLocationValue(value: string) {
+    return this.normalizeExtractedValue(value);
+  }
+
+  private normalizeLanguageValue(value: string) {
+    return this.normalizeStructuredListValue(value);
+  }
+
+  private normalizeSafetyValue(value: string) {
+    return this.normalizeExtractedValue(value);
+  }
+
+  private normalizeStructuredListValue(value: string) {
+    const normalized = this.normalizeExtractedValue(value);
+    if (!normalized) {
+      return "";
+    }
+
+    const parts = normalized
+      .replace(/\s+(?:&|\/)\s+/g, ", ")
+      .replace(/\s+\band\b\s+/gi, ", ")
+      .replace(/\s+\bor\b\s+/gi, ", ")
+      .split(",")
+      .map((part) => this.normalizeExtractedValue(part))
+      .filter(Boolean)
+      .filter((part) => !this.isGenericMemoryValue(part));
+
+    if (parts.length === 0) {
+      return "";
+    }
+
+    const uniqueParts: string[] = [];
+    const seen = new Set<string>();
+    for (const part of parts) {
+      const signature = part.toLowerCase();
+      if (seen.has(signature)) {
+        continue;
+      }
+      seen.add(signature);
+      uniqueParts.push(part);
+    }
+
+    return uniqueParts.join(", ");
+  }
+
+  private extractRelationshipParts(value: string) {
+    const match = value.match(/^(.+?)(?:\s+(?:from|at|through|via)\s+(.+))?$/i);
+    return [match?.[1] ?? value, match?.[2] ?? ""] as const;
+  }
+
+  private scorePreferenceConfidence(value: string, clause: string) {
+    const normalized = clause.toLowerCase();
+    const words = value.split(/\s+/).filter(Boolean).length;
+    const directSignal =
+      /\b(?:i like|i love|i enjoy|i prefer|my favorite is|i'm into|i am into)\b/i.test(
+        clause,
+      );
+    const multiValueBonus = value.includes(",") ? 0.03 : 0;
+    const fillerPenalty =
+      /\b(a lot|kind of|sort of|maybe|probably|somewhat|a bit|a little)\b/i.test(
+        normalized,
+      )
+        ? 0.03
+        : 0;
+    return Math.max(
+      0.72,
+      Math.min(
+        0.96,
+        (directSignal ? 0.9 : 0.82) +
+          Math.min(words * 0.015, 0.05) +
+          multiValueBonus -
+          fillerPenalty,
+      ),
+    );
+  }
+
+  private scoreLocationConfidence(value: string) {
+    const words = value.split(/\s+/).filter(Boolean).length;
+    const specificityBonus = /[A-Z]/.test(value) ? 0.02 : 0;
+    return Math.max(
+      0.84,
+      Math.min(0.96, 0.88 + Math.min(words * 0.015, 0.04) + specificityBonus),
+    );
+  }
+
+  private scoreLanguageConfidence(value: string) {
+    const words = value.split(/\s+/).filter(Boolean).length;
+    const listBonus = value.includes(",") ? 0.02 : 0;
+    return Math.max(
+      0.84,
+      Math.min(0.96, 0.87 + Math.min(words * 0.01, 0.04) + listBonus),
+    );
+  }
+
+  private isGenericMemoryValue(value: string) {
+    const normalized = value.toLowerCase();
+    return [
+      "people",
+      "social plans",
+      "new connections",
+      "stuff",
+      "things",
+      "anything",
+      "everything",
+      "somewhere",
+      "here",
+      "there",
+      "a lot",
+    ].some(
+      (fragment) => normalized === fragment || normalized.includes(fragment),
+    );
+  }
+
+  private isGenericLocationValue(value: string) {
+    const normalized = value.toLowerCase();
+    return ["here", "there", "somewhere", "anywhere"].includes(normalized);
   }
 
   async getChatMetadata(chatId: string, viewerUserId?: string) {

@@ -2,6 +2,398 @@ import { describe, expect, it, vi } from "vitest";
 import { ChatsService } from "../src/chats/chats.service.js";
 
 describe("ChatsService", () => {
+  it("ingests dm messages into governed memory with explicit preference detection", async () => {
+    const personalizationService = {
+      storeInteractionSummary: vi.fn().mockResolvedValue({
+        stored: true,
+        documentId: "doc-1",
+      }),
+    };
+    const prisma: any = {
+      chat: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "chat-1",
+          type: "dm",
+          connectionId: "conn-1",
+        }),
+      },
+      connectionParticipant: {
+        findMany: vi
+          .fn()
+          .mockResolvedValue([{ userId: "user-1" }, { userId: "user-2" }]),
+      },
+      block: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      userPreference: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      userReport: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      chatMessage: {
+        create: vi.fn().mockResolvedValue({ id: "msg-1", chatId: "chat-1" }),
+      },
+      messageReceipt: {
+        create: vi.fn().mockResolvedValue({}),
+      },
+    };
+
+    const service = new ChatsService(
+      prisma,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      personalizationService as any,
+    );
+    await service.createMessage("chat-1", "user-1", "I like apex a lot");
+
+    expect(
+      personalizationService.storeInteractionSummary,
+    ).toHaveBeenCalledTimes(2);
+    expect(
+      personalizationService.storeInteractionSummary,
+    ).toHaveBeenNthCalledWith(
+      1,
+      "user-1",
+      expect.objectContaining({
+        memory: expect.objectContaining({
+          class: "interaction_summary",
+          governanceTier: "inferable",
+        }),
+      }),
+    );
+    expect(
+      personalizationService.storeInteractionSummary,
+    ).toHaveBeenNthCalledWith(
+      2,
+      "user-1",
+      expect.objectContaining({
+        memory: expect.objectContaining({
+          class: "stable_preference",
+          governanceTier: "explicit_only",
+          key: "conversation.preference.likes",
+        }),
+      }),
+    );
+  });
+
+  it("extracts multiple explicit structured memories from one dm message", async () => {
+    const personalizationService = {
+      storeInteractionSummary: vi.fn().mockResolvedValue({
+        stored: true,
+        documentId: "doc-1",
+      }),
+    };
+    const prisma: any = {
+      chat: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "chat-1",
+          type: "dm",
+          connectionId: "conn-1",
+        }),
+      },
+      connectionParticipant: {
+        findMany: vi
+          .fn()
+          .mockResolvedValue([{ userId: "user-1" }, { userId: "user-2" }]),
+      },
+      block: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      userPreference: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      userReport: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      chatMessage: {
+        create: vi.fn().mockResolvedValue({ id: "msg-1", chatId: "chat-1" }),
+      },
+      messageReceipt: {
+        create: vi.fn().mockResolvedValue({}),
+      },
+    };
+
+    const service = new ChatsService(
+      prisma,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      personalizationService as any,
+    );
+    await service.createMessage(
+      "chat-1",
+      "user-1",
+      "I like apex, I live in Buenos Aires, and I speak English and Spanish",
+    );
+
+    expect(
+      personalizationService.storeInteractionSummary,
+    ).toHaveBeenCalledTimes(4);
+    const payloads =
+      personalizationService.storeInteractionSummary.mock.calls.map(
+        (call: any[]) => call[1],
+      );
+    expect(
+      payloads.some(
+        (payload: any) =>
+          payload.memory?.key === "conversation.preference.likes" &&
+          payload.memory?.class === "stable_preference",
+      ),
+    ).toBe(true);
+    expect(
+      payloads.some(
+        (payload: any) =>
+          payload.memory?.key === "profile.location" &&
+          payload.memory?.class === "profile_memory",
+      ),
+    ).toBe(true);
+    expect(
+      payloads.some(
+        (payload: any) =>
+          payload.memory?.key === "profile.languages" &&
+          payload.memory?.class === "profile_memory",
+      ),
+    ).toBe(true);
+  });
+
+  it("deduplicates repeated preference mentions and strips filler words", async () => {
+    const personalizationService = {
+      storeInteractionSummary: vi.fn().mockResolvedValue({
+        stored: true,
+        documentId: "doc-1",
+      }),
+    };
+    const prisma: any = {
+      chat: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "chat-1",
+          type: "dm",
+          connectionId: "conn-1",
+        }),
+      },
+      connectionParticipant: {
+        findMany: vi
+          .fn()
+          .mockResolvedValue([{ userId: "user-1" }, { userId: "user-2" }]),
+      },
+      block: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      userPreference: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      userReport: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      chatMessage: {
+        create: vi.fn().mockResolvedValue({ id: "msg-1", chatId: "chat-1" }),
+      },
+      messageReceipt: {
+        create: vi.fn().mockResolvedValue({}),
+      },
+    };
+
+    const service = new ChatsService(
+      prisma,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      personalizationService as any,
+    );
+    await service.createMessage(
+      "chat-1",
+      "user-1",
+      "I like Apex a lot, I like apex, and I live in Buenos Aires",
+    );
+
+    const payloads =
+      personalizationService.storeInteractionSummary.mock.calls.map(
+        (call: any[]) => call[1],
+      );
+
+    expect(payloads).toHaveLength(3);
+    const preferenceWrites = payloads.filter(
+      (payload: any) => payload.memory?.key === "conversation.preference.likes",
+    );
+    expect(preferenceWrites).toHaveLength(1);
+    expect(preferenceWrites[0].memory?.value.toLowerCase()).toBe("apex");
+    expect(
+      payloads.some(
+        (payload: any) =>
+          payload.memory?.key === "profile.location" &&
+          payload.memory?.value === "Buenos Aires",
+      ),
+    ).toBe(true);
+  });
+
+  it("drops generic preference noise while keeping real structured memories", async () => {
+    const personalizationService = {
+      storeInteractionSummary: vi.fn().mockResolvedValue({
+        stored: true,
+        documentId: "doc-1",
+      }),
+    };
+    const prisma: any = {
+      chat: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "chat-1",
+          type: "dm",
+          connectionId: "conn-1",
+        }),
+      },
+      connectionParticipant: {
+        findMany: vi
+          .fn()
+          .mockResolvedValue([{ userId: "user-1" }, { userId: "user-2" }]),
+      },
+      block: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      userPreference: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      userReport: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      chatMessage: {
+        create: vi.fn().mockResolvedValue({ id: "msg-1", chatId: "chat-1" }),
+      },
+      messageReceipt: {
+        create: vi.fn().mockResolvedValue({}),
+      },
+    };
+
+    const service = new ChatsService(
+      prisma,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      personalizationService as any,
+    );
+    await service.createMessage(
+      "chat-1",
+      "user-1",
+      "I like stuff, I live in Buenos Aires, and I speak English and Spanish",
+    );
+
+    const payloads =
+      personalizationService.storeInteractionSummary.mock.calls.map(
+        (call: any[]) => call[1],
+      );
+
+    expect(payloads).toHaveLength(3);
+    expect(
+      payloads.some(
+        (payload: any) =>
+          payload.memory?.key === "conversation.preference.likes",
+      ),
+    ).toBe(false);
+    expect(
+      payloads.some(
+        (payload: any) =>
+          payload.memory?.key === "profile.location" &&
+          payload.memory?.value === "Buenos Aires",
+      ),
+    ).toBe(true);
+    expect(
+      payloads.some(
+        (payload: any) =>
+          payload.memory?.key === "profile.languages" &&
+          payload.memory?.value === "English, Spanish",
+      ),
+    ).toBe(true);
+  });
+
+  it("extracts relationship, commerce, and safety memories with domain-sensitive governance", async () => {
+    const personalizationService = {
+      storeInteractionSummary: vi.fn().mockResolvedValue({
+        stored: true,
+        documentId: "doc-1",
+      }),
+    };
+    const prisma: any = {
+      chat: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "chat-1",
+          type: "dm",
+          connectionId: "conn-1",
+        }),
+      },
+      connectionParticipant: {
+        findMany: vi
+          .fn()
+          .mockResolvedValue([{ userId: "user-1" }, { userId: "user-2" }]),
+      },
+      block: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      userPreference: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      userReport: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      chatMessage: {
+        create: vi.fn().mockResolvedValue({ id: "msg-1", chatId: "chat-1" }),
+      },
+      messageReceipt: {
+        create: vi.fn().mockResolvedValue({}),
+      },
+    };
+
+    const service = new ChatsService(
+      prisma,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      personalizationService as any,
+    );
+    await service.createMessage(
+      "chat-1",
+      "user-1",
+      "I know Bruno from work, my budget is 400 usd, and please avoid late-night one-on-one meetups",
+    );
+
+    const payloads =
+      personalizationService.storeInteractionSummary.mock.calls.map(
+        (call: any[]) => call[1],
+      );
+
+    expect(payloads).toHaveLength(4);
+    expect(
+      payloads.some(
+        (payload: any) =>
+          payload.memory?.class === "relationship_history" &&
+          payload.memory?.governanceTier === "inferable" &&
+          payload.memory?.key === "relationship.prior_context",
+      ),
+    ).toBe(true);
+    expect(
+      payloads.some(
+        (payload: any) =>
+          payload.memory?.class === "commerce_memory" &&
+          payload.memory?.governanceTier === "inferable" &&
+          payload.memory?.key === "commerce.budget",
+      ),
+    ).toBe(true);
+    expect(
+      payloads.some(
+        (payload: any) =>
+          payload.memory?.class === "safety_memory" &&
+          payload.memory?.governanceTier === "explicit_only" &&
+          payload.memory?.key === "safety.boundary" &&
+          payload.memory?.contradictionPolicy === "suppress_conflict",
+      ),
+    ).toBe(true);
+  });
+
   it("creates sender receipt when creating message", async () => {
     const prisma: any = {
       chat: {
