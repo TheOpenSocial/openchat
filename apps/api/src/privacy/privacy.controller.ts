@@ -77,6 +77,8 @@ export class PrivacyController {
         mode: payload.mode ?? "learned_memory",
         actorUserId: payload.actorUserId,
         reason: payload.reason,
+        domains: payload.domains,
+        surfaces: payload.surfaces,
       }),
     );
   }

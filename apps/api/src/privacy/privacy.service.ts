@@ -13,6 +13,9 @@ const LEARNED_RETRIEVAL_DOC_TYPES = [
   "preference_memory",
   "interaction_summary",
   "interaction_summary_flagged",
+  "relationship_memory",
+  "safety_memory",
+  "commerce_memory",
 ] as const;
 
 @Injectable()
@@ -299,9 +302,22 @@ export class PrivacyService {
   async resetUserMemory(
     userId: string,
     input: {
-      mode: "learned_memory" | "all_personalization";
+      mode:
+        | "learned_memory"
+        | "all_personalization"
+        | "domain_memory"
+        | "surface_memory";
       actorUserId?: string;
       reason?: string;
+      domains?: string[];
+      surfaces?: Array<
+        | "agent_chat"
+        | "dm_chat"
+        | "group_chat"
+        | "workflow_event"
+        | "system_event"
+        | "profile_edit"
+      >;
     },
   ) {
     await this.ensureUserExists(userId);
@@ -312,22 +328,35 @@ export class PrivacyService {
           userId,
           docType: { in: [...LEARNED_RETRIEVAL_DOC_TYPES] },
         },
-        select: { id: true },
+        select: { id: true, content: true, docType: true },
       });
-      const retrievalDocumentIds = retrievalDocuments.map((item) => item.id);
+      const retrievalDocumentIds = this.filterResettableMemoryDocuments(
+        retrievalDocuments,
+        input,
+      ).map((item) => item.id);
 
-      const inferredPreferences = await tx.inferredPreference.deleteMany({
-        where: { userId },
-      });
-      const feedbackEvents = await tx.preferenceFeedbackEvent.deleteMany({
-        where: { userId },
-      });
-      const lifeGraphEdges = await tx.lifeGraphEdge.deleteMany({
-        where: { userId },
-      });
-      const lifeGraphNodes = await tx.lifeGraphNode.deleteMany({
-        where: { userId },
-      });
+      const deleteLearnedStructures =
+        input.mode === "learned_memory" || input.mode === "all_personalization";
+      const inferredPreferences = deleteLearnedStructures
+        ? await tx.inferredPreference.deleteMany({
+            where: { userId },
+          })
+        : { count: 0 };
+      const feedbackEvents = deleteLearnedStructures
+        ? await tx.preferenceFeedbackEvent.deleteMany({
+            where: { userId },
+          })
+        : { count: 0 };
+      const lifeGraphEdges = deleteLearnedStructures
+        ? await tx.lifeGraphEdge.deleteMany({
+            where: { userId },
+          })
+        : { count: 0 };
+      const lifeGraphNodes = deleteLearnedStructures
+        ? await tx.lifeGraphNode.deleteMany({
+            where: { userId },
+          })
+        : { count: 0 };
       const retrievalChunks =
         retrievalDocumentIds.length === 0
           ? { count: 0 }
@@ -336,8 +365,7 @@ export class PrivacyService {
             });
       const retrievalDocs = await tx.retrievalDocument.deleteMany({
         where: {
-          userId,
-          docType: { in: [...LEARNED_RETRIEVAL_DOC_TYPES] },
+          id: { in: retrievalDocumentIds },
         },
       });
 
@@ -369,6 +397,8 @@ export class PrivacyService {
           metadata: {
             mode: input.mode,
             reason: input.reason ?? null,
+            domains: input.domains ?? [],
+            surfaces: input.surfaces ?? [],
             deleted: {
               inferredPreferences: inferredPreferences.count,
               explicitPreferences: explicitPreferences.count,
@@ -398,6 +428,80 @@ export class PrivacyService {
         },
       };
     });
+  }
+
+  private filterResettableMemoryDocuments(
+    documents: Array<{ id: string; content: string; docType: string }>,
+    input: {
+      mode:
+        | "learned_memory"
+        | "all_personalization"
+        | "domain_memory"
+        | "surface_memory";
+      domains?: string[];
+      surfaces?: string[];
+    },
+  ) {
+    if (
+      input.mode === "learned_memory" ||
+      input.mode === "all_personalization"
+    ) {
+      return documents;
+    }
+    return documents.filter((document) => {
+      const memory = this.readMemoryEnvelope(document);
+      if (!memory) {
+        return false;
+      }
+      if (input.mode === "domain_memory") {
+        return (
+          Array.isArray(input.domains) &&
+          input.domains.length > 0 &&
+          input.domains.includes(memory.class)
+        );
+      }
+      if (input.mode === "surface_memory") {
+        return (
+          Array.isArray(input.surfaces) &&
+          input.surfaces.length > 0 &&
+          input.surfaces.includes(memory.sourceSurface)
+        );
+      }
+      return false;
+    });
+  }
+
+  private readMemoryEnvelope(document: { content: string; docType: string }) {
+    const contextLine = document.content
+      .split("\n")
+      .find((line) => line.startsWith("context: "));
+    if (!contextLine) {
+      return null;
+    }
+    try {
+      const parsed = JSON.parse(contextLine.slice("context: ".length).trim());
+      const memory =
+        parsed && typeof parsed.memory === "object" && parsed.memory
+          ? (parsed.memory as Record<string, unknown>)
+          : null;
+      if (!memory) {
+        return null;
+      }
+      return {
+        class:
+          typeof memory.class === "string" ? memory.class : document.docType,
+        sourceSurface:
+          memory.provenance &&
+          typeof memory.provenance === "object" &&
+          typeof (memory.provenance as Record<string, unknown>)
+            .sourceSurface === "string"
+            ? ((memory.provenance as Record<string, unknown>)
+                .sourceSurface as string)
+            : "system_event",
+      };
+    } catch {
+      return null;
+    }
   }
 
   async deleteAccount(

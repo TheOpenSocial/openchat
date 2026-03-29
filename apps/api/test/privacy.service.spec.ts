@@ -71,6 +71,73 @@ describe("PrivacyService", () => {
     );
   });
 
+  it("can reset only memory for a specific source surface without deleting learned preferences", async () => {
+    const tx: any = {
+      retrievalDocument: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: "doc-dm",
+            docType: "interaction_summary",
+            content:
+              'summary: dm\ncontext: {"memory":{"class":"interaction_summary","provenance":{"sourceSurface":"dm_chat"}}}',
+          },
+          {
+            id: "doc-agent",
+            docType: "interaction_summary",
+            content:
+              'summary: agent\ncontext: {"memory":{"class":"interaction_summary","provenance":{"sourceSurface":"agent_chat"}}}',
+          },
+        ]),
+        deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+      inferredPreference: {
+        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+      preferenceFeedbackEvent: {
+        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+      lifeGraphEdge: {
+        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+      lifeGraphNode: {
+        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+      retrievalChunk: {
+        deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+      explicitPreference: {
+        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+      embedding: {
+        deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+      auditLog: {
+        create: vi.fn().mockResolvedValue({ id: "audit-surface" }),
+      },
+    };
+    const prisma: any = {
+      user: {
+        findUnique: vi
+          .fn()
+          .mockResolvedValue({ id: "user-1", status: "active" }),
+      },
+      $transaction: vi.fn(async (fn: (input: unknown) => unknown) => fn(tx)),
+    };
+
+    const service = new PrivacyService(prisma);
+    const result = await service.resetUserMemory("user-1", {
+      mode: "surface_memory",
+      surfaces: ["dm_chat"],
+    });
+
+    expect(result.mode).toBe("surface_memory");
+    expect(result.deleted.retrievalDocuments).toBe(1);
+    expect(tx.inferredPreference.deleteMany).not.toHaveBeenCalled();
+    expect(tx.retrievalDocument.deleteMany).toHaveBeenCalledWith({
+      where: { id: { in: ["doc-dm"] } },
+    });
+  });
+
   it("anonymizes and deletes account-linked data", async () => {
     const tx: any = {
       retrievalDocument: {
