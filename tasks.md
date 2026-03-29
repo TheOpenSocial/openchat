@@ -7,34 +7,43 @@ Verification cadence and release gates live in `AGENT_TEST_SUITE.md`.
 Last refreshed: 2026-03-29
 
 ## Active Epic
-`Backend Gap Closure + Launch Evidence`
+`Backend Product Quality Iteration`
 
 ## Now
-- [ ] Tighten remaining code-addressable backend gaps in parallel
-  - Activation follow-through quality
-  - Agent outcome usefulness and recovery quality
-  - Memory retrieval/contradiction quality
-  - Operator explainability payloads
+- [ ] Deepen real-world activation quality
+  - Tighten first-value usefulness after onboarding completion.
+  - Focus:
+    - better first recommendation quality
+    - clearer first-thread / first-intent prioritization
+    - stronger resume behavior after partial activation
   - Evidence:
-    - focused backend tests per slice
-    - `pnpm release:check:api`
+    - focused onboarding/backend tests
+    - `pnpm test:agentic:suite -- --layer=workflow`
 
-- [ ] Return to launch evidence closure after memory pass
-  - Run one fresh deployed `Backend Ops Drill` after the moderation-drill refresh fallback and artifact-upload workflow fixes.
+- [ ] Improve agent outcome usefulness under real no-match and follow-up conditions
+  - Focus:
+    - more useful async follow-ups
+    - better no-match recovery guidance
+    - stronger next-action prioritization
   - Evidence:
-    - `pnpm test:backend:ops-pack`
-    - uploaded workflow artifacts (`.artifacts/backend-ops-pack/*.json`, `.artifacts/agent-test-suite/*.json`)
-  - Status note:
-    - all planned long-term memory, activation-readiness, and operator explainability coding slices are now complete and locally green; remaining work is deployed-environment evidence.
-    - the latest repo-side blocker fixes are in `apps/api/src/onboarding/onboarding.controller.ts`, `apps/api/src/onboarding/onboarding.service.ts`, `apps/api/src/chats/chats.service.ts`, `scripts/moderation-drill.mjs`, `scripts/run-agent-test-suite.mjs`, `scripts/run-backend-ops-pack.mjs`, and the backend GitHub workflows; rerun live ops evidence after commit/deploy.
-    - ops-pack now publishes final verification history into `ops/verification-runs` when live admin env is present, so the next green run should close both artifact and admin-reliability evidence together.
+    - focused intent/follow-up tests
+    - `pnpm test:agentic:suite -- --layer=scenario`
+
+- [ ] Deepen long-term memory extraction and retrieval quality
+  - Focus:
+    - richer structured extraction from conversations
+    - stronger contradiction resolution and stale-memory suppression
+    - better operator-facing explainability for disputed memories
+  - Evidence:
+    - focused personalization/admin tests
+    - `pnpm test:agentic:suite -- --layer=eval`
 
 ## Next
-- [ ] Commit and deploy after live evidence is green
-  - Capture the successful ops-drill evidence and then commit/push the completed backend work together.
+- [ ] Run operator drills on representative real cases
+  - Use the deployed admin/debug surfaces on real moderation and memory cases.
   - Evidence:
     - green `Backend Ops Drill`
-    - `git status`
+    - archived drill artifacts and admin inspection notes
 
 ## Notes
 - Do not add durable historical status here.

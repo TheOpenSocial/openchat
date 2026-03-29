@@ -25,9 +25,11 @@ Operating model:
 
 Last verified: 2026-03-29
 Latest known green deploy verification:
-- GitHub Actions `Deploy Staging` run `23692569711`
+- GitHub Actions `Deploy Staging` run `23708298801`
+Latest known green live ops evidence:
+- GitHub Actions `Backend Ops Drill` run `23709635423`
 Current launch blocker:
-- rerun `Backend Ops Drill` after the latest moderation-drill artifact/polling hardening, activation-execute backend contract, and retrieval-ranking fixes land in a deployed environment
+- none for the backend phase tracked in this roadmap pass
 
 ## 2. Current Product Objective
 Close the gap between backend correctness and product quality.
@@ -55,7 +57,7 @@ Priority order:
 | Agent outcome quality | Strong but incomplete | The product depends on useful next actions, not just valid replies | Async/no-match behavior improved, but follow-up usefulness and next-action quality still have room | Tighten intent/follow-up guidance and more grounded recovery behavior |
 | Long-term memory and retrieval | Strong but incomplete | Agent quality depends on explicit, fresh, trustworthy memory winning consistently | Governance, ingestion, admin debug, and retrieval ranking exist, but contradiction/ranking quality can still improve | Improve retrieval ranking bounds, stale-memory suppression, and agent context quality |
 | Operator explainability | Strong but incomplete | Support/admin must answer "why did this happen?" without log spelunking | Memory debug and reliability surfaces exist, but one-shot explainability can be clearer | Add richer explainability/failure summaries and drill-down helpers |
-| Launch evidence and trust drills | Release-blocking | Launch claims require deployed evidence, not only local green tests | Repo-side fixes are in place; fresh staging deploy + backend ops drill are still pending | Finish deploy, run ops drill, archive evidence |
+| Launch evidence and trust drills | Done | Launch claims require deployed evidence, not only local green tests | Staging deploy verification and live backend ops drill are green on the latest backend pass | Keep green; next work is quality iteration, not launch closure plumbing |
 | Admin frontend maintainability | Deferred | Important for sustained UI velocity, but not launch-critical backend work | Monolith finding remains valid | Refactor later, after backend launch blockers close |
 
 ## 3. Epics With Numbered Milestones
@@ -116,7 +118,7 @@ Priority order:
   - Last updated: 2026-03-28
 
 ### EPIC C — Golden Suite and Operator Confidence
-- [~] `C-01` Cheap-by-default verification discipline
+- [x] `C-01` Cheap-by-default verification discipline
   - Goal: keep the suite green while making the expensive live lane intentional.
   - Close when:
     - CI runs only cheap golden-suite coverage by default
@@ -131,10 +133,10 @@ Priority order:
     - GitHub Actions deploy verification runs
     - `.artifacts/agent-test-suite/verification-latest.json`
     - `.artifacts/backend-ops-pack/*.json`
-  - Last updated: 2026-03-28
+  - Last updated: 2026-03-29
 
 ### EPIC D — Launch Security and Reliability Closure
-- [~] `D-01` Secret rotation and launch evidence closure
+- [x] `D-01` Secret rotation and launch evidence closure
   - Goal: remove temporary probe/debug credential risk and finish operator launch evidence.
   - Close when:
     - temporary probe/debug credentials are rotated
@@ -143,9 +145,9 @@ Priority order:
     - launch smoke matrix and readiness runbook are complete
   - Current substatus:
     - secret rotation: complete
-    - staging/prod secret parity: complete in repo/workflow config, pending one fresh deployed rerun
-    - moderation/trust drill artifact: pending
-    - launch smoke matrix evidence archive: pending
+    - staging/prod secret parity: complete
+    - moderation/trust drill artifact: complete
+    - launch smoke matrix evidence archive: complete for this backend pass
   - Evidence command:
     - `pnpm moderation:drill`
     - `pnpm test:agentic:suite:verification`
@@ -153,7 +155,7 @@ Priority order:
   - Artifact/endpoint:
     - deploy verification artifacts
     - runbook docs and drill evidence
-  - Last updated: 2026-03-28
+  - Last updated: 2026-03-29
 
 ### EPIC E — Long-Term Memory System
 - [x] `E-01` Memory governance and ingestion backbone
@@ -220,6 +222,7 @@ Priority order:
 - 2026-03-29: upgraded launch-ops evidence plumbing. `scripts/run-backend-ops-pack.mjs` now supports per-step timeouts and ingests the final ops-pack artifact into `POST /api/admin/ops/verification-runs` when admin env is present, so operator evidence is visible in admin reliability surfaces instead of only in CI artifacts. Verified with `BACKEND_OPS_DRY_RUN=1 BACKEND_OPS_REQUIRE_ENV=0 node scripts/run-backend-ops-pack.mjs`.
 - 2026-03-29: completed the next backend product/operator slice. Added `POST /api/onboarding/activation-execute` for replay-safe first-action execution, deepened DM/group memory extraction with clause-aware preference/location/language/relationship/budget/safety detection, and hardened moderation drill evidence with bounded polling plus structured `.artifacts/moderation-drill/*.json` output. Verified with `node --test scripts/moderation-drill.test.mjs`, `node --test scripts/run-backend-ops-pack.test.mjs`, `pnpm --filter @opensocial/api exec vitest run test/personalization.service.spec.ts test/chats.service.spec.ts test/onboarding-flow.contract.spec.ts test/onboarding.service.spec.ts test/agent-conversation.service.spec.ts test/admin.controller.spec.ts`, and `pnpm --filter @opensocial/api exec tsc --noEmit`.
 - 2026-03-29: closed the retrieval-ranking regression surfaced during integration. Explicit durable preferences now rank above older inferred summaries even when query wording differs (`like` vs `likes` / `prefer*` variants), and retrieval/debug excerpts now render human-readable memory leads such as `prefers apex`. Verified with `node scripts/run-agent-test-suite.mjs --layer=contract` and `pnpm release:check:api`.
+- 2026-03-29: closed the backend launch-evidence path. `Deploy Staging` run `23708298801` was green on commit `055b2ce`, including post-deploy backend golden verification. `Backend Ops Drill` run `23709635423` was green on commit `866445f` after fixing moderation drill audit matching and verification-run ingestion layer normalization in `scripts/moderation-drill.mjs` and `scripts/run-backend-ops-pack.mjs`. Verified locally with `node --test scripts/moderation-drill.test.mjs scripts/run-backend-ops-pack.test.mjs`.
 
 ---
 
