@@ -149,6 +149,29 @@ function createServiceHarness() {
       eventType: "agent_social_action",
     }),
   };
+  const personalizationService: any = {
+    retrievePersonalizationContext: vi.fn().mockResolvedValue({
+      userId: IDS.userId,
+      query: "current social context",
+      maxChunks: 4,
+      maxAgeDays: 90,
+      staleCutoff: new Date("2025-12-20T11:00:00.000Z"),
+      results: [
+        {
+          documentId: "doc-1",
+          docType: "preference_memory",
+          chunkIndex: 0,
+          tokenCount: 12,
+          score: 0.92,
+          createdAt: new Date("2026-03-20T09:00:00.000Z"),
+          excerpt: "Explicit preference: evening design sessions.",
+        },
+      ],
+      bundle:
+        "preference_memory (score=0.92): Explicit preference: evening design sessions.",
+      bundleTokenEstimate: 14,
+    }),
+  };
 
   const agentOutcomeToolsService: any = {
     lookupAvailability: vi.fn().mockResolvedValue({
@@ -279,6 +302,7 @@ function createServiceHarness() {
     analyticsService,
     moderationService,
     agentOutcomeToolsService,
+    personalizationService,
   );
 
   const openai = {
@@ -324,6 +348,7 @@ function createServiceHarness() {
     appCacheService,
     analyticsService,
     agentOutcomeToolsService,
+    personalizationService,
   };
 }
 
@@ -771,6 +796,45 @@ describe("AgentConversationService", () => {
         take: 4,
         widenOnScarcity: true,
         scarcityThreshold: 2,
+      }),
+    );
+  });
+
+  it("uses ranked personalization retrieval for tool execution and social context", async () => {
+    const { service, personalizationService } = createServiceHarness();
+
+    const socialContext = await (service as any).buildSocialContextPacket({
+      userId: IDS.userId,
+      threadId: IDS.threadId,
+      existingMessageCount: 1,
+    });
+
+    expect(socialContext.memoryHighlights).toEqual([
+      "Explicit preference: evening design sessions.",
+    ]);
+    expect(socialContext.memoryContext?.bundle).toContain("preference_memory");
+
+    await (service as any).executeToolCall(
+      IDS.threadId,
+      IDS.userId,
+      "trace-agentic-memory-tool",
+      {
+        role: "personalization_interpreter",
+        tool: "personalization.retrieve",
+        input: {
+          query: "find evening design people",
+          maxDocs: 3,
+        },
+      },
+    );
+
+    expect(
+      personalizationService.retrievePersonalizationContext,
+    ).toHaveBeenCalledWith(
+      IDS.userId,
+      expect.objectContaining({
+        query: "find evening design people",
+        maxChunks: 3,
       }),
     );
   });

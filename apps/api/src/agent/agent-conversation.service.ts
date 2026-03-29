@@ -16,11 +16,12 @@ import {
   NotFoundException,
   Optional,
 } from "@nestjs/common";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { AnalyticsService } from "../analytics/analytics.service.js";
 import { AppCacheService } from "../common/app-cache.service.js";
 import { PrismaService } from "../database/prisma.service.js";
 import { ModerationService } from "../moderation/moderation.service.js";
+import { PersonalizationService } from "../personalization/personalization.service.js";
 import { AgentOutcomeToolsService } from "./agent-outcome-tools.service.js";
 import { AgentService } from "./agent.service.js";
 
@@ -76,6 +77,9 @@ type SocialContextPacket = {
     reachable: string;
     notificationMode: string;
     memoryMode: string;
+    dmGroupMemoryIngestionEnabled: string;
+    agentChatMemoryIngestionEnabled: string;
+    memoryInferenceStrictness: string;
     timezone: string;
   };
   thread: {
@@ -84,6 +88,15 @@ type SocialContextPacket = {
     existingMessageCount: number;
   };
   memoryHighlights: string[];
+  memoryContext?: {
+    bundle: string;
+    topResults: Array<{
+      documentId: string;
+      docType: string;
+      excerpt: string;
+      score: number;
+    }>;
+  };
 };
 
 @Injectable()
@@ -116,6 +129,8 @@ export class AgentConversationService {
     private readonly moderationService?: ModerationService,
     @Optional()
     private readonly agentOutcomeToolsService?: AgentOutcomeToolsService,
+    @Optional()
+    private readonly personalizationService?: PersonalizationService,
   ) {}
 
   async listPlanCheckpoints(input: {
@@ -643,68 +658,56 @@ export class AgentConversationService {
       "global_rules_reachable",
       "global_rules_notification_mode",
       "global_rules_memory_mode",
+      "global_rules_dm_group_memory_ingestion",
+      "global_rules_agent_chat_memory_ingestion",
+      "global_rules_memory_inference_strictness",
       "global_rules_timezone",
     ];
 
-    const [user, profile, interests, preferences, thread, retrievalDocs] =
-      await Promise.all([
-        this.prisma.user.findUnique({
-          where: { id: input.userId },
-          select: {
-            displayName: true,
-          },
-        }),
-        this.prisma.userProfile.findUnique({
-          where: { userId: input.userId },
-          select: {
-            bio: true,
-            city: true,
-            country: true,
-            onboardingState: true,
-            availabilityMode: true,
-          },
-        }),
-        this.prisma.userInterest.findMany({
-          where: { userId: input.userId },
-          orderBy: [{ createdAt: "desc" }],
-          take: 8,
-          select: {
-            label: true,
-            kind: true,
-          },
-        }),
-        this.prisma.userPreference.findMany({
-          where: {
-            userId: input.userId,
-            key: { in: globalRuleKeys },
-          },
-          select: {
-            key: true,
-            value: true,
-          },
-        }),
-        this.prisma.agentThread.findUnique({
-          where: { id: input.threadId },
-          select: {
-            title: true,
-            createdAt: true,
-          },
-        }),
-        this.prisma.retrievalDocument.findMany({
-          where: {
-            userId: input.userId,
-            docType: {
-              in: ["profile_summary", "preference_memory"],
-            },
-          },
-          orderBy: [{ createdAt: "desc" }],
-          take: 2,
-          select: {
-            docType: true,
-            content: true,
-          },
-        }),
-      ]);
+    const [user, profile, interests, preferences, thread] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: input.userId },
+        select: {
+          displayName: true,
+        },
+      }),
+      this.prisma.userProfile.findUnique({
+        where: { userId: input.userId },
+        select: {
+          bio: true,
+          city: true,
+          country: true,
+          onboardingState: true,
+          availabilityMode: true,
+        },
+      }),
+      this.prisma.userInterest.findMany({
+        where: { userId: input.userId },
+        orderBy: [{ createdAt: "desc" }],
+        take: 8,
+        select: {
+          label: true,
+          kind: true,
+        },
+      }),
+      this.prisma.userPreference.findMany({
+        where: {
+          userId: input.userId,
+          key: { in: globalRuleKeys },
+        },
+        select: {
+          key: true,
+          value: true,
+        },
+      }),
+      this.prisma.agentThread.findUnique({
+        where: { id: input.threadId },
+        select: {
+          title: true,
+          createdAt: true,
+        },
+      }),
+    ]);
 
     const prefMap = new Map(preferences.map((pref) => [pref.key, pref.value]));
     const readStringPref = (key: string, fallback: string) => {
@@ -713,13 +716,36 @@ export class AgentConversationService {
         ? value
         : fallback;
     };
-    const memoryHighlights = retrievalDocs
-      .map((doc) => this.toShortMemoryHighlight(doc.content))
-      .filter((value): value is string => value.length > 0)
-      .slice(0, 2);
     const goals = interests
       .filter((interest) => interest.kind.toLowerCase() !== "topic")
       .map((interest) => interest.label);
+    const memoryQuery = [
+      thread?.title ?? "",
+      profile?.bio ?? "",
+      ...goals.slice(0, 2),
+      ...interests
+        .filter((interest) => interest.kind.toLowerCase() === "topic")
+        .slice(0, 2)
+        .map((interest) => interest.label),
+    ]
+      .filter((value) => value.trim().length > 0)
+      .join(" ")
+      .slice(0, 240);
+    const rankedMemory =
+      this.personalizationService && memoryQuery
+        ? await this.personalizationService.retrievePersonalizationContext(
+            input.userId,
+            {
+              query: memoryQuery,
+              maxChunks: 4,
+              maxAgeDays: 90,
+            },
+          )
+        : null;
+    const memoryHighlights = (rankedMemory?.results ?? [])
+      .map((result) => this.toShortMemoryHighlight(result.excerpt))
+      .filter((value): value is string => value.length > 0)
+      .slice(0, 3);
 
     return {
       freshOnboardingTurn: input.existingMessageCount <= 1,
@@ -744,6 +770,18 @@ export class AgentConversationService {
           "immediate",
         ),
         memoryMode: readStringPref("global_rules_memory_mode", "standard"),
+        dmGroupMemoryIngestionEnabled: readStringPref(
+          "global_rules_dm_group_memory_ingestion",
+          "true",
+        ),
+        agentChatMemoryIngestionEnabled: readStringPref(
+          "global_rules_agent_chat_memory_ingestion",
+          "true",
+        ),
+        memoryInferenceStrictness: readStringPref(
+          "global_rules_memory_inference_strictness",
+          "standard",
+        ),
         timezone: readStringPref("global_rules_timezone", "UTC"),
       },
       thread: {
@@ -757,6 +795,17 @@ export class AgentConversationService {
         existingMessageCount: input.existingMessageCount,
       },
       memoryHighlights,
+      memoryContext: rankedMemory
+        ? {
+            bundle: rankedMemory.bundle,
+            topResults: rankedMemory.results.slice(0, 4).map((result) => ({
+              documentId: result.documentId,
+              docType: result.docType,
+              excerpt: result.excerpt,
+              score: result.score,
+            })),
+          }
+        : undefined,
     };
   }
 
@@ -1003,41 +1052,83 @@ export class AgentConversationService {
         }
         case "personalization.retrieve": {
           const maxDocs = this.readIntInRange(call.input.maxDocs, 1, 10, 4);
-          const cacheKey = `agent:personalization:${userId}:${maxDocs}`;
-          const cachedDocuments = await this.appCacheService.getJson<
-            Array<{
-              id: string;
+          const query =
+            this.readString(call.input.query) ??
+            this.readString(call.input.text) ??
+            this.readString(call.input.intentText) ??
+            "current social context";
+          const queryHash = createHash("sha1")
+            .update(query)
+            .digest("hex")
+            .slice(0, 12);
+          const cacheKey = `agent:personalization:${userId}:${maxDocs}:${queryHash}`;
+          const cachedPayload = await this.appCacheService.getJson<{
+            userId: string;
+            query: string;
+            results: Array<{
+              documentId: string;
               docType: string;
-              content: string;
+              chunkIndex: number;
+              tokenCount: number;
+              score: number;
               createdAt: string;
-            }>
-          >(cacheKey);
-          const documents =
-            cachedDocuments?.map((document) => ({
-              ...document,
-              createdAt: new Date(document.createdAt),
-            })) ??
-            (await this.prisma.retrievalDocument.findMany({
-              where: { userId },
-              orderBy: { createdAt: "desc" },
-              take: maxDocs,
-              select: {
-                id: true,
-                docType: true,
-                content: true,
-                createdAt: true,
+              excerpt: string;
+            }>;
+            bundle: string;
+            bundleTokenEstimate: number;
+          }>(cacheKey);
+          if (cachedPayload && !Array.isArray(cachedPayload)) {
+            return {
+              role: call.role,
+              tool: call.tool,
+              status: "executed",
+              output: {
+                ...cachedPayload,
+                results: cachedPayload.results.map((result) => ({
+                  ...result,
+                  createdAt: new Date(result.createdAt),
+                })),
               },
-            }));
-          if (!cachedDocuments) {
+            };
+          }
+          if (this.personalizationService) {
+            const preview =
+              await this.personalizationService.retrievePersonalizationContext(
+                userId,
+                {
+                  query,
+                  maxChunks: maxDocs,
+                },
+              );
             await this.appCacheService.setJson(
               cacheKey,
-              documents.map((document) => ({
-                ...document,
-                createdAt: document.createdAt.toISOString(),
-              })),
+              {
+                ...preview,
+                results: preview.results.map((result) => ({
+                  ...result,
+                  createdAt: result.createdAt.toISOString(),
+                })),
+              },
               60,
             );
+            return {
+              role: call.role,
+              tool: call.tool,
+              status: "executed",
+              output: preview,
+            };
           }
+          const documents = await this.prisma.retrievalDocument.findMany({
+            where: { userId },
+            orderBy: { createdAt: "desc" },
+            take: maxDocs,
+            select: {
+              id: true,
+              docType: true,
+              content: true,
+              createdAt: true,
+            },
+          });
           return {
             role: call.role,
             tool: call.tool,

@@ -20,6 +20,7 @@ import { AgentService } from "../agent/agent.service.js";
 import { recordOnboardingInferenceMetric } from "../common/ops-metrics.js";
 import { PrismaService } from "../database/prisma.service.js";
 import { DiscoveryService } from "../discovery/discovery.service.js";
+import { PersonalizationService } from "../personalization/personalization.service.js";
 
 type OnboardingInferResponse = z.infer<typeof onboardingInferResponseSchema>;
 type OnboardingQuickInferResponse = z.infer<
@@ -31,6 +32,9 @@ type OnboardingActivationPlanInput = z.infer<
 type OnboardingActivationPlanResponse = z.infer<
   typeof onboardingActivationPlanResponseSchema
 >;
+type OnboardingActivationPlanContext = OnboardingActivationPlanInput & {
+  memoryHighlights?: string[];
+};
 type OnboardingActivationBootstrapInput = z.infer<
   typeof onboardingActivationBootstrapBodySchema
 >;
@@ -89,6 +93,8 @@ export class OnboardingService {
     private readonly discoveryService?: DiscoveryService,
     @Optional()
     private readonly agentService?: AgentService,
+    @Optional()
+    private readonly personalizationService?: PersonalizationService,
   ) {
     for (const model of this.fastModelCandidates) {
       this.fastOpenaiByModel.set(
@@ -256,7 +262,7 @@ export class OnboardingService {
   }
 
   async buildActivationPlan(
-    input: OnboardingActivationPlanInput,
+    input: OnboardingActivationPlanContext,
   ): Promise<OnboardingActivationPlanResponse> {
     const transcript = this.buildActivationPlanTranscript(input);
     const traceId = randomUUID();
@@ -348,7 +354,7 @@ export class OnboardingService {
       ]);
 
     const onboardingState = profile?.onboardingState ?? "not_started";
-    const enrichedInput = this.enrichActivationInput(input, {
+    const baseEnrichedInput = this.enrichActivationInput(input, {
       summary: profile?.bio ?? null,
       city: profile?.city ?? null,
       country: profile?.country ?? null,
@@ -356,6 +362,26 @@ export class OnboardingService {
         (entry) => entry.label,
       ),
     });
+    const memoryPreview =
+      this.personalizationService &&
+      this.hasActivationContext(baseEnrichedInput)
+        ? await this.personalizationService.retrievePersonalizationContext(
+            input.userId,
+            {
+              query: this.buildActivationPlanTranscript(baseEnrichedInput),
+              maxChunks: 3,
+              maxAgeDays: 90,
+            },
+          )
+        : null;
+    const memoryHighlights = (memoryPreview?.results ?? [])
+      .map((result) => result.excerpt.trim())
+      .filter((value) => value.length > 0)
+      .slice(0, 3);
+    const enrichedInput: OnboardingActivationPlanContext = {
+      ...baseEnrichedInput,
+      ...(memoryHighlights.length > 0 ? { memoryHighlights } : {}),
+    };
     const hasActivationContext = this.hasActivationContext(enrichedInput);
 
     const baseActivation =
@@ -404,6 +430,7 @@ export class OnboardingService {
       readiness: {
         hasActivationContext,
         profileSignalCount: this.countActivationSignals(enrichedInput),
+        memorySignalCount: memoryHighlights.length,
         hasPrimaryThread: Boolean(primaryThread),
         hasDiscoveryCandidates:
           (discovery?.tonight.suggestions.length ?? 0) +
@@ -420,6 +447,7 @@ export class OnboardingService {
           hasActivationContext,
         }),
       },
+      memoryHighlights,
       primaryThread: primaryThread
         ? {
             id: primaryThread.id,
@@ -778,7 +806,7 @@ export class OnboardingService {
   }
 
   private buildActivationPlanTranscript(
-    input: OnboardingActivationPlanInput,
+    input: OnboardingActivationPlanContext,
   ): string {
     const chunks = [
       input.firstIntentText?.trim() ?? "",
@@ -791,6 +819,9 @@ export class OnboardingService {
       input.city?.trim() ? `City: ${input.city.trim()}.` : "",
       input.country?.trim() ? `Country: ${input.country.trim()}.` : "",
       input.socialMode ? `Preferred mode: ${input.socialMode}.` : "",
+      input.memoryHighlights?.length
+        ? `Learned context: ${input.memoryHighlights.join(" | ")}.`
+        : "",
     ]
       .map((value) => value.trim())
       .filter((value) => value.length > 0);

@@ -4,7 +4,7 @@ This file is the rolling execution slice for the **next implementation pass only
 Durable planning, historical evidence, and closure state live in `PROGRESS.md`.
 Verification cadence and release gates live in `AGENT_TEST_SUITE.md`.
 
-Last refreshed: 2026-03-28
+Last refreshed: 2026-03-29
 
 ## Active Epic
 `Launch Evidence Closure`
@@ -17,7 +17,8 @@ Last refreshed: 2026-03-28
     - uploaded workflow artifacts (`.artifacts/backend-ops-pack/*.json`, `.artifacts/agent-test-suite/*.json`)
   - Status note:
     - all planned long-term memory, activation-readiness, and operator explainability coding slices are now complete and locally green; remaining work is deployed-environment evidence.
-    - the latest repo-side blocker fixes are in `scripts/moderation-drill.mjs`, `scripts/run-agent-test-suite.mjs`, and the backend GitHub workflows; rerun live ops evidence after commit/deploy.
+    - the latest repo-side blocker fixes are in `scripts/moderation-drill.mjs`, `scripts/run-agent-test-suite.mjs`, `scripts/run-backend-ops-pack.mjs`, and the backend GitHub workflows; rerun live ops evidence after commit/deploy.
+    - ops-pack now publishes final verification history into `ops/verification-runs` when live admin env is present, so the next green run should close both artifact and admin-reliability evidence together.
 
 ## Next
 - [ ] Commit and deploy after live evidence is green

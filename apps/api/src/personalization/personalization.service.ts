@@ -1277,7 +1277,8 @@ export class PersonalizationService {
           memoryMetadata &&
           (memoryMetadata.state === "suppressed" ||
             memoryMetadata.state === "flagged_for_review" ||
-            memoryMetadata.state === "expired")
+            memoryMetadata.state === "expired" ||
+            memoryMetadata.state === "superseded")
         ) {
           return null;
         }
@@ -2179,6 +2180,13 @@ export class PersonalizationService {
       normalizedQuery.includes(memoryMetadata.key.toLowerCase())
         ? 0.85
         : 0;
+    const semanticKeyMatch = memoryMetadata?.key
+      ? Array.from(
+          this.tokenizeForMatching(
+            memoryMetadata.key.replaceAll(/[._-]/g, " "),
+          ),
+        ).filter((token) => queryTokens.has(token)).length * 0.3
+      : 0;
     const exactValueMatch =
       memoryMetadata?.value &&
       normalizedQuery.includes(memoryMetadata.value.toLowerCase())
@@ -2199,6 +2207,7 @@ export class PersonalizationService {
       sourceBoost +
       confidenceBoost +
       exactKeyMatch +
+      semanticKeyMatch +
       exactValueMatch +
       chunkContainsValue -
       supersededPenalty

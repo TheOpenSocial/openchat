@@ -27,6 +27,8 @@ const artifactPath = path.resolve(
 );
 
 const commands = [];
+const ingestVerificationRuns =
+  process.env.BACKEND_OPS_INGEST_VERIFICATION_RUN !== "0";
 
 const requiredRunbookFiles = [
   "docs/backend-launch-ops-pack.md",
@@ -107,6 +109,7 @@ if (includeModerationDrill) {
 
 function runCommand(step) {
   const startedAt = Date.now();
+  const timeoutMs = resolveStepTimeoutMs(step.id);
   const effectiveEnv = {
     ...process.env,
     ...(target === "staging"
@@ -122,6 +125,7 @@ function runCommand(step) {
       exitCode: 0,
       latencyMs: Date.now() - startedAt,
       command: `${step.cmd} ${step.args.join(" ")}`,
+      timeoutMs,
     };
   }
 
@@ -130,9 +134,14 @@ function runCommand(step) {
     encoding: "utf8",
     env: effectiveEnv,
     shell: process.platform === "win32",
+    ...(timeoutMs > 0 ? { timeout: timeoutMs } : {}),
   });
   if (result.stdout) process.stdout.write(result.stdout);
   if (result.stderr) process.stderr.write(result.stderr);
+  const timedOut =
+    typeof result.signal === "string" &&
+    (result.signal === "SIGTERM" || result.signal === "SIGKILL") &&
+    timeoutMs > 0;
   return {
     id: step.id,
     summary: step.summary,
@@ -140,7 +149,22 @@ function runCommand(step) {
     exitCode: result.status ?? 1,
     latencyMs: Date.now() - startedAt,
     command: `${step.cmd} ${step.args.join(" ")}`,
+    timeoutMs,
+    failureClass: timedOut ? "timeout" : "command_failed",
   };
+}
+
+function resolveStepTimeoutMs(stepId) {
+  const specificKey = `BACKEND_OPS_${stepId.toUpperCase().replace(/[^A-Z0-9]/g, "_")}_TIMEOUT_MS`;
+  const specific = Number(process.env[specificKey] ?? "");
+  if (Number.isFinite(specific) && specific > 0) {
+    return specific;
+  }
+  const globalTimeout = Number(process.env.BACKEND_OPS_STEP_TIMEOUT_MS ?? "");
+  if (Number.isFinite(globalTimeout) && globalTimeout > 0) {
+    return globalTimeout;
+  }
+  return 0;
 }
 
 function findMissingEnv(stepId) {
@@ -156,6 +180,81 @@ function verifyRunbooks() {
     file,
     exists: existsSync(path.resolve(process.cwd(), file)),
   }));
+}
+
+async function ingestVerificationRunArtifact(artifact) {
+  if (!ingestVerificationRuns || dryRun) {
+    return null;
+  }
+  const baseUrl = process.env.SMOKE_BASE_URL?.trim();
+  const adminUserId = process.env.SMOKE_ADMIN_USER_ID?.trim();
+  const adminRole = process.env.SMOKE_ADMIN_ROLE?.trim() || "admin";
+  if (!baseUrl || !adminUserId) {
+    return {
+      attempted: false,
+      reason: "missing_ingest_admin_context",
+    };
+  }
+  const endpoint = `${baseUrl.replace(/\/+$/, "")}/api/admin/ops/verification-runs`;
+  const body = {
+    runId: artifact.runId,
+    lane: "verification",
+    layer: "full",
+    status: artifact.status,
+    generatedAt: artifact.generatedAt,
+    canaryVerdict: artifact.status === "passed" ? "healthy" : "critical",
+    summary: {
+      target: artifact.target,
+      shipVerdict: artifact.shipVerdict,
+      blockedReasons: artifact.blockedReasons,
+      stepStatuses: artifact.steps.map((step) => ({
+        id: step.id,
+        status: step.status,
+        latencyMs: step.latencyMs,
+        failureClass: step.failureClass ?? null,
+      })),
+    },
+    artifact,
+  };
+  const headers = {
+    Accept: "application/json",
+    "Content-Type": "application/json",
+    "x-admin-user-id": adminUserId,
+    "x-admin-role": adminRole,
+  };
+  const adminApiKey = process.env.SMOKE_ADMIN_API_KEY?.trim();
+  if (adminApiKey) {
+    headers["x-admin-api-key"] = adminApiKey;
+  }
+  let lastError = null;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(
+          `ingest failed (${response.status}): ${JSON.stringify(payload).slice(0, 280)}`,
+        );
+      }
+      return {
+        attempted: true,
+        status: "stored",
+        attempt,
+      };
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+      await new Promise((resolve) => setTimeout(resolve, attempt * 500));
+    }
+  }
+  return {
+    attempted: true,
+    status: "failed",
+    reason: lastError,
+  };
 }
 
 async function main() {
@@ -257,10 +356,18 @@ async function main() {
         : []),
       ...steps
         .filter((step) => step.status === "failed")
-        .map((step) => `step_failed:${step.id}`),
+        .map((step) =>
+          step.failureClass === "timeout"
+            ? `step_timeout:${step.id}`
+            : `step_failed:${step.id}`,
+        ),
     ],
     steps,
   };
+
+  artifact.verificationRunIngest = await ingestVerificationRunArtifact(
+    artifact,
+  );
 
   mkdirSync(path.dirname(artifactPath), { recursive: true });
   writeFileSync(artifactPath, JSON.stringify(artifact, null, 2));

@@ -289,10 +289,42 @@ describe("OnboardingService activation plan", () => {
         createdAt: new Date("2026-03-28T18:00:00.000Z"),
       }),
     };
+    const personalizationService: any = {
+      retrievePersonalizationContext: vi.fn().mockResolvedValue({
+        userId: "11111111-1111-4111-8111-111111111111",
+        query: "memory-backed activation",
+        maxChunks: 3,
+        maxAgeDays: 90,
+        staleCutoff: new Date("2025-12-28T18:00:00.000Z"),
+        results: [
+          {
+            documentId: "doc-memory-1",
+            docType: "preference_memory",
+            chunkIndex: 0,
+            tokenCount: 10,
+            score: 0.91,
+            createdAt: new Date("2026-03-27T18:00:00.000Z"),
+            excerpt: "Prefers football-heavy social plans.",
+          },
+          {
+            documentId: "doc-memory-2",
+            docType: "relationship_memory",
+            chunkIndex: 0,
+            tokenCount: 11,
+            score: 0.79,
+            createdAt: new Date("2026-03-26T18:00:00.000Z"),
+            excerpt: "Already has coffee meetup context in Buenos Aires.",
+          },
+        ],
+        bundle: "memory bundle",
+        bundleTokenEstimate: 24,
+      }),
+    };
     const service = new OnboardingService(
       prisma,
       discoveryService,
       agentService,
+      personalizationService,
     );
     (service as any).resolveClient = vi.fn().mockReturnValue({
       inferOnboardingQuick: vi.fn().mockResolvedValue({
@@ -313,12 +345,17 @@ describe("OnboardingService activation plan", () => {
     expect(result.readiness).toEqual(
       expect.objectContaining({
         hasActivationContext: true,
+        memorySignalCount: 2,
         hasPrimaryThread: true,
         hasDiscoveryCandidates: true,
         recommendationReady: true,
         activationReason: "activation_ready",
       }),
     );
+    expect(result.memoryHighlights).toEqual([
+      "Prefers football-heavy social plans.",
+      "Already has coffee meetup context in Buenos Aires.",
+    ]);
     expect(result.primaryThread?.id).toBe(
       "22222222-2222-4222-8222-222222222222",
     );
@@ -354,12 +391,14 @@ describe("OnboardingService activation plan", () => {
     expect(result.readiness).toEqual(
       expect.objectContaining({
         hasActivationContext: false,
+        memorySignalCount: 0,
         hasPrimaryThread: false,
         hasDiscoveryCandidates: false,
         recommendationReady: false,
         activationReason: "onboarding_incomplete",
       }),
     );
+    expect(result.memoryHighlights).toEqual([]);
     expect(result.discovery.tonightCount).toBe(0);
     expect(result.execution.status).toBe("idle");
   });

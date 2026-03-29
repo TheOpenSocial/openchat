@@ -1237,6 +1237,7 @@ export const onboardingActivationBootstrapResponseSchema = z.object({
   readiness: z.object({
     hasActivationContext: z.boolean(),
     profileSignalCount: z.number().int().nonnegative(),
+    memorySignalCount: z.number().int().nonnegative(),
     hasPrimaryThread: z.boolean(),
     hasDiscoveryCandidates: z.boolean(),
     recommendationReady: z.boolean(),
@@ -1248,6 +1249,7 @@ export const onboardingActivationBootstrapResponseSchema = z.object({
       "activation_failed",
     ]),
   }),
+  memoryHighlights: z.array(z.string().min(1)).max(3).default([]),
   primaryThread: z
     .object({
       id: uuidSchema,

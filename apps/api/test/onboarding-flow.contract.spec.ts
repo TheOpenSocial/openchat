@@ -366,11 +366,16 @@ describe("Onboarding flow contract", () => {
         readiness: {
           hasActivationContext: true,
           profileSignalCount: 3,
+          memorySignalCount: 2,
           hasPrimaryThread: true,
           hasDiscoveryCandidates: true,
           recommendationReady: true,
           activationReason: "activation_ready",
         },
+        memoryHighlights: [
+          "Prefers football-heavy social plans.",
+          "Already has coffee meetup context in Buenos Aires.",
+        ],
         primaryThread: {
           id: "22222222-2222-4222-8222-222222222222",
           title: "Main",
@@ -425,6 +430,8 @@ describe("Onboarding flow contract", () => {
     expect(data.onboardingState).toBe("complete");
     expect(data.activation.state).toBe("ready");
     expect(data.readiness.activationReason).toBe("activation_ready");
+    expect(data.readiness.memorySignalCount).toBe(2);
+    expect(data.memoryHighlights).toHaveLength(2);
     expect(data.primaryThread.id).toBe("22222222-2222-4222-8222-222222222222");
     expect(data.discovery.topTonight).toHaveLength(1);
     expect(data.execution.status).toBe("completed");
