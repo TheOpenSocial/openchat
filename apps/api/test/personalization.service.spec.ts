@@ -258,6 +258,10 @@ function createLifeGraphPrismaMock() {
         return { count };
       }),
     },
+    auditLog: {
+      create: vi.fn().mockResolvedValue({ id: "audit-1" }),
+      findMany: vi.fn().mockResolvedValue([]),
+    },
   };
 
   return prisma;
@@ -322,6 +326,9 @@ describe("PersonalizationService", () => {
       notificationMode: "immediate",
       agentAutonomy: "suggest_only",
       memoryMode: "standard",
+      dmGroupMemoryIngestionEnabled: true,
+      agentChatMemoryIngestionEnabled: true,
+      memoryInferenceStrictness: "standard",
     });
   });
 
@@ -339,6 +346,9 @@ describe("PersonalizationService", () => {
       notificationMode: "digest",
       agentAutonomy: "manual",
       memoryMode: "minimal",
+      dmGroupMemoryIngestionEnabled: true,
+      agentChatMemoryIngestionEnabled: false,
+      memoryInferenceStrictness: "conservative",
     };
 
     const prisma: any = {
@@ -380,6 +390,18 @@ describe("PersonalizationService", () => {
           },
           { key: "global_rules_agent_autonomy", value: expected.agentAutonomy },
           { key: "global_rules_memory_mode", value: expected.memoryMode },
+          {
+            key: "global_rules_dm_group_memory_ingestion",
+            value: expected.dmGroupMemoryIngestionEnabled,
+          },
+          {
+            key: "global_rules_agent_chat_memory_ingestion",
+            value: expected.agentChatMemoryIngestionEnabled,
+          },
+          {
+            key: "global_rules_memory_inference_strictness",
+            value: expected.memoryInferenceStrictness,
+          },
           { key: "global_rules_timezone", value: expected.timezone },
         ]),
       },
@@ -432,7 +454,7 @@ describe("PersonalizationService", () => {
       expected,
     );
 
-    expect(prisma.userPreference.create).toHaveBeenCalledTimes(12);
+    expect(prisma.userPreference.create).toHaveBeenCalledTimes(15);
     expect(result).toEqual(expected);
     expect(analyticsService.trackEvent).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -556,6 +578,10 @@ describe("PersonalizationService", () => {
         class: "stable_preference",
         confidence: 0.3,
         safeWritePolicy: "strict",
+        consent: {
+          basis: "explicit_user_message",
+          explicit: true,
+        },
         provenance: {
           sourceType: "model_inference",
           traceId: "trace-memory-1",
@@ -570,6 +596,64 @@ describe("PersonalizationService", () => {
       }),
     );
     expect(prisma.retrievalDocument.create).not.toHaveBeenCalled();
+  });
+
+  it("requires explicit consent for explicit-only durable memory", async () => {
+    const prisma = createLifeGraphPrismaMock();
+    const service = new PersonalizationService(prisma);
+    const userId = "11111111-1111-4111-8111-111111111111";
+
+    const result = await service.storeInteractionSummary(userId, {
+      summary: "Lives in Barcelona now.",
+      memory: {
+        class: "profile_memory",
+        key: "profile.city",
+        value: "barcelona",
+        provenance: {
+          sourceType: "model_inference",
+          sourceSurface: "dm_chat",
+          traceId: "trace-memory-explicit",
+        },
+      },
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        stored: false,
+        reason: "explicit_consent_required",
+      }),
+    );
+  });
+
+  it("suppresses dm/group ingestion when the surface is disabled", async () => {
+    const prisma = createLifeGraphPrismaMock();
+    prisma.userPreference.findMany.mockResolvedValue([
+      {
+        key: "global_rules_dm_group_memory_ingestion",
+        value: false,
+      },
+    ]);
+    const service = new PersonalizationService(prisma);
+    const userId = "11111111-1111-4111-8111-111111111111";
+
+    const result = await service.storeInteractionSummary(userId, {
+      summary: "Looking for someone to play apex tonight.",
+      memory: {
+        class: "interaction_summary",
+        provenance: {
+          sourceType: "interaction_observation",
+          sourceSurface: "dm_chat",
+          traceId: "trace-memory-dm-disabled",
+        },
+      },
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        stored: false,
+        reason: "surface_memory_disabled",
+      }),
+    );
   });
 
   it("applies contradiction suppression and conflict-note policies for keyed memory writes", async () => {
@@ -626,12 +710,12 @@ describe("PersonalizationService", () => {
     expect(appended).toEqual(
       expect.objectContaining({
         stored: true,
-        docType: "interaction_summary",
+        docType: "preference_memory",
       }),
     );
 
     const docs = await prisma.retrievalDocument.findMany({
-      where: { userId, docType: "interaction_summary" },
+      where: { userId, docType: "preference_memory" },
     });
     expect(
       docs.some((doc: { content: string }) =>
@@ -662,5 +746,121 @@ describe("PersonalizationService", () => {
     expect(result.bundle.length).toBeLessThanOrEqual(1200);
     expect(result.bundleTokenEstimate).toBeGreaterThan(0);
     expect(result.bundle.endsWith("...")).toBe(true);
+  });
+
+  it("prefers explicit memory and excludes suppressed retrieval memories", async () => {
+    const prisma = createLifeGraphPrismaMock();
+    const service = new PersonalizationService(prisma);
+    const userId = "11111111-1111-4111-8111-111111111111";
+
+    await service.storeInteractionSummary(userId, {
+      summary: "Prefers apex with close friends.",
+      memory: {
+        class: "stable_preference",
+        governanceTier: "explicit_only",
+        key: "conversation.preference.likes",
+        value: "apex",
+        confidence: 0.95,
+        safeWritePolicy: "strict",
+        contradictionPolicy: "keep_latest",
+        consent: {
+          basis: "explicit_user_message",
+          explicit: true,
+        },
+        provenance: {
+          sourceType: "explicit_user_input",
+          sourceSurface: "dm_chat",
+          traceId: "trace-explicit-retrieval",
+        },
+      },
+    });
+    await service.storeInteractionSummary(userId, {
+      summary: "Old inferred preference says valorant.",
+      memory: {
+        class: "inferred_preference",
+        governanceTier: "inferable",
+        key: "preferred_game",
+        value: "valorant",
+        confidence: 0.4,
+        contradictionPolicy: "append_conflict_note",
+        provenance: {
+          sourceType: "interaction_observation",
+          sourceSurface: "group_chat",
+          traceId: "trace-inferred-retrieval",
+        },
+      },
+    });
+    await prisma.retrievalDocument.create({
+      data: {
+        userId,
+        docType: "interaction_summary",
+        content:
+          'summary: suppressed\ncontext: {"memory":{"class":"inferred_preference","governanceTier":"inferable","state":"suppressed","confidence":0.9}}',
+      },
+    });
+
+    const result = await service.retrievePersonalizationContext(userId, {
+      query: "what game does the user like",
+      maxChunks: 5,
+      maxAgeDays: 30,
+    });
+
+    expect(result.results.length).toBeGreaterThan(0);
+    expect(result.results[0]?.excerpt.toLowerCase()).toContain("prefers apex");
+    expect(
+      result.results.some((item) =>
+        item.excerpt.toLowerCase().includes("suppressed"),
+      ),
+    ).toBe(false);
+  });
+
+  it("ranks explicit keyed memory ahead of generic interaction summaries for matching queries", async () => {
+    const prisma = createLifeGraphPrismaMock();
+    const service = new PersonalizationService(prisma);
+    const userId = "11111111-1111-4111-8111-111111111111";
+
+    await service.storeInteractionSummary(userId, {
+      summary: "The user explicitly said they like tennis after work.",
+      memory: {
+        class: "stable_preference",
+        governanceTier: "explicit_only",
+        key: "conversation.preference.likes",
+        value: "tennis",
+        confidence: 0.98,
+        safeWritePolicy: "strict",
+        contradictionPolicy: "keep_latest",
+        consent: {
+          basis: "explicit_user_message",
+          explicit: true,
+        },
+        provenance: {
+          sourceType: "explicit_user_input",
+          sourceSurface: "dm_chat",
+          traceId: "trace-explicit-tennis",
+        },
+      },
+    });
+    await service.storeInteractionSummary(userId, {
+      summary: "They talked about sports and meeting after work with friends.",
+      memory: {
+        class: "interaction_summary",
+        governanceTier: "inferable",
+        confidence: 0.5,
+        provenance: {
+          sourceType: "interaction_observation",
+          sourceSurface: "group_chat",
+          traceId: "trace-generic-tennis",
+        },
+      },
+    });
+
+    const result = await service.retrievePersonalizationContext(userId, {
+      query: "conversation.preference.likes tennis after work",
+      maxChunks: 5,
+      maxAgeDays: 30,
+    });
+
+    expect(result.results[0]?.docType).toBe("preference_memory");
+    expect(result.results[0]?.excerpt.toLowerCase()).toContain("tennis");
   });
 });

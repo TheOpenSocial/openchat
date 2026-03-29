@@ -488,3 +488,14 @@ jobs:
           if [[ "${status:-0}" -ne 0 ]]; then
             exit "$status"
           fi
+
+      - name: Upload verification artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-staging-verification-artifacts-${{ github.run_id }}
+          if-no-files-found: warn
+          path: |
+            /tmp/openchat-agent-suite-verification-latest.json
+            .artifacts/backend-ops-pack/**/*.json
+            .artifacts/agent-test-suite/**/*.json

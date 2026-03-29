@@ -95,6 +95,18 @@ const preflightChecks = [
     args: ["scripts/check-runtime-version-residue.mjs"],
   },
   {
+    id: "types-package-build",
+    summary: "Types package build baseline",
+    cmd: "pnpm",
+    args: ["--filter", "@opensocial/types", "build"],
+  },
+  {
+    id: "openai-package-build",
+    summary: "OpenAI package build baseline",
+    cmd: "pnpm",
+    args: ["--filter", "@opensocial/openai", "build"],
+  },
+  {
     id: "api-typecheck",
     summary: "API typecheck baseline",
     cmd: "pnpm",
@@ -129,8 +141,9 @@ const layerChecks = {
       args: [
         "--filter",
         "@opensocial/api",
-        "test",
-        "--",
+        "exec",
+        "vitest",
+        "run",
         "test/onboarding-agent.contract.spec.ts",
         "test/openai-client.spec.ts",
         "test/agent-conversation.service.spec.ts",
@@ -146,8 +159,9 @@ const layerChecks = {
       args: [
         "--filter",
         "@opensocial/api",
-        "test",
-        "--",
+        "exec",
+        "vitest",
+        "run",
         "test/intents.service.spec.ts",
         "test/async-agent-followup.consumer.spec.ts",
         "test/connection-setup.service.spec.ts",
@@ -166,8 +180,9 @@ const layerChecks = {
       args: [
         "--filter",
         "@opensocial/api",
-        "test",
-        "--",
+        "exec",
+        "vitest",
+        "run",
         "test/dead-letter.service.spec.ts",
         "test/async-agent-followup.consumer.spec.ts",
         "test/execution-reconciliation.service.spec.ts",
@@ -183,8 +198,9 @@ const layerChecks = {
       args: [
         "--filter",
         "@opensocial/api",
-        "test",
-        "--",
+        "exec",
+        "vitest",
+        "run",
         "test/agentic-scenario-suite.spec.ts",
       ],
       scenarioIds: scenarioLayerScenarioIds,
@@ -198,8 +214,9 @@ const layerChecks = {
       args: [
         "--filter",
         "@opensocial/api",
-        "test",
-        "--",
+        "exec",
+        "vitest",
+        "run",
         "test/agentic-evals.service.spec.ts",
         "test/admin.controller.spec.ts",
       ],
@@ -230,6 +247,12 @@ const layerChecks = {
 };
 
 function commandForLayer(selectedLayer) {
+  const baselineChecks = [
+    preflightChecks[0],
+    preflightChecks[1],
+    preflightChecks[2],
+  ].filter(Boolean);
+
   if (selectedLayer === "full") {
     return [
       ...preflightChecks,
@@ -243,7 +266,7 @@ function commandForLayer(selectedLayer) {
     ];
   }
 
-  return layerChecks[selectedLayer] ?? [];
+  return [...baselineChecks, ...(layerChecks[selectedLayer] ?? [])];
 }
 
 function runCommand(check) {

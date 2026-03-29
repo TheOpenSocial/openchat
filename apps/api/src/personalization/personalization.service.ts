@@ -25,6 +25,9 @@ export interface GlobalRules {
   notificationMode: "immediate" | "digest" | "quiet";
   agentAutonomy: "manual" | "suggest_only" | "auto_non_risky";
   memoryMode: "minimal" | "standard" | "extended";
+  dmGroupMemoryIngestionEnabled: boolean;
+  agentChatMemoryIngestionEnabled: boolean;
+  memoryInferenceStrictness: "conservative" | "standard" | "permissive";
 }
 
 export type LifeGraphNodeType =
@@ -73,6 +76,24 @@ export type MemoryClass =
   | "interaction_summary"
   | "transient_working_memory";
 
+export type MemoryGovernanceTier = "explicit_only" | "inferable" | "ephemeral";
+
+export type MemoryDomain =
+  | "profile"
+  | "preference"
+  | "relationship"
+  | "safety"
+  | "commerce"
+  | "interaction";
+
+export type MemorySourceSurface =
+  | "agent_chat"
+  | "dm_chat"
+  | "group_chat"
+  | "workflow_event"
+  | "system_event"
+  | "profile_edit";
+
 export type MemorySourceType =
   | "explicit_user_input"
   | "user_profile_edit"
@@ -93,7 +114,13 @@ export type MemoryContradictionPolicy =
 
 export interface MemoryWriteProvenance {
   sourceType: MemorySourceType;
+  sourceSurface?: MemorySourceSurface;
   sourceId?: string;
+  sourceEntityId?: string;
+  messageId?: string;
+  chatId?: string;
+  threadId?: string;
+  actorUserIds?: string[];
   traceId?: string;
   workflowRunId?: string;
   toolName?: string;
@@ -101,14 +128,33 @@ export interface MemoryWriteProvenance {
   observedAt?: string;
 }
 
+export interface MemoryConsentContext {
+  basis:
+    | "default_allow"
+    | "explicit_user_message"
+    | "profile_edit"
+    | "user_opt_in"
+    | "user_opt_out";
+  explicit: boolean;
+  sourceText?: string;
+}
+
+export interface MemoryModerationContext {
+  decision: "clean" | "flagged" | "review" | "blocked";
+  reasonTokens?: string[];
+}
+
 export interface InteractionMemoryWriteInput {
   class?: MemoryClass;
+  governanceTier?: MemoryGovernanceTier;
   key?: string;
   value?: string;
   confidence?: number;
   safeWritePolicy?: MemorySafeWritePolicy;
   contradictionPolicy?: MemoryContradictionPolicy;
   compressible?: boolean;
+  consent?: MemoryConsentContext;
+  moderation?: MemoryModerationContext;
   provenance?: MemoryWriteProvenance;
 }
 
@@ -138,6 +184,9 @@ const GLOBAL_RULE_DEFAULTS: GlobalRules = {
   notificationMode: "immediate",
   agentAutonomy: "suggest_only",
   memoryMode: "standard",
+  dmGroupMemoryIngestionEnabled: true,
+  agentChatMemoryIngestionEnabled: true,
+  memoryInferenceStrictness: "standard",
 };
 
 const GLOBAL_RULE_PREF_KEYS: Record<keyof GlobalRules, string> = {
@@ -153,6 +202,9 @@ const GLOBAL_RULE_PREF_KEYS: Record<keyof GlobalRules, string> = {
   notificationMode: "global_rules_notification_mode",
   agentAutonomy: "global_rules_agent_autonomy",
   memoryMode: "global_rules_memory_mode",
+  dmGroupMemoryIngestionEnabled: "global_rules_dm_group_memory_ingestion",
+  agentChatMemoryIngestionEnabled: "global_rules_agent_chat_memory_ingestion",
+  memoryInferenceStrictness: "global_rules_memory_inference_strictness",
 };
 
 const LIFE_GRAPH_PREF_SCOPE = "life_graph_edge";
@@ -187,10 +239,16 @@ const RETRIEVAL_DOC_TYPE_PROFILE_SUMMARY = "profile_summary";
 const RETRIEVAL_DOC_TYPE_PREFERENCE_MEMORY = "preference_memory";
 const RETRIEVAL_DOC_TYPE_INTERACTION_SUMMARY = "interaction_summary";
 const RETRIEVAL_DOC_TYPE_INTERACTION_FLAGGED = "interaction_summary_flagged";
+const RETRIEVAL_DOC_TYPE_RELATIONSHIP_MEMORY = "relationship_memory";
+const RETRIEVAL_DOC_TYPE_SAFETY_MEMORY = "safety_memory";
+const RETRIEVAL_DOC_TYPE_COMMERCE_MEMORY = "commerce_memory";
 const RETRIEVAL_SAFE_DOC_TYPES = [
   RETRIEVAL_DOC_TYPE_PROFILE_SUMMARY,
   RETRIEVAL_DOC_TYPE_PREFERENCE_MEMORY,
   RETRIEVAL_DOC_TYPE_INTERACTION_SUMMARY,
+  RETRIEVAL_DOC_TYPE_RELATIONSHIP_MEMORY,
+  RETRIEVAL_DOC_TYPE_SAFETY_MEMORY,
+  RETRIEVAL_DOC_TYPE_COMMERCE_MEMORY,
 ] as const;
 const RETRIEVAL_DEFAULT_MAX_CHUNKS = 5;
 const RETRIEVAL_DEFAULT_MAX_AGE_DAYS = 30;
@@ -213,12 +271,24 @@ const MEMORY_TRACE_REQUIRED_CLASSES = new Set<MemoryClass>([
   "commerce_memory",
 ]);
 const DEFAULT_MEMORY_CLASS: MemoryClass = "interaction_summary";
+const MEMORY_CLASS_GOVERNANCE_TIER: Record<MemoryClass, MemoryGovernanceTier> =
+  {
+    profile_memory: "explicit_only",
+    stable_preference: "explicit_only",
+    inferred_preference: "inferable",
+    relationship_history: "inferable",
+    safety_memory: "explicit_only",
+    commerce_memory: "inferable",
+    interaction_summary: "inferable",
+    transient_working_memory: "ephemeral",
+  };
 const DEFAULT_MEMORY_SAFE_WRITE_POLICY: MemorySafeWritePolicy =
   "allow_with_trace";
 const DEFAULT_MEMORY_CONTRADICTION_POLICY: MemoryContradictionPolicy =
   "append_conflict_note";
 const RETRIEVAL_UNSAFE_PATTERN =
   /\b(hate|threat|abuse|violence|self-harm|suicide)\b/i;
+const DEFAULT_MEMORY_SOURCE_SURFACE: MemorySourceSurface = "system_event";
 
 @Injectable()
 export class PersonalizationService {
@@ -362,6 +432,19 @@ export class PersonalizationService {
           "standard",
           "extended",
         ]) ?? GLOBAL_RULE_DEFAULTS.memoryMode,
+      dmGroupMemoryIngestionEnabled:
+        this.readBooleanValue(
+          byKey.get(GLOBAL_RULE_PREF_KEYS.dmGroupMemoryIngestionEnabled),
+        ) ?? GLOBAL_RULE_DEFAULTS.dmGroupMemoryIngestionEnabled,
+      agentChatMemoryIngestionEnabled:
+        this.readBooleanValue(
+          byKey.get(GLOBAL_RULE_PREF_KEYS.agentChatMemoryIngestionEnabled),
+        ) ?? GLOBAL_RULE_DEFAULTS.agentChatMemoryIngestionEnabled,
+      memoryInferenceStrictness:
+        this.readEnumValue(
+          byKey.get(GLOBAL_RULE_PREF_KEYS.memoryInferenceStrictness),
+          ["conservative", "standard", "permissive"],
+        ) ?? GLOBAL_RULE_DEFAULTS.memoryInferenceStrictness,
       timezone:
         this.readStringValue(byKey.get(GLOBAL_RULE_PREF_KEYS.timezone)) ??
         GLOBAL_RULE_DEFAULTS.timezone,
@@ -941,8 +1024,44 @@ export class PersonalizationService {
   ) {
     const summary = input.summary.trim();
     const memoryWrite = this.normalizeInteractionMemoryWrite(input);
+    const globalRules = await this.getGlobalRules(userId);
+    const eligibility = this.evaluateMemoryEligibility({
+      globalRules,
+      summary,
+      memoryWrite,
+      safe: input.safe,
+    });
     const safeWrite = this.evaluateMemorySafeWrite(memoryWrite);
+    if (!eligibility.allowed) {
+      await this.recordMemoryAuditEvent("memory.write_suppressed", userId, {
+        summary,
+        memoryWrite,
+        reason: eligibility.reason,
+        state: "suppressed",
+      });
+      return {
+        stored: false,
+        reason: eligibility.reason,
+        safe: false,
+        memory: {
+          ...memoryWrite,
+          compressedSummary: this.compressSummary(summary, 160),
+          safeWriteDecision: "suppressed" as const,
+          safeWriteReason: eligibility.reason,
+          contradictionDetected: false,
+          conflictingDocumentId: null,
+          state: "suppressed" as const,
+        },
+      };
+    }
+
     if (!safeWrite.allowed && memoryWrite.safeWritePolicy === "strict") {
+      await this.recordMemoryAuditEvent("memory.write_suppressed", userId, {
+        summary,
+        memoryWrite,
+        reason: safeWrite.reason,
+        state: "suppressed",
+      });
       return {
         stored: false,
         reason: safeWrite.reason,
@@ -954,6 +1073,7 @@ export class PersonalizationService {
           safeWriteReason: safeWrite.reason,
           contradictionDetected: false,
           conflictingDocumentId: null,
+          state: "suppressed" as const,
         },
       };
     }
@@ -966,6 +1086,13 @@ export class PersonalizationService {
       contradiction.detected &&
       memoryWrite.contradictionPolicy === "suppress_conflict"
     ) {
+      await this.recordMemoryAuditEvent("memory.write_suppressed", userId, {
+        summary,
+        memoryWrite,
+        reason: "contradiction_suppressed",
+        state: "suppressed",
+        contradiction,
+      });
       return {
         stored: false,
         reason: "contradiction_suppressed",
@@ -977,9 +1104,18 @@ export class PersonalizationService {
           safeWriteReason: "contradiction_suppressed",
           contradictionDetected: true,
           conflictingDocumentId: contradiction.conflictingDocumentId,
+          state: "suppressed" as const,
         },
       };
     }
+
+    await this.recordMemoryAuditEvent("memory.write_attempted", userId, {
+      summary,
+      memoryWrite,
+      reason: null,
+      state: contradiction.detected ? "flagged_for_review" : "active",
+      contradiction,
+    });
 
     const compressedSummary = memoryWrite.compressible
       ? this.compressSummary(summary, 160)
@@ -993,9 +1129,13 @@ export class PersonalizationService {
     );
     const safe =
       input.safe ?? (summary.length > 0 && !this.isUnsafeContent(summary));
-    const docType = safe
-      ? RETRIEVAL_DOC_TYPE_INTERACTION_SUMMARY
-      : RETRIEVAL_DOC_TYPE_INTERACTION_FLAGGED;
+    const state = !safe
+      ? "flagged_for_review"
+      : contradiction.detected &&
+          memoryWrite.contradictionPolicy === "append_conflict_note"
+        ? "superseded"
+        : "active";
+    const docType = this.resolveRetrievalDocType(memoryWrite.class, safe);
 
     const contradictionLine =
       contradiction.detected &&
@@ -1008,13 +1148,17 @@ export class PersonalizationService {
       `context: ${this.stableStringify(enrichedContext)}`,
       `memory: ${this.stableStringify({
         class: memoryWrite.class,
+        governanceTier: memoryWrite.governanceTier,
         key: memoryWrite.key,
         value: memoryWrite.value,
         confidence: memoryWrite.confidence,
         safeWritePolicy: memoryWrite.safeWritePolicy,
         contradictionPolicy: memoryWrite.contradictionPolicy,
+        consent: memoryWrite.consent,
+        moderation: memoryWrite.moderation,
         provenance: memoryWrite.provenance,
         compressedSummary,
+        state,
         contradictionDetected: contradiction.detected,
         conflictingDocumentId: contradiction.conflictingDocumentId,
         safeWriteDecision: safeWrite.allowed ? "accepted" : "degraded",
@@ -1029,6 +1173,19 @@ export class PersonalizationService {
       content,
       false,
     );
+    await this.recordMemoryAuditEvent(
+      state === "flagged_for_review"
+        ? "memory.write_review_required"
+        : "memory.write_accepted",
+      userId,
+      {
+        summary,
+        memoryWrite,
+        reason: safeWrite.reason,
+        state,
+        contradiction,
+      },
+    );
 
     return {
       stored: true,
@@ -1037,6 +1194,7 @@ export class PersonalizationService {
       memory: {
         ...memoryWrite,
         compressedSummary,
+        state,
         safeWriteDecision: safeWrite.allowed
           ? ("accepted" as const)
           : ("degraded" as const),
@@ -1114,12 +1272,24 @@ export class PersonalizationService {
         if (this.isUnsafeContent(chunk.content)) {
           return null;
         }
+        const memoryMetadata = this.readMemoryMetadata(chunk.content);
+        if (
+          memoryMetadata &&
+          (memoryMetadata.state === "suppressed" ||
+            memoryMetadata.state === "flagged_for_review" ||
+            memoryMetadata.state === "expired")
+        ) {
+          return null;
+        }
 
         const score = this.scoreChunkForQuery(
           queryTokens,
+          input.query,
+          document.docType,
           chunk.content,
           document.createdAt,
           maxAgeDays,
+          memoryMetadata,
         );
 
         return {
@@ -1148,6 +1318,129 @@ export class PersonalizationService {
       bundle,
       bundleTokenEstimate,
     };
+  }
+
+  async listMemoryTimeline(
+    userId: string,
+    input: {
+      limit?: number;
+      memoryClass?: MemoryClass;
+      key?: string;
+      state?:
+        | "active"
+        | "superseded"
+        | "suppressed"
+        | "flagged_for_review"
+        | "expired";
+      governanceTier?: MemoryGovernanceTier;
+      sourceSurface?: MemorySourceSurface;
+      domain?: MemoryDomain;
+    } = {},
+  ) {
+    const limit = Math.min(Math.max(input.limit ?? 50, 1), 100);
+    const documents = await this.prisma.retrievalDocument.findMany({
+      where: {
+        userId,
+        docType: {
+          in: [
+            ...RETRIEVAL_SAFE_DOC_TYPES,
+            RETRIEVAL_DOC_TYPE_INTERACTION_FLAGGED,
+          ],
+        },
+      },
+      select: {
+        id: true,
+        docType: true,
+        content: true,
+        createdAt: true,
+      },
+      orderBy: [{ createdAt: "desc" }],
+      take: Math.max(limit * 2, 50),
+    });
+
+    return documents
+      .map((document) => this.parseMemoryTimelineItem(document))
+      .filter((item): item is NonNullable<typeof item> => item != null)
+      .filter(
+        (item) =>
+          (!input.memoryClass || item.memory.class === input.memoryClass) &&
+          (!input.key || item.memory.key === input.key) &&
+          (!input.state || item.memory.state === input.state) &&
+          (!input.governanceTier ||
+            item.memory.governanceTier === input.governanceTier) &&
+          (!input.sourceSurface ||
+            item.memory.provenance.sourceSurface === input.sourceSurface) &&
+          (!input.domain || item.memory.domain === input.domain),
+      )
+      .slice(0, limit);
+  }
+
+  async listMemoryAuditTrail(userId: string, limit = 50) {
+    if (!this.prisma.auditLog?.findMany) {
+      return [];
+    }
+    const rows = await this.prisma.auditLog.findMany({
+      where: {
+        entityType: "memory",
+        entityId: userId,
+        action: {
+          in: [
+            "memory.write_attempted",
+            "memory.write_accepted",
+            "memory.write_suppressed",
+            "memory.write_review_required",
+            "privacy.memory_reset",
+          ],
+        },
+      },
+      orderBy: [{ createdAt: "desc" }],
+      take: Math.min(Math.max(limit, 1), 100),
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      action: row.action,
+      createdAt: row.createdAt,
+      metadata: row.metadata ?? null,
+    }));
+  }
+
+  async listMemoryContradictions(userId: string, limit = 25) {
+    const timeline = await this.listMemoryTimeline(userId, {
+      limit: Math.max(limit * 3, 50),
+    });
+    return timeline
+      .filter(
+        (item) =>
+          item.memory.contradictionDetected ||
+          item.memory.state === "superseded" ||
+          item.memory.state === "suppressed",
+      )
+      .slice(0, limit);
+  }
+
+  async getMemoryRecord(userId: string, documentId: string) {
+    const document = await this.prisma.retrievalDocument.findFirst({
+      where: {
+        id: documentId,
+        userId,
+        docType: {
+          in: [
+            ...RETRIEVAL_SAFE_DOC_TYPES,
+            RETRIEVAL_DOC_TYPE_INTERACTION_FLAGGED,
+          ],
+        },
+      },
+      select: {
+        id: true,
+        docType: true,
+        content: true,
+        createdAt: true,
+      },
+    });
+    if (!document) {
+      return null;
+    }
+    return this.parseMemoryTimelineItem(document);
   }
 
   private async saveRetrievalDocument(
@@ -1217,7 +1510,29 @@ export class PersonalizationService {
         : null;
     const provenance: MemoryWriteProvenance = {
       sourceType,
+      sourceSurface:
+        this.normalizeMemorySourceSurface(
+          input.memory?.provenance?.sourceSurface,
+          context["sourceSurface"],
+          sourceType,
+        ) ?? DEFAULT_MEMORY_SOURCE_SURFACE,
       sourceId: this.limitString(input.memory?.provenance?.sourceId, 255),
+      sourceEntityId:
+        this.limitString(input.memory?.provenance?.sourceEntityId, 255) ??
+        this.limitString(context["sourceEntityId"], 255),
+      messageId:
+        this.limitString(input.memory?.provenance?.messageId, 255) ??
+        this.limitString(context["messageId"], 255),
+      chatId:
+        this.limitString(input.memory?.provenance?.chatId, 255) ??
+        this.limitString(context["chatId"], 255),
+      threadId:
+        this.limitString(input.memory?.provenance?.threadId, 255) ??
+        this.limitString(context["threadId"], 255),
+      actorUserIds:
+        this.readStringArrayValue(
+          input.memory?.provenance?.actorUserIds ?? context["actorUserIds"],
+        ) ?? undefined,
       traceId:
         this.limitString(input.memory?.provenance?.traceId, 255) ??
         this.limitString(context["traceId"], 255) ??
@@ -1238,6 +1553,10 @@ export class PersonalizationService {
 
     return {
       class: this.normalizeMemoryClass(input.memory?.class),
+      governanceTier: this.normalizeMemoryGovernanceTier(
+        input.memory?.governanceTier,
+        input.memory?.class,
+      ),
       key: this.limitString(input.memory?.key, 160) ?? null,
       value: this.limitString(input.memory?.value, 400) ?? null,
       confidence,
@@ -1247,6 +1566,15 @@ export class PersonalizationService {
         input.memory?.contradictionPolicy ??
         DEFAULT_MEMORY_CONTRADICTION_POLICY,
       compressible: input.memory?.compressible !== false,
+      consent: this.normalizeMemoryConsentContext(
+        input.memory?.consent,
+        context,
+        sourceType,
+      ),
+      moderation: this.normalizeMemoryModerationContext(
+        input.memory?.moderation,
+        context,
+      ),
       provenance,
     };
   }
@@ -1256,6 +1584,16 @@ export class PersonalizationService {
       return DEFAULT_MEMORY_CLASS;
     }
     return value;
+  }
+
+  private normalizeMemoryGovernanceTier(
+    value: MemoryGovernanceTier | undefined,
+    memoryClass: MemoryClass | undefined,
+  ): MemoryGovernanceTier {
+    if (value) {
+      return value;
+    }
+    return MEMORY_CLASS_GOVERNANCE_TIER[this.normalizeMemoryClass(memoryClass)];
   }
 
   private normalizeMemorySourceType(
@@ -1278,8 +1616,140 @@ export class PersonalizationService {
     return "system_event";
   }
 
+  private normalizeMemorySourceSurface(
+    explicitSurface: MemorySourceSurface | undefined,
+    contextSurface: unknown,
+    sourceType: MemorySourceType,
+  ): MemorySourceSurface {
+    if (explicitSurface) {
+      return explicitSurface;
+    }
+    const surface = this.readString(contextSurface)?.toLowerCase();
+    if (
+      surface === "agent_chat" ||
+      surface === "dm_chat" ||
+      surface === "group_chat" ||
+      surface === "workflow_event" ||
+      surface === "system_event" ||
+      surface === "profile_edit"
+    ) {
+      return surface;
+    }
+    if (sourceType === "user_profile_edit") {
+      return "profile_edit";
+    }
+    if (sourceType === "agent_tool") {
+      return "agent_chat";
+    }
+    return DEFAULT_MEMORY_SOURCE_SURFACE;
+  }
+
+  private normalizeMemoryConsentContext(
+    explicitConsent: MemoryConsentContext | undefined,
+    context: Record<string, unknown>,
+    sourceType: MemorySourceType,
+  ): MemoryConsentContext {
+    if (explicitConsent) {
+      return {
+        basis: explicitConsent.basis,
+        explicit: explicitConsent.explicit,
+        sourceText:
+          this.limitString(explicitConsent.sourceText, 500) ?? undefined,
+      };
+    }
+    if (sourceType === "user_profile_edit") {
+      return { basis: "profile_edit", explicit: true };
+    }
+    if (sourceType === "explicit_user_input") {
+      return {
+        basis: "explicit_user_message",
+        explicit: true,
+        sourceText: this.limitString(context["sourceText"], 500) ?? undefined,
+      };
+    }
+    return { basis: "default_allow", explicit: false };
+  }
+
+  private normalizeMemoryModerationContext(
+    explicitModeration: MemoryModerationContext | undefined,
+    context: Record<string, unknown>,
+  ): MemoryModerationContext {
+    if (explicitModeration) {
+      return {
+        decision: explicitModeration.decision,
+        reasonTokens:
+          this.readStringArrayValue(explicitModeration.reasonTokens) ??
+          undefined,
+      };
+    }
+    const decision = this.readString(context["moderationDecision"]);
+    return {
+      decision:
+        decision === "flagged" ||
+        decision === "review" ||
+        decision === "blocked"
+          ? decision
+          : "clean",
+      reasonTokens:
+        this.readStringArrayValue(context["moderationReasonTokens"]) ??
+        undefined,
+    };
+  }
+
+  private evaluateMemoryEligibility(input: {
+    globalRules: GlobalRules;
+    summary: string;
+    safe?: boolean;
+    memoryWrite: {
+      class: MemoryClass;
+      governanceTier: MemoryGovernanceTier;
+      consent: MemoryConsentContext;
+      moderation: MemoryModerationContext;
+      provenance: MemoryWriteProvenance;
+    };
+  }) {
+    const { globalRules, summary, safe, memoryWrite } = input;
+    if (memoryWrite.governanceTier === "ephemeral") {
+      return { allowed: false, reason: "ephemeral_memory_not_durable" };
+    }
+    if (globalRules.memoryMode === "minimal") {
+      return { allowed: false, reason: "memory_mode_minimal" };
+    }
+    if (
+      (memoryWrite.provenance.sourceSurface === "dm_chat" ||
+        memoryWrite.provenance.sourceSurface === "group_chat") &&
+      !globalRules.dmGroupMemoryIngestionEnabled
+    ) {
+      return { allowed: false, reason: "surface_memory_disabled" };
+    }
+    if (
+      memoryWrite.provenance.sourceSurface === "agent_chat" &&
+      !globalRules.agentChatMemoryIngestionEnabled
+    ) {
+      return { allowed: false, reason: "surface_memory_disabled" };
+    }
+    if (
+      memoryWrite.moderation.decision === "flagged" ||
+      memoryWrite.moderation.decision === "review" ||
+      memoryWrite.moderation.decision === "blocked"
+    ) {
+      return { allowed: false, reason: "moderation_blocked_memory" };
+    }
+    if ((safe ?? true) === false || this.isUnsafeContent(summary)) {
+      return { allowed: false, reason: "unsafe_memory_content" };
+    }
+    if (
+      memoryWrite.governanceTier === "explicit_only" &&
+      !memoryWrite.consent.explicit
+    ) {
+      return { allowed: false, reason: "explicit_consent_required" };
+    }
+    return { allowed: true, reason: null as string | null };
+  }
+
   private evaluateMemorySafeWrite(input: {
     class: MemoryClass;
+    governanceTier: MemoryGovernanceTier;
     confidence: number | null;
     safeWritePolicy: MemorySafeWritePolicy;
     provenance: MemoryWriteProvenance;
@@ -1335,7 +1805,16 @@ export class PersonalizationService {
     const recentDocs = await this.prisma.retrievalDocument.findMany({
       where: {
         userId,
-        docType: RETRIEVAL_DOC_TYPE_INTERACTION_SUMMARY,
+        docType: {
+          in: [
+            RETRIEVAL_DOC_TYPE_INTERACTION_SUMMARY,
+            RETRIEVAL_DOC_TYPE_PREFERENCE_MEMORY,
+            RETRIEVAL_DOC_TYPE_PROFILE_SUMMARY,
+            RETRIEVAL_DOC_TYPE_RELATIONSHIP_MEMORY,
+            RETRIEVAL_DOC_TYPE_SAFETY_MEMORY,
+            RETRIEVAL_DOC_TYPE_COMMERCE_MEMORY,
+          ],
+        },
       },
       select: {
         id: true,
@@ -1380,11 +1859,14 @@ export class PersonalizationService {
     context: Record<string, unknown> | undefined,
     memoryWrite: {
       class: MemoryClass;
+      governanceTier: MemoryGovernanceTier;
       key: string | null;
       value: string | null;
       confidence: number | null;
       safeWritePolicy: MemorySafeWritePolicy;
       contradictionPolicy: MemoryContradictionPolicy;
+      consent: MemoryConsentContext;
+      moderation: MemoryModerationContext;
       provenance: MemoryWriteProvenance;
     },
     compressedSummary: string,
@@ -1401,11 +1883,14 @@ export class PersonalizationService {
       ...(context ?? {}),
       memory: {
         class: memoryWrite.class,
+        governanceTier: memoryWrite.governanceTier,
         key: memoryWrite.key,
         value: memoryWrite.value,
         confidence: memoryWrite.confidence,
         safeWritePolicy: memoryWrite.safeWritePolicy,
         contradictionPolicy: memoryWrite.contradictionPolicy,
+        consent: memoryWrite.consent,
+        moderation: memoryWrite.moderation,
         provenance: memoryWrite.provenance,
         compressedSummary,
         safeWriteDecision: safeWrite.allowed ? "accepted" : "degraded",
@@ -1460,6 +1945,31 @@ export class PersonalizationService {
     return this.compressSummary(raw, RETRIEVAL_BUNDLE_MAX_CHARS);
   }
 
+  private resolveRetrievalDocType(memoryClass: MemoryClass, safe: boolean) {
+    if (!safe) {
+      return RETRIEVAL_DOC_TYPE_INTERACTION_FLAGGED;
+    }
+    if (memoryClass === "profile_memory") {
+      return RETRIEVAL_DOC_TYPE_PROFILE_SUMMARY;
+    }
+    if (
+      memoryClass === "stable_preference" ||
+      memoryClass === "inferred_preference"
+    ) {
+      return RETRIEVAL_DOC_TYPE_PREFERENCE_MEMORY;
+    }
+    if (memoryClass === "relationship_history") {
+      return RETRIEVAL_DOC_TYPE_RELATIONSHIP_MEMORY;
+    }
+    if (memoryClass === "safety_memory") {
+      return RETRIEVAL_DOC_TYPE_SAFETY_MEMORY;
+    }
+    if (memoryClass === "commerce_memory") {
+      return RETRIEVAL_DOC_TYPE_COMMERCE_MEMORY;
+    }
+    return RETRIEVAL_DOC_TYPE_INTERACTION_SUMMARY;
+  }
+
   private compressSummary(value: string, maxLength: number) {
     const normalized = value.replace(/\s+/g, " ").trim();
     if (normalized.length <= maxLength) {
@@ -1492,6 +2002,9 @@ export class PersonalizationService {
       `rules.languages: ${input.globalRules.languagePreferences.join(", ") || "unspecified"}`,
       `rules.countries: ${input.globalRules.countryPreferences.join(", ") || "unspecified"}`,
       `rules.translation_opt_in: ${input.globalRules.translationOptIn ? "yes" : "no"}`,
+      `rules.dm_group_memory_ingestion: ${input.globalRules.dmGroupMemoryIngestionEnabled ? "yes" : "no"}`,
+      `rules.agent_chat_memory_ingestion: ${input.globalRules.agentChatMemoryIngestionEnabled ? "yes" : "no"}`,
+      `rules.memory_inference_strictness: ${input.globalRules.memoryInferenceStrictness}`,
     ];
     return lines.join("\n");
   }
@@ -1576,9 +2089,27 @@ export class PersonalizationService {
 
   private scoreChunkForQuery(
     queryTokens: Set<string>,
+    query: string,
+    docType: string,
     chunkContent: string,
     createdAt: Date,
     maxAgeDays: number,
+    memoryMetadata?: {
+      governanceTier: MemoryGovernanceTier | null;
+      domain: MemoryDomain | null;
+      key: string | null;
+      value: string | null;
+      sourceSurface: MemorySourceSurface | null;
+      sourceType: MemorySourceType | null;
+      confidence: number | null;
+      state:
+        | "active"
+        | "superseded"
+        | "suppressed"
+        | "flagged_for_review"
+        | "expired"
+        | null;
+    } | null,
   ) {
     const chunkTokens = this.tokenizeForMatching(chunkContent);
     let overlap = 0;
@@ -1591,8 +2122,87 @@ export class PersonalizationService {
       0,
       (Date.now() - createdAt.getTime()) / (24 * 60 * 60_000),
     );
-    const freshnessBoost = Math.max(0, 1 - ageDays / maxAgeDays);
-    return overlap * 2 + freshnessBoost;
+    const freshnessWindowDays =
+      memoryMetadata?.governanceTier === "explicit_only"
+        ? maxAgeDays * 1.75
+        : memoryMetadata?.governanceTier === "inferable"
+          ? maxAgeDays * 0.85
+          : maxAgeDays;
+    const freshnessBoost = Math.max(0, 1 - ageDays / freshnessWindowDays);
+    const docTypeBoost =
+      docType === RETRIEVAL_DOC_TYPE_PROFILE_SUMMARY
+        ? 1.15
+        : docType === RETRIEVAL_DOC_TYPE_PREFERENCE_MEMORY
+          ? 1
+          : docType === RETRIEVAL_DOC_TYPE_RELATIONSHIP_MEMORY
+            ? 0.7
+            : docType === RETRIEVAL_DOC_TYPE_SAFETY_MEMORY
+              ? 0.45
+              : docType === RETRIEVAL_DOC_TYPE_COMMERCE_MEMORY
+                ? 0.4
+                : 0.2;
+    const domainBoost =
+      memoryMetadata?.domain === "profile"
+        ? 0.5
+        : memoryMetadata?.domain === "preference"
+          ? 0.45
+          : memoryMetadata?.domain === "relationship"
+            ? 0.25
+            : memoryMetadata?.domain === "safety"
+              ? 0.15
+              : memoryMetadata?.domain === "commerce"
+                ? 0.1
+                : 0;
+    const governanceBoost =
+      memoryMetadata?.governanceTier === "explicit_only"
+        ? 0.9
+        : memoryMetadata?.governanceTier === "inferable"
+          ? 0.35
+          : 0;
+    const sourceBoost =
+      memoryMetadata?.sourceType === "explicit_user_input" ||
+      memoryMetadata?.sourceType === "user_profile_edit"
+        ? 0.35
+        : memoryMetadata?.sourceSurface === "dm_chat"
+          ? 0.18
+          : memoryMetadata?.sourceSurface === "agent_chat"
+            ? 0.12
+            : memoryMetadata?.sourceSurface === "group_chat"
+              ? 0.08
+              : 0;
+    const confidenceBoost = memoryMetadata?.confidence
+      ? memoryMetadata.confidence * 0.6
+      : 0;
+    const normalizedQuery = query.trim().toLowerCase();
+    const exactKeyMatch =
+      memoryMetadata?.key &&
+      normalizedQuery.includes(memoryMetadata.key.toLowerCase())
+        ? 0.85
+        : 0;
+    const exactValueMatch =
+      memoryMetadata?.value &&
+      normalizedQuery.includes(memoryMetadata.value.toLowerCase())
+        ? 0.95
+        : 0;
+    const chunkContainsValue =
+      memoryMetadata?.value &&
+      chunkContent.toLowerCase().includes(memoryMetadata.value.toLowerCase())
+        ? 0.35
+        : 0;
+    const supersededPenalty = memoryMetadata?.state === "superseded" ? 0.55 : 0;
+    return (
+      overlap * 2 +
+      freshnessBoost +
+      docTypeBoost +
+      domainBoost +
+      governanceBoost +
+      sourceBoost +
+      confidenceBoost +
+      exactKeyMatch +
+      exactValueMatch +
+      chunkContainsValue -
+      supersededPenalty
+    );
   }
 
   private isUnsafeContent(content: string) {
@@ -1615,6 +2225,213 @@ export class PersonalizationService {
       value as Record<string, unknown>,
     ).sort(([a], [b]) => a.localeCompare(b));
     return JSON.stringify(Object.fromEntries(orderedEntries));
+  }
+
+  private parseMemoryTimelineItem(document: {
+    id: string;
+    docType: string;
+    content: string;
+    createdAt: Date;
+  }) {
+    const context = this.parseInteractionContextLine(document.content) ?? {};
+    const memory =
+      context["memory"] && typeof context["memory"] === "object"
+        ? (context["memory"] as Record<string, unknown>)
+        : null;
+    if (!memory) {
+      return null;
+    }
+    return {
+      id: document.id,
+      docType: document.docType,
+      createdAt: document.createdAt,
+      summary: this.parseSummaryLine(document.content),
+      memory: {
+        class: this.readString(memory["class"]) as MemoryClass | null,
+        governanceTier: this.readString(
+          memory["governanceTier"],
+        ) as MemoryGovernanceTier | null,
+        domain: this.inferMemoryDomain({
+          docType: document.docType,
+          memory,
+        }),
+        key: this.readString(memory["key"]),
+        value: this.readString(memory["value"]),
+        state:
+          (this.readString(memory["state"]) as
+            | "active"
+            | "superseded"
+            | "suppressed"
+            | "flagged_for_review"
+            | "expired"
+            | null) ?? "active",
+        confidence: this.readNumber(memory["confidence"]),
+        contradictionDetected:
+          this.readBooleanValue(memory["contradictionDetected"]) ?? false,
+        conflictingDocumentId:
+          this.readString(memory["conflictingDocumentId"]) ?? null,
+        provenance:
+          memory["provenance"] && typeof memory["provenance"] === "object"
+            ? (memory["provenance"] as Record<string, unknown>)
+            : {},
+      },
+    };
+  }
+
+  private readMemoryMetadata(content: string) {
+    const context = this.parseInteractionContextLine(content) ?? {};
+    const memory =
+      context["memory"] && typeof context["memory"] === "object"
+        ? (context["memory"] as Record<string, unknown>)
+        : null;
+    if (!memory) {
+      return null;
+    }
+    const provenance = this.readJsonObject(
+      memory["provenance"] as Prisma.JsonValue | null | undefined,
+    );
+    return {
+      governanceTier: this.readString(
+        memory["governanceTier"],
+      ) as MemoryGovernanceTier | null,
+      domain: this.inferMemoryDomain({
+        docType:
+          this.readString(context["docType"]) ??
+          RETRIEVAL_DOC_TYPE_INTERACTION_SUMMARY,
+        memory,
+      }),
+      key: this.readString(memory["key"]),
+      value: this.readString(memory["value"]),
+      sourceSurface:
+        (this.readString(
+          provenance.sourceSurface,
+        ) as MemorySourceSurface | null) ?? null,
+      sourceType:
+        (this.readString(provenance.sourceType) as MemorySourceType | null) ??
+        null,
+      confidence: this.readNumber(memory["confidence"]),
+      state:
+        (this.readString(memory["state"]) as
+          | "active"
+          | "superseded"
+          | "suppressed"
+          | "flagged_for_review"
+          | "expired"
+          | null) ?? null,
+    };
+  }
+
+  private inferMemoryDomain(input: {
+    docType: string;
+    memory: Record<string, unknown>;
+  }): MemoryDomain {
+    const key = this.readString(input.memory["key"])?.toLowerCase() ?? "";
+    const memoryClass =
+      (this.readString(input.memory["class"]) as MemoryClass | null) ?? null;
+    const docType = input.docType.toLowerCase();
+
+    if (
+      docType === RETRIEVAL_DOC_TYPE_PROFILE_SUMMARY ||
+      key.startsWith("profile.")
+    ) {
+      return "profile";
+    }
+    if (
+      docType === RETRIEVAL_DOC_TYPE_PREFERENCE_MEMORY ||
+      memoryClass === "stable_preference" ||
+      memoryClass === "inferred_preference"
+    ) {
+      return "preference";
+    }
+    if (
+      docType === RETRIEVAL_DOC_TYPE_RELATIONSHIP_MEMORY ||
+      memoryClass === "relationship_history"
+    ) {
+      return "relationship";
+    }
+    if (
+      docType === RETRIEVAL_DOC_TYPE_SAFETY_MEMORY ||
+      memoryClass === "safety_memory"
+    ) {
+      return "safety";
+    }
+    if (
+      docType === RETRIEVAL_DOC_TYPE_COMMERCE_MEMORY ||
+      memoryClass === "commerce_memory"
+    ) {
+      return "commerce";
+    }
+    return "interaction";
+  }
+
+  private parseSummaryLine(content: string) {
+    const summaryLine = content
+      .split("\n")
+      .find((line) => line.startsWith("summary: "));
+    if (!summaryLine) {
+      return null;
+    }
+    return summaryLine.slice("summary: ".length).trim() || null;
+  }
+
+  private async recordMemoryAuditEvent(
+    action:
+      | "memory.write_attempted"
+      | "memory.write_accepted"
+      | "memory.write_suppressed"
+      | "memory.write_review_required",
+    userId: string,
+    input: {
+      summary: string;
+      memoryWrite: {
+        class: MemoryClass;
+        governanceTier: MemoryGovernanceTier;
+        key: string | null;
+        value: string | null;
+        consent: MemoryConsentContext;
+        moderation: MemoryModerationContext;
+        provenance: MemoryWriteProvenance;
+      };
+      reason: string | null;
+      state:
+        | "active"
+        | "superseded"
+        | "suppressed"
+        | "flagged_for_review"
+        | "expired";
+      contradiction?: {
+        detected: boolean;
+        conflictingDocumentId: string | null;
+      };
+    },
+  ) {
+    if (!this.prisma.auditLog?.create) {
+      return;
+    }
+    await this.prisma.auditLog.create({
+      data: {
+        actorUserId: userId,
+        actorType: "user",
+        action,
+        entityType: "memory",
+        entityId: userId,
+        metadata: this.toInputJsonValue({
+          summaryPreview: this.compressSummary(input.summary, 180),
+          class: input.memoryWrite.class,
+          governanceTier: input.memoryWrite.governanceTier,
+          key: input.memoryWrite.key,
+          value: input.memoryWrite.value,
+          consent: input.memoryWrite.consent,
+          moderation: input.memoryWrite.moderation,
+          provenance: input.memoryWrite.provenance,
+          state: input.state,
+          reason: input.reason,
+          contradictionDetected: input.contradiction?.detected ?? false,
+          conflictingDocumentId:
+            input.contradiction?.conflictingDocumentId ?? null,
+        }),
+      },
+    });
   }
 
   private async recomputeLifeGraphEdge(input: {
@@ -1898,6 +2715,10 @@ export class PersonalizationService {
     return typeof value === "boolean" ? value : null;
   }
 
+  private readNumber(value: unknown): number | null {
+    return typeof value === "number" && Number.isFinite(value) ? value : null;
+  }
+
   private readStringValue(value: unknown): string | null {
     return typeof value === "string" && value.trim().length > 0
       ? value.trim()
@@ -1913,6 +2734,13 @@ export class PersonalizationService {
       return null;
     }
     return strings;
+  }
+
+  private readJsonObject(value: Prisma.JsonValue | null | undefined) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return {};
+    }
+    return value as Record<string, unknown>;
   }
 
   private readWeightFromPreferenceValue(value: unknown): number | null {

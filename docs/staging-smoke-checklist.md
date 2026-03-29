@@ -116,3 +116,15 @@ Cross-check with `PROGRESS.md` §31 before promoting to production:
 - [ ] Cohort / invite-only: if enabled, non-cohort denial tested.
 - [ ] Frontend smoke: mobile Maestro critical path (local-mode) and/or web design-mock Playwright (`pnpm --filter @opensocial/web test:e2e`) green on a release candidate build; optional manual pass of **Home → Chats → Profile** on staging web/mobile against live API.
 - [ ] Moderation drill executed in a deployed environment with `pnpm moderation:drill`; verify queue visibility, assignment, triage, audit trail, and any selected enforcement path.
+
+## Must-Pass For Ship
+
+Use this compact subset for final launch approval:
+
+- [ ] `GET /api/health` returns success.
+- [ ] `GET /api/admin/health` returns success with valid admin headers.
+- [ ] `GET /api/admin/ops/alerts` reviewed and understood for the current baseline.
+- [ ] `pnpm test:agentic:suite:verification` passes in the deployed environment.
+- [ ] `pnpm test:backend:ops-pack` passes and the latest artifact says `shipVerdict=ship_ready`.
+- [ ] `pnpm moderation:drill` passes in the deployed environment and the audit path is visible.
+- [ ] launch controls and kill switches respond from `GET /api/admin/launch-controls`.

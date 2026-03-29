@@ -7,24 +7,24 @@ Verification cadence and release gates live in `AGENT_TEST_SUITE.md`.
 Last refreshed: 2026-03-28
 
 ## Active Epic
-`EPIC D — Launch Security and Reliability Closure`
+`Launch Evidence Closure`
 
 ## Now
-- [ ] `D-02` Record moderation and trust-sensitive operator drill evidence
-  - Run and archive moderation drill and trust-sensitive lifecycle operator evidence in staging/prod.
+- [ ] Return to launch evidence closure after memory pass
+  - Run one fresh deployed `Backend Ops Drill` after the moderation-drill refresh fallback and artifact-upload workflow fixes.
   - Evidence:
-    - `pnpm moderation:drill`
     - `pnpm test:backend:ops-pack`
+    - uploaded workflow artifacts (`.artifacts/backend-ops-pack/*.json`, `.artifacts/agent-test-suite/*.json`)
+  - Status note:
+    - all planned long-term memory, activation-readiness, and operator explainability coding slices are now complete and locally green; remaining work is deployed-environment evidence.
+    - the latest repo-side blocker fixes are in `scripts/moderation-drill.mjs`, `scripts/run-agent-test-suite.mjs`, and the backend GitHub workflows; rerun live ops evidence after commit/deploy.
 
 ## Next
-- [ ] `D-03` Finalize launch smoke matrix and runbook evidence
-  - Record explicit pass/fail evidence, rollback points, monitors, and first-24h owner map.
+- [ ] Commit and deploy after live evidence is green
+  - Capture the successful ops-drill evidence and then commit/push the completed backend work together.
   - Evidence:
-    - `pnpm test:backend:ops-pack`
-    - runbook artifact references in `PROGRESS.md`
-
-- [ ] Admin maintainability cleanup only if it helps backend operability
-  - Keep admin refactor secondary unless it directly improves ops visibility, replay/debug, or verification workflows.
+    - green `Backend Ops Drill`
+    - `git status`
 
 ## Notes
 - Do not add durable historical status here.

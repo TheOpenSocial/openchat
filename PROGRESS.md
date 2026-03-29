@@ -23,9 +23,11 @@ Operating model:
 - [x] staging deploy verification green with default core lane (`contract,workflow,queue,scenario,eval`)
 - [x] full live verification green in GitHub Actions when explicitly requested
 
-Last verified: 2026-03-28
+Last verified: 2026-03-29
 Latest known green deploy verification:
-- GitHub Actions `Deploy Staging` run `23690582624`
+- GitHub Actions `Deploy Staging` run `23692569711`
+Current launch blocker:
+- rerun `Backend Ops Drill` after the moderation-drill refresh fallback and workflow artifact archival fixes land in a deployed environment
 
 ## 2. Current Product Objective
 Close the gap between backend correctness and product quality.
@@ -42,6 +44,7 @@ Priority order:
 3. launch security and smoke matrix evidence
 4. moderation and trust-sensitive operator drills
 5. admin maintainability only where it supports backend operability
+6. long-term memory ingestion and governance closure
 
 ## 3. Epics With Numbered Milestones
 
@@ -119,13 +122,18 @@ Priority order:
   - Last updated: 2026-03-28
 
 ### EPIC D — Launch Security and Reliability Closure
-- [ ] `D-01` Secret rotation and launch evidence closure
+- [~] `D-01` Secret rotation and launch evidence closure
   - Goal: remove temporary probe/debug credential risk and finish operator launch evidence.
   - Close when:
     - temporary probe/debug credentials are rotated
     - staging/prod secret scope parity is re-confirmed
     - moderation and trust-sensitive drills are archived
     - launch smoke matrix and readiness runbook are complete
+  - Current substatus:
+    - secret rotation: complete
+    - staging/prod secret parity: complete in repo/workflow config, pending one fresh deployed rerun
+    - moderation/trust drill artifact: pending
+    - launch smoke matrix evidence archive: pending
   - Evidence command:
     - `pnpm moderation:drill`
     - `pnpm test:agentic:suite:verification`
@@ -135,10 +143,47 @@ Priority order:
     - runbook docs and drill evidence
   - Last updated: 2026-03-28
 
+### EPIC E — Long-Term Memory System
+- [x] `E-01` Memory governance and ingestion backbone
+  - Goal: turn durable memory into a governed backend subsystem across agent chat, DM chat, group chat, and workflow events.
+  - Close when:
+    - memory governance tiers and source-surface policy are encoded in backend contracts
+    - durable writes pass one centralized eligibility gate
+    - DM/group chat ingestion uses the governed memory path with provenance and moderation context
+    - admin can inspect recent memory writes, contradictions, and retrieval previews
+    - privacy reset supports targeted domain/surface memory cleanup in addition to learned/all modes
+  - Evidence command:
+    - `pnpm --filter @opensocial/api exec vitest run test/personalization.service.spec.ts test/privacy.service.spec.ts test/chats.service.spec.ts test/admin.controller.spec.ts`
+    - `pnpm release:check:api`
+  - Artifact/endpoint:
+    - `PUT /api/personalization/:userId/rules/global`
+    - `GET /api/admin/ops/memory/users/:userId/recent-writes`
+    - `GET /api/admin/ops/memory/users/:userId/contradictions`
+    - `POST /api/admin/ops/memory/users/:userId/retrieval-preview`
+  - Last updated: 2026-03-28
+
+- [x] `E-02` Memory extraction quality and stricter domain policy closure
+  - Goal: improve fact extraction quality and finish domain-sensitive policy rules without weakening safety.
+  - Close when:
+    - DM/group extraction goes beyond raw interaction summaries into higher-confidence structured memory candidates
+    - explicit-only domains (profile, safety, consent-sensitive facts) are covered with stronger source classification
+    - retrieval bundles prefer explicit memory and freshness more clearly across all memory classes
+    - golden-suite scenarios cover DM inference, group inference, unsafe-memory suppression, disputed-memory explainability, and retrieval-grounding-after-contradiction end to end
+    - admin memory debug reads expose provenance summaries, replayability hints, domain/governance filters, and single-memory drill-down for support triage
+  - Evidence command:
+    - `pnpm --filter @opensocial/api test -- test/personalization.service.spec.ts test/chats.service.spec.ts test/agentic-scenario-suite.spec.ts test/agentic-evals.service.spec.ts`
+    - `pnpm test:agentic:suite -- --layer=scenario`
+    - `pnpm test:agentic:suite -- --layer=eval`
+  - Artifact/endpoint:
+    - canonical scenario/eval artifacts under `.artifacts/agent-test-suite/`
+    - memory debug endpoints and retrieval bundles
+  - Last updated: 2026-03-28
+
 ## 4. Open Blockers / External Dependencies
 - GitHub/environment secret rotation is still operational work, not fully closed in repo evidence.
 - Moderation and trust-sensitive drills require deployed-environment execution evidence, not just local tests.
 - Launch smoke matrix and first-24h operator map still need durable runbook evidence.
+- Long-term memory extraction is currently strongest at governed ingestion and debug visibility; richer structured fact extraction across all chat surfaces is still the next pass.
 
 ## 5. Evidence Log
 - 2026-03-28: staging deploy verification green with `Deploy Staging` run `23690582624`, including `Verify backend golden suite lane`.
@@ -151,6 +196,14 @@ Priority order:
 - 2026-03-28: extended post-onboarding activation with a real backend bootstrap payload at `POST /api/onboarding/activation-bootstrap`, returning activation plan state, primary thread summary, passive discovery preview, inbox suggestions, and replay-safe execution status from `client_mutations`. Verified with `pnpm --filter @opensocial/api exec vitest run test/onboarding.service.spec.ts test/onboarding-flow.contract.spec.ts`, `pnpm --filter @opensocial/api lint`, and `pnpm release:check:api`.
 - 2026-03-28: launch-ops repo evidence tightened. Added `docs/backend-launch-smoke-matrix.md`, linked release/ops runbooks, and upgraded `scripts/run-backend-ops-pack.mjs` to validate required runbooks, emit per-step env readiness, and produce a final `shipVerdict`. Verified locally with `BACKEND_OPS_DRY_RUN=1 pnpm test:backend:ops-pack`.
 - 2026-03-28: rotated verification-lane probe/debug credentials (`ONBOARDING_PROBE_TOKEN`, `SMOKE_SESSION_APPLICATION_KEY`, `SMOKE_SESSION_APPLICATION_TOKEN`, `STAGING_SMOKE_SESSION_APPLICATION_KEY`, `STAGING_SMOKE_SESSION_APPLICATION_TOKEN`, `SMOKE_ADMIN_API_KEY`), confirmed refreshed GitHub secret timestamps, and revalidated deployed staging with green `Deploy Staging` run `23692569711` including smoke bootstrap, refresh, incident gates, and the backend golden suite lane.
+- 2026-03-28: completed `E-01` long-term memory backbone hardening. Added memory governance tiers (`explicit_only|inferable|ephemeral`), source-surface provenance, consent/moderation envelopes, centralized memory eligibility gating, richer contradiction/state metadata, new retrieval doc families (`relationship_memory`, `safety_memory`, `commerce_memory`), DM/group chat memory ingestion through `ChatsService`, targeted privacy reset modes (`domain_memory`, `surface_memory`), and admin memory debug surfaces for recent writes, contradictions, audit trail, and retrieval preview. Verified with focused backend tests (`83/83`) and `pnpm release:check:api`.
+- 2026-03-28: advanced `E-02` memory quality. DM/group chat ingestion now stores both governed interaction summaries and richer explicit structured memories when users clearly state likes/avoids, location, or languages. Retrieval scoring now prefers stronger explicit memory channels (`profile_summary`, `preference_memory`), excludes suppressed/flagged/expired memory states, and detects contradictions across all durable memory doc families rather than only `interaction_summary`. Verified with focused backend tests (`85/85`) and `pnpm release:check:api`.
+- 2026-03-28: expanded canonical memory eval coverage as part of `E-02`. Added eval scenarios for DM inference quality, group inference quality, unsafe-memory suppression, and disputed-memory explainability to the shared fixture corpus plus `AgenticEvalsService`. Verified with `pnpm --filter @opensocial/api exec vitest run test/agentic-evals.service.spec.ts test/agentic-scenario-suite.spec.ts`, `pnpm --filter @opensocial/api exec tsc --noEmit`, and `pnpm --filter @opensocial/api lint`.
+- 2026-03-28: completed the next `E-02/E-04` memory pass. Added contradiction-grounding eval coverage (`eval_memory_grounding_after_contradiction_v1`) and enriched admin memory debugging with provenance summaries, replayability hints, and domain/governance-aware filtering in recent-write and contradiction views. Verified with `pnpm --filter @opensocial/types build`, `pnpm --filter @opensocial/api exec vitest run test/agentic-evals.service.spec.ts test/agentic-scenario-suite.spec.ts test/admin.controller.spec.ts`, `pnpm --filter @opensocial/api exec tsc --noEmit`, and `pnpm --filter @opensocial/api lint`.
+- 2026-03-28: finished the remaining `E-04` drill-down slice. Added `GET /api/admin/ops/memory/users/:userId/writes/:documentId` for single-memory inspection with provenance source links, replay/workflow hints, and related audit-event linking. Verified with `pnpm --filter @opensocial/api exec vitest run test/admin.controller.spec.ts`, `pnpm --filter @opensocial/api exec tsc --noEmit`, and `pnpm release:check:api`.
+- 2026-03-28: closed `E-02` memory extraction quality. Chat ingestion now extracts governed relationship history, commerce budget context, and explicit safety boundaries in addition to preferences/profile facts, with domain-sensitive governance tiers and contradiction policies. Verified with `pnpm --filter @opensocial/api exec vitest run test/chats.service.spec.ts test/personalization.service.spec.ts`, focused memory/admin/eval suite coverage (`127/127`), and `pnpm release:check:api`.
+- 2026-03-28: advanced the highest-value backend follow-up slice outside CI. Activation bootstrap now returns a readiness snapshot for first-session debugging, retrieval ranking more strongly prefers explicit/fresh keyed memory over generic summaries, and memory drill-down now includes a retrieval-check summary so operators can see whether a disputed memory is actually surfacing in retrieval. Verified with `pnpm --filter @opensocial/types build`, `pnpm --filter @opensocial/api exec vitest run test/personalization.service.spec.ts test/admin.controller.spec.ts test/onboarding.service.spec.ts test/onboarding-flow.contract.spec.ts`, `pnpm --filter @opensocial/api exec tsc --noEmit`, and `pnpm release:check:api`.
+- 2026-03-28: fixed the remaining backend ops-drill implementation blocker in repo by teaching `scripts/moderation-drill.mjs` to refresh the reporter smoke session through the application-credential exchange endpoint when the stored bearer token is stale. Verified with `node --check scripts/moderation-drill.mjs`. Live GitHub evidence still needs one rerun after commit/deploy.
 
 ---
 

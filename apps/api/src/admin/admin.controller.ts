@@ -21,6 +21,8 @@ import {
   adminModerationAgentRiskQuerySchema,
   adminModerationFlagTriageBodySchema,
   adminModerationDecisionReviewBodySchema,
+  adminMemoryInspectionQuerySchema,
+  adminMemoryRetrievalPreviewBodySchema,
   adminModerationQueueQuerySchema,
   adminVerificationRunIngestBodySchema,
   adminVerificationRunListQuerySchema,
@@ -372,6 +374,197 @@ export class AdminController {
         openCircuitCount: openaiBudget.openCircuitCount,
       },
     });
+  }
+
+  @Get("ops/memory/users/:userId/recent-writes")
+  async recentMemoryWrites(
+    @Param("userId") userIdParam: string,
+    @Query() query: Record<string, unknown>,
+    @Headers("x-admin-user-id") adminUserIdHeader?: string,
+    @Headers("x-admin-role") adminRoleHeader?: string,
+  ) {
+    const admin = this.parseAdminContext(adminUserIdHeader, adminRoleHeader, [
+      "admin",
+      "support",
+      "moderator",
+    ]);
+    const userId = parseRequestPayload(uuidSchema, userIdParam);
+    const filters = parseRequestPayload(
+      adminMemoryInspectionQuerySchema,
+      query,
+    );
+    const extendedFilters = filters as typeof filters & {
+      governanceTier?: "explicit_only" | "inferable" | "ephemeral";
+      domain?:
+        | "profile"
+        | "preference"
+        | "relationship"
+        | "safety"
+        | "commerce"
+        | "interaction";
+    };
+    const timeline = await this.personalizationService.listMemoryTimeline(
+      userId,
+      {
+        limit: filters.limit,
+        memoryClass: filters.class,
+        key: filters.key,
+        state: filters.state,
+        governanceTier: extendedFilters.governanceTier,
+        sourceSurface: filters.sourceSurface,
+        domain: extendedFilters.domain,
+      },
+    );
+    const writes = await Promise.all(
+      timeline.map((entry) => this.enrichMemoryWriteForAdmin(entry)),
+    );
+    await this.adminAuditService.recordAction({
+      adminUserId: admin.adminUserId,
+      role: admin.role,
+      action: "admin.ops_memory_recent_writes_view",
+      entityType: "memory",
+      entityId: userId,
+      metadata: extendedFilters,
+    });
+    return ok({
+      userId,
+      count: writes.length,
+      writes,
+    });
+  }
+
+  @Get("ops/memory/users/:userId/contradictions")
+  async memoryContradictions(
+    @Param("userId") userIdParam: string,
+    @Query("limit") limitRaw: string | undefined,
+    @Headers("x-admin-user-id") adminUserIdHeader?: string,
+    @Headers("x-admin-role") adminRoleHeader?: string,
+  ) {
+    const admin = this.parseAdminContext(adminUserIdHeader, adminRoleHeader, [
+      "admin",
+      "support",
+      "moderator",
+    ]);
+    const userId = parseRequestPayload(uuidSchema, userIdParam);
+    const limit = Math.min(Math.max(Number(limitRaw ?? "25") || 25, 1), 100);
+    const contradictions =
+      await this.personalizationService.listMemoryContradictions(userId, limit);
+    const auditTrail = await this.personalizationService.listMemoryAuditTrail(
+      userId,
+      limit,
+    );
+    const contradictionEntries = await Promise.all(
+      contradictions.map((entry) => this.enrichMemoryWriteForAdmin(entry)),
+    );
+    await this.adminAuditService.recordAction({
+      adminUserId: admin.adminUserId,
+      role: admin.role,
+      action: "admin.ops_memory_contradictions_view",
+      entityType: "memory",
+      entityId: userId,
+      metadata: { limit },
+    });
+    return ok({
+      userId,
+      contradictions: contradictionEntries,
+      auditTrail,
+    });
+  }
+
+  @Get("ops/memory/users/:userId/writes/:documentId")
+  async memoryWriteDetails(
+    @Param("userId") userIdParam: string,
+    @Param("documentId") documentIdParam: string,
+    @Query("auditLimit") auditLimitRaw: string | undefined,
+    @Headers("x-admin-user-id") adminUserIdHeader?: string,
+    @Headers("x-admin-role") adminRoleHeader?: string,
+  ) {
+    const admin = this.parseAdminContext(adminUserIdHeader, adminRoleHeader, [
+      "admin",
+      "support",
+      "moderator",
+    ]);
+    const userId = parseRequestPayload(uuidSchema, userIdParam);
+    const documentId = parseRequestPayload(uuidSchema, documentIdParam);
+    const auditLimit = Math.min(
+      Math.max(Number(auditLimitRaw ?? "20") || 20, 1),
+      100,
+    );
+    const entry = await this.personalizationService.getMemoryRecord(
+      userId,
+      documentId,
+    );
+    if (!entry) {
+      throw new NotFoundException("memory write not found");
+    }
+    const enriched = await this.enrichMemoryWriteForAdmin(entry);
+    const auditTrail = await this.personalizationService.listMemoryAuditTrail(
+      userId,
+      auditLimit,
+    );
+    const retrievalCheck = await this.buildMemoryRetrievalCheck(
+      userId,
+      enriched,
+    );
+    const relatedAuditTrail = this.filterAuditTrailForMemory(
+      auditTrail,
+      enriched,
+    );
+    await this.adminAuditService.recordAction({
+      adminUserId: admin.adminUserId,
+      role: admin.role,
+      action: "admin.ops_memory_write_details_view",
+      entityType: "memory",
+      entityId: userId,
+      metadata: {
+        documentId,
+        auditLimit,
+      },
+    });
+    return ok({
+      userId,
+      documentId,
+      write: enriched,
+      sourceLinks: enriched.explainability?.provenanceSummary ?? null,
+      retrievalCheck,
+      relatedAuditTrail,
+    });
+  }
+
+  @Post("ops/memory/users/:userId/retrieval-preview")
+  async previewMemoryRetrieval(
+    @Param("userId") userIdParam: string,
+    @Body() body: unknown,
+    @Headers("x-admin-user-id") adminUserIdHeader?: string,
+    @Headers("x-admin-role") adminRoleHeader?: string,
+  ) {
+    const admin = this.parseAdminContext(adminUserIdHeader, adminRoleHeader, [
+      "admin",
+      "support",
+      "moderator",
+    ]);
+    const userId = parseRequestPayload(uuidSchema, userIdParam);
+    const payload = parseRequestPayload(
+      adminMemoryRetrievalPreviewBodySchema,
+      body,
+    );
+    const preview =
+      await this.personalizationService.retrievePersonalizationContext(
+        userId,
+        payload,
+      );
+    await this.adminAuditService.recordAction({
+      adminUserId: admin.adminUserId,
+      role: admin.role,
+      action: "admin.ops_memory_retrieval_preview_view",
+      entityType: "memory",
+      entityId: userId,
+      metadata: {
+        query: payload.query,
+        maxChunks: payload.maxChunks ?? null,
+      },
+    });
+    return ok(preview);
   }
 
   @Get("ops/alerts")
@@ -4241,6 +4434,173 @@ export class AdminController {
       return "Verify group eligibility, current supply, and recent reconciliation events before replaying.";
     }
     return "Inspect the linked trace and user context before replaying this action.";
+  }
+
+  private async enrichMemoryWriteForAdmin(entry: {
+    id: string;
+    docType: string;
+    createdAt: Date;
+    summary: string | null;
+    memory: {
+      class: string | null;
+      governanceTier: string | null;
+      domain?: string | null;
+      key: string | null;
+      value: string | null;
+      state: string;
+      confidence: number | null;
+      contradictionDetected: boolean;
+      conflictingDocumentId: string | null;
+      provenance: Record<string, unknown>;
+    };
+  }) {
+    const provenance = entry.memory.provenance ?? {};
+    const workflowRunId = this.readString(provenance.workflowRunId);
+    const traceId = this.readString(provenance.traceId);
+    const replay = await this.readMemoryReplayDetails(workflowRunId);
+
+    return {
+      ...entry,
+      memory: {
+        ...entry.memory,
+        domain: entry.memory.domain ?? "interaction",
+      },
+      explainability: {
+        provenanceSummary: {
+          sourceSurface: this.readString(provenance.sourceSurface),
+          sourceType: this.readString(provenance.sourceType),
+          sourceEntityId: this.readString(provenance.sourceEntityId),
+          messageId: this.readString(provenance.messageId),
+          chatId: this.readString(provenance.chatId),
+          threadId: this.readString(provenance.threadId),
+          workflowRunId,
+          traceId,
+        },
+        replayability: replay?.replayability ?? null,
+        workflowHealth: replay?.health ?? null,
+        replayHint: replay?.hint ?? null,
+        traceAvailable: Boolean(traceId),
+      },
+    };
+  }
+
+  private filterAuditTrailForMemory(
+    auditTrail: Array<{
+      id: string;
+      action: string;
+      createdAt: Date;
+      metadata: unknown;
+    }>,
+    entry: {
+      id: string;
+      memory: {
+        key: string | null;
+        provenance: Record<string, unknown>;
+      };
+    },
+  ) {
+    const workflowRunId = this.readString(
+      entry.memory.provenance.workflowRunId,
+    );
+    const traceId = this.readString(entry.memory.provenance.traceId);
+    const key = entry.memory.key;
+
+    return auditTrail.filter((row) => {
+      const metadata = this.readJsonObject(
+        row.metadata as Prisma.JsonValue | null | undefined,
+      );
+      const metadataWorkflowRunId = this.readString(metadata.workflowRunId);
+      const metadataTraceId = this.readString(metadata.traceId);
+      const metadataKey = this.readString(metadata.key);
+      const nestedProvenance = this.readJsonObject(
+        metadata.provenance as Prisma.JsonValue | null | undefined,
+      );
+      return (
+        (workflowRunId &&
+          (metadataWorkflowRunId === workflowRunId ||
+            this.readString(nestedProvenance.workflowRunId) ===
+              workflowRunId)) ||
+        (traceId &&
+          (metadataTraceId === traceId ||
+            this.readString(nestedProvenance.traceId) === traceId)) ||
+        (key && metadataKey === key)
+      );
+    });
+  }
+
+  private async buildMemoryRetrievalCheck(
+    userId: string,
+    entry: {
+      id: string;
+      summary: string | null;
+      memory: {
+        key: string | null;
+        value: string | null;
+      };
+    },
+  ) {
+    const query = [entry.memory.key, entry.memory.value, entry.summary]
+      .filter(
+        (value): value is string =>
+          typeof value === "string" && value.trim().length > 0,
+      )
+      .join(" ")
+      .trim();
+    if (!query) {
+      return {
+        query: null,
+        currentDocumentIncluded: false,
+        topMatchDocumentId: null,
+        resultCount: 0,
+      };
+    }
+    const preview =
+      await this.personalizationService.retrievePersonalizationContext(userId, {
+        query,
+        maxChunks: 5,
+        maxAgeDays: 30,
+      });
+    const topMatchDocumentId =
+      preview.results[0] && "documentId" in preview.results[0]
+        ? ((preview.results[0] as { documentId?: string }).documentId ?? null)
+        : null;
+    return {
+      query,
+      currentDocumentIncluded: preview.results.some(
+        (item) =>
+          "documentId" in item &&
+          (item as { documentId?: string }).documentId === entry.id,
+      ),
+      topMatchDocumentId,
+      resultCount: preview.results.length,
+    };
+  }
+
+  private async readMemoryReplayDetails(workflowRunId: string | null) {
+    if (!workflowRunId || !this.workflowRuntimeService?.getRunDetails) {
+      return null;
+    }
+    const details =
+      await this.workflowRuntimeService.getRunDetails(workflowRunId);
+    const run = details?.run;
+    if (!run) {
+      return null;
+    }
+    return {
+      replayability: run.replayability,
+      health: run.health,
+      hint: this.buildWorkflowReplayHint({
+        replayability: run.replayability,
+        health: run.health,
+        failureClass: this.classifyWorkflowFailure({
+          stageStatusCounts: run.stageStatusCounts,
+          replayability: run.replayability,
+          health: run.health,
+          integrity: run.integrity,
+          stages: run.stages,
+        }),
+      }),
+    };
   }
 
   private async executeAdminReadWithSchemaFallback<T>(

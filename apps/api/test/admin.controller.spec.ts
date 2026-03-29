@@ -165,6 +165,17 @@ function createController(overrides: Partial<Record<string, any>> = {}) {
   };
   const personalizationService = overrides.personalizationService ?? {
     getGlobalRules: vi.fn().mockResolvedValue({}),
+    listMemoryTimeline: vi.fn().mockResolvedValue([]),
+    listMemoryContradictions: vi.fn().mockResolvedValue([]),
+    listMemoryAuditTrail: vi.fn().mockResolvedValue([]),
+    getMemoryRecord: vi.fn().mockResolvedValue(null),
+    retrievePersonalizationContext: vi.fn().mockResolvedValue({
+      userId: CHAT_ID,
+      query: "memory",
+      results: [],
+      bundle: "",
+      bundleTokenEstimate: 0,
+    }),
   };
   const notificationsService = overrides.notificationsService ?? {
     createInAppNotification: vi.fn().mockResolvedValue({ id: "notif-1" }),
@@ -186,7 +197,34 @@ function createController(overrides: Partial<Record<string, any>> = {}) {
   };
   const workflowRuntimeService = overrides.workflowRuntimeService ?? {
     listRecentRuns: vi.fn().mockResolvedValue([]),
-    getRunDetails: vi.fn().mockResolvedValue(null),
+    getRunDetails: vi.fn().mockResolvedValue({
+      run: {
+        workflowRunId: "workflow-memory-1",
+        replayability: "partial",
+        health: "watch",
+        stageStatusCounts: {
+          started: 1,
+          completed: 1,
+          skipped: 0,
+          blocked: 0,
+          degraded: 1,
+          failed: 0,
+          unknown: 0,
+        },
+        integrity: {
+          sideEffectCount: 1,
+          dedupedSideEffectCount: 0,
+          reusedRelations: [],
+        },
+        stages: [
+          {
+            stage: "memory_ingestion",
+            status: "degraded",
+            at: "2026-03-28T00:00:00.000Z",
+          },
+        ],
+      },
+    }),
   };
 
   return {
@@ -226,6 +264,283 @@ function createController(overrides: Partial<Record<string, any>> = {}) {
 }
 
 describe("AdminController", () => {
+  it("lists recent memory writes for support/admin triage", async () => {
+    const { controller, personalizationService, adminAuditService } =
+      createController({
+        personalizationService: {
+          getGlobalRules: vi.fn().mockResolvedValue({}),
+          listMemoryTimeline: vi.fn().mockResolvedValue([
+            {
+              id: "doc-1",
+              docType: "preference_memory",
+              createdAt: new Date("2026-03-28T00:00:00.000Z"),
+              summary: "User prefers tennis intros after work.",
+              memory: {
+                class: "interaction_summary",
+                governanceTier: "inferable",
+                domain: "preference",
+                key: "conversation.preference.likes",
+                value: "tennis",
+                state: "active",
+                confidence: 0.82,
+                contradictionDetected: false,
+                conflictingDocumentId: null,
+                provenance: {
+                  sourceSurface: "dm_chat",
+                  workflowRunId: "workflow-memory-1",
+                  traceId: "trace-memory-1",
+                },
+              },
+            },
+          ]),
+          listMemoryContradictions: vi.fn().mockResolvedValue([]),
+          listMemoryAuditTrail: vi.fn().mockResolvedValue([]),
+          getMemoryRecord: vi.fn().mockResolvedValue(null),
+          retrievePersonalizationContext: vi.fn().mockResolvedValue({
+            userId: CHAT_ID,
+            query:
+              "conversation.preference.likes tennis User prefers tennis intros after work.",
+            results: [
+              {
+                documentId: "66666666-6666-4666-8666-666666666666",
+                docType: "preference_memory",
+                excerpt: "User prefers tennis intros after work.",
+                score: 4.2,
+              },
+            ],
+            bundle: "",
+            bundleTokenEstimate: 0,
+          }),
+        },
+      });
+
+    const result = await controller.recentMemoryWrites(
+      ADMIN_USER_ID,
+      {
+        limit: "10",
+        governanceTier: "inferable",
+        domain: "preference",
+      },
+      ADMIN_USER_ID,
+      "support",
+    );
+
+    expect(personalizationService.listMemoryTimeline).toHaveBeenCalledWith(
+      ADMIN_USER_ID,
+      expect.objectContaining({
+        limit: 10,
+        governanceTier: "inferable",
+        domain: "preference",
+      }),
+    );
+    expect(adminAuditService.recordAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "admin.ops_memory_recent_writes_view",
+      }),
+    );
+    expect(result.data).toEqual(
+      expect.objectContaining({
+        count: 1,
+        writes: [
+          expect.objectContaining({
+            explainability: expect.objectContaining({
+              replayability: "partial",
+              traceAvailable: true,
+            }),
+          }),
+        ],
+      }),
+    );
+  });
+
+  it("returns contradiction queue and audit trail for memory debugging", async () => {
+    const { controller, personalizationService } = createController({
+      personalizationService: {
+        getGlobalRules: vi.fn().mockResolvedValue({}),
+        listMemoryTimeline: vi.fn().mockResolvedValue([]),
+        listMemoryContradictions: vi.fn().mockResolvedValue([
+          {
+            id: "doc-2",
+            docType: "interaction_summary_flagged",
+            createdAt: new Date("2026-03-28T00:00:00.000Z"),
+            summary: "Unsafe memory candidate suppressed.",
+            memory: {
+              class: "interaction_summary",
+              governanceTier: "inferable",
+              domain: "interaction",
+              key: "conversation.summary",
+              value: "suppressed",
+              state: "suppressed",
+              confidence: 0.4,
+              contradictionDetected: true,
+              conflictingDocumentId: "doc-1",
+              provenance: {
+                sourceSurface: "group_chat",
+                workflowRunId: "workflow-memory-1",
+                traceId: "trace-memory-2",
+              },
+            },
+          },
+        ]),
+        listMemoryAuditTrail: vi
+          .fn()
+          .mockResolvedValue([
+            { id: "audit-1", action: "memory.write_suppressed" },
+          ]),
+        getMemoryRecord: vi.fn().mockResolvedValue(null),
+        retrievePersonalizationContext: vi.fn().mockResolvedValue({
+          userId: CHAT_ID,
+          query: "memory",
+          results: [],
+          bundle: "",
+          bundleTokenEstimate: 0,
+        }),
+      },
+    });
+
+    const result = await controller.memoryContradictions(
+      ADMIN_USER_ID,
+      "5",
+      ADMIN_USER_ID,
+      "admin",
+    );
+
+    expect(
+      personalizationService.listMemoryContradictions,
+    ).toHaveBeenCalledWith(ADMIN_USER_ID, 5);
+    expect(personalizationService.listMemoryAuditTrail).toHaveBeenCalledWith(
+      ADMIN_USER_ID,
+      5,
+    );
+    expect(result.data).toEqual(
+      expect.objectContaining({
+        contradictions: [
+          expect.objectContaining({
+            explainability: expect.objectContaining({
+              replayability: "partial",
+              replayHint: expect.any(String),
+            }),
+          }),
+        ],
+        auditTrail: expect.any(Array),
+      }),
+    );
+  });
+
+  it("returns a single memory write drill-down with source links and related audit events", async () => {
+    const memoryWrite = {
+      id: "66666666-6666-4666-8666-666666666666",
+      docType: "preference_memory",
+      createdAt: new Date("2026-03-28T00:00:00.000Z"),
+      summary: "User prefers tennis intros after work.",
+      memory: {
+        class: "interaction_summary",
+        governanceTier: "inferable",
+        domain: "preference",
+        key: "conversation.preference.likes",
+        value: "tennis",
+        state: "active",
+        confidence: 0.82,
+        contradictionDetected: false,
+        conflictingDocumentId: null,
+        provenance: {
+          sourceSurface: "dm_chat",
+          sourceEntityId: "chat-1",
+          chatId: "chat-1",
+          workflowRunId: "workflow-memory-1",
+          traceId: "trace-memory-1",
+        },
+      },
+    };
+    const { controller, personalizationService, adminAuditService } =
+      createController({
+        personalizationService: {
+          getGlobalRules: vi.fn().mockResolvedValue({}),
+          listMemoryTimeline: vi.fn().mockResolvedValue([]),
+          listMemoryContradictions: vi.fn().mockResolvedValue([]),
+          getMemoryRecord: vi.fn().mockResolvedValue(memoryWrite),
+          listMemoryAuditTrail: vi.fn().mockResolvedValue([
+            {
+              id: "audit-1",
+              action: "memory.write_accepted",
+              createdAt: new Date("2026-03-28T00:01:00.000Z"),
+              metadata: {
+                key: "conversation.preference.likes",
+                provenance: {
+                  workflowRunId: "workflow-memory-1",
+                  traceId: "trace-memory-1",
+                },
+              },
+            },
+            {
+              id: "audit-2",
+              action: "memory.write_attempted",
+              createdAt: new Date("2026-03-28T00:02:00.000Z"),
+              metadata: {
+                key: "unrelated.key",
+              },
+            },
+          ]),
+          retrievePersonalizationContext: vi.fn().mockResolvedValue({
+            userId: CHAT_ID,
+            query:
+              "conversation.preference.likes tennis User prefers tennis intros after work.",
+            results: [
+              {
+                documentId: "66666666-6666-4666-8666-666666666666",
+                docType: "preference_memory",
+                excerpt: "User prefers tennis intros after work.",
+                score: 4.2,
+              },
+            ],
+            bundle: "",
+            bundleTokenEstimate: 0,
+          }),
+        },
+      });
+
+    const result = await controller.memoryWriteDetails(
+      ADMIN_USER_ID,
+      "66666666-6666-4666-8666-666666666666",
+      "10",
+      ADMIN_USER_ID,
+      "support",
+    );
+
+    expect(personalizationService.getMemoryRecord).toHaveBeenCalledWith(
+      ADMIN_USER_ID,
+      "66666666-6666-4666-8666-666666666666",
+    );
+    expect(personalizationService.listMemoryAuditTrail).toHaveBeenCalledWith(
+      ADMIN_USER_ID,
+      10,
+    );
+    expect(adminAuditService.recordAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "admin.ops_memory_write_details_view",
+      }),
+    );
+    expect(result.data).toEqual(
+      expect.objectContaining({
+        sourceLinks: expect.objectContaining({
+          sourceSurface: "dm_chat",
+          chatId: "chat-1",
+          workflowRunId: "workflow-memory-1",
+          traceId: "trace-memory-1",
+        }),
+        retrievalCheck: expect.objectContaining({
+          currentDocumentIncluded: true,
+          topMatchDocumentId: "66666666-6666-4666-8666-666666666666",
+          resultCount: 1,
+        }),
+        relatedAuditTrail: [
+          expect.objectContaining({
+            id: "audit-1",
+          }),
+        ],
+      }),
+    );
+  });
   it("allows support role to list dead letters and records audit action", async () => {
     const { controller, deadLetterService, adminAuditService } =
       createController();

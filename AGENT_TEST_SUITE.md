@@ -30,6 +30,16 @@ The suite exists to prove that the backend can:
 - Product prioritization, feature sequencing, and launch backlog ownership belong in `PROGRESS.md`.
 - The immediate coding queue belongs in `tasks.md`.
 
+## Cadence vs Ship Gate
+- Default cadence:
+  - CI runs cheap checks only.
+  - staging deploy defaults to the core lane: `contract,workflow,queue,scenario,eval`.
+  - expensive live layers stay opt-in for release candidates or regression investigation.
+- Ship gate:
+  - release decisions use deployed-environment evidence, not only local green runs.
+  - the minimum ship gate is `pnpm release:check:api`, `pnpm test:agentic:suite:verification`, and `pnpm test:backend:ops-pack`.
+  - `pnpm test:agentic:suite -- --layer=full` is required for release-candidate validation or when a regression touches benchmark/prod-smoke-sensitive paths.
+
 ## Current Foundation
 - Workflow execution tracking is active in the backend through `workflowRunId`, `traceId`, stage checkpoints, and linked side effects.
 - Canonical runtime API surface is single-version under `/api/runtime/*` with no legacy compatibility route.
@@ -43,6 +53,7 @@ The suite exists to prove that the backend can:
   - `GET /api/admin/ops/agent-reliability`
   This path now reuses the shared verification-run cache contract so canary status reflects playground-triggered suite runs.
 - Memory writes are now normalized through typed taxonomy/provenance envelopes with strict safe-write suppression, contradiction policies, and compressed retrieval bundles for bounded long-context grounding.
+- Durable memory is now governed by source-surface + governance-tier policy (`explicit_only|inferable|ephemeral`) with centralized eligibility gates, DM/group chat ingestion, admin memory debug endpoints, and targeted privacy reset modes for domain/surface cleanup.
 - Negotiation runtime is now structured and bounded through `negotiation.evaluate` (social + commerce packet/outcome contracts, policy gating, and explicit next-action decisions).
 - Canonical fixture parity is now locked for reconnect + eval runtime coverage (`reconnect_signal_v1` executed in scenario suite, `eval_workflow_runtime_traceability_v1` present in fixture corpus and eval contract).
 - The current backend baseline must remain green:
@@ -205,6 +216,11 @@ Current backend eval snapshot contract also includes:
 - async ack tone scenario (`eval_tone_agentic_async_ack_v1`)
 - no-match recovery usefulness scenario (`eval_usefulness_no_match_recovery_v1`)
 - profile-memory grounding consistency scenario (`eval_grounding_profile_memory_consistency_v1`)
+- DM memory grounding scenario (`eval_memory_dm_inference_quality_v1`)
+- group-memory grounding scenario (`eval_memory_group_inference_quality_v1`)
+- unsafe-memory suppression scenario (`eval_memory_unsafe_suppression_v1`)
+- disputed-memory explainability scenario (`eval_memory_disputed_explainability_v1`)
+- contradiction-grounding scenario (`eval_memory_grounding_after_contradiction_v1`)
 
 ### 6. Benchmark and Prod Smoke
 Validates:
@@ -248,6 +264,9 @@ Prod-connected verification must use reserved users/threads and controlled pacin
 - duplicate retry and replay safety
 - workflow stage-failure triage families (llm/schema, queue/replay, notification/follow-up, persistence/dedupe, latency/capacity, observability-gap)
 - memory write/read, contradiction handling, compression, hallucination resistance
+- governed memory ingestion across `agent_chat`, `dm_chat`, `group_chat`, `workflow_event`, and `system_event`
+- explicit-only vs inferable durable-memory enforcement
+- admin explainability for disputed or suppressed memory writes
 - agent-to-agent and buyer-seller negotiation
 - spam, scam, coercion, underage/illegal, moderation review/blocked flows
 - buyer intent, seller intent, passive demand, passive supply, item/offer compatibility

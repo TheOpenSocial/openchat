@@ -679,6 +679,11 @@ export const globalRulesBodySchema = z.object({
   notificationMode: z.enum(["immediate", "digest", "quiet"]),
   agentAutonomy: z.enum(["manual", "suggest_only", "auto_non_risky"]),
   memoryMode: z.enum(["minimal", "standard", "extended"]),
+  dmGroupMemoryIngestionEnabled: z.boolean().default(true),
+  agentChatMemoryIngestionEnabled: z.boolean().default(true),
+  memoryInferenceStrictness: z
+    .enum(["conservative", "standard", "permissive"])
+    .default("standard"),
   timezone: z.string().min(1).max(128).default("UTC"),
 });
 
@@ -735,6 +740,21 @@ export const memoryClassSchema = z.enum([
   "transient_working_memory",
 ]);
 
+export const memoryGovernanceTierSchema = z.enum([
+  "explicit_only",
+  "inferable",
+  "ephemeral",
+]);
+
+export const memorySourceSurfaceSchema = z.enum([
+  "agent_chat",
+  "dm_chat",
+  "group_chat",
+  "workflow_event",
+  "system_event",
+  "profile_edit",
+]);
+
 export const memorySourceTypeSchema = z.enum([
   "explicit_user_input",
   "user_profile_edit",
@@ -758,7 +778,13 @@ export const memoryContradictionPolicySchema = z.enum([
 
 export const memoryWriteProvenanceSchema = z.object({
   sourceType: memorySourceTypeSchema,
+  sourceSurface: memorySourceSurfaceSchema.optional(),
   sourceId: z.string().min(1).max(255).optional(),
+  sourceEntityId: z.string().min(1).max(255).optional(),
+  messageId: z.string().min(1).max(255).optional(),
+  chatId: z.string().min(1).max(255).optional(),
+  threadId: z.string().min(1).max(255).optional(),
+  actorUserIds: z.array(uuidSchema).max(16).optional(),
   traceId: z.string().min(1).max(255).optional(),
   workflowRunId: z.string().min(1).max(255).optional(),
   toolName: z.string().min(1).max(120).optional(),
@@ -766,16 +792,53 @@ export const memoryWriteProvenanceSchema = z.object({
   observedAt: isoDateTimeSchema.optional(),
 });
 
+export const memoryConsentContextSchema = z.object({
+  basis: z.enum([
+    "default_allow",
+    "explicit_user_message",
+    "profile_edit",
+    "user_opt_in",
+    "user_opt_out",
+  ]),
+  explicit: z.boolean().default(false),
+  sourceText: z.string().min(1).max(500).optional(),
+});
+
+export const memoryModerationContextSchema = z.object({
+  decision: z.enum(["clean", "flagged", "review", "blocked"]).default("clean"),
+  reasonTokens: z.array(z.string().min(1).max(80)).max(20).optional(),
+});
+
 export const interactionMemoryWriteSchema = z.object({
   class: memoryClassSchema.optional(),
+  governanceTier: memoryGovernanceTierSchema.optional(),
   key: z.string().min(1).max(160).optional(),
   value: z.string().min(1).max(400).optional(),
   confidence: z.number().min(0).max(1).optional(),
   safeWritePolicy: memorySafeWritePolicySchema.optional(),
   contradictionPolicy: memoryContradictionPolicySchema.optional(),
   compressible: z.boolean().optional(),
+  consent: memoryConsentContextSchema.optional(),
+  moderation: memoryModerationContextSchema.optional(),
   provenance: memoryWriteProvenanceSchema.optional(),
 });
+
+export const memoryStateSchema = z.enum([
+  "active",
+  "superseded",
+  "suppressed",
+  "flagged_for_review",
+  "expired",
+]);
+
+export const memoryDomainSchema = z.enum([
+  "profile",
+  "preference",
+  "relationship",
+  "safety",
+  "commerce",
+  "interaction",
+]);
 
 export const retrievalInteractionSummaryBodySchema = z.object({
   summary: z.string().min(1).max(4000),
@@ -1143,6 +1206,11 @@ export const onboardingActivationPlanBodySchema = z.object({
   socialMode: z.enum(["one_to_one", "group", "either"]).optional(),
 });
 
+export const onboardingActivationBootstrapBodySchema =
+  onboardingActivationPlanBodySchema.extend({
+    limit: z.number().int().min(1).max(5).optional(),
+  });
+
 export const onboardingActivationPlanResponseSchema = z.object({
   state: z.enum(["idle", "pending", "ready", "failed"]),
   source: z.enum(["llm", "fallback"]),
@@ -1153,6 +1221,78 @@ export const onboardingActivationPlanResponseSchema = z.object({
     kind: z.enum(["agent_thread_seed", "intent_create"]),
     label: z.string().min(1),
     text: z.string().min(1),
+  }),
+});
+
+export const onboardingActivationExecutionStatusSchema = z.enum([
+  "idle",
+  "processing",
+  "completed",
+  "failed",
+]);
+
+export const onboardingActivationBootstrapResponseSchema = z.object({
+  onboardingState: z.string().min(1),
+  activation: onboardingActivationPlanResponseSchema,
+  readiness: z.object({
+    hasActivationContext: z.boolean(),
+    profileSignalCount: z.number().int().nonnegative(),
+    hasPrimaryThread: z.boolean(),
+    hasDiscoveryCandidates: z.boolean(),
+    recommendationReady: z.boolean(),
+    activationReason: z.enum([
+      "onboarding_incomplete",
+      "missing_context",
+      "activation_ready",
+      "activation_pending",
+      "activation_failed",
+    ]),
+  }),
+  primaryThread: z
+    .object({
+      id: uuidSchema,
+      title: z.string().nullable(),
+      createdAt: isoDateTimeSchema,
+    })
+    .nullable(),
+  discovery: z.object({
+    tonightCount: z.number().int().nonnegative(),
+    reconnectCount: z.number().int().nonnegative(),
+    groupCount: z.number().int().nonnegative(),
+    activeIntentCount: z.number().int().nonnegative(),
+    topTonight: z
+      .array(
+        z.object({
+          userId: uuidSchema,
+          displayName: z.string().min(1),
+          reason: z.string().min(1),
+          score: z.number().min(0).max(1),
+        }),
+      )
+      .max(3),
+    inboxSuggestions: z
+      .array(
+        z.object({
+          title: z.string().min(1),
+          reason: z.string().min(1),
+          score: z.number().min(0).max(1),
+        }),
+      )
+      .max(4),
+  }),
+  execution: z.object({
+    scope: z.literal("intent.create_from_agent"),
+    idempotencyKey: z.string().min(1),
+    status: onboardingActivationExecutionStatusSchema,
+    hasCachedResponse: z.boolean(),
+    cachedResponse: z
+      .object({
+        threadId: uuidSchema.nullable().optional(),
+        intentId: z.string().min(1).nullable().optional(),
+        status: z.string().min(1).nullable().optional(),
+        intentCount: z.number().int().nonnegative().nullable().optional(),
+      })
+      .nullable(),
   }),
 });
 
@@ -1557,6 +1697,8 @@ export const privacyDeleteMessagesBodySchema = z
 export const privacyMemoryResetModeSchema = z.enum([
   "learned_memory",
   "all_personalization",
+  "domain_memory",
+  "surface_memory",
 ]);
 
 export const privacyResetMemoryBodySchema = z
@@ -1564,8 +1706,26 @@ export const privacyResetMemoryBodySchema = z
     actorUserId: uuidSchema.optional(),
     reason: z.string().min(1).max(500).optional(),
     mode: privacyMemoryResetModeSchema.optional(),
+    domains: z.array(z.string().min(1).max(80)).max(10).optional(),
+    surfaces: z.array(memorySourceSurfaceSchema).max(10).optional(),
   })
   .default({});
+
+export const adminMemoryInspectionQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+  class: memoryClassSchema.optional(),
+  key: z.string().min(1).max(160).optional(),
+  state: memoryStateSchema.optional(),
+  governanceTier: memoryGovernanceTierSchema.optional(),
+  sourceSurface: memorySourceSurfaceSchema.optional(),
+  domain: memoryDomainSchema.optional(),
+});
+
+export const adminMemoryRetrievalPreviewBodySchema = z.object({
+  query: z.string().min(1).max(400),
+  maxChunks: z.number().int().min(1).max(10).optional(),
+  maxAgeDays: z.number().int().min(1).max(365).optional(),
+});
 
 export const complianceAcceptanceTypeSchema = z.enum(["terms", "privacy"]);
 

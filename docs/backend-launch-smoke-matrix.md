@@ -55,3 +55,13 @@ Do not continue rollout if any of the following occur:
 
 - Keep this document operational, not aspirational.
 - If a command or endpoint is replaced, update this matrix and the ops-pack script in the same change.
+
+## Evidence Log Template
+
+Capture the final go/no-go evidence in this shape:
+
+| Date | Area | Command / Run | Result | Artifact / URL | Notes |
+| --- | --- | --- | --- | --- | --- |
+| YYYY-MM-DD | Golden Suite verification | `pnpm test:agentic:suite:verification` or workflow run id | passed / failed | artifact path or workflow URL | short note |
+| YYYY-MM-DD | Backend ops pack | `pnpm test:backend:ops-pack` or workflow run id | passed / failed | artifact path or workflow URL | short note |
+| YYYY-MM-DD | Moderation drill | `pnpm moderation:drill` or workflow run id | passed / failed | artifact path or workflow URL | short note |

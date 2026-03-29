@@ -11,14 +11,17 @@ const adminUserId =
 const adminRole = process.env.SMOKE_ADMIN_ROLE || "admin";
 const adminApiKey = process.env.SMOKE_ADMIN_API_KEY;
 const adminAccessToken = process.env.SMOKE_ACCESS_TOKEN;
+const smokeApplicationKey = process.env.SMOKE_APPLICATION_KEY?.trim() || "";
+const smokeApplicationToken =
+  process.env.SMOKE_APPLICATION_TOKEN?.trim() || "";
 const timeoutMs = Number(process.env.SMOKE_TIMEOUT_MS || 15000);
 
 const existingFlagId = process.env.MODERATION_DRILL_EXISTING_FLAG_ID?.trim();
-const reporterUserId =
+let reporterUserId =
   process.env.MODERATION_DRILL_REPORTER_USER_ID?.trim() ||
   process.env.SMOKE_USER_ID?.trim() ||
   "";
-const reporterAccessToken =
+let reporterAccessToken =
   process.env.MODERATION_DRILL_ACCESS_TOKEN?.trim() ||
   process.env.SMOKE_ACCESS_TOKEN?.trim() ||
   "";
@@ -185,7 +188,7 @@ async function resolveFlagId() {
   requireEnv("MODERATION_DRILL_ACCESS_TOKEN", reporterAccessToken);
   requireEnv("MODERATION_DRILL_ENTITY_ID", entityId);
 
-  const reportResult = await requestJson("POST", "/api/moderation/reports", {
+  let reportResult = await requestJson("POST", "/api/moderation/reports", {
     accessToken: reporterAccessToken,
     forwardedIndex: 0,
     body: {
@@ -197,6 +200,27 @@ async function resolveFlagId() {
       entityId,
     },
   });
+  if (
+    reportResult.status === 401 &&
+    smokeApplicationKey &&
+    smokeApplicationToken
+  ) {
+    const refreshed = await exchangeSmokeSessionWithApplicationCredentials();
+    reporterAccessToken = refreshed.accessToken;
+    reporterUserId = refreshed.userId;
+    reportResult = await requestJson("POST", "/api/moderation/reports", {
+      accessToken: reporterAccessToken,
+      forwardedIndex: 0,
+      body: {
+        reporterUserId,
+        targetUserId,
+        reason: reportReason,
+        details: reportDetails,
+        entityType,
+        entityId,
+      },
+    });
+  }
   const reportData = parseDataEnvelope(reportResult, "create report");
   const flagId =
     reportData && typeof reportData === "object"
@@ -221,6 +245,51 @@ async function resolveFlagId() {
     reportId: typeof reportId === "string" ? reportId : null,
     reportCreated: true,
   };
+}
+
+async function exchangeSmokeSessionWithApplicationCredentials() {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(`${baseUrl}/api/admin/ops/smoke-session/exchange`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "x-application-key": smokeApplicationKey,
+        "x-application-token": smokeApplicationToken,
+      },
+      body: JSON.stringify({ smokeBaseUrl: baseUrl }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload || typeof payload !== "object" || !("data" in payload)) {
+      throw new Error(
+        `smoke session exchange failed (${response.status}): ${JSON.stringify(payload).slice(0, 280)}`,
+      );
+    }
+    const data = payload.data;
+    if (!data || typeof data !== "object") {
+      throw new Error("smoke session exchange returned no data");
+    }
+    const envPayload =
+      "env" in data && data.env && typeof data.env === "object" ? data.env : data;
+    const accessToken =
+      typeof envPayload.SMOKE_ACCESS_TOKEN === "string"
+        ? envPayload.SMOKE_ACCESS_TOKEN
+        : "";
+    const userId =
+      typeof envPayload.SMOKE_USER_ID === "string" ? envPayload.SMOKE_USER_ID : "";
+    if (!accessToken || !userId) {
+      throw new Error("smoke session exchange did not return token and user id");
+    }
+    console.log("Refreshed moderation drill smoke session via application credentials.");
+    return { accessToken, userId };
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 async function loadModerationQueue() {

@@ -228,6 +228,142 @@ describe("OnboardingService activation plan", () => {
     ]);
   });
 
+  it("builds activation bootstrap from persisted profile, discovery, and replay-safe execution state", async () => {
+    const prisma: any = {
+      userProfile: {
+        findUnique: vi.fn().mockResolvedValue({
+          onboardingState: "complete",
+          bio: "Looking for football and coffee plans.",
+          city: "Buenos Aires",
+          country: "Argentina",
+        }),
+      },
+      userInterest: {
+        findMany: vi.fn().mockResolvedValue([{ label: "football" }]),
+      },
+      userTopic: {
+        findMany: vi.fn().mockResolvedValue([{ label: "coffee" }]),
+      },
+      clientMutation: {
+        findUnique: vi.fn().mockResolvedValue({
+          status: "completed",
+          responseBody: {
+            threadId: "22222222-2222-4222-8222-222222222222",
+            intentId: "intent-activation-1",
+            status: "parsed",
+            intentCount: 1,
+          },
+        }),
+      },
+    };
+    const discoveryService: any = {
+      getPassiveDiscovery: vi.fn().mockResolvedValue({
+        tonight: {
+          suggestions: [
+            {
+              userId: "33333333-3333-4333-8333-333333333333",
+              displayName: "Alice",
+              reason: "Strong overlap in football and coffee.",
+              score: 0.91,
+            },
+          ],
+        },
+        reconnects: { reconnects: [] },
+        groups: { groups: [] },
+        activeIntentsOrUsers: { items: [] },
+      }),
+      getInboxSuggestions: vi.fn().mockResolvedValue({
+        suggestions: [
+          {
+            title: "Try a football coffee group",
+            reason: "It matches your current profile signals.",
+            score: 0.88,
+          },
+        ],
+      }),
+    };
+    const agentService: any = {
+      findPrimaryThreadSummaryForUser: vi.fn().mockResolvedValue({
+        id: "22222222-2222-4222-8222-222222222222",
+        title: "Main",
+        createdAt: new Date("2026-03-28T18:00:00.000Z"),
+      }),
+    };
+    const service = new OnboardingService(
+      prisma,
+      discoveryService,
+      agentService,
+    );
+    (service as any).resolveClient = vi.fn().mockReturnValue({
+      inferOnboardingQuick: vi.fn().mockResolvedValue({
+        transcript: "Looking for football and coffee plans.",
+        interests: ["football", "coffee"],
+        goals: ["meet people"],
+        summary: "You want football and coffee plans.",
+        firstIntent: "Help me find football and coffee plans in Buenos Aires.",
+      }),
+    });
+
+    const result = await service.buildActivationBootstrap({
+      userId: "11111111-1111-4111-8111-111111111111",
+    });
+
+    expect(result.onboardingState).toBe("complete");
+    expect(result.activation.state).toBe("ready");
+    expect(result.readiness).toEqual(
+      expect.objectContaining({
+        hasActivationContext: true,
+        hasPrimaryThread: true,
+        hasDiscoveryCandidates: true,
+        recommendationReady: true,
+        activationReason: "activation_ready",
+      }),
+    );
+    expect(result.primaryThread?.id).toBe(
+      "22222222-2222-4222-8222-222222222222",
+    );
+    expect(result.discovery.tonightCount).toBe(1);
+    expect(result.execution.status).toBe("completed");
+    expect(result.execution.cachedResponse?.intentId).toBe(
+      "intent-activation-1",
+    );
+  });
+
+  it("keeps activation bootstrap idle until onboarding is complete", async () => {
+    const prisma: any = {
+      userProfile: {
+        findUnique: vi.fn().mockResolvedValue({
+          onboardingState: "not_started",
+          bio: null,
+          city: null,
+          country: null,
+        }),
+      },
+      userInterest: { findMany: vi.fn().mockResolvedValue([]) },
+      userTopic: { findMany: vi.fn().mockResolvedValue([]) },
+      clientMutation: { findUnique: vi.fn().mockResolvedValue(null) },
+    };
+    const service = new OnboardingService(prisma, undefined, undefined);
+
+    const result = await service.buildActivationBootstrap({
+      userId: "11111111-1111-4111-8111-111111111111",
+    });
+
+    expect(result.onboardingState).toBe("not_started");
+    expect(result.activation.state).toBe("idle");
+    expect(result.readiness).toEqual(
+      expect.objectContaining({
+        hasActivationContext: false,
+        hasPrimaryThread: false,
+        hasDiscoveryCandidates: false,
+        recommendationReady: false,
+        activationReason: "onboarding_incomplete",
+      }),
+    );
+    expect(result.discovery.tonightCount).toBe(0);
+    expect(result.execution.status).toBe("idle");
+  });
+
   it("normalizes generic rich persona/summary into concrete output", async () => {
     const service = new OnboardingService();
     (service as any).resolveClient = vi.fn().mockReturnValue({

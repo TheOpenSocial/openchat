@@ -1,14 +1,25 @@
-import { BadRequestException, Injectable, Logger } from "@nestjs/common";
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  Optional,
+} from "@nestjs/common";
 import { OpenAIClient } from "@opensocial/openai";
 import {
+  onboardingActivationBootstrapBodySchema,
+  onboardingActivationBootstrapResponseSchema,
   onboardingActivationPlanBodySchema,
   onboardingActivationPlanResponseSchema,
   onboardingInferResponseSchema,
   onboardingQuickInferResponseSchema,
 } from "@opensocial/types";
+import { Prisma } from "@prisma/client";
 import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
+import { AgentService } from "../agent/agent.service.js";
 import { recordOnboardingInferenceMetric } from "../common/ops-metrics.js";
+import { PrismaService } from "../database/prisma.service.js";
+import { DiscoveryService } from "../discovery/discovery.service.js";
 
 type OnboardingInferResponse = z.infer<typeof onboardingInferResponseSchema>;
 type OnboardingQuickInferResponse = z.infer<
@@ -19,6 +30,12 @@ type OnboardingActivationPlanInput = z.infer<
 >;
 type OnboardingActivationPlanResponse = z.infer<
   typeof onboardingActivationPlanResponseSchema
+>;
+type OnboardingActivationBootstrapInput = z.infer<
+  typeof onboardingActivationBootstrapBodySchema
+>;
+type OnboardingActivationBootstrapResponse = z.infer<
+  typeof onboardingActivationBootstrapResponseSchema
 >;
 
 const GENERIC_PERSONA_LABELS = new Set([
@@ -65,7 +82,14 @@ export class OnboardingService {
   private readonly fastOpenaiByModel = new Map<string, OpenAIClient>();
   private readonly richOpenaiByModel = new Map<string, OpenAIClient>();
 
-  constructor() {
+  constructor(
+    @Optional()
+    private readonly prisma?: PrismaService,
+    @Optional()
+    private readonly discoveryService?: DiscoveryService,
+    @Optional()
+    private readonly agentService?: AgentService,
+  ) {
     for (const model of this.fastModelCandidates) {
       this.fastOpenaiByModel.set(
         model,
@@ -286,6 +310,185 @@ export class OnboardingService {
       `onboarding activation plan fallback traceId=${traceId} model=${selectedFastModel} durationMs=${durationMs} reason=llm_unavailable`,
     );
     return this.buildActivationFallbackPlan(input, "llm_unavailable");
+  }
+
+  async buildActivationBootstrap(
+    input: OnboardingActivationBootstrapInput,
+  ): Promise<OnboardingActivationBootstrapResponse> {
+    const limit = Math.max(1, Math.min(input.limit ?? 3, 5));
+    const [profile, storedInterests, storedTopics, primaryThread] =
+      await Promise.all([
+        this.prisma?.userProfile.findUnique({
+          where: { userId: input.userId },
+          select: {
+            onboardingState: true,
+            bio: true,
+            city: true,
+            country: true,
+          },
+        }) ?? null,
+        input.interests?.length
+          ? Promise.resolve([] as Array<{ label: string }>)
+          : (this.prisma?.userInterest.findMany({
+              where: { userId: input.userId },
+              select: { label: true },
+              orderBy: { createdAt: "asc" },
+              take: 8,
+            }) ?? Promise.resolve([] as Array<{ label: string }>)),
+        input.interests?.length
+          ? Promise.resolve([] as Array<{ label: string }>)
+          : (this.prisma?.userTopic.findMany({
+              where: { userId: input.userId },
+              select: { label: true },
+              orderBy: { createdAt: "asc" },
+              take: 8,
+            }) ?? Promise.resolve([] as Array<{ label: string }>)),
+        this.agentService?.findPrimaryThreadSummaryForUser(input.userId) ??
+          null,
+      ]);
+
+    const onboardingState = profile?.onboardingState ?? "not_started";
+    const enrichedInput = this.enrichActivationInput(input, {
+      summary: profile?.bio ?? null,
+      city: profile?.city ?? null,
+      country: profile?.country ?? null,
+      interests: [...storedInterests, ...storedTopics].map(
+        (entry) => entry.label,
+      ),
+    });
+    const hasActivationContext = this.hasActivationContext(enrichedInput);
+
+    const baseActivation =
+      onboardingState !== "complete" && !hasActivationContext
+        ? this.buildIdleActivationPlan(input.userId)
+        : await this.buildActivationPlan(enrichedInput);
+
+    const clientMutation =
+      this.prisma && baseActivation.idempotencyKey
+        ? await this.prisma.clientMutation.findUnique({
+            where: {
+              userId_scope_idempotencyKey: {
+                userId: input.userId,
+                scope: "intent.create_from_agent",
+                idempotencyKey: baseActivation.idempotencyKey,
+              },
+            },
+          })
+        : null;
+    const execution = this.buildActivationExecutionSnapshot(
+      baseActivation.idempotencyKey,
+      clientMutation,
+    );
+    const activation = {
+      ...baseActivation,
+      state: this.resolveActivationState(
+        onboardingState,
+        baseActivation.state,
+        execution.status,
+      ),
+    };
+
+    const [discovery, inboxSuggestions] =
+      activation.state === "idle"
+        ? [null, null]
+        : await Promise.all([
+            this.discoveryService?.getPassiveDiscovery(input.userId, limit) ??
+              null,
+            this.discoveryService?.getInboxSuggestions(input.userId, limit) ??
+              null,
+          ]);
+
+    return {
+      onboardingState,
+      activation,
+      readiness: {
+        hasActivationContext,
+        profileSignalCount: this.countActivationSignals(enrichedInput),
+        hasPrimaryThread: Boolean(primaryThread),
+        hasDiscoveryCandidates:
+          (discovery?.tonight.suggestions.length ?? 0) +
+            (discovery?.reconnects.reconnects.length ?? 0) +
+            (discovery?.groups.groups.length ?? 0) +
+            (inboxSuggestions?.suggestions.length ?? 0) >
+          0,
+        recommendationReady:
+          activation.state !== "idle" &&
+          activation.recommendedAction.text.trim().length > 0,
+        activationReason: this.resolveActivationReason({
+          onboardingState,
+          activationState: activation.state,
+          hasActivationContext,
+        }),
+      },
+      primaryThread: primaryThread
+        ? {
+            id: primaryThread.id,
+            title: primaryThread.title,
+            createdAt: primaryThread.createdAt.toISOString(),
+          }
+        : null,
+      discovery: {
+        tonightCount: discovery?.tonight.suggestions.length ?? 0,
+        reconnectCount: discovery?.reconnects.reconnects.length ?? 0,
+        groupCount: discovery?.groups.groups.length ?? 0,
+        activeIntentCount:
+          discovery?.activeIntentsOrUsers.items.filter(
+            (item) => item.type === "intent",
+          ).length ?? 0,
+        topTonight:
+          discovery?.tonight.suggestions.slice(0, limit).map((suggestion) => ({
+            userId: suggestion.userId,
+            displayName: suggestion.displayName,
+            reason: suggestion.reason,
+            score: suggestion.score,
+          })) ?? [],
+        inboxSuggestions:
+          inboxSuggestions?.suggestions.slice(0, limit + 1).map((item) => ({
+            title: item.title,
+            reason: item.reason,
+            score: item.score,
+          })) ?? [],
+      },
+      execution,
+    };
+  }
+
+  private countActivationSignals(input: OnboardingActivationBootstrapInput) {
+    return [
+      input.summary?.trim(),
+      input.city?.trim(),
+      input.country?.trim(),
+      ...(input.interests ?? []).map((value) => value.trim()).filter(Boolean),
+      ...(input.goals ?? []).map((value) => value.trim()).filter(Boolean),
+    ].filter(Boolean).length;
+  }
+
+  private resolveActivationReason(input: {
+    onboardingState: string;
+    activationState: OnboardingActivationPlanResponse["state"];
+    hasActivationContext: boolean;
+  }):
+    | "onboarding_incomplete"
+    | "missing_context"
+    | "activation_ready"
+    | "activation_pending"
+    | "activation_failed" {
+    if (input.activationState === "failed") {
+      return "activation_failed";
+    }
+    if (input.activationState === "pending") {
+      return "activation_pending";
+    }
+    if (input.activationState === "ready") {
+      return "activation_ready";
+    }
+    if (input.onboardingState !== "complete") {
+      return "onboarding_incomplete";
+    }
+    if (!input.hasActivationContext) {
+      return "missing_context";
+    }
+    return "activation_pending";
   }
 
   private parseModelCandidates(
@@ -626,6 +829,150 @@ export class OnboardingService {
         text: seed,
       },
     };
+  }
+
+  private buildIdleActivationPlan(
+    userId: string,
+  ): OnboardingActivationPlanResponse {
+    const activationIdentity = this.buildActivationIdentity(
+      userId,
+      "finish onboarding for first-step bootstrap",
+    );
+    return {
+      state: "idle",
+      source: "fallback",
+      idempotencyKey: activationIdentity.idempotencyKey,
+      activationFingerprint: activationIdentity.fingerprint,
+      summary:
+        "Finish onboarding and confirm your profile, then I can line up your first useful next step.",
+      recommendedAction: {
+        kind: "agent_thread_seed",
+        label: "Keep going",
+        text: "Tell me a bit more about the people, places, or activities you want to prioritize first.",
+      },
+    };
+  }
+
+  private enrichActivationInput(
+    input: OnboardingActivationBootstrapInput,
+    stored: {
+      summary: string | null;
+      city: string | null;
+      country: string | null;
+      interests: string[];
+    },
+  ): OnboardingActivationPlanInput {
+    const mergedInterests = Array.from(
+      new Set(
+        [...(input.interests ?? []), ...stored.interests].filter(Boolean),
+      ),
+    ).slice(0, 12);
+
+    return {
+      ...input,
+      summary: input.summary?.trim() || stored.summary || undefined,
+      city: input.city?.trim() || stored.city || undefined,
+      country: input.country?.trim() || stored.country || undefined,
+      interests: mergedInterests.length > 0 ? mergedInterests : undefined,
+    };
+  }
+
+  private hasActivationContext(input: OnboardingActivationPlanInput): boolean {
+    return Boolean(
+      input.firstIntentText?.trim() ||
+      input.summary?.trim() ||
+      input.persona?.trim() ||
+      input.goals?.length ||
+      input.interests?.length ||
+      input.city?.trim() ||
+      input.country?.trim(),
+    );
+  }
+
+  private resolveActivationState(
+    onboardingState: string,
+    baseState: OnboardingActivationPlanResponse["state"],
+    executionStatus: OnboardingActivationBootstrapResponse["execution"]["status"],
+  ): OnboardingActivationPlanResponse["state"] {
+    if (onboardingState !== "complete" && baseState === "idle") {
+      return "idle";
+    }
+    if (executionStatus === "processing") {
+      return "pending";
+    }
+    if (executionStatus === "failed") {
+      return "failed";
+    }
+    return baseState;
+  }
+
+  private buildActivationExecutionSnapshot(
+    idempotencyKey: string,
+    row:
+      | {
+          status: string;
+          responseBody: Prisma.JsonValue | null;
+        }
+      | null
+      | undefined,
+  ): OnboardingActivationBootstrapResponse["execution"] {
+    const status = this.normalizeExecutionStatus(row?.status);
+    const cachedResponse =
+      row?.responseBody &&
+      typeof row.responseBody === "object" &&
+      !Array.isArray(row.responseBody)
+        ? {
+            threadId: this.readUuidLikeValue(
+              (row.responseBody as Record<string, unknown>).threadId,
+            ),
+            intentId: this.readStringValue(
+              (row.responseBody as Record<string, unknown>).intentId,
+            ),
+            status: this.readStringValue(
+              (row.responseBody as Record<string, unknown>).status,
+            ),
+            intentCount: this.readIntegerValue(
+              (row.responseBody as Record<string, unknown>).intentCount,
+            ),
+          }
+        : null;
+
+    return {
+      scope: "intent.create_from_agent",
+      idempotencyKey,
+      status,
+      hasCachedResponse: status === "completed" && cachedResponse !== null,
+      cachedResponse,
+    };
+  }
+
+  private normalizeExecutionStatus(
+    status?: string | null,
+  ): OnboardingActivationBootstrapResponse["execution"]["status"] {
+    if (status === "processing") {
+      return "processing";
+    }
+    if (status === "completed") {
+      return "completed";
+    }
+    if (status === "failed") {
+      return "failed";
+    }
+    return "idle";
+  }
+
+  private readStringValue(value: unknown): string | null {
+    return typeof value === "string" && value.trim().length > 0 ? value : null;
+  }
+
+  private readUuidLikeValue(value: unknown): string | null {
+    return this.readStringValue(value);
+  }
+
+  private readIntegerValue(value: unknown): number | null {
+    return typeof value === "number" && Number.isInteger(value) && value >= 0
+      ? value
+      : null;
   }
 
   private buildActivationIdentity(

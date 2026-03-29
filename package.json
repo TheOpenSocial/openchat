@@ -38,6 +38,7 @@
     "test:agentic:suite:verification": "node scripts/run-agent-test-suite-verification.mjs",
     "test:agentic:suite:verification:failed": "AGENT_TEST_SUITE_RERUN_FAILED_ONLY=1 node scripts/run-agent-test-suite-verification.mjs",
     "test:backend:ops-pack": "node scripts/run-backend-ops-pack.mjs",
+    "test:moderation:drill": "node --test scripts/moderation-drill.test.mjs",
     "test:playground:ec2-bridge": "node scripts/playground-ec2-verification-bridge.mjs",
     "staging:verify:incident": "node scripts/staging-incident-verify.mjs",
     "moderation:drill": "node scripts/moderation-drill.mjs",

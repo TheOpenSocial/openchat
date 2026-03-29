@@ -50,11 +50,16 @@ Control surface:
 
 ```bash
 pnpm release:check:api
-pnpm test:agentic:suite -- --layer=full
 pnpm test:agentic:suite:verification
 pnpm test:backend:ops-pack
 ```
 
+Run this additionally for release-candidate validation or after regressions that touch benchmark/prod-smoke-sensitive paths:
+
+```bash
+pnpm test:agentic:suite -- --layer=full
+```
+
 ## Ship / no-ship rule
 
-Ship only when all required commands pass, the latest ops-pack artifact status is `passed`, and its `shipVerdict` is `ship_ready`.
+Ship only when all required commands pass, the latest ops-pack artifact status is `passed`, and its `shipVerdict` is `ship_ready`. Treat the `full` layer as a stricter promotion gate for RC/regression-sensitive releases rather than an every-commit default.

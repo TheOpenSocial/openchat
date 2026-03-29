@@ -344,4 +344,89 @@ describe("Onboarding flow contract", () => {
     });
     expect(second).toEqual(first);
   });
+
+  it("exposes activation bootstrap payload for first-session home/chat state", async () => {
+    const userId = "11111111-1111-4111-8111-111111111111";
+    const onboardingService: any = {
+      buildActivationBootstrap: vi.fn().mockResolvedValue({
+        onboardingState: "complete",
+        activation: {
+          state: "ready",
+          source: "fallback",
+          summary: "We prepared your first step.",
+          idempotencyKey:
+            "onboarding-carryover:11111111-1111-4111-8111-111111111111:abc123efab456789",
+          activationFingerprint: "abc123efab456789",
+          recommendedAction: {
+            kind: "agent_thread_seed",
+            label: "Start with this",
+            text: "Help me find football plans in Buenos Aires.",
+          },
+        },
+        readiness: {
+          hasActivationContext: true,
+          profileSignalCount: 3,
+          hasPrimaryThread: true,
+          hasDiscoveryCandidates: true,
+          recommendationReady: true,
+          activationReason: "activation_ready",
+        },
+        primaryThread: {
+          id: "22222222-2222-4222-8222-222222222222",
+          title: "Main",
+          createdAt: "2026-03-28T18:00:00.000Z",
+        },
+        discovery: {
+          tonightCount: 1,
+          reconnectCount: 0,
+          groupCount: 0,
+          activeIntentCount: 0,
+          topTonight: [
+            {
+              userId: "33333333-3333-4333-8333-333333333333",
+              displayName: "Alice",
+              reason: "Strong overlap in football plans.",
+              score: 0.91,
+            },
+          ],
+          inboxSuggestions: [
+            {
+              title: "Try a football plan tonight",
+              reason: "It fits what you just shared.",
+              score: 0.88,
+            },
+          ],
+        },
+        execution: {
+          scope: "intent.create_from_agent",
+          idempotencyKey:
+            "onboarding-carryover:11111111-1111-4111-8111-111111111111:abc123efab456789",
+          status: "completed",
+          hasCachedResponse: true,
+          cachedResponse: {
+            threadId: "22222222-2222-4222-8222-222222222222",
+            intentId: "intent-activation-1",
+            status: "parsed",
+            intentCount: 1,
+          },
+        },
+      }),
+    };
+    const onboardingController = new OnboardingController(onboardingService);
+
+    const response = await onboardingController.activationBootstrap(
+      {
+        userId,
+      },
+      userId,
+    );
+
+    const data = response.data as any;
+    expect(data.onboardingState).toBe("complete");
+    expect(data.activation.state).toBe("ready");
+    expect(data.readiness.activationReason).toBe("activation_ready");
+    expect(data.primaryThread.id).toBe("22222222-2222-4222-8222-222222222222");
+    expect(data.discovery.topTonight).toHaveLength(1);
+    expect(data.execution.status).toBe("completed");
+  });
 });
