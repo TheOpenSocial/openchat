@@ -950,6 +950,27 @@ describe("IntentsService", () => {
     );
   });
 
+  it("grounds no-match recovery in the ask and a concrete next action", async () => {
+    const { service } = createIntentsService();
+
+    const message = (service as any).buildNoMatchRecoveryMessage(
+      {
+        intentType: "social",
+        topics: ["tennis"],
+        timingConstraints: ["tonight"],
+        modality: "offline",
+        groupSizeTarget: 2,
+        skillConstraints: ["intermediate"],
+      },
+      { includeBackground: true },
+    );
+
+    expect(message).toContain("tennis");
+    expect(message).toContain("widen timing");
+    expect(message).toContain("1:1 or a small group");
+    expect(message).toContain("I’m still searching in the background");
+  });
+
   it("reuses delayed retry idempotency keys across repeated no-candidate passes", async () => {
     const { service, intentQueue } = createIntentsService({
       prisma: {

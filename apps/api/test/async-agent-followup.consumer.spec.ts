@@ -117,6 +117,78 @@ describe("AsyncAgentFollowupConsumer", () => {
     );
   });
 
+  it("grounds no-match follow-ups in the original ask and a concrete next step", async () => {
+    const { consumer, agentService, notificationsService } = createConsumer();
+
+    await consumer.process({
+      name: "AsyncAgentFollowup",
+      id: "job-no-match",
+      data: {
+        version: 1,
+        traceId: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+        idempotencyKey:
+          "intent-followup:22222222-2222-4222-8222-222222222222:no_match_yet",
+        timestamp: "2026-03-20T00:00:00.000Z",
+        type: "AsyncAgentFollowup",
+        payload: {
+          userId: "11111111-1111-4111-8111-111111111111",
+          intentId: "22222222-2222-4222-8222-222222222222",
+          template: "no_match_yet",
+        },
+      },
+    } as any);
+
+    expect(agentService.createAgentMessage).toHaveBeenCalledWith(
+      "thread-latest",
+      expect.stringContaining("Need tennis now"),
+    );
+    expect(agentService.createAgentMessage).toHaveBeenCalledWith(
+      "thread-latest",
+      expect.stringContaining("widen timing"),
+    );
+    expect(notificationsService.createInAppNotification).toHaveBeenCalledWith(
+      "11111111-1111-4111-8111-111111111111",
+      "agent_update",
+      expect.stringContaining("Need tennis now"),
+    );
+  });
+
+  it("keeps progress updates tied to the original ask and a next action hint", async () => {
+    const { consumer, agentService, notificationsService } = createConsumer();
+
+    await consumer.process({
+      name: "AsyncAgentFollowup",
+      id: "job-progress",
+      data: {
+        version: 1,
+        traceId: "ffffffff-ffff-4fff-8fff-ffffffffffff",
+        idempotencyKey:
+          "intent-followup:22222222-2222-4222-8222-222222222222:progress_update",
+        timestamp: "2026-03-20T00:00:00.000Z",
+        type: "AsyncAgentFollowup",
+        payload: {
+          userId: "11111111-1111-4111-8111-111111111111",
+          intentId: "22222222-2222-4222-8222-222222222222",
+          template: "progress_update",
+        },
+      },
+    } as any);
+
+    expect(agentService.createAgentMessage).toHaveBeenCalledWith(
+      "thread-latest",
+      expect.stringContaining("Need tennis now"),
+    );
+    expect(agentService.createAgentMessage).toHaveBeenCalledWith(
+      "thread-latest",
+      expect.stringContaining("widen timing"),
+    );
+    expect(notificationsService.createInAppNotification).toHaveBeenCalledWith(
+      "11111111-1111-4111-8111-111111111111",
+      "agent_update",
+      expect.stringContaining("Need tennis now"),
+    );
+  });
+
   it("skips processing when intent is no longer processable", async () => {
     const {
       consumer,

@@ -328,29 +328,56 @@ export class AsyncAgentFollowupConsumer extends WorkerHost {
     },
     rawText: string,
   ) {
+    const contextLabel = this.buildFollowupContextLabel(rawText);
+    const nextActionHint = this.buildNextActionHint(rawText);
+
     if (template === "no_match_yet") {
-      return "Nothing strong enough yet. I’m still searching in the background. The fastest next move is to widen timing, try online or in-person, or switch between 1:1 and a small group.";
+      return `Nothing strong enough yet${contextLabel}. I’m still searching in the background. ${nextActionHint}`;
     }
 
     if (template === "progress_update") {
       if (counts.accepted > 0 && counts.pending > 0) {
-        return `Quick update: ${counts.accepted} accepted, and I still have ${counts.pending} more in motion.`;
+        return `Quick update${contextLabel}: ${counts.accepted} accepted, and I still have ${counts.pending} more in motion. ${nextActionHint}`;
       }
       if (counts.accepted > 0) {
-        return `Quick update: ${counts.accepted} accepted so far. I’m staying on top of the next best options too.`;
+        return `Quick update${contextLabel}: ${counts.accepted} accepted so far. ${nextActionHint}`;
       }
-      return `Quick update: I still have ${counts.pending} in motion and I’m watching for the strongest response.`;
+      return `Quick update${contextLabel}: I still have ${counts.pending} in motion and I’m watching for the strongest response. ${nextActionHint}`;
     }
 
     if (counts.accepted > 0 && counts.pending > 0) {
-      return `Quick update on "${rawText.slice(0, 48)}": ${counts.accepted} accepted, and ${counts.pending} are still in motion.`;
+      return `Quick update${contextLabel}: ${counts.accepted} accepted, and ${counts.pending} are still in motion. ${nextActionHint}`;
     }
 
     if (counts.accepted > 0 && counts.pending === 0) {
-      return `Good news: ${counts.accepted} accepted so far. If you want, I can line up another wave after this.`;
+      return `Good news${contextLabel}: ${counts.accepted} accepted so far. ${nextActionHint}`;
     }
 
-    return `Still in motion: ${counts.pending} pending invite${counts.pending === 1 ? "" : "s"}. I’ll keep you posted here.`;
+    return `Still in motion${contextLabel}: ${counts.pending} pending invite${counts.pending === 1 ? "" : "s"}. ${nextActionHint}`;
+  }
+
+  private buildFollowupContextLabel(rawText: string) {
+    const normalized = rawText.trim().replace(/\s+/g, " ");
+    if (!normalized) {
+      return "";
+    }
+    const snippet = normalized.slice(0, 48);
+    const suffix = normalized.length > snippet.length ? "..." : "";
+    return ` on "${snippet}${suffix}"`;
+  }
+
+  private buildNextActionHint(rawText: string) {
+    const lowered = rawText.toLowerCase();
+    if (/(tonight|today|now|soon|this week)/.test(lowered)) {
+      return "If pace matters, widen timing by a day or two.";
+    }
+    if (/(online|virtual|remote)/.test(lowered)) {
+      return "Keep online and in-person both open so the pool can widen.";
+    }
+    if (/(1:1|one on one|one-on-one|small group|group)/.test(lowered)) {
+      return "Try both 1:1 and a small group to widen the response pool.";
+    }
+    return "If it stays thin, I can widen one constraint at a time.";
   }
 
   private async resolveLatestThreadIdForUser(userId: string) {

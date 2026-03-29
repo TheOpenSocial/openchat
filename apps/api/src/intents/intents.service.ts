@@ -1743,6 +1743,12 @@ export class IntentsService {
         : {};
 
     const suggestions: string[] = [];
+    const primaryTopic =
+      Array.isArray(parsed.topics) && parsed.topics.length > 0
+        ? parsed.topics.find(
+            (topic) => typeof topic === "string" && topic.trim(),
+          )
+        : null;
 
     if (
       Array.isArray(parsed.timingConstraints) &&
@@ -1767,7 +1773,15 @@ export class IntentsService {
       Array.isArray(parsed.skillConstraints) &&
       parsed.skillConstraints.length
     ) {
-      suggestions.push("relax skill filters");
+      suggestions.push("relax skill filters one step at a time");
+    }
+
+    if (
+      suggestions.length === 0 &&
+      Array.isArray(parsed.topics) &&
+      parsed.topics.length > 0
+    ) {
+      suggestions.push("drop one constraint at a time");
     }
 
     const dedupedSuggestions = Array.from(new Set(suggestions)).slice(0, 3);
@@ -1780,7 +1794,9 @@ export class IntentsService {
       ? " I’m still searching in the background."
       : "";
 
-    return `Nothing strong enough yet.${backgroundText} ${suggestionText}`.trim();
+    const topicText = primaryTopic ? ` for ${primaryTopic}` : "";
+
+    return `Nothing strong enough yet${topicText}.${backgroundText} ${suggestionText}`.trim();
   }
 
   private clampIntentCount(value: number) {
