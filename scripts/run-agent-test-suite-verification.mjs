@@ -461,13 +461,14 @@ const stagesFromLatestSummary =
   rerunFailedOnly && stagesFromEnv.length === 0
     ? loadFailedStagesFromLatestSummary()
     : [];
-const firstPassStages = rerunFailedOnly
-  ? stagesFromEnv.length > 0
+const firstPassStages =
+  stagesFromEnv.length > 0
     ? stagesFromEnv
-    : stagesFromLatestSummary.length > 0
-      ? stagesFromLatestSummary
-      : stageSequence
-  : stageSequence;
+    : rerunFailedOnly
+      ? stagesFromLatestSummary.length > 0
+        ? stagesFromLatestSummary
+        : stageSequence
+      : stageSequence;
 let suiteEnv = buildSuiteEnv();
 
 async function hydrateStageCredentials(layer) {
