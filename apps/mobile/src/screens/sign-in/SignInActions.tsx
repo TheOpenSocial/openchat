@@ -10,6 +10,7 @@ import {
 } from "react-native";
 
 import { type AppLocale, t } from "../../i18n/strings";
+import { appTheme } from "../../theme";
 import { signInTheme } from "./sign-in-theme";
 
 type SignInActionsProps = {
@@ -98,7 +99,7 @@ function PrimaryChromeButton({
       testID={testID}
     >
       {loading ? (
-        <ActivityIndicator color="#0a0a0a" />
+        <ActivityIndicator color={appTheme.colors.background} />
       ) : (
         <Text style={styles.primaryLabel}>{label}</Text>
       )}
@@ -128,13 +129,13 @@ const styles = StyleSheet.create({
     opacity: 0.88,
   },
   primaryLabel: {
-    color: "#0a0a0a",
+    color: appTheme.colors.background,
     fontSize: 15,
     fontWeight: "500",
     letterSpacing: 0.2,
   },
   footnote: {
-    color: "rgba(255,255,255,0.42)",
+    color: appTheme.colors.muted,
     fontSize: signInTheme.footnoteSize,
     letterSpacing: 0.15,
     lineHeight: signInTheme.footnoteSize * 1.45,

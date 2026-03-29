@@ -13,6 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { PrimaryButton } from "../components/PrimaryButton";
 import { hapticImpact, hapticSelection } from "../lib/haptics";
+import { appTheme } from "../theme";
 import { useOtherUserProfileData } from "./profile/useProfileData";
 
 export type OtherProfileContext = {
@@ -35,8 +36,8 @@ type OtherUserProfileScreenProps = {
 
 function Chip({ label }: { label: string }) {
   return (
-    <View className="rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1.5">
-      <Text className="text-[12px] font-medium text-white/82">{label}</Text>
+    <View className="rounded-full border border-hairline bg-surfaceMuted/80 px-3 py-1.5">
+      <Text className="text-[12px] font-medium text-ink/90">{label}</Text>
     </View>
   );
 }
@@ -68,6 +69,7 @@ export function OtherUserProfileScreen({
   const otherInterests = allInterests.filter(
     (interest) => !sharedSet.has(interest.toLowerCase()),
   );
+  const iconButtonClassName = "h-11 w-11 items-center justify-center";
 
   const runModerationAction = async (kind: "report" | "block") => {
     setBusyAction(kind);
@@ -86,48 +88,52 @@ export function OtherUserProfileScreen({
 
   return (
     <SafeAreaView
-      className="absolute inset-0 z-40 bg-[#050506]"
+      className="absolute inset-0 z-40 bg-canvas"
       edges={["top", "bottom", "left", "right"]}
     >
       <View className="flex-row items-center justify-between px-5 pb-3 pt-2">
         <Pressable
-          className="h-9 w-9 items-center justify-center"
+          accessibilityHint="Returns to the previous screen."
+          accessibilityLabel="Close profile"
+          accessibilityRole="button"
+          className={iconButtonClassName}
+          hitSlop={10}
           onPress={() => {
             hapticSelection();
             onClose();
           }}
           testID="other-profile-close"
         >
-          <Ionicons
-            color="rgba(255,255,255,0.9)"
-            name="chevron-back"
-            size={20}
-          />
+          <Ionicons color={appTheme.colors.ink} name="chevron-back" size={20} />
         </Pressable>
-        <Text className="text-[13px] font-semibold uppercase tracking-[0.12em] text-white/48">
+        <Text className="text-[13px] font-semibold uppercase tracking-[0.12em] text-muted">
           Profile
         </Text>
         <Pressable
-          className="h-9 w-9 items-center justify-center"
+          accessibilityHint="Opens profile moderation actions."
+          accessibilityLabel="Profile actions"
+          accessibilityRole="button"
+          className={iconButtonClassName}
+          hitSlop={10}
           onPress={() => {
             hapticSelection();
             void runModerationAction("report");
           }}
         >
           <Ionicons
-            color="rgba(255,255,255,0.8)"
+            color={appTheme.colors.ink}
             name="ellipsis-horizontal"
             size={16}
           />
         </Pressable>
       </View>
       {!loading && profile ? (
-        <View className="mx-5 mb-2 rounded-[14px] border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
-          <Text className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/44">
+        <View className="mx-5 mb-2 rounded-[14px] border border-hairline bg-surfaceMuted/80 px-3 py-2.5">
+          <Text className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">
             Why you are seeing this
           </Text>
           <Text
-            className="mt-1 text-[13px] leading-[18px] text-white/84"
+            className="mt-1 text-[13px] leading-[18px] text-ink/90"
             numberOfLines={2}
           >
             {quickReason}
@@ -141,15 +147,13 @@ export function OtherUserProfileScreen({
       >
         {loading || !profile ? (
           <View className="mt-16 flex-row items-center gap-2">
-            <ActivityIndicator color="rgba(255,255,255,0.7)" size="small" />
-            <Text className="text-[13px] text-white/52">
-              Loading profile...
-            </Text>
+            <ActivityIndicator color={appTheme.colors.muted} size="small" />
+            <Text className="text-[13px] text-muted">Loading profile...</Text>
           </View>
         ) : (
           <>
             <Animated.View entering={FadeInUp.duration(240)}>
-              <View className="h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-white/[0.08]">
+              <View className="h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-surfaceMuted/80">
                 {profile.avatarUrl ? (
                   <Image
                     source={{ uri: profile.avatarUrl }}
@@ -157,36 +161,36 @@ export function OtherUserProfileScreen({
                     resizeMode="cover"
                   />
                 ) : (
-                  <Text className="text-[20px] font-semibold text-white">
+                  <Text className="text-[20px] font-semibold text-ink">
                     {(profile.name.charAt(0) || "U").toUpperCase()}
                   </Text>
                 )}
               </View>
-              <Text className="mt-4 text-[25px] font-semibold tracking-[-0.03em] text-white">
+              <Text className="mt-4 text-[25px] font-semibold tracking-[-0.03em] text-ink">
                 {profile.name}
               </Text>
-              <Text className="mt-1 text-[13px] leading-[20px] text-white/45">
+              <Text className="mt-1 text-[13px] leading-[20px] text-muted">
                 {profile.bio || "No bio yet."}
               </Text>
               {profile.location ? (
-                <Text className="mt-2 text-[12px] text-white/42">
+                <Text className="mt-2 text-[12px] text-muted">
                   {profile.location}
                 </Text>
               ) : null}
             </Animated.View>
 
             <Animated.View
-              className="mt-5 rounded-[20px] border border-white/[0.07] bg-white/[0.035] px-4 py-4"
+              className="mt-5 rounded-[20px] border border-hairline bg-surfaceMuted/75 px-4 py-4"
               entering={FadeInUp.delay(40).duration(240)}
             >
-              <Text className="text-[12px] font-semibold uppercase tracking-[0.14em] text-white/42">
+              <Text className="text-[12px] font-semibold uppercase tracking-[0.14em] text-muted">
                 Why This Person
               </Text>
-              <Text className="mt-3 text-[14px] leading-[22px] text-white/82">
+              <Text className="mt-3 text-[14px] leading-[22px] text-ink/90">
                 {quickReason}
               </Text>
               {profile.context?.lastInteraction ? (
-                <Text className="mt-2 text-[12px] text-white/50">
+                <Text className="mt-2 text-[12px] text-muted">
                   {profile.context.lastInteraction}
                 </Text>
               ) : null}
@@ -197,7 +201,7 @@ export function OtherUserProfileScreen({
                   ))}
                 </View>
               ) : (
-                <Text className="mt-2 text-[12px] text-white/44">
+                <Text className="mt-2 text-[12px] text-muted">
                   No shared topics yet.
                 </Text>
               )}
@@ -261,12 +265,12 @@ export function OtherUserProfileScreen({
               className="mt-5"
               entering={FadeInUp.delay(80).duration(240)}
             >
-              <Text className="text-[12px] font-semibold uppercase tracking-[0.14em] text-white/42">
+              <Text className="text-[12px] font-semibold uppercase tracking-[0.14em] text-muted">
                 Interests
               </Text>
               {sharedTopics.length > 0 ? (
                 <>
-                  <Text className="mt-3 text-[12px] uppercase tracking-[0.11em] text-white/38">
+                  <Text className="mt-3 text-[12px] uppercase tracking-[0.11em] text-muted">
                     Shared
                   </Text>
                   <View className="mt-2 flex-row flex-wrap gap-2">
@@ -276,7 +280,7 @@ export function OtherUserProfileScreen({
                   </View>
                 </>
               ) : null}
-              <Text className="mt-3 text-[12px] uppercase tracking-[0.11em] text-white/38">
+              <Text className="mt-3 text-[12px] uppercase tracking-[0.11em] text-muted">
                 {sharedTopics.length > 0 ? "Other interests" : "Topics"}
               </Text>
               <View className="mt-2 flex-row flex-wrap gap-2">
@@ -286,7 +290,7 @@ export function OtherUserProfileScreen({
                     (interest) => <Chip key={interest} label={interest} />,
                   )
                 ) : (
-                  <Text className="text-[13px] text-white/46">
+                  <Text className="text-[13px] text-muted">
                     Interests are still being inferred.
                   </Text>
                 )}
@@ -297,35 +301,35 @@ export function OtherUserProfileScreen({
               className="mt-5"
               entering={FadeInUp.delay(120).duration(240)}
             >
-              <Text className="text-[12px] font-semibold uppercase tracking-[0.14em] text-white/42">
+              <Text className="text-[12px] font-semibold uppercase tracking-[0.14em] text-muted">
                 How They Connect
               </Text>
               <View className="mt-3 gap-2">
-                <Text className="text-[13px] text-white/82">
+                <Text className="text-[13px] text-ink/90">
                   Format: {profile.preferences.format || "Not specified"}
                 </Text>
-                <Text className="text-[13px] text-white/82">
+                <Text className="text-[13px] text-ink/90">
                   Mode: {profile.preferences.mode || "Social"}
                 </Text>
-                <Text className="text-[13px] text-white/82">
+                <Text className="text-[13px] text-ink/90">
                   Availability: {profile.preferences.availability || "Unknown"}
                 </Text>
               </View>
-              <View className="mt-4 h-px bg-white/[0.05]" />
+              <View className="mt-4 h-px bg-hairline/70" />
             </Animated.View>
 
             {profile.persona ? (
               <Animated.View
-                className="mt-5 rounded-[18px] border border-white/[0.07] bg-white/[0.03] px-4 py-4"
+                className="mt-5 rounded-[18px] border border-hairline bg-surfaceMuted/75 px-4 py-4"
                 entering={FadeInUp.delay(160).duration(240)}
               >
-                <Text className="text-[12px] font-semibold uppercase tracking-[0.14em] text-white/42">
+                <Text className="text-[12px] font-semibold uppercase tracking-[0.14em] text-muted">
                   Persona
                 </Text>
-                <Text className="mt-3 text-[17px] font-semibold text-white/92">
+                <Text className="mt-3 text-[17px] font-semibold text-ink">
                   {profile.persona}
                 </Text>
-                <Text className="mt-1 text-[13px] leading-[20px] text-white/62">
+                <Text className="mt-1 text-[13px] leading-[20px] text-muted">
                   A lightweight style summary inferred from interaction signals.
                 </Text>
               </Animated.View>
@@ -335,24 +339,29 @@ export function OtherUserProfileScreen({
               className="mt-5"
               entering={FadeInUp.delay(200).duration(240)}
             >
-              <Text className="text-[12px] font-semibold uppercase tracking-[0.14em] text-white/42">
+              <Text className="text-[12px] font-semibold uppercase tracking-[0.14em] text-muted">
                 Relationship Context
               </Text>
-              <Text className="mt-3 text-[13px] leading-[20px] text-white/78">
+              <Text className="mt-3 text-[13px] leading-[20px] text-ink/90">
                 {profile.context?.lastInteraction ||
                   "No previous interactions yet."}
               </Text>
-              <View className="mt-4 h-px bg-white/[0.05]" />
+              <View className="mt-4 h-px bg-hairline/70" />
             </Animated.View>
 
             {error ? (
-              <Text className="mt-3 text-[12px] text-[#fca5a5]">{error}</Text>
+              <Text
+                className="mt-3 text-[12px]"
+                style={{ color: appTheme.colors.danger }}
+              >
+                {error}
+              </Text>
             ) : null}
           </>
         )}
       </ScrollView>
 
-      <View className="border-t border-white/[0.06] bg-[#070708]/95 px-5 pb-7 pt-3">
+      <View className="border-t border-hairline bg-canvas/95 px-5 pb-7 pt-3">
         <View className="mt-2 flex-row gap-2">
           <View className="flex-1">
             <PrimaryButton

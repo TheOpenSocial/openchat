@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { View } from "react-native";
+import { Text, View } from "react-native";
 import Animated, { FadeInRight } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -14,6 +14,14 @@ import { usePrimaryAgentThread } from "../lib/use-primary-agent-thread";
 import { useKeyboardVisible } from "../hooks/useKeyboardVisible";
 import { MobileSession, UserProfileDraft } from "../types";
 import { HomeAgentThreadScreen } from "./HomeAgentThreadScreen";
+import { ActivityScreen } from "./ActivityScreen";
+import { ConnectionsScreen } from "./ConnectionsScreen";
+import { DiscoveryScreen } from "./DiscoveryScreen";
+import { InboxScreen } from "./InboxScreen";
+import { IntentDetailScreen } from "./IntentDetailScreen";
+import { RecurringCirclesScreen } from "./RecurringCirclesScreen";
+import { SavedSearchesScreen } from "./SavedSearchesScreen";
+import { ScheduledTasksScreen } from "./ScheduledTasksScreen";
 import {
   OtherUserProfileScreen,
   type OtherProfileContext,
@@ -38,9 +46,23 @@ import { useChatsRealtime } from "./home/hooks/useChatsRealtime";
 import { useChatsHydration } from "./home/hooks/useChatsHydration";
 import { useHomeRecoveryController } from "./home/hooks/useHomeRecoveryController";
 import { useHomeWelcomeSheet } from "./home/hooks/useHomeWelcomeSheet";
+import { useActivityIndicator } from "../features/activity/hooks/useActivityIndicator";
+import {
+  usePushLifecycle,
+  type PushRouteIntent,
+} from "../features/notifications/hooks/usePushLifecycle";
+import { useNonChatRealtimeController } from "../features/realtime/hooks/useNonChatRealtimeController";
+import { useActivityStore } from "../store/activity-store";
 import { useHomeShellStore } from "../store/home-shell-store";
 import { useHomeThreadStore } from "../store/home-thread-store";
 import { useChatsStore } from "../store/chats-store";
+
+const HOME_SHELL_BACKGROUND_COLOR = "#212121";
+const HOME_SHELL_CONTAINER_STYLE = {
+  flex: 1,
+  backgroundColor: HOME_SHELL_BACKGROUND_COLOR,
+} as const;
+const FULL_SCREEN_STYLE = { flex: 1 } as const;
 
 export interface HomeScreenProps {
   session: MobileSession;
@@ -65,6 +87,23 @@ function stableHash36(input: string) {
 function buildOnboardingCarryoverIdempotencyKey(userId: string, seed: string) {
   const normalized = seed.trim().toLowerCase().replace(/\s+/g, " ");
   return `onboarding-carryover:${userId}:${stableHash36(normalized)}`;
+}
+
+function describePushRouteIntent(intent: PushRouteIntent | null) {
+  if (!intent) {
+    return "idle";
+  }
+
+  switch (intent.kind) {
+    case "chat":
+      return `chat:${intent.chatId}`;
+    case "intent":
+      return `intent:${intent.intentId}`;
+    case "profile":
+      return `profile:${intent.userId}`;
+    default:
+      return intent.kind;
+  }
 }
 
 export function HomeScreen({
@@ -196,7 +235,125 @@ export function HomeScreen({
     userId: string;
     context: OtherProfileContext;
   } | null>(null);
+  const [activityOpen, setActivityOpen] = useState(false);
+  const [inboxOpen, setInboxOpen] = useState(false);
+  const [connectionsOpen, setConnectionsOpen] = useState(false);
+  const [discoveryOpen, setDiscoveryOpen] = useState(false);
+  const [recurringCirclesOpen, setRecurringCirclesOpen] = useState(false);
+  const [savedSearchesOpen, setSavedSearchesOpen] = useState(false);
+  const [scheduledTasksOpen, setScheduledTasksOpen] = useState(false);
+  const [intentDetailIntentId, setIntentDetailIntentId] = useState<
+    string | null
+  >(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const activityHasUnread = useActivityStore((store) => store.hasUnread);
+  const nonChatRealtimeCallbacks = useNonChatRealtimeController({
+    setBanner,
+  });
+  const showPushDebug =
+    __DEV__ || process.env.EXPO_PUBLIC_ENABLE_PUSH_DEBUG === "1";
+
+  const renderTransientScreen = useCallback(
+    (screen: React.ReactNode, options?: { animated?: boolean }) => {
+      if (options?.animated === false) {
+        return screen;
+      }
+
+      return (
+        <View className="flex-1 bg-canvas" style={HOME_SHELL_CONTAINER_STYLE}>
+          <Animated.View
+            entering={FadeInRight.duration(220)}
+            style={FULL_SCREEN_STYLE}
+          >
+            {screen}
+          </Animated.View>
+        </View>
+      );
+    },
+    [],
+  );
+
+  const closeTransientRoutes = useCallback(() => {
+    setActivityOpen(false);
+    setConnectionsOpen(false);
+    setDiscoveryOpen(false);
+    setInboxOpen(false);
+    setRecurringCirclesOpen(false);
+    setSavedSearchesOpen(false);
+    setScheduledTasksOpen(false);
+    setIntentDetailIntentId(null);
+    setSettingsOpen(false);
+    setOtherProfileTarget(null);
+  }, []);
+
+  const handlePushRouteIntent = useCallback(
+    (intent: PushRouteIntent) => {
+      closeTransientRoutes();
+
+      switch (intent.kind) {
+        case "activity":
+          setActivityOpen(true);
+          break;
+        case "connections":
+          setConnectionsOpen(true);
+          break;
+        case "discovery":
+          setDiscoveryOpen(true);
+          break;
+        case "home":
+          setActiveTab("home");
+          break;
+        case "inbox":
+          setInboxOpen(true);
+          break;
+        case "intent":
+          setIntentDetailIntentId(intent.intentId);
+          break;
+        case "profile":
+          if (intent.userId === session.userId) {
+            setActiveTab("profile");
+            break;
+          }
+          setOtherProfileTarget({
+            userId: intent.userId,
+            context: {
+              source: "chat",
+              reason: "Opened from a notification.",
+            },
+          });
+          break;
+        case "recurringCircles":
+          setRecurringCirclesOpen(true);
+          break;
+        case "savedSearches":
+          setSavedSearchesOpen(true);
+          break;
+        case "scheduledTasks":
+          setScheduledTasksOpen(true);
+          break;
+        case "settings":
+          setSettingsOpen(true);
+          break;
+        case "chat":
+          setActiveTab("chats");
+          setSelectedChatId(intent.chatId);
+          break;
+        default:
+          break;
+      }
+    },
+    [closeTransientRoutes, session.userId, setActiveTab, setSelectedChatId],
+  );
+  const { push, pushDebug } = usePushLifecycle({
+    enabled: true,
+    onRouteIntent: handlePushRouteIntent,
+    userId: session.userId,
+  });
+
+  useActivityIndicator({
+    accessToken: session.accessToken,
+    userId: session.userId,
+  });
 
   useEffect(() => {
     setChatStorageReady(false);
@@ -353,6 +510,7 @@ export function HomeScreen({
     localTypingChatIdRef,
     localTypingStopTimeoutRef,
     realtimeSessionRef,
+    realtimeCallbacks: nonChatRealtimeCallbacks,
     selectedChatId,
     selectedChatIdRef,
     sessionAccessToken: session.accessToken,
@@ -487,22 +645,184 @@ export function HomeScreen({
   }
 
   if (settingsOpen) {
-    return (
-      <View className="flex-1 bg-[#050506]" style={{ flex: 1 }}>
-        <Animated.View entering={FadeInRight.duration(220)} style={{ flex: 1 }}>
-          <SettingsScreen
-            accessToken={session.accessToken}
-            displayName={session.displayName}
-            email={session.email}
-            initialDraft={initialProfile}
-            onClose={() => {
-              setSettingsOpen(false);
-            }}
-            onProfileUpdated={onProfileUpdated}
-            userId={session.userId}
-          />
-        </Animated.View>
-      </View>
+    return renderTransientScreen(
+      <SettingsScreen
+        accessToken={session.accessToken}
+        displayName={session.displayName}
+        email={session.email}
+        initialDraft={initialProfile}
+        onClose={() => {
+          setSettingsOpen(false);
+        }}
+        onProfileUpdated={onProfileUpdated}
+        userId={session.userId}
+      />,
+    );
+  }
+
+  if (activityOpen) {
+    return renderTransientScreen(
+      <ActivityScreen
+        accessToken={session.accessToken}
+        onClose={() => {
+          setActivityOpen(false);
+        }}
+        onOpenConnections={() => {
+          setActivityOpen(false);
+          setConnectionsOpen(true);
+        }}
+        onOpenDiscovery={() => {
+          setActivityOpen(false);
+          setDiscoveryOpen(true);
+        }}
+        onOpenInbox={() => {
+          setActivityOpen(false);
+          setInboxOpen(true);
+        }}
+        onOpenIntentDetail={(intentId) => {
+          setActivityOpen(false);
+          setIntentDetailIntentId(intentId);
+        }}
+        onOpenRecurringCircles={() => {
+          setActivityOpen(false);
+          setRecurringCirclesOpen(true);
+        }}
+        onOpenSavedSearches={() => {
+          setActivityOpen(false);
+          setSavedSearchesOpen(true);
+        }}
+        onOpenScheduledTasks={() => {
+          setActivityOpen(false);
+          setScheduledTasksOpen(true);
+        }}
+        userId={session.userId}
+      />,
+    );
+  }
+
+  if (connectionsOpen) {
+    return renderTransientScreen(
+      <ConnectionsScreen
+        accessToken={session.accessToken}
+        onClose={() => {
+          setConnectionsOpen(false);
+        }}
+        onOpenChat={(chatId) => {
+          setConnectionsOpen(false);
+          setActiveTab("chats");
+          setSelectedChatId(chatId);
+        }}
+        onOpenProfile={(targetUserId) => {
+          setConnectionsOpen(false);
+          setOtherProfileTarget({
+            userId: targetUserId,
+            context: {
+              source: "chat",
+              reason: "You are connected through an existing direct chat.",
+            },
+          });
+        }}
+        userId={session.userId}
+      />,
+    );
+  }
+
+  if (discoveryOpen) {
+    return renderTransientScreen(
+      <DiscoveryScreen
+        accessToken={session.accessToken}
+        onClose={() => {
+          setDiscoveryOpen(false);
+        }}
+        onOpenProfile={(targetUserId) => {
+          setDiscoveryOpen(false);
+          setOtherProfileTarget({
+            userId: targetUserId,
+            context: {
+              source: "request",
+              reason:
+                "Suggested from discovery as a strong match for your current intent.",
+            },
+          });
+        }}
+        userId={session.userId}
+      />,
+      { animated: false },
+    );
+  }
+
+  if (recurringCirclesOpen) {
+    return renderTransientScreen(
+      <RecurringCirclesScreen
+        accessToken={session.accessToken}
+        onClose={() => {
+          setRecurringCirclesOpen(false);
+        }}
+        userId={session.userId}
+      />,
+    );
+  }
+
+  if (savedSearchesOpen) {
+    return renderTransientScreen(
+      <SavedSearchesScreen
+        accessToken={session.accessToken}
+        onClose={() => {
+          setSavedSearchesOpen(false);
+        }}
+        userId={session.userId}
+      />,
+    );
+  }
+
+  if (scheduledTasksOpen) {
+    return renderTransientScreen(
+      <ScheduledTasksScreen
+        accessToken={session.accessToken}
+        onClose={() => {
+          setScheduledTasksOpen(false);
+        }}
+        userId={session.userId}
+      />,
+    );
+  }
+
+  if (intentDetailIntentId) {
+    return renderTransientScreen(
+      <IntentDetailScreen
+        accessToken={session.accessToken}
+        intentId={intentDetailIntentId}
+        onClose={() => {
+          setIntentDetailIntentId(null);
+        }}
+        userId={session.userId}
+      />,
+    );
+  }
+
+  if (inboxOpen) {
+    return renderTransientScreen(
+      <InboxScreen
+        accessToken={session.accessToken}
+        onClose={() => {
+          setInboxOpen(false);
+        }}
+        onOpenIntentDetail={(intentId) => {
+          setInboxOpen(false);
+          setIntentDetailIntentId(intentId);
+        }}
+        onOpenProfile={(targetUserId) => {
+          setInboxOpen(false);
+          setOtherProfileTarget({
+            userId: targetUserId,
+            context: {
+              source: "request",
+              reason: "This person sent you a connection request.",
+            },
+          });
+        }}
+        userId={session.userId}
+      />,
     );
   }
 
@@ -537,7 +857,7 @@ export function HomeScreen({
           typingUsers={typingUsers}
         />
       }
-      hasNotifications={pendingOutboxCount > 0}
+      hasNotifications={activityHasUnread || pendingOutboxCount > 0}
       homeContent={
         <HomeAgentThreadScreen
           agentImageUrl={agentImageUrlDraft}
@@ -596,6 +916,7 @@ export function HomeScreen({
       }}
       onPressNotifications={() => {
         hapticSelection();
+        setActivityOpen(true);
       }}
       onTabChange={(tab) => {
         hapticSelection();
@@ -603,6 +924,30 @@ export function HomeScreen({
       }}
       overlay={
         <>
+          {showPushDebug ? (
+            <View
+              className="absolute left-4 top-4 max-w-[260px] rounded-[18px] border border-white/[0.08] bg-black/55 px-3 py-2.5"
+              pointerEvents="none"
+              testID="push-debug-overlay"
+            >
+              <Text className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/45">
+                Push
+              </Text>
+              <Text className="mt-1 text-[11px] leading-[16px] text-white/78">
+                {push.enabled
+                  ? `enabled • ${push.permissionStatus}`
+                  : `disabled • ${push.permissionStatus}`}
+              </Text>
+              <Text className="mt-0.5 text-[11px] leading-[16px] text-white/58">
+                {`listener ${pushDebug.listenerState} • ${describePushRouteIntent(
+                  pushDebug.lastRouteIntent,
+                )}`}
+              </Text>
+              <Text className="mt-0.5 text-[11px] leading-[16px] text-white/42">
+                {`received ${pushDebug.notificationReceivedCount} • responses ${pushDebug.notificationResponseCount}`}
+              </Text>
+            </View>
+          ) : null}
           <DevOrb
             bottomOffset={composerBottomInset + 14}
             onCreateDmSandbox={async () => {

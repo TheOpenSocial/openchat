@@ -10,6 +10,11 @@ import type { AppLocale } from "../../i18n/strings";
 import type { HomeTab } from "../../types";
 
 type BannerTone = "error" | "info" | "success";
+const HOME_SHELL_BACKGROUND_COLOR = "#050506";
+const HOME_SHELL_STYLE = {
+  flex: 1,
+  backgroundColor: HOME_SHELL_BACKGROUND_COLOR,
+} as const;
 
 type HomeScreenLayoutProps = {
   activeTab: HomeTab;
@@ -53,11 +58,13 @@ export function HomeScreenLayout({
   visibleBanner,
 }: HomeScreenLayoutProps) {
   void _locale;
+  const shouldShowInlineNotices = activeTab !== "home";
+
   return (
     <SafeAreaView
       className="flex-1 bg-canvas"
       edges={[]}
-      style={{ flex: 1, backgroundColor: "#050506" }}
+      style={HOME_SHELL_STYLE}
       testID="home-screen"
     >
       <KeyboardAvoidingView
@@ -66,11 +73,8 @@ export function HomeScreenLayout({
         keyboardVerticalOffset={0}
         style={{ flex: 1 }}
       >
-        <View
-          className="flex-1"
-          style={{ flex: 1, backgroundColor: "#050506" }}
-        >
-          {visibleBanner && activeTab !== "home" ? (
+        <View className="flex-1" style={HOME_SHELL_STYLE}>
+          {visibleBanner && shouldShowInlineNotices ? (
             <View className="px-5 pt-3">
               <InlineNotice
                 text={visibleBanner.text}
@@ -78,7 +82,7 @@ export function HomeScreenLayout({
               />
             </View>
           ) : null}
-          {!skipNetwork && !netOnline && activeTab !== "home" ? (
+          {!skipNetwork && !netOnline && shouldShowInlineNotices ? (
             <View className="px-5 pt-3">
               <InlineNotice text={offlineNoticeText} tone="info" />
             </View>

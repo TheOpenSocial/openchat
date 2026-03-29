@@ -1,5 +1,4 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { BlurView } from "expo-blur";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { useState } from "react";
 import type { LayoutChangeEvent } from "react-native";
 
@@ -119,16 +118,16 @@ export function ChatsListScreen({
   };
 
   return (
-    <View className="min-h-0 flex-1 bg-[#050506] px-5 pb-4 pt-2">
+    <View className="min-h-0 flex-1 bg-canvas px-5 pb-4 pt-2">
       <View className="mb-4 flex-row items-center gap-2 px-0.5">
-        <View className="rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1">
+        <View className="rounded-full border border-hairline bg-surfaceMuted px-2.5 py-1">
           <Text
             className={`text-[10px] font-semibold uppercase tracking-[0.14em] ${
               realtimeState === "connected"
-                ? "text-white/62"
+                ? "text-ink"
                 : realtimeState === "connecting"
-                  ? "text-white/46"
-                  : "text-white/34"
+                  ? "text-muted"
+                  : "text-muted"
             }`}
           >
             {realtimeState === "connected"
@@ -139,7 +138,7 @@ export function ChatsListScreen({
           </Text>
         </View>
         <Text
-          className="min-w-0 flex-1 text-[12px] leading-[18px] text-white/32"
+          className="min-w-0 flex-1 text-[12px] leading-[18px] text-muted"
           numberOfLines={2}
         >
           Human conversations live here.
@@ -155,26 +154,33 @@ export function ChatsListScreen({
         <ScrollView className="mb-4 max-h-44">
           {threads.map((thread) => (
             <Pressable
+              accessibilityHint={
+                thread.unreadCount > 0
+                  ? `${thread.unreadCount} unread message${thread.unreadCount === 1 ? "" : "s"}.`
+                  : "Opens the conversation."
+              }
+              accessibilityLabel={`Open chat ${thread.title}`}
+              accessibilityRole="button"
               className={`mb-2 rounded-[20px] border px-4 py-3 ${
                 selectedChat?.id === thread.id
-                  ? "border-white/[0.14] bg-white/[0.08]"
-                  : "border-white/[0.06] bg-white/[0.03]"
+                  ? "border-hairline bg-surfaceMuted"
+                  : "border-hairline bg-surfaceMuted/70"
               }`}
               key={thread.id}
               onPress={() => {
                 void onOpenChat(thread.id);
               }}
             >
-              <Text className="text-[14px] font-semibold text-white/88">
+              <Text className="text-[14px] font-semibold text-ink">
                 {thread.title}
               </Text>
               <View className="mt-1 flex-row items-center justify-between gap-3">
-                <Text className="min-w-0 flex-1 text-[11px] text-white/34">
+                <Text className="min-w-0 flex-1 text-[11px] text-muted">
                   {thread.messages.at(-1)?.body ?? formatThreadSummary(thread)}
                 </Text>
                 {thread.unreadCount > 0 ? (
-                  <View className="rounded-full bg-white px-2 py-1">
-                    <Text className="text-[10px] font-semibold text-[#0d0d0d]">
+                  <View className="rounded-full bg-ink px-2 py-1">
+                    <Text className="text-[10px] font-semibold text-canvas">
                       {thread.unreadCount > 9 ? "9+" : thread.unreadCount}
                     </Text>
                   </View>
@@ -185,17 +191,17 @@ export function ChatsListScreen({
         </ScrollView>
       )}
 
-      <View className="min-h-0 flex-1 overflow-hidden rounded-[26px] border border-white/[0.06] bg-white/[0.03]">
+      <View className="min-h-0 flex-1 overflow-hidden rounded-[26px] border border-hairline bg-surfaceMuted/70">
         <View
           className="min-h-0 flex-1 px-4 pt-4"
           style={{ paddingBottom: composerOverlayHeight }}
         >
           {selectedChat ? (
             <>
-              <Text className="text-[18px] font-semibold tracking-[-0.02em] text-white/92">
+              <Text className="text-[18px] font-semibold tracking-[-0.02em] text-ink">
                 {selectedChat.title}
               </Text>
-              <Text className="mt-1 text-[12px] leading-[18px] text-white/34">
+              <Text className="mt-1 text-[12px] leading-[18px] text-muted">
                 {formatThreadSummary(selectedChat)}
               </Text>
               {moderationTargetUserId ? (
@@ -269,18 +275,18 @@ export function ChatsListScreen({
                 </View>
               ) : (
                 <View className="min-h-0 flex-1 items-center justify-center">
-                  <Text className="text-[13px] text-white/34">
+                  <Text className="text-[13px] text-muted">
                     No messages yet.
                   </Text>
                 </View>
               )}
               {loadingMessages ? (
-                <Text className="mb-2 text-[11px] text-white/46">
+                <Text className="mb-2 text-[11px] text-muted">
                   Syncing latest…
                 </Text>
               ) : null}
               {typingUsers.length > 0 ? (
-                <Text className="mb-2 text-[11px] text-white/38">
+                <Text className="mb-2 text-[11px] text-muted">
                   {typingUsers.length === 1
                     ? "Someone is typing…"
                     : `${typingUsers.length} people are typing…`}
@@ -289,10 +295,10 @@ export function ChatsListScreen({
             </>
           ) : (
             <View className="min-h-0 flex-1 items-center justify-center">
-              <Text className="text-center text-[15px] font-medium text-white/48">
+              <Text className="text-center text-[15px] font-medium text-ink">
                 Select a chat to start talking
               </Text>
-              <Text className="mt-2 max-w-[260px] text-center text-[12px] leading-[18px] text-white/28">
+              <Text className="mt-2 max-w-[260px] text-center text-[12px] leading-[18px] text-muted">
                 Your composer stays ready here once you open a conversation.
               </Text>
             </View>
@@ -302,18 +308,10 @@ export function ChatsListScreen({
           className="absolute bottom-0 left-0 right-0 px-4 pb-4 pt-2"
           onLayout={onComposerLayout}
         >
-          <View className="overflow-hidden rounded-[22px] border border-white/[0.08] px-2 py-2">
-            <BlurView
-              intensity={24}
-              style={StyleSheet.absoluteFillObject}
-              tint="dark"
-            />
+          <View className="overflow-hidden rounded-[22px] border border-hairline bg-surfaceMuted/90 px-2 py-2">
             <View
               pointerEvents="none"
-              style={[
-                StyleSheet.absoluteFillObject,
-                { backgroundColor: "rgba(8,10,14,0.16)" },
-              ]}
+              className="absolute inset-0 bg-surface/30"
             />
             <MessageComposer
               canSend={canSendMessage}

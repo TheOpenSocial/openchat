@@ -8,6 +8,7 @@ import { WelcomeBackdrop } from "../components/WelcomeBackdrop";
 import { type AppLocale, t } from "../i18n/strings";
 import { api } from "../lib/api";
 import { showErrorToast } from "../lib/app-toast";
+import { appTheme } from "../theme";
 
 import { SignInActions } from "./sign-in/SignInActions";
 import { SignInGradientOverlay } from "./sign-in/SignInGradientOverlay";
@@ -155,7 +156,7 @@ const styles = StyleSheet.create({
   },
   wordmark: {
     alignSelf: "center",
-    color: "rgba(255,255,255,0.36)",
+    color: appTheme.colors.muted,
     fontSize: signInTheme.wordmarkSize,
     fontWeight: "600",
     letterSpacing: signInTheme.wordmarkSize * 0.22,

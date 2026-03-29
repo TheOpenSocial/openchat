@@ -1,8 +1,7 @@
-import { BlurView } from "expo-blur";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useEffect } from "react";
 import type { LayoutChangeEvent } from "react-native";
-import { Pressable, StyleSheet, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import Animated, {
   Easing,
   interpolate,
@@ -34,19 +33,23 @@ const TAB_META: Record<
   {
     icon: React.ComponentProps<typeof Ionicons>["name"];
     label: string;
+    hint: string;
   }
 > = {
   chats: {
     icon: "chatbubble-outline",
     label: "Chats",
+    hint: "Tab 1 of 3. Shows your conversations.",
   },
   home: {
     icon: "sparkles-outline",
     label: "Home",
+    hint: "Tab 2 of 3. Opens the home workspace.",
   },
   profile: {
     icon: "person-outline",
     label: "Profile",
+    hint: "Tab 3 of 3. Opens your profile.",
   },
 };
 
@@ -85,6 +88,7 @@ function TabItem({
 
   return (
     <Pressable
+      accessibilityHint={meta.hint}
       accessibilityLabel={meta.label}
       accessibilityRole="tab"
       accessibilityState={{ selected: isActive }}
@@ -106,14 +110,23 @@ function TabItem({
       >
         <View className="h-10 w-10 items-center justify-center">
           <Ionicons
-            color={isActive ? "#ffffff" : "rgba(255,255,255,0.42)"}
+            color={isActive ? appTheme.colors.background : appTheme.colors.ink}
+            style={{ opacity: isActive ? 1 : 0.62 }}
             name={meta.icon}
             size={20}
           />
           {badgeCount > 0 ? (
-            <View className="absolute right-0 top-1 h-1.5 w-1.5 rounded-full bg-white/88" />
+            <View className="absolute right-0 top-1 h-1.5 w-1.5 rounded-full bg-ink" />
           ) : null}
         </View>
+        <Text
+          className={`text-[10px] font-semibold tracking-[0.02em] ${
+            isActive ? "text-canvas" : "text-muted"
+          }`}
+          numberOfLines={1}
+        >
+          {meta.label}
+        </Text>
       </Animated.View>
     </Pressable>
   );
@@ -190,29 +203,26 @@ export function AppBottomTabs({
       style={shellStyle}
     >
       <View
+        accessibilityLabel="Primary navigation tabs"
+        accessibilityRole="tablist"
         className="overflow-hidden"
         onLayout={handleLayout}
         style={{
           paddingBottom: Math.max(insets.bottom, 8),
+          backgroundColor: appTheme.colors.background,
+          borderTopColor: appTheme.colors.hairline,
+          borderTopWidth: 1,
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.14,
+          shadowRadius: 12,
           width: "100%",
         }}
       >
-        <BlurView
-          intensity={18}
-          style={StyleSheet.absoluteFillObject}
-          tint="dark"
-        />
-        <View
-          pointerEvents="none"
-          style={[
-            StyleSheet.absoluteFillObject,
-            { backgroundColor: "rgba(5,6,7,0.78)" },
-          ]}
-        />
         <View>
-          <View className="overflow-hidden ">
+          <View className="overflow-hidden">
             <Animated.View
-              className="absolute bottom-[5px] left-0 top-[5px] rounded-full bg-white/[0.055]"
+              className="absolute bottom-[5px] left-0 top-[5px] rounded-full border border-hairline bg-ink"
               style={indicatorStyle}
             />
             <View className="flex-row items-center py-[3px]">

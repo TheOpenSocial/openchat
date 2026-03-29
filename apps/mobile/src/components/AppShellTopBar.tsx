@@ -1,4 +1,3 @@
-import { BlurView } from "expo-blur";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Keyboard, Pressable, StyleSheet, Text, View } from "react-native";
 
@@ -30,32 +29,30 @@ export function AppShellTopBar({
     handler();
   };
 
+  const iconButtonClassName = "h-11 w-11 items-center justify-center";
+
   return (
     <View
-      className="px-5"
+      className="border-b border-hairline bg-canvas px-5"
       style={{
         height: headerHeight,
         paddingTop: topInset,
         paddingBottom: 4,
-        backgroundColor: "rgba(5,5,6,0.12)",
+        backgroundColor: "rgba(33,33,33,0.94)",
         overflow: "hidden",
       }}
     >
-      <BlurView
-        intensity={36}
-        style={StyleSheet.absoluteFillObject}
-        tint="dark"
-      />
       <View
         pointerEvents="none"
         style={[
           StyleSheet.absoluteFillObject,
-          { backgroundColor: "rgba(5,5,6,0.22)" },
+          { backgroundColor: "rgba(33,33,33,0.24)" },
         ]}
       />
       <View className="flex-row items-center justify-between gap-4">
         <Pressable
-          accessibilityLabel="Go to Home"
+          accessibilityHint="Dismisses the current screen and returns to the Home tab."
+          accessibilityLabel="Home"
           accessibilityRole="button"
           className="min-w-0 flex-1"
           hitSlop={8}
@@ -66,14 +63,14 @@ export function AppShellTopBar({
           testID="app-shell-home"
         >
           <Text
-            className="text-[20px] font-semibold tracking-[-0.02em] text-white"
+            className="text-[20px] font-semibold tracking-[-0.02em] text-ink"
             numberOfLines={1}
           >
             {title}
           </Text>
           {subtitle ? (
             <Text
-              className="mt-1 text-[12px] leading-[18px] text-white/38"
+              className="mt-1 text-[12px] leading-[18px] text-muted"
               numberOfLines={1}
             >
               {subtitle}
@@ -83,10 +80,11 @@ export function AppShellTopBar({
 
         <View className="flex-row items-center gap-3">
           <Pressable
+            accessibilityHint="Opens settings."
             accessibilityLabel="Settings"
             accessibilityRole="button"
-            className="h-9 w-9 items-center justify-center"
-            hitSlop={8}
+            className={iconButtonClassName}
+            hitSlop={10}
             onPress={() => dismissAnd(onPressSettings)}
             style={({ pressed }) => ({
               opacity: pressed ? appTheme.motion.pressOpacity : 1,
@@ -94,16 +92,17 @@ export function AppShellTopBar({
             testID="app-shell-settings"
           >
             <Ionicons
-              color="rgba(255,255,255,0.78)"
+              color={appTheme.colors.ink}
               name="settings-outline"
               size={19}
             />
           </Pressable>
           <Pressable
+            accessibilityHint="Opens notifications."
             accessibilityLabel="Notifications"
             accessibilityRole="button"
-            className="h-9 w-9 items-center justify-center"
-            hitSlop={8}
+            className={iconButtonClassName}
+            hitSlop={10}
             onPress={() => dismissAnd(onPressNotifications)}
             style={({ pressed }) => ({
               opacity: pressed ? appTheme.motion.pressOpacity : 1,
@@ -112,12 +111,15 @@ export function AppShellTopBar({
           >
             <View>
               <Ionicons
-                color="rgba(255,255,255,0.78)"
+                color={appTheme.colors.ink}
                 name="notifications-outline"
                 size={19}
               />
               {hasNotifications ? (
-                <View className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-white" />
+                <View
+                  className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full"
+                  style={{ backgroundColor: appTheme.colors.ink }}
+                />
               ) : null}
             </View>
           </Pressable>

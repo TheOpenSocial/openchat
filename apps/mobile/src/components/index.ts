@@ -8,7 +8,6 @@ export { ChatBubble } from "./ChatBubble";
 export { ChoiceChip } from "./ChoiceChip";
 export { ComposerInput } from "./ComposerInput";
 export { EmptyState } from "./EmptyState";
-export { HomeTabBar } from "./HomeTabBar";
 export { InlineNotice } from "./InlineNotice";
 export { LoadingModal } from "./LoadingModal";
 export { LoadingState } from "./LoadingState";

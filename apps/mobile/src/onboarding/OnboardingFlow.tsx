@@ -28,6 +28,7 @@ import { type AppLocale, t } from "../i18n/strings";
 import { api } from "../lib/api";
 import { hapticSelection } from "../lib/haptics";
 import { speechRecognitionAvailable } from "../lib/speech-recognition-available";
+import { appTheme } from "../theme";
 import type { MobileSession } from "../types";
 import { COUNTRY_OPTIONS, guessCountryFromLocale } from "./country-options";
 import {
@@ -95,14 +96,14 @@ function Chip({
       accessibilityRole="checkbox"
       accessibilityState={{ checked: selected }}
       className={`rounded-full border px-4 py-2.5 ${
-        selected ? "border-white bg-white" : "border-white/10 bg-white/[0.04]"
+        selected ? "border-ink bg-ink" : "border-hairline bg-surfaceMuted/70"
       }`}
       onPress={onPress}
       testID={testID}
     >
       <Text
         className={`text-[14px] font-medium ${
-          selected ? "text-[#0d0d0d]" : "text-white/65"
+          selected ? "text-canvas" : "text-muted"
         }`}
       >
         {label}
@@ -120,7 +121,7 @@ function Section({
 }) {
   return (
     <View className="gap-3">
-      <Text className="text-[12px] font-medium uppercase tracking-[0.14em] text-white/34">
+      <Text className="text-[12px] font-medium uppercase tracking-[0.14em] text-muted">
         {title}
       </Text>
       <View className="flex-row flex-wrap gap-2">{children}</View>
@@ -131,10 +132,10 @@ function Section({
 function StepHeading({ title, subtitle }: { title: string; subtitle: string }) {
   return (
     <View className="items-center gap-3">
-      <Text className="text-center text-[30px] font-semibold leading-[34px] tracking-tight text-white">
+      <Text className="text-center text-[30px] font-semibold leading-[34px] tracking-tight text-ink">
         {title}
       </Text>
-      <Text className="max-w-[320px] text-center text-[15px] leading-[23px] text-white/52">
+      <Text className="max-w-[320px] text-center text-[15px] leading-[23px] text-muted">
         {subtitle}
       </Text>
     </View>
@@ -150,7 +151,7 @@ function SurfaceCard({
 }) {
   return (
     <View
-      className={`rounded-[24px] border border-white/[0.06] bg-white/[0.02] px-5 py-5 ${className}`}
+      className={`rounded-[24px] border border-hairline bg-surfaceMuted/60 px-5 py-5 ${className}`}
     >
       {children}
     </View>
@@ -159,8 +160,8 @@ function SurfaceCard({
 
 function MetaPill({ children }: { children: React.ReactNode }) {
   return (
-    <View className="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1">
-      <Text className="text-[10px] font-medium text-white/42">{children}</Text>
+    <View className="rounded-full border border-hairline bg-surfaceMuted/70 px-2.5 py-1">
+      <Text className="text-[10px] font-medium text-muted">{children}</Text>
     </View>
   );
 }
@@ -178,10 +179,10 @@ function SelectorField({
 }) {
   return (
     <View className="gap-1.5">
-      <Text className="text-[12px] font-medium text-white/45">{label}</Text>
+      <Text className="text-[12px] font-medium text-muted">{label}</Text>
       <Pressable
         accessibilityRole="button"
-        className="overflow-hidden rounded-[22px] border border-white/10 bg-white/[0.06] px-4 py-3"
+        className="overflow-hidden rounded-[22px] border border-hairline bg-surfaceMuted/70 px-4 py-3"
         onPress={onPress}
         style={({ pressed }) => ({
           transform: [{ scale: pressed ? 0.995 : 1 }],
@@ -190,14 +191,14 @@ function SelectorField({
         <View className="flex-row items-center justify-between gap-3">
           <Text
             className={`flex-1 text-[15px] leading-[22px] ${
-              value.trim() ? "text-white" : "text-white/35"
+              value.trim() ? "text-ink" : "text-muted"
             }`}
             numberOfLines={1}
           >
             {value.trim() || placeholder}
           </Text>
           <Ionicons
-            color="rgba(255,255,255,0.32)"
+            color={appTheme.colors.muted}
             name="chevron-down"
             size={18}
           />
@@ -765,12 +766,12 @@ export function OnboardingFlow({
         >
           <View>
             <View className="items-center pt-4">
-              <Text className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/28">
+              <Text className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted">
                 OpenSocial
               </Text>
               <View className="mt-8 h-[220px] w-[220px] items-center justify-center">
                 <Animated.View
-                  className="absolute h-[192px] w-[192px] rounded-full border border-white/[0.08]"
+                  className="absolute h-[192px] w-[192px] rounded-full border border-hairline/80"
                   style={{
                     opacity: ripple.interpolate({
                       inputRange: [0, 1],
@@ -787,7 +788,7 @@ export function OnboardingFlow({
                   }}
                 />
                 <Animated.View
-                  className="absolute h-[200px] w-[200px] rounded-full bg-white/[0.02]"
+                  className="absolute h-[200px] w-[200px] rounded-full bg-surfaceMuted/50"
                   style={{
                     opacity: systemOpacity,
                     transform: [{ scale: systemScale }],
@@ -803,10 +804,10 @@ export function OnboardingFlow({
                   <SystemBlobAnimation lottieRef={lottieRef} size={188} />
                 </Animated.View>
               </View>
-              <Text className="mt-8 text-center text-[32px] font-semibold leading-[36px] tracking-tight text-white">
+              <Text className="mt-8 text-center text-[32px] font-semibold leading-[36px] tracking-tight text-ink">
                 {t("onboardingHybridTitle", locale)}
               </Text>
-              <Text className="mt-4 max-w-[300px] text-center text-[15px] leading-[23px] text-white/50">
+              <Text className="mt-4 max-w-[300px] text-center text-[15px] leading-[23px] text-muted">
                 {hasFollowUpQuestion
                   ? t("onboardingHybridFollowUpSubtitle", locale)
                   : t("onboardingHybridSubtitle", locale)}
@@ -814,42 +815,42 @@ export function OnboardingFlow({
             </View>
 
             <View
-              className="mt-8 rounded-[24px] border border-white/[0.06] bg-white/[0.02] px-5 py-4"
+              className="mt-8 rounded-[24px] border border-hairline bg-surfaceMuted/55 px-5 py-4"
               style={layout.expressionSignalCard}
             >
               {processing && lastSpokenTurn.trim().length > 0 ? (
                 <>
-                  <Text className="text-[11px] font-medium uppercase tracking-[0.16em] text-white/30">
+                  <Text className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted">
                     {t("onboardingHybridProcessingLabel", locale)}
                   </Text>
-                  <Text className="mt-3 text-[13px] leading-[20px] text-white/42">
+                  <Text className="mt-3 text-[13px] leading-[20px] text-muted">
                     {t("onboardingHybridProcessing", locale)}
                   </Text>
-                  <Text className="mt-3 text-[17px] leading-[27px] text-white/80">
+                  <Text className="mt-3 text-[17px] leading-[27px] text-ink/90">
                     "{lastSpokenTurn.trim()}"
                   </Text>
-                  <Text className="mt-2 text-[13px] leading-[21px] text-white/40">
+                  <Text className="mt-2 text-[13px] leading-[21px] text-muted">
                     {t("onboardingHybridProcessingHint", locale)}
                   </Text>
                 </>
               ) : hasFollowUpQuestion ? (
                 <>
-                  <Text className="text-[11px] font-medium uppercase tracking-[0.16em] text-white/30">
+                  <Text className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted">
                     {t("onboardingHybridFollowUpTitle", locale)}
                   </Text>
-                  <Text className="mt-3 text-[17px] leading-[27px] text-white/80">
+                  <Text className="mt-3 text-[17px] leading-[27px] text-ink/90">
                     {followUpQuestion}
                   </Text>
-                  <Text className="mt-2 text-[13px] leading-[21px] text-white/40">
+                  <Text className="mt-2 text-[13px] leading-[21px] text-muted">
                     {t("onboardingHybridFollowUpHint", locale)}
                   </Text>
                 </>
               ) : (
                 <>
-                  <Text className="text-[11px] font-medium uppercase tracking-[0.16em] text-white/30">
+                  <Text className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted">
                     {t("onboardingHybridExampleLabel", locale)}
                   </Text>
-                  <Text className="mt-3 text-[14px] leading-[23px] text-white/54">
+                  <Text className="mt-3 text-[14px] leading-[23px] text-muted">
                     {t("onboardingHybridExampleText", locale)}
                   </Text>
                 </>
@@ -874,7 +875,7 @@ export function OnboardingFlow({
 
             {backgroundHydrating ? (
               <View className="mt-6 items-center">
-                <Text className="text-center text-[12px] leading-[18px] text-white/34">
+                <Text className="text-center text-[12px] leading-[18px] text-muted">
                   We’re shaping a richer read in the background.
                 </Text>
               </View>
@@ -882,7 +883,7 @@ export function OnboardingFlow({
 
             <View className="mt-8 gap-4">
               <SurfaceCard>
-                <Text className="mb-3 text-[12px] leading-[18px] text-white/42">
+                <Text className="mb-3 text-[12px] leading-[18px] text-muted">
                   Add a few topics you want OpenSocial to prioritize first. We
                   can tune the rest as the system learns what works for you.
                 </Text>
@@ -913,7 +914,7 @@ export function OnboardingFlow({
               </SurfaceCard>
 
               <SurfaceCard>
-                <Text className="mb-3 text-[12px] leading-[18px] text-white/42">
+                <Text className="mb-3 text-[12px] leading-[18px] text-muted">
                   Sharpen the outcome you want first. This helps the system
                   craft a stronger read of your intent and persona.
                 </Text>
@@ -946,7 +947,7 @@ export function OnboardingFlow({
               </SurfaceCard>
 
               <SurfaceCard>
-                <Text className="mb-3 text-[12px] leading-[18px] text-white/42">
+                <Text className="mb-3 text-[12px] leading-[18px] text-muted">
                   Add a light location anchor if place matters for this.
                 </Text>
                 <View className="gap-3">
@@ -1003,13 +1004,13 @@ export function OnboardingFlow({
             />
 
             <SurfaceCard className="mt-8 items-center">
-              <Text className="text-[11px] font-medium uppercase tracking-[0.16em] text-white/24">
+              <Text className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted">
                 Persona
               </Text>
-              <Text className="mt-4 text-center text-[30px] font-semibold leading-[34px] tracking-tight text-white">
+              <Text className="mt-4 text-center text-[30px] font-semibold leading-[34px] tracking-tight text-ink">
                 {draft.persona || "Explorer"}
               </Text>
-              <Text className="mt-4 max-w-[316px] text-center text-[15px] leading-[24px] text-white/54">
+              <Text className="mt-4 max-w-[316px] text-center text-[15px] leading-[24px] text-muted">
                 {draft.personaSummary ||
                   "You have clear intent and enough signal for us to shape your social setup."}
               </Text>
@@ -1020,7 +1021,7 @@ export function OnboardingFlow({
                     draft.inferenceMeta.persona.needsConfirmation,
                   )}
                 </MetaPill>
-                <Text className="text-[11px] leading-[16px] text-white/28">
+                <Text className="text-[11px] leading-[16px] text-muted">
                   {t("onboardingPersonaEditHint", locale)}
                 </Text>
               </View>
@@ -1028,14 +1029,14 @@ export function OnboardingFlow({
 
             <SurfaceCard className="mt-4">
               <View className="flex-row items-center justify-between">
-                <Text className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/24">
+                <Text className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted">
                   {t("onboardingPersonaSignalTitle", locale)}
                 </Text>
                 <Pressable
                   accessibilityRole="button"
                   onPress={() => animateStep(1)}
                 >
-                  <Text className="text-[11px] font-medium text-white/38">
+                  <Text className="text-[11px] font-medium text-muted">
                     {t("onboardingPersonaEdit", locale)}
                   </Text>
                 </Pressable>
@@ -1044,14 +1045,14 @@ export function OnboardingFlow({
                 {trustSignals.map((signal, index) => (
                   <View key={signal.label}>
                     {index > 0 ? (
-                      <View className="h-px bg-white/[0.06]" />
+                      <View className="h-px bg-hairline/70" />
                     ) : null}
                     <View className="flex-row items-start justify-between gap-4 py-3.5">
                       <View className="flex-1 gap-1">
-                        <Text className="text-[11px] uppercase tracking-[0.14em] text-white/24">
+                        <Text className="text-[11px] uppercase tracking-[0.14em] text-muted">
                           {signal.label}
                         </Text>
-                        <Text className="text-[14px] leading-[21px] text-white/66">
+                        <Text className="text-[14px] leading-[21px] text-ink/90">
                           {signal.value}
                         </Text>
                       </View>
@@ -1087,7 +1088,7 @@ export function OnboardingFlow({
               <Pressable
                 accessibilityHint={t("onboardingProfilePhotoHint", locale)}
                 accessibilityLabel={t("onboardingProfilePhotoLabel", locale)}
-                className="h-[88px] w-[88px] items-center justify-center overflow-hidden rounded-full border border-white/15 bg-white/[0.06]"
+                className="h-[88px] w-[88px] items-center justify-center overflow-hidden rounded-full border border-hairline bg-surfaceMuted/75"
                 onPress={pickPhoto}
               >
                 {draft.profilePhotoUri ? (
@@ -1098,7 +1099,7 @@ export function OnboardingFlow({
                   />
                 ) : (
                   <Ionicons
-                    color="rgba(255,255,255,0.35)"
+                    color={appTheme.colors.muted}
                     name="person"
                     size={36}
                   />
@@ -1107,7 +1108,7 @@ export function OnboardingFlow({
               <View className="items-center">
                 <View className="mt-3 flex-row gap-4">
                   <Pressable onPress={pickPhoto}>
-                    <Text className="text-[13px] text-white/50">
+                    <Text className="text-[13px] text-muted">
                       {draft.profilePhotoUri
                         ? t("commonChange", locale)
                         : t("onboardingAddPhoto", locale)}
@@ -1115,7 +1116,7 @@ export function OnboardingFlow({
                   </Pressable>
                   {draft.profilePhotoUri ? (
                     <Pressable onPress={clearPhoto}>
-                      <Text className="text-[13px] text-white/35">
+                      <Text className="text-[13px] text-muted">
                         {t("commonRemove", locale)}
                       </Text>
                     </Pressable>
@@ -1205,7 +1206,7 @@ export function OnboardingFlow({
                     )}
                     value={draft.country}
                   />
-                  <Text className="text-[12px] leading-[18px] text-white/30">
+                  <Text className="text-[12px] leading-[18px] text-muted">
                     {t("onboardingProfileCountryHelper", locale)}
                   </Text>
                 </View>
@@ -1222,11 +1223,11 @@ export function OnboardingFlow({
       <View className="gap-3">
         <View className="items-center justify-center" style={{ minHeight: 24 }}>
           {!speechRecognitionAvailable() ? (
-            <Text className="max-w-[280px] text-center text-[12px] leading-[18px] text-white/28">
+            <Text className="max-w-[280px] text-center text-[12px] leading-[18px] text-muted">
               {t("onboardingEntryVoiceUnavailable", locale)}
             </Text>
           ) : hasFollowUpQuestion ? (
-            <Text className="text-[12px] text-white/28">{voiceHint}</Text>
+            <Text className="text-[12px] text-muted">{voiceHint}</Text>
           ) : null}
         </View>
 
@@ -1235,10 +1236,10 @@ export function OnboardingFlow({
             accessibilityLabelActive={t("onboardingEntryListening", locale)}
             accessibilityLabelIdle={voiceActionLabel}
             activeLabel={t("onboardingEntryListening", locale)}
-            className="w-full rounded-full border border-white/10 bg-white px-5"
+            className="w-full rounded-full border border-hairline bg-ink px-5"
             disabled={processing}
-            iconColorActive="#0d0d0d"
-            iconColorIdle="#0d0d0d"
+            iconColorActive={appTheme.colors.background}
+            iconColorIdle={appTheme.colors.background}
             iconSize={18}
             label={voiceActionLabel}
             onFinalTranscript={(text) => {
@@ -1268,9 +1269,9 @@ export function OnboardingFlow({
             ],
           }}
         >
-          <View className="flex-row items-center gap-3 rounded-full border border-white/[0.06] bg-white/[0.025] px-4 py-2">
+          <View className="flex-row items-center gap-3 rounded-full border border-hairline bg-surfaceMuted/55 px-4 py-2">
             {processing ? (
-              <Text className="text-center text-[14px] leading-[22px] text-white/56">
+              <Text className="text-center text-[14px] leading-[22px] text-muted">
                 {t("onboardingHybridProcessingInline", locale)}
               </Text>
             ) : (
@@ -1290,9 +1291,7 @@ export function OnboardingFlow({
             animateStep(1);
           }}
         >
-          <Text
-            className={`text-[14px] ${processing ? "text-white/20" : "text-white/36"}`}
-          >
+          <Text className="text-[14px] text-muted">
             {t("onboardingHybridManual", locale)}
           </Text>
         </Pressable>
@@ -1320,7 +1319,7 @@ export function OnboardingFlow({
           disabled={loading}
           onPress={() => animateStep(1)}
         >
-          <Text className="text-[14px] text-white/40">
+          <Text className="text-[14px] text-muted">
             {t("onboardingPersonaEdit", locale)}
           </Text>
         </Pressable>
@@ -1340,7 +1339,7 @@ export function OnboardingFlow({
           disabled={loading}
           onPress={() => void finishWithIntent()}
         >
-          <Text className="text-[14px] text-white/40">
+          <Text className="text-[14px] text-muted">
             {t("onboardingSkip", locale)}
           </Text>
         </Pressable>
@@ -1359,9 +1358,9 @@ export function OnboardingFlow({
         style={layout.fill}
       >
         <View className="px-5 pb-2 pt-1">
-          <View className="h-1 overflow-hidden rounded-full bg-white/[0.08]">
+          <View className="h-1 overflow-hidden rounded-full bg-hairline/70">
             <Animated.View
-              className="h-full rounded-full bg-white/35"
+              className="h-full rounded-full bg-ink"
               style={{
                 width: progressAnim.interpolate({
                   inputRange: [0, 1],
@@ -1371,7 +1370,7 @@ export function OnboardingFlow({
             />
           </View>
           <View className="mt-2 flex-row items-center justify-between">
-            <Text className="text-[11px] font-medium uppercase tracking-[0.16em] text-white/28">
+            <Text className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted">
               {stageLabel}
             </Text>
             {stepIndex > 0 ? (
@@ -1382,11 +1381,11 @@ export function OnboardingFlow({
                 onPress={goBack}
               >
                 <Ionicons
-                  color="rgba(255,255,255,0.45)"
+                  color={appTheme.colors.muted}
                   name="chevron-back"
                   size={20}
                 />
-                <Text className="text-[14px] text-white/45">
+                <Text className="text-[14px] text-muted">
                   {t("commonBack", locale)}
                 </Text>
               </Pressable>
@@ -1405,9 +1404,7 @@ export function OnboardingFlow({
         {body}
 
         {footer ? (
-          <View className="border-t border-white/[0.06] px-6 py-4">
-            {footer}
-          </View>
+          <View className="border-t border-hairline px-6 py-4">{footer}</View>
         ) : null}
 
         <Animated.View
@@ -1447,24 +1444,24 @@ export function OnboardingFlow({
           >
             <View className="items-center">
               <View className="h-[204px] w-[204px] items-center justify-center">
-                <View className="absolute h-[184px] w-[184px] rounded-full border border-white/[0.08] bg-white/[0.02]" />
+                <View className="absolute h-[184px] w-[184px] rounded-full border border-hairline/80 bg-surfaceMuted/50" />
                 <SystemBlobAnimation size={180} />
               </View>
             </View>
             <View className="items-center gap-3">
-              <Text className="text-center text-[32px] font-semibold leading-[36px] tracking-tight text-white">
+              <Text className="text-center text-[32px] font-semibold leading-[36px] tracking-tight text-ink">
                 {t("onboardingHybridProcessingTitle", locale)}
               </Text>
-              <Text className="max-w-[316px] text-center text-[16px] leading-[24px] text-white/54">
+              <Text className="max-w-[316px] text-center text-[16px] leading-[24px] text-muted">
                 {t("onboardingHybridProcessing", locale)}
               </Text>
-              <Text className="max-w-[300px] text-center text-[13px] leading-[21px] text-white/48">
+              <Text className="max-w-[300px] text-center text-[13px] leading-[21px] text-muted">
                 {processingPhrases[processingPhraseIndex]}
               </Text>
             </View>
             <View className="items-center gap-2">
               {lastSpokenTurn.trim().length > 0 ? (
-                <Text className="max-w-[292px] text-center text-[13px] leading-[21px] text-white/24">
+                <Text className="max-w-[292px] text-center text-[13px] leading-[21px] text-muted">
                   "{lastSpokenTurn.trim()}"
                 </Text>
               ) : null}
@@ -1479,16 +1476,16 @@ export function OnboardingFlow({
         transparent
         visible={countrySelectorOpen}
       >
-        <View className="flex-1 justify-end bg-black/72 px-3 pb-3">
-          <View className="max-h-[78%] rounded-[30px] border border-white/[0.08] bg-[#0b0b0c] px-5 pb-5 pt-4">
+        <View className="flex-1 justify-end bg-canvas/72 px-3 pb-3">
+          <View className="max-h-[78%] rounded-[30px] border border-hairline/80 bg-canvas px-5 pb-5 pt-4">
             <View className="mb-4 items-center gap-3">
-              <View className="h-1.5 w-12 rounded-full bg-white/12" />
+              <View className="h-1.5 w-12 rounded-full bg-hairline/70" />
               <View className="w-full flex-row items-center justify-between">
                 <View className="gap-1">
-                  <Text className="text-[18px] font-semibold tracking-tight text-white">
+                  <Text className="text-[18px] font-semibold tracking-tight text-ink">
                     {t("onboardingProfileCountryLabel", locale)}
                   </Text>
-                  <Text className="text-[13px] leading-[18px] text-white/38">
+                  <Text className="text-[13px] leading-[18px] text-muted">
                     {t("onboardingCountrySelectorHint", locale)}
                   </Text>
                 </View>
@@ -1498,7 +1495,7 @@ export function OnboardingFlow({
                   onPress={() => setCountrySelectorOpen(false)}
                 >
                   <Ionicons
-                    color="rgba(255,255,255,0.46)"
+                    color={appTheme.colors.muted}
                     name="close"
                     size={22}
                   />
@@ -1506,21 +1503,17 @@ export function OnboardingFlow({
               </View>
             </View>
 
-            <View className="mb-3 flex-row items-center gap-3 overflow-hidden rounded-[22px] border border-white/[0.08] bg-white/[0.04] px-4 py-3">
-              <Ionicons
-                color="rgba(255,255,255,0.28)"
-                name="search"
-                size={16}
-              />
+            <View className="mb-3 flex-row items-center gap-3 overflow-hidden rounded-[22px] border border-hairline bg-surfaceMuted/70 px-4 py-3">
+              <Ionicons color={appTheme.colors.muted} name="search" size={16} />
               <TextInput
                 autoCapitalize="words"
                 autoCorrect={false}
-                className="flex-1 text-[15px] leading-[22px] text-white"
+                className="flex-1 text-[15px] leading-[22px] text-ink"
                 onChangeText={setCountryQuery}
                 placeholder={t("commonSearch", locale)}
-                placeholderTextColor="rgba(255,255,255,0.28)"
+                placeholderTextColor={appTheme.colors.muted}
                 returnKeyType="search"
-                selectionColor="rgba(255,255,255,0.75)"
+                selectionColor={appTheme.colors.ink}
                 value={countryQuery}
               />
             </View>
@@ -1548,10 +1541,10 @@ export function OnboardingFlow({
                     setCountrySelectorOpen(false);
                   }}
                 >
-                  <Text className="text-[16px] text-white/86">{country}</Text>
+                  <Text className="text-[16px] text-ink">{country}</Text>
                   {draft.country === country ? (
                     <Ionicons
-                      color="rgba(255,255,255,0.72)"
+                      color={appTheme.colors.ink}
                       name="checkmark"
                       size={18}
                     />
@@ -1559,10 +1552,10 @@ export function OnboardingFlow({
                 </Pressable>
               )}
               ItemSeparatorComponent={() => (
-                <View className="h-px bg-white/[0.05]" />
+                <View className="h-px bg-hairline/70" />
               )}
               ListEmptyComponent={
-                <Text className="px-1 py-3 text-[13px] text-white/36">
+                <Text className="px-1 py-3 text-[13px] text-muted">
                   {t("onboardingCountrySelectorEmpty", locale)}
                 </Text>
               }
@@ -1591,7 +1584,7 @@ function metaLabel(confidence: number, needsConfirmation: boolean) {
 const layout = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: "#050506",
+    backgroundColor: appTheme.colors.background,
   },
   fill: {
     flex: 1,
@@ -1637,7 +1630,7 @@ const layout = StyleSheet.create({
     gap: 16,
   },
   inferOverlay: {
-    backgroundColor: "#050506",
+    backgroundColor: appTheme.colors.background,
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 28,
