@@ -3,6 +3,7 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 
 const target = (process.env.BACKEND_OPS_TARGET || "production").trim();
 const dryRun = process.env.BACKEND_OPS_DRY_RUN === "1";
@@ -29,6 +30,12 @@ const artifactPath = path.resolve(
 const commands = [];
 const ingestVerificationRuns =
   process.env.BACKEND_OPS_INGEST_VERIFICATION_RUN !== "0";
+const verificationRunIngestLaneByStepId = {
+  release_check_api: "suite",
+  agentic_suite_verification: "verification",
+  agentic_prod_smoke_lane: "prod-smoke",
+  moderation_drill: "verification",
+};
 
 const requiredRunbookFiles = [
   "docs/backend-launch-ops-pack.md",
@@ -107,6 +114,65 @@ if (includeModerationDrill) {
   });
 }
 
+export function buildStepExecutionRecord(step, startedAt, timeoutMs, result) {
+  const timedOut =
+    typeof result.signal === "string" &&
+    (result.signal === "SIGTERM" || result.signal === "SIGKILL") &&
+    timeoutMs > 0;
+  return {
+    id: step.id,
+    summary: step.summary,
+    status: result.status === 0 ? "passed" : "failed",
+    exitCode: result.status ?? 1,
+    latencyMs: Date.now() - startedAt,
+    command: `${step.cmd} ${step.args.join(" ")}`,
+    timeoutMs,
+    failureClass: timedOut ? "timeout" : "command_failed",
+  };
+}
+
+export function buildVerificationHistoryRecord({
+  artifact,
+  lane,
+  layer,
+  runId,
+  status,
+  generatedAt,
+  stepId,
+  stepSummary,
+}) {
+  return {
+    runId,
+    lane,
+    layer,
+    status,
+    generatedAt,
+    ingestedAt: new Date().toISOString(),
+    canaryVerdict: status === "passed" ? "healthy" : "critical",
+    summary: {
+      target: artifact.target,
+      shipVerdict: artifact.shipVerdict,
+      blockedReasons: artifact.blockedReasons,
+      stepId,
+      stepSummary,
+    },
+    artifact,
+  };
+}
+
+export function buildVerificationRunIngestBody(record, artifact) {
+  return {
+    runId: record.runId,
+    lane: record.lane,
+    layer: record.layer,
+    status: record.status,
+    generatedAt: record.generatedAt,
+    canaryVerdict: record.canaryVerdict,
+    summary: record.summary,
+    artifact,
+  };
+}
+
 function runCommand(step) {
   const startedAt = Date.now();
   const timeoutMs = resolveStepTimeoutMs(step.id);
@@ -138,20 +204,7 @@ function runCommand(step) {
   });
   if (result.stdout) process.stdout.write(result.stdout);
   if (result.stderr) process.stderr.write(result.stderr);
-  const timedOut =
-    typeof result.signal === "string" &&
-    (result.signal === "SIGTERM" || result.signal === "SIGKILL") &&
-    timeoutMs > 0;
-  return {
-    id: step.id,
-    summary: step.summary,
-    status: result.status === 0 ? "passed" : "failed",
-    exitCode: result.status ?? 1,
-    latencyMs: Date.now() - startedAt,
-    command: `${step.cmd} ${step.args.join(" ")}`,
-    timeoutMs,
-    failureClass: timedOut ? "timeout" : "command_failed",
-  };
+  return buildStepExecutionRecord(step, startedAt, timeoutMs, result);
 }
 
 function resolveStepTimeoutMs(stepId) {
@@ -182,9 +235,13 @@ function verifyRunbooks() {
   }));
 }
 
-async function ingestVerificationRunArtifact(artifact) {
-  if (!ingestVerificationRuns || dryRun) {
-    return null;
+export async function ingestVerificationRunArtifact(artifact, options = {}) {
+  const { dryRunMode = dryRun, runLabel = "verification", stepId } = options;
+  if (!ingestVerificationRuns || dryRunMode) {
+    return {
+      attempted: false,
+      reason: dryRunMode ? "dry_run" : "disabled",
+    };
   }
   const baseUrl = process.env.SMOKE_BASE_URL?.trim();
   const adminUserId = process.env.SMOKE_ADMIN_USER_ID?.trim();
@@ -196,26 +253,30 @@ async function ingestVerificationRunArtifact(artifact) {
     };
   }
   const endpoint = `${baseUrl.replace(/\/+$/, "")}/api/admin/ops/verification-runs`;
-  const body = {
-    runId: artifact.runId,
-    lane: "verification",
-    layer: "full",
-    status: artifact.status,
-    generatedAt: artifact.generatedAt,
-    canaryVerdict: artifact.status === "passed" ? "healthy" : "critical",
-    summary: {
-      target: artifact.target,
-      shipVerdict: artifact.shipVerdict,
-      blockedReasons: artifact.blockedReasons,
-      stepStatuses: artifact.steps.map((step) => ({
-        id: step.id,
-        status: step.status,
-        latencyMs: step.latencyMs,
-        failureClass: step.failureClass ?? null,
-      })),
+  const body = buildVerificationRunIngestBody(
+    {
+      runId: artifact.runId,
+      lane: runLabel,
+      layer: artifact.layer ?? "verification",
+      status: artifact.status,
+      generatedAt: artifact.generatedAt,
+      canaryVerdict: artifact.status === "passed" ? "healthy" : "critical",
+      summary: {
+        target: artifact.target,
+        shipVerdict: artifact.shipVerdict,
+        blockedReasons: artifact.blockedReasons,
+        stepId: stepId ?? null,
+        stepStatuses: artifact.steps?.map((step) => ({
+          id: step.id,
+          status: step.status,
+          latencyMs: step.latencyMs,
+          failureClass: step.failureClass ?? null,
+        })),
+      },
+      artifact,
     },
     artifact,
-  };
+  );
   const headers = {
     Accept: "application/json",
     "Content-Type": "application/json",
@@ -244,6 +305,8 @@ async function ingestVerificationRunArtifact(artifact) {
         attempted: true,
         status: "stored",
         attempt,
+        lane: runLabel,
+        stepId: stepId ?? null,
       };
     } catch (error) {
       lastError = error instanceof Error ? error.message : String(error);
@@ -254,12 +317,15 @@ async function ingestVerificationRunArtifact(artifact) {
     attempted: true,
     status: "failed",
     reason: lastError,
+    lane: runLabel,
+    stepId: stepId ?? null,
   };
 }
 
 async function main() {
   const startedAt = Date.now();
   const steps = [];
+  const verificationRunIngestions = [];
   const runbookChecks = verifyRunbooks();
   const missingRunbooks = runbookChecks.filter((check) => !check.exists);
   const envReadiness = commands.map((step) => ({
@@ -310,6 +376,50 @@ async function main() {
       console.log(`Running ${step.id}: ${step.summary}`);
       const result = runCommand(step);
       steps.push(result);
+      verificationRunIngestions.push(
+        await ingestVerificationRunArtifact(
+          buildVerificationHistoryRecord({
+            artifact: {
+              runId: `${runId}:${step.id}`,
+              target,
+              status: result.status,
+              layer:
+                step.id === "release_check_api"
+                  ? "contract"
+                  : step.id === "agentic_prod_smoke_lane"
+                    ? "prod-smoke"
+                    : "verification",
+              stageEqualsProd,
+              dryRun,
+              requireRunbooks,
+              requireEnvReadiness,
+              shipVerdict: result.status === "passed" ? "ship_ready" : "blocked",
+              blockedReasons: [
+                ...(result.status === "failed"
+                  ? [result.failureClass === "timeout"
+                      ? `step_timeout:${step.id}`
+                      : `step_failed:${step.id}`]
+                  : []),
+              ],
+              steps: [result],
+            },
+            lane:
+              verificationRunIngestLaneByStepId[step.id] ?? "verification",
+            layer:
+              step.id === "release_check_api"
+                ? "contract"
+                : step.id === "agentic_prod_smoke_lane"
+                  ? "prod-smoke"
+                  : "verification",
+            runId: `${runId}:${step.id}`,
+            status: result.status,
+            generatedAt: new Date().toISOString(),
+            stepId: step.id,
+            stepSummary: step.summary,
+          }),
+          { dryRunMode: dryRun, runLabel: verificationRunIngestLaneByStepId[step.id] ?? "verification", stepId: step.id },
+        ),
+      );
       if (result.status === "failed") {
         break;
       }
@@ -341,6 +451,7 @@ async function main() {
     dryRun,
     requireRunbooks,
     requireEnvReadiness,
+    layer: "full",
     totalLatencyMs: Date.now() - startedAt,
     runbookChecks,
     envReadiness,
@@ -363,11 +474,10 @@ async function main() {
         ),
     ],
     steps,
+    verificationRunIngestions,
   };
 
-  artifact.verificationRunIngest = await ingestVerificationRunArtifact(
-    artifact,
-  );
+  artifact.verificationRunIngest = await ingestVerificationRunArtifact(artifact);
 
   mkdirSync(path.dirname(artifactPath), { recursive: true });
   writeFileSync(artifactPath, JSON.stringify(artifact, null, 2));
@@ -378,4 +488,6 @@ async function main() {
   }
 }
 
-await main();
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+  await main();
+}
