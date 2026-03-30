@@ -19,8 +19,8 @@ test("parseSocialSimArgs applies sane defaults", () => {
     SOCIAL_SIM_DRY_RUN: "1",
   });
 
-  assert.equal(config.provider, "stub");
-  assert.equal(config.judgeProvider, "stub");
+  assert.equal(config.provider, "ollama");
+  assert.equal(config.judgeProvider, "ollama");
   assert.equal(config.namespace, "test-namespace");
   assert.equal(config.dryRun, true);
   assert.equal(config.horizon, "all");

@@ -1,0 +1,143 @@
+name: Social Simulation
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Run a single simulation or the bounded nightly rollup"
+        required: false
+        default: manual
+        type: choice
+        options:
+          - manual
+          - nightly
+      provider:
+        description: "Actor provider"
+        required: false
+        default: ollama
+        type: choice
+        options:
+          - ollama
+          - openai
+          - stub
+      judge_provider:
+        description: "Judge provider"
+        required: false
+        default: ollama
+        type: choice
+        options:
+          - ollama
+          - openai
+          - stub
+      horizon:
+        description: "Simulation horizon"
+        required: false
+        default: all
+        type: choice
+        options:
+          - all
+          - short
+          - medium
+          - long
+      turn_budget:
+        description: "Turn budget override"
+        required: false
+        default: "8"
+        type: string
+      use_remote_provider:
+        description: "Call the remote actor provider instead of heuristic fallback"
+        required: false
+        default: false
+        type: boolean
+      use_remote_judge:
+        description: "Call the remote judge provider instead of heuristic fallback"
+        required: false
+        default: false
+        type: boolean
+      cleanup_mode:
+        description: "Cleanup policy after the run"
+        required: false
+        default: archive
+        type: choice
+        options:
+          - archive
+          - delete
+          - none
+  schedule:
+    - cron: "0 9 * * *"
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  social-sim:
+    runs-on: [self-hosted, linux, x64, opensocial-prod]
+    environment: staging
+    timeout-minutes: 45
+    env:
+      SOCIAL_SIM_BASE_URL: https://api.opensocial.so
+      SOCIAL_SIM_ADMIN_USER_ID: ${{ secrets.STAGING_SMOKE_ADMIN_USER_ID || secrets.SMOKE_ADMIN_USER_ID }}
+      SOCIAL_SIM_ADMIN_ROLE: ${{ secrets.STAGING_SMOKE_ADMIN_ROLE || secrets.SMOKE_ADMIN_ROLE || 'admin' }}
+      SOCIAL_SIM_ADMIN_API_KEY: ${{ secrets.STAGING_SMOKE_ADMIN_API_KEY || secrets.SMOKE_ADMIN_API_KEY }}
+      SOCIAL_SIM_OLLAMA_MODEL: ${{ secrets.SOCIAL_SIM_OLLAMA_MODEL || 'llama3.1' }}
+      SOCIAL_SIM_OPENAI_MODEL: ${{ secrets.SOCIAL_SIM_OPENAI_MODEL || 'gpt-4.1-mini' }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OLLAMA_BASE_URL: ${{ secrets.OLLAMA_BASE_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Run social simulation
+        shell: bash
+        run: |
+          set -euo pipefail
+          provider="${{ github.event_name == 'schedule' && 'ollama' || inputs.provider }}"
+          judge_provider="${{ github.event_name == 'schedule' && 'ollama' || inputs.judge_provider }}"
+          horizon="${{ github.event_name == 'schedule' && 'all' || inputs.horizon }}"
+          turn_budget="${{ github.event_name == 'schedule' && '8' || inputs.turn_budget }}"
+          cleanup_mode="${{ github.event_name == 'schedule' && 'archive' || inputs.cleanup_mode }}"
+          use_remote_provider="${{ github.event_name == 'schedule' && 'false' || inputs.use_remote_provider }}"
+          use_remote_judge="${{ github.event_name == 'schedule' && 'false' || inputs.use_remote_judge }}"
+          namespace="gha-social-sim-${GITHUB_RUN_ID}"
+
+          if [[ "${{ github.event_name }}" == "schedule" || "${{ inputs.mode }}" == "nightly" ]]; then
+            pnpm sim:social:nightly -- \
+              --provider="${provider}" \
+              --judge-provider="${judge_provider}" \
+              --cleanup="${cleanup_mode}" \
+              --turn-budget="${turn_budget}" \
+              --namespace="${namespace}" \
+              --use-remote-provider="${use_remote_provider}" \
+              --use-remote-judge="${use_remote_judge}"
+          else
+            pnpm sim:social -- \
+              --provider="${provider}" \
+              --judge-provider="${judge_provider}" \
+              --horizon="${horizon}" \
+              --cleanup="${cleanup_mode}" \
+              --turn-budget="${turn_budget}" \
+              --namespace="${namespace}" \
+              --use-remote-provider="${use_remote_provider}" \
+              --use-remote-judge="${use_remote_judge}"
+          fi
+
+      - name: Upload social sim artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: social-sim-artifacts-${{ github.run_id }}
+          if-no-files-found: warn
+          path: |
+            .artifacts/social-sim/**/*.json

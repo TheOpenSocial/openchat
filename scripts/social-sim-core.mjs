@@ -85,7 +85,7 @@ export function parseSocialSimArgs(argv = process.argv.slice(2), env = process.e
 
   const provider = normalizeString(
     flags.get("provider") ?? env.SOCIAL_SIM_PROVIDER,
-    "stub",
+    "ollama",
   ).toLowerCase();
   const judgeProvider = normalizeString(
     flags.get("judge-provider") ?? env.SOCIAL_SIM_JUDGE_PROVIDER,
