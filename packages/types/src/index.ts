@@ -1704,6 +1704,293 @@ export const adminPlaygroundStateResponseSchema = z.object({
   requiredEnvStatus: z.record(z.string(), z.boolean()),
 });
 
+export const socialSimProviderSchema = z.enum(["ollama", "openai"]);
+
+export const socialSimHorizonSchema = z.enum(["short", "medium", "long"]);
+
+export const socialSimCleanupModeSchema = z.enum(["archive", "delete"]);
+
+export const socialSimRunStatusSchema = z.enum([
+  "queued",
+  "running",
+  "passed",
+  "failed",
+  "cancelled",
+  "archived",
+]);
+
+export const socialSimActorKindSchema = z.enum([
+  "individual",
+  "pair",
+  "group_seed",
+  "circle_seed",
+  "event_seed",
+]);
+
+export const socialSimBackendCallSchema = z.object({
+  method: z.string().min(1).max(16),
+  path: z.string().min(1).max(255),
+  status: z.number().int().nonnegative().optional(),
+  latencyMs: z.number().int().nonnegative().optional(),
+  outcome: z.string().min(1).max(120).optional(),
+  entityId: z.string().min(1).max(120).optional(),
+  traceId: z.string().min(1).max(255).optional(),
+});
+
+export const socialSimActorSchema = z
+  .object({
+    actorId: z.string().min(1).max(120),
+    kind: socialSimActorKindSchema,
+    displayName: z.string().min(1).max(160),
+    persona: z.string().min(1).max(500),
+    goals: z.array(z.string().min(1).max(160)).min(1).max(10),
+    preferences: z.array(z.string().min(1).max(160)).default([]),
+    hardConstraints: z.array(z.string().min(1).max(160)).default([]),
+    socialStyle: z.string().min(1).max(120).optional(),
+    patience: z.number().min(0).max(1).default(0.5),
+    initiative: z.number().min(0).max(1).default(0.5),
+    mismatchTolerance: z.number().min(0).max(1).default(0.5),
+    memoryDriftProfile: z.string().min(1).max(300).optional(),
+    linkedUserIds: z.array(uuidSchema).max(2).default([]),
+    tags: z.array(z.string().min(1).max(64)).default([]),
+  })
+  .superRefine((actor, ctx) => {
+    if (actor.kind === "pair" && actor.linkedUserIds.length !== 2) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["linkedUserIds"],
+        message: "pair actors must reference exactly two linkedUserIds",
+      });
+    }
+  });
+
+export const socialSimEntityKindSchema = z.enum([
+  "individual",
+  "pair",
+  "group",
+  "circle",
+  "event",
+  "thread",
+]);
+
+export const socialSimEntityStateSchema = z.enum([
+  "draft",
+  "active",
+  "partial",
+  "succeeded",
+  "failed",
+  "archived",
+]);
+
+export const socialSimWorldEntitySchema = z.object({
+  entityId: z.string().min(1).max(120),
+  kind: socialSimEntityKindSchema,
+  state: socialSimEntityStateSchema.default("draft"),
+  backendIds: z
+    .object({
+      userId: uuidSchema.optional(),
+      threadId: uuidSchema.optional(),
+      connectionId: uuidSchema.optional(),
+      chatId: uuidSchema.optional(),
+      groupId: uuidSchema.optional(),
+      circleId: uuidSchema.optional(),
+      eventId: uuidSchema.optional(),
+      intentId: uuidSchema.optional(),
+    })
+    .default({}),
+  memberActorIds: z.array(z.string().min(1).max(120)).default([]),
+  tags: z.array(z.string().min(1).max(64)).default([]),
+});
+
+export const socialSimWorldSchema = z.object({
+  version: z.literal(1),
+  namespace: z.string().min(1).max(120),
+  actors: z.array(socialSimActorSchema).min(1),
+  entities: z.array(socialSimWorldEntitySchema).default([]),
+  turns: z.number().int().min(1).max(2000).default(30),
+  tags: z.array(z.string().min(1).max(64)).default([]),
+});
+
+export const socialSimRunConfigSchema = z.object({
+  provider: socialSimProviderSchema.default("ollama"),
+  judgeProvider: socialSimProviderSchema.default("ollama"),
+  horizon: socialSimHorizonSchema.default("medium"),
+  seed: z.coerce.number().int().nonnegative(),
+  turnBudget: z.coerce.number().int().min(1).max(2000),
+  namespace: z.string().min(1).max(120),
+  cleanupMode: socialSimCleanupModeSchema.default("archive"),
+  scenarioFamily: z.string().min(1).max(120),
+  stagingBaseUrl: z.string().url().optional(),
+  includeGroups: z.boolean().default(true),
+  includePairs: z.boolean().default(true),
+  includeCircles: z.boolean().default(true),
+  includeEvents: z.boolean().default(true),
+});
+
+export const socialSimTurnActionSchema = z.object({
+  turn: z.number().int().min(1),
+  actorId: z.string().min(1).max(120),
+  chosenAction: z.string().min(1).max(240),
+  rationale: z.string().min(1).max(500).optional(),
+  backendCalls: z.array(socialSimBackendCallSchema).default([]),
+  observedOutputs: z.array(z.string().min(1).max(500)).default([]),
+  stateDelta: z.record(z.string(), z.unknown()).default({}),
+  judgeAnnotations: z.record(z.string(), z.unknown()).default({}),
+});
+
+export const socialSimJudgeQualityVerdictSchema = z.enum([
+  "good_match",
+  "weak_match",
+  "bad_match",
+]);
+
+export const socialSimJudgeConversationVerdictSchema = z.enum([
+  "alive",
+  "stalled",
+  "awkward",
+  "unsafe",
+]);
+
+export const socialSimJudgeMemoryVerdictSchema = z.enum([
+  "memory_helpful",
+  "memory_neutral",
+  "memory_harmful",
+]);
+
+export const socialSimJudgeConvergenceVerdictSchema = z.enum([
+  "converged",
+  "partial",
+  "failed",
+]);
+
+export const socialSimJudgeStabilityVerdictSchema = z.enum([
+  "healthy",
+  "unstable",
+  "broken",
+]);
+
+export const socialSimJudgeOutputSchema = z.object({
+  runId: z.string().min(1).max(120),
+  turn: z.number().int().min(1).optional(),
+  actorIds: z.array(z.string().min(1).max(120)).default([]),
+  matchQuality: socialSimJudgeQualityVerdictSchema,
+  conversationQuality: socialSimJudgeConversationVerdictSchema,
+  usefulness: z.number().min(0).max(1),
+  memoryEffect: socialSimJudgeMemoryVerdictSchema,
+  naturalness: z.number().min(0).max(1),
+  convergence: socialSimJudgeConvergenceVerdictSchema,
+  stability: socialSimJudgeStabilityVerdictSchema,
+  operatorAttentionNeeded: z.boolean().default(false),
+  reasons: z.array(z.string().min(1).max(240)).min(1).max(10),
+  notes: z.array(z.string().min(1).max(240)).default([]),
+});
+
+export const socialSimRunSummarySchema = z.object({
+  runId: z.string().min(1).max(120),
+  status: socialSimRunStatusSchema,
+  provider: socialSimProviderSchema,
+  judgeProvider: socialSimProviderSchema,
+  horizon: socialSimHorizonSchema,
+  seed: z.number().int().nonnegative(),
+  namespace: z.string().min(1).max(120),
+  turnBudget: z.number().int().min(1).max(2000),
+  matchRate: z.number().min(0).max(1),
+  introToChatRate: z.number().min(0).max(1),
+  chatToOutcomeRate: z.number().min(0).max(1),
+  noMatchRecoveryQuality: z.number().min(0).max(1),
+  memoryConsistency: z.number().min(0).max(1),
+  convergenceScore: z.number().min(0).max(1),
+  safetyFlags: z.number().int().nonnegative().default(0),
+  weirdnessFlags: z.number().int().nonnegative().default(0),
+  instabilityFlags: z.number().int().nonnegative().default(0),
+  topFailureClasses: z
+    .record(z.string().min(1).max(64), z.number().int().nonnegative())
+    .default({}),
+});
+
+export const socialSimRunArtifactSchema = z.object({
+  runId: z.string().min(1).max(120),
+  generatedAt: isoDateTimeSchema,
+  config: socialSimRunConfigSchema,
+  world: socialSimWorldSchema,
+  status: socialSimRunStatusSchema,
+  turns: z.array(socialSimTurnActionSchema).default([]),
+  judges: z.array(socialSimJudgeOutputSchema).default([]),
+  summary: socialSimRunSummarySchema.optional(),
+  cleanup: z
+    .object({
+      mode: socialSimCleanupModeSchema,
+      completed: z.boolean(),
+      deletedEntityCount: z.number().int().nonnegative().default(0),
+      archivedEntityCount: z.number().int().nonnegative().default(0),
+    })
+    .optional(),
+});
+
+export const socialSimRunCreateBodySchema = z.object({
+  config: socialSimRunConfigSchema,
+  world: socialSimWorldSchema,
+  runLabel: z.string().min(1).max(120).optional(),
+});
+
+export const socialSimRunCreateResponseSchema = z.object({
+  runId: z.string().min(1).max(120),
+  traceId: z.string().min(1).max(255),
+  workflowRunId: z.string().min(1).max(255),
+  artifact: socialSimRunArtifactSchema,
+});
+
+export const socialSimRunListQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+  status: socialSimRunStatusSchema.optional(),
+  provider: socialSimProviderSchema.optional(),
+  judgeProvider: socialSimProviderSchema.optional(),
+  horizon: socialSimHorizonSchema.optional(),
+});
+
+export const socialSimRunListItemSchema = z.object({
+  runId: z.string().min(1).max(120),
+  generatedAt: isoDateTimeSchema,
+  status: socialSimRunStatusSchema,
+  provider: socialSimProviderSchema,
+  judgeProvider: socialSimProviderSchema,
+  horizon: socialSimHorizonSchema,
+  namespace: z.string().min(1).max(120),
+  summary: socialSimRunSummarySchema.optional(),
+});
+
+export const socialSimRunListResponseSchema = z.object({
+  generatedAt: isoDateTimeSchema,
+  total: z.number().int().nonnegative(),
+  runs: z.array(socialSimRunListItemSchema),
+});
+
+export const socialSimRunReplayBodySchema = z.object({
+  runId: z.string().min(1).max(120),
+  rerunJudge: z.boolean().default(true),
+  rerunBackend: z.boolean().default(true),
+});
+
+export const socialSimRunReplayResponseSchema = z.object({
+  runId: z.string().min(1).max(120),
+  traceId: z.string().min(1).max(255),
+  workflowRunId: z.string().min(1).max(255),
+  status: socialSimRunStatusSchema,
+});
+
+export const socialSimRunCleanupBodySchema = z.object({
+  runId: z.string().min(1).max(120),
+  mode: socialSimCleanupModeSchema.default("archive"),
+});
+
+export const socialSimRunCleanupResponseSchema = z.object({
+  runId: z.string().min(1).max(120),
+  mode: socialSimCleanupModeSchema,
+  cleaned: z.boolean(),
+  deletedEntityCount: z.number().int().nonnegative().default(0),
+  archivedEntityCount: z.number().int().nonnegative().default(0),
+});
+
 export const adminModerationFlagTriageBodySchema = z
   .object({
     action: z.enum(["resolve", "reopen", "escalate_strike", "restrict_user"]),
@@ -2203,3 +2490,39 @@ export type RealtimeServerEventPayload<T extends RealtimeServerEventName> =
 export type ApiResponseEnvelope = z.infer<typeof apiResponseEnvelopeSchema>;
 export type IntentPayload = z.infer<typeof intentPayloadSchema>;
 export type QueueEnvelope = z.infer<typeof queueEnvelopeSchema>;
+export type SocialSimProvider = z.infer<typeof socialSimProviderSchema>;
+export type SocialSimHorizon = z.infer<typeof socialSimHorizonSchema>;
+export type SocialSimCleanupMode = z.infer<typeof socialSimCleanupModeSchema>;
+export type SocialSimRunStatus = z.infer<typeof socialSimRunStatusSchema>;
+export type SocialSimActorKind = z.infer<typeof socialSimActorKindSchema>;
+export type SocialSimActor = z.infer<typeof socialSimActorSchema>;
+export type SocialSimWorldEntity = z.infer<typeof socialSimWorldEntitySchema>;
+export type SocialSimWorld = z.infer<typeof socialSimWorldSchema>;
+export type SocialSimRunConfig = z.infer<typeof socialSimRunConfigSchema>;
+export type SocialSimTurnAction = z.infer<typeof socialSimTurnActionSchema>;
+export type SocialSimJudgeOutput = z.infer<typeof socialSimJudgeOutputSchema>;
+export type SocialSimRunSummary = z.infer<typeof socialSimRunSummarySchema>;
+export type SocialSimRunArtifact = z.infer<typeof socialSimRunArtifactSchema>;
+export type SocialSimRunCreateBody = z.infer<
+  typeof socialSimRunCreateBodySchema
+>;
+export type SocialSimRunCreateResponse = z.infer<
+  typeof socialSimRunCreateResponseSchema
+>;
+export type SocialSimRunListQuery = z.infer<typeof socialSimRunListQuerySchema>;
+export type SocialSimRunListItem = z.infer<typeof socialSimRunListItemSchema>;
+export type SocialSimRunListResponse = z.infer<
+  typeof socialSimRunListResponseSchema
+>;
+export type SocialSimRunReplayBody = z.infer<
+  typeof socialSimRunReplayBodySchema
+>;
+export type SocialSimRunReplayResponse = z.infer<
+  typeof socialSimRunReplayResponseSchema
+>;
+export type SocialSimRunCleanupBody = z.infer<
+  typeof socialSimRunCleanupBodySchema
+>;
+export type SocialSimRunCleanupResponse = z.infer<
+  typeof socialSimRunCleanupResponseSchema
+>;
