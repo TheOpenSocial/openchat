@@ -1,0 +1,395 @@
+{
+  "version": 1,
+  "worlds": [
+    {
+      "id": "short-direct-match-v1",
+      "name": "Short direct match",
+      "horizon": "short",
+      "family": "individual-matchmaking",
+      "turnBudget": 6,
+      "seedScenarioIds": ["social_direct_match_v1", "social_followup_intro_v1"],
+      "summary": "Two people discover overlapping interests and quickly confirm a good fit.",
+      "goals": [
+        "Establish an early match quickly.",
+        "Keep the conversation warm and specific."
+      ],
+      "evaluationFocus": [
+        "match_quality",
+        "intro_to_chat_rate",
+        "conversation_quality"
+      ],
+      "actors": [
+        {
+          "id": "aya",
+          "kind": "individual",
+          "persona": "outdoor planner, warm, curious",
+          "goals": ["find a climbing partner", "compare weekend plans"],
+          "preferences": {
+            "topics": ["climbing", "coffee", "weekend trips"],
+            "pace": "friendly"
+          },
+          "hardConstraints": ["non-smoking"],
+          "socialStyle": "warm",
+          "patience": 0.72,
+          "initiative": 0.84,
+          "mismatchTolerance": 0.32,
+          "memoryDriftProfile": "stable"
+        },
+        {
+          "id": "ben",
+          "kind": "individual",
+          "persona": "low-key designer, direct, playful",
+          "goals": [
+            "find someone to try new cafes with",
+            "share climbing routes"
+          ],
+          "preferences": {
+            "topics": ["design", "cafe hopping", "climbing"],
+            "pace": "direct"
+          },
+          "hardConstraints": ["kindness"],
+          "socialStyle": "playful",
+          "patience": 0.68,
+          "initiative": 0.76,
+          "mismatchTolerance": 0.4,
+          "memoryDriftProfile": "stable"
+        }
+      ],
+      "relationships": [
+        {
+          "id": "aya-ben",
+          "type": "match",
+          "members": ["aya", "ben"],
+          "label": "Aya / Ben",
+          "strength": 0.62,
+          "notes": "Natural overlap in climbing and weekend planning."
+        }
+      ]
+    },
+    {
+      "id": "short-no-match-recovery-v1",
+      "name": "Short no-match recovery",
+      "horizon": "short",
+      "family": "recovery",
+      "turnBudget": 6,
+      "seedScenarioIds": ["social_no_match_recovery_v1"],
+      "summary": "A weak pairing needs a graceful recovery path instead of awkward churn.",
+      "goals": ["Detect poor fit early.", "Move toward a better alternative."],
+      "evaluationFocus": [
+        "no_match_recovery_quality",
+        "conversation_naturalness",
+        "operator_attention_needed"
+      ],
+      "actors": [
+        {
+          "id": "cora",
+          "kind": "individual",
+          "persona": "bookish engineer, gentle, a bit cautious",
+          "goals": ["find a quiet coworking buddy", "compare books"],
+          "preferences": {
+            "topics": ["books", "deep work", "coffee"],
+            "pace": "slow"
+          },
+          "hardConstraints": ["no loud venues"],
+          "socialStyle": "gentle",
+          "patience": 0.88,
+          "initiative": 0.42,
+          "mismatchTolerance": 0.18,
+          "memoryDriftProfile": "stable"
+        },
+        {
+          "id": "drew",
+          "kind": "individual",
+          "persona": "sports-first, upbeat, fast moving",
+          "goals": ["find a workout partner", "plan spontaneous events"],
+          "preferences": {
+            "topics": ["sports", "events", "night life"],
+            "pace": "fast"
+          },
+          "hardConstraints": ["weekend only"],
+          "socialStyle": "upbeat",
+          "patience": 0.48,
+          "initiative": 0.82,
+          "mismatchTolerance": 0.62,
+          "memoryDriftProfile": "stable"
+        }
+      ],
+      "relationships": [
+        {
+          "id": "cora-drew",
+          "type": "match",
+          "members": ["cora", "drew"],
+          "label": "Cora / Drew",
+          "strength": 0.24,
+          "notes": "The fit is intentionally weak so recovery logic can trigger."
+        }
+      ]
+    },
+    {
+      "id": "medium-pair-group-discovery-v1",
+      "name": "Pair to group discovery",
+      "horizon": "medium",
+      "family": "pair-and-group",
+      "turnBudget": 10,
+      "seedScenarioIds": [
+        "social_pair_group_discovery_v1",
+        "social_group_formation_partial_fallback_v1"
+      ],
+      "summary": "Two pre-linked pairs discover a shared group channel and try to form a stable group.",
+      "goals": [
+        "Bring pair-level compatibility into a group format.",
+        "Avoid forcing a bad cluster when the fit is weak."
+      ],
+      "evaluationFocus": [
+        "group_formation",
+        "partial_fallback",
+        "intro_to_chat_rate"
+      ],
+      "actors": [
+        {
+          "id": "pair-maya-lev",
+          "kind": "pair",
+          "persona": "pair seeking another pair, playful and collaborative",
+          "goals": ["find another pair", "share food spots"],
+          "preferences": {
+            "topics": ["food", "design", "city walks"],
+            "pace": "playful"
+          },
+          "hardConstraints": ["respect boundaries"],
+          "socialStyle": "collaborative",
+          "patience": 0.73,
+          "initiative": 0.7,
+          "mismatchTolerance": 0.36,
+          "memoryDriftProfile": "stable"
+        },
+        {
+          "id": "pair-nia-omar",
+          "kind": "pair",
+          "persona": "pair that likes low-pressure plans and group activities",
+          "goals": ["join a social group", "find shared events"],
+          "preferences": {
+            "topics": ["events", "games", "food"],
+            "pace": "low-pressure"
+          },
+          "hardConstraints": ["no late-night pressure"],
+          "socialStyle": "warm",
+          "patience": 0.76,
+          "initiative": 0.58,
+          "mismatchTolerance": 0.44,
+          "memoryDriftProfile": "stable"
+        },
+        {
+          "id": "group-seed-soren",
+          "kind": "group_seed",
+          "persona": "community organizer, keeps the room moving",
+          "goals": ["form a useful group", "balance participation"],
+          "preferences": {
+            "topics": ["community", "events", "books"],
+            "pace": "inclusive"
+          },
+          "hardConstraints": ["keep everyone engaged"],
+          "socialStyle": "organized",
+          "patience": 0.84,
+          "initiative": 0.88,
+          "mismatchTolerance": 0.52,
+          "memoryDriftProfile": "stable"
+        }
+      ],
+      "relationships": [
+        {
+          "id": "pair-group-link-1",
+          "type": "group",
+          "members": ["pair-maya-lev", "group-seed-soren"],
+          "label": "Maya/Lev group fit",
+          "strength": 0.52
+        },
+        {
+          "id": "pair-group-link-2",
+          "type": "group",
+          "members": ["pair-nia-omar", "group-seed-soren"],
+          "label": "Nia/Omar group fit",
+          "strength": 0.48
+        }
+      ]
+    },
+    {
+      "id": "medium-recurring-circle-v1",
+      "name": "Recurring circle return flow",
+      "horizon": "medium",
+      "family": "circle",
+      "turnBudget": 10,
+      "seedScenarioIds": [
+        "social_recurring_circle_join_v1",
+        "social_event_reminder_followup_v1"
+      ],
+      "summary": "A recurring circle keeps returning to the system and should feel remembered without being creepy.",
+      "goals": [
+        "Support return behavior.",
+        "Use memory in a safe, restrained way."
+      ],
+      "evaluationFocus": [
+        "memory_helpfulness",
+        "return_behavior",
+        "conversation_quality"
+      ],
+      "actors": [
+        {
+          "id": "circle-iris",
+          "kind": "circle_seed",
+          "persona": "community regular, likes continuity",
+          "goals": ["rejoin familiar group", "continue prior threads"],
+          "preferences": {
+            "topics": ["music", "community", "events"],
+            "pace": "steady"
+          },
+          "hardConstraints": ["respect prior context"],
+          "socialStyle": "steady",
+          "patience": 0.8,
+          "initiative": 0.66,
+          "mismatchTolerance": 0.4,
+          "memoryDriftProfile": "light"
+        },
+        {
+          "id": "circle-luca",
+          "kind": "individual",
+          "persona": "returning participant, practical and friendly",
+          "goals": ["keep continuity", "join familiar people"],
+          "preferences": {
+            "topics": ["music", "food", "planning"],
+            "pace": "steady"
+          },
+          "hardConstraints": ["no repeated reminders"],
+          "socialStyle": "friendly",
+          "patience": 0.74,
+          "initiative": 0.56,
+          "mismatchTolerance": 0.38,
+          "memoryDriftProfile": "light"
+        },
+        {
+          "id": "circle-organizer",
+          "kind": "circle_seed",
+          "persona": "organizer that keeps the circle coherent",
+          "goals": ["avoid churn", "route new people to the right places"],
+          "preferences": {
+            "topics": ["events", "planning", "reliability"],
+            "pace": "clear"
+          },
+          "hardConstraints": ["do not over-rotate"],
+          "socialStyle": "clear",
+          "patience": 0.85,
+          "initiative": 0.9,
+          "mismatchTolerance": 0.5,
+          "memoryDriftProfile": "stable"
+        }
+      ],
+      "relationships": [
+        {
+          "id": "circle-return-1",
+          "type": "circle",
+          "members": ["circle-iris", "circle-organizer"],
+          "label": "Iris circle return",
+          "strength": 0.58
+        },
+        {
+          "id": "circle-return-2",
+          "type": "circle",
+          "members": ["circle-luca", "circle-organizer"],
+          "label": "Luca circle return",
+          "strength": 0.54
+        }
+      ]
+    },
+    {
+      "id": "long-memory-drift-event-v1",
+      "name": "Long memory drift event follow-up",
+      "horizon": "long",
+      "family": "event-and-memory",
+      "turnBudget": 14,
+      "seedScenarioIds": [
+        "social_memory_drift_v1",
+        "social_event_followup_v1",
+        "social_trust_moderation_edge_v1"
+      ],
+      "summary": "A long-running world where memory, recurring events, and moderation-adjacent signals all matter.",
+      "goals": [
+        "Respect prior context across sessions.",
+        "Keep event follow-up useful rather than creepy.",
+        "Surface moderation concerns safely when needed."
+      ],
+      "evaluationFocus": [
+        "memory_consistency",
+        "event_return_behavior",
+        "trust_and_moderation"
+      ],
+      "actors": [
+        {
+          "id": "event-zoe",
+          "kind": "event_seed",
+          "persona": "event host, remembers prior attendance lightly",
+          "goals": ["bring people back", "keep events coherent"],
+          "preferences": {
+            "topics": ["events", "community", "small groups"],
+            "pace": "calm"
+          },
+          "hardConstraints": ["avoid over-notifying"],
+          "socialStyle": "calm",
+          "patience": 0.82,
+          "initiative": 0.8,
+          "mismatchTolerance": 0.45,
+          "memoryDriftProfile": "fluid"
+        },
+        {
+          "id": "event-jules",
+          "kind": "individual",
+          "persona": "returning attendee, open but selective",
+          "goals": [
+            "join relevant follow-up",
+            "keep the context from last time"
+          ],
+          "preferences": {
+            "topics": ["events", "music", "community"],
+            "pace": "calm"
+          },
+          "hardConstraints": ["no creepy persistence"],
+          "socialStyle": "selective",
+          "patience": 0.7,
+          "initiative": 0.5,
+          "mismatchTolerance": 0.28,
+          "memoryDriftProfile": "fluid"
+        },
+        {
+          "id": "event-kai",
+          "kind": "individual",
+          "persona": "safety-aware participant, likes clear boundaries",
+          "goals": ["participate safely", "avoid repeated bad fits"],
+          "preferences": {
+            "topics": ["safety", "community", "events"],
+            "pace": "clear"
+          },
+          "hardConstraints": ["respect boundaries"],
+          "socialStyle": "clear",
+          "patience": 0.78,
+          "initiative": 0.62,
+          "mismatchTolerance": 0.22,
+          "memoryDriftProfile": "stable"
+        }
+      ],
+      "relationships": [
+        {
+          "id": "event-return-1",
+          "type": "event",
+          "members": ["event-zoe", "event-jules"],
+          "label": "Zoe / Jules follow-up",
+          "strength": 0.51
+        },
+        {
+          "id": "event-return-2",
+          "type": "event",
+          "members": ["event-zoe", "event-kai"],
+          "label": "Zoe / Kai follow-up",
+          "strength": 0.43
+        }
+      ]
+    }
+  ]
+}

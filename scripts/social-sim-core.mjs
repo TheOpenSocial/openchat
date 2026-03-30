@@ -1,0 +1,1692 @@
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { randomUUID } from "node:crypto";
+
+export const SOCIAL_SIM_PROMPT_VERSION = "social-sim-v1";
+export const DEFAULT_SOCIAL_SIM_ARTIFACT_ROOT = ".artifacts/social-sim";
+export const DEFAULT_SOCIAL_SIM_FIXTURE_PATH = "scripts/social-sim-worlds.json";
+export const DEFAULT_SOCIAL_SIM_SCENARIO_FIXTURE_PATH =
+  "apps/api/test/fixtures/agentic-scenarios.json";
+
+const HORIZON_ORDER = new Map([
+  ["short", 0],
+  ["medium", 1],
+  ["long", 2],
+]);
+
+const VALID_PROVIDERS = new Set(["ollama", "openai", "stub"]);
+const VALID_CLEANUP_MODES = new Set(["archive", "delete", "none"]);
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function safeJsonParse(raw, fallback = null) {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+}
+
+function clamp(value, min, max) {
+  if (!Number.isFinite(value)) return min;
+  return Math.min(max, Math.max(min, value));
+}
+
+function normalizeString(value, fallback = "") {
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : fallback;
+}
+
+function toNumber(value, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function boolFromEnv(value, fallback = false) {
+  if (typeof value !== "string") return fallback;
+  const normalized = value.trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  return fallback;
+}
+
+function parseList(value) {
+  if (!value) return [];
+  return String(value)
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+export function makeSeededRng(seed) {
+  let state = Number.isFinite(seed) ? seed >>> 0 : 0x9e3779b9;
+  return () => {
+    state |= 0;
+    state = (state + 0x6d2b79f5) | 0;
+    let t = Math.imul(state ^ (state >>> 15), 1 | state);
+    t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+export function parseSocialSimArgs(argv = process.argv.slice(2), env = process.env) {
+  const args = Array.isArray(argv) ? argv : [];
+  const flags = new Map();
+
+  for (const arg of args) {
+    if (!arg.startsWith("--")) continue;
+    const withoutPrefix = arg.slice(2);
+    const [key, rawValue] = withoutPrefix.split("=", 2);
+    flags.set(key, rawValue ?? "true");
+  }
+
+  const provider = normalizeString(
+    flags.get("provider") ?? env.SOCIAL_SIM_PROVIDER,
+    "stub",
+  ).toLowerCase();
+  const judgeProvider = normalizeString(
+    flags.get("judge-provider") ?? env.SOCIAL_SIM_JUDGE_PROVIDER,
+    provider,
+  ).toLowerCase();
+  const horizon = normalizeString(
+    flags.get("horizon") ?? env.SOCIAL_SIM_HORIZON,
+    "all",
+  ).toLowerCase();
+  const worldFilter = parseList(flags.get("world") ?? env.SOCIAL_SIM_WORLD);
+  const scenarioFilter = parseList(
+    flags.get("scenario") ?? env.SOCIAL_SIM_SCENARIO,
+  );
+  const seed = toNumber(
+    flags.get("seed") ?? env.SOCIAL_SIM_SEED,
+    Date.now() % 2_147_483_647,
+  );
+  const namespace = normalizeString(
+    flags.get("namespace") ?? env.SOCIAL_SIM_NAMESPACE,
+    `social-sim-${new Date().toISOString().replace(/[:.]/g, "-")}`,
+  );
+  const turnBudget = clamp(
+    toNumber(flags.get("turn-budget") ?? env.SOCIAL_SIM_TURN_BUDGET, 12),
+    1,
+    128,
+  );
+  const cleanupMode = normalizeString(
+    flags.get("cleanup") ?? env.SOCIAL_SIM_CLEANUP,
+    "archive",
+  ).toLowerCase();
+  const dryRun = boolFromEnv(flags.get("dry-run") ?? env.SOCIAL_SIM_DRY_RUN);
+  const nightly = boolFromEnv(flags.get("nightly") ?? env.SOCIAL_SIM_NIGHTLY);
+  const artifactRoot = path.resolve(
+    process.cwd(),
+    normalizeString(
+      flags.get("artifact-root") ?? env.SOCIAL_SIM_ARTIFACT_ROOT,
+      DEFAULT_SOCIAL_SIM_ARTIFACT_ROOT,
+    ),
+  );
+  const fixturePath = path.resolve(
+    process.cwd(),
+    normalizeString(
+      flags.get("fixture") ?? env.SOCIAL_SIM_FIXTURE_PATH,
+      DEFAULT_SOCIAL_SIM_FIXTURE_PATH,
+    ),
+  );
+  const scenarioFixturePath = path.resolve(
+    process.cwd(),
+    normalizeString(
+      flags.get("scenario-fixture") ??
+        env.SOCIAL_SIM_SCENARIO_FIXTURE_PATH,
+      DEFAULT_SOCIAL_SIM_SCENARIO_FIXTURE_PATH,
+    ),
+  );
+  const baseUrl = normalizeString(
+    flags.get("base-url") ?? env.SOCIAL_SIM_BASE_URL,
+    "",
+  );
+  const adminUserId = normalizeString(
+    flags.get("admin-user-id") ?? env.SOCIAL_SIM_ADMIN_USER_ID,
+    "",
+  );
+  const adminRole = normalizeString(
+    flags.get("admin-role") ?? env.SOCIAL_SIM_ADMIN_ROLE,
+    "admin",
+  );
+  const adminApiKey = normalizeString(
+    flags.get("admin-api-key") ?? env.SOCIAL_SIM_ADMIN_API_KEY,
+    "",
+  );
+  const ollamaBaseUrl = normalizeString(
+    flags.get("ollama-base-url") ?? env.OLLAMA_BASE_URL,
+    "http://localhost:11434",
+  );
+  const ollamaModel = normalizeString(
+    flags.get("ollama-model") ?? env.SOCIAL_SIM_OLLAMA_MODEL,
+    "llama3.1",
+  );
+  const openaiModel = normalizeString(
+    flags.get("openai-model") ?? env.SOCIAL_SIM_OPENAI_MODEL,
+    "gpt-4.1-mini",
+  );
+  const openaiApiKey = normalizeString(
+    flags.get("openai-api-key") ?? env.OPENAI_API_KEY,
+    "",
+  );
+  const useRemoteProvider = boolFromEnv(
+    flags.get("use-remote-provider") ??
+      env.SOCIAL_SIM_USE_REMOTE_PROVIDER,
+    false,
+  );
+  const useRemoteJudge = boolFromEnv(
+    flags.get("use-remote-judge") ?? env.SOCIAL_SIM_USE_REMOTE_JUDGE,
+    useRemoteProvider,
+  );
+
+  if (!VALID_PROVIDERS.has(provider)) {
+    throw new Error(
+      `Invalid social sim provider "${provider}". Expected ollama, openai, or stub.`,
+    );
+  }
+  if (!VALID_PROVIDERS.has(judgeProvider)) {
+    throw new Error(
+      `Invalid social sim judge provider "${judgeProvider}". Expected ollama, openai, or stub.`,
+    );
+  }
+  if (!VALID_CLEANUP_MODES.has(cleanupMode)) {
+    throw new Error(
+      `Invalid cleanup mode "${cleanupMode}". Expected archive, delete, or none.`,
+    );
+  }
+
+  return {
+    provider,
+    judgeProvider,
+    horizon,
+    worldFilter,
+    scenarioFilter,
+    seed,
+    namespace,
+    turnBudget,
+    cleanupMode,
+    dryRun,
+    nightly,
+    artifactRoot,
+    fixturePath,
+    scenarioFixturePath,
+    baseUrl,
+    adminUserId,
+    adminRole,
+    adminApiKey,
+    ollamaBaseUrl,
+    ollamaModel,
+    openaiApiKey,
+    openaiModel,
+    useRemoteProvider,
+    useRemoteJudge,
+  };
+}
+
+export function loadSocialSimScenarioCorpus(scenarioFixturePath) {
+  try {
+    const parsed = safeJsonParse(
+      readFileSync(scenarioFixturePath, "utf8"),
+      null,
+    );
+    const scenarios = Array.isArray(parsed?.scenarios) ? parsed.scenarios : [];
+    return new Map(
+      scenarios
+        .filter((scenario) => scenario && typeof scenario.id === "string")
+        .map((scenario) => [scenario.id, scenario]),
+    );
+  } catch {
+    return new Map();
+  }
+}
+
+export function loadSocialSimWorldFixture(fixturePath, scenarioFixturePath) {
+  const parsed = safeJsonParse(readFileSync(fixturePath, "utf8"), null);
+  if (!parsed || !Array.isArray(parsed.worlds)) {
+    throw new Error(
+      `Social sim fixture must be an object with a worlds array: ${fixturePath}`,
+    );
+  }
+  const scenarioCorpus = loadSocialSimScenarioCorpus(scenarioFixturePath);
+
+  return parsed.worlds
+    .map((world, index) => normalizeWorld(world, index, scenarioCorpus))
+    .filter(Boolean);
+}
+
+function normalizeWorld(world, index, scenarioCorpus) {
+  if (!world || typeof world !== "object") return null;
+  const id = normalizeString(world.id, `world-${index + 1}`);
+  const name = normalizeString(world.name, id);
+  const horizon = normalizeString(world.horizon, "short").toLowerCase();
+  const family = normalizeString(world.family, "social");
+  const turnBudget = clamp(toNumber(world.turnBudget, 12), 1, 128);
+  const seedScenarioIds = Array.isArray(world.seedScenarioIds)
+    ? world.seedScenarioIds.filter((entry) => typeof entry === "string")
+    : [];
+  const resolvedScenarios = seedScenarioIds
+    .map((scenarioId) => scenarioCorpus.get(scenarioId))
+    .filter(Boolean);
+  const actors = Array.isArray(world.actors)
+    ? world.actors
+        .map((actor, actorIndex) => normalizeActor(actor, actorIndex, id))
+        .filter(Boolean)
+    : [];
+  const relationships = Array.isArray(world.relationships)
+    ? world.relationships
+        .map((relationship, relationshipIndex) =>
+          normalizeRelationship(relationship, relationshipIndex, actors),
+        )
+        .filter(Boolean)
+    : [];
+
+  return {
+    id,
+    name,
+    horizon: ["short", "medium", "long"].includes(horizon)
+      ? horizon
+      : "short",
+    family,
+    turnBudget,
+    seedScenarioIds,
+    sourceScenarioIds: resolvedScenarios.map((scenario) => scenario.id),
+    summary:
+      typeof world.summary === "string" && world.summary.trim().length > 0
+        ? world.summary.trim()
+        : `${name} (${family})`,
+    goals: Array.isArray(world.goals)
+      ? world.goals.filter((goal) => typeof goal === "string")
+      : [],
+    actors,
+    relationships,
+    evaluationFocus: Array.isArray(world.evaluationFocus)
+      ? world.evaluationFocus.filter((value) => typeof value === "string")
+      : [],
+    judgeHints: Array.isArray(world.judgeHints)
+      ? world.judgeHints.filter((value) => typeof value === "string")
+      : [],
+    artifactHints: Array.isArray(world.artifactHints)
+      ? world.artifactHints.filter((value) => typeof value === "string")
+      : [],
+  };
+}
+
+function normalizeActor(actor, index, worldId) {
+  if (!actor || typeof actor !== "object") return null;
+  const id = normalizeString(actor.id, `${worldId}-actor-${index + 1}`);
+  const kind = normalizeString(actor.kind, "individual");
+  const persona = normalizeString(actor.persona, "curious, warm, social");
+  return {
+    id,
+    kind: ["individual", "pair", "group_seed", "circle_seed", "event_seed"].includes(kind)
+      ? kind
+      : "individual",
+    persona,
+    goals: Array.isArray(actor.goals)
+      ? actor.goals.filter((goal) => typeof goal === "string")
+      : [],
+    preferences: actor.preferences && typeof actor.preferences === "object"
+      ? actor.preferences
+      : {},
+    hardConstraints: Array.isArray(actor.hardConstraints)
+      ? actor.hardConstraints.filter((constraint) => typeof constraint === "string")
+      : [],
+    socialStyle: normalizeString(actor.socialStyle, "warm"),
+    patience: clamp(toNumber(actor.patience, 0.6), 0, 1),
+    initiative: clamp(toNumber(actor.initiative, 0.6), 0, 1),
+    mismatchTolerance: clamp(
+      toNumber(actor.mismatchTolerance, 0.5),
+      0,
+      1,
+    ),
+    memoryDriftProfile: normalizeString(actor.memoryDriftProfile, "stable"),
+    hiddenGoals: Array.isArray(actor.hiddenGoals)
+      ? actor.hiddenGoals.filter((goal) => typeof goal === "string")
+      : [],
+    backendHints: actor.backendHints && typeof actor.backendHints === "object"
+      ? actor.backendHints
+      : {},
+  };
+}
+
+function normalizeRelationship(relationship, index, actors) {
+  if (!relationship || typeof relationship !== "object") return null;
+  const type = normalizeString(relationship.type, "pair");
+  const members = Array.isArray(relationship.members)
+    ? relationship.members.filter((member) => typeof member === "string")
+    : [];
+  if (members.length === 0) return null;
+  const memberSet = new Set(actors.map((actor) => actor.id));
+  const validMembers = members.filter((member) => memberSet.has(member));
+  if (validMembers.length === 0) return null;
+  return {
+    id: normalizeString(
+      relationship.id,
+      `${type}-${index + 1}-${validMembers.join("-")}`,
+    ),
+    type,
+    members: validMembers,
+    label: normalizeString(
+      relationship.label,
+      `${type} ${validMembers.join(" / ")}`,
+    ),
+    strength: clamp(toNumber(relationship.strength, 0.5), 0, 1),
+    notes: normalizeString(relationship.notes, ""),
+  };
+}
+
+function selectHorizonWorlds(worlds, horizon) {
+  if (!horizon || horizon === "all") {
+    return worlds.slice();
+  }
+  return worlds.filter((world) => world.horizon === horizon);
+}
+
+export function selectSocialSimWorlds(worlds, config) {
+  const selectedByHorizon = selectHorizonWorlds(worlds, config.horizon);
+  const selectedByWorld = config.worldFilter.length
+    ? selectedByHorizon.filter(
+        (world) =>
+          config.worldFilter.includes(world.id) ||
+          config.worldFilter.includes(world.name),
+      )
+    : selectedByHorizon;
+  const selectedByScenario = config.scenarioFilter.length
+    ? selectedByWorld.filter((world) =>
+        config.scenarioFilter.some(
+          (scenarioId) =>
+            world.seedScenarioIds.includes(scenarioId) ||
+            world.sourceScenarioIds.includes(scenarioId) ||
+            world.id.includes(scenarioId) ||
+            world.name.toLowerCase().includes(scenarioId.toLowerCase()),
+        ),
+      )
+    : selectedByWorld;
+
+  return selectedByScenario.length > 0 ? selectedByScenario : selectedByHorizon;
+}
+
+export function createBackendAdapter(config) {
+  return new SocialSimBackendAdapter(config);
+}
+
+export function createBrainProvider(config) {
+  if (config.provider === "ollama") {
+    return new OllamaSocialSimProvider(config);
+  }
+  if (config.provider === "openai") {
+    return new OpenAISocialSimProvider(config);
+  }
+  return new HeuristicSocialSimProvider(config);
+}
+
+export function createJudgeProvider(config) {
+  if (config.judgeProvider === "ollama") {
+    return new OllamaJudgeProvider(config);
+  }
+  if (config.judgeProvider === "openai") {
+    return new OpenAIJudgeProvider(config);
+  }
+  return new HeuristicJudgeProvider(config);
+}
+
+export async function runSocialSimulation(config) {
+  mkdirSync(config.artifactRoot, { recursive: true });
+  const runId = config.runId ?? `social-sim-${config.namespace}`;
+  const runDir = path.join(config.artifactRoot, runId);
+  mkdirSync(runDir, { recursive: true });
+
+  const worlds = loadSocialSimWorldFixture(
+    config.fixturePath,
+    config.scenarioFixturePath,
+  );
+  const selectedWorlds = selectSocialSimWorlds(worlds, config);
+  const adapter = createBackendAdapter(config);
+  const brainProvider = createBrainProvider(config);
+  const judgeProvider = createJudgeProvider(config);
+  const startedAt = nowIso();
+  const globalRng = makeSeededRng(config.seed);
+  const bootstrap = await adapter.bootstrapRun({
+    runId,
+    namespace: config.namespace,
+    dryRun: config.dryRun,
+    worldCount: selectedWorlds.length,
+  });
+
+  const worldRuns = [];
+  for (const [worldIndex, world] of selectedWorlds.entries()) {
+    const worldSeed = Math.floor(globalRng() * 2_147_483_647) ^ worldIndex;
+    const worldRng = makeSeededRng(worldSeed);
+    const result = await runWorldSimulation({
+      world,
+      config,
+      adapter,
+      brainProvider,
+      judgeProvider,
+      runId,
+      runDir,
+      worldRng,
+      worldIndex,
+      bootstrap,
+    });
+    worldRuns.push(result);
+  }
+
+  const summary = summarizeRun(worldRuns, config, bootstrap);
+  const artifact = {
+    runId,
+    namespace: config.namespace,
+    createdAt: startedAt,
+    completedAt: nowIso(),
+    promptVersion: SOCIAL_SIM_PROMPT_VERSION,
+    config: {
+      provider: config.provider,
+      judgeProvider: config.judgeProvider,
+      horizon: config.horizon,
+      turnBudget: config.turnBudget,
+      cleanupMode: config.cleanupMode,
+      dryRun: config.dryRun,
+      nightly: config.nightly,
+      seed: config.seed,
+      worldFilter: config.worldFilter,
+      scenarioFilter: config.scenarioFilter,
+      fixturePath: config.fixturePath,
+      scenarioFixturePath: config.scenarioFixturePath,
+    },
+    bootstrap,
+    worlds: worldRuns,
+    summary,
+  };
+
+  writeSocialSimArtifact(runDir, "run.json", artifact);
+  writeSocialSimArtifact(runDir, "summary.json", summary);
+
+  const cleanup = await adapter.cleanupRun({
+    runId,
+    namespace: config.namespace,
+    worlds: worldRuns,
+    mode: config.cleanupMode,
+  });
+  artifact.cleanup = cleanup;
+  writeSocialSimArtifact(runDir, "run.json", artifact);
+
+  return {
+    runDir,
+    artifact,
+    summary,
+    cleanup,
+  };
+}
+
+async function runWorldSimulation({
+  world,
+  config,
+  adapter,
+  brainProvider,
+  judgeProvider,
+  runId,
+  runDir,
+  worldRng,
+  worldIndex,
+  bootstrap,
+}) {
+  const worldRunId = `${runId}:${world.id}`;
+  const transcript = [];
+  const judgeTurns = [];
+  const metrics = {
+    introductions: 0,
+    replies: 0,
+    followups: 0,
+    invites: 0,
+    memorySignals: 0,
+    recoverySignals: 0,
+    moderationSignals: 0,
+    matchedMembers: new Set(),
+    stalledTurns: 0,
+    totalTurns: 0,
+  };
+  const state = {
+    stage: "onboarding",
+    turnIndex: 0,
+    focusActorIndex: 0,
+    lastActionByActor: new Map(),
+    knownTargets: new Map(),
+    relationships: world.relationships.map((relationship) => ({
+      ...relationship,
+      status: "pending",
+    })),
+  };
+
+  const turnBudget = config.turnBudget ?? world.turnBudget;
+  for (let turnIndex = 0; turnIndex < turnBudget; turnIndex += 1) {
+    state.turnIndex = turnIndex;
+    state.stage = inferWorldStage(turnIndex, turnBudget, world);
+    const actor = world.actors[(turnIndex + worldIndex) % world.actors.length];
+    const action = await brainProvider.generateActorTurn({
+      world,
+      state,
+      actor,
+      transcript,
+      rng: worldRng,
+      config,
+    });
+    const backendResult = await adapter.submitTurn({
+      runId,
+      world,
+      actor,
+      action,
+      state,
+      transcript,
+      config,
+      dryRun: config.dryRun,
+    });
+    const turnRecord = applyTurnOutcome({
+      world,
+      actor,
+      action,
+      backendResult,
+      state,
+      transcript,
+      metrics,
+      rng: worldRng,
+      turnIndex,
+      bootstrap,
+    });
+    transcript.push(turnRecord);
+    metrics.totalTurns += 1;
+    judgeTurns.push(
+      await judgeProvider.scoreTurn({
+        world,
+        actor,
+        action,
+        turnRecord,
+        transcript,
+        state,
+        config,
+      }),
+    );
+  }
+
+  const finalJudge = await judgeProvider.scoreWorld({
+    world,
+    transcript,
+    state,
+    metrics,
+    turns: judgeTurns,
+    config,
+  });
+  const worldSummary = summarizeWorld(world, transcript, metrics, finalJudge);
+  const worldArtifact = {
+    worldRunId,
+    worldId: world.id,
+    name: world.name,
+    horizon: world.horizon,
+    family: world.family,
+    turnBudget,
+    seedScenarioIds: world.seedScenarioIds,
+    sourceScenarioIds: world.sourceScenarioIds,
+    promptVersion: SOCIAL_SIM_PROMPT_VERSION,
+    actors: world.actors,
+    relationships: world.relationships,
+    transcript,
+    judgeTurns,
+    judge: finalJudge,
+    summary: worldSummary,
+  };
+  writeSocialSimArtifact(runDir, `${world.id}.json`, worldArtifact);
+  return worldArtifact;
+}
+
+function inferWorldStage(turnIndex, turnBudget, world) {
+  if (turnIndex === 0) return "onboarding";
+  if (turnIndex < Math.max(2, Math.floor(turnBudget * 0.4))) {
+    return "matching";
+  }
+  if (turnIndex < Math.max(4, Math.floor(turnBudget * 0.75))) {
+    return "conversation";
+  }
+  if (world.horizon === "long") {
+    return "memory_drift";
+  }
+  return "convergence";
+}
+
+function applyTurnOutcome({
+  world,
+  actor,
+  action,
+  backendResult,
+  state,
+  transcript,
+  metrics,
+  rng,
+  turnIndex,
+  bootstrap,
+}) {
+  const targetRelationship = findBestRelationship(world, actor, action.targetActorId);
+  const isPositive =
+    action.intent === "introduce" ||
+    action.intent === "reply" ||
+    action.intent === "follow_up" ||
+    action.intent === "invite_group" ||
+    action.intent === "propose_event" ||
+    action.intent === "reference_memory";
+
+  if (action.intent === "introduce") metrics.introductions += 1;
+  if (action.intent === "reply") metrics.replies += 1;
+  if (action.intent === "follow_up") metrics.followups += 1;
+  if (action.intent === "invite_group") metrics.invites += 1;
+  if (action.intent === "reference_memory") metrics.memorySignals += 1;
+  if (action.intent === "recover_no_match") metrics.recoverySignals += 1;
+  if (action.intent === "flag_moderation") metrics.moderationSignals += 1;
+
+  if (targetRelationship && isPositive) {
+    const nextStrength = clamp(
+      targetRelationship.strength + (action.intent === "reference_memory" ? 0.06 : 0.1),
+      0,
+      1,
+    );
+    targetRelationship.strength = nextStrength;
+    if (nextStrength >= 0.75) {
+      targetRelationship.status = "matched";
+      targetRelationship.lastMatchedTurn = turnIndex;
+      metrics.matchedMembers.add(targetRelationship.id);
+    }
+    state.knownTargets.set(targetRelationship.id, {
+      turnIndex,
+      action: action.intent,
+      confidence: action.confidence,
+    });
+  }
+
+  const stalled =
+    action.intent === "idle" ||
+    action.intent === "wait" ||
+    action.intent === "unknown";
+  if (stalled) {
+    metrics.stalledTurns += 1;
+  }
+
+  state.lastActionByActor.set(actor.id, {
+    ...action,
+    backendMode: backendResult.mode,
+    backendStatus: backendResult.status,
+    backendDetail: backendResult.detail ?? null,
+  });
+
+  return {
+    turnIndex,
+    actorId: actor.id,
+    actorKind: actor.kind,
+    stage: state.stage,
+    promptVersion: SOCIAL_SIM_PROMPT_VERSION,
+    intent: action.intent,
+    targetActorId: action.targetActorId ?? null,
+    message: action.message,
+    rationale: action.rationale,
+    tone: action.tone,
+    confidence: action.confidence,
+    memoryReferences: action.memoryReferences ?? [],
+    worldContext: {
+      horizon: world.horizon,
+      family: world.family,
+      relationshipId: targetRelationship?.id ?? null,
+      backendMode: backendResult.mode,
+      bootstrapRunId: bootstrap?.runId ?? null,
+    },
+    backend: backendResult,
+    outcome: {
+      matched: Boolean(targetRelationship && targetRelationship.status === "matched"),
+      relationshipStrength: targetRelationship?.strength ?? null,
+      stalled,
+      positive: isPositive,
+    },
+    randomFactor: Number(rng().toFixed(6)),
+  };
+}
+
+function findBestRelationship(world, actor, explicitTargetId) {
+  if (explicitTargetId) {
+    const explicit = world.relationships.find(
+      (relationship) =>
+        relationship.members.includes(actor.id) &&
+        relationship.members.includes(explicitTargetId),
+    );
+    if (explicit) return explicit;
+  }
+  return (
+    world.relationships.find((relationship) =>
+      relationship.members.includes(actor.id),
+    ) ?? null
+  );
+}
+
+function summarizeWorld(world, transcript, metrics, judge) {
+  const totalTurns = transcript.length || 1;
+  const matchedRelationships = metrics.matchedMembers.size;
+  const convergenceScore = clamp(
+    (matchedRelationships / Math.max(world.relationships.length || 1, 1)) * 0.45 +
+      (metrics.introductions + metrics.replies + metrics.followups) /
+        Math.max(totalTurns * 2.5, 1) *
+        0.35 +
+      (metrics.memorySignals > 0 ? 0.1 : 0) +
+      (metrics.stalledTurns === 0 ? 0.1 : 0),
+    0,
+    1,
+  );
+  const noMatchRecoveryQuality = clamp(
+    metrics.recoverySignals > 0
+      ? 0.55 + metrics.recoverySignals / Math.max(totalTurns * 2, 1) * 0.35
+      : 0.15,
+    0,
+    1,
+  );
+  const memoryConsistency = clamp(
+    metrics.memorySignals > 0
+      ? 0.6 + metrics.memorySignals / Math.max(totalTurns * 2, 1) * 0.3
+      : 0.35,
+    0,
+    1,
+  );
+
+  return {
+    totalTurns,
+    introductions: metrics.introductions,
+    replies: metrics.replies,
+    followups: metrics.followups,
+    invites: metrics.invites,
+    memorySignals: metrics.memorySignals,
+    recoverySignals: metrics.recoverySignals,
+    moderationSignals: metrics.moderationSignals,
+    matchedRelationships,
+    convergenceScore: Number(convergenceScore.toFixed(3)),
+    noMatchRecoveryQuality: Number(noMatchRecoveryQuality.toFixed(3)),
+    memoryConsistency: Number(memoryConsistency.toFixed(3)),
+    judge,
+  };
+}
+
+function summarizeRun(worldRuns, config, bootstrap) {
+  const totals = {
+    worlds: worldRuns.length,
+    turns: 0,
+    matchedRelationships: 0,
+    memorySignals: 0,
+    moderationSignals: 0,
+    convergenceScoreTotal: 0,
+  };
+  for (const world of worldRuns) {
+    totals.turns += world.summary?.totalTurns ?? 0;
+    totals.matchedRelationships += world.summary?.matchedRelationships ?? 0;
+    totals.memorySignals += world.summary?.memorySignals ?? 0;
+    totals.moderationSignals += world.summary?.moderationSignals ?? 0;
+    totals.convergenceScoreTotal += world.summary?.convergenceScore ?? 0;
+  }
+  const avgConvergence =
+    worldRuns.length > 0 ? totals.convergenceScoreTotal / worldRuns.length : 0;
+  const verdict =
+    avgConvergence >= 0.75 && totals.moderationSignals === 0
+      ? "healthy"
+      : avgConvergence >= 0.5
+        ? "watch"
+        : "critical";
+  return {
+    totals: {
+      ...totals,
+      averageConvergenceScore: Number(avgConvergence.toFixed(3)),
+    },
+    verdict,
+    bootstrap,
+    provider: config.provider,
+    judgeProvider: config.judgeProvider,
+    nightly: config.nightly,
+  };
+}
+
+export function writeSocialSimArtifact(runDir, filename, data) {
+  const filePath = path.join(runDir, filename);
+  writeFileSync(filePath, `${JSON.stringify(data, null, 2)}\n`, "utf8");
+  return filePath;
+}
+
+function defaultBrainAction(context) {
+  const { actor, state, world, rng } = context;
+  const targetRelationship = findBestRelationship(world, actor, null);
+  const targetActorId = targetRelationship?.members.find((member) => member !== actor.id) ?? null;
+  const hasMemorySignal =
+    world.horizon === "long" || actor.memoryDriftProfile === "fluid";
+  const baseIntent =
+    state.stage === "onboarding"
+      ? "introduce"
+      : state.stage === "matching"
+        ? "ask_preference"
+        : state.stage === "memory_drift"
+          ? "reference_memory"
+          : "follow_up";
+  const likelyRecovery =
+    targetRelationship && targetRelationship.strength < 0.35 && rng() > 0.5;
+  const intent =
+    likelyRecovery && state.stage !== "onboarding"
+      ? "recover_no_match"
+      : baseIntent;
+  const message = buildMessageForIntent({
+    intent,
+    actor,
+    targetActorId,
+    world,
+    state,
+  });
+  return {
+    provider: "heuristic",
+    promptVersion: SOCIAL_SIM_PROMPT_VERSION,
+    intent,
+    targetActorId,
+    message,
+    tone: actor.socialStyle,
+    confidence: intent === "recover_no_match" ? 0.52 : 0.76,
+    rationale:
+      intent === "reference_memory"
+        ? "Using earlier conversation context to improve continuity."
+        : intent === "invite_group"
+          ? "Trying to move the social graph toward a broader group outcome."
+          : intent === "recover_no_match"
+            ? "The pairing looks weak, so the actor is trying a recovery path."
+            : "Advancing the conversation in a socially plausible way.",
+    memoryReferences: hasMemorySignal
+      ? [
+          {
+            key: "preference_memory",
+            confidence: 0.71,
+            excerpt: actor.goals[0] ?? actor.persona,
+          },
+        ]
+      : [],
+  };
+}
+
+function buildMessageForIntent({ intent, actor, targetActorId, world, state }) {
+  const targetLabel = targetActorId ? ` @${targetActorId}` : "";
+  switch (intent) {
+    case "introduce":
+      return `${actor.persona.split(",")[0]} here${targetLabel}. I’m trying to connect around ${actor.goals[0] ?? "shared interests"}.`;
+    case "ask_preference":
+      return `What kind of ${actor.goals[0] ?? "plans"} are you into${targetLabel}? I’m trying to find a good fit.`;
+    case "follow_up":
+      return `Following up on our earlier thread${targetLabel} — would you be open to continuing this in a smaller circle?`;
+    case "invite_group":
+      return `This feels like a good thread to bring a few more people in${targetLabel}. Want to try a group conversation?`;
+    case "propose_event":
+      return `We could move this into a casual event or session${targetLabel} if that feels better.`;
+    case "reference_memory":
+      return `I remember you mentioned ${actor.goals[0] ?? "your preferences"} before, so I’m keeping that in mind${targetLabel}.`;
+    case "recover_no_match":
+      return `I don’t think this is the best fit yet${targetLabel}, but I can try a different angle or connect you with someone else.`;
+    case "flag_moderation":
+      return `This needs a moderation check because the conversation direction feels off${targetLabel}.`;
+    default:
+      return `Checking in on the current conversation${targetLabel} (${state.stage}).`;
+  }
+}
+
+class HeuristicSocialSimProvider {
+  constructor(config) {
+    this.config = config;
+    this.kind = "stub";
+    this.name = "heuristic";
+  }
+
+  async generateActorTurn(context) {
+    return defaultBrainAction(context);
+  }
+}
+
+class RemoteSocialSimProviderBase {
+  constructor(config) {
+    this.config = config;
+    this.kind = "remote";
+  }
+
+  async generateActorTurn(context) {
+    const remote = await this.tryRemote(context);
+    if (remote) return remote;
+    return defaultBrainAction(context);
+  }
+
+  async tryRemote() {
+    return null;
+  }
+}
+
+class OllamaSocialSimProvider extends RemoteSocialSimProviderBase {
+  constructor(config) {
+    super(config);
+    this.name = "ollama";
+    this.endpoint =
+      normalizeString(config.ollamaBaseUrl, "http://localhost:11434").replace(
+        /\/+$/,
+        "",
+      );
+    this.model = normalizeString(config.ollamaModel, "llama3.1");
+    this.useRemote = config.useRemoteProvider || boolFromEnv(process.env.SOCIAL_SIM_USE_REMOTE_PROVIDER);
+  }
+
+  async tryRemote(context) {
+    if (!this.useRemote) return null;
+    try {
+      const response = await fetch(`${this.endpoint}/api/chat`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          model: this.model,
+          format: "json",
+          stream: false,
+          messages: [
+            {
+              role: "system",
+              content: [
+                "You are a synthetic social simulation actor.",
+                `Return JSON matching prompt version ${SOCIAL_SIM_PROMPT_VERSION}.`,
+                "Fields: intent, targetActorId, message, tone, confidence, rationale, memoryReferences[].",
+              ].join(" "),
+            },
+            {
+              role: "user",
+              content: JSON.stringify(buildProviderContext(context), null, 2),
+            },
+          ],
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      const content = payload?.message?.content;
+      if (!response.ok || typeof content !== "string") return null;
+      const parsed = safeJsonParse(content, null);
+      if (!parsed || typeof parsed !== "object") return null;
+      return normalizeBrainOutput(parsed, "ollama", context);
+    } catch {
+      return null;
+    }
+  }
+}
+
+class OpenAISocialSimProvider extends RemoteSocialSimProviderBase {
+  constructor(config) {
+    super(config);
+    this.name = "openai";
+    this.model = normalizeString(config.openaiModel, "gpt-4.1-mini");
+    this.apiKey = normalizeString(config.openaiApiKey, "");
+    this.useRemote =
+      config.useRemoteProvider ||
+      boolFromEnv(process.env.SOCIAL_SIM_USE_REMOTE_PROVIDER);
+  }
+
+  async tryRemote(context) {
+    if (!this.useRemote || !this.apiKey) return null;
+    try {
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: this.model,
+          response_format: { type: "json_object" },
+          messages: [
+            {
+              role: "system",
+              content: [
+                "You are a synthetic social simulation actor.",
+                `Return JSON matching prompt version ${SOCIAL_SIM_PROMPT_VERSION}.`,
+                "Fields: intent, targetActorId, message, tone, confidence, rationale, memoryReferences[].",
+              ].join(" "),
+            },
+            {
+              role: "user",
+              content: JSON.stringify(buildProviderContext(context), null, 2),
+            },
+          ],
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      const content = payload?.choices?.[0]?.message?.content;
+      if (!response.ok || typeof content !== "string") return null;
+      const parsed = safeJsonParse(content, null);
+      if (!parsed || typeof parsed !== "object") return null;
+      return normalizeBrainOutput(parsed, "openai", context);
+    } catch {
+      return null;
+    }
+  }
+}
+
+function normalizeBrainOutput(output, provider, context) {
+  const targetActorId =
+    typeof output.targetActorId === "string" ? output.targetActorId : null;
+  const intent = normalizeString(output.intent, "follow_up");
+  return {
+    provider,
+    promptVersion: SOCIAL_SIM_PROMPT_VERSION,
+    intent,
+    targetActorId,
+    message: normalizeString(
+      output.message,
+      buildMessageForIntent({
+        intent,
+        actor: context.actor,
+        targetActorId,
+        world: context.world,
+        state: context.state,
+      }),
+    ),
+    tone: normalizeString(output.tone, context.actor.socialStyle),
+    confidence: clamp(toNumber(output.confidence, 0.65), 0, 1),
+    rationale: normalizeString(output.rationale, "Remote provider turn plan."),
+    memoryReferences: Array.isArray(output.memoryReferences)
+      ? output.memoryReferences
+          .filter((entry) => entry && typeof entry === "object")
+          .map((entry) => ({
+            key: normalizeString(entry.key, "preference_memory"),
+            confidence: clamp(toNumber(entry.confidence, 0.5), 0, 1),
+            excerpt: normalizeString(entry.excerpt, ""),
+          }))
+      : [],
+  };
+}
+
+class HeuristicJudgeProvider {
+  constructor(config) {
+    this.config = config;
+    this.kind = "stub";
+    this.name = "heuristic";
+  }
+
+  async scoreTurn(context) {
+    const { action, turnRecord } = context;
+    const score = clamp(
+      0.4 +
+        (action.intent === "recover_no_match" ? 0.15 : 0) +
+        (action.intent === "reference_memory" ? 0.15 : 0) +
+        (turnRecord.outcome.matched ? 0.2 : 0) +
+        (turnRecord.outcome.stalled ? -0.15 : 0),
+      0,
+      1,
+    );
+    return {
+      turnIndex: turnRecord.turnIndex,
+      label:
+        score >= 0.75
+          ? "healthy"
+          : score >= 0.5
+            ? "watch"
+            : "broken",
+      conversation: turnRecord.outcome.stalled ? "stalled" : "alive",
+      memory: action.memoryReferences?.length ? "memory_helpful" : "memory_neutral",
+      convergence: turnRecord.outcome.matched ? "converged" : "partial",
+      usefulness: score >= 0.6 ? "good_match" : score >= 0.45 ? "weak_match" : "bad_match",
+      instability: turnRecord.outcome.stalled ? "unstable" : "healthy",
+      operatorAttentionNeeded: Boolean(
+        turnRecord.outcome.stalled || turnRecord.backend?.status !== "passed",
+      ),
+      score: Number(score.toFixed(3)),
+      rationale:
+        turnRecord.outcome.matched
+          ? "Turn advanced a relationship toward convergence."
+          : "Turn kept the simulation moving without a confirmed match.",
+    };
+  }
+
+  async scoreWorld(context) {
+    const matchedRatio =
+      context.metrics.matchedMembers.size /
+      Math.max(context.world.relationships.length || 1, 1);
+    const turnBalance = 1 - context.metrics.stalledTurns / Math.max(context.metrics.totalTurns || 1, 1);
+    const score = clamp(
+      0.35 +
+        matchedRatio * 0.35 +
+        turnBalance * 0.2 +
+        (context.metrics.memorySignals > 0 ? 0.05 : 0) +
+        (context.metrics.recoverySignals > 0 ? 0.05 : 0) +
+        (context.metrics.moderationSignals > 0 ? -0.2 : 0),
+      0,
+      1,
+    );
+    return buildWorldJudgeResult(context.world, score, context.metrics);
+  }
+}
+
+class RemoteJudgeProviderBase extends HeuristicJudgeProvider {
+  async scoreTurn(context) {
+    const remote = await this.tryRemoteTurn(context);
+    return remote ?? super.scoreTurn(context);
+  }
+
+  async scoreWorld(context) {
+    const remote = await this.tryRemoteWorld(context);
+    return remote ?? super.scoreWorld(context);
+  }
+}
+
+class OllamaJudgeProvider extends RemoteJudgeProviderBase {
+  constructor(config) {
+    super(config);
+    this.name = "ollama";
+    this.endpoint =
+      normalizeString(config.ollamaBaseUrl, "http://localhost:11434").replace(
+        /\/+$/,
+        "",
+      );
+    this.model = normalizeString(config.ollamaModel, "llama3.1");
+    this.useRemote =
+      config.useRemoteJudge || boolFromEnv(process.env.SOCIAL_SIM_USE_REMOTE_JUDGE);
+  }
+
+  async tryRemoteTurn(context) {
+    return this.tryRemote("turn", context);
+  }
+
+  async tryRemoteWorld(context) {
+    return this.tryRemote("world", context);
+  }
+
+  async tryRemote(scope, context) {
+    if (!this.useRemote) return null;
+    try {
+      const response = await fetch(`${this.endpoint}/api/chat`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          model: this.model,
+          format: "json",
+          stream: false,
+          messages: [
+            {
+              role: "system",
+              content: [
+                "You are a judge for a social simulation harness.",
+                `Return JSON matching prompt version ${SOCIAL_SIM_PROMPT_VERSION}.`,
+              ].join(" "),
+            },
+            {
+              role: "user",
+              content: JSON.stringify(
+                {
+                  scope,
+                  ...buildJudgeContext(context),
+                },
+                null,
+                2,
+              ),
+            },
+          ],
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      const content = payload?.message?.content;
+      if (!response.ok || typeof content !== "string") return null;
+      const parsed = safeJsonParse(content, null);
+      if (!parsed || typeof parsed !== "object") return null;
+      return normalizeJudgeOutput(parsed, scope, context, "ollama");
+    } catch {
+      return null;
+    }
+  }
+}
+
+class OpenAIJudgeProvider extends RemoteJudgeProviderBase {
+  constructor(config) {
+    super(config);
+    this.name = "openai";
+    this.model = normalizeString(config.openaiModel, "gpt-4.1-mini");
+    this.apiKey = normalizeString(config.openaiApiKey, "");
+    this.useRemote =
+      config.useRemoteJudge || boolFromEnv(process.env.SOCIAL_SIM_USE_REMOTE_JUDGE);
+  }
+
+  async tryRemoteTurn(context) {
+    return this.tryRemote("turn", context);
+  }
+
+  async tryRemoteWorld(context) {
+    return this.tryRemote("world", context);
+  }
+
+  async tryRemote(scope, context) {
+    if (!this.useRemote || !this.apiKey) return null;
+    try {
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: this.model,
+          response_format: { type: "json_object" },
+          messages: [
+            {
+              role: "system",
+              content: [
+                "You are a judge for a social simulation harness.",
+                `Return JSON matching prompt version ${SOCIAL_SIM_PROMPT_VERSION}.`,
+              ].join(" "),
+            },
+            {
+              role: "user",
+              content: JSON.stringify(
+                {
+                  scope,
+                  ...buildJudgeContext(context),
+                },
+                null,
+                2,
+              ),
+            },
+          ],
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      const content = payload?.choices?.[0]?.message?.content;
+      if (!response.ok || typeof content !== "string") return null;
+      const parsed = safeJsonParse(content, null);
+      if (!parsed || typeof parsed !== "object") return null;
+      return normalizeJudgeOutput(parsed, scope, context, "openai");
+    } catch {
+      return null;
+    }
+  }
+}
+
+function buildProviderContext(context) {
+  return {
+    promptVersion: SOCIAL_SIM_PROMPT_VERSION,
+    actor: context.actor,
+    world: {
+      id: context.world.id,
+      name: context.world.name,
+      family: context.world.family,
+      horizon: context.world.horizon,
+      turnBudget: context.world.turnBudget,
+      goals: context.world.goals,
+      relationships: context.world.relationships,
+      evaluationFocus: context.world.evaluationFocus,
+    },
+    state: {
+      stage: context.state.stage,
+      turnIndex: context.state.turnIndex,
+      knownTargets: Array.from(context.state.knownTargets.entries()),
+    },
+    transcriptPreview: context.transcript.slice(-4),
+  };
+}
+
+function buildJudgeContext(context) {
+  return {
+    promptVersion: SOCIAL_SIM_PROMPT_VERSION,
+    world: {
+      id: context.world.id,
+      name: context.world.name,
+      family: context.world.family,
+      horizon: context.world.horizon,
+      turnBudget: context.world.turnBudget,
+      relationships: context.world.relationships,
+      evaluationFocus: context.world.evaluationFocus,
+    },
+    transcript: context.transcript.slice(-8),
+    state: {
+      stage: context.state.stage,
+      turnIndex: context.state.turnIndex,
+      matchedMembers: Array.from(context.metrics.matchedMembers ?? []),
+    },
+    metrics: {
+      introductions: context.metrics.introductions,
+      replies: context.metrics.replies,
+      followups: context.metrics.followups,
+      invites: context.metrics.invites,
+      memorySignals: context.metrics.memorySignals,
+      recoverySignals: context.metrics.recoverySignals,
+      moderationSignals: context.metrics.moderationSignals,
+      matchedRelationships: context.metrics.matchedMembers.size,
+      stalledTurns: context.metrics.stalledTurns,
+      totalTurns: context.metrics.totalTurns,
+    },
+  };
+}
+
+function normalizeJudgeOutput(output, scope, context, provider) {
+  if (scope === "turn") {
+    const score = clamp(toNumber(output.score, 0.5), 0, 1);
+    return {
+      turnIndex: context.turnRecord.turnIndex,
+      label: normalizeString(output.label, score >= 0.5 ? "watch" : "broken"),
+      conversation: normalizeString(
+        output.conversation,
+        context.turnRecord.outcome.stalled ? "stalled" : "alive",
+      ),
+      memory: normalizeString(
+        output.memory,
+        context.action.memoryReferences?.length
+          ? "memory_helpful"
+          : "memory_neutral",
+      ),
+      convergence: normalizeString(
+        output.convergence,
+        context.turnRecord.outcome.matched ? "converged" : "partial",
+      ),
+      usefulness: normalizeString(
+        output.usefulness,
+        score >= 0.6 ? "good_match" : score >= 0.45 ? "weak_match" : "bad_match",
+      ),
+      instability: normalizeString(
+        output.instability,
+        context.turnRecord.outcome.stalled ? "unstable" : "healthy",
+      ),
+      operatorAttentionNeeded:
+        typeof output.operatorAttentionNeeded === "boolean"
+          ? output.operatorAttentionNeeded
+          : Boolean(context.turnRecord.outcome.stalled),
+      score,
+      rationale: normalizeString(output.rationale, `${provider} remote turn judgment.`),
+    };
+  }
+  const score = clamp(toNumber(output.score, 0.6), 0, 1);
+  return buildWorldJudgeResult(context.world, score, context.metrics, {
+    provider,
+    label: normalizeString(output.label, score >= 0.75 ? "healthy" : "watch"),
+    conversation: normalizeString(output.conversation, "alive"),
+    memory: normalizeString(output.memory, "memory_helpful"),
+    convergence: normalizeString(output.convergence, "converged"),
+    usefulness: normalizeString(output.usefulness, "good_match"),
+    instability: normalizeString(output.instability, "healthy"),
+    operatorAttentionNeeded:
+      typeof output.operatorAttentionNeeded === "boolean"
+        ? output.operatorAttentionNeeded
+        : false,
+    rationale: normalizeString(output.rationale, `${provider} remote world judgment.`),
+  });
+}
+
+function buildWorldJudgeResult(world, score, metrics, overrides = {}) {
+  const label =
+    overrides.label ??
+    (score >= 0.75 ? "healthy" : score >= 0.5 ? "watch" : "broken");
+  const convergence =
+    overrides.convergence ??
+    (score >= 0.75 ? "converged" : score >= 0.5 ? "partial" : "failed");
+  const memory =
+    overrides.memory ?? (metrics.memorySignals > 0 ? "memory_helpful" : "memory_neutral");
+  const conversation =
+    overrides.conversation ??
+    (metrics.stalledTurns > metrics.totalTurns / 2 ? "stalled" : "alive");
+  const usefulness =
+    overrides.usefulness ??
+    (score >= 0.6 ? "good_match" : score >= 0.45 ? "weak_match" : "bad_match");
+  const instability =
+    overrides.instability ??
+    (metrics.moderationSignals > 0 ? "unstable" : "healthy");
+  return {
+    worldId: world.id,
+    label,
+    conversation,
+    memory,
+    convergence,
+    usefulness,
+    instability,
+    operatorAttentionNeeded:
+      overrides.operatorAttentionNeeded ??
+      Boolean(metrics.moderationSignals > 0 || metrics.stalledTurns > metrics.totalTurns / 2),
+    score: Number(score.toFixed(3)),
+    rationale:
+      overrides.rationale ??
+      `world=${world.id} score=${score.toFixed(3)} matched=${metrics.matchedMembers.size}`,
+  };
+}
+
+function buildCleanupResult(mode, worlds, config) {
+  return {
+    mode,
+    attempted: mode !== "none",
+    applied: false,
+    namespace: config.namespace,
+    worldIds: worlds.map((world) => world.worldId),
+    notes:
+      mode === "none"
+        ? ["Cleanup disabled by configuration."]
+        : [
+            "Script-local MVP cleanup is artifact-only unless a backend cleanup adapter is configured.",
+          ],
+  };
+}
+
+class SocialSimBackendAdapter {
+  constructor(config) {
+    this.config = config;
+    this.baseUrl = normalizeString(config.baseUrl, "");
+    this.adminUserId = normalizeString(config.adminUserId, "");
+    this.adminRole = normalizeString(config.adminRole, "admin");
+    this.adminApiKey = normalizeString(config.adminApiKey, "");
+    this.enabled = Boolean(this.baseUrl && this.adminUserId);
+  }
+
+  async bootstrapRun({ runId, namespace, dryRun, worldCount }) {
+    if (!this.enabled || dryRun) {
+      return {
+        backendMode: "offline",
+        runId,
+        namespace,
+        worldCount,
+        status: "stubbed",
+        notes: this.enabled
+          ? ["Dry-run mode prevented backend bootstrap."]
+          : ["No backend credentials configured; using offline simulation mode."],
+      };
+    }
+
+    try {
+      const response = await fetch(`${this.baseUrl}/api/admin/playground/bootstrap`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-admin-user-id": this.adminUserId,
+          "x-admin-role": this.adminRole,
+          ...(this.adminApiKey ? { "x-admin-api-key": this.adminApiKey } : {}),
+        },
+        body: JSON.stringify({}),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.success) {
+        return {
+          backendMode: "offline",
+          runId,
+          namespace,
+          worldCount,
+          status: "bootstrap_failed",
+          error: {
+            status: response.status,
+            payload,
+          },
+        };
+      }
+      return {
+        backendMode: "playground",
+        runId,
+        namespace,
+        worldCount,
+        status: "bootstrapped",
+        env: payload?.data?.env ?? {},
+        entities: payload?.data?.entities ?? {},
+        notes: Array.isArray(payload?.data?.notes) ? payload.data.notes : [],
+      };
+    } catch (error) {
+      return {
+        backendMode: "offline",
+        runId,
+        namespace,
+        worldCount,
+        status: "bootstrap_error",
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  async submitTurn({ world, actor, action, state, dryRun }) {
+    if (!this.enabled || dryRun) {
+      return {
+        mode: "offline",
+        status: "passed",
+        actionType: action.intent,
+        detail: "offline simulation turn",
+      };
+    }
+    const headers = {
+      "content-type": "application/json",
+      "x-admin-user-id": this.adminUserId,
+      "x-admin-role": this.adminRole,
+      ...(this.adminApiKey ? { "x-admin-api-key": this.adminApiKey } : {}),
+    };
+    const payload = {
+      namespace: this.config.namespace,
+      runId: this.config.runId ?? null,
+      worldId: world.id,
+      actorId: actor.id,
+      actorKind: actor.kind,
+      stage: state.stage,
+      promptVersion: SOCIAL_SIM_PROMPT_VERSION,
+      action,
+      metrics: {
+        turnIndex: state.turnIndex,
+      },
+    };
+    try {
+      const response = await fetch(`${this.baseUrl}/api/admin/ops/social-sim/turn`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+      });
+      const json = await response.json().catch(() => null);
+      if (!response.ok || !json?.success) {
+        return {
+          mode: "offline",
+          status: "failed",
+          actionType: action.intent,
+          detail: {
+            status: response.status,
+            payload: json,
+          },
+        };
+      }
+      return {
+        mode: "backend",
+        status: "passed",
+        actionType: action.intent,
+        detail: json?.data ?? null,
+      };
+    } catch (error) {
+      return {
+        mode: "offline",
+        status: "failed",
+        actionType: action.intent,
+        detail: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  async cleanupRun({ runId, namespace, worlds, mode }) {
+    if (mode === "none") {
+      return buildCleanupResult(mode, worlds, this.config);
+    }
+    if (!this.enabled) {
+      return buildCleanupResult(mode, worlds, this.config);
+    }
+    return {
+      mode,
+      attempted: true,
+      applied: false,
+      namespace,
+      worldIds: worlds.map((world) => world.worldId),
+      notes: [
+        "Backend cleanup adapter is intentionally not wired in the script-only MVP.",
+        "Artifacts remain available under the run directory.",
+        `Run ${runId} is namespaced and may be cleaned up later from backend tooling.`,
+      ],
+    };
+  }
+}
+
+export async function main(argv = process.argv.slice(2), env = process.env) {
+  const config = parseSocialSimArgs(argv, env);
+  const result = await runSocialSimulation(config);
+  const output = {
+    runId: result.artifact.runId,
+    runDir: result.runDir,
+    namespace: result.artifact.namespace,
+    summary: result.summary,
+    cleanup: result.cleanup,
+    worlds: result.artifact.worlds.map((world) => ({
+      worldId: world.worldId,
+      horizon: world.horizon,
+      family: world.family,
+      convergenceScore: world.summary.convergenceScore,
+      noMatchRecoveryQuality: world.summary.noMatchRecoveryQuality,
+      memoryConsistency: world.summary.memoryConsistency,
+      judge: world.judge,
+    })),
+  };
+  console.log(JSON.stringify(output, null, 2));
+  console.log(`artifact written to ${path.join(result.runDir, "run.json")}`);
+  return output;
+}
+
+export async function nightlyMain(argv = process.argv.slice(2), env = process.env) {
+  const config = parseSocialSimArgs(argv, env);
+  const fixture = loadSocialSimWorldFixture(
+    config.fixturePath,
+    config.scenarioFixturePath,
+  );
+  const canonical = [
+    ...fixture.filter((world) => world.horizon === "short").slice(0, 1),
+    ...fixture.filter((world) => world.horizon === "medium").slice(0, 1),
+    ...fixture.filter((world) => world.horizon === "long").slice(0, 1),
+  ];
+  const nightlyConfig = {
+    ...config,
+    nightly: true,
+    horizon: "all",
+    worldFilter: canonical.map((world) => world.id),
+    turnBudget: Math.min(config.turnBudget, 8),
+    cleanupMode: config.cleanupMode === "none" ? "none" : "archive",
+  };
+  nightlyConfig.runId = `${config.namespace}-nightly-${new Date().toISOString().replace(/[:.]/g, "-")}`;
+  const result = await runSocialSimulation(nightlyConfig);
+  const rollup = {
+    runId: result.artifact.runId,
+    namespace: result.artifact.namespace,
+    nightly: true,
+    summary: result.summary,
+    worlds: result.artifact.worlds.map((world) => ({
+      worldId: world.worldId,
+      horizon: world.horizon,
+      convergenceScore: world.summary.convergenceScore,
+      judgeLabel: world.judge.label,
+      operatorAttentionNeeded: world.judge.operatorAttentionNeeded,
+    })),
+  };
+  const nightlyPath = path.join(result.runDir, "nightly-rollup.json");
+  writeFileSync(nightlyPath, `${JSON.stringify(rollup, null, 2)}\n`, "utf8");
+  console.log(JSON.stringify(rollup, null, 2));
+  console.log(`artifact written to ${path.join(result.runDir, "run.json")}`);
+  return rollup;
+}
+
+export {
+  HeuristicJudgeProvider,
+  HeuristicSocialSimProvider,
+  OllamaJudgeProvider,
+  OllamaSocialSimProvider,
+  OpenAIJudgeProvider,
+  OpenAISocialSimProvider,
+  SocialSimBackendAdapter,
+  buildMessageForIntent,
+};
