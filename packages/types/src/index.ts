@@ -1711,12 +1711,13 @@ export const socialSimHorizonSchema = z.enum(["short", "medium", "long"]);
 export const socialSimCleanupModeSchema = z.enum(["archive", "delete"]);
 
 export const socialSimRunStatusSchema = z.enum([
-  "queued",
+  "created",
+  "replayed",
   "running",
-  "passed",
+  "completed",
   "failed",
-  "cancelled",
   "archived",
+  "deleted",
 ]);
 
 export const socialSimActorKindSchema = z.enum([
@@ -1825,6 +1826,87 @@ export const socialSimRunConfigSchema = z.object({
   includePairs: z.boolean().default(true),
   includeCircles: z.boolean().default(true),
   includeEvents: z.boolean().default(true),
+});
+
+export const socialSimFixtureExpectedOutcomeSchema = z.object({
+  convergence: z.enum(["converged", "partial", "failed"]),
+  matchQuality: z.enum(["good", "weak", "bad"]),
+  conversationQuality: z.enum(["alive", "stalled", "awkward", "unsafe"]),
+  memoryOutcome: z.enum(["memory_helpful", "memory_neutral", "memory_harmful"]),
+});
+
+export const socialSimFixtureScenarioSchema = z.object({
+  id: z.string().min(1).max(160),
+  interactionKind: z.enum(["individual", "pair", "group", "circle", "event"]),
+  pathKind: z.enum([
+    "success",
+    "stagnation",
+    "mismatch",
+    "recovery",
+    "moderationTrust",
+  ]),
+  objective: z.string().min(1).max(500),
+  expectedOutcome: socialSimFixtureExpectedOutcomeSchema,
+});
+
+export const socialSimFixtureWorldSchema = z.object({
+  id: z.string().min(1).max(160),
+  horizon: socialSimHorizonSchema,
+  title: z.string().min(1).max(200),
+  simulationBrief: z.string().min(1).max(500),
+  actors: z.array(
+    z.object({
+      actorId: z.string().min(1).max(160),
+      kind: socialSimActorKindSchema,
+      displayName: z.string().min(1).max(160),
+      persona: z.string().min(1).max(160),
+      goals: z.array(z.string().min(1).max(160)).min(1),
+      preferences: z.array(z.string().min(1).max(160)).default([]),
+      hardConstraints: z.array(z.string().min(1).max(160)).default([]),
+      socialStyle: z.string().min(1).max(120),
+      patience: z.number().int().min(1).max(10),
+      toleranceForMismatch: z.number().int().min(0).max(10),
+      memoryDriftProfile: z.string().min(1).max(120),
+    }),
+  ),
+  entities: z.object({
+    pairs: z.array(z.record(z.string(), z.unknown())).default([]),
+    groups: z.array(z.record(z.string(), z.unknown())).default([]),
+    circles: z.array(z.record(z.string(), z.unknown())).default([]),
+    events: z.array(z.record(z.string(), z.unknown())).default([]),
+  }),
+  scenarios: z.array(socialSimFixtureScenarioSchema).min(1),
+  coverage: z.record(
+    z.enum([
+      "success",
+      "stagnation",
+      "mismatch",
+      "recovery",
+      "moderationTrust",
+    ]),
+    z.string().min(1).max(160),
+  ),
+});
+
+export const socialSimFixtureCorpusSchema = z.object({
+  version: z.literal(1),
+  worlds: z.array(socialSimFixtureWorldSchema).min(1),
+});
+
+export const socialSimTurnIngestBodySchema = z.object({
+  namespace: z.string().min(1).max(120),
+  runId: z.string().min(1).max(160).nullable().optional(),
+  worldId: z.string().min(1).max(160),
+  actorId: z.string().min(1).max(160),
+  actorKind: z.string().min(1).max(80),
+  stage: z.string().min(1).max(80),
+  promptVersion: z.string().min(1).max(80),
+  action: z.record(z.string(), z.unknown()),
+  metrics: z
+    .object({
+      turnIndex: z.number().int().min(0).max(10_000).optional(),
+    })
+    .optional(),
 });
 
 export const socialSimTurnActionSchema = z.object({

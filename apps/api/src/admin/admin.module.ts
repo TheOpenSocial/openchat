@@ -10,6 +10,8 @@ import { NotificationsModule } from "../notifications/notifications.module.js";
 import { PersonalizationModule } from "../personalization/personalization.module.js";
 import { AdminPlaygroundController } from "./admin-playground.controller.js";
 import { AdminPlaygroundService } from "./admin-playground.service.js";
+import { SocialSimController } from "./social-sim.controller.js";
+import { SocialSimService } from "./social-sim.service.js";
 import { AgenticEvalsService } from "./agentic-evals.service.js";
 import { AdminAuditService } from "./admin-audit.service.js";
 import { AdminController } from "./admin.controller.js";
@@ -26,7 +28,16 @@ import { AdminController } from "./admin.controller.js";
     NotificationsModule,
     ChatsModule,
   ],
-  providers: [AdminAuditService, AgenticEvalsService, AdminPlaygroundService],
-  controllers: [AdminController, AdminPlaygroundController],
+  providers: [
+    AdminAuditService,
+    AgenticEvalsService,
+    AdminPlaygroundService,
+    SocialSimService,
+  ],
+  controllers: [
+    AdminController,
+    AdminPlaygroundController,
+    SocialSimController,
+  ],
 })
 export class AdminModule {}

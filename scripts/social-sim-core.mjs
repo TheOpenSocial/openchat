@@ -1468,6 +1468,7 @@ class SocialSimBackendAdapter {
     this.adminRole = normalizeString(config.adminRole, "admin");
     this.adminApiKey = normalizeString(config.adminApiKey, "");
     this.enabled = Boolean(this.baseUrl && this.adminUserId);
+    this.remoteRunId = null;
   }
 
   async bootstrapRun({ runId, namespace, dryRun, worldCount }) {
@@ -1509,7 +1510,7 @@ class SocialSimBackendAdapter {
           },
         };
       }
-      return {
+      const bootstrap = {
         backendMode: "playground",
         runId,
         namespace,
@@ -1519,6 +1520,47 @@ class SocialSimBackendAdapter {
         entities: payload?.data?.entities ?? {},
         notes: Array.isArray(payload?.data?.notes) ? payload.data.notes : [],
       };
+
+      const runResponse = await fetch(`${this.baseUrl}/api/admin/social-sim/runs`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-admin-user-id": this.adminUserId,
+          "x-admin-role": this.adminRole,
+          ...(this.adminApiKey ? { "x-admin-api-key": this.adminApiKey } : {}),
+        },
+        body: JSON.stringify({
+          scenarioFamily: "full-social-world",
+          provider: this.config.provider,
+          judgeProvider: this.config.judgeProvider,
+          horizon: this.config.horizon === "all" ? "medium" : this.config.horizon,
+          seed: String(this.config.seed),
+          namespace,
+          turnBudget: this.config.turnBudget,
+          actorCount: this.config.actorCount ?? worldCount,
+          cleanupMode:
+            this.config.cleanupMode === "none" ? "archive" : this.config.cleanupMode,
+          notes: [
+            `script-run:${runId}`,
+            `worldCount:${worldCount}`,
+          ],
+        }),
+      });
+      const runPayload = await runResponse.json().catch(() => null);
+      if (runResponse.ok && runPayload?.success && runPayload?.data?.runId) {
+        this.remoteRunId = runPayload.data.runId;
+        bootstrap.remoteRunId = this.remoteRunId;
+        bootstrap.notes = [
+          ...(bootstrap.notes ?? []),
+          `remoteRunId:${this.remoteRunId}`,
+        ];
+      } else {
+        bootstrap.notes = [
+          ...(bootstrap.notes ?? []),
+          "remote run bootstrap failed; backend turns will fall back to offline mode.",
+        ];
+      }
+      return bootstrap;
     } catch (error) {
       return {
         backendMode: "offline",
@@ -1532,12 +1574,14 @@ class SocialSimBackendAdapter {
   }
 
   async submitTurn({ world, actor, action, state, dryRun }) {
-    if (!this.enabled || dryRun) {
+    if (!this.enabled || dryRun || !this.remoteRunId) {
       return {
         mode: "offline",
-        status: "passed",
+        status: this.remoteRunId || dryRun || !this.enabled ? "passed" : "skipped",
         actionType: action.intent,
-        detail: "offline simulation turn",
+        detail: this.remoteRunId
+          ? "offline simulation turn"
+          : "remote run unavailable; offline simulation turn",
       };
     }
     const headers = {
@@ -1548,7 +1592,7 @@ class SocialSimBackendAdapter {
     };
     const payload = {
       namespace: this.config.namespace,
-      runId: this.config.runId ?? null,
+      runId: this.remoteRunId,
       worldId: world.id,
       actorId: actor.id,
       actorKind: actor.kind,
@@ -1560,7 +1604,7 @@ class SocialSimBackendAdapter {
       },
     };
     try {
-      const response = await fetch(`${this.baseUrl}/api/admin/ops/social-sim/turn`, {
+      const response = await fetch(`${this.baseUrl}/api/admin/social-sim/turn`, {
         method: "POST",
         headers,
         body: JSON.stringify(payload),
@@ -1599,6 +1643,37 @@ class SocialSimBackendAdapter {
     }
     if (!this.enabled) {
       return buildCleanupResult(mode, worlds, this.config);
+    }
+    if (this.remoteRunId) {
+      try {
+        const response = await fetch(
+          `${this.baseUrl}/api/admin/social-sim/runs/${this.remoteRunId}/cleanup`,
+          {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "x-admin-user-id": this.adminUserId,
+              "x-admin-role": this.adminRole,
+              ...(this.adminApiKey ? { "x-admin-api-key": this.adminApiKey } : {}),
+            },
+            body: JSON.stringify({
+              mode: mode === "none" ? "archive" : mode,
+            }),
+          },
+        );
+        const payload = await response.json().catch(() => null);
+        if (response.ok && payload?.success) {
+          return {
+            mode,
+            attempted: true,
+            applied: true,
+            namespace,
+            remoteRunId: this.remoteRunId,
+            worldIds: worlds.map((world) => world.worldId),
+            notes: [`remote cleanup applied for ${this.remoteRunId}`],
+          };
+        }
+      } catch {}
     }
     return {
       mode,

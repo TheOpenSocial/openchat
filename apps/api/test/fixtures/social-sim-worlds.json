@@ -1,0 +1,577 @@
+{
+  "version": 1,
+  "worlds": [
+    {
+      "id": "social-sim-short-fast-match-v1",
+      "horizon": "short",
+      "title": "Fast match and recovery",
+      "simulationBrief": "Two individuals and one pair move through onboarding, a quick match, and a no-match recovery branch.",
+      "actors": [
+        {
+          "actorId": "sim-alice",
+          "kind": "individual",
+          "displayName": "Alice",
+          "persona": "direct",
+          "goals": ["find a tennis partner tonight"],
+          "preferences": ["en", "es", "now", "tennis"],
+          "hardConstraints": ["no blocked users", "same city preferred"],
+          "socialStyle": "warm",
+          "patience": 3,
+          "toleranceForMismatch": 1,
+          "memoryDriftProfile": "stable"
+        },
+        {
+          "actorId": "sim-bruno",
+          "kind": "individual",
+          "displayName": "Bruno",
+          "persona": "friendly",
+          "goals": ["accept a direct social intro quickly"],
+          "preferences": ["es", "now", "tennis"],
+          "hardConstraints": ["no spammy intros"],
+          "socialStyle": "concise",
+          "patience": 2,
+          "toleranceForMismatch": 1,
+          "memoryDriftProfile": "stable"
+        },
+        {
+          "actorId": "sim-maya-omar",
+          "kind": "pair",
+          "displayName": "Maya and Omar",
+          "persona": "couple",
+          "goals": ["meet another couple for board games"],
+          "preferences": ["pair", "boardgames", "weekend"],
+          "hardConstraints": ["pair-only introductions"],
+          "socialStyle": "collaborative",
+          "patience": 4,
+          "toleranceForMismatch": 2,
+          "memoryDriftProfile": "stable"
+        },
+        {
+          "actorId": "sim-group-seed-alfa",
+          "kind": "group_seed",
+          "displayName": "Group Seed Alfa",
+          "persona": "group organizer",
+          "goals": ["assemble a small mixed-interest group"],
+          "preferences": ["group", "low-friction", "local"],
+          "hardConstraints": ["must remain under 4 people"],
+          "socialStyle": "structured",
+          "patience": 4,
+          "toleranceForMismatch": 2,
+          "memoryDriftProfile": "stable"
+        }
+      ],
+      "relationships": [
+        {
+          "sourceActorId": "sim-alice",
+          "targetActorId": "sim-bruno",
+          "type": "candidate"
+        },
+        {
+          "sourceActorId": "sim-alice",
+          "targetActorId": "sim-maya-omar",
+          "type": "pair_candidate"
+        },
+        {
+          "sourceActorId": "sim-bruno",
+          "targetActorId": "sim-group-seed-alfa",
+          "type": "group_candidate"
+        }
+      ],
+      "entities": {
+        "pairs": [
+          {
+            "id": "pair-maya-omar",
+            "memberActorIds": ["sim-maya-omar"],
+            "sharedGoals": ["meet another pair"],
+            "status": "seeded"
+          }
+        ],
+        "groups": [
+          {
+            "id": "group-tennis-afterwork",
+            "memberActorIds": ["sim-alice", "sim-bruno"],
+            "sizeTarget": 4,
+            "purpose": "quick social intro"
+          }
+        ],
+        "circles": [
+          {
+            "id": "circle-weekly-tennis",
+            "memberActorIds": ["sim-alice", "sim-bruno"],
+            "cadence": "weekly",
+            "purpose": "recurring social fit check"
+          }
+        ],
+        "events": [
+          {
+            "id": "event-evening-tennis",
+            "title": "Evening tennis session",
+            "attendanceMode": "now",
+            "capacity": 4
+          }
+        ]
+      },
+      "scenarios": [
+        {
+          "id": "social-sim-short-success-v1",
+          "interactionKind": "individual",
+          "pathKind": "success",
+          "objective": "Alice gets a grounded intro to Bruno and starts a chat.",
+          "expectedOutcome": {
+            "convergence": "converged",
+            "matchQuality": "good",
+            "conversationQuality": "alive",
+            "memoryOutcome": "memory_helpful"
+          }
+        },
+        {
+          "id": "social-sim-short-stagnation-v1",
+          "interactionKind": "individual",
+          "pathKind": "stagnation",
+          "objective": "The system keeps the match alive without overcommitting when the pool is thin.",
+          "expectedOutcome": {
+            "convergence": "partial",
+            "matchQuality": "weak",
+            "conversationQuality": "stalled",
+            "memoryOutcome": "memory_neutral"
+          }
+        },
+        {
+          "id": "social-sim-short-mismatch-v1",
+          "interactionKind": "pair",
+          "pathKind": "mismatch",
+          "objective": "The couple is not paired with a solo user and the system should avoid an awkward intro.",
+          "expectedOutcome": {
+            "convergence": "failed",
+            "matchQuality": "bad",
+            "conversationQuality": "awkward",
+            "memoryOutcome": "memory_neutral"
+          }
+        },
+        {
+          "id": "social-sim-short-recovery-v1",
+          "interactionKind": "individual",
+          "pathKind": "recovery",
+          "objective": "After a no-match, the follow-up suggests a concrete next move and alternative filters.",
+          "expectedOutcome": {
+            "convergence": "partial",
+            "matchQuality": "weak",
+            "conversationQuality": "alive",
+            "memoryOutcome": "memory_helpful"
+          }
+        },
+        {
+          "id": "social-sim-short-moderation-v1",
+          "interactionKind": "event",
+          "pathKind": "moderationTrust",
+          "objective": "A synthetic report or trust issue should route to moderation rather than a visible unsafe match.",
+          "expectedOutcome": {
+            "convergence": "failed",
+            "matchQuality": "bad",
+            "conversationQuality": "unsafe",
+            "memoryOutcome": "memory_harmful"
+          }
+        }
+      ],
+      "coverage": {
+        "success": "social-sim-short-success-v1",
+        "stagnation": "social-sim-short-stagnation-v1",
+        "mismatch": "social-sim-short-mismatch-v1",
+        "recovery": "social-sim-short-recovery-v1",
+        "moderationTrust": "social-sim-short-moderation-v1"
+      }
+    },
+    {
+      "id": "social-sim-medium-pair-group-v1",
+      "horizon": "medium",
+      "title": "Pair-to-group convergence",
+      "simulationBrief": "A couple, a small group seed, and a recurring circle move through multiple rounds of matching and chat.",
+      "actors": [
+        {
+          "actorId": "sim-cora",
+          "kind": "individual",
+          "displayName": "Cora",
+          "persona": "careful",
+          "goals": ["join a reliable weekly board game group"],
+          "preferences": ["group", "boardgames", "weekend"],
+          "hardConstraints": ["no late-night invitations"],
+          "socialStyle": "measured",
+          "patience": 5,
+          "toleranceForMismatch": 2,
+          "memoryDriftProfile": "stable"
+        },
+        {
+          "actorId": "sim-dylan",
+          "kind": "individual",
+          "displayName": "Dylan",
+          "persona": "social",
+          "goals": ["meet a pair that likes co-op games"],
+          "preferences": ["pair", "co-op", "games"],
+          "hardConstraints": ["prefer same-city"],
+          "socialStyle": "open",
+          "patience": 4,
+          "toleranceForMismatch": 2,
+          "memoryDriftProfile": "stable"
+        },
+        {
+          "actorId": "sim-lee-ava",
+          "kind": "pair",
+          "displayName": "Lee and Ava",
+          "persona": "pair",
+          "goals": ["meet another pair and then a small group"],
+          "preferences": ["pair", "co-op", "cards"],
+          "hardConstraints": ["pair-only first intro"],
+          "socialStyle": "collaborative",
+          "patience": 5,
+          "toleranceForMismatch": 2,
+          "memoryDriftProfile": "stable"
+        },
+        {
+          "actorId": "sim-group-seed-bravo",
+          "kind": "group_seed",
+          "displayName": "Group Seed Bravo",
+          "persona": "community builder",
+          "goals": ["form a small group and keep it alive"],
+          "preferences": ["group", "cards", "weekly"],
+          "hardConstraints": ["must keep total under 4"],
+          "socialStyle": "organizing",
+          "patience": 5,
+          "toleranceForMismatch": 1,
+          "memoryDriftProfile": "stable"
+        },
+        {
+          "actorId": "sim-circle-seed-bravo",
+          "kind": "circle_seed",
+          "displayName": "Circle Seed Bravo",
+          "persona": "recurring host",
+          "goals": ["check whether the same people return next week"],
+          "preferences": ["recurring", "consistency", "games"],
+          "hardConstraints": ["prefer returning members"],
+          "socialStyle": "consistent",
+          "patience": 6,
+          "toleranceForMismatch": 2,
+          "memoryDriftProfile": "stable"
+        }
+      ],
+      "relationships": [
+        {
+          "sourceActorId": "sim-cora",
+          "targetActorId": "sim-group-seed-bravo",
+          "type": "group_candidate"
+        },
+        {
+          "sourceActorId": "sim-dylan",
+          "targetActorId": "sim-lee-ava",
+          "type": "pair_candidate"
+        },
+        {
+          "sourceActorId": "sim-lee-ava",
+          "targetActorId": "sim-circle-seed-bravo",
+          "type": "reconnect_candidate"
+        }
+      ],
+      "entities": {
+        "pairs": [
+          {
+            "id": "pair-lee-ava",
+            "memberActorIds": ["sim-lee-ava"],
+            "sharedGoals": ["join another pair"],
+            "status": "seeded"
+          }
+        ],
+        "groups": [
+          {
+            "id": "group-boardgames-club",
+            "memberActorIds": ["sim-cora", "sim-dylan", "sim-lee-ava"],
+            "sizeTarget": 4,
+            "purpose": "weekly board game group"
+          }
+        ],
+        "circles": [
+          {
+            "id": "circle-weekly-boardgames",
+            "memberActorIds": ["sim-cora", "sim-lee-ava"],
+            "cadence": "weekly",
+            "purpose": "repeat attendance and memory carry-over"
+          }
+        ],
+        "events": [
+          {
+            "id": "event-boardgames-night",
+            "title": "Board games night",
+            "attendanceMode": "later_today",
+            "capacity": 6
+          }
+        ]
+      },
+      "scenarios": [
+        {
+          "id": "social-sim-medium-success-v1",
+          "interactionKind": "group",
+          "pathKind": "success",
+          "objective": "The pair and the group converge into a healthy recurring group.",
+          "expectedOutcome": {
+            "convergence": "converged",
+            "matchQuality": "good",
+            "conversationQuality": "alive",
+            "memoryOutcome": "memory_helpful"
+          }
+        },
+        {
+          "id": "social-sim-medium-stagnation-v1",
+          "interactionKind": "pair",
+          "pathKind": "stagnation",
+          "objective": "The system keeps a pair matched but does not force a bad group fit.",
+          "expectedOutcome": {
+            "convergence": "partial",
+            "matchQuality": "weak",
+            "conversationQuality": "stalled",
+            "memoryOutcome": "memory_neutral"
+          }
+        },
+        {
+          "id": "social-sim-medium-mismatch-v1",
+          "interactionKind": "individual",
+          "pathKind": "mismatch",
+          "objective": "A solo actor should not be pushed into a pair-only intro.",
+          "expectedOutcome": {
+            "convergence": "failed",
+            "matchQuality": "bad",
+            "conversationQuality": "awkward",
+            "memoryOutcome": "memory_neutral"
+          }
+        },
+        {
+          "id": "social-sim-medium-recovery-v1",
+          "interactionKind": "group",
+          "pathKind": "recovery",
+          "objective": "When the group is partial, the system widens safely and recovers with a better fit.",
+          "expectedOutcome": {
+            "convergence": "partial",
+            "matchQuality": "weak",
+            "conversationQuality": "alive",
+            "memoryOutcome": "memory_helpful"
+          }
+        },
+        {
+          "id": "social-sim-medium-moderation-v1",
+          "interactionKind": "circle",
+          "pathKind": "moderationTrust",
+          "objective": "Repeat participation should still respect block/report signals and avoid unsafe reuse.",
+          "expectedOutcome": {
+            "convergence": "failed",
+            "matchQuality": "bad",
+            "conversationQuality": "unsafe",
+            "memoryOutcome": "memory_harmful"
+          }
+        }
+      ],
+      "coverage": {
+        "success": "social-sim-medium-success-v1",
+        "stagnation": "social-sim-medium-stagnation-v1",
+        "mismatch": "social-sim-medium-mismatch-v1",
+        "recovery": "social-sim-medium-recovery-v1",
+        "moderationTrust": "social-sim-medium-moderation-v1"
+      }
+    },
+    {
+      "id": "social-sim-long-memory-drift-v1",
+      "horizon": "long",
+      "title": "Long-horizon memory drift",
+      "simulationBrief": "Actors return across multiple sessions so we can see whether matching, memory, and trust stay stable over time.",
+      "actors": [
+        {
+          "actorId": "sim-eve",
+          "kind": "individual",
+          "displayName": "Eve",
+          "persona": "reflective",
+          "goals": [
+            "return to a recurring social circle and keep preferences consistent"
+          ],
+          "preferences": ["recurring", "music", "english"],
+          "hardConstraints": ["avoid unsafe or creepy personalization"],
+          "socialStyle": "thoughtful",
+          "patience": 7,
+          "toleranceForMismatch": 2,
+          "memoryDriftProfile": "slow"
+        },
+        {
+          "actorId": "sim-felix",
+          "kind": "individual",
+          "displayName": "Felix",
+          "persona": "experimental",
+          "goals": ["explore new people while preserving old memory signals"],
+          "preferences": ["music", "social", "flexible"],
+          "hardConstraints": [
+            "do not override explicit preferences with inference"
+          ],
+          "socialStyle": "adaptive",
+          "patience": 6,
+          "toleranceForMismatch": 3,
+          "memoryDriftProfile": "moderate"
+        },
+        {
+          "actorId": "sim-gina-hugo",
+          "kind": "pair",
+          "displayName": "Gina and Hugo",
+          "persona": "returning pair",
+          "goals": ["rejoin a circle after a successful previous session"],
+          "preferences": ["pair", "music", "returning"],
+          "hardConstraints": ["pair-only until trust is established"],
+          "socialStyle": "consistent",
+          "patience": 7,
+          "toleranceForMismatch": 2,
+          "memoryDriftProfile": "slow"
+        },
+        {
+          "actorId": "sim-circle-seed-charlie",
+          "kind": "circle_seed",
+          "displayName": "Circle Seed Charlie",
+          "persona": "memory-sensitive host",
+          "goals": [
+            "see whether remembered preferences stay aligned over several sessions"
+          ],
+          "preferences": ["circle", "music", "weekly"],
+          "hardConstraints": ["respect explicit memory over inference"],
+          "socialStyle": "observant",
+          "patience": 8,
+          "toleranceForMismatch": 2,
+          "memoryDriftProfile": "slow"
+        },
+        {
+          "actorId": "sim-event-seed-charlie",
+          "kind": "event_seed",
+          "displayName": "Event Seed Charlie",
+          "persona": "event organizer",
+          "goals": ["run multiple sessions and observe follow-up behavior"],
+          "preferences": ["event", "music", "returning"],
+          "hardConstraints": ["one active event at a time"],
+          "socialStyle": "structured",
+          "patience": 8,
+          "toleranceForMismatch": 2,
+          "memoryDriftProfile": "slow"
+        }
+      ],
+      "relationships": [
+        {
+          "sourceActorId": "sim-eve",
+          "targetActorId": "sim-circle-seed-charlie",
+          "type": "reconnect_candidate"
+        },
+        {
+          "sourceActorId": "sim-felix",
+          "targetActorId": "sim-event-seed-charlie",
+          "type": "reconnect_candidate"
+        },
+        {
+          "sourceActorId": "sim-gina-hugo",
+          "targetActorId": "sim-circle-seed-charlie",
+          "type": "prior_connection"
+        }
+      ],
+      "entities": {
+        "pairs": [
+          {
+            "id": "pair-gina-hugo",
+            "memberActorIds": ["sim-gina-hugo"],
+            "sharedGoals": ["re-enter a circle"],
+            "status": "returning"
+          }
+        ],
+        "groups": [
+          {
+            "id": "group-music-circle",
+            "memberActorIds": ["sim-eve", "sim-felix", "sim-gina-hugo"],
+            "sizeTarget": 5,
+            "purpose": "long-horizon social convergence"
+          }
+        ],
+        "circles": [
+          {
+            "id": "circle-monthly-music",
+            "memberActorIds": ["sim-eve", "sim-gina-hugo"],
+            "cadence": "monthly",
+            "purpose": "memory-sensitive recurring social loop"
+          }
+        ],
+        "events": [
+          {
+            "id": "event-venue-hop",
+            "title": "Venue hopping music meetup",
+            "attendanceMode": "flexible",
+            "capacity": 8
+          }
+        ]
+      },
+      "scenarios": [
+        {
+          "id": "social-sim-long-success-v1",
+          "interactionKind": "circle",
+          "pathKind": "success",
+          "objective": "The recurring circle keeps returning members aligned over multiple sessions.",
+          "expectedOutcome": {
+            "convergence": "converged",
+            "matchQuality": "good",
+            "conversationQuality": "alive",
+            "memoryOutcome": "memory_helpful"
+          }
+        },
+        {
+          "id": "social-sim-long-stagnation-v1",
+          "interactionKind": "event",
+          "pathKind": "stagnation",
+          "objective": "A long-running event should not spiral into repetitive low-signal follow-ups.",
+          "expectedOutcome": {
+            "convergence": "partial",
+            "matchQuality": "weak",
+            "conversationQuality": "stalled",
+            "memoryOutcome": "memory_neutral"
+          }
+        },
+        {
+          "id": "social-sim-long-mismatch-v1",
+          "interactionKind": "pair",
+          "pathKind": "mismatch",
+          "objective": "The pair should not be forced into an incompatible group after memory drift.",
+          "expectedOutcome": {
+            "convergence": "failed",
+            "matchQuality": "bad",
+            "conversationQuality": "awkward",
+            "memoryOutcome": "memory_harmful"
+          }
+        },
+        {
+          "id": "social-sim-long-recovery-v1",
+          "interactionKind": "individual",
+          "pathKind": "recovery",
+          "objective": "After a stale-memory mismatch, the next suggestion should recover using fresher explicit preferences.",
+          "expectedOutcome": {
+            "convergence": "partial",
+            "matchQuality": "weak",
+            "conversationQuality": "alive",
+            "memoryOutcome": "memory_helpful"
+          }
+        },
+        {
+          "id": "social-sim-long-moderation-v1",
+          "interactionKind": "group",
+          "pathKind": "moderationTrust",
+          "objective": "Trust/moderation signals should prevent unsafe reuse when the same users return.",
+          "expectedOutcome": {
+            "convergence": "failed",
+            "matchQuality": "bad",
+            "conversationQuality": "unsafe",
+            "memoryOutcome": "memory_harmful"
+          }
+        }
+      ],
+      "coverage": {
+        "success": "social-sim-long-success-v1",
+        "stagnation": "social-sim-long-stagnation-v1",
+        "mismatch": "social-sim-long-mismatch-v1",
+        "recovery": "social-sim-long-recovery-v1",
+        "moderationTrust": "social-sim-long-moderation-v1"
+      }
+    }
+  ]
+}
