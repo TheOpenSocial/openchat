@@ -33,8 +33,10 @@ test("loadSocialSimWorldFixture normalizes canonical fixture worlds", () => {
     path.resolve("apps/api/test/fixtures/agentic-scenarios.json"),
   );
 
-  assert.ok(worlds.length >= 4);
+  assert.ok(worlds.length >= 6);
   assert.ok(worlds.some((world) => world.horizon === "long"));
+  assert.ok(worlds.some((world) => world.id === "medium-dense-social-mixer-v1"));
+  assert.ok(worlds.some((world) => world.id === "long-network-rebalancing-v1"));
   assert.ok(worlds.every((world) => Array.isArray(world.actors)));
   assert.ok(worlds.every((world) => Array.isArray(world.relationships)));
 });
@@ -52,6 +54,14 @@ test("selectSocialSimWorlds narrows by horizon and scenario", () => {
   });
   assert.ok(shortOnly.length >= 2);
   assert.ok(shortOnly.every((world) => world.horizon === "short"));
+
+  const longOnly = selectSocialSimWorlds(worlds, {
+    horizon: "long",
+    worldFilter: [],
+    scenarioFilter: [],
+  });
+  assert.ok(longOnly.length >= 2);
+  assert.ok(longOnly.every((world) => world.horizon === "long"));
 
   const byScenario = selectSocialSimWorlds(worlds, {
     horizon: "all",

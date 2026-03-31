@@ -300,6 +300,188 @@
       ]
     },
     {
+      "id": "medium-dense-social-mixer-v1",
+      "name": "Dense social mixer",
+      "horizon": "medium",
+      "family": "dense-social-graph",
+      "turnBudget": 12,
+      "seedScenarioIds": [
+        "social_pair_group_discovery_v1",
+        "social_no_match_recovery_v1",
+        "social_event_reminder_followup_v1"
+      ],
+      "summary": "A denser mixed pool where individuals, a pair, a group seed, and an event host compete for fit and attention.",
+      "goals": [
+        "Stress matching specificity in a denser pool.",
+        "Force the system to separate strong fit from merely active conversations.",
+        "Surface better recovery when several plausible matches exist."
+      ],
+      "evaluationFocus": [
+        "matching_specificity",
+        "conversation_depth",
+        "recovery_quality",
+        "group_or_event_routing"
+      ],
+      "actors": [
+        {
+          "id": "mixer-nora",
+          "kind": "individual",
+          "persona": "community-oriented product designer, warm and direct",
+          "goals": [
+            "find a small design-minded social group",
+            "meet people for calm dinners"
+          ],
+          "preferences": {
+            "topics": ["design", "dinners", "community"],
+            "pace": "warm"
+          },
+          "hardConstraints": ["no loud nightlife"],
+          "socialStyle": "warm",
+          "patience": 0.78,
+          "initiative": 0.71,
+          "mismatchTolerance": 0.31,
+          "memoryDriftProfile": "stable"
+        },
+        {
+          "id": "mixer-eli",
+          "kind": "individual",
+          "persona": "curious city explorer, fast-moving but polite",
+          "goals": [
+            "find people for spontaneous city walks",
+            "join a mixed-interest social event"
+          ],
+          "preferences": {
+            "topics": ["city walks", "cafes", "events"],
+            "pace": "fast"
+          },
+          "hardConstraints": ["prefer same city"],
+          "socialStyle": "upbeat",
+          "patience": 0.58,
+          "initiative": 0.85,
+          "mismatchTolerance": 0.52,
+          "memoryDriftProfile": "light"
+        },
+        {
+          "id": "mixer-sana",
+          "kind": "individual",
+          "persona": "music-loving operator, selective and thoughtful",
+          "goals": [
+            "find recurring music-and-dinner people",
+            "avoid shallow intros"
+          ],
+          "preferences": {
+            "topics": ["music", "food", "small groups"],
+            "pace": "selective"
+          },
+          "hardConstraints": ["no flaky follow-through"],
+          "socialStyle": "clear",
+          "patience": 0.82,
+          "initiative": 0.55,
+          "mismatchTolerance": 0.24,
+          "memoryDriftProfile": "stable"
+        },
+        {
+          "id": "mixer-pair-jonah-rin",
+          "kind": "pair",
+          "persona": "pair looking for another calm social duo",
+          "goals": [
+            "meet another pair for low-pressure dinners",
+            "join a small recurring circle"
+          ],
+          "preferences": {
+            "topics": ["food", "conversation", "calm events"],
+            "pace": "low-pressure"
+          },
+          "hardConstraints": ["pair-first intros"],
+          "socialStyle": "collaborative",
+          "patience": 0.8,
+          "initiative": 0.63,
+          "mismatchTolerance": 0.27,
+          "memoryDriftProfile": "stable"
+        },
+        {
+          "id": "mixer-group-seed-tomas",
+          "kind": "group_seed",
+          "persona": "practical organizer trying to form a durable micro-group",
+          "goals": [
+            "form a four-person group",
+            "keep early interactions useful"
+          ],
+          "preferences": {
+            "topics": ["community", "food", "music"],
+            "pace": "organized"
+          },
+          "hardConstraints": ["avoid dead-end intros"],
+          "socialStyle": "organized",
+          "patience": 0.86,
+          "initiative": 0.89,
+          "mismatchTolerance": 0.34,
+          "memoryDriftProfile": "stable"
+        },
+        {
+          "id": "mixer-event-host-lia",
+          "kind": "event_seed",
+          "persona": "event host balancing small-group energy and safety",
+          "goals": [
+            "convert good fit pairs into an event",
+            "avoid noisy mismatches"
+          ],
+          "preferences": {
+            "topics": ["events", "small groups", "food"],
+            "pace": "clear"
+          },
+          "hardConstraints": ["respect capacity and boundaries"],
+          "socialStyle": "clear",
+          "patience": 0.74,
+          "initiative": 0.83,
+          "mismatchTolerance": 0.37,
+          "memoryDriftProfile": "light"
+        }
+      ],
+      "relationships": [
+        {
+          "id": "mixer-nora-sana",
+          "type": "match",
+          "members": ["mixer-nora", "mixer-sana"],
+          "label": "Nora / Sana",
+          "strength": 0.61,
+          "notes": "Strong small-group dinner and music overlap."
+        },
+        {
+          "id": "mixer-eli-lia",
+          "type": "event",
+          "members": ["mixer-eli", "mixer-event-host-lia"],
+          "label": "Eli / Lia event fit",
+          "strength": 0.56,
+          "notes": "Fast-moving event energy, but risk of shallow continuity."
+        },
+        {
+          "id": "mixer-pair-group",
+          "type": "group",
+          "members": ["mixer-pair-jonah-rin", "mixer-group-seed-tomas"],
+          "label": "Pair to group route",
+          "strength": 0.52,
+          "notes": "Good fit if the interaction stays calm and specific."
+        },
+        {
+          "id": "mixer-nora-group",
+          "type": "group",
+          "members": ["mixer-nora", "mixer-group-seed-tomas"],
+          "label": "Nora group fit",
+          "strength": 0.48,
+          "notes": "Useful group fit if the system avoids generic activity."
+        },
+        {
+          "id": "mixer-sana-event",
+          "type": "event",
+          "members": ["mixer-sana", "mixer-event-host-lia"],
+          "label": "Sana event fit",
+          "strength": 0.39,
+          "notes": "Deliberately weaker so recovery and rerouting can trigger."
+        }
+      ]
+    },
+    {
       "id": "long-memory-drift-event-v1",
       "name": "Long memory drift event follow-up",
       "horizon": "long",
@@ -388,6 +570,204 @@
           "members": ["event-zoe", "event-kai"],
           "label": "Zoe / Kai follow-up",
           "strength": 0.43
+        }
+      ]
+    },
+    {
+      "id": "long-network-rebalancing-v1",
+      "name": "Long network rebalancing",
+      "horizon": "long",
+      "family": "network-rebalancing",
+      "turnBudget": 18,
+      "seedScenarioIds": [
+        "social_memory_drift_v1",
+        "social_group_formation_partial_fallback_v1",
+        "social_trust_moderation_edge_v1",
+        "social_event_followup_v1"
+      ],
+      "summary": "A larger long-running world where recurring circles, events, and a mismatched participant force the system to rebalance over time.",
+      "goals": [
+        "Carry useful memory across multiple sessions without getting creepy.",
+        "Recover from one weak participant without collapsing the whole world.",
+        "Prefer durable social outcomes over superficial motion."
+      ],
+      "evaluationFocus": [
+        "memory_consistency",
+        "network_rebalancing",
+        "trust_and_safety",
+        "durable_convergence"
+      ],
+      "actors": [
+        {
+          "id": "rebalance-host-mila",
+          "kind": "event_seed",
+          "persona": "steady host maintaining a recurring social rhythm",
+          "goals": ["bring back high-fit people", "keep sessions coherent"],
+          "preferences": {
+            "topics": ["community", "events", "small groups"],
+            "pace": "steady"
+          },
+          "hardConstraints": ["avoid creepy persistence"],
+          "socialStyle": "steady",
+          "patience": 0.84,
+          "initiative": 0.76,
+          "mismatchTolerance": 0.34,
+          "memoryDriftProfile": "fluid"
+        },
+        {
+          "id": "rebalance-ivy",
+          "kind": "individual",
+          "persona": "returning attendee who values continuity and trust",
+          "goals": ["rejoin a familiar group", "keep prior context grounded"],
+          "preferences": {
+            "topics": ["food", "music", "community"],
+            "pace": "steady"
+          },
+          "hardConstraints": ["respect boundaries and prior preferences"],
+          "socialStyle": "warm",
+          "patience": 0.79,
+          "initiative": 0.58,
+          "mismatchTolerance": 0.22,
+          "memoryDriftProfile": "fluid"
+        },
+        {
+          "id": "rebalance-noah",
+          "kind": "individual",
+          "persona": "newcomer with high energy and weak fit discipline",
+          "goals": ["find any active group quickly", "join an event now"],
+          "preferences": {
+            "topics": ["nightlife", "events", "spontaneous plans"],
+            "pace": "fast"
+          },
+          "hardConstraints": ["weekend only"],
+          "socialStyle": "fast",
+          "patience": 0.44,
+          "initiative": 0.9,
+          "mismatchTolerance": 0.71,
+          "memoryDriftProfile": "light"
+        },
+        {
+          "id": "rebalance-pair-ada-luis",
+          "kind": "pair",
+          "persona": "pair looking for recurring dinner-and-music people",
+          "goals": [
+            "find another stable pair or circle",
+            "avoid shallow event churn"
+          ],
+          "preferences": {
+            "topics": ["food", "music", "small circles"],
+            "pace": "calm"
+          },
+          "hardConstraints": ["pair-first or small-circle intros only"],
+          "socialStyle": "collaborative",
+          "patience": 0.83,
+          "initiative": 0.61,
+          "mismatchTolerance": 0.25,
+          "memoryDriftProfile": "stable"
+        },
+        {
+          "id": "rebalance-circle-sel",
+          "kind": "circle_seed",
+          "persona": "circle organizer optimizing for durable return behavior",
+          "goals": [
+            "keep the circle coherent across sessions",
+            "route weak fits elsewhere"
+          ],
+          "preferences": {
+            "topics": ["recurring groups", "music", "food"],
+            "pace": "clear"
+          },
+          "hardConstraints": ["avoid repeated bad fits"],
+          "socialStyle": "clear",
+          "patience": 0.88,
+          "initiative": 0.87,
+          "mismatchTolerance": 0.29,
+          "memoryDriftProfile": "stable"
+        },
+        {
+          "id": "rebalance-group-seed-omar",
+          "kind": "group_seed",
+          "persona": "group seed trying to rebalance a partially healthy network",
+          "goals": [
+            "keep good members engaged",
+            "avoid collapse from one mismatch"
+          ],
+          "preferences": {
+            "topics": ["community", "design", "food"],
+            "pace": "organized"
+          },
+          "hardConstraints": ["avoid dead-end activity loops"],
+          "socialStyle": "organized",
+          "patience": 0.86,
+          "initiative": 0.84,
+          "mismatchTolerance": 0.33,
+          "memoryDriftProfile": "stable"
+        },
+        {
+          "id": "rebalance-safety-kai",
+          "kind": "individual",
+          "persona": "trust-sensitive participant who notices weak boundaries early",
+          "goals": ["participate safely", "stay only in good-fit spaces"],
+          "preferences": {
+            "topics": ["safety", "community", "small groups"],
+            "pace": "clear"
+          },
+          "hardConstraints": ["escalate repeated bad behavior quickly"],
+          "socialStyle": "clear",
+          "patience": 0.76,
+          "initiative": 0.57,
+          "mismatchTolerance": 0.16,
+          "memoryDriftProfile": "stable"
+        }
+      ],
+      "relationships": [
+        {
+          "id": "rebalance-host-ivy",
+          "type": "event",
+          "members": ["rebalance-host-mila", "rebalance-ivy"],
+          "label": "Mila / Ivy return",
+          "strength": 0.59,
+          "notes": "Should benefit from memory continuity."
+        },
+        {
+          "id": "rebalance-host-noah",
+          "type": "event",
+          "members": ["rebalance-host-mila", "rebalance-noah"],
+          "label": "Mila / Noah weak event fit",
+          "strength": 0.34,
+          "notes": "Intentionally weak so rerouting pressure appears."
+        },
+        {
+          "id": "rebalance-pair-circle",
+          "type": "circle",
+          "members": ["rebalance-pair-ada-luis", "rebalance-circle-sel"],
+          "label": "Pair to circle route",
+          "strength": 0.57,
+          "notes": "Strong durable fit if the system uses prior context well."
+        },
+        {
+          "id": "rebalance-group-ivy",
+          "type": "group",
+          "members": ["rebalance-group-seed-omar", "rebalance-ivy"],
+          "label": "Omar / Ivy group fit",
+          "strength": 0.51,
+          "notes": "Useful group route if attention is not wasted on weak matches."
+        },
+        {
+          "id": "rebalance-group-kai",
+          "type": "group",
+          "members": ["rebalance-group-seed-omar", "rebalance-safety-kai"],
+          "label": "Omar / Kai safety-aware fit",
+          "strength": 0.54,
+          "notes": "Should reward clear boundaries and stability."
+        },
+        {
+          "id": "rebalance-circle-kai",
+          "type": "circle",
+          "members": ["rebalance-circle-sel", "rebalance-safety-kai"],
+          "label": "Sel / Kai circle fit",
+          "strength": 0.49,
+          "notes": "Moderate fit that should improve with careful memory use."
         }
       ]
     }
