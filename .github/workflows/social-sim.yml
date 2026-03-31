@@ -77,7 +77,7 @@ jobs:
     env:
       SOCIAL_SIM_BASE_URL: https://api.opensocial.so
       SOCIAL_SIM_ADMIN_USER_ID: ${{ secrets.STAGING_SMOKE_ADMIN_USER_ID || secrets.SMOKE_ADMIN_USER_ID }}
-      SOCIAL_SIM_ADMIN_ROLE: ${{ secrets.STAGING_SMOKE_ADMIN_ROLE || secrets.SMOKE_ADMIN_ROLE || 'admin' }}
+      SOCIAL_SIM_ADMIN_ROLE: admin
       SOCIAL_SIM_ADMIN_API_KEY: ${{ secrets.STAGING_SMOKE_ADMIN_API_KEY || secrets.SMOKE_ADMIN_API_KEY }}
       SOCIAL_SIM_OLLAMA_MODEL: ${{ secrets.SOCIAL_SIM_OLLAMA_MODEL || 'llama3.1' }}
       SOCIAL_SIM_OPENAI_MODEL: ${{ secrets.SOCIAL_SIM_OPENAI_MODEL || 'gpt-4.1-mini' }}
