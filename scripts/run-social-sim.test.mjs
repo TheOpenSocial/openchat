@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  createBackendAdapter,
   createBrainProvider,
   createJudgeProvider,
   loadSocialSimWorldFixture,
@@ -25,6 +26,9 @@ test("parseSocialSimArgs applies sane defaults", () => {
   assert.equal(config.dryRun, true);
   assert.equal(config.horizon, "all");
   assert.equal(config.turnBudget, 12);
+  assert.equal(config.backendTurnDelayMs, 250);
+  assert.equal(config.backendRetryCount, 3);
+  assert.equal(config.backendRetryBaseDelayMs, 750);
 });
 
 test("loadSocialSimWorldFixture normalizes canonical fixture worlds", () => {
@@ -166,6 +170,9 @@ test("runSocialSimulation writes artifacts in dry-run mode", async () => {
       openaiModel: "gpt-4.1-mini",
       useRemoteProvider: false,
       useRemoteJudge: false,
+      backendTurnDelayMs: 0,
+      backendRetryCount: 0,
+      backendRetryBaseDelayMs: 0,
     });
 
     assert.equal(result.summary.verdict, "watch");
@@ -177,5 +184,79 @@ test("runSocialSimulation writes artifacts in dry-run mode", async () => {
     assert.equal(runJson.namespace, "test-social-sim");
   } finally {
     rmSync(artifactRoot, { recursive: true, force: true });
+  }
+});
+
+test("backend adapter retries abuse throttling before falling back offline", async () => {
+  const adapter = createBackendAdapter({
+    baseUrl: "https://api.example.com",
+    adminUserId: "11111111-1111-4111-8111-111111111111",
+    adminRole: "admin",
+    adminApiKey: "test-key",
+    namespace: "social-sim-test",
+    backendTurnDelayMs: 0,
+    backendRetryCount: 2,
+    backendRetryBaseDelayMs: 0,
+  });
+  adapter.remoteRunId = "remote-run-1";
+
+  const originalFetch = globalThis.fetch;
+  let callCount = 0;
+  globalThis.fetch = async () => {
+    callCount += 1;
+    if (callCount < 3) {
+      return {
+        ok: false,
+        status: 429,
+        async json() {
+          return {
+            success: false,
+            error: {
+              code: "abuse_throttled",
+            },
+          };
+        },
+      };
+    }
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          success: true,
+          data: {
+            accepted: true,
+            mode: "persisted",
+          },
+        };
+      },
+    };
+  };
+
+  try {
+    const result = await adapter.submitTurn({
+      world: {
+        id: "world-1",
+      },
+      actor: {
+        id: "actor-1",
+        kind: "individual",
+      },
+      action: {
+        intent: "follow_up",
+      },
+      state: {
+        stage: "conversation",
+        turnIndex: 3,
+      },
+      dryRun: false,
+    });
+
+    assert.equal(callCount, 3);
+    assert.equal(result.mode, "backend");
+    assert.equal(result.status, "recovered");
+    assert.equal(result.detail.retryCount, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
   }
 });

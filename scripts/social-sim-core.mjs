@@ -1,18 +1,11 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
 
 export const SOCIAL_SIM_PROMPT_VERSION = "social-sim-v1";
 export const DEFAULT_SOCIAL_SIM_ARTIFACT_ROOT = ".artifacts/social-sim";
 export const DEFAULT_SOCIAL_SIM_FIXTURE_PATH = "scripts/social-sim-worlds.json";
 export const DEFAULT_SOCIAL_SIM_SCENARIO_FIXTURE_PATH =
   "apps/api/test/fixtures/agentic-scenarios.json";
-
-const HORIZON_ORDER = new Map([
-  ["short", 0],
-  ["medium", 1],
-  ["long", 2],
-]);
 
 const VALID_PROVIDERS = new Set(["ollama", "openai", "stub"]);
 const VALID_CLEANUP_MODES = new Set(["archive", "delete", "none"]);
@@ -59,6 +52,12 @@ function parseList(value) {
     .split(",")
     .map((entry) => entry.trim())
     .filter(Boolean);
+}
+
+function sleep(ms) {
+  const delay = Math.max(0, Number(ms) || 0);
+  if (delay <= 0) return Promise.resolve();
+  return new Promise((resolve) => setTimeout(resolve, delay));
 }
 
 export function makeSeededRng(seed) {
@@ -181,6 +180,32 @@ export function parseSocialSimArgs(argv = process.argv.slice(2), env = process.e
     flags.get("use-remote-judge") ?? env.SOCIAL_SIM_USE_REMOTE_JUDGE,
     useRemoteProvider,
   );
+  const backendTurnDelayMs = clamp(
+    toNumber(
+      flags.get("backend-turn-delay-ms") ??
+        env.SOCIAL_SIM_BACKEND_TURN_DELAY_MS,
+      250,
+    ),
+    0,
+    10_000,
+  );
+  const backendRetryCount = clamp(
+    toNumber(
+      flags.get("backend-retry-count") ?? env.SOCIAL_SIM_BACKEND_RETRY_COUNT,
+      3,
+    ),
+    0,
+    10,
+  );
+  const backendRetryBaseDelayMs = clamp(
+    toNumber(
+      flags.get("backend-retry-base-delay-ms") ??
+        env.SOCIAL_SIM_BACKEND_RETRY_BASE_DELAY_MS,
+      750,
+    ),
+    0,
+    30_000,
+  );
 
   if (!VALID_PROVIDERS.has(provider)) {
     throw new Error(
@@ -223,6 +248,9 @@ export function parseSocialSimArgs(argv = process.argv.slice(2), env = process.e
     openaiModel,
     useRemoteProvider,
     useRemoteJudge,
+    backendTurnDelayMs,
+    backendRetryCount,
+    backendRetryBaseDelayMs,
   };
 }
 
@@ -487,6 +515,9 @@ export async function runSocialSimulation(config) {
       judgeProvider: config.judgeProvider,
       horizon: config.horizon,
       turnBudget: config.turnBudget,
+      backendTurnDelayMs: config.backendTurnDelayMs,
+      backendRetryCount: config.backendRetryCount,
+      backendRetryBaseDelayMs: config.backendRetryBaseDelayMs,
       cleanupMode: config.cleanupMode,
       dryRun: config.dryRun,
       nightly: config.nightly,
@@ -660,7 +691,6 @@ function applyTurnOutcome({
   action,
   backendResult,
   state,
-  transcript,
   metrics,
   rng,
   turnIndex,
@@ -907,7 +937,7 @@ function defaultBrainAction(context) {
   };
 }
 
-function buildMessageForIntent({ intent, actor, targetActorId, world, state }) {
+function buildMessageForIntent({ intent, actor, targetActorId, state }) {
   const targetLabel = targetActorId ? ` @${targetActorId}` : "";
   switch (intent) {
     case "introduce":
@@ -1469,6 +1499,18 @@ class SocialSimBackendAdapter {
     this.adminApiKey = normalizeString(config.adminApiKey, "");
     this.enabled = Boolean(this.baseUrl && this.adminUserId);
     this.remoteRunId = null;
+    this.backendTurnDelayMs = clamp(
+      toNumber(config.backendTurnDelayMs, 250),
+      0,
+      10_000,
+    );
+    this.backendRetryCount = clamp(toNumber(config.backendRetryCount, 3), 0, 10);
+    this.backendRetryBaseDelayMs = clamp(
+      toNumber(config.backendRetryBaseDelayMs, 750),
+      0,
+      30_000,
+    );
+    this.nextAllowedTurnAtMs = 0;
   }
 
   async bootstrapRun({ runId, namespace, dryRun, worldCount }) {
@@ -1603,38 +1645,70 @@ class SocialSimBackendAdapter {
         turnIndex: state.turnIndex,
       },
     };
-    try {
-      const response = await fetch(`${this.baseUrl}/api/admin/social-sim/turn`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(payload),
-      });
-      const json = await response.json().catch(() => null);
-      if (!response.ok || !json?.success) {
-        return {
-          mode: "offline",
-          status: "failed",
-          actionType: action.intent,
-          detail: {
-            status: response.status,
-            payload: json,
-          },
-        };
+    let lastFailure = null;
+    for (
+      let attemptIndex = 0;
+      attemptIndex <= this.backendRetryCount;
+      attemptIndex += 1
+    ) {
+      const now = Date.now();
+      if (this.nextAllowedTurnAtMs > now) {
+        await sleep(this.nextAllowedTurnAtMs - now);
       }
-      return {
-        mode: "backend",
-        status: "passed",
-        actionType: action.intent,
-        detail: json?.data ?? null,
-      };
-    } catch (error) {
-      return {
-        mode: "offline",
-        status: "failed",
-        actionType: action.intent,
-        detail: error instanceof Error ? error.message : String(error),
-      };
+
+      try {
+        const response = await fetch(`${this.baseUrl}/api/admin/social-sim/turn`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(payload),
+        });
+        const json = await response.json().catch(() => null);
+        if (response.ok && json?.success) {
+          this.nextAllowedTurnAtMs = Date.now() + this.backendTurnDelayMs;
+          return {
+            mode: "backend",
+            status: attemptIndex > 0 ? "recovered" : "passed",
+            actionType: action.intent,
+            detail: {
+              ...(json?.data ?? {}),
+              retryCount: attemptIndex,
+            },
+          };
+        }
+
+        lastFailure = {
+          status: response.status,
+          payload: json,
+        };
+        const isThrottle =
+          response.status === 429 ||
+          json?.error?.code === "abuse_throttled";
+        if (!isThrottle || attemptIndex >= this.backendRetryCount) {
+          break;
+        }
+
+        const delay =
+          this.backendRetryBaseDelayMs * Math.max(1, 2 ** attemptIndex);
+        this.nextAllowedTurnAtMs = Date.now() + delay;
+        await sleep(delay);
+      } catch (error) {
+        lastFailure = error instanceof Error ? error.message : String(error);
+        if (attemptIndex >= this.backendRetryCount) {
+          break;
+        }
+        const delay =
+          this.backendRetryBaseDelayMs * Math.max(1, 2 ** attemptIndex);
+        this.nextAllowedTurnAtMs = Date.now() + delay;
+        await sleep(delay);
+      }
     }
+
+    return {
+      mode: "offline",
+      status: "failed",
+      actionType: action.intent,
+      detail: lastFailure,
+    };
   }
 
   async cleanupRun({ runId, namespace, worlds, mode }) {
@@ -1673,7 +1747,9 @@ class SocialSimBackendAdapter {
             notes: [`remote cleanup applied for ${this.remoteRunId}`],
           };
         }
-      } catch {}
+      } catch {
+        // Remote cleanup is best-effort. Local artifacts remain available.
+      }
     }
     return {
       mode,
