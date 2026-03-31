@@ -9,7 +9,7 @@ import {
   Post,
   Query,
 } from "@nestjs/common";
-import { z, type ZodTypeAny } from "zod";
+import { z } from "zod";
 import { PublicRoute } from "../auth/public-route.decorator.js";
 import { ok } from "../common/api-response.js";
 import { parseRequestPayload } from "../common/validation.js";
