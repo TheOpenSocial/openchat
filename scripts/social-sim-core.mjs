@@ -1534,6 +1534,7 @@ class SocialSimBackendAdapter {
           "content-type": "application/json",
           "x-admin-user-id": this.adminUserId,
           "x-admin-role": this.adminRole,
+          "x-social-sim-namespace": namespace,
           ...(this.adminApiKey ? { "x-admin-api-key": this.adminApiKey } : {}),
         },
         body: JSON.stringify({}),
@@ -1569,6 +1570,7 @@ class SocialSimBackendAdapter {
           "content-type": "application/json",
           "x-admin-user-id": this.adminUserId,
           "x-admin-role": this.adminRole,
+          "x-social-sim-namespace": namespace,
           ...(this.adminApiKey ? { "x-admin-api-key": this.adminApiKey } : {}),
         },
         body: JSON.stringify({
@@ -1630,6 +1632,7 @@ class SocialSimBackendAdapter {
       "content-type": "application/json",
       "x-admin-user-id": this.adminUserId,
       "x-admin-role": this.adminRole,
+      "x-social-sim-namespace": this.config.namespace,
       ...(this.adminApiKey ? { "x-admin-api-key": this.adminApiKey } : {}),
     };
     const payload = {
@@ -1728,6 +1731,7 @@ class SocialSimBackendAdapter {
               "content-type": "application/json",
               "x-admin-user-id": this.adminUserId,
               "x-admin-role": this.adminRole,
+              "x-social-sim-namespace": namespace,
               ...(this.adminApiKey ? { "x-admin-api-key": this.adminApiKey } : {}),
             },
             body: JSON.stringify({

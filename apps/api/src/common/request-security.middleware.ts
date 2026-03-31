@@ -246,6 +246,19 @@ function isVerificationBypassRequest(request: Request, path: string) {
   );
 }
 
+function isTrustedSocialSimBypassRequest(request: Request, path: string) {
+  if (!path.startsWith("/api/admin/social-sim/")) {
+    return false;
+  }
+  if (!isTrustedAdminRequest(request, path)) {
+    return false;
+  }
+  const namespace = getSingleHeader(
+    request.headers["x-social-sim-namespace"],
+  )?.trim();
+  return typeof namespace === "string" && namespace.length > 0;
+}
+
 function getOrInitWindow(
   map: Map<string, CounterWindow>,
   key: string,
@@ -357,6 +370,10 @@ export function requestSecurityMiddleware(
   const isAuth = isAuthPath(path);
   const isPlayground = isPlaygroundPath(path);
   const isVerificationBypass = isVerificationBypassRequest(request, path);
+  const isTrustedSocialSimBypass = isTrustedSocialSimBypassRequest(
+    request,
+    path,
+  );
 
   if (isVerificationBypass) {
     next();
@@ -482,56 +499,58 @@ export function requestSecurityMiddleware(
     return;
   }
 
-  const abuseKey = `abuse:${abuseIdentity}`;
-  const abuseWindow = getOrInitWindow(
-    abuseCounters,
-    abuseKey,
-    now,
-    config.abuseWindowMs,
-  );
-  if (abuseWindow.blockedUntil && abuseWindow.blockedUntil > now) {
-    const retryAfterMs = abuseWindow.blockedUntil - now;
-    reject(
-      response,
-      429,
-      "abuse_throttled",
-      "request temporarily blocked due to abuse controls",
-      Math.ceil(retryAfterMs / 1000),
+  if (!isTrustedSocialSimBypass) {
+    const abuseKey = `abuse:${abuseIdentity}`;
+    const abuseWindow = getOrInitWindow(
+      abuseCounters,
+      abuseKey,
+      now,
+      config.abuseWindowMs,
     );
-    return;
-  }
+    if (abuseWindow.blockedUntil && abuseWindow.blockedUntil > now) {
+      const retryAfterMs = abuseWindow.blockedUntil - now;
+      reject(
+        response,
+        429,
+        "abuse_throttled",
+        "request temporarily blocked due to abuse controls",
+        Math.ceil(retryAfterMs / 1000),
+      );
+      return;
+    }
 
-  const requestScore = isTrustedAdminRequest(request, path)
-    ? 1
-    : isHighRiskPath(path)
-      ? 8
-      : isWrite
-        ? 3
-        : 1;
-  abuseWindow.count += requestScore;
-  if (abuseWindow.count > config.abuseMaxScore) {
-    abuseWindow.blockedUntil = now + config.abuseBlockMs;
-    logger.warn(
-      JSON.stringify({
-        event: "security.abuse_throttled",
-        traceId,
-        ip,
-        abuseIdentity,
-        method,
-        path,
-        score: abuseWindow.count,
-        maxScore: config.abuseMaxScore,
-        blockMs: config.abuseBlockMs,
-      }),
-    );
-    reject(
-      response,
-      429,
-      "abuse_throttled",
-      "request temporarily blocked due to abuse controls",
-      Math.ceil(config.abuseBlockMs / 1000),
-    );
-    return;
+    const requestScore = isTrustedAdminRequest(request, path)
+      ? 1
+      : isHighRiskPath(path)
+        ? 8
+        : isWrite
+          ? 3
+          : 1;
+    abuseWindow.count += requestScore;
+    if (abuseWindow.count > config.abuseMaxScore) {
+      abuseWindow.blockedUntil = now + config.abuseBlockMs;
+      logger.warn(
+        JSON.stringify({
+          event: "security.abuse_throttled",
+          traceId,
+          ip,
+          abuseIdentity,
+          method,
+          path,
+          score: abuseWindow.count,
+          maxScore: config.abuseMaxScore,
+          blockMs: config.abuseBlockMs,
+        }),
+      );
+      reject(
+        response,
+        429,
+        "abuse_throttled",
+        "request temporarily blocked due to abuse controls",
+        Math.ceil(config.abuseBlockMs / 1000),
+      );
+      return;
+    }
   }
 
   next();

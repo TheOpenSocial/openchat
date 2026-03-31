@@ -304,4 +304,62 @@ describe("requestSecurityMiddleware", () => {
       }),
     );
   });
+
+  it("bypasses abuse throttling for trusted social simulation admin traffic with namespace header", () => {
+    process.env.ABUSE_THROTTLE_MAX_SCORE = "8";
+    process.env.ABUSE_THROTTLE_BLOCK_MS = "60000";
+
+    const next = vi.fn();
+
+    for (let index = 0; index < 6; index += 1) {
+      const request = createRequest({
+        method: "POST",
+        path: "/api/admin/social-sim/turn",
+        ip: "203.0.113.120",
+        headers: {
+          "x-admin-user-id": "11111111-1111-4111-8111-111111111111",
+          "x-admin-role": "admin",
+          "x-social-sim-namespace": "gha-social-sim-23813500382",
+        },
+      });
+      const response = createResponse();
+      requestSecurityMiddleware(request, response, next);
+      expect(response.status).not.toHaveBeenCalled();
+    }
+
+    expect(next).toHaveBeenCalledTimes(6);
+  });
+
+  it("does not bypass abuse throttling for social simulation traffic without namespace header", () => {
+    process.env.ABUSE_THROTTLE_MAX_SCORE = "3";
+    process.env.ABUSE_THROTTLE_BLOCK_MS = "60000";
+
+    const request = createRequest({
+      method: "POST",
+      path: "/api/admin/social-sim/turn",
+      ip: "203.0.113.121",
+      headers: {
+        "x-admin-user-id": "11111111-1111-4111-8111-111111111111",
+        "x-admin-role": "admin",
+      },
+    });
+    const next = vi.fn();
+
+    const responses = Array.from({ length: 4 }, () => createResponse());
+    for (const response of responses) {
+      requestSecurityMiddleware(request, response, next);
+    }
+
+    expect(next).toHaveBeenCalledTimes(3);
+    const blockedResponse = responses[3];
+    expect(blockedResponse.status).toHaveBeenCalledWith(429);
+    expect(blockedResponse.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: false,
+        error: expect.objectContaining({
+          code: "abuse_throttled",
+        }),
+      }),
+    );
+  });
 });
