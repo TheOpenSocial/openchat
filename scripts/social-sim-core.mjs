@@ -225,6 +225,25 @@ function resolvePolicyTargetStrategy(setting, fallback = "drop") {
   return setting && setting !== "current" ? setting : fallback;
 }
 
+function sanitizeBootstrapForArtifact(bootstrap) {
+  if (!bootstrap || typeof bootstrap !== "object") return bootstrap;
+  const next = { ...bootstrap };
+  if (next.env && typeof next.env === "object") {
+    const redactedEnv = {};
+    for (const [key, value] of Object.entries(next.env)) {
+      const normalizedKey = String(key).toUpperCase();
+      const shouldRedact =
+        normalizedKey.includes("TOKEN") ||
+        normalizedKey.includes("KEY") ||
+        normalizedKey.includes("SECRET") ||
+        normalizedKey.includes("PASSWORD");
+      redactedEnv[key] = shouldRedact ? "[redacted]" : value;
+    }
+    next.env = redactedEnv;
+  }
+  return next;
+}
+
 export function parseSocialSimArgs(argv = process.argv.slice(2), env = process.env) {
   const args = Array.isArray(argv) ? argv : [];
   const flags = new Map();
@@ -639,6 +658,7 @@ export async function runSocialSimulation(config) {
     dryRun: config.dryRun,
     worldCount: selectedWorlds.length,
   });
+  const artifactBootstrap = sanitizeBootstrapForArtifact(bootstrap);
 
   const worldRuns = [];
   for (const [worldIndex, world] of selectedWorlds.entries()) {
@@ -659,7 +679,7 @@ export async function runSocialSimulation(config) {
     worldRuns.push(result);
   }
 
-  const summary = summarizeRun(worldRuns, config, bootstrap);
+  const summary = summarizeRun(worldRuns, config, artifactBootstrap);
   const artifact = {
     runId,
     namespace: config.namespace,

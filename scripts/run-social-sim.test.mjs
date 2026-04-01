@@ -399,3 +399,94 @@ test("backend adapter retries abuse throttling before falling back offline", asy
     globalThis.fetch = originalFetch;
   }
 });
+
+test("backend bootstrap redacts secret env values in artifacts", async () => {
+  const artifactRoot = mkdtempSync(path.join(os.tmpdir(), "social-sim-redact-"));
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url.endsWith("/api/admin/playground/bootstrap")) {
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            success: true,
+            data: {
+              env: {
+                SMOKE_BASE_URL: "http://localhost:3000",
+                SMOKE_ACCESS_TOKEN: "secret-token",
+                SOCIAL_SIM_ADMIN_API_KEY: "secret-key",
+                ONBOARDING_PROBE_TOKEN: "probe-token",
+              },
+              entities: {
+                smokeUserId: "77777777-7777-4777-8777-777777777777",
+              },
+              notes: ["bootstrapped"],
+            },
+          };
+        },
+      };
+    }
+    if (url.endsWith("/api/admin/social-sim/runs")) {
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            success: true,
+            data: {
+              runId: "remote-run-1",
+            },
+          };
+        },
+      };
+    }
+    throw new Error(`Unexpected fetch in test: ${url}`);
+  };
+
+  try {
+    const result = await runSocialSimulation({
+      provider: "stub",
+      judgeProvider: "stub",
+      horizon: "short",
+      worldFilter: ["short-direct-match-v1"],
+      scenarioFilter: [],
+      seed: 12345,
+      namespace: "test-social-sim-redact",
+      turnBudget: 4,
+      cleanupMode: "none",
+      dryRun: false,
+      nightly: false,
+      artifactRoot,
+      fixturePath: path.resolve("scripts/social-sim-worlds.json"),
+      scenarioFixturePath: path.resolve(
+        "apps/api/test/fixtures/agentic-scenarios.json",
+      ),
+      baseUrl: "https://api.example.com",
+      adminUserId: "11111111-1111-4111-8111-111111111111",
+      adminRole: "admin",
+      adminApiKey: "real-admin-key",
+      ollamaBaseUrl: "http://localhost:11434",
+      ollamaModel: "llama3.1",
+      openaiApiKey: "",
+      openaiModel: "gpt-4.1-mini",
+      useRemoteProvider: false,
+      useRemoteJudge: false,
+      backendTurnDelayMs: 0,
+      backendRetryCount: 0,
+      backendRetryBaseDelayMs: 0,
+    });
+
+    const summary = JSON.parse(
+      readFileSync(path.join(result.runDir, "summary.json"), "utf8"),
+    );
+    assert.equal(summary.bootstrap.env.SMOKE_ACCESS_TOKEN, "[redacted]");
+    assert.equal(summary.bootstrap.env.SOCIAL_SIM_ADMIN_API_KEY, "[redacted]");
+    assert.equal(summary.bootstrap.env.ONBOARDING_PROBE_TOKEN, "[redacted]");
+    assert.equal(summary.bootstrap.env.SMOKE_BASE_URL, "http://localhost:3000");
+  } finally {
+    globalThis.fetch = originalFetch;
+    rmSync(artifactRoot, { recursive: true, force: true });
+  }
+});
