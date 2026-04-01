@@ -6,6 +6,97 @@ export const DEFAULT_SOCIAL_SIM_ARTIFACT_ROOT = ".artifacts/social-sim";
 export const DEFAULT_SOCIAL_SIM_FIXTURE_PATH = "scripts/social-sim-worlds.json";
 export const DEFAULT_SOCIAL_SIM_SCENARIO_FIXTURE_PATH =
   "apps/api/test/fixtures/agentic-scenarios.json";
+export const DEFAULT_SOCIAL_SIM_TUNING = {
+  thresholds: {
+    lowStrength: 0.35,
+    mediumStrength: 0.72,
+    weakRelationshipFloor: 0.2,
+    networkWeakPenaltyThreshold: 0.38,
+    circleContinuityMin: 0.45,
+  },
+  probabilities: {
+    lowStrengthGroupRecovery: 0.55,
+    matchingGroupInvite: 0.58,
+    memoryConversation: 0.45,
+    denseConversationInvite: 0.6,
+    pairConversationInvite: 0.52,
+    eventConvergence: 0.5,
+    strongConvergenceEvent: 0.35,
+    genericMemoryReference: 0.65,
+    networkMemoryReference: 0.35,
+  },
+  deltas: {
+    askPreference: 0.07,
+    reply: 0.12,
+    referenceMemory: 0.06,
+    referenceMemoryInMemoryWorld: 0.08,
+    inviteGroup: 0.1,
+    inviteGroupInGroupWorld: 0.14,
+    proposeEvent: 0.1,
+    proposeEventInLongOrRecovery: 0.13,
+  },
+  priority: {
+    ageBonusStep: 0.02,
+    ageBonusCap: 0.12,
+    defaultAgeBonus: 0.08,
+    matchedPenalty: -0.18,
+    unmatchedBonus: 0.14,
+    recoverPenalty: -0.35,
+    moderationPenalty: -0.45,
+    recoveryWeakBonus: 0.06,
+    recoveryStrongPenalty: -0.1,
+    recoveryRepeatPenalty: -0.4,
+    circleSeedBonus: 0.08,
+    circleUnmatchedBonus: 0.12,
+    circleContinuityBonus: 0.08,
+    networkWeakPenalty: -0.45,
+    networkMediumBonus: 0.18,
+    networkOrganizerBonus: 0.1,
+    networkUnmatchedBonus: 0.08,
+    networkRecoverPenalty: -0.35,
+  },
+  scoring: {
+    progressDensityDivisor: 2.8,
+    matchedRatioWeight: 0.45,
+    progressDensityWeight: 0.18,
+    expectationFulfillmentWeight: 0.22,
+    noStallBonus: 0.05,
+    shallowFollowupDominanceStart: 1.2,
+    shallowFollowupPenaltySlope: 0.16,
+    shallowFollowupPenaltyCap: 0.22,
+    stalledPenaltyWeight: 0.18,
+    missingRecoveryPenalty: 0.12,
+    missingMemoryPenalty: 0.12,
+    missingGroupPenalty: 0.1,
+    recoveryBase: 0.62,
+    recoveryScale: 0.28,
+    recoveryMissingScore: 0.05,
+    recoveryExtraScore: 0.48,
+    recoveryDefaultScore: 0.2,
+    memoryBase: 0.62,
+    memoryScale: 0.26,
+    memoryMissingScore: 0.08,
+    memoryExtraScore: 0.54,
+    memoryDefaultScore: 0.28,
+  },
+  judge: {
+    turnBase: 0.32,
+    recoverBonus: 0.15,
+    memoryBonus: 0.15,
+    inviteBonus: 0.12,
+    eventBonus: 0.12,
+    matchedBonus: 0.2,
+    stalledPenalty: 0.15,
+    weakFollowupPenalty: 0.18,
+    worldBase: 0.18,
+    worldMatchedRatioWeight: 0.34,
+    worldTurnBalanceWeight: 0.12,
+    worldExpectationWeight: 0.26,
+    worldModerationPenalty: 0.2,
+    worldShallowPenaltySlope: 0.18,
+    worldShallowPenaltyCap: 0.24,
+  },
+};
 
 const VALID_PROVIDERS = new Set(["ollama", "openai", "stub"]);
 const VALID_CLEANUP_MODES = new Set(["archive", "delete", "none"]);
@@ -20,6 +111,26 @@ function safeJsonParse(raw, fallback = null) {
   } catch {
     return fallback;
   }
+}
+
+function deepMerge(base, overrides) {
+  if (!overrides || typeof overrides !== "object") return base;
+  const result = Array.isArray(base) ? base.slice() : { ...base };
+  for (const [key, value] of Object.entries(overrides)) {
+    if (
+      value &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      base?.[key] &&
+      typeof base[key] === "object" &&
+      !Array.isArray(base[key])
+    ) {
+      result[key] = deepMerge(base[key], value);
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
 }
 
 function clamp(value, min, max) {
@@ -69,6 +180,32 @@ export function makeSeededRng(seed) {
     t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+}
+
+export function normalizeSocialSimTuning(overrides = null) {
+  return deepMerge(DEFAULT_SOCIAL_SIM_TUNING, overrides ?? {});
+}
+
+function loadSocialSimTuning(flags, env) {
+  const tuningFile = normalizeString(
+    flags.get("tuning-file") ?? env.SOCIAL_SIM_TUNING_FILE,
+    "",
+  );
+  const tuningJson = normalizeString(
+    flags.get("tuning-json") ?? env.SOCIAL_SIM_TUNING_JSON,
+    "",
+  );
+  let overrides = null;
+  if (tuningFile) {
+    overrides = safeJsonParse(readFileSync(path.resolve(process.cwd(), tuningFile), "utf8"), null);
+  } else if (tuningJson) {
+    overrides = safeJsonParse(tuningJson, null);
+  }
+  return normalizeSocialSimTuning(overrides);
+}
+
+function getTuning(config) {
+  return config?.tuning ?? DEFAULT_SOCIAL_SIM_TUNING;
 }
 
 export function parseSocialSimArgs(argv = process.argv.slice(2), env = process.env) {
@@ -206,6 +343,7 @@ export function parseSocialSimArgs(argv = process.argv.slice(2), env = process.e
     0,
     30_000,
   );
+  const tuning = loadSocialSimTuning(flags, env);
 
   if (!VALID_PROVIDERS.has(provider)) {
     throw new Error(
@@ -251,6 +389,7 @@ export function parseSocialSimArgs(argv = process.argv.slice(2), env = process.e
     backendTurnDelayMs,
     backendRetryCount,
     backendRetryBaseDelayMs,
+    tuning,
   };
 }
 
@@ -526,6 +665,7 @@ export async function runSocialSimulation(config) {
       scenarioFilter: config.scenarioFilter,
       fixturePath: config.fixturePath,
       scenarioFixturePath: config.scenarioFixturePath,
+      tuning: config.tuning,
     },
     bootstrap,
     worlds: worldRuns,
@@ -616,6 +756,7 @@ async function runWorldSimulation({
     });
     const turnRecord = applyTurnOutcome({
       world,
+      config,
       actor,
       action,
       backendResult,
@@ -649,7 +790,7 @@ async function runWorldSimulation({
     turns: judgeTurns,
     config,
   });
-  const worldSummary = summarizeWorld(world, transcript, metrics, finalJudge);
+  const worldSummary = summarizeWorld(world, transcript, metrics, finalJudge, config);
   const worldArtifact = {
     worldRunId,
     worldId: world.id,
@@ -687,6 +828,7 @@ function inferWorldStage(turnIndex, turnBudget, world) {
 
 function applyTurnOutcome({
   world,
+  config,
   actor,
   action,
   backendResult,
@@ -718,7 +860,7 @@ function applyTurnOutcome({
 
   if (targetRelationship && isPositive) {
     const nextStrength = clamp(
-      targetRelationship.strength + relationshipDeltaForAction(world, action.intent),
+      targetRelationship.strength + relationshipDeltaForAction(world, action.intent, getTuning(config)),
       0,
       1,
     );
@@ -782,11 +924,17 @@ function applyTurnOutcome({
   };
 }
 
-function findBestRelationship(world, actor, explicitTargetId) {
-  return findBestRelationshipWithState(world, actor, explicitTargetId, null);
+function findBestRelationship(world, actor, explicitTargetId, state, tuning = DEFAULT_SOCIAL_SIM_TUNING) {
+  return findBestRelationshipWithState(world, actor, explicitTargetId, state ?? null, tuning);
 }
 
-function findBestRelationshipWithState(world, actor, explicitTargetId, state) {
+function findBestRelationshipWithState(
+  world,
+  actor,
+  explicitTargetId,
+  state,
+  tuning = DEFAULT_SOCIAL_SIM_TUNING,
+) {
   if (explicitTargetId) {
     const explicit = world.relationships.find(
       (relationship) =>
@@ -803,7 +951,7 @@ function findBestRelationshipWithState(world, actor, explicitTargetId, state) {
   const ranked = candidates
     .map((relationship) => ({
       relationship,
-      score: relationshipPriorityScore(world, actor, relationship, state),
+      score: relationshipPriorityScore(world, actor, relationship, state, tuning),
     }))
     .sort((left, right) => right.score - left.score);
 
@@ -811,26 +959,26 @@ function findBestRelationshipWithState(world, actor, explicitTargetId, state) {
   if (!best) return null;
   if (
     (world.family === "recovery" || world.family === "network-rebalancing") &&
-    best.score < 0.2
+    best.score < tuning.thresholds.weakRelationshipFloor
   ) {
     return null;
   }
   return best.relationship;
 }
 
-function findWeakRelationshipWithState(world, actor, state) {
+function findWeakRelationshipWithState(world, actor, state, tuning = DEFAULT_SOCIAL_SIM_TUNING) {
   const candidates = world.relationships.filter(
     (relationship) =>
       relationship.members.includes(actor.id) &&
       relationship.status !== "matched" &&
-      relationship.strength < 0.35,
+      relationship.strength < tuning.thresholds.lowStrength,
   );
   if (candidates.length === 0) return null;
 
   return candidates
     .map((relationship) => ({
       relationship,
-      score: relationshipPriorityScore(world, actor, relationship, state),
+      score: relationshipPriorityScore(world, actor, relationship, state, tuning),
     }))
     .sort((left, right) => left.score - right.score)[0]?.relationship ?? null;
 }
@@ -857,52 +1005,88 @@ function worldNeedsGroupProgress(world) {
   );
 }
 
-function relationshipDeltaForAction(world, intent) {
-  if (intent === "ask_preference") return 0.07;
-  if (intent === "reply") return 0.12;
+function relationshipDeltaForAction(world, intent, tuning = DEFAULT_SOCIAL_SIM_TUNING) {
+  if (intent === "ask_preference") return tuning.deltas.askPreference;
+  if (intent === "reply") return tuning.deltas.reply;
   if (intent === "reference_memory") {
-    return worldNeedsMemory(world) ? 0.08 : 0.06;
+    return worldNeedsMemory(world)
+      ? tuning.deltas.referenceMemoryInMemoryWorld
+      : tuning.deltas.referenceMemory;
   }
   if (intent === "invite_group") {
-    return worldNeedsGroupProgress(world) ? 0.14 : 0.1;
+    return worldNeedsGroupProgress(world)
+      ? tuning.deltas.inviteGroupInGroupWorld
+      : tuning.deltas.inviteGroup;
   }
   if (intent === "propose_event") {
-    return world.horizon === "long" || world.family === "recovery" ? 0.13 : 0.1;
+    return world.horizon === "long" || world.family === "recovery"
+      ? tuning.deltas.proposeEventInLongOrRecovery
+      : tuning.deltas.proposeEvent;
   }
-  return 0.1;
+  return tuning.deltas.inviteGroup;
 }
 
-function relationshipPriorityScore(world, actor, relationship, state) {
+function relationshipPriorityScore(
+  world,
+  actor,
+  relationship,
+  state,
+  tuning = DEFAULT_SOCIAL_SIM_TUNING,
+) {
   const meta = state?.knownTargets?.get(relationship.id) ?? null;
   const lastAction = normalizeString(meta?.action, "");
   const lastTurnIndex = Number.isFinite(meta?.turnIndex) ? meta.turnIndex : -1;
   const turnIndex = Number.isFinite(state?.turnIndex) ? state.turnIndex : 0;
-  const ageBonus = lastTurnIndex >= 0 ? clamp((turnIndex - lastTurnIndex) * 0.02, 0, 0.12) : 0.08;
-  const pendingBonus = relationship.status === "matched" ? -0.18 : 0.14;
+  const ageBonus = lastTurnIndex >= 0
+    ? clamp(
+        (turnIndex - lastTurnIndex) * tuning.priority.ageBonusStep,
+        0,
+        tuning.priority.ageBonusCap,
+      )
+    : tuning.priority.defaultAgeBonus;
+  const pendingBonus =
+    relationship.status === "matched"
+      ? tuning.priority.matchedPenalty
+      : tuning.priority.unmatchedBonus;
   let score = relationship.strength + pendingBonus + ageBonus;
 
-  if (lastAction === "recover_no_match") score -= 0.35;
-  if (lastAction === "flag_moderation") score -= 0.45;
+  if (lastAction === "recover_no_match") score += tuning.priority.recoverPenalty;
+  if (lastAction === "flag_moderation") score += tuning.priority.moderationPenalty;
 
   if (world.family === "recovery") {
-    score += relationship.strength < 0.35 ? 0.06 : -0.1;
-    if (lastAction === "recover_no_match") score -= 0.4;
+    score += relationship.strength < tuning.thresholds.lowStrength
+      ? tuning.priority.recoveryWeakBonus
+      : tuning.priority.recoveryStrongPenalty;
+    if (lastAction === "recover_no_match") score += tuning.priority.recoveryRepeatPenalty;
   }
 
   if (world.family === "circle") {
-    if (actor.kind === "circle_seed") score += 0.08;
-    if (relationship.status !== "matched") score += 0.12;
-    if (world.horizon !== "short" && relationship.strength >= 0.45 && relationship.strength < 0.75) {
-      score += 0.08;
+    if (actor.kind === "circle_seed") score += tuning.priority.circleSeedBonus;
+    if (relationship.status !== "matched") score += tuning.priority.circleUnmatchedBonus;
+    if (
+      world.horizon !== "short" &&
+      relationship.strength >= tuning.thresholds.circleContinuityMin &&
+      relationship.strength < tuning.thresholds.mediumStrength
+    ) {
+      score += tuning.priority.circleContinuityBonus;
     }
   }
 
   if (world.family === "network-rebalancing") {
-    if (relationship.strength < 0.38) score -= 0.45;
-    if (relationship.strength >= 0.45 && relationship.strength < 0.72) score += 0.18;
-    if (["event_seed", "group_seed", "circle_seed"].includes(actor.kind)) score += 0.1;
-    if (relationship.status !== "matched") score += 0.08;
-    if (lastAction === "recover_no_match") score -= 0.35;
+    if (relationship.strength < tuning.thresholds.networkWeakPenaltyThreshold) {
+      score += tuning.priority.networkWeakPenalty;
+    }
+    if (
+      relationship.strength >= tuning.thresholds.circleContinuityMin &&
+      relationship.strength < tuning.thresholds.mediumStrength
+    ) {
+      score += tuning.priority.networkMediumBonus;
+    }
+    if (["event_seed", "group_seed", "circle_seed"].includes(actor.kind)) {
+      score += tuning.priority.networkOrganizerBonus;
+    }
+    if (relationship.status !== "matched") score += tuning.priority.networkUnmatchedBonus;
+    if (lastAction === "recover_no_match") score += tuning.priority.networkRecoverPenalty;
   }
 
   return score;
@@ -916,14 +1100,15 @@ function worldSpecificExpectationCount(world) {
   return count;
 }
 
-function summarizeWorld(world, transcript, metrics, judge) {
+function summarizeWorld(world, transcript, metrics, judge, config) {
+  const tuning = getTuning(config);
   const totalTurns = transcript.length || 1;
   const matchedRelationships = metrics.matchedMembers.size;
   const matchedRatio =
     matchedRelationships / Math.max(world.relationships.length || 1, 1);
   const progressDensity =
     (metrics.introductions + metrics.replies + metrics.followups + metrics.invites) /
-    Math.max(totalTurns * 2.8, 1);
+    Math.max(totalTurns * tuning.scoring.progressDensityDivisor, 1);
   const recoveryNeeded = worldNeedsRecovery(world);
   const memoryNeeded = worldNeedsMemory(world);
   const groupNeeded = worldNeedsGroupProgress(world);
@@ -935,17 +1120,25 @@ function summarizeWorld(world, transcript, metrics, judge) {
     Math.max(expectationCount, 1);
   const followupDominance =
     metrics.followups / Math.max(metrics.introductions + metrics.replies + metrics.invites, 1);
-  const shallowFollowupPenalty = clamp((followupDominance - 1.2) * 0.16, 0, 0.22);
+  const shallowFollowupPenalty = clamp(
+    (followupDominance - tuning.scoring.shallowFollowupDominanceStart) *
+      tuning.scoring.shallowFollowupPenaltySlope,
+    0,
+    tuning.scoring.shallowFollowupPenaltyCap,
+  );
   const stalledPenalty =
-    (metrics.stalledTurns / Math.max(totalTurns, 1)) * 0.18;
-  const missingRecoveryPenalty = recoveryNeeded && metrics.recoverySignals === 0 ? 0.12 : 0;
-  const missingMemoryPenalty = memoryNeeded && metrics.memorySignals === 0 ? 0.12 : 0;
-  const missingGroupPenalty = groupNeeded && metrics.invites === 0 ? 0.1 : 0;
+    (metrics.stalledTurns / Math.max(totalTurns, 1)) * tuning.scoring.stalledPenaltyWeight;
+  const missingRecoveryPenalty =
+    recoveryNeeded && metrics.recoverySignals === 0 ? tuning.scoring.missingRecoveryPenalty : 0;
+  const missingMemoryPenalty =
+    memoryNeeded && metrics.memorySignals === 0 ? tuning.scoring.missingMemoryPenalty : 0;
+  const missingGroupPenalty =
+    groupNeeded && metrics.invites === 0 ? tuning.scoring.missingGroupPenalty : 0;
   const convergenceScore = clamp(
-    matchedRatio * 0.45 +
-      progressDensity * 0.18 +
-      expectationFulfillment * 0.22 +
-      (metrics.stalledTurns === 0 ? 0.05 : 0) -
+    matchedRatio * tuning.scoring.matchedRatioWeight +
+      progressDensity * tuning.scoring.progressDensityWeight +
+      expectationFulfillment * tuning.scoring.expectationFulfillmentWeight +
+      (metrics.stalledTurns === 0 ? tuning.scoring.noStallBonus : 0) -
       shallowFollowupPenalty -
       stalledPenalty -
       missingRecoveryPenalty -
@@ -957,22 +1150,24 @@ function summarizeWorld(world, transcript, metrics, judge) {
   const noMatchRecoveryQuality = clamp(
     recoveryNeeded
       ? metrics.recoverySignals > 0
-        ? 0.62 + metrics.recoverySignals / Math.max(totalTurns * 2.5, 1) * 0.28
-        : 0.05
+        ? tuning.scoring.recoveryBase +
+          (metrics.recoverySignals / Math.max(totalTurns * 2.5, 1)) * tuning.scoring.recoveryScale
+        : tuning.scoring.recoveryMissingScore
       : metrics.recoverySignals > 0
-        ? 0.48
-        : 0.2,
+        ? tuning.scoring.recoveryExtraScore
+        : tuning.scoring.recoveryDefaultScore,
     0,
     1,
   );
   const memoryConsistency = clamp(
     memoryNeeded
       ? metrics.memorySignals > 0
-        ? 0.62 + metrics.memorySignals / Math.max(totalTurns * 2.5, 1) * 0.26
-        : 0.08
+        ? tuning.scoring.memoryBase +
+          (metrics.memorySignals / Math.max(totalTurns * 2.5, 1)) * tuning.scoring.memoryScale
+        : tuning.scoring.memoryMissingScore
       : metrics.memorySignals > 0
-        ? 0.54
-        : 0.28,
+        ? tuning.scoring.memoryExtraScore
+        : tuning.scoring.memoryDefaultScore,
     0,
     1,
   );
@@ -1039,10 +1234,11 @@ export function writeSocialSimArtifact(runDir, filename, data) {
 
 function defaultBrainAction(context) {
   const { actor, state, world, rng } = context;
+  const tuning = getTuning(context.config);
   const knownTargets = state.knownTargets ?? new Map();
   const lastActionByActor = state.lastActionByActor ?? new Map();
-  const targetRelationship = findBestRelationshipWithState(world, actor, null, state);
-  const weakRelationship = findWeakRelationshipWithState(world, actor, state);
+  const targetRelationship = findBestRelationshipWithState(world, actor, null, state, tuning);
+  const weakRelationship = findWeakRelationshipWithState(world, actor, state, tuning);
   const targetActorId = targetRelationship?.members.find((member) => member !== actor.id) ?? null;
   const weakTargetActorId =
     weakRelationship?.members.find((member) => member !== actor.id) ?? null;
@@ -1053,10 +1249,11 @@ function defaultBrainAction(context) {
     weakRelationship ? knownTargets.get(weakRelationship.id)?.action ?? "" : "";
   const hasMemorySignal =
     world.horizon === "long" || actor.memoryDriftProfile === "fluid";
-  const lowStrength = (targetRelationship?.strength ?? 0) < 0.35;
-  const mediumStrength = (targetRelationship?.strength ?? 0) >= 0.35 &&
-    (targetRelationship?.strength ?? 0) < 0.72;
-  const strongStrength = (targetRelationship?.strength ?? 0) >= 0.72;
+  const lowStrength = (targetRelationship?.strength ?? 0) < tuning.thresholds.lowStrength;
+  const mediumStrength =
+    (targetRelationship?.strength ?? 0) >= tuning.thresholds.lowStrength &&
+    (targetRelationship?.strength ?? 0) < tuning.thresholds.mediumStrength;
+  const strongStrength = (targetRelationship?.strength ?? 0) >= tuning.thresholds.mediumStrength;
   let intent = "follow_up";
   let resolvedTargetActorId = targetActorId;
   let detachedFromWeakFit = false;
@@ -1132,17 +1329,17 @@ function defaultBrainAction(context) {
         ? mediumStrength
           ? "invite_group"
           : "ask_preference"
-        : worldNeedsMemory(world) && rng() > 0.35
+        : worldNeedsMemory(world) && rng() > tuning.probabilities.networkMemoryReference
           ? "reference_memory"
           : "invite_group";
   } else if (strongStrength && state.stage === "matching") {
     intent = "reply";
   } else if (lowStrength && state.stage !== "onboarding") {
-    intent = worldNeedsGroupProgress(world) && rng() > 0.55
+    intent = worldNeedsGroupProgress(world) && rng() > tuning.probabilities.lowStrengthGroupRecovery
       ? "invite_group"
       : "recover_no_match";
   } else if (state.stage === "matching") {
-    intent = mediumStrength && worldNeedsGroupProgress(world) && rng() > 0.58
+    intent = mediumStrength && worldNeedsGroupProgress(world) && rng() > tuning.probabilities.matchingGroupInvite
       ? "invite_group"
       : "ask_preference";
   } else if (
@@ -1154,19 +1351,43 @@ function defaultBrainAction(context) {
     intent = recentRelationshipAction === "invite_group" ? "reply" : "invite_group";
   } else if (state.stage === "memory_drift") {
     intent = hasMemorySignal ? "reference_memory" : "follow_up";
-  } else if (worldNeedsMemory(world) && state.stage === "conversation" && rng() > 0.45) {
+  } else if (
+    worldNeedsMemory(world) &&
+    state.stage === "conversation" &&
+    rng() > tuning.probabilities.memoryConversation
+  ) {
     intent = "reference_memory";
-  } else if (state.stage === "conversation" && world.family === "dense-social-graph" && rng() > 0.6) {
+  } else if (
+    state.stage === "conversation" &&
+    world.family === "dense-social-graph" &&
+    rng() > tuning.probabilities.denseConversationInvite
+  ) {
     intent = "invite_group";
-  } else if (state.stage === "conversation" && world.family === "pair-and-group" && rng() > 0.52) {
+  } else if (
+    state.stage === "conversation" &&
+    world.family === "pair-and-group" &&
+    rng() > tuning.probabilities.pairConversationInvite
+  ) {
     intent = "invite_group";
   } else if (strongStrength && state.stage === "conversation") {
     intent = "reply";
-  } else if (state.stage === "convergence" && world.family === "event-and-memory" && rng() > 0.5) {
+  } else if (
+    state.stage === "convergence" &&
+    world.family === "event-and-memory" &&
+    rng() > tuning.probabilities.eventConvergence
+  ) {
     intent = "propose_event";
-  } else if (state.stage === "convergence" && strongStrength && rng() > 0.35) {
+  } else if (
+    state.stage === "convergence" &&
+    strongStrength &&
+    rng() > tuning.probabilities.strongConvergenceEvent
+  ) {
     intent = "propose_event";
-  } else if (hasMemorySignal && state.stage !== "onboarding" && rng() > 0.65) {
+  } else if (
+    hasMemorySignal &&
+    state.stage !== "onboarding" &&
+    rng() > tuning.probabilities.genericMemoryReference
+  ) {
     intent = "reference_memory";
   }
   if (
@@ -1424,17 +1645,20 @@ class HeuristicJudgeProvider {
 
   async scoreTurn(context) {
     const { action, turnRecord } = context;
+    const tuning = getTuning(context.config);
     const lowStrength = (turnRecord.outcome.relationshipStrength ?? 0) < 0.35;
     const progressPenalty =
-      action.intent === "follow_up" && !turnRecord.outcome.matched && lowStrength ? 0.18 : 0;
+      action.intent === "follow_up" && !turnRecord.outcome.matched && lowStrength
+        ? tuning.judge.weakFollowupPenalty
+        : 0;
     const score = clamp(
-      0.32 +
-        (action.intent === "recover_no_match" ? 0.15 : 0) +
-        (action.intent === "reference_memory" ? 0.15 : 0) +
-        (action.intent === "invite_group" ? 0.12 : 0) +
-        (action.intent === "propose_event" ? 0.12 : 0) +
-        (turnRecord.outcome.matched ? 0.2 : 0) +
-        (turnRecord.outcome.stalled ? -0.15 : 0) -
+      tuning.judge.turnBase +
+        (action.intent === "recover_no_match" ? tuning.judge.recoverBonus : 0) +
+        (action.intent === "reference_memory" ? tuning.judge.memoryBonus : 0) +
+        (action.intent === "invite_group" ? tuning.judge.inviteBonus : 0) +
+        (action.intent === "propose_event" ? tuning.judge.eventBonus : 0) +
+        (turnRecord.outcome.matched ? tuning.judge.matchedBonus : 0) +
+        (turnRecord.outcome.stalled ? -tuning.judge.stalledPenalty : 0) -
         progressPenalty,
       0,
       1,
@@ -1467,6 +1691,7 @@ class HeuristicJudgeProvider {
   }
 
   async scoreWorld(context) {
+    const tuning = getTuning(context.config);
     const matchedRatio =
       context.metrics.matchedMembers.size /
       Math.max(context.world.relationships.length || 1, 1);
@@ -1487,16 +1712,16 @@ class HeuristicJudgeProvider {
             1,
           ) -
           1.15) *
-          0.18,
+          tuning.judge.worldShallowPenaltySlope,
         0,
-        0.24,
+        tuning.judge.worldShallowPenaltyCap,
       );
     const score = clamp(
-      0.18 +
-        matchedRatio * 0.34 +
-        turnBalance * 0.12 +
-        expectationFulfillment * 0.26 +
-        (context.metrics.moderationSignals > 0 ? -0.2 : 0) -
+      tuning.judge.worldBase +
+        matchedRatio * tuning.judge.worldMatchedRatioWeight +
+        turnBalance * tuning.judge.worldTurnBalanceWeight +
+        expectationFulfillment * tuning.judge.worldExpectationWeight +
+        (context.metrics.moderationSignals > 0 ? -tuning.judge.worldModerationPenalty : 0) -
         shallowFollowupPenalty,
       0,
       1,

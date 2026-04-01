@@ -5,10 +5,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  DEFAULT_SOCIAL_SIM_TUNING,
   createBackendAdapter,
   createBrainProvider,
   createJudgeProvider,
   loadSocialSimWorldFixture,
+  normalizeSocialSimTuning,
   parseSocialSimArgs,
   runSocialSimulation,
   selectSocialSimWorlds,
@@ -29,6 +31,36 @@ test("parseSocialSimArgs applies sane defaults", () => {
   assert.equal(config.backendTurnDelayMs, 250);
   assert.equal(config.backendRetryCount, 3);
   assert.equal(config.backendRetryBaseDelayMs, 750);
+  assert.equal(config.tuning.thresholds.lowStrength, DEFAULT_SOCIAL_SIM_TUNING.thresholds.lowStrength);
+});
+
+test("parseSocialSimArgs applies tuning overrides from JSON", () => {
+  const config = parseSocialSimArgs(
+    ["--tuning-json={\"probabilities\":{\"memoryConversation\":0.9},\"scoring\":{\"missingGroupPenalty\":0.2}}"],
+    {},
+  );
+
+  assert.equal(config.tuning.probabilities.memoryConversation, 0.9);
+  assert.equal(config.tuning.scoring.missingGroupPenalty, 0.2);
+  assert.equal(
+    config.tuning.thresholds.lowStrength,
+    DEFAULT_SOCIAL_SIM_TUNING.thresholds.lowStrength,
+  );
+});
+
+test("normalizeSocialSimTuning preserves defaults for missing fields", () => {
+  const tuning = normalizeSocialSimTuning({
+    deltas: {
+      inviteGroupInGroupWorld: 0.2,
+    },
+  });
+
+  assert.equal(tuning.deltas.inviteGroupInGroupWorld, 0.2);
+  assert.equal(tuning.deltas.reply, DEFAULT_SOCIAL_SIM_TUNING.deltas.reply);
+  assert.equal(
+    tuning.scoring.matchedRatioWeight,
+    DEFAULT_SOCIAL_SIM_TUNING.scoring.matchedRatioWeight,
+  );
 });
 
 test("loadSocialSimWorldFixture normalizes canonical fixture worlds", () => {
