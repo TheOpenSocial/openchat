@@ -818,6 +818,23 @@ function findBestRelationshipWithState(world, actor, explicitTargetId, state) {
   return best.relationship;
 }
 
+function findWeakRelationshipWithState(world, actor, state) {
+  const candidates = world.relationships.filter(
+    (relationship) =>
+      relationship.members.includes(actor.id) &&
+      relationship.status !== "matched" &&
+      relationship.strength < 0.35,
+  );
+  if (candidates.length === 0) return null;
+
+  return candidates
+    .map((relationship) => ({
+      relationship,
+      score: relationshipPriorityScore(world, actor, relationship, state),
+    }))
+    .sort((left, right) => left.score - right.score)[0]?.relationship ?? null;
+}
+
 function worldNeedsRecovery(world) {
   return world.relationships.some((relationship) => relationship.strength < 0.35);
 }
@@ -1025,10 +1042,15 @@ function defaultBrainAction(context) {
   const knownTargets = state.knownTargets ?? new Map();
   const lastActionByActor = state.lastActionByActor ?? new Map();
   const targetRelationship = findBestRelationshipWithState(world, actor, null, state);
+  const weakRelationship = findWeakRelationshipWithState(world, actor, state);
   const targetActorId = targetRelationship?.members.find((member) => member !== actor.id) ?? null;
+  const weakTargetActorId =
+    weakRelationship?.members.find((member) => member !== actor.id) ?? null;
   const recentActorAction = lastActionByActor.get(actor.id)?.intent ?? "";
   const recentRelationshipAction =
     targetRelationship ? knownTargets.get(targetRelationship.id)?.action ?? "" : "";
+  const recentWeakRelationshipAction =
+    weakRelationship ? knownTargets.get(weakRelationship.id)?.action ?? "" : "";
   const hasMemorySignal =
     world.horizon === "long" || actor.memoryDriftProfile === "fluid";
   const lowStrength = (targetRelationship?.strength ?? 0) < 0.35;
@@ -1040,6 +1062,27 @@ function defaultBrainAction(context) {
   let detachedFromWeakFit = false;
   if (state.stage === "onboarding") {
     intent = "introduce";
+  } else if (
+    weakRelationship &&
+    worldNeedsRecovery(world) &&
+    (world.family === "dense-social-graph" ||
+      world.family === "circle" ||
+      world.family === "network-rebalancing") &&
+    (["group_seed", "circle_seed", "event_seed"].includes(actor.kind) ||
+      actor.socialStyle === "clear")
+  ) {
+    intent = "recover_no_match";
+    resolvedTargetActorId = weakTargetActorId;
+    if (recentWeakRelationshipAction === "recover_no_match") {
+      intent =
+        world.family === "circle"
+          ? "invite_group"
+          : state.stage === "convergence"
+            ? "propose_event"
+            : "invite_group";
+      resolvedTargetActorId = null;
+      detachedFromWeakFit = true;
+    }
   } else if (
     world.family === "network-rebalancing" &&
     lowStrength &&
@@ -1055,9 +1098,22 @@ function defaultBrainAction(context) {
     recentActorAction === "recover_no_match" &&
     state.stage !== "onboarding"
   ) {
-    intent = state.stage === "convergence" ? "propose_event" : "ask_preference";
+    intent =
+      state.stage === "matching"
+        ? "ask_preference"
+        : state.stage === "convergence"
+          ? "propose_event"
+          : "invite_group";
     resolvedTargetActorId = null;
     detachedFromWeakFit = true;
+  } else if (
+    world.family === "circle" &&
+    world.horizon === "long" &&
+    ["circle_seed", "group_seed"].includes(actor.kind) &&
+    mediumStrength &&
+    state.stage !== "onboarding"
+  ) {
+    intent = recentRelationshipAction === "reference_memory" ? "invite_group" : "reply";
   } else if (
     world.family === "circle" &&
     worldNeedsMemory(world) &&
@@ -1089,6 +1145,13 @@ function defaultBrainAction(context) {
     intent = mediumStrength && worldNeedsGroupProgress(world) && rng() > 0.58
       ? "invite_group"
       : "ask_preference";
+  } else if (
+    world.family === "dense-social-graph" &&
+    ["group_seed", "event_seed"].includes(actor.kind) &&
+    mediumStrength &&
+    state.stage === "conversation"
+  ) {
+    intent = recentRelationshipAction === "invite_group" ? "reply" : "invite_group";
   } else if (state.stage === "memory_drift") {
     intent = hasMemorySignal ? "reference_memory" : "follow_up";
   } else if (worldNeedsMemory(world) && state.stage === "conversation" && rng() > 0.45) {
