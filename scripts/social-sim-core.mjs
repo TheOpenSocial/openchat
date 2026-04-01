@@ -696,9 +696,12 @@ function applyTurnOutcome({
   turnIndex,
   bootstrap,
 }) {
-  const targetRelationship = findBestRelationship(world, actor, action.targetActorId);
+  const targetRelationship = action.detachedFromWeakFit
+    ? null
+    : findBestRelationship(world, actor, action.targetActorId, state);
   const isPositive =
     action.intent === "introduce" ||
+    action.intent === "ask_preference" ||
     action.intent === "reply" ||
     action.intent === "follow_up" ||
     action.intent === "invite_group" ||
@@ -715,7 +718,7 @@ function applyTurnOutcome({
 
   if (targetRelationship && isPositive) {
     const nextStrength = clamp(
-      targetRelationship.strength + (action.intent === "reference_memory" ? 0.06 : 0.1),
+      targetRelationship.strength + relationshipDeltaForAction(world, action.intent),
       0,
       1,
     );
@@ -760,6 +763,7 @@ function applyTurnOutcome({
     tone: action.tone,
     confidence: action.confidence,
     memoryReferences: action.memoryReferences ?? [],
+    detachedFromWeakFit: Boolean(action.detachedFromWeakFit),
     worldContext: {
       horizon: world.horizon,
       family: world.family,
@@ -779,6 +783,10 @@ function applyTurnOutcome({
 }
 
 function findBestRelationship(world, actor, explicitTargetId) {
+  return findBestRelationshipWithState(world, actor, explicitTargetId, null);
+}
+
+function findBestRelationshipWithState(world, actor, explicitTargetId, state) {
   if (explicitTargetId) {
     const explicit = world.relationships.find(
       (relationship) =>
@@ -787,11 +795,27 @@ function findBestRelationship(world, actor, explicitTargetId) {
     );
     if (explicit) return explicit;
   }
-  return (
-    world.relationships.find((relationship) =>
-      relationship.members.includes(actor.id),
-    ) ?? null
+  const candidates = world.relationships.filter((relationship) =>
+    relationship.members.includes(actor.id),
   );
+  if (candidates.length === 0) return null;
+
+  const ranked = candidates
+    .map((relationship) => ({
+      relationship,
+      score: relationshipPriorityScore(world, actor, relationship, state),
+    }))
+    .sort((left, right) => right.score - left.score);
+
+  const best = ranked[0];
+  if (!best) return null;
+  if (
+    (world.family === "recovery" || world.family === "network-rebalancing") &&
+    best.score < 0.2
+  ) {
+    return null;
+  }
+  return best.relationship;
 }
 
 function worldNeedsRecovery(world) {
@@ -811,8 +835,60 @@ function worldNeedsGroupProgress(world) {
   return (
     world.family === "pair-and-group" ||
     world.family === "dense-social-graph" ||
-    world.family === "circle"
+    world.family === "circle" ||
+    world.family === "network-rebalancing"
   );
+}
+
+function relationshipDeltaForAction(world, intent) {
+  if (intent === "ask_preference") return 0.07;
+  if (intent === "reply") return 0.12;
+  if (intent === "reference_memory") {
+    return worldNeedsMemory(world) ? 0.08 : 0.06;
+  }
+  if (intent === "invite_group") {
+    return worldNeedsGroupProgress(world) ? 0.14 : 0.1;
+  }
+  if (intent === "propose_event") {
+    return world.horizon === "long" || world.family === "recovery" ? 0.13 : 0.1;
+  }
+  return 0.1;
+}
+
+function relationshipPriorityScore(world, actor, relationship, state) {
+  const meta = state?.knownTargets?.get(relationship.id) ?? null;
+  const lastAction = normalizeString(meta?.action, "");
+  const lastTurnIndex = Number.isFinite(meta?.turnIndex) ? meta.turnIndex : -1;
+  const turnIndex = Number.isFinite(state?.turnIndex) ? state.turnIndex : 0;
+  const ageBonus = lastTurnIndex >= 0 ? clamp((turnIndex - lastTurnIndex) * 0.02, 0, 0.12) : 0.08;
+  const pendingBonus = relationship.status === "matched" ? -0.18 : 0.14;
+  let score = relationship.strength + pendingBonus + ageBonus;
+
+  if (lastAction === "recover_no_match") score -= 0.35;
+  if (lastAction === "flag_moderation") score -= 0.45;
+
+  if (world.family === "recovery") {
+    score += relationship.strength < 0.35 ? 0.06 : -0.1;
+    if (lastAction === "recover_no_match") score -= 0.4;
+  }
+
+  if (world.family === "circle") {
+    if (actor.kind === "circle_seed") score += 0.08;
+    if (relationship.status !== "matched") score += 0.12;
+    if (world.horizon !== "short" && relationship.strength >= 0.45 && relationship.strength < 0.75) {
+      score += 0.08;
+    }
+  }
+
+  if (world.family === "network-rebalancing") {
+    if (relationship.strength < 0.38) score -= 0.45;
+    if (relationship.strength >= 0.45 && relationship.strength < 0.72) score += 0.18;
+    if (["event_seed", "group_seed", "circle_seed"].includes(actor.kind)) score += 0.1;
+    if (relationship.status !== "matched") score += 0.08;
+    if (lastAction === "recover_no_match") score -= 0.35;
+  }
+
+  return score;
 }
 
 function worldSpecificExpectationCount(world) {
@@ -946,8 +1022,13 @@ export function writeSocialSimArtifact(runDir, filename, data) {
 
 function defaultBrainAction(context) {
   const { actor, state, world, rng } = context;
-  const targetRelationship = findBestRelationship(world, actor, null);
+  const knownTargets = state.knownTargets ?? new Map();
+  const lastActionByActor = state.lastActionByActor ?? new Map();
+  const targetRelationship = findBestRelationshipWithState(world, actor, null, state);
   const targetActorId = targetRelationship?.members.find((member) => member !== actor.id) ?? null;
+  const recentActorAction = lastActionByActor.get(actor.id)?.intent ?? "";
+  const recentRelationshipAction =
+    targetRelationship ? knownTargets.get(targetRelationship.id)?.action ?? "" : "";
   const hasMemorySignal =
     world.horizon === "long" || actor.memoryDriftProfile === "fluid";
   const lowStrength = (targetRelationship?.strength ?? 0) < 0.35;
@@ -955,8 +1036,49 @@ function defaultBrainAction(context) {
     (targetRelationship?.strength ?? 0) < 0.72;
   const strongStrength = (targetRelationship?.strength ?? 0) >= 0.72;
   let intent = "follow_up";
+  let resolvedTargetActorId = targetActorId;
+  let detachedFromWeakFit = false;
   if (state.stage === "onboarding") {
     intent = "introduce";
+  } else if (
+    world.family === "network-rebalancing" &&
+    lowStrength &&
+    state.stage !== "onboarding"
+  ) {
+    intent = "recover_no_match";
+    if (recentRelationshipAction === "recover_no_match") {
+      resolvedTargetActorId = null;
+      detachedFromWeakFit = true;
+    }
+  } else if (
+    world.family === "recovery" &&
+    recentActorAction === "recover_no_match" &&
+    state.stage !== "onboarding"
+  ) {
+    intent = state.stage === "convergence" ? "propose_event" : "ask_preference";
+    resolvedTargetActorId = null;
+    detachedFromWeakFit = true;
+  } else if (
+    world.family === "circle" &&
+    worldNeedsMemory(world) &&
+    (actor.kind === "circle_seed" || actor.id.includes("organizer")) &&
+    state.stage !== "onboarding" &&
+    mediumStrength
+  ) {
+    intent = recentRelationshipAction === "reference_memory" ? "invite_group" : "reference_memory";
+  } else if (
+    world.family === "network-rebalancing" &&
+    ["event_seed", "group_seed", "circle_seed"].includes(actor.kind) &&
+    state.stage !== "onboarding"
+  ) {
+    intent =
+      state.stage === "matching"
+        ? mediumStrength
+          ? "invite_group"
+          : "ask_preference"
+        : worldNeedsMemory(world) && rng() > 0.35
+          ? "reference_memory"
+          : "invite_group";
   } else if (strongStrength && state.stage === "matching") {
     intent = "reply";
   } else if (lowStrength && state.stage !== "onboarding") {
@@ -984,10 +1106,27 @@ function defaultBrainAction(context) {
   } else if (hasMemorySignal && state.stage !== "onboarding" && rng() > 0.65) {
     intent = "reference_memory";
   }
+  if (
+    !resolvedTargetActorId &&
+    (intent === "reference_memory" || intent === "invite_group") &&
+    targetRelationship
+  ) {
+    resolvedTargetActorId =
+      targetRelationship.members.find((member) => member !== actor.id) ?? null;
+  }
+  if (
+    targetRelationship &&
+    targetRelationship.strength < 0.35 &&
+    recentRelationshipAction === "recover_no_match" &&
+    (intent === "propose_event" || intent === "ask_preference")
+  ) {
+    resolvedTargetActorId = null;
+    detachedFromWeakFit = true;
+  }
   const message = buildMessageForIntent({
     intent,
     actor,
-    targetActorId,
+    targetActorId: resolvedTargetActorId,
     world,
     state,
   });
@@ -995,8 +1134,9 @@ function defaultBrainAction(context) {
     provider: "heuristic",
     promptVersion: SOCIAL_SIM_PROMPT_VERSION,
     intent,
-    targetActorId,
+    targetActorId: resolvedTargetActorId,
     message,
+    detachedFromWeakFit,
     tone: actor.socialStyle,
     confidence: intent === "recover_no_match" ? 0.52 : 0.76,
     rationale:

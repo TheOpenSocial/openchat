@@ -87,6 +87,7 @@ test("provider and judge factories return deterministic stub adapters", async ()
   const state = {
     stage: "onboarding",
     turnIndex: 0,
+    lastActionByActor: new Map(),
     knownTargets: new Map(),
   };
 
@@ -138,6 +139,67 @@ test("provider and judge factories return deterministic stub adapters", async ()
   assert.ok(turn.message.length > 0);
   assert.ok(judgedTurn.score >= 0);
   assert.ok(judgedWorld.score >= 0);
+});
+
+test("recovery worlds detach from weak-fit loops after initial recovery", async () => {
+  const brain = createBrainProvider({ provider: "stub" });
+  const worlds = loadSocialSimWorldFixture(
+    path.resolve("scripts/social-sim-worlds.json"),
+    path.resolve("apps/api/test/fixtures/agentic-scenarios.json"),
+  );
+  const world = worlds.find((entry) => entry.id === "short-no-match-recovery-v1");
+  const actor = world.actors.find((entry) => entry.id === "drew");
+  const state = {
+    stage: "matching",
+    turnIndex: 3,
+    lastActionByActor: new Map([["drew", { intent: "recover_no_match" }]]),
+    knownTargets: new Map([
+      ["cora-drew", { action: "recover_no_match", turnIndex: 2, confidence: 0.52 }],
+    ]),
+  };
+
+  const turn = await brain.generateActorTurn({
+    world,
+    actor,
+    state,
+    transcript: [],
+    rng: () => 0.2,
+    config: {},
+  });
+
+  assert.equal(turn.intent, "ask_preference");
+  assert.equal(turn.targetActorId, null);
+  assert.equal(turn.detachedFromWeakFit, true);
+});
+
+test("circle organizers prioritize unfinished returning members", async () => {
+  const brain = createBrainProvider({ provider: "stub" });
+  const worlds = loadSocialSimWorldFixture(
+    path.resolve("scripts/social-sim-worlds.json"),
+    path.resolve("apps/api/test/fixtures/agentic-scenarios.json"),
+  );
+  const world = worlds.find((entry) => entry.id === "medium-recurring-circle-v1");
+  const actor = world.actors.find((entry) => entry.id === "circle-organizer");
+  const state = {
+    stage: "matching",
+    turnIndex: 1,
+    lastActionByActor: new Map(),
+    knownTargets: new Map([
+      ["circle-return-1", { action: "introduce", turnIndex: 0, confidence: 0.76 }],
+    ]),
+  };
+
+  const turn = await brain.generateActorTurn({
+    world,
+    actor,
+    state,
+    transcript: [],
+    rng: () => 0.3,
+    config: {},
+  });
+
+  assert.equal(turn.targetActorId, "circle-luca");
+  assert.equal(turn.intent, "reference_memory");
 });
 
 test("runSocialSimulation writes artifacts in dry-run mode", async () => {
