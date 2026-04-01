@@ -61,6 +61,10 @@ test("normalizeSocialSimTuning preserves defaults for missing fields", () => {
     tuning.scoring.matchedRatioWeight,
     DEFAULT_SOCIAL_SIM_TUNING.scoring.matchedRatioWeight,
   );
+  assert.equal(
+    tuning.policy.networkOrganizerPostRecoveryTargetStrategy,
+    DEFAULT_SOCIAL_SIM_TUNING.policy.networkOrganizerPostRecoveryTargetStrategy,
+  );
 });
 
 test("loadSocialSimWorldFixture normalizes canonical fixture worlds", () => {
@@ -235,6 +239,44 @@ test("circle organizers prioritize unfinished returning members", async () => {
 
   assert.equal(turn.targetActorId, "circle-luca");
   assert.equal(turn.intent, "reference_memory");
+});
+
+test("network rebalancing organizers can reroute to a healthier target after recovery", async () => {
+  const brain = createBrainProvider({ provider: "stub" });
+  const worlds = loadSocialSimWorldFixture(
+    path.resolve("scripts/social-sim-worlds.json"),
+    path.resolve("apps/api/test/fixtures/agentic-scenarios.json"),
+  );
+  const world = worlds.find((entry) => entry.id === "long-network-rebalancing-v1");
+  const actor = world.actors.find((entry) => entry.id === "rebalance-host-mila");
+  const state = {
+    stage: "conversation",
+    turnIndex: 4,
+    lastActionByActor: new Map([["rebalance-host-mila", { intent: "recover_no_match" }]]),
+    knownTargets: new Map([
+      ["rebalance-host-noah", { action: "recover_no_match", turnIndex: 3, confidence: 0.52 }],
+      ["rebalance-host-ivy", { action: "reference_memory", turnIndex: 2, confidence: 0.76 }],
+    ]),
+  };
+
+  const turn = await brain.generateActorTurn({
+    world,
+    actor,
+    state,
+    transcript: [],
+    rng: () => 0.3,
+    config: {
+      tuning: normalizeSocialSimTuning({
+        policy: {
+          networkOrganizerPostRecoveryTargetStrategy: "best_alternative",
+        },
+      }),
+    },
+  });
+
+  assert.equal(turn.intent, "invite_group");
+  assert.equal(turn.targetActorId, "rebalance-ivy");
+  assert.equal(turn.detachedFromWeakFit, true);
 });
 
 test("runSocialSimulation writes artifacts in dry-run mode", async () => {

@@ -59,7 +59,7 @@ export const DEFAULT_SOCIAL_SIM_TUNING = {
     progressDensityDivisor: 2.8,
     matchedRatioWeight: 0.45,
     progressDensityWeight: 0.18,
-    expectationFulfillmentWeight: 0.22,
+    expectationFulfillmentWeight: 0.26,
     noStallBonus: 0.05,
     shallowFollowupDominanceStart: 1.2,
     shallowFollowupPenaltySlope: 0.16,
@@ -67,7 +67,7 @@ export const DEFAULT_SOCIAL_SIM_TUNING = {
     stalledPenaltyWeight: 0.18,
     missingRecoveryPenalty: 0.12,
     missingMemoryPenalty: 0.12,
-    missingGroupPenalty: 0.1,
+    missingGroupPenalty: 0.08,
     recoveryBase: 0.62,
     recoveryScale: 0.28,
     recoveryMissingScore: 0.05,
@@ -95,6 +95,15 @@ export const DEFAULT_SOCIAL_SIM_TUNING = {
     worldModerationPenalty: 0.2,
     worldShallowPenaltySlope: 0.18,
     worldShallowPenaltyCap: 0.24,
+  },
+  policy: {
+    recoveryPostRecoveryConversationAction: "current",
+    recoveryPostRecoveryConvergenceAction: "current",
+    recoveryPostRecoveryTargetStrategy: "drop",
+    networkOrganizerPostRecoveryConversationAction: "current",
+    networkOrganizerPostRecoveryMemoryDriftAction: "current",
+    networkOrganizerPostRecoveryTargetStrategy: "drop",
+    denseGraphRecoveredConversationAction: "current",
   },
 };
 
@@ -206,6 +215,14 @@ function loadSocialSimTuning(flags, env) {
 
 function getTuning(config) {
   return config?.tuning ?? DEFAULT_SOCIAL_SIM_TUNING;
+}
+
+function resolvePolicyAction(setting, fallback) {
+  return setting && setting !== "current" ? setting : fallback;
+}
+
+function resolvePolicyTargetStrategy(setting, fallback = "drop") {
+  return setting && setting !== "current" ? setting : fallback;
 }
 
 export function parseSocialSimArgs(argv = process.argv.slice(2), env = process.env) {
@@ -983,6 +1000,51 @@ function findWeakRelationshipWithState(world, actor, state, tuning = DEFAULT_SOC
     .sort((left, right) => left.score - right.score)[0]?.relationship ?? null;
 }
 
+function findBestAlternativeRelationshipWithState(
+  world,
+  actor,
+  state,
+  tuning = DEFAULT_SOCIAL_SIM_TUNING,
+  options = {},
+) {
+  const excludedIds = new Set(options.excludedIds ?? []);
+  const candidates = world.relationships.filter((relationship) => {
+    if (!relationship.members.includes(actor.id)) return false;
+    if (excludedIds.has(relationship.id)) return false;
+    const meta = state?.knownTargets?.get(relationship.id) ?? null;
+    if (meta?.action === "recover_no_match") return false;
+    if (relationship.strength < tuning.thresholds.lowStrength) return false;
+    return true;
+  });
+  if (candidates.length === 0) return null;
+
+  return candidates
+    .map((relationship) => ({
+      relationship,
+      score: relationshipPriorityScore(world, actor, relationship, state, tuning),
+    }))
+    .sort((left, right) => right.score - left.score)[0]?.relationship ?? null;
+}
+
+function resolvePostRecoveryTargetActorId({
+  world,
+  actor,
+  state,
+  tuning,
+  currentTargetActorId,
+  excludedRelationshipIds = [],
+  strategy = "drop",
+}) {
+  const resolvedStrategy = resolvePolicyTargetStrategy(strategy, "drop");
+  if (resolvedStrategy === "drop") return null;
+  if (resolvedStrategy === "current") return currentTargetActorId ?? null;
+
+  const alternative = findBestAlternativeRelationshipWithState(world, actor, state, tuning, {
+    excludedIds: excludedRelationshipIds,
+  });
+  return alternative?.members.find((member) => member !== actor.id) ?? null;
+}
+
 function worldNeedsRecovery(world) {
   return world.relationships.some((relationship) => relationship.strength < 0.35);
 }
@@ -1247,6 +1309,16 @@ function defaultBrainAction(context) {
     targetRelationship ? knownTargets.get(targetRelationship.id)?.action ?? "" : "";
   const recentWeakRelationshipAction =
     weakRelationship ? knownTargets.get(weakRelationship.id)?.action ?? "" : "";
+  const recoveredRelationshipIds = world.relationships
+    .filter(
+      (relationship) =>
+        relationship.members.includes(actor.id) &&
+        knownTargets.get(relationship.id)?.action === "recover_no_match",
+    )
+    .map((relationship) => relationship.id);
+  const hasRecoveredRelationship =
+    recentRelationshipAction === "recover_no_match" ||
+    recentActorAction === "recover_no_match";
   const hasMemorySignal =
     world.horizon === "long" || actor.memoryDriftProfile === "fluid";
   const lowStrength = (targetRelationship?.strength ?? 0) < tuning.thresholds.lowStrength;
@@ -1259,6 +1331,44 @@ function defaultBrainAction(context) {
   let detachedFromWeakFit = false;
   if (state.stage === "onboarding") {
     intent = "introduce";
+  } else if (
+    world.family === "recovery" &&
+    hasRecoveredRelationship &&
+    state.stage === "conversation"
+  ) {
+    intent = resolvePolicyAction(
+      tuning.policy.recoveryPostRecoveryConversationAction,
+      "invite_group",
+    );
+    resolvedTargetActorId = resolvePostRecoveryTargetActorId({
+      world,
+      actor,
+      state,
+      tuning,
+      currentTargetActorId: targetActorId,
+      excludedRelationshipIds: recoveredRelationshipIds,
+      strategy: tuning.policy.recoveryPostRecoveryTargetStrategy,
+    });
+    detachedFromWeakFit = true;
+  } else if (
+    world.family === "recovery" &&
+    hasRecoveredRelationship &&
+    state.stage === "convergence"
+  ) {
+    intent = resolvePolicyAction(
+      tuning.policy.recoveryPostRecoveryConvergenceAction,
+      "propose_event",
+    );
+    resolvedTargetActorId = resolvePostRecoveryTargetActorId({
+      world,
+      actor,
+      state,
+      tuning,
+      currentTargetActorId: targetActorId,
+      excludedRelationshipIds: recoveredRelationshipIds,
+      strategy: tuning.policy.recoveryPostRecoveryTargetStrategy,
+    });
+    detachedFromWeakFit = true;
   } else if (
     weakRelationship &&
     worldNeedsRecovery(world) &&
@@ -1277,7 +1387,21 @@ function defaultBrainAction(context) {
           : state.stage === "convergence"
             ? "propose_event"
             : "invite_group";
-      resolvedTargetActorId = null;
+      resolvedTargetActorId =
+        world.family === "network-rebalancing"
+          ? resolvePostRecoveryTargetActorId({
+              world,
+              actor,
+              state,
+              tuning,
+              currentTargetActorId: targetActorId,
+              excludedRelationshipIds: [
+                ...recoveredRelationshipIds,
+                weakRelationship?.id,
+              ].filter(Boolean),
+              strategy: tuning.policy.networkOrganizerPostRecoveryTargetStrategy,
+            })
+          : null;
       detachedFromWeakFit = true;
     }
   } else if (
@@ -1325,13 +1449,38 @@ function defaultBrainAction(context) {
     state.stage !== "onboarding"
   ) {
     intent =
-      state.stage === "matching"
+      hasRecoveredRelationship && state.stage === "conversation"
+        ? resolvePolicyAction(
+            tuning.policy.networkOrganizerPostRecoveryConversationAction,
+            "invite_group",
+          )
+        : hasRecoveredRelationship && state.stage === "memory_drift"
+          ? resolvePolicyAction(
+              tuning.policy.networkOrganizerPostRecoveryMemoryDriftAction,
+              "propose_event",
+            )
+        : state.stage === "matching"
         ? mediumStrength
           ? "invite_group"
           : "ask_preference"
         : worldNeedsMemory(world) && rng() > tuning.probabilities.networkMemoryReference
           ? "reference_memory"
           : "invite_group";
+    if (
+      hasRecoveredRelationship &&
+      (state.stage === "conversation" || state.stage === "memory_drift")
+    ) {
+      resolvedTargetActorId = resolvePostRecoveryTargetActorId({
+        world,
+        actor,
+        state,
+        tuning,
+        currentTargetActorId: targetActorId,
+        excludedRelationshipIds: recoveredRelationshipIds,
+        strategy: tuning.policy.networkOrganizerPostRecoveryTargetStrategy,
+      });
+      detachedFromWeakFit = true;
+    }
   } else if (strongStrength && state.stage === "matching") {
     intent = "reply";
   } else if (lowStrength && state.stage !== "onboarding") {
@@ -1348,7 +1497,15 @@ function defaultBrainAction(context) {
     mediumStrength &&
     state.stage === "conversation"
   ) {
-    intent = recentRelationshipAction === "invite_group" ? "reply" : "invite_group";
+    intent =
+      hasRecoveredRelationship
+        ? resolvePolicyAction(
+            tuning.policy.denseGraphRecoveredConversationAction,
+            "reply",
+          )
+        : recentRelationshipAction === "invite_group"
+          ? "reply"
+          : "invite_group";
   } else if (state.stage === "memory_drift") {
     intent = hasMemorySignal ? "reference_memory" : "follow_up";
   } else if (
