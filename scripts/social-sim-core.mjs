@@ -794,30 +794,92 @@ function findBestRelationship(world, actor, explicitTargetId) {
   );
 }
 
+function worldNeedsRecovery(world) {
+  return world.relationships.some((relationship) => relationship.strength < 0.35);
+}
+
+function worldNeedsMemory(world) {
+  return (
+    world.horizon === "long" ||
+    world.family === "circle" ||
+    world.family === "event-and-memory" ||
+    world.evaluationFocus.includes("memory_helpfulness")
+  );
+}
+
+function worldNeedsGroupProgress(world) {
+  return (
+    world.family === "pair-and-group" ||
+    world.family === "dense-social-graph" ||
+    world.family === "circle"
+  );
+}
+
+function worldSpecificExpectationCount(world) {
+  let count = 0;
+  if (worldNeedsRecovery(world)) count += 1;
+  if (worldNeedsMemory(world)) count += 1;
+  if (worldNeedsGroupProgress(world)) count += 1;
+  return count;
+}
+
 function summarizeWorld(world, transcript, metrics, judge) {
   const totalTurns = transcript.length || 1;
   const matchedRelationships = metrics.matchedMembers.size;
+  const matchedRatio =
+    matchedRelationships / Math.max(world.relationships.length || 1, 1);
+  const progressDensity =
+    (metrics.introductions + metrics.replies + metrics.followups + metrics.invites) /
+    Math.max(totalTurns * 2.8, 1);
+  const recoveryNeeded = worldNeedsRecovery(world);
+  const memoryNeeded = worldNeedsMemory(world);
+  const groupNeeded = worldNeedsGroupProgress(world);
+  const expectationCount = worldSpecificExpectationCount(world);
+  const expectationFulfillment =
+    ((recoveryNeeded && metrics.recoverySignals > 0 ? 1 : 0) +
+      (memoryNeeded && metrics.memorySignals > 0 ? 1 : 0) +
+      (groupNeeded && metrics.invites > 0 ? 1 : 0)) /
+    Math.max(expectationCount, 1);
+  const followupDominance =
+    metrics.followups / Math.max(metrics.introductions + metrics.replies + metrics.invites, 1);
+  const shallowFollowupPenalty = clamp((followupDominance - 1.2) * 0.16, 0, 0.22);
+  const stalledPenalty =
+    (metrics.stalledTurns / Math.max(totalTurns, 1)) * 0.18;
+  const missingRecoveryPenalty = recoveryNeeded && metrics.recoverySignals === 0 ? 0.12 : 0;
+  const missingMemoryPenalty = memoryNeeded && metrics.memorySignals === 0 ? 0.12 : 0;
+  const missingGroupPenalty = groupNeeded && metrics.invites === 0 ? 0.1 : 0;
   const convergenceScore = clamp(
-    (matchedRelationships / Math.max(world.relationships.length || 1, 1)) * 0.45 +
-      (metrics.introductions + metrics.replies + metrics.followups) /
-        Math.max(totalTurns * 2.5, 1) *
-        0.35 +
-      (metrics.memorySignals > 0 ? 0.1 : 0) +
-      (metrics.stalledTurns === 0 ? 0.1 : 0),
+    matchedRatio * 0.45 +
+      progressDensity * 0.18 +
+      expectationFulfillment * 0.22 +
+      (metrics.stalledTurns === 0 ? 0.05 : 0) -
+      shallowFollowupPenalty -
+      stalledPenalty -
+      missingRecoveryPenalty -
+      missingMemoryPenalty -
+      missingGroupPenalty,
     0,
     1,
   );
   const noMatchRecoveryQuality = clamp(
-    metrics.recoverySignals > 0
-      ? 0.55 + metrics.recoverySignals / Math.max(totalTurns * 2, 1) * 0.35
-      : 0.15,
+    recoveryNeeded
+      ? metrics.recoverySignals > 0
+        ? 0.62 + metrics.recoverySignals / Math.max(totalTurns * 2.5, 1) * 0.28
+        : 0.05
+      : metrics.recoverySignals > 0
+        ? 0.48
+        : 0.2,
     0,
     1,
   );
   const memoryConsistency = clamp(
-    metrics.memorySignals > 0
-      ? 0.6 + metrics.memorySignals / Math.max(totalTurns * 2, 1) * 0.3
-      : 0.35,
+    memoryNeeded
+      ? metrics.memorySignals > 0
+        ? 0.62 + metrics.memorySignals / Math.max(totalTurns * 2.5, 1) * 0.26
+        : 0.08
+      : metrics.memorySignals > 0
+        ? 0.54
+        : 0.28,
     0,
     1,
   );
@@ -888,20 +950,40 @@ function defaultBrainAction(context) {
   const targetActorId = targetRelationship?.members.find((member) => member !== actor.id) ?? null;
   const hasMemorySignal =
     world.horizon === "long" || actor.memoryDriftProfile === "fluid";
-  const baseIntent =
-    state.stage === "onboarding"
-      ? "introduce"
-      : state.stage === "matching"
-        ? "ask_preference"
-        : state.stage === "memory_drift"
-          ? "reference_memory"
-          : "follow_up";
-  const likelyRecovery =
-    targetRelationship && targetRelationship.strength < 0.35 && rng() > 0.5;
-  const intent =
-    likelyRecovery && state.stage !== "onboarding"
-      ? "recover_no_match"
-      : baseIntent;
+  const lowStrength = (targetRelationship?.strength ?? 0) < 0.35;
+  const mediumStrength = (targetRelationship?.strength ?? 0) >= 0.35 &&
+    (targetRelationship?.strength ?? 0) < 0.72;
+  const strongStrength = (targetRelationship?.strength ?? 0) >= 0.72;
+  let intent = "follow_up";
+  if (state.stage === "onboarding") {
+    intent = "introduce";
+  } else if (strongStrength && state.stage === "matching") {
+    intent = "reply";
+  } else if (lowStrength && state.stage !== "onboarding") {
+    intent = worldNeedsGroupProgress(world) && rng() > 0.55
+      ? "invite_group"
+      : "recover_no_match";
+  } else if (state.stage === "matching") {
+    intent = mediumStrength && worldNeedsGroupProgress(world) && rng() > 0.58
+      ? "invite_group"
+      : "ask_preference";
+  } else if (state.stage === "memory_drift") {
+    intent = hasMemorySignal ? "reference_memory" : "follow_up";
+  } else if (worldNeedsMemory(world) && state.stage === "conversation" && rng() > 0.45) {
+    intent = "reference_memory";
+  } else if (state.stage === "conversation" && world.family === "dense-social-graph" && rng() > 0.6) {
+    intent = "invite_group";
+  } else if (state.stage === "conversation" && world.family === "pair-and-group" && rng() > 0.52) {
+    intent = "invite_group";
+  } else if (strongStrength && state.stage === "conversation") {
+    intent = "reply";
+  } else if (state.stage === "convergence" && world.family === "event-and-memory" && rng() > 0.5) {
+    intent = "propose_event";
+  } else if (state.stage === "convergence" && strongStrength && rng() > 0.35) {
+    intent = "propose_event";
+  } else if (hasMemorySignal && state.stage !== "onboarding" && rng() > 0.65) {
+    intent = "reference_memory";
+  }
   const message = buildMessageForIntent({
     intent,
     actor,
@@ -922,6 +1004,8 @@ function defaultBrainAction(context) {
         ? "Using earlier conversation context to improve continuity."
         : intent === "invite_group"
           ? "Trying to move the social graph toward a broader group outcome."
+          : intent === "propose_event"
+            ? "Trying to convert a weak or partial thread into a clearer concrete plan."
           : intent === "recover_no_match"
             ? "The pairing looks weak, so the actor is trying a recovery path."
             : "Advancing the conversation in a socially plausible way.",
@@ -944,6 +1028,8 @@ function buildMessageForIntent({ intent, actor, targetActorId, state }) {
       return `${actor.persona.split(",")[0]} here${targetLabel}. I’m trying to connect around ${actor.goals[0] ?? "shared interests"}.`;
     case "ask_preference":
       return `What kind of ${actor.goals[0] ?? "plans"} are you into${targetLabel}? I’m trying to find a good fit.`;
+    case "reply":
+      return `That overlaps well with what I want too${targetLabel}. We should make the next step more concrete.`;
     case "follow_up":
       return `Following up on our earlier thread${targetLabel} — would you be open to continuing this in a smaller circle?`;
     case "invite_group":
@@ -1135,12 +1221,18 @@ class HeuristicJudgeProvider {
 
   async scoreTurn(context) {
     const { action, turnRecord } = context;
+    const lowStrength = (turnRecord.outcome.relationshipStrength ?? 0) < 0.35;
+    const progressPenalty =
+      action.intent === "follow_up" && !turnRecord.outcome.matched && lowStrength ? 0.18 : 0;
     const score = clamp(
-      0.4 +
+      0.32 +
         (action.intent === "recover_no_match" ? 0.15 : 0) +
         (action.intent === "reference_memory" ? 0.15 : 0) +
+        (action.intent === "invite_group" ? 0.12 : 0) +
+        (action.intent === "propose_event" ? 0.12 : 0) +
         (turnRecord.outcome.matched ? 0.2 : 0) +
-        (turnRecord.outcome.stalled ? -0.15 : 0),
+        (turnRecord.outcome.stalled ? -0.15 : 0) -
+        progressPenalty,
       0,
       1,
     );
@@ -1158,13 +1250,16 @@ class HeuristicJudgeProvider {
       usefulness: score >= 0.6 ? "good_match" : score >= 0.45 ? "weak_match" : "bad_match",
       instability: turnRecord.outcome.stalled ? "unstable" : "healthy",
       operatorAttentionNeeded: Boolean(
-        turnRecord.outcome.stalled || turnRecord.backend?.status !== "passed",
+        turnRecord.outcome.stalled ||
+          !["passed", "recovered"].includes(turnRecord.backend?.status ?? ""),
       ),
       score: Number(score.toFixed(3)),
       rationale:
         turnRecord.outcome.matched
           ? "Turn advanced a relationship toward convergence."
-          : "Turn kept the simulation moving without a confirmed match.",
+          : progressPenalty > 0
+            ? "Turn kept moving but did not resolve a weak-fit relationship."
+            : "Turn kept the simulation moving without a confirmed match.",
     };
   }
 
@@ -1173,13 +1268,33 @@ class HeuristicJudgeProvider {
       context.metrics.matchedMembers.size /
       Math.max(context.world.relationships.length || 1, 1);
     const turnBalance = 1 - context.metrics.stalledTurns / Math.max(context.metrics.totalTurns || 1, 1);
+    const expectationCount = worldSpecificExpectationCount(context.world);
+    const expectationFulfillment =
+      ((worldNeedsRecovery(context.world) && context.metrics.recoverySignals > 0 ? 1 : 0) +
+        (worldNeedsMemory(context.world) && context.metrics.memorySignals > 0 ? 1 : 0) +
+        (worldNeedsGroupProgress(context.world) && context.metrics.invites > 0 ? 1 : 0)) /
+      Math.max(expectationCount, 1);
+    const shallowFollowupPenalty =
+      clamp(
+        (context.metrics.followups /
+          Math.max(
+            context.metrics.replies +
+              context.metrics.introductions +
+              context.metrics.invites,
+            1,
+          ) -
+          1.15) *
+          0.18,
+        0,
+        0.24,
+      );
     const score = clamp(
-      0.35 +
-        matchedRatio * 0.35 +
-        turnBalance * 0.2 +
-        (context.metrics.memorySignals > 0 ? 0.05 : 0) +
-        (context.metrics.recoverySignals > 0 ? 0.05 : 0) +
-        (context.metrics.moderationSignals > 0 ? -0.2 : 0),
+      0.18 +
+        matchedRatio * 0.34 +
+        turnBalance * 0.12 +
+        expectationFulfillment * 0.26 +
+        (context.metrics.moderationSignals > 0 ? -0.2 : 0) -
+        shallowFollowupPenalty,
       0,
       1,
     );
@@ -1449,13 +1564,23 @@ function buildWorldJudgeResult(world, score, metrics, overrides = {}) {
     overrides.memory ?? (metrics.memorySignals > 0 ? "memory_helpful" : "memory_neutral");
   const conversation =
     overrides.conversation ??
-    (metrics.stalledTurns > metrics.totalTurns / 2 ? "stalled" : "alive");
+    (metrics.stalledTurns > metrics.totalTurns / 2
+      ? "stalled"
+      : metrics.followups >
+            metrics.replies + metrics.introductions + metrics.invites
+        ? "awkward"
+        : "alive");
   const usefulness =
     overrides.usefulness ??
     (score >= 0.6 ? "good_match" : score >= 0.45 ? "weak_match" : "bad_match");
   const instability =
     overrides.instability ??
-    (metrics.moderationSignals > 0 ? "unstable" : "healthy");
+    (metrics.moderationSignals > 0
+      ? "unstable"
+      : metrics.followups >
+            metrics.replies + metrics.introductions + metrics.invites
+        ? "unstable"
+        : "healthy");
   return {
     worldId: world.id,
     label,
