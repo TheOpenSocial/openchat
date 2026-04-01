@@ -37,10 +37,13 @@ test("loadSocialSimWorldFixture normalizes canonical fixture worlds", () => {
     path.resolve("apps/api/test/fixtures/agentic-scenarios.json"),
   );
 
-  assert.ok(worlds.length >= 6);
+  assert.ok(worlds.length >= 10);
   assert.ok(worlds.some((world) => world.horizon === "long"));
   assert.ok(worlds.some((world) => world.id === "medium-dense-social-mixer-v1"));
   assert.ok(worlds.some((world) => world.id === "long-network-rebalancing-v1"));
+  assert.ok(worlds.some((world) => world.id === "medium-multi-cluster-bridging-v1"));
+  assert.ok(worlds.some((world) => world.id === "long-recurring-circle-fragmentation-v1"));
+  assert.ok(worlds.some((world) => world.id === "long-bad-actor-containment-v1"));
   assert.ok(worlds.every((world) => Array.isArray(world.actors)));
   assert.ok(worlds.every((world) => Array.isArray(world.relationships)));
 });

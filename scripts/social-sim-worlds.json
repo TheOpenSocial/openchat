@@ -770,6 +770,658 @@
           "notes": "Moderate fit that should improve with careful memory use."
         }
       ]
+    },
+    {
+      "id": "medium-multi-cluster-bridging-v1",
+      "name": "Medium multi-cluster bridging",
+      "horizon": "medium",
+      "family": "dense-social-graph",
+      "turnBudget": 12,
+      "seedScenarioIds": [
+        "social_group_formation_partial_fallback_v1",
+        "social_followup_intro_v1",
+        "social_event_followup_v1"
+      ],
+      "summary": "Two medium-fit social clusters need the system to build the right bridges instead of generating shallow chatter.",
+      "goals": [
+        "Create useful bridges between adjacent clusters.",
+        "Avoid wasting turns on weak cross-cluster noise."
+      ],
+      "evaluationFocus": [
+        "bridge_quality",
+        "group_progress",
+        "conversation_quality"
+      ],
+      "actors": [
+        {
+          "id": "bridge-nina",
+          "kind": "individual",
+          "persona": "design-minded regular who likes curated small groups",
+          "goals": [
+            "find a calm food-and-design circle",
+            "meet one useful new person"
+          ],
+          "preferences": {
+            "topics": ["design", "food", "small groups"],
+            "pace": "steady"
+          },
+          "hardConstraints": ["no loud nightlife"],
+          "socialStyle": "steady",
+          "patience": 0.78,
+          "initiative": 0.6,
+          "mismatchTolerance": 0.24,
+          "memoryDriftProfile": "stable"
+        },
+        {
+          "id": "bridge-rui",
+          "kind": "individual",
+          "persona": "event-friendly connector who likes gently expanding circles",
+          "goals": [
+            "introduce compatible people",
+            "turn overlap into a real plan"
+          ],
+          "preferences": {
+            "topics": ["events", "food", "community"],
+            "pace": "social"
+          },
+          "hardConstraints": ["avoid empty follow-ups"],
+          "socialStyle": "warm",
+          "patience": 0.74,
+          "initiative": 0.82,
+          "mismatchTolerance": 0.42,
+          "memoryDriftProfile": "stable"
+        },
+        {
+          "id": "bridge-olivia",
+          "kind": "individual",
+          "persona": "music-and-food regular who prefers repeatable plans",
+          "goals": ["join a recurring dinner circle", "avoid random churn"],
+          "preferences": {
+            "topics": ["music", "food", "community"],
+            "pace": "calm"
+          },
+          "hardConstraints": ["prefer recurring formats"],
+          "socialStyle": "calm",
+          "patience": 0.81,
+          "initiative": 0.51,
+          "mismatchTolerance": 0.27,
+          "memoryDriftProfile": "light"
+        },
+        {
+          "id": "bridge-pair-ivy-noel",
+          "kind": "pair",
+          "persona": "pair seeking another stable pair or small dinner group",
+          "goals": [
+            "find a pair-compatible circle",
+            "avoid shallow event hopping"
+          ],
+          "preferences": {
+            "topics": ["food", "music", "small circles"],
+            "pace": "measured"
+          },
+          "hardConstraints": ["pair-friendly intros only"],
+          "socialStyle": "collaborative",
+          "patience": 0.84,
+          "initiative": 0.59,
+          "mismatchTolerance": 0.22,
+          "memoryDriftProfile": "stable"
+        },
+        {
+          "id": "bridge-group-sana",
+          "kind": "group_seed",
+          "persona": "group seed trying to assemble a useful mixed cluster",
+          "goals": ["form a viable mixed group", "avoid dead-end bridging"],
+          "preferences": {
+            "topics": ["community", "food", "design"],
+            "pace": "organized"
+          },
+          "hardConstraints": ["must stay coherent"],
+          "socialStyle": "organized",
+          "patience": 0.86,
+          "initiative": 0.88,
+          "mismatchTolerance": 0.36,
+          "memoryDriftProfile": "stable"
+        },
+        {
+          "id": "bridge-group-teo",
+          "kind": "group_seed",
+          "persona": "lighter-weight group organizer that brings in event energy",
+          "goals": [
+            "bridge event-friendly people into stable groups",
+            "avoid overextending weak fits"
+          ],
+          "preferences": {
+            "topics": ["events", "music", "community"],
+            "pace": "light"
+          },
+          "hardConstraints": ["do not over-notify"],
+          "socialStyle": "light",
+          "patience": 0.72,
+          "initiative": 0.85,
+          "mismatchTolerance": 0.45,
+          "memoryDriftProfile": "light"
+        },
+        {
+          "id": "bridge-circle-yara",
+          "kind": "circle_seed",
+          "persona": "circle organizer preserving continuity and fit",
+          "goals": [
+            "route strong matches into a recurring circle",
+            "keep low-fit people from dominating"
+          ],
+          "preferences": {
+            "topics": ["recurring groups", "food", "music"],
+            "pace": "clear"
+          },
+          "hardConstraints": ["avoid fragile large groups"],
+          "socialStyle": "clear",
+          "patience": 0.83,
+          "initiative": 0.79,
+          "mismatchTolerance": 0.28,
+          "memoryDriftProfile": "stable"
+        },
+        {
+          "id": "bridge-event-kai",
+          "kind": "event_seed",
+          "persona": "event host with enough energy to activate a bridge but not sustain noise",
+          "goals": [
+            "turn overlap into one real event",
+            "hand off good fits to recurring formats"
+          ],
+          "preferences": {
+            "topics": ["events", "food", "music"],
+            "pace": "fast"
+          },
+          "hardConstraints": ["no empty invites"],
+          "socialStyle": "energetic",
+          "patience": 0.61,
+          "initiative": 0.92,
+          "mismatchTolerance": 0.41,
+          "memoryDriftProfile": "light"
+        }
+      ],
+      "relationships": [
+        {
+          "id": "bridge-nina-sana",
+          "type": "group",
+          "members": ["bridge-nina", "bridge-group-sana"],
+          "label": "Nina / Sana strong group route",
+          "strength": 0.58
+        },
+        {
+          "id": "bridge-olivia-yara",
+          "type": "circle",
+          "members": ["bridge-olivia", "bridge-circle-yara"],
+          "label": "Olivia / Yara recurring fit",
+          "strength": 0.56
+        },
+        {
+          "id": "bridge-pair-yara",
+          "type": "circle",
+          "members": ["bridge-pair-ivy-noel", "bridge-circle-yara"],
+          "label": "Pair / Yara circle route",
+          "strength": 0.54
+        },
+        {
+          "id": "bridge-rui-teo",
+          "type": "group",
+          "members": ["bridge-rui", "bridge-group-teo"],
+          "label": "Rui / Teo event bridge",
+          "strength": 0.52
+        },
+        {
+          "id": "bridge-kai-rui",
+          "type": "event",
+          "members": ["bridge-event-kai", "bridge-rui"],
+          "label": "Kai / Rui event activation",
+          "strength": 0.57
+        },
+        {
+          "id": "bridge-kai-sana",
+          "type": "event",
+          "members": ["bridge-event-kai", "bridge-group-sana"],
+          "label": "Kai / Sana handoff route",
+          "strength": 0.47
+        },
+        {
+          "id": "bridge-nina-teo",
+          "type": "group",
+          "members": ["bridge-nina", "bridge-group-teo"],
+          "label": "Nina / Teo weak event route",
+          "strength": 0.33,
+          "notes": "Useful to test weak cross-cluster suppression."
+        }
+      ]
+    },
+    {
+      "id": "long-recurring-circle-fragmentation-v1",
+      "name": "Long recurring circle fragmentation",
+      "horizon": "long",
+      "family": "circle",
+      "turnBudget": 14,
+      "seedScenarioIds": [
+        "social_recurring_circle_join_v1",
+        "social_memory_drift_v1",
+        "social_event_reminder_followup_v1"
+      ],
+      "summary": "A recurring circle is at risk of fragmenting into separate memory islands unless the system preserves continuity and routes newcomers carefully.",
+      "goals": [
+        "Preserve continuity across multiple returns.",
+        "Avoid fragmenting the circle into weak parallel threads."
+      ],
+      "evaluationFocus": [
+        "return_behavior",
+        "memory_helpfulness",
+        "durable_convergence"
+      ],
+      "actors": [
+        {
+          "id": "frag-organizer-ines",
+          "kind": "circle_seed",
+          "persona": "circle organizer trying to keep a recurring group coherent",
+          "goals": [
+            "bring back the right regulars",
+            "reduce drift between sessions"
+          ],
+          "preferences": {
+            "topics": ["community", "music", "food"],
+            "pace": "steady"
+          },
+          "hardConstraints": ["avoid creepy persistence"],
+          "socialStyle": "steady",
+          "patience": 0.88,
+          "initiative": 0.83,
+          "mismatchTolerance": 0.27,
+          "memoryDriftProfile": "stable"
+        },
+        {
+          "id": "frag-regular-lio",
+          "kind": "individual",
+          "persona": "regular who values prior context and low churn",
+          "goals": ["continue a familiar thread", "stay with trusted people"],
+          "preferences": {
+            "topics": ["music", "food", "small groups"],
+            "pace": "calm"
+          },
+          "hardConstraints": ["respect earlier preferences"],
+          "socialStyle": "calm",
+          "patience": 0.82,
+          "initiative": 0.49,
+          "mismatchTolerance": 0.21,
+          "memoryDriftProfile": "fluid"
+        },
+        {
+          "id": "frag-regular-mara",
+          "kind": "individual",
+          "persona": "practical returning member who likes consistent planning",
+          "goals": ["rejoin the same useful subgroup", "avoid noisy resets"],
+          "preferences": {
+            "topics": ["planning", "food", "community"],
+            "pace": "clear"
+          },
+          "hardConstraints": ["no repeated reminder spam"],
+          "socialStyle": "clear",
+          "patience": 0.77,
+          "initiative": 0.58,
+          "mismatchTolerance": 0.25,
+          "memoryDriftProfile": "fluid"
+        },
+        {
+          "id": "frag-newcomer-pax",
+          "kind": "individual",
+          "persona": "newcomer with decent fit but no prior context",
+          "goals": [
+            "join a stable recurring circle",
+            "avoid awkward cold-starts"
+          ],
+          "preferences": {
+            "topics": ["music", "community", "events"],
+            "pace": "friendly"
+          },
+          "hardConstraints": ["needs a clear first step"],
+          "socialStyle": "friendly",
+          "patience": 0.69,
+          "initiative": 0.66,
+          "mismatchTolerance": 0.39,
+          "memoryDriftProfile": "light"
+        },
+        {
+          "id": "frag-pair-zed-rhea",
+          "kind": "pair",
+          "persona": "pair interested in recurring dinner-and-music circles",
+          "goals": ["find a recurring subgroup", "avoid one-off event churn"],
+          "preferences": {
+            "topics": ["food", "music", "small circles"],
+            "pace": "measured"
+          },
+          "hardConstraints": ["pair-friendly entry only"],
+          "socialStyle": "collaborative",
+          "patience": 0.85,
+          "initiative": 0.62,
+          "mismatchTolerance": 0.24,
+          "memoryDriftProfile": "stable"
+        },
+        {
+          "id": "frag-host-uma",
+          "kind": "event_seed",
+          "persona": "event host that can reactivate dormant edges",
+          "goals": [
+            "create one useful re-entry moment",
+            "hand off durable fits to the circle"
+          ],
+          "preferences": {
+            "topics": ["events", "music", "community"],
+            "pace": "light"
+          },
+          "hardConstraints": ["no repeated weak reminders"],
+          "socialStyle": "light",
+          "patience": 0.67,
+          "initiative": 0.89,
+          "mismatchTolerance": 0.37,
+          "memoryDriftProfile": "light"
+        },
+        {
+          "id": "frag-group-selim",
+          "kind": "group_seed",
+          "persona": "small-group seed trying to keep multiple regulars aligned",
+          "goals": ["prevent fragmentation", "keep one subgroup healthy"],
+          "preferences": {
+            "topics": ["food", "community", "small groups"],
+            "pace": "organized"
+          },
+          "hardConstraints": ["avoid parallel dead-end threads"],
+          "socialStyle": "organized",
+          "patience": 0.84,
+          "initiative": 0.79,
+          "mismatchTolerance": 0.29,
+          "memoryDriftProfile": "stable"
+        },
+        {
+          "id": "frag-trust-vik",
+          "kind": "individual",
+          "persona": "trust-sensitive regular who notices when continuity becomes creepy",
+          "goals": [
+            "stay in healthy recurring spaces",
+            "leave weak or boundary-crossing threads early"
+          ],
+          "preferences": {
+            "topics": ["community", "safety", "small groups"],
+            "pace": "clear"
+          },
+          "hardConstraints": ["flag creepy persistence quickly"],
+          "socialStyle": "clear",
+          "patience": 0.74,
+          "initiative": 0.55,
+          "mismatchTolerance": 0.15,
+          "memoryDriftProfile": "stable"
+        }
+      ],
+      "relationships": [
+        {
+          "id": "frag-ines-lio",
+          "type": "circle",
+          "members": ["frag-organizer-ines", "frag-regular-lio"],
+          "label": "Ines / Lio return fit",
+          "strength": 0.59
+        },
+        {
+          "id": "frag-ines-mara",
+          "type": "circle",
+          "members": ["frag-organizer-ines", "frag-regular-mara"],
+          "label": "Ines / Mara planning fit",
+          "strength": 0.57
+        },
+        {
+          "id": "frag-selim-lio",
+          "type": "group",
+          "members": ["frag-group-selim", "frag-regular-lio"],
+          "label": "Selim / Lio subgroup route",
+          "strength": 0.53
+        },
+        {
+          "id": "frag-selim-vik",
+          "type": "group",
+          "members": ["frag-group-selim", "frag-trust-vik"],
+          "label": "Selim / Vik trust-aware subgroup",
+          "strength": 0.51
+        },
+        {
+          "id": "frag-pax-uma",
+          "type": "event",
+          "members": ["frag-newcomer-pax", "frag-host-uma"],
+          "label": "Pax / Uma newcomer event route",
+          "strength": 0.46
+        },
+        {
+          "id": "frag-pair-ines",
+          "type": "circle",
+          "members": ["frag-pair-zed-rhea", "frag-organizer-ines"],
+          "label": "Pair / Ines circle route",
+          "strength": 0.49
+        },
+        {
+          "id": "frag-pax-vik",
+          "type": "group",
+          "members": ["frag-newcomer-pax", "frag-trust-vik"],
+          "label": "Pax / Vik weak trust route",
+          "strength": 0.32,
+          "notes": "Should stay bounded rather than fragmenting the circle."
+        }
+      ]
+    },
+    {
+      "id": "long-bad-actor-containment-v1",
+      "name": "Long bad actor containment",
+      "horizon": "long",
+      "family": "network-rebalancing",
+      "turnBudget": 14,
+      "seedScenarioIds": [
+        "social_trust_moderation_edge_v1",
+        "social_group_formation_partial_fallback_v1",
+        "social_event_followup_v1"
+      ],
+      "summary": "A larger social world includes one persistent poor-fit participant who should be rerouted or contained without collapsing healthy threads.",
+      "goals": [
+        "Protect the healthy part of the network from one bad-fit actor.",
+        "Preserve durable convergence for good participants."
+      ],
+      "evaluationFocus": [
+        "trust_and_safety",
+        "network_rebalancing",
+        "durable_convergence"
+      ],
+      "actors": [
+        {
+          "id": "contain-host-aria",
+          "kind": "event_seed",
+          "persona": "steady host maintaining healthy event quality",
+          "goals": ["bring back good participants", "contain bad-fit drift"],
+          "preferences": {
+            "topics": ["community", "events", "small groups"],
+            "pace": "steady"
+          },
+          "hardConstraints": ["do not reward repeated poor fit"],
+          "socialStyle": "steady",
+          "patience": 0.82,
+          "initiative": 0.79,
+          "mismatchTolerance": 0.29,
+          "memoryDriftProfile": "fluid"
+        },
+        {
+          "id": "contain-regular-jo",
+          "kind": "individual",
+          "persona": "trusted regular who likes continuity and calm plans",
+          "goals": [
+            "stay in the healthy subnetwork",
+            "avoid repeated bad intros"
+          ],
+          "preferences": {
+            "topics": ["food", "music", "community"],
+            "pace": "calm"
+          },
+          "hardConstraints": ["respect boundaries"],
+          "socialStyle": "calm",
+          "patience": 0.8,
+          "initiative": 0.53,
+          "mismatchTolerance": 0.18,
+          "memoryDriftProfile": "fluid"
+        },
+        {
+          "id": "contain-regular-kira",
+          "kind": "individual",
+          "persona": "clear communicator who notices instability early",
+          "goals": ["stay in useful groups", "escalate weak boundaries early"],
+          "preferences": {
+            "topics": ["community", "safety", "design"],
+            "pace": "clear"
+          },
+          "hardConstraints": ["no repeated unsafe behavior"],
+          "socialStyle": "clear",
+          "patience": 0.74,
+          "initiative": 0.59,
+          "mismatchTolerance": 0.14,
+          "memoryDriftProfile": "stable"
+        },
+        {
+          "id": "contain-pair-milo-ene",
+          "kind": "pair",
+          "persona": "pair seeking calm recurring dinner-and-music people",
+          "goals": ["find a stable circle", "avoid chaotic event churn"],
+          "preferences": {
+            "topics": ["food", "music", "small circles"],
+            "pace": "measured"
+          },
+          "hardConstraints": ["pair-first or small-circle only"],
+          "socialStyle": "collaborative",
+          "patience": 0.83,
+          "initiative": 0.61,
+          "mismatchTolerance": 0.23,
+          "memoryDriftProfile": "stable"
+        },
+        {
+          "id": "contain-circle-len",
+          "kind": "circle_seed",
+          "persona": "circle organizer who prefers durable recurring fits",
+          "goals": [
+            "route strong people into recurring format",
+            "keep poor-fit actors out"
+          ],
+          "preferences": {
+            "topics": ["recurring groups", "food", "music"],
+            "pace": "clear"
+          },
+          "hardConstraints": ["avoid repeated contamination"],
+          "socialStyle": "clear",
+          "patience": 0.87,
+          "initiative": 0.86,
+          "mismatchTolerance": 0.2,
+          "memoryDriftProfile": "stable"
+        },
+        {
+          "id": "contain-group-suri",
+          "kind": "group_seed",
+          "persona": "group seed stabilizing the healthy side of the graph",
+          "goals": [
+            "retain strong members",
+            "absorb one bad-fit disruption safely"
+          ],
+          "preferences": {
+            "topics": ["community", "design", "food"],
+            "pace": "organized"
+          },
+          "hardConstraints": ["no dead-end loops"],
+          "socialStyle": "organized",
+          "patience": 0.85,
+          "initiative": 0.82,
+          "mismatchTolerance": 0.31,
+          "memoryDriftProfile": "stable"
+        },
+        {
+          "id": "contain-newcomer-pip",
+          "kind": "individual",
+          "persona": "newcomer with fair fit if routed well",
+          "goals": ["enter through a safe path", "avoid mismatched churn"],
+          "preferences": {
+            "topics": ["food", "events", "community"],
+            "pace": "friendly"
+          },
+          "hardConstraints": ["needs a clear intro"],
+          "socialStyle": "friendly",
+          "patience": 0.68,
+          "initiative": 0.64,
+          "mismatchTolerance": 0.37,
+          "memoryDriftProfile": "light"
+        },
+        {
+          "id": "contain-bad-fit-ronan",
+          "kind": "individual",
+          "persona": "persistent poor-fit participant who keeps pushing into weak spaces",
+          "goals": ["join any active thread quickly", "bypass fit signals"],
+          "preferences": {
+            "topics": ["nightlife", "events", "anything active"],
+            "pace": "fast"
+          },
+          "hardConstraints": ["weekend only"],
+          "socialStyle": "fast",
+          "patience": 0.42,
+          "initiative": 0.94,
+          "mismatchTolerance": 0.82,
+          "memoryDriftProfile": "light"
+        }
+      ],
+      "relationships": [
+        {
+          "id": "contain-aria-jo",
+          "type": "event",
+          "members": ["contain-host-aria", "contain-regular-jo"],
+          "label": "Aria / Jo healthy return",
+          "strength": 0.58
+        },
+        {
+          "id": "contain-aria-ronan",
+          "type": "event",
+          "members": ["contain-host-aria", "contain-bad-fit-ronan"],
+          "label": "Aria / Ronan weak route",
+          "strength": 0.28,
+          "notes": "Should trigger reroute and containment."
+        },
+        {
+          "id": "contain-suri-kira",
+          "type": "group",
+          "members": ["contain-group-suri", "contain-regular-kira"],
+          "label": "Suri / Kira healthy group",
+          "strength": 0.56
+        },
+        {
+          "id": "contain-len-pair",
+          "type": "circle",
+          "members": ["contain-circle-len", "contain-pair-milo-ene"],
+          "label": "Len / pair circle route",
+          "strength": 0.55
+        },
+        {
+          "id": "contain-suri-pip",
+          "type": "group",
+          "members": ["contain-group-suri", "contain-newcomer-pip"],
+          "label": "Suri / Pip newcomer route",
+          "strength": 0.47
+        },
+        {
+          "id": "contain-len-kira",
+          "type": "circle",
+          "members": ["contain-circle-len", "contain-regular-kira"],
+          "label": "Len / Kira stable circle",
+          "strength": 0.5
+        },
+        {
+          "id": "contain-ronan-kira",
+          "type": "group",
+          "members": ["contain-bad-fit-ronan", "contain-regular-kira"],
+          "label": "Ronan / Kira unsafe weak route",
+          "strength": 0.23,
+          "notes": "Should not be allowed to contaminate healthy routes."
+        }
+      ]
     }
   ]
 }
