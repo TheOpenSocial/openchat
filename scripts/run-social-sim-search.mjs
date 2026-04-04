@@ -277,11 +277,13 @@ export function scoreCandidate(
   const protectedWorlds = options.protectedWorlds ?? [];
   const baselineWorldScores = options.baselineWorldScores ?? new Map();
   const overall = summary.totals.averageConvergenceScore ?? 0;
-  const focusScores = worlds
-    .filter((world) => focusWorlds.includes(world.worldId))
-    .map((world) => world.summary.convergenceScore);
+  const focusWorldRecords = worlds.filter((world) => focusWorlds.includes(world.worldId));
+  const focusScores = focusWorldRecords.map((world) => world.summary.convergenceScore);
   const worldScores = new Map(
     worlds.map((world) => [world.worldId, world.summary.convergenceScore]),
+  );
+  const worldStrongCoverage = new Map(
+    worlds.map((world) => [world.worldId, world.summary.strongRelationshipCoverage ?? 0]),
   );
   const weakMean =
     focusScores.length > 0
@@ -289,26 +291,80 @@ export function scoreCandidate(
       : overall;
   const weakMin = focusScores.length > 0 ? Math.min(...focusScores) : overall;
   const networkFloor = worldScores.get("long-network-rebalancing-v1") ?? weakMin;
+  const strongCoverageMean =
+    focusWorldRecords.length > 0
+      ? focusWorldRecords.reduce(
+          (sum, world) => sum + (world.summary.strongRelationshipCoverage ?? 0),
+          0,
+        ) / focusWorldRecords.length
+      : 0;
+  const weakStartMatchMean =
+    focusWorldRecords.length > 0
+      ? focusWorldRecords.reduce(
+          (sum, world) => sum + (world.summary.weakStartMatchCount ?? 0),
+          0,
+        ) / focusWorldRecords.length
+      : 0;
+  const meanStrengthLiftMean =
+    focusWorldRecords.length > 0
+      ? focusWorldRecords.reduce(
+          (sum, world) => sum + (world.summary.meanStrengthLift ?? 0),
+          0,
+        ) / focusWorldRecords.length
+      : 0;
   const regressionPenalty = protectedWorlds.reduce((penalty, worldId) => {
     const baseline = baselineWorldScores.get(worldId);
     const candidate = worldScores.get(worldId);
-    if (!Number.isFinite(baseline) || !Number.isFinite(candidate)) return penalty;
-    return penalty + Math.max(0, baseline - candidate);
+    const baselineCoverage = baselineWorldScores.get(`${worldId}:strongCoverage`);
+    const candidateCoverage = worldStrongCoverage.get(worldId);
+    let nextPenalty = penalty;
+    if (Number.isFinite(baseline) && Number.isFinite(candidate)) {
+      nextPenalty += Math.max(0, baseline - candidate);
+    }
+    if (Number.isFinite(baselineCoverage) && Number.isFinite(candidateCoverage)) {
+      nextPenalty += Math.max(0, baselineCoverage - candidateCoverage) * 0.5;
+    }
+    return nextPenalty;
   }, 0);
   const objectiveScore =
     objective === "weak-world-push"
-      ? overall * 0.3 + weakMean * 0.4 + weakMin * 0.3
+      ? overall * 0.25 +
+        weakMean * 0.3 +
+        weakMin * 0.2 +
+        strongCoverageMean * 0.15 +
+        meanStrengthLiftMean * 0.15 -
+        weakStartMatchMean * 0.05
       : objective === "network-floor-push"
-        ? overall * 0.25 + weakMean * 0.25 + weakMin * 0.15 + networkFloor * 0.35
+        ? overall * 0.2 +
+          weakMean * 0.2 +
+          weakMin * 0.15 +
+          networkFloor * 0.25 +
+          strongCoverageMean * 0.1 +
+          meanStrengthLiftMean * 0.15 -
+          weakStartMatchMean * 0.05
       : objective === "guarded-balance"
-        ? overall * 0.25 + weakMean * 0.4 + weakMin * 0.2 - regressionPenalty * 0.5
-      : overall * 0.45 + weakMean * 0.35 + weakMin * 0.2;
+        ? overall * 0.2 +
+          weakMean * 0.25 +
+          weakMin * 0.15 +
+          strongCoverageMean * 0.2 +
+          meanStrengthLiftMean * 0.15 -
+          weakStartMatchMean * 0.05 -
+          regressionPenalty * 0.5
+      : overall * 0.35 +
+        weakMean * 0.2 +
+        weakMin * 0.1 +
+        strongCoverageMean * 0.2 +
+        meanStrengthLiftMean * 0.2 -
+        weakStartMatchMean * 0.05;
   return {
     objective: Number(objectiveScore.toFixed(4)),
     overall: Number(overall.toFixed(4)),
     weakMean: Number(weakMean.toFixed(4)),
     weakMin: Number(weakMin.toFixed(4)),
     networkFloor: Number(networkFloor.toFixed(4)),
+    strongCoverageMean: Number(strongCoverageMean.toFixed(4)),
+    weakStartMatchMean: Number(weakStartMatchMean.toFixed(4)),
+    meanStrengthLiftMean: Number(meanStrengthLiftMean.toFixed(4)),
     regressionPenalty: Number(regressionPenalty.toFixed(4)),
   };
 }
@@ -321,6 +377,9 @@ export function aggregateCandidateMetrics(seedRuns) {
       acc.weakMean += seedRun.metrics.weakMean;
       acc.weakMin += seedRun.metrics.weakMin;
       acc.networkFloor += seedRun.metrics.networkFloor ?? 0;
+      acc.strongCoverageMean += seedRun.metrics.strongCoverageMean ?? 0;
+      acc.weakStartMatchMean += seedRun.metrics.weakStartMatchMean ?? 0;
+      acc.meanStrengthLiftMean += seedRun.metrics.meanStrengthLiftMean ?? 0;
       return acc;
     },
     {
@@ -329,6 +388,9 @@ export function aggregateCandidateMetrics(seedRuns) {
       weakMean: 0,
       weakMin: 0,
       networkFloor: 0,
+      strongCoverageMean: 0,
+      weakStartMatchMean: 0,
+      meanStrengthLiftMean: 0,
     },
   );
   const divisor = Math.max(seedRuns.length, 1);
@@ -338,6 +400,9 @@ export function aggregateCandidateMetrics(seedRuns) {
     weakMean: Number((totals.weakMean / divisor).toFixed(4)),
     weakMin: Number((totals.weakMin / divisor).toFixed(4)),
     networkFloor: Number((totals.networkFloor / divisor).toFixed(4)),
+    strongCoverageMean: Number((totals.strongCoverageMean / divisor).toFixed(4)),
+    weakStartMatchMean: Number((totals.weakStartMatchMean / divisor).toFixed(4)),
+    meanStrengthLiftMean: Number((totals.meanStrengthLiftMean / divisor).toFixed(4)),
   };
 }
 
@@ -395,6 +460,21 @@ export async function main() {
     }
   }
   for (const [worldId, scores] of baselineWorldScores.entries()) {
+    baselineWorldScores.set(
+      worldId,
+      scores.reduce((sum, value) => sum + value, 0) / Math.max(scores.length, 1),
+    );
+  }
+  for (const seedRun of baselineSeedRuns) {
+    for (const world of seedRun.worlds) {
+      const key = `${world.worldId}:strongCoverage`;
+      const previous = baselineWorldScores.get(key) ?? [];
+      previous.push(world.summary.strongRelationshipCoverage ?? 0);
+      baselineWorldScores.set(key, previous);
+    }
+  }
+  for (const [worldId, scores] of baselineWorldScores.entries()) {
+    if (!String(worldId).endsWith(":strongCoverage")) continue;
     baselineWorldScores.set(
       worldId,
       scores.reduce((sum, value) => sum + value, 0) / Math.max(scores.length, 1),

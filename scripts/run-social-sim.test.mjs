@@ -172,6 +172,9 @@ test("loadSocialSimWorldFixture normalizes canonical fixture worlds", () => {
   assert.ok(worlds.some((world) => world.id === "medium-multi-cluster-bridging-v1"));
   assert.ok(worlds.some((world) => world.id === "long-recurring-circle-fragmentation-v1"));
   assert.ok(worlds.some((world) => world.id === "long-bad-actor-containment-v1"));
+  const recoveryWorld = worlds.find((world) => world.id === "short-no-match-recovery-v1");
+  assert.equal(recoveryWorld?.actors.length, 3);
+  assert.equal(recoveryWorld?.relationships.length, 3);
   assert.ok(worlds.every((world) => Array.isArray(world.actors)));
   assert.ok(worlds.every((world) => Array.isArray(world.relationships)));
 });
@@ -622,6 +625,9 @@ test("search runner uses stable default seeds and writes summary artifacts", () 
   assert.equal(summary.candidateCount, 1);
   assert.equal(summary.topCandidates[0].seedRuns.length, 3);
   assert.ok(summary.topCandidates[0].metrics.networkFloor >= 0);
+  assert.ok(summary.topCandidates[0].metrics.strongCoverageMean >= 0);
+  assert.ok(summary.topCandidates[0].metrics.weakStartMatchMean >= 0);
+  assert.ok(summary.topCandidates[0].metrics.meanStrengthLiftMean >= 0);
 });
 
 test("search runner honors explicit multi-seed overrides", () => {

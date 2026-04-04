@@ -73,8 +73,11 @@
       "family": "recovery",
       "turnBudget": 6,
       "seedScenarioIds": ["social_no_match_recovery_v1"],
-      "summary": "A weak pairing needs a graceful recovery path instead of awkward churn.",
-      "goals": ["Detect poor fit early.", "Move toward a better alternative."],
+      "summary": "A weak pairing should recover cleanly by disengaging or rerouting toward a plausible alternative.",
+      "goals": [
+        "Detect poor fit early.",
+        "Move toward a better alternative when one exists."
+      ],
       "evaluationFocus": [
         "no_match_recovery_quality",
         "conversation_naturalness",
@@ -112,6 +115,25 @@
           "initiative": 0.82,
           "mismatchTolerance": 0.62,
           "memoryDriftProfile": "stable"
+        },
+        {
+          "id": "mina",
+          "kind": "individual",
+          "persona": "quiet community host, thoughtful and low-pressure",
+          "goals": [
+            "find a calm coworking partner",
+            "build a reliable small routine"
+          ],
+          "preferences": {
+            "topics": ["books", "deep work", "calm dinners"],
+            "pace": "slow"
+          },
+          "hardConstraints": ["no loud venues"],
+          "socialStyle": "clear",
+          "patience": 0.79,
+          "initiative": 0.58,
+          "mismatchTolerance": 0.24,
+          "memoryDriftProfile": "stable"
         }
       ],
       "relationships": [
@@ -122,6 +144,22 @@
           "label": "Cora / Drew",
           "strength": 0.24,
           "notes": "The fit is intentionally weak so recovery logic can trigger."
+        },
+        {
+          "id": "cora-mina",
+          "type": "match",
+          "members": ["cora", "mina"],
+          "label": "Cora / Mina",
+          "strength": 0.46,
+          "notes": "A calmer alternative fit that should be preferred after recovery."
+        },
+        {
+          "id": "drew-mina",
+          "type": "match",
+          "members": ["drew", "mina"],
+          "label": "Drew / Mina",
+          "strength": 0.22,
+          "notes": "Another intentionally weak fit so the reroute target stays specific."
         }
       ]
     },

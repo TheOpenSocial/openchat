@@ -89,6 +89,21 @@ async function buildBaseline(baseConfig, grid, seeds, artifactRoot) {
       scores.reduce((sum, value) => sum + value, 0) / Math.max(scores.length, 1),
     );
   }
+  for (const seedRun of baselineSeedRuns) {
+    for (const world of seedRun.worlds) {
+      const key = `${world.worldId}:strongCoverage`;
+      const previous = baselineWorldScores.get(key) ?? [];
+      previous.push(world.summary.strongRelationshipCoverage ?? 0);
+      baselineWorldScores.set(key, previous);
+    }
+  }
+  for (const [worldId, scores] of baselineWorldScores.entries()) {
+    if (!String(worldId).endsWith(":strongCoverage")) continue;
+    baselineWorldScores.set(
+      worldId,
+      scores.reduce((sum, value) => sum + value, 0) / Math.max(scores.length, 1),
+    );
+  }
 
   return {
     seedRuns: baselineSeedRuns,
