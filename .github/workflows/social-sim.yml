@@ -89,7 +89,7 @@ jobs:
       SOCIAL_SIM_ADMIN_USER_ID: ${{ secrets.STAGING_SMOKE_ADMIN_USER_ID || secrets.SMOKE_ADMIN_USER_ID }}
       SOCIAL_SIM_ADMIN_ROLE: admin
       SOCIAL_SIM_ADMIN_API_KEY: ${{ secrets.STAGING_SMOKE_ADMIN_API_KEY || secrets.SMOKE_ADMIN_API_KEY }}
-      SOCIAL_SIM_OLLAMA_MODEL: ${{ secrets.SOCIAL_SIM_OLLAMA_MODEL || 'llama3.1' }}
+      SOCIAL_SIM_OLLAMA_MODEL: ${{ secrets.SOCIAL_SIM_OLLAMA_MODEL || vars.SOCIAL_SIM_OLLAMA_MODEL || 'deepseek-v3.1:671b-cloud' }}
       SOCIAL_SIM_OPENAI_MODEL: ${{ secrets.SOCIAL_SIM_OPENAI_MODEL || 'gpt-4.1-mini' }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       OLLAMA_BASE_URL: ${{ secrets.OLLAMA_BASE_URL }}
@@ -121,6 +121,66 @@ jobs:
             echo "OLLAMA_BASE_URL is required for benchmark-mode Ollama runs." >&2
             exit 1
           fi
+
+      - name: Ensure Ollama endpoint is ready
+        shell: bash
+        run: |
+          set -euo pipefail
+          provider="${{ github.event_name == 'schedule' && 'ollama' || inputs.provider }}"
+          benchmark_mode="${{ github.event_name == 'schedule' && 'true' || inputs.benchmark_mode }}"
+          use_remote_provider="${{ github.event_name == 'schedule' && 'true' || inputs.use_remote_provider }}"
+
+          if [[ "${provider}" != "ollama" || "${use_remote_provider}" != "true" ]]; then
+            exit 0
+          fi
+
+          probe_url="${OLLAMA_BASE_URL%/}/api/tags"
+          probe_attempts=10
+          probe_sleep=2
+          ollama_log="/tmp/social-sim-ollama-serve.log"
+
+          probe_tags() {
+            curl -fsS --max-time 5 "${probe_url}"
+          }
+
+          for _ in $(seq 1 "${probe_attempts}"); do
+            if tags_json="$(probe_tags)"; then
+              break
+            fi
+            sleep "${probe_sleep}"
+          done
+
+          if [[ -z "${tags_json:-}" ]]; then
+            if [[ "${OLLAMA_BASE_URL}" =~ ^http://(127\.0\.0\.1|localhost):[0-9]+/?$ ]] && command -v ollama >/dev/null 2>&1; then
+              nohup ollama serve >"${ollama_log}" 2>&1 &
+              for _ in $(seq 1 15); do
+                if tags_json="$(probe_tags)"; then
+                  break
+                fi
+                sleep 2
+              done
+            fi
+          fi
+
+          if [[ -z "${tags_json:-}" ]]; then
+            echo "Ollama endpoint is not reachable at ${OLLAMA_BASE_URL}." >&2
+            if [[ -f "${ollama_log}" ]]; then
+              echo "--- ollama serve log ---" >&2
+              tail -n 40 "${ollama_log}" >&2 || true
+            fi
+            exit 1
+          fi
+
+          TAGS_JSON="${tags_json}" node <<'EOF'
+          const tags = JSON.parse(process.env.TAGS_JSON ?? "{}");
+          const wanted = process.env.SOCIAL_SIM_OLLAMA_MODEL;
+          const available = new Set((tags.models ?? []).map((model) => model.name));
+          if (!available.has(wanted)) {
+            console.error(`Configured SOCIAL_SIM_OLLAMA_MODEL "${wanted}" is not available on the Ollama endpoint.`);
+            console.error(`Available models: ${[...available].sort().join(", ") || "(none)"}`);
+            process.exit(1);
+          }
+          EOF
 
       - name: Run social simulation
         shell: bash
