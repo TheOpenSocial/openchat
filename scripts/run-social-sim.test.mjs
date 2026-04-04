@@ -628,6 +628,8 @@ test("search runner uses stable default seeds and writes summary artifacts", () 
   assert.ok(summary.topCandidates[0].metrics.strongCoverageMean >= 0);
   assert.ok(summary.topCandidates[0].metrics.weakStartMatchMean >= 0);
   assert.ok(summary.topCandidates[0].metrics.meanStrengthLiftMean >= 0);
+  assert.ok(summary.topCandidates[0].metrics.objectiveStdDev >= 0);
+  assert.ok(summary.topCandidates[0].metrics.worstSeedObjective >= 0);
 });
 
 test("search runner honors explicit multi-seed overrides", () => {
@@ -652,4 +654,55 @@ test("search runner honors explicit multi-seed overrides", () => {
   const summary = parseTrailingJson(stdout);
   assert.deepEqual(summary.seeds, [11, 22]);
   assert.equal(summary.topCandidates[0].seedRuns.length, 2);
+});
+
+test("search runner reports holdout metrics for holdout profile", () => {
+  const stdout = execFileSync(
+    process.execPath,
+    [
+      path.resolve("scripts/run-social-sim-search.mjs"),
+      "--search-profile=holdout-balance-v1",
+      "--max-candidates=1",
+      "--top-k=1",
+      "--horizon=all",
+    ],
+    {
+      encoding: "utf8",
+      stdio: "pipe",
+    },
+  );
+
+  const summary = parseTrailingJson(stdout);
+  assert.equal(summary.profile, "holdout-balance-v1");
+  assert.equal(summary.objective, "holdout-balance");
+  assert.ok(Array.isArray(summary.holdoutWorlds));
+  assert.ok(summary.holdoutWorlds.length > 0);
+  assert.ok(summary.baseline.holdoutMetrics);
+  assert.ok(summary.topCandidates[0].holdoutMetrics);
+  assert.ok(Number.isFinite(summary.topCandidates[0].selectionScore));
+});
+
+test("search runner reports holdout metrics for guarded profiles", () => {
+  const stdout = execFileSync(
+    process.execPath,
+    [
+      path.resolve("scripts/run-social-sim-search.mjs"),
+      "--search-profile=closure-guard-v1",
+      "--max-candidates=1",
+      "--top-k=1",
+      "--horizon=all",
+      "--seeds=17031,27031",
+    ],
+    {
+      encoding: "utf8",
+      stdio: "pipe",
+    },
+  );
+
+  const summary = parseTrailingJson(stdout);
+  assert.ok(Array.isArray(summary.holdoutWorlds));
+  assert.ok(summary.holdoutWorlds.length > 0);
+  assert.ok(summary.baseline.holdoutMetrics);
+  assert.ok(summary.topCandidates[0].holdoutMetrics);
+  assert.ok(Number.isFinite(summary.topCandidates[0].selectionScore));
 });

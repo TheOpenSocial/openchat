@@ -45,6 +45,18 @@ function tuningKey(tuning) {
   return JSON.stringify(tuning);
 }
 
+function holdoutPenalty(candidateMetrics, baselineMetrics) {
+  if (!baselineMetrics) return 0;
+  return (
+    Math.max(0, (baselineMetrics.overall ?? 0) - (candidateMetrics.overall ?? 0)) * 0.4 +
+    Math.max(
+      0,
+      (baselineMetrics.strongCoverageMean ?? 0) - (candidateMetrics.strongCoverageMean ?? 0),
+    ) * 0.2 +
+    Math.max(0, (baselineMetrics.weakMin ?? 0) - (candidateMetrics.weakMin ?? 0)) * 0.2
+  );
+}
+
 async function buildBaseline(baseConfig, grid, seeds, artifactRoot) {
   const baselineSeedRuns = [];
   for (const seed of seeds) {
@@ -110,6 +122,19 @@ async function buildBaseline(baseConfig, grid, seeds, artifactRoot) {
     metrics: aggregateCandidateMetrics(
       baselineSeedRuns.map((seedRun) => ({ metrics: seedRun.metrics })),
     ),
+    holdoutMetrics:
+      Array.isArray(grid.holdoutWorlds) && grid.holdoutWorlds.length > 0
+        ? aggregateCandidateMetrics(
+            baselineSeedRuns.map((seedRun) => ({
+              metrics: scoreCandidate(
+                seedRun.summary,
+                seedRun.worlds,
+                grid.holdoutWorlds,
+                grid.objective,
+              ),
+            })),
+          )
+        : null,
     worldScores: baselineWorldScores,
   };
 }
@@ -137,10 +162,21 @@ async function evaluateCandidate({
       tuning,
     };
     const result = await runSocialSimulation(candidateConfig);
+    const holdoutMetrics =
+      Array.isArray(grid.holdoutWorlds) && grid.holdoutWorlds.length > 0
+        ? scoreCandidate(
+            result.summary,
+            result.artifact.worlds,
+            grid.holdoutWorlds,
+            grid.objective,
+          )
+        : null;
     seedRuns.push({
       seed,
       runId: result.artifact.runId,
       runDir: result.runDir,
+      summary: result.summary,
+      worlds: result.artifact.worlds,
       metrics: scoreCandidate(
         result.summary,
         result.artifact.worlds,
@@ -149,8 +185,9 @@ async function evaluateCandidate({
         {
           protectedWorlds: grid.protectedWorlds,
           baselineWorldScores,
-        },
-      ),
+          },
+        ),
+      holdoutMetrics,
       worstWorlds: result.artifact.worlds
         .map((world) => ({
           worldId: world.worldId,
@@ -164,6 +201,14 @@ async function evaluateCandidate({
   return {
     tuning,
     metrics: aggregateCandidateMetrics(seedRuns),
+    holdoutMetrics:
+      Array.isArray(grid.holdoutWorlds) && grid.holdoutWorlds.length > 0
+        ? aggregateCandidateMetrics(
+            seedRuns
+              .filter((seedRun) => seedRun.holdoutMetrics)
+              .map((seedRun) => ({ metrics: seedRun.holdoutMetrics })),
+          )
+        : null,
     seedRuns,
     worstWorlds: seedRuns[0]?.worstWorlds ?? [],
   };
@@ -210,10 +255,19 @@ async function main() {
       baselineWorldScores: baseline.worldScores,
       label: `social-sim-optimize-${++candidateCounter}`,
     });
-    history.push({ phase: "matrix", ...result });
+    history.push({
+      phase: "matrix",
+      selectionScore: Number(
+        (
+          result.metrics.objective -
+          holdoutPenalty(result.holdoutMetrics, baseline.holdoutMetrics)
+        ).toFixed(4),
+      ),
+      ...result,
+    });
   }
 
-  history.sort((left, right) => right.metrics.objective - left.metrics.objective);
+  history.sort((left, right) => right.selectionScore - left.selectionScore);
   let beam = history.slice(0, Math.max(1, refineBeam));
 
   for (let round = 0; round < refineRounds; round += 1) {
@@ -235,18 +289,27 @@ async function main() {
             baselineWorldScores: baseline.worldScores,
             label: `social-sim-optimize-${++candidateCounter}`,
           });
-          nextBeam.push({ phase: `refine-${round + 1}`, ...result });
+          nextBeam.push({
+            phase: `refine-${round + 1}`,
+            selectionScore: Number(
+              (
+                result.metrics.objective -
+                holdoutPenalty(result.holdoutMetrics, baseline.holdoutMetrics)
+              ).toFixed(4),
+            ),
+            ...result,
+          });
         }
       }
     }
     history.push(...nextBeam);
-    history.sort((left, right) => right.metrics.objective - left.metrics.objective);
+    history.sort((left, right) => right.selectionScore - left.selectionScore);
     beam = history.slice(0, Math.max(1, refineBeam));
   }
 
   const topCandidates = history
     .slice()
-    .sort((left, right) => right.metrics.objective - left.metrics.objective)
+    .sort((left, right) => right.selectionScore - left.selectionScore)
     .slice(0, Math.max(1, topK));
 
   const output = {
@@ -254,9 +317,11 @@ async function main() {
     objective: grid.objective,
     seeds,
     focusWorlds: grid.focusWorlds,
+    holdoutWorlds: grid.holdoutWorlds ?? [],
     protectedWorlds: grid.protectedWorlds ?? [],
     baseline: {
       metrics: baseline.metrics,
+      holdoutMetrics: baseline.holdoutMetrics,
       worldScores: Object.fromEntries(baseline.worldScores.entries()),
     },
     topCandidates,

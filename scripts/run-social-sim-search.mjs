@@ -191,6 +191,11 @@ export function buildCandidateGrid(profile) {
         "medium-dense-social-mixer-v1",
         "medium-multi-cluster-bridging-v1",
       ],
+      holdoutWorlds: [
+        "short-no-match-recovery-v1",
+        "long-recurring-circle-fragmentation-v1",
+        "long-bad-actor-containment-v1",
+      ],
       protectedWorlds: [
         "medium-dense-social-mixer-v1",
         "medium-multi-cluster-bridging-v1",
@@ -225,6 +230,12 @@ export function buildCandidateGrid(profile) {
         "long-network-rebalancing-v1",
         "long-recurring-circle-fragmentation-v1",
       ],
+      holdoutWorlds: [
+        "medium-dense-social-mixer-v1",
+        "medium-multi-cluster-bridging-v1",
+        "medium-pair-group-discovery-v1",
+        "medium-recurring-circle-v1",
+      ],
       protectedWorlds: [
         "medium-dense-social-mixer-v1",
         "medium-multi-cluster-bridging-v1",
@@ -251,6 +262,53 @@ export function buildCandidateGrid(profile) {
         {
           key: "policy.networkOrganizerPostRecoveryTargetStrategy",
           values: ["drop", "best_alternative"],
+        },
+      ],
+    };
+  }
+  if (profile === "holdout-balance-v1") {
+    return {
+      objective: "holdout-balance",
+      focusWorlds: [
+        "short-direct-match-v1",
+        "medium-pair-group-discovery-v1",
+        "medium-recurring-circle-v1",
+        "long-memory-drift-event-v1",
+        "medium-multi-cluster-bridging-v1",
+        "long-network-rebalancing-v1",
+      ],
+      holdoutWorlds: [
+        "short-no-match-recovery-v1",
+        "medium-dense-social-mixer-v1",
+        "long-recurring-circle-fragmentation-v1",
+        "long-bad-actor-containment-v1",
+      ],
+      protectedWorlds: [
+        "short-no-match-recovery-v1",
+        "medium-dense-social-mixer-v1",
+        "long-recurring-circle-fragmentation-v1",
+        "long-bad-actor-containment-v1",
+      ],
+      dimensions: [
+        {
+          key: "thresholds.nearMatchMin",
+          values: [0.6, 0.62, 0.65],
+        },
+        {
+          key: "priority.circleNearMatchBonus",
+          values: [0.04, 0.06, 0.08],
+        },
+        {
+          key: "priority.networkNearMatchBonus",
+          values: [0.06, 0.08, 0.1],
+        },
+        {
+          key: "probabilities.matchingGroupInvite",
+          values: [0.52, 0.58, 0.64],
+        },
+        {
+          key: "probabilities.denseConversationInvite",
+          values: [0.52, 0.6, 0.68],
         },
       ],
     };
@@ -370,6 +428,7 @@ export function scoreCandidate(
 }
 
 export function aggregateCandidateMetrics(seedRuns) {
+  const divisor = Math.max(seedRuns.length, 1);
   const totals = seedRuns.reduce(
     (acc, seedRun) => {
       acc.objective += seedRun.metrics.objective;
@@ -393,7 +452,12 @@ export function aggregateCandidateMetrics(seedRuns) {
       meanStrengthLiftMean: 0,
     },
   );
-  const divisor = Math.max(seedRuns.length, 1);
+  const objectiveMean = totals.objective / divisor;
+  const objectiveVariance =
+    seedRuns.reduce(
+      (sum, seedRun) => sum + (seedRun.metrics.objective - objectiveMean) ** 2,
+      0,
+    ) / divisor;
   return {
     objective: Number((totals.objective / divisor).toFixed(4)),
     overall: Number((totals.overall / divisor).toFixed(4)),
@@ -403,7 +467,23 @@ export function aggregateCandidateMetrics(seedRuns) {
     strongCoverageMean: Number((totals.strongCoverageMean / divisor).toFixed(4)),
     weakStartMatchMean: Number((totals.weakStartMatchMean / divisor).toFixed(4)),
     meanStrengthLiftMean: Number((totals.meanStrengthLiftMean / divisor).toFixed(4)),
+    objectiveStdDev: Number(Math.sqrt(objectiveVariance).toFixed(4)),
+    worstSeedObjective: Number(
+      Math.min(...seedRuns.map((seedRun) => seedRun.metrics.objective)).toFixed(4),
+    ),
   };
+}
+
+function holdoutPenalty(candidateMetrics, baselineMetrics) {
+  if (!baselineMetrics) return 0;
+  return (
+    Math.max(0, (baselineMetrics.overall ?? 0) - (candidateMetrics.overall ?? 0)) * 0.4 +
+    Math.max(
+      0,
+      (baselineMetrics.strongCoverageMean ?? 0) - (candidateMetrics.strongCoverageMean ?? 0),
+    ) * 0.2 +
+    Math.max(0, (baselineMetrics.weakMin ?? 0) - (candidateMetrics.weakMin ?? 0)) * 0.2
+  );
 }
 
 export async function main() {
@@ -483,6 +563,19 @@ export async function main() {
   const baselineAggregate = aggregateCandidateMetrics(
     baselineSeedRuns.map((seedRun) => ({ metrics: seedRun.metrics })),
   );
+  const baselineHoldoutAggregate =
+    Array.isArray(grid.holdoutWorlds) && grid.holdoutWorlds.length > 0
+      ? aggregateCandidateMetrics(
+          baselineSeedRuns.map((seedRun) => ({
+            metrics: scoreCandidate(
+              seedRun.summary,
+              seedRun.worlds,
+              grid.holdoutWorlds,
+              grid.objective,
+            ),
+          })),
+        )
+      : null;
 
   const results = [];
   for (const [index, combination] of limitedCombinations.entries()) {
@@ -526,28 +619,55 @@ export async function main() {
           }))
           .sort((left, right) => left.convergenceScore - right.convergenceScore)
           .slice(0, 5),
+        holdoutMetrics:
+          Array.isArray(grid.holdoutWorlds) && grid.holdoutWorlds.length > 0
+            ? scoreCandidate(
+                result.summary,
+                result.artifact.worlds,
+                grid.holdoutWorlds,
+                grid.objective,
+              )
+            : null,
       });
     }
     const metrics = aggregateCandidateMetrics(seedRuns);
+    const holdoutMetrics =
+      Array.isArray(grid.holdoutWorlds) && grid.holdoutWorlds.length > 0
+        ? aggregateCandidateMetrics(
+            seedRuns
+              .filter((seedRun) => seedRun.holdoutMetrics)
+              .map((seedRun) => ({ metrics: seedRun.holdoutMetrics })),
+          )
+        : null;
+    const selectionScore = Number(
+      (
+        metrics.objective -
+        holdoutPenalty(holdoutMetrics, baselineHoldoutAggregate)
+      ).toFixed(4),
+    );
     results.push({
       rankHint: index + 1,
       tuning,
       metrics,
+      holdoutMetrics,
+      selectionScore,
       seedRuns,
       worstWorlds: seedRuns[0]?.worstWorlds ?? [],
     });
   }
 
-  results.sort((left, right) => right.metrics.objective - left.metrics.objective);
+  results.sort((left, right) => right.selectionScore - left.selectionScore);
   const output = {
     profile,
     objective: grid.objective,
     candidateCount: results.length,
     seeds,
     focusWorlds: grid.focusWorlds,
+    holdoutWorlds: grid.holdoutWorlds ?? [],
     protectedWorlds: grid.protectedWorlds ?? [],
     baseline: {
       metrics: baselineAggregate,
+      holdoutMetrics: baselineHoldoutAggregate,
       worldScores: Object.fromEntries(baselineWorldScores.entries()),
     },
     topCandidates: results.slice(0, Math.max(1, topK)),
