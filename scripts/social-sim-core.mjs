@@ -832,7 +832,7 @@ export async function runSocialSimulation(config) {
       scenarioFixturePath: config.scenarioFixturePath,
       tuning: config.tuning,
     },
-    bootstrap,
+    bootstrap: artifactBootstrap,
     worlds: worldRuns,
     summary,
   };
@@ -3854,6 +3854,10 @@ class SocialSimBackendAdapter {
         notes: Array.isArray(payload?.data?.notes) ? payload.data.notes : [],
       };
 
+      const remoteProvider =
+        this.config.provider === "stub" ? undefined : this.config.provider;
+      const remoteJudgeProvider =
+        this.config.judgeProvider === "stub" ? undefined : this.config.judgeProvider;
       const runResponse = await fetch(`${this.baseUrl}/api/admin/social-sim/runs`, {
         method: "POST",
         headers: {
@@ -3865,8 +3869,8 @@ class SocialSimBackendAdapter {
         },
         body: JSON.stringify({
           scenarioFamily: "full-social-world",
-          provider: this.config.provider,
-          judgeProvider: this.config.judgeProvider,
+          ...(remoteProvider ? { provider: remoteProvider } : {}),
+          ...(remoteJudgeProvider ? { judgeProvider: remoteJudgeProvider } : {}),
           horizon: this.config.horizon === "all" ? "medium" : this.config.horizon,
           seed: String(this.config.seed),
           namespace,

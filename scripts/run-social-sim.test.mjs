@@ -710,7 +710,8 @@ test("backend adapter retries abuse throttling before falling back offline", asy
 test("backend bootstrap redacts secret env values in artifacts", async () => {
   const artifactRoot = mkdtempSync(path.join(os.tmpdir(), "social-sim-redact-"));
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = async (input) => {
+  const remoteRunBodies = [];
+  globalThis.fetch = async (input, init) => {
     const url = String(input);
     if (url.endsWith("/api/admin/playground/bootstrap")) {
       return {
@@ -736,6 +737,7 @@ test("backend bootstrap redacts secret env values in artifacts", async () => {
       };
     }
     if (url.endsWith("/api/admin/social-sim/runs")) {
+      remoteRunBodies.push(JSON.parse(String(init?.body ?? "{}")));
       return {
         ok: true,
         status: 200,
@@ -788,10 +790,20 @@ test("backend bootstrap redacts secret env values in artifacts", async () => {
     const summary = JSON.parse(
       readFileSync(path.join(result.runDir, "summary.json"), "utf8"),
     );
+    const runArtifact = JSON.parse(
+      readFileSync(path.join(result.runDir, "run.json"), "utf8"),
+    );
     assert.equal(summary.bootstrap.env.SMOKE_ACCESS_TOKEN, "[redacted]");
     assert.equal(summary.bootstrap.env.SOCIAL_SIM_ADMIN_API_KEY, "[redacted]");
     assert.equal(summary.bootstrap.env.ONBOARDING_PROBE_TOKEN, "[redacted]");
     assert.equal(summary.bootstrap.env.SMOKE_BASE_URL, "http://localhost:3000");
+    assert.equal(runArtifact.bootstrap.env.SMOKE_ACCESS_TOKEN, "[redacted]");
+    assert.equal(runArtifact.bootstrap.env.SOCIAL_SIM_ADMIN_API_KEY, "[redacted]");
+    assert.equal(runArtifact.bootstrap.env.ONBOARDING_PROBE_TOKEN, "[redacted]");
+    assert.equal(runArtifact.bootstrap.env.SMOKE_BASE_URL, "http://localhost:3000");
+    assert.equal(remoteRunBodies.length, 1);
+    assert.equal("provider" in remoteRunBodies[0], false);
+    assert.equal("judgeProvider" in remoteRunBodies[0], false);
   } finally {
     globalThis.fetch = originalFetch;
     rmSync(artifactRoot, { recursive: true, force: true });
