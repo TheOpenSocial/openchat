@@ -358,6 +358,10 @@ export function parseSocialSimArgs(argv = process.argv.slice(2), env = process.e
     flags.get("ollama-model") ?? env.SOCIAL_SIM_OLLAMA_MODEL,
     "llama3.1",
   );
+  const ollamaApiKey = normalizeString(
+    flags.get("ollama-api-key") ?? env.OLLAMA_API_KEY,
+    "",
+  );
   const openaiModel = normalizeString(
     flags.get("openai-model") ?? env.SOCIAL_SIM_OPENAI_MODEL,
     "gpt-4.1-mini",
@@ -464,6 +468,7 @@ export function parseSocialSimArgs(argv = process.argv.slice(2), env = process.e
     adminApiKey,
     ollamaBaseUrl,
     ollamaModel,
+    ollamaApiKey,
     openaiApiKey,
     openaiModel,
     useRemoteProvider,
@@ -3221,6 +3226,7 @@ class OllamaSocialSimProvider extends RemoteSocialSimProviderBase {
         "",
       );
     this.model = normalizeString(config.ollamaModel, "llama3.1");
+    this.apiKey = normalizeString(config.ollamaApiKey, "");
     this.useRemote = config.useRemoteProvider || boolFromEnv(process.env.SOCIAL_SIM_USE_REMOTE_PROVIDER);
   }
 
@@ -3229,7 +3235,7 @@ class OllamaSocialSimProvider extends RemoteSocialSimProviderBase {
     try {
       const response = await fetch(`${this.endpoint}/api/chat`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: buildOllamaHeaders(this.apiKey),
         body: JSON.stringify({
           model: this.model,
           format: "json",
@@ -3473,6 +3479,7 @@ class OllamaJudgeProvider extends RemoteJudgeProviderBase {
         "",
       );
     this.model = normalizeString(config.ollamaModel, "llama3.1");
+    this.apiKey = normalizeString(config.ollamaApiKey, "");
     this.useRemote =
       config.useRemoteJudge || boolFromEnv(process.env.SOCIAL_SIM_USE_REMOTE_JUDGE);
   }
@@ -3490,7 +3497,7 @@ class OllamaJudgeProvider extends RemoteJudgeProviderBase {
     try {
       const response = await fetch(`${this.endpoint}/api/chat`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: buildOllamaHeaders(this.apiKey),
         body: JSON.stringify({
           model: this.model,
           format: "json",
@@ -3527,6 +3534,15 @@ class OllamaJudgeProvider extends RemoteJudgeProviderBase {
       return null;
     }
   }
+}
+
+function buildOllamaHeaders(apiKey = "") {
+  const headers = { "content-type": "application/json" };
+  const normalizedApiKey = normalizeString(apiKey, "");
+  if (normalizedApiKey) {
+    headers.authorization = `Bearer ${normalizedApiKey}`;
+  }
+  return headers;
 }
 
 class OpenAIJudgeProvider extends RemoteJudgeProviderBase {
