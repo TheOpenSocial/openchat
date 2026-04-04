@@ -172,11 +172,16 @@ test("loadSocialSimWorldFixture normalizes canonical fixture worlds", () => {
   assert.ok(worlds.some((world) => world.id === "medium-multi-cluster-bridging-v1"));
   assert.ok(worlds.some((world) => world.id === "long-recurring-circle-fragmentation-v1"));
   assert.ok(worlds.some((world) => world.id === "long-bad-actor-containment-v1"));
+  assert.ok(worlds.some((world) => world.id === "medium-cross-cluster-holdout-v1"));
+  assert.ok(worlds.some((world) => world.id === "long-trust-boundary-holdout-v1"));
   const recoveryWorld = worlds.find((world) => world.id === "short-no-match-recovery-v1");
   assert.equal(recoveryWorld?.actors.length, 3);
   assert.equal(recoveryWorld?.relationships.length, 3);
   assert.deepEqual(recoveryWorld?.oracle.preferredOutcomeEdges, ["cora-mina"]);
   assert.deepEqual(recoveryWorld?.oracle.forbiddenOutcomeEdges, ["cora-drew", "drew-mina"]);
+  const holdoutWorld = worlds.find((world) => world.id === "medium-cross-cluster-holdout-v1");
+  assert.equal(holdoutWorld?.worldSet, "holdout");
+  assert.equal(holdoutWorld?.family, "dense-social-graph");
   assert.ok(worlds.every((world) => Array.isArray(world.actors)));
   assert.ok(worlds.every((world) => Array.isArray(world.relationships)));
 });
@@ -209,6 +214,20 @@ test("selectSocialSimWorlds narrows by horizon and scenario", () => {
     scenarioFilter: ["social_recurring_circle_join_v1"],
   });
   assert.ok(byScenario.some((world) => world.id === "medium-recurring-circle-v1"));
+
+  const holdoutOnly = selectSocialSimWorlds(worlds, {
+    horizon: "all",
+    worldFilter: [],
+    scenarioFilter: [],
+    worldSet: "holdout",
+  });
+  assert.deepEqual(
+    holdoutOnly.map((world) => world.id).sort(),
+    [
+      "long-trust-boundary-holdout-v1",
+      "medium-cross-cluster-holdout-v1",
+    ],
+  );
 });
 
 test("provider and judge factories return deterministic stub adapters", async () => {
@@ -630,6 +649,7 @@ test("search runner uses stable default seeds and writes summary artifacts", () 
     {
       encoding: "utf8",
       stdio: "pipe",
+      maxBuffer: 20 * 1024 * 1024,
     },
   );
 
@@ -668,6 +688,7 @@ test("search runner honors explicit multi-seed overrides", () => {
     {
       encoding: "utf8",
       stdio: "pipe",
+      maxBuffer: 20 * 1024 * 1024,
     },
   );
 
@@ -689,6 +710,7 @@ test("search runner reports holdout metrics for holdout profile", () => {
     {
       encoding: "utf8",
       stdio: "pipe",
+      maxBuffer: 20 * 1024 * 1024,
     },
   );
 
@@ -718,6 +740,7 @@ test("search runner reports holdout metrics for guarded profiles", () => {
     {
       encoding: "utf8",
       stdio: "pipe",
+      maxBuffer: 20 * 1024 * 1024,
     },
   );
 

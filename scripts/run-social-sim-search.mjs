@@ -11,6 +11,19 @@ import {
   runSocialSimulation,
 } from "./social-sim-core.mjs";
 
+const CURRENT_TUNING_WORLDS = new Set([
+  "short-no-match-recovery-v1",
+  "medium-multi-cluster-bridging-v1",
+  "long-network-rebalancing-v1",
+  "long-recurring-circle-fragmentation-v1",
+  "long-bad-actor-containment-v1",
+]);
+
+const HOLDOUT_ONLY_V2_WORLDS = [
+  "medium-cross-cluster-holdout-v1",
+  "long-trust-boundary-holdout-v1",
+];
+
 export function parseSearchArgs(argv = process.argv.slice(2)) {
   const flags = new Map();
   for (const arg of argv) {
@@ -313,6 +326,37 @@ export function buildCandidateGrid(profile) {
       ],
     };
   }
+  if (profile === "holdout-balance-v2") {
+    return {
+      objective: "holdout-only",
+      focusWorlds: HOLDOUT_ONLY_V2_WORLDS,
+      holdoutWorlds: HOLDOUT_ONLY_V2_WORLDS,
+      protectedWorlds: HOLDOUT_ONLY_V2_WORLDS,
+      excludedWorlds: Array.from(CURRENT_TUNING_WORLDS),
+      dimensions: [
+        {
+          key: "scoring.expectationFulfillmentWeight",
+          values: [0.22, 0.26, 0.3],
+        },
+        {
+          key: "probabilities.matchingGroupInvite",
+          values: [0.52, 0.58, 0.64],
+        },
+        {
+          key: "probabilities.denseConversationInvite",
+          values: [0.52, 0.6, 0.68],
+        },
+        {
+          key: "thresholds.nearMatchMin",
+          values: [0.62, 0.65, 0.68],
+        },
+        {
+          key: "priority.circleNearMatchBonus",
+          values: [0.06, 0.08, 0.12],
+        },
+      ],
+    };
+  }
 
   throw new Error(`Unknown social-sim search profile: ${profile}`);
 }
@@ -466,6 +510,19 @@ export function scoreCandidate(
           meanStrengthLiftMean * 0.08 -
           weakStartMatchMean * 0.04 -
           regressionPenalty * 0.45
+      : objective === "holdout-only"
+        ? overall * 0.2 +
+          weakMean * 0.14 +
+          weakMin * 0.12 +
+          oracleScoreMean * 0.2 +
+          oracleProgressMean * 0.16 +
+          closurePrecisionMean * 0.12 +
+          preferredRecallMean * 0.1 +
+          forbiddenAvoidanceMean * 0.06 +
+          strongCoverageMean * 0.12 +
+          meanStrengthLiftMean * 0.1 -
+          weakStartMatchMean * 0.04 -
+          regressionPenalty * 0.5
       : overall * 0.35 +
         weakMean * 0.2 +
         weakMin * 0.1 +
@@ -491,6 +548,211 @@ export function scoreCandidate(
     forbiddenAvoidanceMean: Number(forbiddenAvoidanceMean.toFixed(4)),
     regressionPenalty: Number(regressionPenalty.toFixed(4)),
   };
+}
+
+function average(values) {
+  return values.length > 0
+    ? values.reduce((sum, value) => sum + value, 0) / values.length
+    : 0;
+}
+
+export function findWorstWorldByDiagnostics(worldDiagnostics) {
+  return (
+    worldDiagnostics
+      .slice()
+      .sort((left, right) => {
+        const severityGap =
+          (right.topReason?.severity ?? 0) - (left.topReason?.severity ?? 0);
+        if (Math.abs(severityGap) > 0.0001) return severityGap;
+        return (left.convergenceScore ?? 0) - (right.convergenceScore ?? 0);
+      })[0] ?? null
+  );
+}
+
+function buildWorldReasonCandidates(diagnostic) {
+  const reasons = [];
+  if ((diagnostic.deltaConvergence ?? 0) <= -0.12) {
+    reasons.push({
+      code: "regressed_convergence",
+      severity: Math.abs(diagnostic.deltaConvergence),
+      message: `${diagnostic.worldId} regressed against baseline by ${diagnostic.deltaConvergence.toFixed(3)}`,
+    });
+  }
+  if ((diagnostic.convergenceScore ?? 0) < 0.2) {
+    reasons.push({
+      code: "critical_low_convergence",
+      severity: 0.35 - (diagnostic.convergenceScore ?? 0),
+      message: `${diagnostic.worldId} is critically low on convergence`,
+    });
+  }
+  if (
+    diagnostic.family !== "recovery" &&
+    (diagnostic.matchedRelationships ?? 0) === 0 &&
+    (diagnostic.convergenceScore ?? 0) < 0.55
+  ) {
+    reasons.push({
+      code: "no_durable_match",
+      severity: 0.24,
+      message: `${diagnostic.worldId} is not converting healthy edges into durable matches`,
+    });
+  }
+  if (
+    diagnostic.family === "recovery" &&
+    (diagnostic.noMatchRecoveryQuality ?? 0) < 0.62
+  ) {
+    reasons.push({
+      code: "weak_recovery_path",
+      severity: 0.2,
+      message: `${diagnostic.worldId} recovery quality is too low for a recovery-first world`,
+    });
+  }
+  if (
+    diagnostic.family === "circle" &&
+    (diagnostic.memoryConsistency ?? 0) < 0.62
+  ) {
+    reasons.push({
+      code: "weak_circle_continuity",
+      severity: 0.18,
+      message: `${diagnostic.worldId} is not preserving circle continuity strongly enough`,
+    });
+  }
+  if (
+    diagnostic.family === "dense-social-graph" &&
+    ((diagnostic.strongRelationshipCoverage ?? 0) < 0.45 ||
+      (diagnostic.oracleProgressScore ?? 0) < 0.45)
+  ) {
+    reasons.push({
+      code: "weak_group_progress",
+      severity: 0.18 + Math.max(0, 0.45 - (diagnostic.oracleProgressScore ?? 0)),
+      message: `${diagnostic.worldId} is underperforming on group progress and bridge formation`,
+    });
+  }
+  if ((diagnostic.closurePrecision ?? 1) < 0.45) {
+    reasons.push({
+      code: "low_closure_precision",
+      severity: 0.45 - (diagnostic.closurePrecision ?? 0),
+      message: `${diagnostic.worldId} is closing the wrong edges too often`,
+    });
+  }
+  if ((diagnostic.weakStartMatchMean ?? 0) > 0.5) {
+    reasons.push({
+      code: "weak_start_overpromotion",
+      severity: (diagnostic.weakStartMatchMean ?? 0) - 0.5,
+      message: `${diagnostic.worldId} is over-promoting weak starting relationships`,
+    });
+  }
+  if (reasons.length === 0) {
+    reasons.push({
+      code: "no_major_regression",
+      severity: 0,
+      message: `${diagnostic.worldId} has no dominant regression signature`,
+    });
+  }
+  return reasons.sort((left, right) => right.severity - left.severity);
+}
+
+export function aggregateWorldDiagnostics(
+  seedRuns,
+  options = {},
+) {
+  const selectedWorlds =
+    Array.isArray(options.selectedWorlds) && options.selectedWorlds.length > 0
+      ? new Set(options.selectedWorlds)
+      : null;
+  const baselineWorldScores = options.baselineWorldScores ?? new Map();
+  const aggregate = new Map();
+
+  for (const seedRun of seedRuns) {
+    for (const world of seedRun.worlds ?? []) {
+      if (selectedWorlds && !selectedWorlds.has(world.worldId)) continue;
+      const key = world.worldId;
+      const current = aggregate.get(key) ?? {
+        worldId: world.worldId,
+        family: world.family,
+        horizon: world.horizon,
+        convergenceScore: [],
+        matchedRelationships: [],
+        noMatchRecoveryQuality: [],
+        memoryConsistency: [],
+        strongRelationshipCoverage: [],
+        weakStartMatchMean: [],
+        meanStrengthLift: [],
+        oracleScore: [],
+        oracleProgressScore: [],
+        closurePrecision: [],
+        preferredRecall: [],
+        forbiddenAvoidance: [],
+      };
+      const summary = world.summary ?? {};
+      current.convergenceScore.push(summary.convergenceScore ?? 0);
+      current.matchedRelationships.push(summary.matchedRelationships ?? 0);
+      current.noMatchRecoveryQuality.push(summary.noMatchRecoveryQuality ?? 0);
+      current.memoryConsistency.push(summary.memoryConsistency ?? 0);
+      current.strongRelationshipCoverage.push(summary.strongRelationshipCoverage ?? 0);
+      current.weakStartMatchMean.push(summary.weakStartMatchCount ?? 0);
+      current.meanStrengthLift.push(summary.meanStrengthLift ?? 0);
+      current.oracleScore.push(summary.oracleScore ?? 0);
+      current.oracleProgressScore.push(summary.oracleProgressScore ?? 0);
+      current.closurePrecision.push(summary.closurePrecision ?? 0);
+      current.preferredRecall.push(summary.preferredRecall ?? 0);
+      current.forbiddenAvoidance.push(summary.forbiddenAvoidance ?? 0);
+      aggregate.set(key, current);
+    }
+  }
+
+  return Array.from(aggregate.values())
+    .map((entry) => {
+      const diagnostic = {
+        worldId: entry.worldId,
+        family: entry.family,
+        horizon: entry.horizon,
+        convergenceScore: Number(average(entry.convergenceScore).toFixed(4)),
+        matchedRelationships: Number(average(entry.matchedRelationships).toFixed(4)),
+        noMatchRecoveryQuality: Number(average(entry.noMatchRecoveryQuality).toFixed(4)),
+        memoryConsistency: Number(average(entry.memoryConsistency).toFixed(4)),
+        strongRelationshipCoverage: Number(average(entry.strongRelationshipCoverage).toFixed(4)),
+        weakStartMatchMean: Number(average(entry.weakStartMatchMean).toFixed(4)),
+        meanStrengthLift: Number(average(entry.meanStrengthLift).toFixed(4)),
+        oracleScore: Number(average(entry.oracleScore).toFixed(4)),
+        oracleProgressScore: Number(average(entry.oracleProgressScore).toFixed(4)),
+        closurePrecision: Number(average(entry.closurePrecision).toFixed(4)),
+        preferredRecall: Number(average(entry.preferredRecall).toFixed(4)),
+        forbiddenAvoidance: Number(average(entry.forbiddenAvoidance).toFixed(4)),
+      };
+      const baselineConvergence = baselineWorldScores.get(entry.worldId);
+      const baselineCoverage = baselineWorldScores.get(`${entry.worldId}:strongCoverage`);
+      diagnostic.deltaConvergence = Number(
+        (
+          diagnostic.convergenceScore -
+          (Number.isFinite(baselineConvergence) ? baselineConvergence : diagnostic.convergenceScore)
+        ).toFixed(4),
+      );
+      diagnostic.deltaStrongCoverage = Number(
+        (
+          diagnostic.strongRelationshipCoverage -
+          (Number.isFinite(baselineCoverage)
+            ? baselineCoverage
+            : diagnostic.strongRelationshipCoverage)
+        ).toFixed(4),
+      );
+      diagnostic.reasonCandidates = buildWorldReasonCandidates(diagnostic);
+      diagnostic.topReason = diagnostic.reasonCandidates[0];
+      return diagnostic;
+    })
+    .sort((left, right) => left.convergenceScore - right.convergenceScore);
+}
+
+export function findTopRegressionReason(worldDiagnostics) {
+  const candidates = worldDiagnostics
+    .map((world) => ({
+      worldId: world.worldId,
+      family: world.family,
+      ...world.topReason,
+      convergenceScore: world.convergenceScore,
+      deltaConvergence: world.deltaConvergence,
+    }))
+    .sort((left, right) => right.severity - left.severity);
+  return candidates[0] ?? null;
 }
 
 export function aggregateCandidateMetrics(seedRuns) {
@@ -557,7 +819,7 @@ export function aggregateCandidateMetrics(seedRuns) {
   };
 }
 
-function holdoutPenalty(candidateMetrics, baselineMetrics) {
+export function holdoutPenalty(candidateMetrics, baselineMetrics) {
   if (!baselineMetrics) return 0;
   return (
     Math.max(0, (baselineMetrics.overall ?? 0) - (candidateMetrics.overall ?? 0)) * 0.4 +
@@ -604,6 +866,7 @@ export async function main() {
       ...baseConfig,
       provider: "stub",
       judgeProvider: "stub",
+      worldSet: "all",
       dryRun: true,
       cleanupMode: "none",
       artifactRoot,
@@ -671,6 +934,17 @@ export async function main() {
           })),
         )
       : null;
+  const baselineWorldDiagnostics = aggregateWorldDiagnostics(baselineSeedRuns, {
+    selectedWorlds: grid.focusWorlds,
+    baselineWorldScores,
+  });
+  const baselineHoldoutDiagnostics =
+    Array.isArray(grid.holdoutWorlds) && grid.holdoutWorlds.length > 0
+      ? aggregateWorldDiagnostics(baselineSeedRuns, {
+          selectedWorlds: grid.holdoutWorlds,
+          baselineWorldScores,
+        })
+      : [];
 
   const results = [];
   for (const [index, combination] of limitedCombinations.entries()) {
@@ -685,6 +959,7 @@ export async function main() {
         ...baseConfig,
         provider: "stub",
         judgeProvider: "stub",
+        worldSet: "all",
         dryRun: true,
         cleanupMode: "none",
         artifactRoot,
@@ -697,6 +972,8 @@ export async function main() {
         seed,
         runId: result.artifact.runId,
         runDir: result.runDir,
+        summary: result.summary,
+        worlds: result.artifact.worlds,
         metrics: scoreCandidate(
           result.summary,
           result.artifact.worlds,
@@ -740,18 +1017,53 @@ export async function main() {
         holdoutPenalty(holdoutMetrics, baselineHoldoutAggregate)
       ).toFixed(4),
     );
+    const worldDiagnostics = aggregateWorldDiagnostics(seedRuns, {
+      selectedWorlds: grid.focusWorlds,
+      baselineWorldScores,
+    });
+    const holdoutDiagnostics =
+      Array.isArray(grid.holdoutWorlds) && grid.holdoutWorlds.length > 0
+        ? aggregateWorldDiagnostics(seedRuns, {
+            selectedWorlds: grid.holdoutWorlds,
+            baselineWorldScores,
+          })
+        : [];
     results.push({
       rankHint: index + 1,
       tuning,
       metrics,
       holdoutMetrics,
       selectionScore,
+      topRegressionReason: findTopRegressionReason(worldDiagnostics),
+      holdoutTopRegressionReason: findTopRegressionReason(holdoutDiagnostics),
+      worstHoldoutWorld: findWorstWorldByDiagnostics(holdoutDiagnostics),
+      worstSeedWorld:
+        seedRuns
+          .flatMap((seedRun) =>
+            (seedRun.worstWorlds ?? []).map((world) => ({
+              seed: seedRun.seed,
+              ...world,
+            })),
+          )
+          .sort((left, right) => left.convergenceScore - right.convergenceScore)[0] ?? null,
+      worldDiagnostics,
+      holdoutDiagnostics,
       seedRuns,
       worstWorlds: seedRuns[0]?.worstWorlds ?? [],
     });
   }
 
   results.sort((left, right) => right.selectionScore - left.selectionScore);
+  const topCandidates = results.slice(0, Math.max(1, topK));
+  const topHoldoutCandidates = results
+    .slice()
+    .filter((result) => result.holdoutMetrics)
+    .sort(
+      (left, right) =>
+        (right.holdoutMetrics?.objective ?? Number.NEGATIVE_INFINITY) -
+        (left.holdoutMetrics?.objective ?? Number.NEGATIVE_INFINITY),
+    )
+    .slice(0, Math.max(1, topK));
   const output = {
     profile,
     objective: grid.objective,
@@ -760,12 +1072,29 @@ export async function main() {
     focusWorlds: grid.focusWorlds,
     holdoutWorlds: grid.holdoutWorlds ?? [],
     protectedWorlds: grid.protectedWorlds ?? [],
+    excludedWorlds: grid.excludedWorlds ?? [],
     baseline: {
       metrics: baselineAggregate,
       holdoutMetrics: baselineHoldoutAggregate,
+      topRegressionReason: findTopRegressionReason(baselineWorldDiagnostics),
+      holdoutTopRegressionReason: findTopRegressionReason(baselineHoldoutDiagnostics),
+      worstHoldoutWorld: findWorstWorldByDiagnostics(baselineHoldoutDiagnostics),
+      worstSeedWorld:
+        baselineSeedRuns
+          .flatMap((seedRun) =>
+            (seedRun.worlds ?? []).map((world) => ({
+              seed: seedRun.seed,
+              worldId: world.worldId,
+              convergenceScore: world.summary?.convergenceScore ?? 0,
+            })),
+          )
+          .sort((left, right) => left.convergenceScore - right.convergenceScore)[0] ?? null,
+      worldDiagnostics: baselineWorldDiagnostics,
+      holdoutDiagnostics: baselineHoldoutDiagnostics,
       worldScores: Object.fromEntries(baselineWorldScores.entries()),
     },
-    topCandidates: results.slice(0, Math.max(1, topK)),
+    topCandidates,
+    topHoldoutCandidates,
   };
 
   writeFileSync(

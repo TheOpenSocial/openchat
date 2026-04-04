@@ -12,10 +12,14 @@ import {
 } from "./social-sim-core.mjs";
 import {
   aggregateCandidateMetrics,
+  aggregateWorldDiagnostics,
   buildCandidateGrid,
   cartesianProduct,
   createCandidateTuning,
+  findWorstWorldByDiagnostics,
+  findTopRegressionReason,
   getSearchSeeds,
+  holdoutPenalty,
   parseSearchArgs,
   scoreCandidate,
   setNestedValue,
@@ -45,18 +49,6 @@ function tuningKey(tuning) {
   return JSON.stringify(tuning);
 }
 
-function holdoutPenalty(candidateMetrics, baselineMetrics) {
-  if (!baselineMetrics) return 0;
-  return (
-    Math.max(0, (baselineMetrics.overall ?? 0) - (candidateMetrics.overall ?? 0)) * 0.4 +
-    Math.max(
-      0,
-      (baselineMetrics.strongCoverageMean ?? 0) - (candidateMetrics.strongCoverageMean ?? 0),
-    ) * 0.2 +
-    Math.max(0, (baselineMetrics.weakMin ?? 0) - (candidateMetrics.weakMin ?? 0)) * 0.2
-  );
-}
-
 async function buildBaseline(baseConfig, grid, seeds, artifactRoot) {
   const baselineSeedRuns = [];
   for (const seed of seeds) {
@@ -64,6 +56,7 @@ async function buildBaseline(baseConfig, grid, seeds, artifactRoot) {
       ...baseConfig,
       provider: "stub",
       judgeProvider: "stub",
+      worldSet: "all",
       dryRun: true,
       cleanupMode: "none",
       artifactRoot,
@@ -135,6 +128,17 @@ async function buildBaseline(baseConfig, grid, seeds, artifactRoot) {
             })),
           )
         : null,
+    worldDiagnostics: aggregateWorldDiagnostics(baselineSeedRuns, {
+      selectedWorlds: grid.focusWorlds,
+      baselineWorldScores,
+    }),
+    holdoutDiagnostics:
+      Array.isArray(grid.holdoutWorlds) && grid.holdoutWorlds.length > 0
+        ? aggregateWorldDiagnostics(baselineSeedRuns, {
+            selectedWorlds: grid.holdoutWorlds,
+            baselineWorldScores,
+          })
+        : [],
     worldScores: baselineWorldScores,
   };
 }
@@ -154,6 +158,7 @@ async function evaluateCandidate({
       ...baseConfig,
       provider: "stub",
       judgeProvider: "stub",
+      worldSet: "all",
       dryRun: true,
       cleanupMode: "none",
       artifactRoot,
@@ -177,17 +182,17 @@ async function evaluateCandidate({
       runDir: result.runDir,
       summary: result.summary,
       worlds: result.artifact.worlds,
-      metrics: scoreCandidate(
-        result.summary,
-        result.artifact.worlds,
+        metrics: scoreCandidate(
+          result.summary,
+          result.artifact.worlds,
         grid.focusWorlds,
         grid.objective,
-        {
-          protectedWorlds: grid.protectedWorlds,
-          baselineWorldScores,
+          {
+            protectedWorlds: grid.protectedWorlds,
+            baselineWorldScores,
           },
         ),
-      holdoutMetrics,
+        holdoutMetrics,
       worstWorlds: result.artifact.worlds
         .map((world) => ({
           worldId: world.worldId,
@@ -198,6 +203,17 @@ async function evaluateCandidate({
     });
   }
 
+  const worldDiagnostics = aggregateWorldDiagnostics(seedRuns, {
+    selectedWorlds: grid.focusWorlds,
+    baselineWorldScores,
+  });
+  const holdoutDiagnostics =
+    Array.isArray(grid.holdoutWorlds) && grid.holdoutWorlds.length > 0
+      ? aggregateWorldDiagnostics(seedRuns, {
+          selectedWorlds: grid.holdoutWorlds,
+          baselineWorldScores,
+        })
+      : [];
   return {
     tuning,
     metrics: aggregateCandidateMetrics(seedRuns),
@@ -209,6 +225,20 @@ async function evaluateCandidate({
               .map((seedRun) => ({ metrics: seedRun.holdoutMetrics })),
           )
         : null,
+    topRegressionReason: findTopRegressionReason(worldDiagnostics),
+    holdoutTopRegressionReason: findTopRegressionReason(holdoutDiagnostics),
+    worstHoldoutWorld: findWorstWorldByDiagnostics(holdoutDiagnostics),
+    worstSeedWorld:
+      seedRuns
+        .flatMap((seedRun) =>
+          (seedRun.worstWorlds ?? []).map((world) => ({
+            seed: seedRun.seed,
+            ...world,
+          })),
+        )
+        .sort((left, right) => left.convergenceScore - right.convergenceScore)[0] ?? null,
+    worldDiagnostics,
+    holdoutDiagnostics,
     seedRuns,
     worstWorlds: seedRuns[0]?.worstWorlds ?? [],
   };
@@ -311,6 +341,15 @@ async function main() {
     .slice()
     .sort((left, right) => right.selectionScore - left.selectionScore)
     .slice(0, Math.max(1, topK));
+  const topHoldoutCandidates = history
+    .slice()
+    .filter((candidate) => candidate.holdoutMetrics)
+    .sort(
+      (left, right) =>
+        (right.holdoutMetrics?.objective ?? Number.NEGATIVE_INFINITY) -
+        (left.holdoutMetrics?.objective ?? Number.NEGATIVE_INFINITY),
+    )
+    .slice(0, Math.max(1, topK));
 
   const output = {
     profile,
@@ -319,12 +358,29 @@ async function main() {
     focusWorlds: grid.focusWorlds,
     holdoutWorlds: grid.holdoutWorlds ?? [],
     protectedWorlds: grid.protectedWorlds ?? [],
+    excludedWorlds: grid.excludedWorlds ?? [],
     baseline: {
       metrics: baseline.metrics,
       holdoutMetrics: baseline.holdoutMetrics,
+      topRegressionReason: findTopRegressionReason(baseline.worldDiagnostics),
+      holdoutTopRegressionReason: findTopRegressionReason(baseline.holdoutDiagnostics),
+      worstHoldoutWorld: findWorstWorldByDiagnostics(baseline.holdoutDiagnostics),
+      worstSeedWorld:
+        baseline.seedRuns
+          .flatMap((seedRun) =>
+            (seedRun.worlds ?? []).map((world) => ({
+              seed: seedRun.seed,
+              worldId: world.worldId,
+              convergenceScore: world.summary?.convergenceScore ?? 0,
+            })),
+          )
+          .sort((left, right) => left.convergenceScore - right.convergenceScore)[0] ?? null,
+      worldDiagnostics: baseline.worldDiagnostics,
+      holdoutDiagnostics: baseline.holdoutDiagnostics,
       worldScores: Object.fromEntries(baseline.worldScores.entries()),
     },
     topCandidates,
+    topHoldoutCandidates,
   };
 
   writeFileSync(

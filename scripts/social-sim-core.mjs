@@ -63,7 +63,7 @@ export const DEFAULT_SOCIAL_SIM_TUNING = {
     progressDensityDivisor: 2.8,
     matchedRatioWeight: 0.45,
     progressDensityWeight: 0.18,
-    expectationFulfillmentWeight: 0.26,
+    expectationFulfillmentWeight: 0.3,
     noStallBonus: 0.05,
     shallowFollowupDominanceStart: 1.2,
     shallowFollowupPenaltySlope: 0.16,
@@ -114,6 +114,7 @@ export const DEFAULT_SOCIAL_SIM_TUNING = {
 
 const VALID_PROVIDERS = new Set(["ollama", "openai", "stub"]);
 const VALID_CLEANUP_MODES = new Set(["archive", "delete", "none"]);
+const VALID_WORLD_SETS = new Set(["core", "holdout", "all"]);
 
 function nowIso() {
   return new Date().toISOString();
@@ -276,6 +277,10 @@ export function parseSocialSimArgs(argv = process.argv.slice(2), env = process.e
   const scenarioFilter = parseList(
     flags.get("scenario") ?? env.SOCIAL_SIM_SCENARIO,
   );
+  const worldSet = normalizeString(
+    flags.get("world-set") ?? env.SOCIAL_SIM_WORLD_SET,
+    "core",
+  ).toLowerCase();
   const seed = toNumber(
     flags.get("seed") ?? env.SOCIAL_SIM_SEED,
     Date.now() % 2_147_483_647,
@@ -401,12 +406,18 @@ export function parseSocialSimArgs(argv = process.argv.slice(2), env = process.e
       `Invalid cleanup mode "${cleanupMode}". Expected archive, delete, or none.`,
     );
   }
+  if (!VALID_WORLD_SETS.has(worldSet)) {
+    throw new Error(
+      `Invalid world set "${worldSet}". Expected core, holdout, or all.`,
+    );
+  }
 
   return {
     provider,
     judgeProvider,
     horizon,
     worldFilter,
+    worldSet,
     scenarioFilter,
     seed,
     namespace,
@@ -510,6 +521,9 @@ function normalizeWorld(world, index, scenarioCorpus) {
       : [],
     actors,
     relationships,
+    worldSet: normalizeString(world.worldSet, "core").toLowerCase() === "holdout"
+      ? "holdout"
+      : "core",
     evaluationFocus: Array.isArray(world.evaluationFocus)
       ? world.evaluationFocus.filter((value) => typeof value === "string")
       : [],
@@ -620,7 +634,14 @@ function selectHorizonWorlds(worlds, horizon) {
 }
 
 export function selectSocialSimWorlds(worlds, config) {
-  const selectedByHorizon = selectHorizonWorlds(worlds, config.horizon);
+  const selectedWorldSet = config.worldSet ?? "core";
+  const baseWorlds =
+    config.worldFilter.length > 0 || config.scenarioFilter.length > 0
+      ? worlds.slice()
+      : worlds.filter((world) =>
+          selectedWorldSet === "all" ? true : world.worldSet === selectedWorldSet,
+        );
+  const selectedByHorizon = selectHorizonWorlds(baseWorlds, config.horizon);
   const selectedByWorld = config.worldFilter.length
     ? selectedByHorizon.filter(
         (world) =>
@@ -1101,6 +1122,19 @@ function resolvePostRecoveryTargetActorId({
   return alternative?.members.find((member) => member !== actor.id) ?? null;
 }
 
+function classifyOracleRelationship(world, relationship) {
+  if (!relationship) return "neutral";
+  const oracle = world.oracle ?? {};
+  if ((oracle.forbiddenOutcomeEdges ?? []).includes(relationship.id)) return "forbidden";
+  if ((oracle.preferredOutcomeEdges ?? []).includes(relationship.id)) return "preferred";
+  if ((oracle.acceptableFallbackEdges ?? []).includes(relationship.id)) return "acceptable";
+  return "neutral";
+}
+
+function isRequiredGroupClosure(world, relationship) {
+  return (world.oracle?.requiredGroupClosure ?? []).includes(relationship?.id);
+}
+
 function worldNeedsRecovery(world) {
   return world.relationships.some((relationship) => relationship.strength < 0.35);
 }
@@ -1167,6 +1201,12 @@ function relationshipPriorityScore(
       ? tuning.priority.matchedPenalty
       : tuning.priority.unmatchedBonus;
   let score = relationship.strength + pendingBonus + ageBonus;
+  const oracleClass = classifyOracleRelationship(world, relationship);
+  if (oracleClass === "preferred") score += 0.26;
+  if (oracleClass === "acceptable") score += 0.12;
+  if (oracleClass === "forbidden") score -= 0.55;
+  if (isRequiredGroupClosure(world, relationship)) score += 0.14;
+  if (relationship.status === "matched" && oracleClass === "forbidden") score -= 0.35;
 
   if (lastAction === "recover_no_match") score += tuning.priority.recoverPenalty;
   if (lastAction === "flag_moderation") score += tuning.priority.moderationPenalty;
@@ -1220,6 +1260,681 @@ function relationshipPriorityScore(
   }
 
   return score;
+}
+
+function createPlannedAction({
+  context,
+  intent,
+  targetActorId = null,
+  detachedFromWeakFit = false,
+  confidence = null,
+  rationale = null,
+  memoryReferences = null,
+}) {
+  const { actor, state, world } = context;
+  const resolvedIntent = normalizeString(intent, "follow_up");
+  const resolvedTargetActorId = normalizeString(targetActorId, "") || null;
+  return {
+    provider: "heuristic",
+    promptVersion: SOCIAL_SIM_PROMPT_VERSION,
+    intent: resolvedIntent,
+    targetActorId: resolvedTargetActorId,
+    message: buildMessageForIntent({
+      intent: resolvedIntent,
+      actor,
+      targetActorId: resolvedTargetActorId,
+      world,
+      state,
+    }),
+    detachedFromWeakFit: Boolean(detachedFromWeakFit),
+    tone: actor.socialStyle,
+    confidence: clamp(
+      toNumber(
+        confidence,
+        resolvedIntent === "recover_no_match" ? 0.52 : 0.76,
+      ),
+      0,
+      1,
+    ),
+    rationale:
+      normalizeString(
+        rationale,
+        resolvedIntent === "reference_memory"
+          ? "Using earlier conversation context to improve continuity."
+          : resolvedIntent === "invite_group"
+            ? "Trying to move the social graph toward a broader group outcome."
+            : resolvedIntent === "propose_event"
+              ? "Trying to convert a weak or partial thread into a clearer concrete plan."
+              : resolvedIntent === "recover_no_match"
+                ? "The pairing looks weak, so the actor is trying a recovery path."
+                : "Advancing the conversation in a socially plausible way.",
+      ),
+    memoryReferences:
+      memoryReferences ??
+      (worldNeedsMemory(world)
+        ? [
+            {
+              key: "preference_memory",
+              confidence: 0.71,
+              excerpt: actor.goals[0] ?? actor.persona,
+            },
+          ]
+        : []),
+  };
+}
+
+function resolveActorTarget(world, actor, relationship) {
+  if (!relationship) return null;
+  return relationship.members.find((member) => member !== actor.id) ?? null;
+}
+
+function canUseNearMatch(world, relationship, tuning = DEFAULT_SOCIAL_SIM_TUNING) {
+  return (
+    relationship &&
+    relationship.status !== "matched" &&
+    relationship.strength >= tuning.thresholds.nearMatchMin
+  );
+}
+
+function shouldPreferMemory(world, actor, state, recentRelationshipAction) {
+  return (
+    worldNeedsMemory(world) &&
+    (state.stage === "memory_drift" ||
+      actor.memoryDriftProfile !== "stable" ||
+      recentRelationshipAction === "reference_memory")
+  );
+}
+
+function planRecoveryFamilyAction(context) {
+  const { actor, state, world, rng } = context;
+  const tuning = getTuning(context.config);
+  const targetRelationship = findBestRelationshipWithState(world, actor, null, state, tuning);
+  const weakRelationship = findWeakRelationshipWithState(world, actor, state, tuning);
+  const targetActorId = resolveActorTarget(world, actor, targetRelationship);
+  const weakTargetActorId = resolveActorTarget(world, actor, weakRelationship);
+  const knownTargets = state.knownTargets ?? new Map();
+  const lastActionByActor = state.lastActionByActor ?? new Map();
+  const recentActorAction = lastActionByActor.get(actor.id)?.intent ?? "";
+  const recentRelationshipAction =
+    targetRelationship ? knownTargets.get(targetRelationship.id)?.action ?? "" : "";
+  const recentWeakRelationshipAction =
+    weakRelationship ? knownTargets.get(weakRelationship.id)?.action ?? "" : "";
+  const recoveredRelationshipIds = world.relationships
+    .filter(
+      (relationship) =>
+        relationship.members.includes(actor.id) &&
+        knownTargets.get(relationship.id)?.action === "recover_no_match",
+    )
+    .map((relationship) => relationship.id);
+  const hasRecoveredRelationship =
+    recentRelationshipAction === "recover_no_match" ||
+    recentActorAction === "recover_no_match";
+  const mediumStrength = (targetRelationship?.strength ?? 0) >= tuning.thresholds.lowStrength &&
+    (targetRelationship?.strength ?? 0) < tuning.thresholds.mediumStrength;
+  const strongStrength = (targetRelationship?.strength ?? 0) >= tuning.thresholds.mediumStrength;
+
+  if (state.stage === "onboarding") {
+    return createPlannedAction({
+      context,
+      intent: "introduce",
+      targetActorId,
+    });
+  }
+
+  if (hasRecoveredRelationship && state.stage === "conversation") {
+    return createPlannedAction({
+      context,
+      intent: resolvePolicyAction(
+        tuning.policy.recoveryPostRecoveryConversationAction,
+        "invite_group",
+      ),
+      targetActorId: resolvePostRecoveryTargetActorId({
+        world,
+        actor,
+        state,
+        tuning,
+        currentTargetActorId: targetActorId,
+        excludedRelationshipIds: recoveredRelationshipIds,
+        strategy: tuning.policy.recoveryPostRecoveryTargetStrategy,
+      }),
+      detachedFromWeakFit: true,
+    });
+  }
+
+  if (hasRecoveredRelationship && state.stage === "convergence") {
+    return createPlannedAction({
+      context,
+      intent: resolvePolicyAction(
+        tuning.policy.recoveryPostRecoveryConvergenceAction,
+        "propose_event",
+      ),
+      targetActorId: resolvePostRecoveryTargetActorId({
+        world,
+        actor,
+        state,
+        tuning,
+        currentTargetActorId: targetActorId,
+        excludedRelationshipIds: recoveredRelationshipIds,
+        strategy: tuning.policy.recoveryPostRecoveryTargetStrategy,
+      }),
+      detachedFromWeakFit: true,
+    });
+  }
+
+  if (weakRelationship && worldNeedsRecovery(world) &&
+    (["group_seed", "circle_seed", "event_seed"].includes(actor.kind) ||
+      actor.socialStyle === "clear")
+  ) {
+    if (recentWeakRelationshipAction === "recover_no_match") {
+      return createPlannedAction({
+        context,
+        intent:
+          world.family === "circle"
+            ? "invite_group"
+            : state.stage === "convergence"
+              ? "propose_event"
+              : "invite_group",
+        targetActorId:
+          world.family === "network-rebalancing"
+            ? resolvePostRecoveryTargetActorId({
+                world,
+                actor,
+                state,
+                tuning,
+                currentTargetActorId: targetActorId,
+                excludedRelationshipIds: [
+                  ...recoveredRelationshipIds,
+                  weakRelationship?.id,
+                ].filter(Boolean),
+                strategy: tuning.policy.networkOrganizerPostRecoveryTargetStrategy,
+              })
+            : null,
+        detachedFromWeakFit: true,
+      });
+    }
+    return createPlannedAction({
+      context,
+      intent: "recover_no_match",
+      targetActorId: weakTargetActorId,
+    });
+  }
+
+  if (world.family === "recovery" && recentActorAction === "recover_no_match" && state.stage !== "onboarding") {
+    return createPlannedAction({
+      context,
+      intent:
+        state.stage === "matching"
+          ? "ask_preference"
+          : state.stage === "convergence"
+            ? "propose_event"
+            : "invite_group",
+      targetActorId: null,
+      detachedFromWeakFit: true,
+    });
+  }
+
+  if (isLowStrength(targetRelationship, tuning) && state.stage !== "onboarding") {
+    return createPlannedAction({
+      context,
+      intent: worldNeedsGroupProgress(world) && rng() > tuning.probabilities.lowStrengthGroupRecovery
+        ? "invite_group"
+        : "recover_no_match",
+      targetActorId: lowStrengthTargetActorId(world, actor, state, tuning, targetRelationship),
+      detachedFromWeakFit: false,
+    });
+  }
+
+  if (state.stage === "matching") {
+    return createPlannedAction({
+      context,
+      intent:
+        mediumStrength && worldNeedsGroupProgress(world) && rng() > tuning.probabilities.matchingGroupInvite
+          ? "invite_group"
+          : "ask_preference",
+      targetActorId: targetActorId,
+    });
+  }
+
+  if (
+    strongStrength &&
+    state.stage === "conversation"
+  ) {
+    return createPlannedAction({
+      context,
+      intent: "reply",
+      targetActorId,
+    });
+  }
+
+  if (state.stage === "memory_drift") {
+    return createPlannedAction({
+      context,
+      intent: shouldPreferMemory(world, actor, state, recentRelationshipAction)
+        ? "reference_memory"
+        : "follow_up",
+      targetActorId,
+    });
+  }
+
+  if (
+    worldNeedsMemory(world) &&
+    state.stage === "conversation" &&
+    rng() > tuning.probabilities.memoryConversation
+  ) {
+    return createPlannedAction({
+      context,
+      intent: "reference_memory",
+      targetActorId,
+    });
+  }
+
+  if (
+    state.stage === "conversation" &&
+    world.family === "dense-social-graph" &&
+    rng() > tuning.probabilities.denseConversationInvite
+  ) {
+    return createPlannedAction({
+      context,
+      intent: "invite_group",
+      targetActorId,
+    });
+  }
+
+  if (
+    state.stage === "conversation" &&
+    world.family === "pair-and-group" &&
+    rng() > tuning.probabilities.pairConversationInvite
+  ) {
+    return createPlannedAction({
+      context,
+      intent: "invite_group",
+      targetActorId,
+    });
+  }
+
+  if (
+    state.stage === "convergence" &&
+    world.family === "event-and-memory" &&
+    rng() > tuning.probabilities.eventConvergence
+  ) {
+    return createPlannedAction({
+      context,
+      intent: "propose_event",
+      targetActorId,
+    });
+  }
+
+  if (
+    state.stage === "convergence" &&
+    strongStrength &&
+    rng() > tuning.probabilities.strongConvergenceEvent
+  ) {
+    return createPlannedAction({
+      context,
+      intent: "propose_event",
+      targetActorId,
+    });
+  }
+
+  if (
+    shouldPreferMemory(world, actor, state, recentRelationshipAction) &&
+    state.stage !== "onboarding" &&
+    rng() > tuning.probabilities.genericMemoryReference
+  ) {
+    return createPlannedAction({
+      context,
+      intent: "reference_memory",
+      targetActorId,
+    });
+  }
+
+  return createPlannedAction({
+    context,
+    intent: "follow_up",
+    targetActorId,
+  });
+}
+
+function isLowStrength(relationship, tuning) {
+  return (relationship?.strength ?? 0) < tuning.thresholds.lowStrength;
+}
+
+function lowStrengthTargetActorId(world, actor, state, tuning, relationship) {
+  if (!relationship) {
+    const fallback = findBestRelationshipWithState(world, actor, null, state, tuning);
+    return resolveActorTarget(world, actor, fallback);
+  }
+  return resolveActorTarget(world, actor, relationship);
+}
+
+function planCircleFamilyAction(context) {
+  const { actor, state, world } = context;
+  const tuning = getTuning(context.config);
+  const targetRelationship = findBestRelationshipWithState(world, actor, null, state, tuning);
+  const weakRelationship = findWeakRelationshipWithState(world, actor, state, tuning);
+  const targetActorId = resolveActorTarget(world, actor, targetRelationship);
+  const knownTargets = state.knownTargets ?? new Map();
+  const recentRelationshipAction =
+    targetRelationship ? knownTargets.get(targetRelationship.id)?.action ?? "" : "";
+  const mediumStrength = (targetRelationship?.strength ?? 0) >= tuning.thresholds.lowStrength &&
+    (targetRelationship?.strength ?? 0) < tuning.thresholds.mediumStrength;
+
+  if (state.stage === "onboarding") {
+    return createPlannedAction({
+      context,
+      intent: "introduce",
+      targetActorId,
+    });
+  }
+
+  if (actor.kind === "circle_seed" || actor.id.includes("organizer")) {
+    if (
+      state.stage !== "onboarding" &&
+      weakRelationship &&
+      recentRelationshipAction === "recover_no_match"
+    ) {
+      return createPlannedAction({
+        context,
+        intent: "invite_group",
+        targetActorId: null,
+        detachedFromWeakFit: true,
+      });
+    }
+    if (canUseNearMatch(world, targetRelationship, tuning)) {
+      return createPlannedAction({
+        context,
+        intent: "invite_group",
+        targetActorId,
+      });
+    }
+    if (
+      worldNeedsMemory(world) &&
+      state.stage !== "onboarding" &&
+      mediumStrength
+    ) {
+      return createPlannedAction({
+        context,
+        intent: recentRelationshipAction === "reference_memory"
+          ? "invite_group"
+          : "reference_memory",
+        targetActorId,
+      });
+    }
+  }
+
+  if (
+    world.horizon === "long" &&
+    ["circle_seed", "group_seed"].includes(actor.kind) &&
+    mediumStrength &&
+    state.stage !== "onboarding"
+  ) {
+    return createPlannedAction({
+      context,
+      intent:
+        canUseNearMatch(world, targetRelationship, tuning) ||
+        recentRelationshipAction === "reference_memory"
+          ? "invite_group"
+          : "reply",
+      targetActorId,
+    });
+  }
+
+  if (worldNeedsMemory(world) && state.stage === "memory_drift") {
+    return createPlannedAction({
+      context,
+      intent: "reference_memory",
+      targetActorId,
+    });
+  }
+
+  if (
+    world.family === "circle" &&
+    weakRelationship &&
+    state.stage !== "onboarding" &&
+    weakRelationship.strength < tuning.thresholds.lowStrength
+  ) {
+    return createPlannedAction({
+      context,
+      intent: "recover_no_match",
+      targetActorId: resolveActorTarget(world, actor, weakRelationship),
+    });
+  }
+
+  return null;
+}
+
+function planNetworkRebalancingFamilyAction(context) {
+  const { actor, state, world, rng } = context;
+  const tuning = getTuning(context.config);
+  const targetRelationship = findBestRelationshipWithState(world, actor, null, state, tuning);
+  const weakRelationship = findWeakRelationshipWithState(world, actor, state, tuning);
+  const targetActorId = resolveActorTarget(world, actor, targetRelationship);
+  const knownTargets = state.knownTargets ?? new Map();
+  const recentRelationshipAction =
+    targetRelationship ? knownTargets.get(targetRelationship.id)?.action ?? "" : "";
+  const recoveredRelationshipIds = world.relationships
+    .filter(
+      (relationship) =>
+        relationship.members.includes(actor.id) &&
+        knownTargets.get(relationship.id)?.action === "recover_no_match",
+    )
+    .map((relationship) => relationship.id);
+  const hasRecoveredRelationship =
+    recentRelationshipAction === "recover_no_match" ||
+    (state.lastActionByActor.get(actor.id)?.intent ?? "") === "recover_no_match";
+
+  if (state.stage === "onboarding") {
+    return createPlannedAction({
+      context,
+      intent: "introduce",
+      targetActorId,
+    });
+  }
+
+  if (["event_seed", "group_seed", "circle_seed"].includes(actor.kind)) {
+    const nearMatchTarget = canUseNearMatch(world, targetRelationship, tuning);
+    if (hasRecoveredRelationship && (state.stage === "conversation" || state.stage === "memory_drift")) {
+      return createPlannedAction({
+        context,
+        intent:
+          state.stage === "memory_drift"
+            ? resolvePolicyAction(
+                tuning.policy.networkOrganizerPostRecoveryMemoryDriftAction,
+                "propose_event",
+              )
+            : resolvePolicyAction(
+                tuning.policy.networkOrganizerPostRecoveryConversationAction,
+                "invite_group",
+              ),
+        targetActorId: resolvePostRecoveryTargetActorId({
+          world,
+          actor,
+          state,
+          tuning,
+          currentTargetActorId: targetActorId,
+          excludedRelationshipIds: recoveredRelationshipIds,
+          strategy: tuning.policy.networkOrganizerPostRecoveryTargetStrategy,
+        }),
+        detachedFromWeakFit: true,
+      });
+    }
+    if (nearMatchTarget && state.stage === "conversation") {
+      return createPlannedAction({
+        context,
+        intent: "invite_group",
+        targetActorId,
+      });
+    }
+    if (nearMatchTarget && state.stage === "memory_drift") {
+      return createPlannedAction({
+        context,
+        intent: "propose_event",
+        targetActorId,
+      });
+    }
+    if (state.stage === "matching") {
+      return createPlannedAction({
+        context,
+        intent:
+          (targetRelationship?.strength ?? 0) >= tuning.thresholds.lowStrength
+            ? "invite_group"
+            : "ask_preference",
+        targetActorId,
+      });
+    }
+    if (weakRelationship && weakRelationship.strength < tuning.thresholds.networkWeakPenaltyThreshold) {
+      return createPlannedAction({
+        context,
+        intent: "recover_no_match",
+        targetActorId: resolveActorTarget(world, actor, weakRelationship),
+      });
+    }
+    if (worldNeedsMemory(world) && rng() > tuning.probabilities.networkMemoryReference) {
+      return createPlannedAction({
+        context,
+        intent: "reference_memory",
+        targetActorId,
+      });
+    }
+    return createPlannedAction({
+      context,
+      intent:
+        worldNeedsGroupProgress(world) && (targetRelationship?.strength ?? 0) >= tuning.thresholds.lowStrength
+          ? "invite_group"
+          : "follow_up",
+      targetActorId,
+    });
+  }
+
+  if (
+    weakRelationship &&
+    weakRelationship.strength < tuning.thresholds.lowStrength &&
+    state.stage !== "onboarding"
+  ) {
+    return createPlannedAction({
+      context,
+      intent: "recover_no_match",
+      targetActorId: resolveActorTarget(world, actor, weakRelationship),
+    });
+  }
+
+  return null;
+}
+
+function planDenseSocialGraphFamilyAction(context) {
+  const { actor, state, world, rng } = context;
+  const tuning = getTuning(context.config);
+  const targetRelationship = findBestRelationshipWithState(world, actor, null, state, tuning);
+  const weakRelationship = findWeakRelationshipWithState(world, actor, state, tuning);
+  const targetActorId = resolveActorTarget(world, actor, targetRelationship);
+  const knownTargets = state.knownTargets ?? new Map();
+  const recentRelationshipAction =
+    targetRelationship ? knownTargets.get(targetRelationship.id)?.action ?? "" : "";
+  const hasRecoveredRelationship =
+    recentRelationshipAction === "recover_no_match" ||
+    (state.lastActionByActor.get(actor.id)?.intent ?? "") === "recover_no_match";
+  const nearMatchTarget = canUseNearMatch(world, targetRelationship, tuning);
+
+  if (state.stage === "onboarding") {
+    return createPlannedAction({
+      context,
+      intent: "introduce",
+      targetActorId,
+    });
+  }
+
+  if (hasRecoveredRelationship && state.stage === "conversation") {
+    return createPlannedAction({
+      context,
+      intent: resolvePolicyAction(tuning.policy.denseGraphRecoveredConversationAction, "reply"),
+      targetActorId,
+      detachedFromWeakFit: true,
+    });
+  }
+
+  if (
+    ["group_seed", "event_seed"].includes(actor.kind) &&
+    state.stage === "conversation"
+  ) {
+    if (nearMatchTarget) {
+      return createPlannedAction({
+        context,
+        intent: "invite_group",
+        targetActorId,
+      });
+    }
+    if (worldNeedsMemory(world) && rng() > tuning.probabilities.memoryConversation) {
+      return createPlannedAction({
+        context,
+        intent: "reference_memory",
+        targetActorId,
+      });
+    }
+    return createPlannedAction({
+      context,
+      intent: "reply",
+      targetActorId,
+    });
+  }
+
+  if (
+    worldNeedsGroupProgress(world) &&
+    state.stage !== "onboarding" &&
+    nearMatchTarget &&
+    actor.initiative >= 0.55
+  ) {
+    return createPlannedAction({
+      context,
+      intent: "invite_group",
+      targetActorId,
+    });
+  }
+
+  if (weakRelationship && state.stage !== "onboarding" && weakRelationship.strength < tuning.thresholds.lowStrength) {
+    return createPlannedAction({
+      context,
+      intent: "recover_no_match",
+      targetActorId: resolveActorTarget(world, actor, weakRelationship),
+    });
+  }
+
+  if (worldNeedsMemory(world) && state.stage === "memory_drift") {
+    return createPlannedAction({
+      context,
+      intent: "reference_memory",
+      targetActorId,
+    });
+  }
+
+  if (
+    state.stage === "conversation" &&
+    rng() > tuning.probabilities.denseConversationInvite
+  ) {
+    return createPlannedAction({
+      context,
+      intent: "invite_group",
+      targetActorId,
+    });
+  }
+
+  return null;
+}
+
+function planSocialSimAction(context) {
+  const family = normalizeString(context.world.family, "social");
+  if (family === "recovery") {
+    return planRecoveryFamilyAction(context);
+  }
+  if (family === "circle") {
+    return planCircleFamilyAction(context);
+  }
+  if (family === "network-rebalancing") {
+    return planNetworkRebalancingFamilyAction(context);
+  }
+  if (family === "dense-social-graph") {
+    return planDenseSocialGraphFamilyAction(context);
+  }
+  return null;
 }
 
 function worldSpecificExpectationCount(world) {
@@ -1333,6 +2048,66 @@ function computeOracleMetrics(world, relationships) {
   };
 }
 
+function buildWorldDiagnostics(world, relationships, oracleMetrics, tuning) {
+  const relationshipMap = new Map(
+    relationships.map((relationship) => [relationship.id, relationship]),
+  );
+  const preferredEdgeMisses = (world.oracle?.preferredOutcomeEdges ?? []).filter(
+    (edgeId) => !oracleMetrics.matchedEdgeIds.includes(edgeId),
+  );
+  const forbiddenEdgeHits = (world.oracle?.forbiddenOutcomeEdges ?? []).filter((edgeId) =>
+    oracleMetrics.matchedEdgeIds.includes(edgeId),
+  );
+  const lowStrengthMatchedPreferredEdges = (world.oracle?.preferredOutcomeEdges ?? []).filter(
+    (edgeId) =>
+      oracleMetrics.matchedEdgeIds.includes(edgeId) &&
+      (relationshipMap.get(edgeId)?.strength ?? 0) < tuning.thresholds.nearMatchMin,
+  );
+  const groupClosureMisses = (world.oracle?.requiredGroupClosure ?? []).filter(
+    (edgeId) => !oracleMetrics.matchedEdgeIds.includes(edgeId),
+  );
+  const isolationFailures = (world.oracle?.requiredIsolations ?? []).filter((actorId) =>
+    relationships.some(
+      (relationship) =>
+        relationship.status === "matched" && relationship.members.includes(actorId),
+    ),
+  );
+  const severity =
+    preferredEdgeMisses.length * 0.16 +
+    forbiddenEdgeHits.length * 0.22 +
+    lowStrengthMatchedPreferredEdges.length * 0.12 +
+    groupClosureMisses.length * 0.15 +
+    isolationFailures.length * 0.18;
+  const primaryReason =
+    forbiddenEdgeHits.length > 0
+      ? "forbidden_edge_hit"
+      : isolationFailures.length > 0
+        ? "isolation_failure"
+        : groupClosureMisses.length > 0
+          ? "group_closure_miss"
+          : preferredEdgeMisses.length > 0
+            ? "preferred_edge_miss"
+            : lowStrengthMatchedPreferredEdges.length > 0
+              ? "weak_preferred_closure"
+              : "none";
+
+  return {
+    preferredEdgeMisses,
+    forbiddenEdgeHits,
+    lowStrengthMatchedPreferredEdges,
+    groupClosureMisses,
+    isolationFailures,
+    issueCount:
+      preferredEdgeMisses.length +
+      forbiddenEdgeHits.length +
+      lowStrengthMatchedPreferredEdges.length +
+      groupClosureMisses.length +
+      isolationFailures.length,
+    severity: Number(severity.toFixed(3)),
+    primaryReason,
+  };
+}
+
 function summarizeWorld(world, transcript, metrics, judge, config) {
   const tuning = getTuning(config);
   const totalTurns = transcript.length || 1;
@@ -1436,6 +2211,7 @@ function summarizeWorld(world, transcript, metrics, judge, config) {
     1,
   );
   const oracleMetrics = computeOracleMetrics(world, relationships);
+  const diagnostics = buildWorldDiagnostics(world, relationships, oracleMetrics, tuning);
 
   return {
     totalTurns,
@@ -1507,6 +2283,7 @@ function summarizeWorld(world, transcript, metrics, judge, config) {
       matchedEdgeIds: oracleMetrics.matchedEdgeIds,
       relationshipSnapshot: oracleMetrics.relationshipSnapshot,
     },
+    diagnostics,
     judge,
   };
 }
@@ -1544,6 +2321,8 @@ function summarizeRun(worldRuns, config, bootstrap) {
       closurePrecisionTotal: 0,
       preferredRecallTotal: 0,
       forbiddenAvoidanceTotal: 0,
+      diagnosticIssueCount: 0,
+      diagnosticSeverityTotal: 0,
     };
     currentFamily.worlds += 1;
     currentFamily.convergenceScoreTotal += world.summary?.convergenceScore ?? 0;
@@ -1558,6 +2337,8 @@ function summarizeRun(worldRuns, config, bootstrap) {
     currentFamily.closurePrecisionTotal += world.summary?.closurePrecision ?? 0;
     currentFamily.preferredRecallTotal += world.summary?.preferredRecall ?? 0;
     currentFamily.forbiddenAvoidanceTotal += world.summary?.forbiddenAvoidance ?? 0;
+    currentFamily.diagnosticIssueCount += world.summary?.diagnostics?.issueCount ?? 0;
+    currentFamily.diagnosticSeverityTotal += world.summary?.diagnostics?.severity ?? 0;
     familyRollup.set(world.family, currentFamily);
   }
   const avgConvergence =
@@ -1594,9 +2375,27 @@ function summarizeRun(worldRuns, config, bootstrap) {
         averageForbiddenAvoidance: Number(
           (rollup.forbiddenAvoidanceTotal / Math.max(rollup.worlds, 1)).toFixed(3),
         ),
+        diagnosticIssueCount: rollup.diagnosticIssueCount,
+        averageDiagnosticSeverity: Number(
+          (rollup.diagnosticSeverityTotal / Math.max(rollup.worlds, 1)).toFixed(3),
+        ),
       },
     ]),
   );
+  const worldDiagnostics = worldRuns
+    .map((world) => ({
+      worldId: world.worldId,
+      family: world.family,
+      horizon: world.horizon,
+      convergenceScore: world.summary?.convergenceScore ?? 0,
+      oracleScore: world.summary?.oracleScore ?? 0,
+      oracleProgressScore: world.summary?.oracleProgressScore ?? 0,
+      diagnostics: world.summary?.diagnostics ?? {},
+    }))
+    .sort(
+      (left, right) =>
+        (right.diagnostics?.severity ?? 0) - (left.diagnostics?.severity ?? 0),
+    );
   const measurementWarnings = [];
   const truncatedWorlds = worldRuns.filter(
     (world) => (world.summary?.measurement?.turnBudgetGap ?? 0) > 0,
@@ -1634,6 +2433,7 @@ function summarizeRun(worldRuns, config, bootstrap) {
     },
     verdict,
     familyScores,
+    worldDiagnostics,
     measurementWarnings,
     bootstrap,
     provider: config.provider,
@@ -1649,6 +2449,12 @@ export function writeSocialSimArtifact(runDir, filename, data) {
 }
 
 function defaultBrainAction(context) {
+  const plannedAction = planSocialSimAction(context);
+  if (plannedAction) return plannedAction;
+  return planGenericBrainAction(context);
+}
+
+function planGenericBrainAction(context) {
   const { actor, state, world, rng } = context;
   const tuning = getTuning(context.config);
   const knownTargets = state.knownTargets ?? new Map();
@@ -1958,9 +2764,9 @@ function defaultBrainAction(context) {
           ? "Trying to move the social graph toward a broader group outcome."
           : intent === "propose_event"
             ? "Trying to convert a weak or partial thread into a clearer concrete plan."
-          : intent === "recover_no_match"
-            ? "The pairing looks weak, so the actor is trying a recovery path."
-            : "Advancing the conversation in a socially plausible way.",
+            : intent === "recover_no_match"
+              ? "The pairing looks weak, so the actor is trying a recovery path."
+              : "Advancing the conversation in a socially plausible way.",
     memoryReferences: hasMemorySignal
       ? [
           {

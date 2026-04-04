@@ -370,6 +370,7 @@
       "name": "Dense social mixer",
       "horizon": "medium",
       "family": "dense-social-graph",
+      "holdout": true,
       "turnBudget": 12,
       "seedScenarioIds": [
         "social_pair_group_discovery_v1",
@@ -394,7 +395,7 @@
           "mixer-eli-lia",
           "mixer-pair-group"
         ],
-        "acceptableFallbackEdges": ["mixer-nora-group"],
+        "acceptableFallbackEdges": [],
         "forbiddenOutcomeEdges": ["mixer-sana-event"],
         "requiredIsolations": [],
         "requiredGroupClosure": ["mixer-pair-group"]
@@ -1107,6 +1108,7 @@
       "name": "Long recurring circle fragmentation",
       "horizon": "long",
       "family": "circle",
+      "holdout": true,
       "turnBudget": 14,
       "seedScenarioIds": [
         "social_recurring_circle_join_v1",
@@ -1130,7 +1132,7 @@
           "frag-selim-lio",
           "frag-selim-vik"
         ],
-        "acceptableFallbackEdges": ["frag-pair-ines", "frag-pax-uma"],
+        "acceptableFallbackEdges": [],
         "forbiddenOutcomeEdges": ["frag-pax-vik"],
         "requiredIsolations": [],
         "requiredGroupClosure": [
@@ -1556,6 +1558,362 @@
           "label": "Ronan / Kira unsafe weak route",
           "strength": 0.23,
           "notes": "Should not be allowed to contaminate healthy routes."
+        }
+      ]
+    },
+    {
+      "id": "medium-cross-cluster-holdout-v1",
+      "name": "Medium cross-cluster holdout",
+      "horizon": "medium",
+      "family": "dense-social-graph",
+      "worldSet": "holdout",
+      "holdout": true,
+      "turnBudget": 12,
+      "seedScenarioIds": [
+        "social_group_formation_partial_fallback_v1",
+        "social_followup_intro_v1",
+        "social_event_followup_v1"
+      ],
+      "summary": "A holdout world where two adjacent clusters should bridge cleanly without collapsing into generic chatter.",
+      "goals": [
+        "Build one durable bridge between clusters.",
+        "Keep weak cross-cluster paths from looking like success."
+      ],
+      "evaluationFocus": [
+        "bridge_quality",
+        "durable_convergence",
+        "oracle_precision"
+      ],
+      "oracle": {
+        "preferredOutcomeEdges": [
+          "holdout-bridge-ree-kai",
+          "holdout-circle-zoe-milo",
+          "holdout-group-ara-len"
+        ],
+        "acceptableFallbackEdges": [],
+        "forbiddenOutcomeEdges": [
+          "holdout-bridge-ree-noise",
+          "holdout-event-zoe-noise"
+        ],
+        "requiredIsolations": ["holdout-noise-jo"],
+        "requiredGroupClosure": ["holdout-group-ara-len"]
+      },
+      "actors": [
+        {
+          "id": "holdout-ree",
+          "kind": "individual",
+          "persona": "connector who likes moving between adjacent clusters",
+          "goals": [
+            "find one useful bridge",
+            "avoid shallow cross-cluster spam"
+          ],
+          "preferences": {
+            "topics": ["design", "community", "food"],
+            "pace": "steady"
+          },
+          "hardConstraints": ["no generic mass invites"],
+          "socialStyle": "warm",
+          "patience": 0.73,
+          "initiative": 0.68,
+          "mismatchTolerance": 0.3,
+          "memoryDriftProfile": "stable"
+        },
+        {
+          "id": "holdout-kai",
+          "kind": "individual",
+          "persona": "practical participant who only stays with clearly relevant fits",
+          "goals": ["join a durable group", "avoid empty bridge attempts"],
+          "preferences": {
+            "topics": ["food", "music", "small groups"],
+            "pace": "clear"
+          },
+          "hardConstraints": ["respect prior context"],
+          "socialStyle": "clear",
+          "patience": 0.8,
+          "initiative": 0.54,
+          "mismatchTolerance": 0.18,
+          "memoryDriftProfile": "stable"
+        },
+        {
+          "id": "holdout-zoe",
+          "kind": "circle_seed",
+          "persona": "circle organizer preserving continuity across a bridgeable boundary",
+          "goals": ["pull in one strong bridge", "keep the circle coherent"],
+          "preferences": {
+            "topics": ["community", "music", "recurring groups"],
+            "pace": "clear"
+          },
+          "hardConstraints": ["avoid over-rotation"],
+          "socialStyle": "clear",
+          "patience": 0.87,
+          "initiative": 0.84,
+          "mismatchTolerance": 0.28,
+          "memoryDriftProfile": "stable"
+        },
+        {
+          "id": "holdout-milo",
+          "kind": "individual",
+          "persona": "low-noise regular who prefers one strong next step",
+          "goals": ["join one useful circle", "avoid noisy group churn"],
+          "preferences": {
+            "topics": ["books", "food", "community"],
+            "pace": "slow"
+          },
+          "hardConstraints": ["no loud venues"],
+          "socialStyle": "gentle",
+          "patience": 0.81,
+          "initiative": 0.46,
+          "mismatchTolerance": 0.22,
+          "memoryDriftProfile": "light"
+        },
+        {
+          "id": "holdout-group-ara",
+          "kind": "group_seed",
+          "persona": "group seed trying to bridge adjacent circles without collapsing them",
+          "goals": ["form one stable bridge group", "avoid shallow progress"],
+          "preferences": {
+            "topics": ["design", "community", "music"],
+            "pace": "organized"
+          },
+          "hardConstraints": ["do not over-invite"],
+          "socialStyle": "organized",
+          "patience": 0.85,
+          "initiative": 0.9,
+          "mismatchTolerance": 0.35,
+          "memoryDriftProfile": "stable"
+        },
+        {
+          "id": "holdout-noise-jo",
+          "kind": "individual",
+          "persona": "fast-moving participant that can distract the bridge if misrouted",
+          "goals": ["find any active thread", "push into visible spaces"],
+          "preferences": {
+            "topics": ["events", "nightlife", "anything active"],
+            "pace": "fast"
+          },
+          "hardConstraints": ["weekend only"],
+          "socialStyle": "fast",
+          "patience": 0.41,
+          "initiative": 0.93,
+          "mismatchTolerance": 0.78,
+          "memoryDriftProfile": "light"
+        }
+      ],
+      "relationships": [
+        {
+          "id": "holdout-bridge-ree-kai",
+          "type": "group",
+          "members": ["holdout-ree", "holdout-group-ara"],
+          "label": "Ree / Ara bridge route",
+          "strength": 0.56
+        },
+        {
+          "id": "holdout-circle-zoe-milo",
+          "type": "circle",
+          "members": ["holdout-zoe", "holdout-milo"],
+          "label": "Zoe / Milo continuity route",
+          "strength": 0.53
+        },
+        {
+          "id": "holdout-group-ara-len",
+          "type": "group",
+          "members": ["holdout-group-ara", "holdout-kai"],
+          "label": "Ara / Kai stable group",
+          "strength": 0.52
+        },
+        {
+          "id": "holdout-bridge-ree-noise",
+          "type": "event",
+          "members": ["holdout-ree", "holdout-noise-jo"],
+          "label": "Ree / Jo weak bridge",
+          "strength": 0.31,
+          "notes": "Should be suppressed as a misleading bridge."
+        },
+        {
+          "id": "holdout-event-zoe-noise",
+          "type": "event",
+          "members": ["holdout-zoe", "holdout-noise-jo"],
+          "label": "Zoe / Jo weak event",
+          "strength": 0.34,
+          "notes": "Should not be treated as durable convergence."
+        }
+      ]
+    },
+    {
+      "id": "long-trust-boundary-holdout-v1",
+      "name": "Long trust boundary holdout",
+      "horizon": "long",
+      "family": "network-rebalancing",
+      "worldSet": "holdout",
+      "holdout": true,
+      "turnBudget": 14,
+      "seedScenarioIds": [
+        "social_trust_moderation_edge_v1",
+        "social_memory_drift_v1",
+        "social_event_followup_v1"
+      ],
+      "summary": "A long-horizon holdout where boundary-aware routing must protect healthy relationships from one persistent poor fit.",
+      "goals": [
+        "Keep strong relationships intact.",
+        "Contain the bad-fit actor without over-rotating the rest of the network."
+      ],
+      "evaluationFocus": [
+        "trust_and_safety",
+        "network_rebalancing",
+        "oracle_precision"
+      ],
+      "oracle": {
+        "preferredOutcomeEdges": [
+          "holdout-contain-aya",
+          "holdout-contain-mika",
+          "holdout-contain-circle"
+        ],
+        "acceptableFallbackEdges": [],
+        "forbiddenOutcomeEdges": [
+          "holdout-contain-noise",
+          "holdout-noise-mika"
+        ],
+        "requiredIsolations": ["holdout-noise"],
+        "requiredGroupClosure": ["holdout-contain-circle"]
+      },
+      "actors": [
+        {
+          "id": "holdout-host-mika",
+          "kind": "event_seed",
+          "persona": "steady host balancing trust and continuity",
+          "goals": ["support the healthy network", "contain poor-fit drift"],
+          "preferences": {
+            "topics": ["community", "events", "small groups"],
+            "pace": "steady"
+          },
+          "hardConstraints": ["do not reward repeated poor fit"],
+          "socialStyle": "steady",
+          "patience": 0.83,
+          "initiative": 0.8,
+          "mismatchTolerance": 0.29,
+          "memoryDriftProfile": "fluid"
+        },
+        {
+          "id": "holdout-aya",
+          "kind": "individual",
+          "persona": "trusted regular who values continuity and clear boundaries",
+          "goals": [
+            "stay in the healthy subnetwork",
+            "avoid repeated bad intros"
+          ],
+          "preferences": {
+            "topics": ["food", "music", "community"],
+            "pace": "calm"
+          },
+          "hardConstraints": ["respect boundaries"],
+          "socialStyle": "calm",
+          "patience": 0.79,
+          "initiative": 0.54,
+          "mismatchTolerance": 0.19,
+          "memoryDriftProfile": "fluid"
+        },
+        {
+          "id": "holdout-noise",
+          "kind": "individual",
+          "persona": "persistent poor-fit participant who keeps pushing weak edges",
+          "goals": ["join any active thread quickly", "bypass fit signals"],
+          "preferences": {
+            "topics": ["nightlife", "events", "anything active"],
+            "pace": "fast"
+          },
+          "hardConstraints": ["weekend only"],
+          "socialStyle": "fast",
+          "patience": 0.43,
+          "initiative": 0.95,
+          "mismatchTolerance": 0.83,
+          "memoryDriftProfile": "light"
+        },
+        {
+          "id": "holdout-pair-eno-lia",
+          "kind": "pair",
+          "persona": "pair seeking a stable recurring dinner-and-music circle",
+          "goals": ["find a stable circle", "avoid chaotic churn"],
+          "preferences": {
+            "topics": ["food", "music", "small circles"],
+            "pace": "measured"
+          },
+          "hardConstraints": ["pair-first or small-circle only"],
+          "socialStyle": "collaborative",
+          "patience": 0.84,
+          "initiative": 0.62,
+          "mismatchTolerance": 0.23,
+          "memoryDriftProfile": "stable"
+        },
+        {
+          "id": "holdout-circle-ori",
+          "kind": "circle_seed",
+          "persona": "circle organizer that protects continuity and safety",
+          "goals": ["keep the healthy circle coherent", "route weak fits away"],
+          "preferences": {
+            "topics": ["recurring groups", "food", "music"],
+            "pace": "clear"
+          },
+          "hardConstraints": ["avoid repeated contamination"],
+          "socialStyle": "clear",
+          "patience": 0.88,
+          "initiative": 0.86,
+          "mismatchTolerance": 0.21,
+          "memoryDriftProfile": "stable"
+        },
+        {
+          "id": "holdout-group-lena",
+          "kind": "group_seed",
+          "persona": "group seed that should absorb healthy participants but not the bad fit",
+          "goals": ["keep good members engaged", "reject noisy loops"],
+          "preferences": {
+            "topics": ["community", "design", "food"],
+            "pace": "organized"
+          },
+          "hardConstraints": ["no dead-end loops"],
+          "socialStyle": "organized",
+          "patience": 0.86,
+          "initiative": 0.83,
+          "mismatchTolerance": 0.31,
+          "memoryDriftProfile": "stable"
+        }
+      ],
+      "relationships": [
+        {
+          "id": "holdout-contain-aya",
+          "type": "event",
+          "members": ["holdout-host-mika", "holdout-aya"],
+          "label": "Mika / Aya healthy return",
+          "strength": 0.58
+        },
+        {
+          "id": "holdout-contain-noise",
+          "type": "event",
+          "members": ["holdout-host-mika", "holdout-noise"],
+          "label": "Mika / noise weak route",
+          "strength": 0.28,
+          "notes": "Should trigger containment and reroute."
+        },
+        {
+          "id": "holdout-noise-mika",
+          "type": "event",
+          "members": ["holdout-noise", "holdout-group-lena"],
+          "label": "Noise / Lena weak route",
+          "strength": 0.26,
+          "notes": "Should not contaminate healthy convergence."
+        },
+        {
+          "id": "holdout-contain-mika",
+          "type": "group",
+          "members": ["holdout-group-lena", "holdout-aya"],
+          "label": "Lena / Aya healthy group",
+          "strength": 0.55
+        },
+        {
+          "id": "holdout-contain-circle",
+          "type": "circle",
+          "members": ["holdout-circle-ori", "holdout-pair-eno-lia"],
+          "label": "Ori / pair durable circle",
+          "strength": 0.54
         }
       ]
     }
