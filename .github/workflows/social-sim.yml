@@ -23,7 +23,7 @@ on:
       judge_provider:
         description: "Judge provider"
         required: false
-        default: ollama
+        default: stub
         type: choice
         options:
           - ollama
@@ -104,7 +104,7 @@ jobs:
         run: |
           set -euo pipefail
           provider="${{ github.event_name == 'schedule' && 'ollama' || inputs.provider }}"
-          judge_provider="${{ github.event_name == 'schedule' && 'ollama' || inputs.judge_provider }}"
+          judge_provider="${{ github.event_name == 'schedule' && 'stub' || inputs.judge_provider }}"
           horizon="${{ github.event_name == 'schedule' && 'all' || inputs.horizon }}"
           turn_budget="${{ github.event_name == 'schedule' && '8' || inputs.turn_budget }}"
           cleanup_mode="${{ github.event_name == 'schedule' && 'archive' || inputs.cleanup_mode }}"
