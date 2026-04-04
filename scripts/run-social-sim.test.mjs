@@ -810,6 +810,104 @@ test("backend bootstrap redacts secret env values in artifacts", async () => {
   }
 });
 
+test("backend bootstrap persists remote run bootstrap failure details", async () => {
+  const artifactRoot = mkdtempSync(path.join(os.tmpdir(), "social-sim-bootstrap-failure-"));
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url.endsWith("/api/admin/playground/bootstrap")) {
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            success: true,
+            data: {
+              env: {
+                SMOKE_BASE_URL: "http://localhost:3000",
+              },
+              entities: {
+                smokeUserId: "77777777-7777-4777-8777-777777777777",
+              },
+              notes: ["bootstrapped"],
+            },
+          };
+        },
+      };
+    }
+    if (url.endsWith("/api/admin/social-sim/runs")) {
+      return {
+        ok: false,
+        status: 403,
+        async json() {
+          return {
+            success: false,
+            error: {
+              code: "admin_access_denied",
+              message: "admin api key is invalid",
+            },
+          };
+        },
+      };
+    }
+    throw new Error(`Unexpected fetch in test: ${url}`);
+  };
+
+  try {
+    const result = await runSocialSimulation({
+      provider: "ollama",
+      judgeProvider: "stub",
+      horizon: "short",
+      worldFilter: ["short-direct-match-v1"],
+      scenarioFilter: [],
+      seed: 12345,
+      namespace: "test-social-sim-bootstrap-failure",
+      turnBudget: 4,
+      cleanupMode: "none",
+      dryRun: false,
+      nightly: false,
+      artifactRoot,
+      fixturePath: path.resolve("scripts/social-sim-worlds.json"),
+      scenarioFixturePath: path.resolve(
+        "apps/api/test/fixtures/agentic-scenarios.json",
+      ),
+      baseUrl: "https://api.example.com",
+      adminUserId: "11111111-1111-4111-8111-111111111111",
+      adminRole: "admin",
+      adminApiKey: "real-admin-key",
+      ollamaBaseUrl: "https://ollama.example.com",
+      ollamaModel: "deepseek-v3.1:671b",
+      ollamaApiKey: "ollama-api-key",
+      openaiApiKey: "",
+      openaiModel: "gpt-4.1-mini",
+      useRemoteProvider: true,
+      useRemoteJudge: false,
+      backendTurnDelayMs: 0,
+      backendRetryCount: 0,
+      backendRetryBaseDelayMs: 0,
+      failOnRemoteFallback: false,
+    });
+
+    const runArtifact = JSON.parse(
+      readFileSync(path.join(result.runDir, "run.json"), "utf8"),
+    );
+    assert.equal(runArtifact.bootstrap.backendMode, "playground");
+    assert.equal(runArtifact.bootstrap.remoteRunId, undefined);
+    assert.equal(runArtifact.bootstrap.remoteRunError.status, 403);
+    assert.equal(
+      runArtifact.bootstrap.remoteRunError.payload.error.code,
+      "admin_access_denied",
+    );
+    assert.match(
+      runArtifact.bootstrap.notes.join(" "),
+      /remote run bootstrap failed \(403\)/,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    rmSync(artifactRoot, { recursive: true, force: true });
+  }
+});
+
 test("search runner uses stable default seeds and writes summary artifacts", () => {
   const stdout = execFileSync(
     process.execPath,

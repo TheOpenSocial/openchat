@@ -3893,9 +3893,13 @@ class SocialSimBackendAdapter {
           `remoteRunId:${this.remoteRunId}`,
         ];
       } else {
+        bootstrap.remoteRunError = {
+          status: runResponse.status,
+          payload: runPayload,
+        };
         bootstrap.notes = [
           ...(bootstrap.notes ?? []),
-          "remote run bootstrap failed; backend turns will fall back to offline mode.",
+          `remote run bootstrap failed (${runResponse.status}); backend turns will fall back to offline mode.`,
         ];
       }
       return bootstrap;
