@@ -10,6 +10,7 @@ export const DEFAULT_SOCIAL_SIM_TUNING = {
   thresholds: {
     lowStrength: 0.35,
     mediumStrength: 0.72,
+    nearMatchMin: 0.65,
     weakRelationshipFloor: 0.2,
     networkWeakPenaltyThreshold: 0.38,
     circleContinuityMin: 0.45,
@@ -49,6 +50,9 @@ export const DEFAULT_SOCIAL_SIM_TUNING = {
     circleSeedBonus: 0.08,
     circleUnmatchedBonus: 0.12,
     circleContinuityBonus: 0.08,
+    nearMatchBonus: 0.16,
+    circleNearMatchBonus: 0.08,
+    networkNearMatchBonus: 0.1,
     networkWeakPenalty: -0.45,
     networkMediumBonus: 0.18,
     networkOrganizerBonus: 0.1,
@@ -78,6 +82,7 @@ export const DEFAULT_SOCIAL_SIM_TUNING = {
     memoryMissingScore: 0.08,
     memoryExtraScore: 0.54,
     memoryDefaultScore: 0.28,
+    recoveryWorldRecoveryWeight: 0.2,
   },
   judge: {
     turnBase: 0.32,
@@ -1146,6 +1151,12 @@ function relationshipPriorityScore(
     if (actor.kind === "circle_seed") score += tuning.priority.circleSeedBonus;
     if (relationship.status !== "matched") score += tuning.priority.circleUnmatchedBonus;
     if (
+      relationship.status !== "matched" &&
+      relationship.strength >= tuning.thresholds.nearMatchMin
+    ) {
+      score += tuning.priority.nearMatchBonus + tuning.priority.circleNearMatchBonus;
+    }
+    if (
       world.horizon !== "short" &&
       relationship.strength >= tuning.thresholds.circleContinuityMin &&
       relationship.strength < tuning.thresholds.mediumStrength
@@ -1157,6 +1168,12 @@ function relationshipPriorityScore(
   if (world.family === "network-rebalancing") {
     if (relationship.strength < tuning.thresholds.networkWeakPenaltyThreshold) {
       score += tuning.priority.networkWeakPenalty;
+    }
+    if (
+      relationship.status !== "matched" &&
+      relationship.strength >= tuning.thresholds.nearMatchMin
+    ) {
+      score += tuning.priority.nearMatchBonus + tuning.priority.networkNearMatchBonus;
     }
     if (
       relationship.strength >= tuning.thresholds.circleContinuityMin &&
@@ -1216,19 +1233,6 @@ function summarizeWorld(world, transcript, metrics, judge, config) {
     memoryNeeded && metrics.memorySignals === 0 ? tuning.scoring.missingMemoryPenalty : 0;
   const missingGroupPenalty =
     groupNeeded && metrics.invites === 0 ? tuning.scoring.missingGroupPenalty : 0;
-  const convergenceScore = clamp(
-    matchedRatio * tuning.scoring.matchedRatioWeight +
-      progressDensity * tuning.scoring.progressDensityWeight +
-      expectationFulfillment * tuning.scoring.expectationFulfillmentWeight +
-      (metrics.stalledTurns === 0 ? tuning.scoring.noStallBonus : 0) -
-      shallowFollowupPenalty -
-      stalledPenalty -
-      missingRecoveryPenalty -
-      missingMemoryPenalty -
-      missingGroupPenalty,
-    0,
-    1,
-  );
   const noMatchRecoveryQuality = clamp(
     recoveryNeeded
       ? metrics.recoverySignals > 0
@@ -1238,6 +1242,24 @@ function summarizeWorld(world, transcript, metrics, judge, config) {
       : metrics.recoverySignals > 0
         ? tuning.scoring.recoveryExtraScore
         : tuning.scoring.recoveryDefaultScore,
+    0,
+    1,
+  );
+  const recoveryWorldBonus =
+    world.family === "recovery"
+      ? noMatchRecoveryQuality * tuning.scoring.recoveryWorldRecoveryWeight
+      : 0;
+  const convergenceScore = clamp(
+    matchedRatio * tuning.scoring.matchedRatioWeight +
+      progressDensity * tuning.scoring.progressDensityWeight +
+      expectationFulfillment * tuning.scoring.expectationFulfillmentWeight +
+      recoveryWorldBonus +
+      (metrics.stalledTurns === 0 ? tuning.scoring.noStallBonus : 0) -
+      shallowFollowupPenalty -
+      stalledPenalty -
+      missingRecoveryPenalty -
+      missingMemoryPenalty -
+      missingGroupPenalty,
     0,
     1,
   );
@@ -1454,7 +1476,12 @@ function defaultBrainAction(context) {
     mediumStrength &&
     state.stage !== "onboarding"
   ) {
-    intent = recentRelationshipAction === "reference_memory" ? "invite_group" : "reply";
+    intent =
+      (targetRelationship?.strength ?? 0) >= tuning.thresholds.nearMatchMin
+        ? "invite_group"
+        : recentRelationshipAction === "reference_memory"
+          ? "invite_group"
+          : "reply";
   } else if (
     world.family === "circle" &&
     worldNeedsMemory(world) &&
@@ -1462,13 +1489,25 @@ function defaultBrainAction(context) {
     state.stage !== "onboarding" &&
     mediumStrength
   ) {
-    intent = recentRelationshipAction === "reference_memory" ? "invite_group" : "reference_memory";
+    intent =
+      (targetRelationship?.strength ?? 0) >= tuning.thresholds.nearMatchMin
+        ? "invite_group"
+        : recentRelationshipAction === "reference_memory"
+          ? "invite_group"
+          : "reference_memory";
   } else if (
     world.family === "network-rebalancing" &&
     ["event_seed", "group_seed", "circle_seed"].includes(actor.kind) &&
     state.stage !== "onboarding"
   ) {
     intent =
+      (targetRelationship?.strength ?? 0) >= tuning.thresholds.nearMatchMin &&
+      state.stage === "conversation"
+        ? "invite_group"
+      : (targetRelationship?.strength ?? 0) >= tuning.thresholds.nearMatchMin &&
+          state.stage === "memory_drift"
+        ? "propose_event"
+      :
       hasRecoveredRelationship && state.stage === "conversation"
         ? resolvePolicyAction(
             tuning.policy.networkOrganizerPostRecoveryConversationAction,
