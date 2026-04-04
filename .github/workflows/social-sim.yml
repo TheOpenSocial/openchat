@@ -109,6 +109,19 @@ jobs:
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
+      - name: Validate benchmark remote config
+        shell: bash
+        run: |
+          set -euo pipefail
+          provider="${{ github.event_name == 'schedule' && 'ollama' || inputs.provider }}"
+          benchmark_mode="${{ github.event_name == 'schedule' && 'true' || inputs.benchmark_mode }}"
+          use_remote_provider="${{ github.event_name == 'schedule' && 'true' || inputs.use_remote_provider }}"
+
+          if [[ "${benchmark_mode}" == "true" && "${provider}" == "ollama" && "${use_remote_provider}" == "true" && -z "${OLLAMA_BASE_URL}" ]]; then
+            echo "OLLAMA_BASE_URL is required for benchmark-mode Ollama runs." >&2
+            exit 1
+          fi
+
       - name: Run social simulation
         shell: bash
         run: |
