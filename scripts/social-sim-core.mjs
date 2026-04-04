@@ -83,6 +83,12 @@ export const DEFAULT_SOCIAL_SIM_TUNING = {
     memoryExtraScore: 0.54,
     memoryDefaultScore: 0.28,
     recoveryWorldRecoveryWeight: 0.26,
+    requiredEdgeMissPenalty: 0.055,
+    preferredEdgeMissPenalty: 0.04,
+    recoveryClosureWeight: 0.16,
+    recoveryUnresolvedPenalty: 0.09,
+    circleReassemblyWeight: 0.14,
+    denseBridgeWeight: 0.12,
   },
   judge: {
     turnBase: 0.32,
@@ -1122,6 +1128,71 @@ function resolvePostRecoveryTargetActorId({
   return alternative?.members.find((member) => member !== actor.id) ?? null;
 }
 
+function findBestOracleRelationshipForActor(
+  world,
+  actor,
+  state,
+  tuning = DEFAULT_SOCIAL_SIM_TUNING,
+  options = {},
+) {
+  const classes = new Set(options.classes ?? ["preferred", "acceptable"]);
+  const excludedIds = new Set(options.excludedIds ?? []);
+  const onlyUnmatched = Boolean(options.onlyUnmatched);
+  const requireGroupClosure = Boolean(options.requireGroupClosure);
+  const minStrength = Number.isFinite(options.minStrength) ? options.minStrength : null;
+  const candidates = world.relationships.filter((relationship) => {
+    if (!relationship.members.includes(actor.id)) return false;
+    if (excludedIds.has(relationship.id)) return false;
+    if (onlyUnmatched && relationship.status === "matched") return false;
+    if (requireGroupClosure && !isRequiredGroupClosure(world, relationship)) return false;
+    if (minStrength !== null && (relationship.strength ?? 0) < minStrength) return false;
+    const oracleClass = classifyOracleRelationship(world, relationship);
+    if (!classes.has(oracleClass)) return false;
+    return true;
+  });
+
+  if (candidates.length === 0) return null;
+
+  return candidates
+    .map((relationship) => ({
+      relationship,
+      score: relationshipPriorityScore(world, actor, relationship, state, tuning),
+    }))
+    .sort((left, right) => right.score - left.score)[0]?.relationship ?? null;
+}
+
+function averageScore(values) {
+  return values.length > 0
+    ? values.reduce((sum, value) => sum + value, 0) / values.length
+    : 0;
+}
+
+function computeRecoveryResolutionScore(world, oracleMetrics, metrics) {
+  if (world.family !== "recovery") return 0;
+  if (oracleMetrics.preferredMatchedCount > 0) return 1;
+  if (oracleMetrics.acceptableMatchedCount > 0) return 0.78;
+  if (metrics.recoverySignals > 0 && oracleMetrics.forbiddenMatchedCount === 0) return 0.34;
+  return 0;
+}
+
+function computeCircleReassemblyScore(world, oracleMetrics) {
+  if (world.family !== "circle") return 0;
+  return averageScore([
+    oracleMetrics.preferredRecall,
+    oracleMetrics.groupClosureSuccess,
+    oracleMetrics.oracleProgressScore,
+  ]);
+}
+
+function computeDenseBridgeScore(world, oracleMetrics) {
+  if (world.family !== "dense-social-graph") return 0;
+  return averageScore([
+    oracleMetrics.groupClosureSuccess,
+    oracleMetrics.closurePrecision,
+    oracleMetrics.oracleProgressScore,
+  ]);
+}
+
 function classifyOracleRelationship(world, relationship) {
   if (!relationship) return "neutral";
   const oracle = world.oracle ?? {};
@@ -1350,8 +1421,23 @@ function planRecoveryFamilyAction(context) {
   const tuning = getTuning(context.config);
   const targetRelationship = findBestRelationshipWithState(world, actor, null, state, tuning);
   const weakRelationship = findWeakRelationshipWithState(world, actor, state, tuning);
+  const preferredFallbackRelationship = findBestOracleRelationshipForActor(
+    world,
+    actor,
+    state,
+    tuning,
+    {
+      classes: ["preferred", "acceptable"],
+      onlyUnmatched: true,
+    },
+  );
   const targetActorId = resolveActorTarget(world, actor, targetRelationship);
   const weakTargetActorId = resolveActorTarget(world, actor, weakRelationship);
+  const preferredFallbackTargetActorId = resolveActorTarget(
+    world,
+    actor,
+    preferredFallbackRelationship,
+  );
   const knownTargets = state.knownTargets ?? new Map();
   const lastActionByActor = state.lastActionByActor ?? new Map();
   const recentActorAction = lastActionByActor.get(actor.id)?.intent ?? "";
@@ -1369,9 +1455,21 @@ function planRecoveryFamilyAction(context) {
   const hasRecoveredRelationship =
     recentRelationshipAction === "recover_no_match" ||
     recentActorAction === "recover_no_match";
+  const targetOracleClass = classifyOracleRelationship(world, targetRelationship);
   const mediumStrength = (targetRelationship?.strength ?? 0) >= tuning.thresholds.lowStrength &&
     (targetRelationship?.strength ?? 0) < tuning.thresholds.mediumStrength;
   const strongStrength = (targetRelationship?.strength ?? 0) >= tuning.thresholds.mediumStrength;
+  const fallbackTargetActorId =
+    preferredFallbackTargetActorId ??
+    resolvePostRecoveryTargetActorId({
+      world,
+      actor,
+      state,
+      tuning,
+      currentTargetActorId: targetActorId,
+      excludedRelationshipIds: recoveredRelationshipIds,
+      strategy: "best_alternative",
+    });
 
   if (state.stage === "onboarding") {
     return createPlannedAction({
@@ -1384,19 +1482,16 @@ function planRecoveryFamilyAction(context) {
   if (hasRecoveredRelationship && state.stage === "conversation") {
     return createPlannedAction({
       context,
-      intent: resolvePolicyAction(
-        tuning.policy.recoveryPostRecoveryConversationAction,
-        "invite_group",
-      ),
-      targetActorId: resolvePostRecoveryTargetActorId({
-        world,
-        actor,
-        state,
-        tuning,
-        currentTargetActorId: targetActorId,
-        excludedRelationshipIds: recoveredRelationshipIds,
-        strategy: tuning.policy.recoveryPostRecoveryTargetStrategy,
-      }),
+      intent:
+        fallbackTargetActorId && preferredFallbackRelationship
+          ? (preferredFallbackRelationship.strength ?? 0) >= tuning.thresholds.nearMatchMin
+            ? "propose_event"
+            : "reply"
+          : resolvePolicyAction(
+              tuning.policy.recoveryPostRecoveryConversationAction,
+              "invite_group",
+            ),
+      targetActorId: fallbackTargetActorId,
       detachedFromWeakFit: true,
     });
   }
@@ -1404,19 +1499,11 @@ function planRecoveryFamilyAction(context) {
   if (hasRecoveredRelationship && state.stage === "convergence") {
     return createPlannedAction({
       context,
-      intent: resolvePolicyAction(
+      intent: fallbackTargetActorId ? "propose_event" : resolvePolicyAction(
         tuning.policy.recoveryPostRecoveryConvergenceAction,
         "propose_event",
       ),
-      targetActorId: resolvePostRecoveryTargetActorId({
-        world,
-        actor,
-        state,
-        tuning,
-        currentTargetActorId: targetActorId,
-        excludedRelationshipIds: recoveredRelationshipIds,
-        strategy: tuning.policy.recoveryPostRecoveryTargetStrategy,
-      }),
+      targetActorId: fallbackTargetActorId,
       detachedFromWeakFit: true,
     });
   }
@@ -1464,11 +1551,11 @@ function planRecoveryFamilyAction(context) {
       context,
       intent:
         state.stage === "matching"
-          ? "ask_preference"
+          ? "reply"
           : state.stage === "convergence"
             ? "propose_event"
-            : "invite_group",
-      targetActorId: null,
+            : "reply",
+      targetActorId: fallbackTargetActorId,
       detachedFromWeakFit: true,
     });
   }
@@ -1488,10 +1575,41 @@ function planRecoveryFamilyAction(context) {
     return createPlannedAction({
       context,
       intent:
-        mediumStrength && worldNeedsGroupProgress(world) && rng() > tuning.probabilities.matchingGroupInvite
+        preferredFallbackTargetActorId && weakRelationship
+          ? "reply"
+          : (targetOracleClass === "preferred" || targetOracleClass === "acceptable")
+            ? "reply"
+          : mediumStrength && worldNeedsGroupProgress(world) && rng() > tuning.probabilities.matchingGroupInvite
           ? "invite_group"
           : "ask_preference",
-      targetActorId: targetActorId,
+      targetActorId: preferredFallbackTargetActorId ?? targetActorId,
+    });
+  }
+
+  if (
+    world.family === "recovery" &&
+    (targetOracleClass === "preferred" || targetOracleClass === "acceptable") &&
+    state.stage === "conversation"
+  ) {
+    return createPlannedAction({
+      context,
+      intent:
+        (targetRelationship?.strength ?? 0) >= tuning.thresholds.lowStrength
+          ? "propose_event"
+          : "reply",
+      targetActorId,
+    });
+  }
+
+  if (
+    world.family === "recovery" &&
+    (targetOracleClass === "preferred" || targetOracleClass === "acceptable") &&
+    state.stage === "convergence"
+  ) {
+    return createPlannedAction({
+      context,
+      intent: "propose_event",
+      targetActorId,
     });
   }
 
@@ -1612,12 +1730,23 @@ function planCircleFamilyAction(context) {
   const tuning = getTuning(context.config);
   const targetRelationship = findBestRelationshipWithState(world, actor, null, state, tuning);
   const weakRelationship = findWeakRelationshipWithState(world, actor, state, tuning);
-  const targetActorId = resolveActorTarget(world, actor, targetRelationship);
+  const requiredRelationship =
+    findBestOracleRelationshipForActor(world, actor, state, tuning, {
+      classes: ["preferred"],
+      onlyUnmatched: true,
+      requireGroupClosure: true,
+    }) ??
+    findBestOracleRelationshipForActor(world, actor, state, tuning, {
+      classes: ["preferred"],
+      onlyUnmatched: true,
+    });
+  const resolvedRelationship = requiredRelationship ?? targetRelationship;
+  const targetActorId = resolveActorTarget(world, actor, resolvedRelationship);
   const knownTargets = state.knownTargets ?? new Map();
   const recentRelationshipAction =
-    targetRelationship ? knownTargets.get(targetRelationship.id)?.action ?? "" : "";
-  const mediumStrength = (targetRelationship?.strength ?? 0) >= tuning.thresholds.lowStrength &&
-    (targetRelationship?.strength ?? 0) < tuning.thresholds.mediumStrength;
+    resolvedRelationship ? knownTargets.get(resolvedRelationship.id)?.action ?? "" : "";
+  const mediumStrength = (resolvedRelationship?.strength ?? 0) >= tuning.thresholds.lowStrength &&
+    (resolvedRelationship?.strength ?? 0) < tuning.thresholds.mediumStrength;
 
   if (state.stage === "onboarding") {
     return createPlannedAction({
@@ -1640,7 +1769,7 @@ function planCircleFamilyAction(context) {
         detachedFromWeakFit: true,
       });
     }
-    if (canUseNearMatch(world, targetRelationship, tuning)) {
+    if (canUseNearMatch(world, resolvedRelationship, tuning)) {
       return createPlannedAction({
         context,
         intent: "invite_group",
@@ -1654,7 +1783,7 @@ function planCircleFamilyAction(context) {
     ) {
       return createPlannedAction({
         context,
-        intent: recentRelationshipAction === "reference_memory"
+        intent: requiredRelationship || recentRelationshipAction === "reference_memory"
           ? "invite_group"
           : "reference_memory",
         targetActorId,
@@ -1671,7 +1800,7 @@ function planCircleFamilyAction(context) {
     return createPlannedAction({
       context,
       intent:
-        canUseNearMatch(world, targetRelationship, tuning) ||
+        canUseNearMatch(world, resolvedRelationship, tuning) ||
         recentRelationshipAction === "reference_memory"
           ? "invite_group"
           : "reply",
@@ -1682,7 +1811,11 @@ function planCircleFamilyAction(context) {
   if (worldNeedsMemory(world) && state.stage === "memory_drift") {
     return createPlannedAction({
       context,
-      intent: "reference_memory",
+      intent:
+        requiredRelationship &&
+        (resolvedRelationship?.strength ?? 0) >= tuning.thresholds.circleContinuityMin
+          ? "invite_group"
+          : "reference_memory",
       targetActorId,
     });
   }
@@ -1826,14 +1959,27 @@ function planDenseSocialGraphFamilyAction(context) {
   const tuning = getTuning(context.config);
   const targetRelationship = findBestRelationshipWithState(world, actor, null, state, tuning);
   const weakRelationship = findWeakRelationshipWithState(world, actor, state, tuning);
-  const targetActorId = resolveActorTarget(world, actor, targetRelationship);
+  const requiredRelationship =
+    findBestOracleRelationshipForActor(world, actor, state, tuning, {
+      classes: ["preferred", "acceptable"],
+      onlyUnmatched: true,
+      requireGroupClosure: true,
+      minStrength: tuning.thresholds.lowStrength,
+    }) ??
+    findBestOracleRelationshipForActor(world, actor, state, tuning, {
+      classes: ["preferred", "acceptable"],
+      onlyUnmatched: true,
+      minStrength: tuning.thresholds.lowStrength,
+    });
+  const resolvedRelationship = requiredRelationship ?? targetRelationship;
+  const targetActorId = resolveActorTarget(world, actor, resolvedRelationship);
   const knownTargets = state.knownTargets ?? new Map();
   const recentRelationshipAction =
-    targetRelationship ? knownTargets.get(targetRelationship.id)?.action ?? "" : "";
+    resolvedRelationship ? knownTargets.get(resolvedRelationship.id)?.action ?? "" : "";
   const hasRecoveredRelationship =
     recentRelationshipAction === "recover_no_match" ||
     (state.lastActionByActor.get(actor.id)?.intent ?? "") === "recover_no_match";
-  const nearMatchTarget = canUseNearMatch(world, targetRelationship, tuning);
+  const nearMatchTarget = canUseNearMatch(world, resolvedRelationship, tuning);
 
   if (state.stage === "onboarding") {
     return createPlannedAction({
@@ -1856,7 +2002,7 @@ function planDenseSocialGraphFamilyAction(context) {
     ["group_seed", "event_seed"].includes(actor.kind) &&
     state.stage === "conversation"
   ) {
-    if (nearMatchTarget) {
+    if (nearMatchTarget || requiredRelationship) {
       return createPlannedAction({
         context,
         intent: "invite_group",
@@ -1908,11 +2054,11 @@ function planDenseSocialGraphFamilyAction(context) {
 
   if (
     state.stage === "conversation" &&
-    rng() > tuning.probabilities.denseConversationInvite
+    (requiredRelationship || rng() > tuning.probabilities.denseConversationInvite)
   ) {
     return createPlannedAction({
       context,
-      intent: "invite_group",
+      intent: requiredRelationship ? "reply" : "invite_group",
       targetActorId,
     });
   }
@@ -2182,6 +2328,25 @@ function summarizeWorld(world, transcript, metrics, judge, config) {
     world.family === "recovery"
       ? noMatchRecoveryQuality * tuning.scoring.recoveryWorldRecoveryWeight
       : 0;
+  const oracleMetrics = computeOracleMetrics(world, relationships);
+  const diagnostics = buildWorldDiagnostics(world, relationships, oracleMetrics, tuning);
+  const recoveryResolutionScore = computeRecoveryResolutionScore(world, oracleMetrics, metrics);
+  const circleReassemblyScore = computeCircleReassemblyScore(world, oracleMetrics);
+  const denseBridgeScore = computeDenseBridgeScore(world, oracleMetrics);
+  const familyGoalBonus =
+    recoveryResolutionScore * tuning.scoring.recoveryClosureWeight +
+    circleReassemblyScore * tuning.scoring.circleReassemblyWeight +
+    denseBridgeScore * tuning.scoring.denseBridgeWeight;
+  const requiredEdgeMissPenalty =
+    (diagnostics.groupClosureMisses.length * tuning.scoring.requiredEdgeMissPenalty) +
+    (diagnostics.preferredEdgeMisses.length * tuning.scoring.preferredEdgeMissPenalty);
+  const recoveryUnresolvedPenalty =
+    world.family === "recovery" &&
+    metrics.recoverySignals > 0 &&
+    oracleMetrics.preferredMatchedCount === 0 &&
+    oracleMetrics.acceptableMatchedCount === 0
+      ? tuning.scoring.recoveryUnresolvedPenalty
+      : 0;
   const expectedTurnBudget = toNumber(world.turnBudget, totalTurns);
   const turnBudgetGap = Math.max(0, expectedTurnBudget - totalTurns);
   const convergenceScore = clamp(
@@ -2189,12 +2354,15 @@ function summarizeWorld(world, transcript, metrics, judge, config) {
       progressDensity * tuning.scoring.progressDensityWeight +
       expectationFulfillment * tuning.scoring.expectationFulfillmentWeight +
       recoveryWorldBonus +
+      familyGoalBonus +
       (metrics.stalledTurns === 0 ? tuning.scoring.noStallBonus : 0) -
       shallowFollowupPenalty -
       stalledPenalty -
       missingRecoveryPenalty -
       missingMemoryPenalty -
-      missingGroupPenalty,
+      missingGroupPenalty -
+      requiredEdgeMissPenalty -
+      recoveryUnresolvedPenalty,
     0,
     1,
   );
@@ -2210,8 +2378,6 @@ function summarizeWorld(world, transcript, metrics, judge, config) {
     0,
     1,
   );
-  const oracleMetrics = computeOracleMetrics(world, relationships);
-  const diagnostics = buildWorldDiagnostics(world, relationships, oracleMetrics, tuning);
 
   return {
     totalTurns,
@@ -2264,6 +2430,12 @@ function summarizeWorld(world, transcript, metrics, judge, config) {
       missingMemoryPenalty: Number(missingMemoryPenalty.toFixed(3)),
       missingGroupPenalty: Number(missingGroupPenalty.toFixed(3)),
       recoveryWorldBonus: Number(recoveryWorldBonus.toFixed(3)),
+      familyGoalBonus: Number(familyGoalBonus.toFixed(3)),
+      requiredEdgeMissPenalty: Number(requiredEdgeMissPenalty.toFixed(3)),
+      recoveryUnresolvedPenalty: Number(recoveryUnresolvedPenalty.toFixed(3)),
+      recoveryResolutionScore: Number(recoveryResolutionScore.toFixed(3)),
+      circleReassemblyScore: Number(circleReassemblyScore.toFixed(3)),
+      denseBridgeScore: Number(denseBridgeScore.toFixed(3)),
     },
     measurement: {
       expectedTurnBudget,

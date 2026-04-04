@@ -322,9 +322,40 @@ test("recovery worlds detach from weak-fit loops after initial recovery", async 
     config: {},
   });
 
-  assert.equal(turn.intent, "ask_preference");
+  assert.equal(turn.intent, "reply");
   assert.equal(turn.targetActorId, null);
   assert.equal(turn.detachedFromWeakFit, true);
+});
+
+test("recovery planners close toward the preferred fallback after detaching", async () => {
+  const brain = createBrainProvider({ provider: "stub" });
+  const worlds = loadSocialSimWorldFixture(
+    path.resolve("scripts/social-sim-worlds.json"),
+    path.resolve("apps/api/test/fixtures/agentic-scenarios.json"),
+  );
+  const world = worlds.find((entry) => entry.id === "short-no-match-recovery-v1");
+  const actor = world.actors.find((entry) => entry.id === "cora");
+  const state = {
+    stage: "conversation",
+    turnIndex: 3,
+    lastActionByActor: new Map([["cora", { intent: "recover_no_match" }]]),
+    knownTargets: new Map([
+      ["cora-drew", { action: "recover_no_match", turnIndex: 2, confidence: 0.52 }],
+    ]),
+  };
+
+  const turn = await brain.generateActorTurn({
+    world,
+    actor,
+    state,
+    transcript: [],
+    rng: () => 0.2,
+    config: {},
+  });
+
+  assert.equal(turn.targetActorId, "mina");
+  assert.equal(turn.detachedFromWeakFit, true);
+  assert.ok(["reply", "propose_event"].includes(turn.intent));
 });
 
 test("circle organizers prioritize unfinished returning members", async () => {
@@ -354,7 +385,7 @@ test("circle organizers prioritize unfinished returning members", async () => {
   });
 
   assert.equal(turn.targetActorId, "circle-luca");
-  assert.equal(turn.intent, "reference_memory");
+  assert.equal(turn.intent, "invite_group");
 });
 
 test("network rebalancing organizers can reroute to a healthier target after recovery", async () => {
@@ -393,6 +424,36 @@ test("network rebalancing organizers can reroute to a healthier target after rec
   assert.equal(turn.intent, "invite_group");
   assert.equal(turn.targetActorId, "rebalance-ivy");
   assert.equal(turn.detachedFromWeakFit, true);
+});
+
+test("dense graph planners prioritize required bridge closure over generic chatter", async () => {
+  const brain = createBrainProvider({ provider: "stub" });
+  const worlds = loadSocialSimWorldFixture(
+    path.resolve("scripts/social-sim-worlds.json"),
+    path.resolve("apps/api/test/fixtures/agentic-scenarios.json"),
+  );
+  const world = worlds.find((entry) => entry.id === "medium-cross-cluster-holdout-v1");
+  const actor = world.actors.find((entry) => entry.id === "holdout-group-ara");
+  const state = {
+    stage: "conversation",
+    turnIndex: 4,
+    lastActionByActor: new Map(),
+    knownTargets: new Map([
+      ["holdout-group-ara-len", { action: "reply", turnIndex: 3, confidence: 0.74 }],
+    ]),
+  };
+
+  const turn = await brain.generateActorTurn({
+    world,
+    actor,
+    state,
+    transcript: [],
+    rng: () => 0.2,
+    config: {},
+  });
+
+  assert.equal(turn.targetActorId, "holdout-kai");
+  assert.equal(turn.intent, "invite_group");
 });
 
 test("runSocialSimulation writes artifacts in dry-run mode", async () => {
