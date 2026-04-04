@@ -127,7 +127,6 @@ jobs:
         run: |
           set -euo pipefail
           provider="${{ github.event_name == 'schedule' && 'ollama' || inputs.provider }}"
-          benchmark_mode="${{ github.event_name == 'schedule' && 'true' || inputs.benchmark_mode }}"
           use_remote_provider="${{ github.event_name == 'schedule' && 'true' || inputs.use_remote_provider }}"
 
           if [[ "${provider}" != "ollama" || "${use_remote_provider}" != "true" ]]; then
@@ -138,6 +137,9 @@ jobs:
           probe_attempts=10
           probe_sleep=2
           ollama_log="/tmp/social-sim-ollama-serve.log"
+          local_host="$(node -e 'const url = new URL(process.argv[1]); process.stdout.write(url.hostname);' "${OLLAMA_BASE_URL}")"
+          ollama_bin="$(command -v ollama || true)"
+          started_ollama=0
 
           probe_tags() {
             curl -fsS --max-time 5 "${probe_url}"
@@ -151,8 +153,20 @@ jobs:
           done
 
           if [[ -z "${tags_json:-}" ]]; then
-            if [[ "${OLLAMA_BASE_URL}" =~ ^http://(127\.0\.0\.1|localhost):[0-9]+/?$ ]] && command -v ollama >/dev/null 2>&1; then
-              nohup ollama serve >"${ollama_log}" 2>&1 &
+            if [[ "${local_host}" == "127.0.0.1" || "${local_host}" == "localhost" ]]; then
+              if [[ -n "${ollama_bin}" ]]; then
+                nohup "${ollama_bin}" serve >"${ollama_log}" 2>&1 &
+                started_ollama=1
+              elif command -v sudo >/dev/null 2>&1 && sudo -n systemctl start ollama >/dev/null 2>&1; then
+                started_ollama=1
+              elif command -v systemctl >/dev/null 2>&1 && systemctl --user start ollama >/dev/null 2>&1; then
+                started_ollama=1
+              fi
+
+              if [[ "${started_ollama}" -eq 1 ]]; then
+                echo "Started or resumed local Ollama service for ${OLLAMA_BASE_URL}."
+              fi
+
               for _ in $(seq 1 15); do
                 if tags_json="$(probe_tags)"; then
                   break
@@ -164,9 +178,16 @@ jobs:
 
           if [[ -z "${tags_json:-}" ]]; then
             echo "Ollama endpoint is not reachable at ${OLLAMA_BASE_URL}." >&2
+            echo "Resolved host: ${local_host}" >&2
+            echo "ollama binary: ${ollama_bin:-not-found}" >&2
             if [[ -f "${ollama_log}" ]]; then
               echo "--- ollama serve log ---" >&2
               tail -n 40 "${ollama_log}" >&2 || true
+            fi
+            if command -v systemctl >/dev/null 2>&1; then
+              echo "--- systemctl ollama ---" >&2
+              systemctl status ollama --no-pager >&2 || true
+              systemctl --user status ollama --no-pager >&2 || true
             fi
             exit 1
           fi
