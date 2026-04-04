@@ -2,6 +2,7 @@
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import {
   DEFAULT_SOCIAL_SIM_ARTIFACT_ROOT,
   DEFAULT_SOCIAL_SIM_TUNING,
@@ -10,7 +11,7 @@ import {
   runSocialSimulation,
 } from "./social-sim-core.mjs";
 
-function parseSearchArgs(argv = process.argv.slice(2)) {
+export function parseSearchArgs(argv = process.argv.slice(2)) {
   const flags = new Map();
   for (const arg of argv) {
     if (!arg.startsWith("--")) continue;
@@ -32,13 +33,13 @@ function parseSearchArgs(argv = process.argv.slice(2)) {
   };
 }
 
-function getSearchSeeds(baseConfig, parsedArgs) {
+export function getSearchSeeds(baseConfig, parsedArgs) {
   if (parsedArgs.seeds.length > 0) return parsedArgs.seeds;
   if (parsedArgs.hasExplicitSeed && Number.isFinite(baseConfig.seed)) return [baseConfig.seed];
   return [17031, 27031, 37031];
 }
 
-function setNestedValue(target, pathParts, value) {
+export function setNestedValue(target, pathParts, value) {
   let cursor = target;
   for (let index = 0; index < pathParts.length - 1; index += 1) {
     const key = pathParts[index];
@@ -50,7 +51,7 @@ function setNestedValue(target, pathParts, value) {
   cursor[pathParts[pathParts.length - 1]] = value;
 }
 
-function cartesianProduct(arrays) {
+export function cartesianProduct(arrays) {
   return arrays.reduce(
     (acc, values) =>
       acc.flatMap((prefix) => values.map((value) => [...prefix, value])),
@@ -58,7 +59,7 @@ function cartesianProduct(arrays) {
   );
 }
 
-function buildCandidateGrid(profile) {
+export function buildCandidateGrid(profile) {
   if (profile === "weak-worlds-v1") {
     const dimensions = [
       {
@@ -183,11 +184,82 @@ function buildCandidateGrid(profile) {
       ],
     };
   }
+  if (profile === "dense-guard-v1") {
+    return {
+      objective: "guarded-balance",
+      focusWorlds: [
+        "medium-dense-social-mixer-v1",
+        "medium-multi-cluster-bridging-v1",
+      ],
+      protectedWorlds: [
+        "medium-dense-social-mixer-v1",
+        "medium-multi-cluster-bridging-v1",
+        "medium-pair-group-discovery-v1",
+      ],
+      dimensions: [
+        {
+          key: "probabilities.matchingGroupInvite",
+          values: [0.52, 0.58, 0.66],
+        },
+        {
+          key: "probabilities.denseConversationInvite",
+          values: [0.52, 0.6, 0.7],
+        },
+        {
+          key: "deltas.inviteGroupInGroupWorld",
+          values: [0.12, 0.14, 0.16],
+        },
+        {
+          key: "policy.denseGraphRecoveredConversationAction",
+          values: ["current", "reply", "invite_group"],
+        },
+      ],
+    };
+  }
+  if (profile === "closure-guard-v1") {
+    return {
+      objective: "guarded-balance",
+      focusWorlds: [
+        "short-no-match-recovery-v1",
+        "long-bad-actor-containment-v1",
+        "long-network-rebalancing-v1",
+        "long-recurring-circle-fragmentation-v1",
+      ],
+      protectedWorlds: [
+        "medium-dense-social-mixer-v1",
+        "medium-multi-cluster-bridging-v1",
+        "medium-pair-group-discovery-v1",
+        "medium-recurring-circle-v1",
+      ],
+      dimensions: [
+        {
+          key: "thresholds.nearMatchMin",
+          values: [0.62, 0.65, 0.68],
+        },
+        {
+          key: "priority.circleNearMatchBonus",
+          values: [0.06, 0.08, 0.12],
+        },
+        {
+          key: "priority.networkNearMatchBonus",
+          values: [0.08, 0.1, 0.14],
+        },
+        {
+          key: "scoring.recoveryWorldRecoveryWeight",
+          values: [0.12, 0.2, 0.26],
+        },
+        {
+          key: "policy.networkOrganizerPostRecoveryTargetStrategy",
+          values: ["drop", "best_alternative"],
+        },
+      ],
+    };
+  }
 
   throw new Error(`Unknown social-sim search profile: ${profile}`);
 }
 
-function createCandidateTuning(baseTuning, dimensions, combination) {
+export function createCandidateTuning(baseTuning, dimensions, combination) {
   const tuning = normalizeSocialSimTuning(baseTuning);
   dimensions.forEach((dimension, index) => {
     setNestedValue(tuning, dimension.key.split("."), combination[index]);
@@ -195,7 +267,15 @@ function createCandidateTuning(baseTuning, dimensions, combination) {
   return tuning;
 }
 
-function scoreCandidate(summary, worlds, focusWorlds, objective = "weak-world-balance") {
+export function scoreCandidate(
+  summary,
+  worlds,
+  focusWorlds,
+  objective = "weak-world-balance",
+  options = {},
+) {
+  const protectedWorlds = options.protectedWorlds ?? [];
+  const baselineWorldScores = options.baselineWorldScores ?? new Map();
   const overall = summary.totals.averageConvergenceScore ?? 0;
   const focusScores = worlds
     .filter((world) => focusWorlds.includes(world.worldId))
@@ -209,11 +289,19 @@ function scoreCandidate(summary, worlds, focusWorlds, objective = "weak-world-ba
       : overall;
   const weakMin = focusScores.length > 0 ? Math.min(...focusScores) : overall;
   const networkFloor = worldScores.get("long-network-rebalancing-v1") ?? weakMin;
+  const regressionPenalty = protectedWorlds.reduce((penalty, worldId) => {
+    const baseline = baselineWorldScores.get(worldId);
+    const candidate = worldScores.get(worldId);
+    if (!Number.isFinite(baseline) || !Number.isFinite(candidate)) return penalty;
+    return penalty + Math.max(0, baseline - candidate);
+  }, 0);
   const objectiveScore =
     objective === "weak-world-push"
       ? overall * 0.3 + weakMean * 0.4 + weakMin * 0.3
       : objective === "network-floor-push"
         ? overall * 0.25 + weakMean * 0.25 + weakMin * 0.15 + networkFloor * 0.35
+      : objective === "guarded-balance"
+        ? overall * 0.25 + weakMean * 0.4 + weakMin * 0.2 - regressionPenalty * 0.5
       : overall * 0.45 + weakMean * 0.35 + weakMin * 0.2;
   return {
     objective: Number(objectiveScore.toFixed(4)),
@@ -221,10 +309,11 @@ function scoreCandidate(summary, worlds, focusWorlds, objective = "weak-world-ba
     weakMean: Number(weakMean.toFixed(4)),
     weakMin: Number(weakMin.toFixed(4)),
     networkFloor: Number(networkFloor.toFixed(4)),
+    regressionPenalty: Number(regressionPenalty.toFixed(4)),
   };
 }
 
-function aggregateCandidateMetrics(seedRuns) {
+export function aggregateCandidateMetrics(seedRuns) {
   const totals = seedRuns.reduce(
     (acc, seedRun) => {
       acc.objective += seedRun.metrics.objective;
@@ -252,7 +341,7 @@ function aggregateCandidateMetrics(seedRuns) {
   };
 }
 
-async function main() {
+export async function main() {
   const baseConfig = parseSocialSimArgs(process.argv.slice(2), process.env);
   const parsedArgs = parseSearchArgs(process.argv.slice(2));
   const { profile, topK, maxCandidates } = parsedArgs;
@@ -268,6 +357,52 @@ async function main() {
     `search-${new Date().toISOString().replace(/[:.]/g, "-")}`,
   );
   mkdirSync(artifactRoot, { recursive: true });
+
+  const baselineSeedRuns = [];
+  for (const seed of seeds) {
+    const baselineConfig = {
+      ...baseConfig,
+      provider: "stub",
+      judgeProvider: "stub",
+      dryRun: true,
+      cleanupMode: "none",
+      artifactRoot,
+      namespace: `social-sim-baseline-seed-${seed}`,
+      seed,
+      tuning: normalizeSocialSimTuning(baseConfig.tuning ?? DEFAULT_SOCIAL_SIM_TUNING),
+    };
+    const result = await runSocialSimulation(baselineConfig);
+    baselineSeedRuns.push({
+      seed,
+      runId: result.artifact.runId,
+      runDir: result.runDir,
+      summary: result.summary,
+      worlds: result.artifact.worlds,
+      metrics: scoreCandidate(
+        result.summary,
+        result.artifact.worlds,
+        grid.focusWorlds,
+        grid.objective,
+      ),
+    });
+  }
+  const baselineWorldScores = new Map();
+  for (const seedRun of baselineSeedRuns) {
+    for (const world of seedRun.worlds) {
+      const previous = baselineWorldScores.get(world.worldId) ?? [];
+      previous.push(world.summary.convergenceScore);
+      baselineWorldScores.set(world.worldId, previous);
+    }
+  }
+  for (const [worldId, scores] of baselineWorldScores.entries()) {
+    baselineWorldScores.set(
+      worldId,
+      scores.reduce((sum, value) => sum + value, 0) / Math.max(scores.length, 1),
+    );
+  }
+  const baselineAggregate = aggregateCandidateMetrics(
+    baselineSeedRuns.map((seedRun) => ({ metrics: seedRun.metrics })),
+  );
 
   const results = [];
   for (const [index, combination] of limitedCombinations.entries()) {
@@ -299,6 +434,10 @@ async function main() {
           result.artifact.worlds,
           grid.focusWorlds,
           grid.objective,
+          {
+            protectedWorlds: grid.protectedWorlds,
+            baselineWorldScores,
+          },
         ),
         worstWorlds: result.artifact.worlds
           .map((world) => ({
@@ -326,6 +465,11 @@ async function main() {
     candidateCount: results.length,
     seeds,
     focusWorlds: grid.focusWorlds,
+    protectedWorlds: grid.protectedWorlds ?? [],
+    baseline: {
+      metrics: baselineAggregate,
+      worldScores: Object.fromEntries(baselineWorldScores.entries()),
+    },
     topCandidates: results.slice(0, Math.max(1, topK)),
   };
 
@@ -338,4 +482,6 @@ async function main() {
   console.log(JSON.stringify(output, null, 2));
 }
 
-await main();
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+  await main();
+}
