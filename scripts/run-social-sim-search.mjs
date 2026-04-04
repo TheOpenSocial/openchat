@@ -370,6 +370,41 @@ export function scoreCandidate(
           0,
         ) / focusWorldRecords.length
       : 0;
+  const oracleScoreMean =
+    focusWorldRecords.length > 0
+      ? focusWorldRecords.reduce(
+          (sum, world) => sum + (world.summary.oracleScore ?? 0),
+          0,
+        ) / focusWorldRecords.length
+      : 0;
+  const oracleProgressMean =
+    focusWorldRecords.length > 0
+      ? focusWorldRecords.reduce(
+          (sum, world) => sum + (world.summary.oracleProgressScore ?? 0),
+          0,
+        ) / focusWorldRecords.length
+      : 0;
+  const closurePrecisionMean =
+    focusWorldRecords.length > 0
+      ? focusWorldRecords.reduce(
+          (sum, world) => sum + (world.summary.closurePrecision ?? 0),
+          0,
+        ) / focusWorldRecords.length
+      : 0;
+  const preferredRecallMean =
+    focusWorldRecords.length > 0
+      ? focusWorldRecords.reduce(
+          (sum, world) => sum + (world.summary.preferredRecall ?? 0),
+          0,
+        ) / focusWorldRecords.length
+      : 0;
+  const forbiddenAvoidanceMean =
+    focusWorldRecords.length > 0
+      ? focusWorldRecords.reduce(
+          (sum, world) => sum + (world.summary.forbiddenAvoidance ?? 0),
+          0,
+        ) / focusWorldRecords.length
+      : 0;
   const regressionPenalty = protectedWorlds.reduce((penalty, worldId) => {
     const baseline = baselineWorldScores.get(worldId);
     const candidate = worldScores.get(worldId);
@@ -389,6 +424,9 @@ export function scoreCandidate(
       ? overall * 0.25 +
         weakMean * 0.3 +
         weakMin * 0.2 +
+        oracleScoreMean * 0.15 +
+        oracleProgressMean * 0.15 +
+        preferredRecallMean * 0.1 +
         strongCoverageMean * 0.15 +
         meanStrengthLiftMean * 0.15 -
         weakStartMatchMean * 0.05
@@ -397,6 +435,9 @@ export function scoreCandidate(
           weakMean * 0.2 +
           weakMin * 0.15 +
           networkFloor * 0.25 +
+          oracleScoreMean * 0.12 +
+          oracleProgressMean * 0.12 +
+          preferredRecallMean * 0.1 +
           strongCoverageMean * 0.1 +
           meanStrengthLiftMean * 0.15 -
           weakStartMatchMean * 0.05
@@ -404,13 +445,33 @@ export function scoreCandidate(
         ? overall * 0.2 +
           weakMean * 0.25 +
           weakMin * 0.15 +
+          oracleScoreMean * 0.2 +
+          oracleProgressMean * 0.18 +
+          closurePrecisionMean * 0.1 +
+          forbiddenAvoidanceMean * 0.08 +
           strongCoverageMean * 0.2 +
           meanStrengthLiftMean * 0.15 -
           weakStartMatchMean * 0.05 -
           regressionPenalty * 0.5
+      : objective === "holdout-balance"
+        ? overall * 0.14 +
+          weakMean * 0.16 +
+          weakMin * 0.1 +
+          oracleScoreMean * 0.22 +
+          oracleProgressMean * 0.16 +
+          closurePrecisionMean * 0.12 +
+          preferredRecallMean * 0.12 +
+          forbiddenAvoidanceMean * 0.08 +
+          strongCoverageMean * 0.12 +
+          meanStrengthLiftMean * 0.08 -
+          weakStartMatchMean * 0.04 -
+          regressionPenalty * 0.45
       : overall * 0.35 +
         weakMean * 0.2 +
         weakMin * 0.1 +
+        oracleScoreMean * 0.2 +
+        oracleProgressMean * 0.14 +
+        closurePrecisionMean * 0.08 +
         strongCoverageMean * 0.2 +
         meanStrengthLiftMean * 0.2 -
         weakStartMatchMean * 0.05;
@@ -423,6 +484,11 @@ export function scoreCandidate(
     strongCoverageMean: Number(strongCoverageMean.toFixed(4)),
     weakStartMatchMean: Number(weakStartMatchMean.toFixed(4)),
     meanStrengthLiftMean: Number(meanStrengthLiftMean.toFixed(4)),
+    oracleScoreMean: Number(oracleScoreMean.toFixed(4)),
+    oracleProgressMean: Number(oracleProgressMean.toFixed(4)),
+    closurePrecisionMean: Number(closurePrecisionMean.toFixed(4)),
+    preferredRecallMean: Number(preferredRecallMean.toFixed(4)),
+    forbiddenAvoidanceMean: Number(forbiddenAvoidanceMean.toFixed(4)),
     regressionPenalty: Number(regressionPenalty.toFixed(4)),
   };
 }
@@ -439,6 +505,11 @@ export function aggregateCandidateMetrics(seedRuns) {
       acc.strongCoverageMean += seedRun.metrics.strongCoverageMean ?? 0;
       acc.weakStartMatchMean += seedRun.metrics.weakStartMatchMean ?? 0;
       acc.meanStrengthLiftMean += seedRun.metrics.meanStrengthLiftMean ?? 0;
+      acc.oracleScoreMean += seedRun.metrics.oracleScoreMean ?? 0;
+      acc.oracleProgressMean += seedRun.metrics.oracleProgressMean ?? 0;
+      acc.closurePrecisionMean += seedRun.metrics.closurePrecisionMean ?? 0;
+      acc.preferredRecallMean += seedRun.metrics.preferredRecallMean ?? 0;
+      acc.forbiddenAvoidanceMean += seedRun.metrics.forbiddenAvoidanceMean ?? 0;
       return acc;
     },
     {
@@ -450,6 +521,11 @@ export function aggregateCandidateMetrics(seedRuns) {
       strongCoverageMean: 0,
       weakStartMatchMean: 0,
       meanStrengthLiftMean: 0,
+      oracleScoreMean: 0,
+      oracleProgressMean: 0,
+      closurePrecisionMean: 0,
+      preferredRecallMean: 0,
+      forbiddenAvoidanceMean: 0,
     },
   );
   const objectiveMean = totals.objective / divisor;
@@ -467,6 +543,13 @@ export function aggregateCandidateMetrics(seedRuns) {
     strongCoverageMean: Number((totals.strongCoverageMean / divisor).toFixed(4)),
     weakStartMatchMean: Number((totals.weakStartMatchMean / divisor).toFixed(4)),
     meanStrengthLiftMean: Number((totals.meanStrengthLiftMean / divisor).toFixed(4)),
+    oracleScoreMean: Number((totals.oracleScoreMean / divisor).toFixed(4)),
+    oracleProgressMean: Number((totals.oracleProgressMean / divisor).toFixed(4)),
+    closurePrecisionMean: Number((totals.closurePrecisionMean / divisor).toFixed(4)),
+    preferredRecallMean: Number((totals.preferredRecallMean / divisor).toFixed(4)),
+    forbiddenAvoidanceMean: Number(
+      (totals.forbiddenAvoidanceMean / divisor).toFixed(4),
+    ),
     objectiveStdDev: Number(Math.sqrt(objectiveVariance).toFixed(4)),
     worstSeedObjective: Number(
       Math.min(...seedRuns.map((seedRun) => seedRun.metrics.objective)).toFixed(4),
@@ -482,7 +565,19 @@ function holdoutPenalty(candidateMetrics, baselineMetrics) {
       0,
       (baselineMetrics.strongCoverageMean ?? 0) - (candidateMetrics.strongCoverageMean ?? 0),
     ) * 0.2 +
-    Math.max(0, (baselineMetrics.weakMin ?? 0) - (candidateMetrics.weakMin ?? 0)) * 0.2
+    Math.max(0, (baselineMetrics.weakMin ?? 0) - (candidateMetrics.weakMin ?? 0)) * 0.2 +
+    Math.max(
+      0,
+      (baselineMetrics.oracleScoreMean ?? 0) - (candidateMetrics.oracleScoreMean ?? 0),
+    ) * 0.25 +
+    Math.max(
+      0,
+      (baselineMetrics.oracleProgressMean ?? 0) - (candidateMetrics.oracleProgressMean ?? 0),
+    ) * 0.2 +
+    Math.max(
+      0,
+      (baselineMetrics.closurePrecisionMean ?? 0) - (candidateMetrics.closurePrecisionMean ?? 0),
+    ) * 0.15
   );
 }
 

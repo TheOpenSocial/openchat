@@ -519,6 +519,32 @@ function normalizeWorld(world, index, scenarioCorpus) {
     artifactHints: Array.isArray(world.artifactHints)
       ? world.artifactHints.filter((value) => typeof value === "string")
       : [],
+    oracle: normalizeWorldOracle(world.oracle, relationships),
+  };
+}
+
+function normalizeWorldOracle(oracle, relationships) {
+  const relationshipIds = new Set(
+    Array.isArray(relationships)
+      ? relationships.map((relationship) => relationship.id)
+      : [],
+  );
+  const normalizeEdgeIds = (value) =>
+    Array.isArray(value)
+      ? value
+          .filter((entry) => typeof entry === "string" && relationshipIds.has(entry))
+      : [];
+  const normalizeActorIds = (value) =>
+    Array.isArray(value)
+      ? value.filter((entry) => typeof entry === "string" && entry.trim().length > 0)
+      : [];
+  const source = oracle && typeof oracle === "object" ? oracle : {};
+  return {
+    preferredOutcomeEdges: normalizeEdgeIds(source.preferredOutcomeEdges),
+    acceptableFallbackEdges: normalizeEdgeIds(source.acceptableFallbackEdges),
+    forbiddenOutcomeEdges: normalizeEdgeIds(source.forbiddenOutcomeEdges),
+    requiredIsolations: normalizeActorIds(source.requiredIsolations),
+    requiredGroupClosure: normalizeEdgeIds(source.requiredGroupClosure),
   };
 }
 
@@ -1204,6 +1230,109 @@ function worldSpecificExpectationCount(world) {
   return count;
 }
 
+function computeOracleMetrics(world, relationships) {
+  const oracle = world.oracle ?? {};
+  const relationshipMap = new Map(
+    (Array.isArray(relationships) ? relationships : []).map((relationship) => [
+      relationship.id,
+      relationship,
+    ]),
+  );
+  const matchedRelationships = Array.isArray(relationships)
+    ? relationships.filter((relationship) => relationship.status === "matched")
+    : [];
+  const matchedEdgeIds = new Set(matchedRelationships.map((relationship) => relationship.id));
+  const preferredEdges = oracle.preferredOutcomeEdges ?? [];
+  const acceptableEdges = oracle.acceptableFallbackEdges ?? [];
+  const forbiddenEdges = oracle.forbiddenOutcomeEdges ?? [];
+  const requiredGroupClosure = oracle.requiredGroupClosure ?? [];
+  const requiredIsolations = oracle.requiredIsolations ?? [];
+  const favorableEdgeIds = new Set([...preferredEdges, ...acceptableEdges]);
+  const preferredMatchedCount = preferredEdges.filter((edgeId) => matchedEdgeIds.has(edgeId)).length;
+  const acceptableMatchedCount = acceptableEdges.filter((edgeId) => matchedEdgeIds.has(edgeId)).length;
+  const forbiddenMatchedCount = forbiddenEdges.filter((edgeId) => matchedEdgeIds.has(edgeId)).length;
+  const requiredGroupMatchedCount = requiredGroupClosure.filter((edgeId) =>
+    matchedEdgeIds.has(edgeId),
+  ).length;
+  const averageEdgeStrength = (edgeIds) =>
+    edgeIds.length > 0
+      ? edgeIds.reduce(
+          (sum, edgeId) => sum + (relationshipMap.get(edgeId)?.strength ?? 0),
+          0,
+        ) / edgeIds.length
+      : 0;
+  const isolatedActorCount = requiredIsolations.filter((actorId) =>
+    matchedRelationships.every((relationship) => !relationship.members.includes(actorId)),
+  ).length;
+  const closurePrecision =
+    matchedRelationships.length > 0
+      ? matchedRelationships.filter((relationship) => favorableEdgeIds.has(relationship.id)).length /
+        matchedRelationships.length
+      : preferredEdges.length === 0 && acceptableEdges.length === 0
+        ? 1
+        : 0;
+  const preferredRecall =
+    preferredEdges.length > 0 ? preferredMatchedCount / preferredEdges.length : 1;
+  const forbiddenAvoidance =
+    forbiddenEdges.length > 0 ? 1 - forbiddenMatchedCount / forbiddenEdges.length : 1;
+  const groupClosureSuccess =
+    requiredGroupClosure.length > 0
+      ? requiredGroupMatchedCount / requiredGroupClosure.length
+      : 1;
+  const isolationSuccess =
+    requiredIsolations.length > 0 ? isolatedActorCount / requiredIsolations.length : 1;
+  const acceptableLift =
+    acceptableEdges.length > 0 ? acceptableMatchedCount / acceptableEdges.length : 0;
+  const preferredStrengthMean = averageEdgeStrength(preferredEdges);
+  const acceptableStrengthMean = averageEdgeStrength(acceptableEdges);
+  const forbiddenStrengthMean = averageEdgeStrength(forbiddenEdges);
+  const groupClosureStrengthMean = averageEdgeStrength(requiredGroupClosure);
+  const oracleProgressScore = clamp(
+    preferredStrengthMean * 0.42 +
+      acceptableStrengthMean * 0.08 +
+      (1 - forbiddenStrengthMean) * 0.2 +
+      groupClosureStrengthMean * 0.15 +
+      isolationSuccess * 0.15,
+    0,
+    1,
+  );
+  const oracleScore = clamp(
+    preferredRecall * 0.38 +
+      closurePrecision * 0.24 +
+      forbiddenAvoidance * 0.18 +
+      groupClosureSuccess * 0.1 +
+      isolationSuccess * 0.1 +
+      acceptableLift * 0.05,
+    0,
+    1,
+  );
+
+  return {
+    preferredMatchedCount,
+    acceptableMatchedCount,
+    forbiddenMatchedCount,
+    requiredGroupMatchedCount,
+    isolatedActorCount,
+    closurePrecision: Number(closurePrecision.toFixed(3)),
+    preferredRecall: Number(preferredRecall.toFixed(3)),
+    forbiddenAvoidance: Number(forbiddenAvoidance.toFixed(3)),
+    groupClosureSuccess: Number(groupClosureSuccess.toFixed(3)),
+    isolationSuccess: Number(isolationSuccess.toFixed(3)),
+    preferredStrengthMean: Number(preferredStrengthMean.toFixed(3)),
+    acceptableStrengthMean: Number(acceptableStrengthMean.toFixed(3)),
+    forbiddenStrengthMean: Number(forbiddenStrengthMean.toFixed(3)),
+    groupClosureStrengthMean: Number(groupClosureStrengthMean.toFixed(3)),
+    oracleProgressScore: Number(oracleProgressScore.toFixed(3)),
+    oracleScore: Number(oracleScore.toFixed(3)),
+    matchedEdgeIds: Array.from(matchedEdgeIds),
+    relationshipSnapshot: Array.from(relationshipMap.values()).map((relationship) => ({
+      id: relationship.id,
+      status: relationship.status,
+      strength: Number((relationship.strength ?? 0).toFixed(3)),
+    })),
+  };
+}
+
 function summarizeWorld(world, transcript, metrics, judge, config) {
   const tuning = getTuning(config);
   const totalTurns = transcript.length || 1;
@@ -1302,10 +1431,11 @@ function summarizeWorld(world, transcript, metrics, judge, config) {
         : tuning.scoring.memoryMissingScore
       : metrics.memorySignals > 0
         ? tuning.scoring.memoryExtraScore
-        : tuning.scoring.memoryDefaultScore,
+      : tuning.scoring.memoryDefaultScore,
     0,
     1,
   );
+  const oracleMetrics = computeOracleMetrics(world, relationships);
 
   return {
     totalTurns,
@@ -1329,6 +1459,24 @@ function summarizeWorld(world, transcript, metrics, judge, config) {
     convergenceScore: Number(convergenceScore.toFixed(3)),
     noMatchRecoveryQuality: Number(noMatchRecoveryQuality.toFixed(3)),
     memoryConsistency: Number(memoryConsistency.toFixed(3)),
+    oracleScore: oracleMetrics.oracleScore,
+    oracleProgressScore: oracleMetrics.oracleProgressScore,
+    closurePrecision: oracleMetrics.closurePrecision,
+    preferredRecall: oracleMetrics.preferredRecall,
+    forbiddenAvoidance: oracleMetrics.forbiddenAvoidance,
+    groupClosureSuccess: oracleMetrics.groupClosureSuccess,
+    isolationSuccess: oracleMetrics.isolationSuccess,
+    oracleCounts: {
+      preferredMatchedCount: oracleMetrics.preferredMatchedCount,
+      acceptableMatchedCount: oracleMetrics.acceptableMatchedCount,
+      forbiddenMatchedCount: oracleMetrics.forbiddenMatchedCount,
+      requiredGroupMatchedCount: oracleMetrics.requiredGroupMatchedCount,
+      isolatedActorCount: oracleMetrics.isolatedActorCount,
+      preferredStrengthMean: oracleMetrics.preferredStrengthMean,
+      acceptableStrengthMean: oracleMetrics.acceptableStrengthMean,
+      forbiddenStrengthMean: oracleMetrics.forbiddenStrengthMean,
+      groupClosureStrengthMean: oracleMetrics.groupClosureStrengthMean,
+    },
     scoreBreakdown: {
       matchedRatio: Number(matchedRatio.toFixed(3)),
       progressDensity: Number(progressDensity.toFixed(3)),
@@ -1350,6 +1498,15 @@ function summarizeWorld(world, transcript, metrics, judge, config) {
       requiresMemory: memoryNeeded,
       requiresGroupProgress: groupNeeded,
     },
+    oracle: {
+      preferredOutcomeEdges: world.oracle?.preferredOutcomeEdges ?? [],
+      acceptableFallbackEdges: world.oracle?.acceptableFallbackEdges ?? [],
+      forbiddenOutcomeEdges: world.oracle?.forbiddenOutcomeEdges ?? [],
+      requiredIsolations: world.oracle?.requiredIsolations ?? [],
+      requiredGroupClosure: world.oracle?.requiredGroupClosure ?? [],
+      matchedEdgeIds: oracleMetrics.matchedEdgeIds,
+      relationshipSnapshot: oracleMetrics.relationshipSnapshot,
+    },
     judge,
   };
 }
@@ -1362,6 +1519,8 @@ function summarizeRun(worldRuns, config, bootstrap) {
     memorySignals: 0,
     moderationSignals: 0,
     convergenceScoreTotal: 0,
+    oracleScoreTotal: 0,
+    oracleProgressScoreTotal: 0,
   };
   const familyRollup = new Map();
   for (const world of worldRuns) {
@@ -1370,6 +1529,8 @@ function summarizeRun(worldRuns, config, bootstrap) {
     totals.memorySignals += world.summary?.memorySignals ?? 0;
     totals.moderationSignals += world.summary?.moderationSignals ?? 0;
     totals.convergenceScoreTotal += world.summary?.convergenceScore ?? 0;
+    totals.oracleScoreTotal += world.summary?.oracleScore ?? 0;
+    totals.oracleProgressScoreTotal += world.summary?.oracleProgressScore ?? 0;
     const currentFamily = familyRollup.get(world.family) ?? {
       worlds: 0,
       convergenceScoreTotal: 0,
@@ -1378,6 +1539,11 @@ function summarizeRun(worldRuns, config, bootstrap) {
       strongRelationshipCoverageTotal: 0,
       weakStartMatchCount: 0,
       meanStrengthLiftTotal: 0,
+      oracleScoreTotal: 0,
+      oracleProgressScoreTotal: 0,
+      closurePrecisionTotal: 0,
+      preferredRecallTotal: 0,
+      forbiddenAvoidanceTotal: 0,
     };
     currentFamily.worlds += 1;
     currentFamily.convergenceScoreTotal += world.summary?.convergenceScore ?? 0;
@@ -1387,6 +1553,11 @@ function summarizeRun(worldRuns, config, bootstrap) {
       world.summary?.strongRelationshipCoverage ?? 0;
     currentFamily.weakStartMatchCount += world.summary?.weakStartMatchCount ?? 0;
     currentFamily.meanStrengthLiftTotal += world.summary?.meanStrengthLift ?? 0;
+    currentFamily.oracleScoreTotal += world.summary?.oracleScore ?? 0;
+    currentFamily.oracleProgressScoreTotal += world.summary?.oracleProgressScore ?? 0;
+    currentFamily.closurePrecisionTotal += world.summary?.closurePrecision ?? 0;
+    currentFamily.preferredRecallTotal += world.summary?.preferredRecall ?? 0;
+    currentFamily.forbiddenAvoidanceTotal += world.summary?.forbiddenAvoidance ?? 0;
     familyRollup.set(world.family, currentFamily);
   }
   const avgConvergence =
@@ -1407,6 +1578,21 @@ function summarizeRun(worldRuns, config, bootstrap) {
         weakStartMatchCount: rollup.weakStartMatchCount,
         averageMeanStrengthLift: Number(
           (rollup.meanStrengthLiftTotal / Math.max(rollup.worlds, 1)).toFixed(3),
+        ),
+        averageOracleScore: Number(
+          (rollup.oracleScoreTotal / Math.max(rollup.worlds, 1)).toFixed(3),
+        ),
+        averageOracleProgressScore: Number(
+          (rollup.oracleProgressScoreTotal / Math.max(rollup.worlds, 1)).toFixed(3),
+        ),
+        averageClosurePrecision: Number(
+          (rollup.closurePrecisionTotal / Math.max(rollup.worlds, 1)).toFixed(3),
+        ),
+        averagePreferredRecall: Number(
+          (rollup.preferredRecallTotal / Math.max(rollup.worlds, 1)).toFixed(3),
+        ),
+        averageForbiddenAvoidance: Number(
+          (rollup.forbiddenAvoidanceTotal / Math.max(rollup.worlds, 1)).toFixed(3),
         ),
       },
     ]),
@@ -1439,6 +1625,12 @@ function summarizeRun(worldRuns, config, bootstrap) {
     totals: {
       ...totals,
       averageConvergenceScore: Number(avgConvergence.toFixed(3)),
+      averageOracleScore: Number(
+        (worldRuns.length > 0 ? totals.oracleScoreTotal / worldRuns.length : 0).toFixed(3),
+      ),
+      averageOracleProgressScore: Number(
+        (worldRuns.length > 0 ? totals.oracleProgressScoreTotal / worldRuns.length : 0).toFixed(3),
+      ),
     },
     verdict,
     familyScores,

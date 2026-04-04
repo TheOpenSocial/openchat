@@ -175,6 +175,8 @@ test("loadSocialSimWorldFixture normalizes canonical fixture worlds", () => {
   const recoveryWorld = worlds.find((world) => world.id === "short-no-match-recovery-v1");
   assert.equal(recoveryWorld?.actors.length, 3);
   assert.equal(recoveryWorld?.relationships.length, 3);
+  assert.deepEqual(recoveryWorld?.oracle.preferredOutcomeEdges, ["cora-mina"]);
+  assert.deepEqual(recoveryWorld?.oracle.forbiddenOutcomeEdges, ["cora-drew", "drew-mina"]);
   assert.ok(worlds.every((world) => Array.isArray(world.actors)));
   assert.ok(worlds.every((world) => Array.isArray(world.relationships)));
 });
@@ -420,9 +422,22 @@ test("runSocialSimulation writes artifacts in dry-run mode", async () => {
       Number.isFinite(result.artifact.worlds[0].summary.strongRelationshipCoverage),
     );
     assert.ok(Number.isFinite(result.artifact.worlds[0].summary.meanStrengthLift));
+    assert.ok(Number.isFinite(result.artifact.worlds[0].summary.oracleScore));
+    assert.ok(Number.isFinite(result.artifact.worlds[0].summary.oracleProgressScore));
+    assert.ok(Number.isFinite(result.artifact.worlds[0].summary.closurePrecision));
+    assert.ok(Number.isFinite(result.artifact.worlds[0].summary.preferredRecall));
+    assert.ok(Number.isFinite(result.artifact.worlds[0].summary.forbiddenAvoidance));
     assert.ok(
       Number.isFinite(
         result.summary.familyScores["individual-matchmaking"].averageStrongRelationshipCoverage,
+      ),
+    );
+    assert.ok(
+      Number.isFinite(result.summary.familyScores["individual-matchmaking"].averageOracleScore),
+    );
+    assert.ok(
+      Number.isFinite(
+        result.summary.familyScores["individual-matchmaking"].averageOracleProgressScore,
       ),
     );
     const runJson = JSON.parse(
@@ -628,6 +643,11 @@ test("search runner uses stable default seeds and writes summary artifacts", () 
   assert.ok(summary.topCandidates[0].metrics.strongCoverageMean >= 0);
   assert.ok(summary.topCandidates[0].metrics.weakStartMatchMean >= 0);
   assert.ok(summary.topCandidates[0].metrics.meanStrengthLiftMean >= 0);
+  assert.ok(summary.topCandidates[0].metrics.oracleScoreMean >= 0);
+  assert.ok(summary.topCandidates[0].metrics.oracleProgressMean >= 0);
+  assert.ok(summary.topCandidates[0].metrics.closurePrecisionMean >= 0);
+  assert.ok(summary.topCandidates[0].metrics.preferredRecallMean >= 0);
+  assert.ok(summary.topCandidates[0].metrics.forbiddenAvoidanceMean >= 0);
   assert.ok(summary.topCandidates[0].metrics.objectiveStdDev >= 0);
   assert.ok(summary.topCandidates[0].metrics.worstSeedObjective >= 0);
 });
@@ -680,6 +700,8 @@ test("search runner reports holdout metrics for holdout profile", () => {
   assert.ok(summary.baseline.holdoutMetrics);
   assert.ok(summary.topCandidates[0].holdoutMetrics);
   assert.ok(Number.isFinite(summary.topCandidates[0].selectionScore));
+  assert.ok(Number.isFinite(summary.topCandidates[0].holdoutMetrics.oracleScoreMean));
+  assert.ok(Number.isFinite(summary.topCandidates[0].holdoutMetrics.oracleProgressMean));
 });
 
 test("search runner reports holdout metrics for guarded profiles", () => {

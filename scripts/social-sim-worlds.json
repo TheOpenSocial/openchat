@@ -18,6 +18,13 @@
         "intro_to_chat_rate",
         "conversation_quality"
       ],
+      "oracle": {
+        "preferredOutcomeEdges": ["aya-ben"],
+        "acceptableFallbackEdges": [],
+        "forbiddenOutcomeEdges": [],
+        "requiredIsolations": [],
+        "requiredGroupClosure": []
+      },
       "actors": [
         {
           "id": "aya",
@@ -83,6 +90,13 @@
         "conversation_naturalness",
         "operator_attention_needed"
       ],
+      "oracle": {
+        "preferredOutcomeEdges": ["cora-mina"],
+        "acceptableFallbackEdges": [],
+        "forbiddenOutcomeEdges": ["cora-drew", "drew-mina"],
+        "requiredIsolations": ["drew"],
+        "requiredGroupClosure": []
+      },
       "actors": [
         {
           "id": "cora",
@@ -183,6 +197,13 @@
         "partial_fallback",
         "intro_to_chat_rate"
       ],
+      "oracle": {
+        "preferredOutcomeEdges": ["pair-group-link-1", "pair-group-link-2"],
+        "acceptableFallbackEdges": [],
+        "forbiddenOutcomeEdges": [],
+        "requiredIsolations": [],
+        "requiredGroupClosure": ["pair-group-link-1", "pair-group-link-2"]
+      },
       "actors": [
         {
           "id": "pair-maya-lev",
@@ -270,6 +291,13 @@
         "return_behavior",
         "conversation_quality"
       ],
+      "oracle": {
+        "preferredOutcomeEdges": ["circle-return-1", "circle-return-2"],
+        "acceptableFallbackEdges": [],
+        "forbiddenOutcomeEdges": [],
+        "requiredIsolations": [],
+        "requiredGroupClosure": ["circle-return-1", "circle-return-2"]
+      },
       "actors": [
         {
           "id": "circle-iris",
@@ -360,6 +388,17 @@
         "recovery_quality",
         "group_or_event_routing"
       ],
+      "oracle": {
+        "preferredOutcomeEdges": [
+          "mixer-nora-sana",
+          "mixer-eli-lia",
+          "mixer-pair-group"
+        ],
+        "acceptableFallbackEdges": ["mixer-nora-group"],
+        "forbiddenOutcomeEdges": ["mixer-sana-event"],
+        "requiredIsolations": [],
+        "requiredGroupClosure": ["mixer-pair-group"]
+      },
       "actors": [
         {
           "id": "mixer-nora",
@@ -541,6 +580,13 @@
         "event_return_behavior",
         "trust_and_moderation"
       ],
+      "oracle": {
+        "preferredOutcomeEdges": ["event-return-1"],
+        "acceptableFallbackEdges": ["event-return-2"],
+        "forbiddenOutcomeEdges": [],
+        "requiredIsolations": [],
+        "requiredGroupClosure": []
+      },
       "actors": [
         {
           "id": "event-zoe",
@@ -635,6 +681,20 @@
         "trust_and_safety",
         "durable_convergence"
       ],
+      "oracle": {
+        "preferredOutcomeEdges": [
+          "rebalance-host-ivy",
+          "rebalance-pair-circle",
+          "rebalance-group-kai"
+        ],
+        "acceptableFallbackEdges": [
+          "rebalance-group-ivy",
+          "rebalance-circle-kai"
+        ],
+        "forbiddenOutcomeEdges": ["rebalance-host-noah"],
+        "requiredIsolations": ["rebalance-noah"],
+        "requiredGroupClosure": ["rebalance-pair-circle", "rebalance-group-kai"]
+      },
       "actors": [
         {
           "id": "rebalance-host-mila",
@@ -830,6 +890,17 @@
         "group_progress",
         "conversation_quality"
       ],
+      "oracle": {
+        "preferredOutcomeEdges": [
+          "bridge-nina-sana",
+          "bridge-olivia-yara",
+          "bridge-kai-rui"
+        ],
+        "acceptableFallbackEdges": ["bridge-pair-yara", "bridge-rui-teo"],
+        "forbiddenOutcomeEdges": ["bridge-nina-teo"],
+        "requiredIsolations": [],
+        "requiredGroupClosure": ["bridge-olivia-yara", "bridge-pair-yara"]
+      },
       "actors": [
         {
           "id": "bridge-nina",
@@ -1052,6 +1123,22 @@
         "memory_helpfulness",
         "durable_convergence"
       ],
+      "oracle": {
+        "preferredOutcomeEdges": [
+          "frag-ines-lio",
+          "frag-ines-mara",
+          "frag-selim-lio",
+          "frag-selim-vik"
+        ],
+        "acceptableFallbackEdges": ["frag-pair-ines", "frag-pax-uma"],
+        "forbiddenOutcomeEdges": ["frag-pax-vik"],
+        "requiredIsolations": [],
+        "requiredGroupClosure": [
+          "frag-ines-lio",
+          "frag-ines-mara",
+          "frag-selim-lio"
+        ]
+      },
       "actors": [
         {
           "id": "frag-organizer-ines",
@@ -1268,6 +1355,17 @@
         "network_rebalancing",
         "durable_convergence"
       ],
+      "oracle": {
+        "preferredOutcomeEdges": [
+          "contain-aria-jo",
+          "contain-suri-kira",
+          "contain-len-pair"
+        ],
+        "acceptableFallbackEdges": ["contain-suri-pip", "contain-len-kira"],
+        "forbiddenOutcomeEdges": ["contain-aria-ronan", "contain-ronan-kira"],
+        "requiredIsolations": ["contain-bad-fit-ronan"],
+        "requiredGroupClosure": ["contain-suri-kira", "contain-len-pair"]
+      },
       "actors": [
         {
           "id": "contain-host-aria",
