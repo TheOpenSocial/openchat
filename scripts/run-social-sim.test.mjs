@@ -89,7 +89,7 @@ test("parseSocialSimArgs applies sane defaults", () => {
   assert.equal(config.namespace, "test-namespace");
   assert.equal(config.dryRun, true);
   assert.equal(config.horizon, "all");
-  assert.equal(config.turnBudget, 12);
+  assert.equal(config.turnBudget, null);
   assert.equal(config.backendTurnDelayMs, 250);
   assert.equal(config.backendRetryCount, 3);
   assert.equal(config.backendRetryBaseDelayMs, 750);
@@ -407,7 +407,21 @@ test("runSocialSimulation writes artifacts in dry-run mode", async () => {
     });
 
     assert.equal(result.summary.verdict, "watch");
+    assert.ok(Array.isArray(result.summary.measurementWarnings));
+    assert.ok(result.summary.measurementWarnings.includes("turn_budget_override_truncated_1_worlds"));
+    assert.ok(result.summary.familyScores["individual-matchmaking"]);
     assert.ok(result.artifact.worlds.length >= 1);
+    assert.ok(result.artifact.worlds[0].summary.scoreBreakdown);
+    assert.equal(result.artifact.worlds[0].summary.measurement.turnBudgetGap, 2);
+    assert.ok(
+      Number.isFinite(result.artifact.worlds[0].summary.strongRelationshipCoverage),
+    );
+    assert.ok(Number.isFinite(result.artifact.worlds[0].summary.meanStrengthLift));
+    assert.ok(
+      Number.isFinite(
+        result.summary.familyScores["individual-matchmaking"].averageStrongRelationshipCoverage,
+      ),
+    );
     const runJson = JSON.parse(
       readFileSync(path.join(result.runDir, "run.json"), "utf8"),
     );

@@ -284,11 +284,11 @@ export function parseSocialSimArgs(argv = process.argv.slice(2), env = process.e
     flags.get("namespace") ?? env.SOCIAL_SIM_NAMESPACE,
     `social-sim-${new Date().toISOString().replace(/[:.]/g, "-")}`,
   );
-  const turnBudget = clamp(
-    toNumber(flags.get("turn-budget") ?? env.SOCIAL_SIM_TURN_BUDGET, 12),
-    1,
-    128,
-  );
+  const rawTurnBudget = flags.get("turn-budget") ?? env.SOCIAL_SIM_TURN_BUDGET;
+  const turnBudget =
+    rawTurnBudget == null || normalizeString(rawTurnBudget, "") === ""
+      ? null
+      : clamp(toNumber(rawTurnBudget, 12), 1, 128);
   const cleanupMode = normalizeString(
     flags.get("cleanup") ?? env.SOCIAL_SIM_CLEANUP,
     "archive",
@@ -761,6 +761,11 @@ async function runWorldSimulation({
     stalledTurns: 0,
     totalTurns: 0,
   };
+  for (const relationship of world.relationships) {
+    if (!Number.isFinite(relationship.initialStrength)) {
+      relationship.initialStrength = relationship.strength;
+    }
+  }
   const state = {
     stage: "onboarding",
     turnIndex: 0,
@@ -1203,6 +1208,30 @@ function summarizeWorld(world, transcript, metrics, judge, config) {
   const tuning = getTuning(config);
   const totalTurns = transcript.length || 1;
   const matchedRelationships = metrics.matchedMembers.size;
+  const relationships = Array.isArray(world.relationships) ? world.relationships : [];
+  const strongRelationshipCount = relationships.filter(
+    (relationship) =>
+      (relationship.initialStrength ?? relationship.strength ?? 0) >=
+      tuning.thresholds.nearMatchMin,
+  ).length;
+  const strongRelationshipsMatched = relationships.filter(
+    (relationship) =>
+      (relationship.initialStrength ?? relationship.strength ?? 0) >=
+        tuning.thresholds.nearMatchMin && relationship.status === "matched",
+  ).length;
+  const weakStartMatchCount = relationships.filter(
+    (relationship) =>
+      (relationship.initialStrength ?? relationship.strength ?? 0) <
+        tuning.thresholds.lowStrength && relationship.status === "matched",
+  ).length;
+  const meanStrengthLift =
+    relationships.reduce(
+      (sum, relationship) =>
+        sum +
+        ((relationship.strength ?? 0) -
+          (relationship.initialStrength ?? relationship.strength ?? 0)),
+      0,
+    ) / Math.max(relationships.length, 1);
   const matchedRatio =
     matchedRelationships / Math.max(world.relationships.length || 1, 1);
   const progressDensity =
@@ -1249,6 +1278,8 @@ function summarizeWorld(world, transcript, metrics, judge, config) {
     world.family === "recovery"
       ? noMatchRecoveryQuality * tuning.scoring.recoveryWorldRecoveryWeight
       : 0;
+  const expectedTurnBudget = toNumber(world.turnBudget, totalTurns);
+  const turnBudgetGap = Math.max(0, expectedTurnBudget - totalTurns);
   const convergenceScore = clamp(
     matchedRatio * tuning.scoring.matchedRatioWeight +
       progressDensity * tuning.scoring.progressDensityWeight +
@@ -1286,9 +1317,39 @@ function summarizeWorld(world, transcript, metrics, judge, config) {
     recoverySignals: metrics.recoverySignals,
     moderationSignals: metrics.moderationSignals,
     matchedRelationships,
+    strongRelationshipCoverage: Number(
+      clamp(
+        strongRelationshipsMatched / Math.max(strongRelationshipCount, 1),
+        0,
+        1,
+      ).toFixed(3),
+    ),
+    weakStartMatchCount,
+    meanStrengthLift: Number(meanStrengthLift.toFixed(3)),
     convergenceScore: Number(convergenceScore.toFixed(3)),
     noMatchRecoveryQuality: Number(noMatchRecoveryQuality.toFixed(3)),
     memoryConsistency: Number(memoryConsistency.toFixed(3)),
+    scoreBreakdown: {
+      matchedRatio: Number(matchedRatio.toFixed(3)),
+      progressDensity: Number(progressDensity.toFixed(3)),
+      expectationFulfillment: Number(expectationFulfillment.toFixed(3)),
+      followupDominance: Number(followupDominance.toFixed(3)),
+      shallowFollowupPenalty: Number(shallowFollowupPenalty.toFixed(3)),
+      stalledPenalty: Number(stalledPenalty.toFixed(3)),
+      missingRecoveryPenalty: Number(missingRecoveryPenalty.toFixed(3)),
+      missingMemoryPenalty: Number(missingMemoryPenalty.toFixed(3)),
+      missingGroupPenalty: Number(missingGroupPenalty.toFixed(3)),
+      recoveryWorldBonus: Number(recoveryWorldBonus.toFixed(3)),
+    },
+    measurement: {
+      expectedTurnBudget,
+      executedTurnBudget: totalTurns,
+      turnBudgetGap,
+      usedOverrideTurnBudget: Number.isFinite(config.turnBudget),
+      requiresRecovery: recoveryNeeded,
+      requiresMemory: memoryNeeded,
+      requiresGroupProgress: groupNeeded,
+    },
     judge,
   };
 }
@@ -1302,15 +1363,72 @@ function summarizeRun(worldRuns, config, bootstrap) {
     moderationSignals: 0,
     convergenceScoreTotal: 0,
   };
+  const familyRollup = new Map();
   for (const world of worldRuns) {
     totals.turns += world.summary?.totalTurns ?? 0;
     totals.matchedRelationships += world.summary?.matchedRelationships ?? 0;
     totals.memorySignals += world.summary?.memorySignals ?? 0;
     totals.moderationSignals += world.summary?.moderationSignals ?? 0;
     totals.convergenceScoreTotal += world.summary?.convergenceScore ?? 0;
+    const currentFamily = familyRollup.get(world.family) ?? {
+      worlds: 0,
+      convergenceScoreTotal: 0,
+      matchedRelationships: 0,
+      turnBudgetGap: 0,
+      strongRelationshipCoverageTotal: 0,
+      weakStartMatchCount: 0,
+      meanStrengthLiftTotal: 0,
+    };
+    currentFamily.worlds += 1;
+    currentFamily.convergenceScoreTotal += world.summary?.convergenceScore ?? 0;
+    currentFamily.matchedRelationships += world.summary?.matchedRelationships ?? 0;
+    currentFamily.turnBudgetGap += world.summary?.measurement?.turnBudgetGap ?? 0;
+    currentFamily.strongRelationshipCoverageTotal +=
+      world.summary?.strongRelationshipCoverage ?? 0;
+    currentFamily.weakStartMatchCount += world.summary?.weakStartMatchCount ?? 0;
+    currentFamily.meanStrengthLiftTotal += world.summary?.meanStrengthLift ?? 0;
+    familyRollup.set(world.family, currentFamily);
   }
   const avgConvergence =
     worldRuns.length > 0 ? totals.convergenceScoreTotal / worldRuns.length : 0;
+  const familyScores = Object.fromEntries(
+    Array.from(familyRollup.entries()).map(([family, rollup]) => [
+      family,
+      {
+        worlds: rollup.worlds,
+        averageConvergenceScore: Number(
+          (rollup.convergenceScoreTotal / Math.max(rollup.worlds, 1)).toFixed(3),
+        ),
+        matchedRelationships: rollup.matchedRelationships,
+        turnBudgetGap: rollup.turnBudgetGap,
+        averageStrongRelationshipCoverage: Number(
+          (rollup.strongRelationshipCoverageTotal / Math.max(rollup.worlds, 1)).toFixed(3),
+        ),
+        weakStartMatchCount: rollup.weakStartMatchCount,
+        averageMeanStrengthLift: Number(
+          (rollup.meanStrengthLiftTotal / Math.max(rollup.worlds, 1)).toFixed(3),
+        ),
+      },
+    ]),
+  );
+  const measurementWarnings = [];
+  const truncatedWorlds = worldRuns.filter(
+    (world) => (world.summary?.measurement?.turnBudgetGap ?? 0) > 0,
+  );
+  if (truncatedWorlds.length > 0) {
+    measurementWarnings.push(
+      `turn_budget_override_truncated_${truncatedWorlds.length}_worlds`,
+    );
+  }
+  if (
+    config.provider !== "stub" &&
+    config.provider === config.judgeProvider
+  ) {
+    measurementWarnings.push("actor_judge_provider_coupled");
+  }
+  if (bootstrap?.backendMode && bootstrap.backendMode !== "backend") {
+    measurementWarnings.push(`backend_mode_${bootstrap.backendMode}`);
+  }
   const verdict =
     avgConvergence >= 0.75 && totals.moderationSignals === 0
       ? "healthy"
@@ -1323,6 +1441,8 @@ function summarizeRun(worldRuns, config, bootstrap) {
       averageConvergenceScore: Number(avgConvergence.toFixed(3)),
     },
     verdict,
+    familyScores,
+    measurementWarnings,
     bootstrap,
     provider: config.provider,
     judgeProvider: config.judgeProvider,
@@ -2579,7 +2699,7 @@ export async function nightlyMain(argv = process.argv.slice(2), env = process.en
     nightly: true,
     horizon: "all",
     worldFilter: canonical.map((world) => world.id),
-    turnBudget: Math.min(config.turnBudget, 8),
+    turnBudget: Number.isFinite(config.turnBudget) ? Math.min(config.turnBudget, 8) : 8,
     cleanupMode: config.cleanupMode === "none" ? "none" : "archive",
   };
   nightlyConfig.runId = `${config.namespace}-nightly-${new Date().toISOString().replace(/[:.]/g, "-")}`;

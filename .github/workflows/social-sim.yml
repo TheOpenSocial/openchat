@@ -42,7 +42,7 @@ on:
       turn_budget:
         description: "Turn budget override"
         required: false
-        default: "8"
+        default: ""
         type: string
       use_remote_provider:
         description: "Call the remote actor provider instead of heuristic fallback"
@@ -111,13 +111,18 @@ jobs:
           use_remote_provider="${{ github.event_name == 'schedule' && 'false' || inputs.use_remote_provider }}"
           use_remote_judge="${{ github.event_name == 'schedule' && 'false' || inputs.use_remote_judge }}"
           namespace="gha-social-sim-${GITHUB_RUN_ID}"
+          turn_budget_flag=()
+
+          if [[ -n "${turn_budget}" ]]; then
+            turn_budget_flag+=(--turn-budget="${turn_budget}")
+          fi
 
           if [[ "${{ github.event_name }}" == "schedule" || "${{ inputs.mode }}" == "nightly" ]]; then
             pnpm sim:social:nightly -- \
               --provider="${provider}" \
               --judge-provider="${judge_provider}" \
               --cleanup="${cleanup_mode}" \
-              --turn-budget="${turn_budget}" \
+              "${turn_budget_flag[@]}" \
               --namespace="${namespace}" \
               --use-remote-provider="${use_remote_provider}" \
               --use-remote-judge="${use_remote_judge}"
@@ -127,7 +132,7 @@ jobs:
               --judge-provider="${judge_provider}" \
               --horizon="${horizon}" \
               --cleanup="${cleanup_mode}" \
-              --turn-budget="${turn_budget}" \
+              "${turn_budget_flag[@]}" \
               --namespace="${namespace}" \
               --use-remote-provider="${use_remote_provider}" \
               --use-remote-judge="${use_remote_judge}"
