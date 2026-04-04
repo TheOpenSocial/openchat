@@ -90,6 +90,17 @@
         "conversation_naturalness",
         "operator_attention_needed"
       ],
+      "benchmark": {
+        "split": "train",
+        "requiredTransitions": [
+          {
+            "id": "recover-cora-drew-before-cora-mina",
+            "type": "recover_then_match",
+            "sourceEdgeId": "cora-drew",
+            "targetEdgeId": "cora-mina"
+          }
+        ]
+      },
       "oracle": {
         "preferredOutcomeEdges": ["cora-mina"],
         "acceptableFallbackEdges": [],
@@ -291,6 +302,21 @@
         "return_behavior",
         "conversation_quality"
       ],
+      "benchmark": {
+        "split": "train",
+        "requiredTransitions": [
+          {
+            "id": "return-iris-circle",
+            "type": "match_edge",
+            "targetEdgeId": "circle-return-1"
+          },
+          {
+            "id": "return-luca-circle",
+            "type": "match_edge",
+            "targetEdgeId": "circle-return-2"
+          }
+        ]
+      },
       "oracle": {
         "preferredOutcomeEdges": ["circle-return-1", "circle-return-2"],
         "acceptableFallbackEdges": [],
@@ -682,6 +708,17 @@
         "trust_and_safety",
         "durable_convergence"
       ],
+      "benchmark": {
+        "split": "train",
+        "requiredTransitions": [
+          {
+            "id": "recover-host-noah-before-host-ivy",
+            "type": "recover_then_match",
+            "sourceEdgeId": "rebalance-host-noah",
+            "targetEdgeId": "rebalance-host-ivy"
+          }
+        ]
+      },
       "oracle": {
         "preferredOutcomeEdges": [
           "rebalance-host-ivy",
@@ -1125,6 +1162,21 @@
         "memory_helpfulness",
         "durable_convergence"
       ],
+      "benchmark": {
+        "split": "train",
+        "requiredTransitions": [
+          {
+            "id": "frag-ines-lio-close",
+            "type": "match_edge",
+            "targetEdgeId": "frag-ines-lio"
+          },
+          {
+            "id": "frag-selim-lio-close",
+            "type": "match_edge",
+            "targetEdgeId": "frag-selim-lio"
+          }
+        ]
+      },
       "oracle": {
         "preferredOutcomeEdges": [
           "frag-ines-lio",
@@ -1584,6 +1636,16 @@
         "durable_convergence",
         "oracle_precision"
       ],
+      "benchmark": {
+        "split": "holdout",
+        "requiredTransitions": [
+          {
+            "id": "holdout-group-ara-len-close",
+            "type": "match_edge",
+            "targetEdgeId": "holdout-group-ara-len"
+          }
+        ]
+      },
       "oracle": {
         "preferredOutcomeEdges": [
           "holdout-bridge-ree-kai",
@@ -1762,6 +1824,17 @@
         "network_rebalancing",
         "oracle_precision"
       ],
+      "benchmark": {
+        "split": "holdout",
+        "requiredTransitions": [
+          {
+            "id": "recover-noise-before-circle-close",
+            "type": "recover_then_match",
+            "sourceEdgeId": "holdout-contain-noise",
+            "targetEdgeId": "holdout-contain-circle"
+          }
+        ]
+      },
       "oracle": {
         "preferredOutcomeEdges": [
           "holdout-contain-aya",

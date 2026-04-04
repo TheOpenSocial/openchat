@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  DEFAULT_SOCIAL_SIM_BENCHMARK_SEED,
   DEFAULT_SOCIAL_SIM_TUNING,
   createBackendAdapter,
   createBrainProvider,
@@ -96,6 +97,24 @@ test("parseSocialSimArgs applies sane defaults", () => {
   assert.equal(config.tuning.thresholds.lowStrength, DEFAULT_SOCIAL_SIM_TUNING.thresholds.lowStrength);
 });
 
+test("parseSocialSimArgs enables deterministic benchmark mode defaults", () => {
+  const config = parseSocialSimArgs([], {
+    SOCIAL_SIM_BENCHMARK_MODE: "1",
+    SOCIAL_SIM_PROVIDER: "stub",
+  });
+
+  assert.equal(config.benchmarkMode, true);
+  assert.equal(config.seed, DEFAULT_SOCIAL_SIM_BENCHMARK_SEED);
+  assert.equal(config.failOnRemoteFallback, true);
+});
+
+test("parseSocialSimArgs rejects benchmark mode without remote provider for non-stub actors", () => {
+  assert.throws(
+    () => parseSocialSimArgs(["--benchmark-mode=1", "--provider=ollama"], {}),
+    /requires --use-remote-provider/,
+  );
+});
+
 test("parseSocialSimArgs applies tuning overrides from JSON", () => {
   const config = parseSocialSimArgs(
     ["--tuning-json={\"probabilities\":{\"memoryConversation\":0.9},\"scoring\":{\"missingGroupPenalty\":0.2}}"],
@@ -177,11 +196,18 @@ test("loadSocialSimWorldFixture normalizes canonical fixture worlds", () => {
   const recoveryWorld = worlds.find((world) => world.id === "short-no-match-recovery-v1");
   assert.equal(recoveryWorld?.actors.length, 3);
   assert.equal(recoveryWorld?.relationships.length, 3);
+  assert.equal(recoveryWorld?.benchmark?.split, "train");
+  assert.equal(recoveryWorld?.benchmark?.requiredTransitions?.[0]?.type, "recover_then_match");
   assert.deepEqual(recoveryWorld?.oracle.preferredOutcomeEdges, ["cora-mina"]);
   assert.deepEqual(recoveryWorld?.oracle.forbiddenOutcomeEdges, ["cora-drew", "drew-mina"]);
   const holdoutWorld = worlds.find((world) => world.id === "medium-cross-cluster-holdout-v1");
   assert.equal(holdoutWorld?.worldSet, "holdout");
   assert.equal(holdoutWorld?.family, "dense-social-graph");
+  assert.equal(holdoutWorld?.benchmark?.split, "holdout");
+  assert.equal(
+    holdoutWorld?.benchmark?.requiredTransitions?.[0]?.targetEdgeId,
+    "holdout-group-ara-len",
+  );
   assert.ok(worlds.every((world) => Array.isArray(world.actors)));
   assert.ok(worlds.every((world) => Array.isArray(world.relationships)));
 });
@@ -294,6 +320,49 @@ test("provider and judge factories return deterministic stub adapters", async ()
   assert.ok(turn.message.length > 0);
   assert.ok(judgedTurn.score >= 0);
   assert.ok(judgedWorld.score >= 0);
+});
+
+test("remote actor providers fail closed in benchmark mode when remote generation falls back", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    throw new Error("synthetic remote failure");
+  };
+  try {
+    const brain = createBrainProvider({
+      provider: "ollama",
+      useRemoteProvider: true,
+      failOnRemoteFallback: true,
+      ollamaBaseUrl: "http://127.0.0.1:9",
+    });
+    const worlds = loadSocialSimWorldFixture(
+      path.resolve("scripts/social-sim-worlds.json"),
+      path.resolve("apps/api/test/fixtures/agentic-scenarios.json"),
+    );
+    const world = worlds[0];
+    const actor = world.actors[0];
+    const state = {
+      stage: "onboarding",
+      turnIndex: 0,
+      lastActionByActor: new Map(),
+      knownTargets: new Map(),
+    };
+
+    await assert.rejects(
+      brain.generateActorTurn({
+        world,
+        actor,
+        state,
+        transcript: [],
+        rng: () => 0.25,
+        config: {
+          failOnRemoteFallback: true,
+        },
+      }),
+      /fell back to heuristic output in fail-closed mode/,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("recovery worlds detach from weak-fit loops after initial recovery", async () => {

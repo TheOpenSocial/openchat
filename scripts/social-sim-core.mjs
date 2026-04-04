@@ -6,6 +6,7 @@ export const DEFAULT_SOCIAL_SIM_ARTIFACT_ROOT = ".artifacts/social-sim";
 export const DEFAULT_SOCIAL_SIM_FIXTURE_PATH = "scripts/social-sim-worlds.json";
 export const DEFAULT_SOCIAL_SIM_SCENARIO_FIXTURE_PATH =
   "apps/api/test/fixtures/agentic-scenarios.json";
+export const DEFAULT_SOCIAL_SIM_BENCHMARK_SEED = 17031;
 export const DEFAULT_SOCIAL_SIM_TUNING = {
   thresholds: {
     lowStrength: 0.35,
@@ -287,9 +288,14 @@ export function parseSocialSimArgs(argv = process.argv.slice(2), env = process.e
     flags.get("world-set") ?? env.SOCIAL_SIM_WORLD_SET,
     "core",
   ).toLowerCase();
+  const benchmarkMode = boolFromEnv(
+    flags.get("benchmark-mode") ?? env.SOCIAL_SIM_BENCHMARK_MODE,
+    false,
+  );
+  const hasExplicitSeed = flags.has("seed") || typeof env.SOCIAL_SIM_SEED === "string";
   const seed = toNumber(
     flags.get("seed") ?? env.SOCIAL_SIM_SEED,
-    Date.now() % 2_147_483_647,
+    benchmarkMode ? DEFAULT_SOCIAL_SIM_BENCHMARK_SEED : Date.now() % 2_147_483_647,
   );
   const namespace = normalizeString(
     flags.get("namespace") ?? env.SOCIAL_SIM_NAMESPACE,
@@ -369,6 +375,10 @@ export function parseSocialSimArgs(argv = process.argv.slice(2), env = process.e
     flags.get("use-remote-judge") ?? env.SOCIAL_SIM_USE_REMOTE_JUDGE,
     useRemoteProvider,
   );
+  const failOnRemoteFallback = boolFromEnv(
+    flags.get("fail-on-remote-fallback") ?? env.SOCIAL_SIM_FAIL_ON_REMOTE_FALLBACK,
+    benchmarkMode,
+  );
   const backendTurnDelayMs = clamp(
     toNumber(
       flags.get("backend-turn-delay-ms") ??
@@ -417,6 +427,19 @@ export function parseSocialSimArgs(argv = process.argv.slice(2), env = process.e
       `Invalid world set "${worldSet}". Expected core, holdout, or all.`,
     );
   }
+  if (benchmarkMode && !hasExplicitSeed && seed !== DEFAULT_SOCIAL_SIM_BENCHMARK_SEED) {
+    throw new Error("Benchmark mode must use the default deterministic benchmark seed.");
+  }
+  if (benchmarkMode && provider !== "stub" && !useRemoteProvider) {
+    throw new Error(
+      `Benchmark mode requires --use-remote-provider for provider "${provider}".`,
+    );
+  }
+  if (benchmarkMode && judgeProvider !== "stub" && !useRemoteJudge) {
+    throw new Error(
+      `Benchmark mode requires --use-remote-judge for judge provider "${judgeProvider}".`,
+    );
+  }
 
   return {
     provider,
@@ -424,6 +447,7 @@ export function parseSocialSimArgs(argv = process.argv.slice(2), env = process.e
     horizon,
     worldFilter,
     worldSet,
+    benchmarkMode,
     scenarioFilter,
     seed,
     namespace,
@@ -444,6 +468,7 @@ export function parseSocialSimArgs(argv = process.argv.slice(2), env = process.e
     openaiModel,
     useRemoteProvider,
     useRemoteJudge,
+    failOnRemoteFallback,
     backendTurnDelayMs,
     backendRetryCount,
     backendRetryBaseDelayMs,
@@ -508,6 +533,7 @@ function normalizeWorld(world, index, scenarioCorpus) {
         .filter(Boolean)
     : [];
 
+  const benchmark = normalizeWorldBenchmark(world.benchmark, relationships);
   return {
     id,
     name,
@@ -527,9 +553,11 @@ function normalizeWorld(world, index, scenarioCorpus) {
       : [],
     actors,
     relationships,
-    worldSet: normalizeString(world.worldSet, "core").toLowerCase() === "holdout"
-      ? "holdout"
-      : "core",
+    worldSet:
+      normalizeString(world.worldSet, "").toLowerCase() === "holdout" ||
+      benchmark.split === "holdout"
+        ? "holdout"
+        : "core",
     evaluationFocus: Array.isArray(world.evaluationFocus)
       ? world.evaluationFocus.filter((value) => typeof value === "string")
       : [],
@@ -539,7 +567,42 @@ function normalizeWorld(world, index, scenarioCorpus) {
     artifactHints: Array.isArray(world.artifactHints)
       ? world.artifactHints.filter((value) => typeof value === "string")
       : [],
+    benchmark,
     oracle: normalizeWorldOracle(world.oracle, relationships),
+  };
+}
+
+function normalizeWorldBenchmark(benchmark, relationships) {
+  const relationshipIds = new Set(
+    Array.isArray(relationships)
+      ? relationships.map((relationship) => relationship.id)
+      : [],
+  );
+  const source = benchmark && typeof benchmark === "object" ? benchmark : {};
+  const split = normalizeString(source.split, "train").toLowerCase() === "holdout"
+    ? "holdout"
+    : "train";
+  const requiredTransitions = Array.isArray(source.requiredTransitions)
+    ? source.requiredTransitions
+        .map((transition, index) => {
+          if (!transition || typeof transition !== "object") return null;
+          const type = normalizeString(transition.type, "match_edge");
+          const targetEdgeId = normalizeString(transition.targetEdgeId, "");
+          const sourceEdgeId = normalizeString(transition.sourceEdgeId, "");
+          if (!targetEdgeId || !relationshipIds.has(targetEdgeId)) return null;
+          if (sourceEdgeId && !relationshipIds.has(sourceEdgeId)) return null;
+          return {
+            id: normalizeString(transition.id, `transition-${index + 1}`),
+            type,
+            targetEdgeId,
+            sourceEdgeId: sourceEdgeId || null,
+          };
+        })
+        .filter(Boolean)
+    : [];
+  return {
+    split,
+    requiredTransitions,
   };
 }
 
@@ -755,6 +818,8 @@ export async function runSocialSimulation(config) {
       cleanupMode: config.cleanupMode,
       dryRun: config.dryRun,
       nightly: config.nightly,
+      benchmarkMode: config.benchmarkMode,
+      failOnRemoteFallback: config.failOnRemoteFallback,
       seed: config.seed,
       worldFilter: config.worldFilter,
       scenarioFilter: config.scenarioFilter,
@@ -2107,7 +2172,90 @@ function worldSpecificExpectationCount(world) {
   return count;
 }
 
-function computeOracleMetrics(world, relationships) {
+function computeTemporalTransitionMetrics(
+  world,
+  relationships,
+  transcript,
+  tuning = DEFAULT_SOCIAL_SIM_TUNING,
+) {
+  const transitions = world.benchmark?.requiredTransitions ?? [];
+  if (transitions.length === 0) {
+    return {
+      transitionSuccess: 1,
+      transitionMisses: [],
+    };
+  }
+  const relationshipMap = new Map(
+    (Array.isArray(relationships) ? relationships : []).map((relationship) => [
+      relationship.id,
+      relationship,
+    ]),
+  );
+  const actionHistory = Array.isArray(transcript)
+    ? transcript.map((turn) => ({
+        turnIndex: turn.turnIndex,
+        relationshipId: turn.worldContext?.relationshipId ?? null,
+        intent: turn.intent,
+      }))
+    : [];
+  const misses = [];
+  let satisfied = 0;
+
+  for (const transition of transitions) {
+    const targetRelationship = relationshipMap.get(transition.targetEdgeId);
+    const targetMatchedTurn = Number.isFinite(targetRelationship?.lastMatchedTurn)
+      ? targetRelationship.lastMatchedTurn
+      : null;
+
+    if (transition.type === "recover_then_match") {
+      const sourceRecoverTurn = actionHistory.find((entry) =>
+        entry.relationshipId === transition.sourceEdgeId &&
+        entry.intent === "recover_no_match"
+      )?.turnIndex;
+      const satisfiedTransition =
+        Number.isFinite(sourceRecoverTurn) &&
+        Number.isFinite(targetMatchedTurn) &&
+        sourceRecoverTurn < targetMatchedTurn;
+      if (satisfiedTransition) {
+        satisfied += 1;
+      } else {
+        misses.push({
+          id: transition.id,
+          type: transition.type,
+          sourceEdgeId: transition.sourceEdgeId,
+          targetEdgeId: transition.targetEdgeId,
+        });
+      }
+      continue;
+    }
+
+    const satisfiedTransition =
+      targetRelationship?.status === "matched" ||
+      (targetRelationship?.strength ?? 0) >= tuning.thresholds.nearMatchMin;
+    if (satisfiedTransition) {
+      satisfied += 1;
+    } else {
+      misses.push({
+        id: transition.id,
+        type: transition.type,
+        sourceEdgeId: transition.sourceEdgeId,
+        targetEdgeId: transition.targetEdgeId,
+      });
+    }
+  }
+
+  return {
+    transitionSuccess: Number((satisfied / Math.max(transitions.length, 1)).toFixed(3)),
+    transitionMisses: misses,
+  };
+}
+
+function computeOracleMetrics(
+  world,
+  relationships,
+  transcript,
+  tuning = DEFAULT_SOCIAL_SIM_TUNING,
+) {
   const oracle = world.oracle ?? {};
   const relationshipMap = new Map(
     (Array.isArray(relationships) ? relationships : []).map((relationship) => [
@@ -2131,13 +2279,22 @@ function computeOracleMetrics(world, relationships) {
   const requiredGroupMatchedCount = requiredGroupClosure.filter((edgeId) =>
     matchedEdgeIds.has(edgeId),
   ).length;
-  const averageEdgeStrength = (edgeIds) =>
-    edgeIds.length > 0
-      ? edgeIds.reduce(
-          (sum, edgeId) => sum + (relationshipMap.get(edgeId)?.strength ?? 0),
-          0,
-        ) / edgeIds.length
+  const averageConvergedEdgeStrength = (edgeIds) => {
+    if (edgeIds.length === 0) return 0;
+    const converged = edgeIds
+      .map((edgeId) => relationshipMap.get(edgeId))
+      .filter((relationship) =>
+        relationship &&
+        (
+          relationship.status === "matched" ||
+          (relationship.strength ?? 0) >= tuning.thresholds.nearMatchMin
+        ),
+      );
+    return converged.length > 0
+      ? converged.reduce((sum, relationship) => sum + (relationship.strength ?? 0), 0) /
+          converged.length
       : 0;
+  };
   const isolatedActorCount = requiredIsolations.filter((actorId) =>
     matchedRelationships.every((relationship) => !relationship.members.includes(actorId)),
   ).length;
@@ -2160,16 +2317,18 @@ function computeOracleMetrics(world, relationships) {
     requiredIsolations.length > 0 ? isolatedActorCount / requiredIsolations.length : 1;
   const acceptableLift =
     acceptableEdges.length > 0 ? acceptableMatchedCount / acceptableEdges.length : 0;
-  const preferredStrengthMean = averageEdgeStrength(preferredEdges);
-  const acceptableStrengthMean = averageEdgeStrength(acceptableEdges);
-  const forbiddenStrengthMean = averageEdgeStrength(forbiddenEdges);
-  const groupClosureStrengthMean = averageEdgeStrength(requiredGroupClosure);
+  const preferredStrengthMean = averageConvergedEdgeStrength(preferredEdges);
+  const acceptableStrengthMean = averageConvergedEdgeStrength(acceptableEdges);
+  const forbiddenStrengthMean = averageConvergedEdgeStrength(forbiddenEdges);
+  const groupClosureStrengthMean = averageConvergedEdgeStrength(requiredGroupClosure);
+  const temporalMetrics = computeTemporalTransitionMetrics(world, relationships, transcript, tuning);
   const oracleProgressScore = clamp(
     preferredStrengthMean * 0.42 +
       acceptableStrengthMean * 0.08 +
       (1 - forbiddenStrengthMean) * 0.2 +
       groupClosureStrengthMean * 0.15 +
-      isolationSuccess * 0.15,
+      isolationSuccess * 0.1 +
+      temporalMetrics.transitionSuccess * 0.05,
     0,
     1,
   );
@@ -2178,7 +2337,8 @@ function computeOracleMetrics(world, relationships) {
       closurePrecision * 0.24 +
       forbiddenAvoidance * 0.18 +
       groupClosureSuccess * 0.1 +
-      isolationSuccess * 0.1 +
+      isolationSuccess * 0.05 +
+      temporalMetrics.transitionSuccess * 0.05 +
       acceptableLift * 0.05,
     0,
     1,
@@ -2199,8 +2359,10 @@ function computeOracleMetrics(world, relationships) {
     acceptableStrengthMean: Number(acceptableStrengthMean.toFixed(3)),
     forbiddenStrengthMean: Number(forbiddenStrengthMean.toFixed(3)),
     groupClosureStrengthMean: Number(groupClosureStrengthMean.toFixed(3)),
+    temporalTransitionSuccess: temporalMetrics.transitionSuccess,
     oracleProgressScore: Number(oracleProgressScore.toFixed(3)),
     oracleScore: Number(oracleScore.toFixed(3)),
+    transitionMisses: temporalMetrics.transitionMisses,
     matchedEdgeIds: Array.from(matchedEdgeIds),
     relationshipSnapshot: Array.from(relationshipMap.values()).map((relationship) => ({
       id: relationship.id,
@@ -2234,17 +2396,23 @@ function buildWorldDiagnostics(world, relationships, oracleMetrics, tuning) {
         relationship.status === "matched" && relationship.members.includes(actorId),
     ),
   );
+  const transitionMisses = Array.isArray(oracleMetrics.transitionMisses)
+    ? oracleMetrics.transitionMisses
+    : [];
   const severity =
     preferredEdgeMisses.length * 0.16 +
     forbiddenEdgeHits.length * 0.22 +
     lowStrengthMatchedPreferredEdges.length * 0.12 +
     groupClosureMisses.length * 0.15 +
-    isolationFailures.length * 0.18;
+    isolationFailures.length * 0.18 +
+    transitionMisses.length * 0.2;
   const primaryReason =
     forbiddenEdgeHits.length > 0
       ? "forbidden_edge_hit"
       : isolationFailures.length > 0
         ? "isolation_failure"
+        : transitionMisses.length > 0
+          ? "transition_miss"
         : groupClosureMisses.length > 0
           ? "group_closure_miss"
           : preferredEdgeMisses.length > 0
@@ -2259,12 +2427,14 @@ function buildWorldDiagnostics(world, relationships, oracleMetrics, tuning) {
     lowStrengthMatchedPreferredEdges,
     groupClosureMisses,
     isolationFailures,
+    transitionMisses,
     issueCount:
       preferredEdgeMisses.length +
       forbiddenEdgeHits.length +
       lowStrengthMatchedPreferredEdges.length +
       groupClosureMisses.length +
-      isolationFailures.length,
+      isolationFailures.length +
+      transitionMisses.length,
     severity: Number(severity.toFixed(3)),
     primaryReason,
   };
@@ -2344,7 +2514,7 @@ function summarizeWorld(world, transcript, metrics, judge, config) {
     world.family === "recovery"
       ? noMatchRecoveryQuality * tuning.scoring.recoveryWorldRecoveryWeight
       : 0;
-  const oracleMetrics = computeOracleMetrics(world, relationships);
+  const oracleMetrics = computeOracleMetrics(world, relationships, transcript, tuning);
   const diagnostics = buildWorldDiagnostics(world, relationships, oracleMetrics, tuning);
   const recoveryResolutionScore = computeRecoveryResolutionScore(world, oracleMetrics, metrics);
   const circleReassemblyScore = computeCircleReassemblyScore(world, oracleMetrics);
@@ -2434,6 +2604,7 @@ function summarizeWorld(world, transcript, metrics, judge, config) {
       acceptableStrengthMean: oracleMetrics.acceptableStrengthMean,
       forbiddenStrengthMean: oracleMetrics.forbiddenStrengthMean,
       groupClosureStrengthMean: oracleMetrics.groupClosureStrengthMean,
+      temporalTransitionSuccess: oracleMetrics.temporalTransitionSuccess,
     },
     scoreBreakdown: {
       matchedRatio: Number(matchedRatio.toFixed(3)),
@@ -2468,8 +2639,10 @@ function summarizeWorld(world, transcript, metrics, judge, config) {
       forbiddenOutcomeEdges: world.oracle?.forbiddenOutcomeEdges ?? [],
       requiredIsolations: world.oracle?.requiredIsolations ?? [],
       requiredGroupClosure: world.oracle?.requiredGroupClosure ?? [],
+      benchmark: world.benchmark ?? { split: "train", requiredTransitions: [] },
       matchedEdgeIds: oracleMetrics.matchedEdgeIds,
       relationshipSnapshot: oracleMetrics.relationshipSnapshot,
+      transitionMisses: oracleMetrics.transitionMisses,
     },
     diagnostics,
     judge,
@@ -2599,6 +2772,15 @@ function summarizeRun(worldRuns, config, bootstrap) {
   ) {
     measurementWarnings.push("actor_judge_provider_coupled");
   }
+  if (config.benchmarkMode) {
+    measurementWarnings.push(`benchmark_seed_${config.seed}`);
+    if (config.provider !== "stub" && !config.useRemoteProvider) {
+      measurementWarnings.push("benchmark_provider_not_remote");
+    }
+    if (config.judgeProvider !== "stub" && !config.useRemoteJudge) {
+      measurementWarnings.push("benchmark_judge_not_remote");
+    }
+  }
   if (bootstrap?.backendMode && bootstrap.backendMode !== "backend") {
     measurementWarnings.push(`backend_mode_${bootstrap.backendMode}`);
   }
@@ -2626,6 +2808,7 @@ function summarizeRun(worldRuns, config, bootstrap) {
     bootstrap,
     provider: config.provider,
     judgeProvider: config.judgeProvider,
+    benchmarkMode: Boolean(config.benchmarkMode),
     nightly: config.nightly,
   };
 }
@@ -3009,11 +3192,17 @@ class RemoteSocialSimProviderBase {
   constructor(config) {
     this.config = config;
     this.kind = "remote";
+    this.useRemote = false;
   }
 
   async generateActorTurn(context) {
     const remote = await this.tryRemote(context);
     if (remote) return remote;
+    if (this.useRemote && this.config.failOnRemoteFallback) {
+      throw new Error(
+        `Social simulation actor provider "${this.name}" fell back to heuristic output in fail-closed mode.`,
+      );
+    }
     return defaultBrainAction(context);
   }
 
@@ -3255,11 +3444,21 @@ class HeuristicJudgeProvider {
 class RemoteJudgeProviderBase extends HeuristicJudgeProvider {
   async scoreTurn(context) {
     const remote = await this.tryRemoteTurn(context);
+    if (!remote && this.useRemote && this.config.failOnRemoteFallback) {
+      throw new Error(
+        `Social simulation judge provider "${this.name}" fell back to heuristic turn scoring in fail-closed mode.`,
+      );
+    }
     return remote ?? super.scoreTurn(context);
   }
 
   async scoreWorld(context) {
     const remote = await this.tryRemoteWorld(context);
+    if (!remote && this.useRemote && this.config.failOnRemoteFallback) {
+      throw new Error(
+        `Social simulation judge provider "${this.name}" fell back to heuristic world scoring in fail-closed mode.`,
+      );
+    }
     return remote ?? super.scoreWorld(context);
   }
 }

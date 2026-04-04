@@ -39,6 +39,16 @@ on:
           - short
           - medium
           - long
+      benchmark_mode:
+        description: "Run in deterministic fail-closed benchmark mode"
+        required: false
+        default: true
+        type: boolean
+      seed:
+        description: "Deterministic benchmark seed"
+        required: false
+        default: "17031"
+        type: string
       turn_budget:
         description: "Turn budget override"
         required: false
@@ -47,7 +57,7 @@ on:
       use_remote_provider:
         description: "Call the remote actor provider instead of heuristic fallback"
         required: false
-        default: false
+        default: true
         type: boolean
       use_remote_judge:
         description: "Call the remote judge provider instead of heuristic fallback"
@@ -106,9 +116,11 @@ jobs:
           provider="${{ github.event_name == 'schedule' && 'ollama' || inputs.provider }}"
           judge_provider="${{ github.event_name == 'schedule' && 'stub' || inputs.judge_provider }}"
           horizon="${{ github.event_name == 'schedule' && 'all' || inputs.horizon }}"
+          benchmark_mode="${{ github.event_name == 'schedule' && 'true' || inputs.benchmark_mode }}"
+          seed="${{ github.event_name == 'schedule' && '17031' || inputs.seed }}"
           turn_budget="${{ github.event_name == 'schedule' && '8' || inputs.turn_budget }}"
           cleanup_mode="${{ github.event_name == 'schedule' && 'archive' || inputs.cleanup_mode }}"
-          use_remote_provider="${{ github.event_name == 'schedule' && 'false' || inputs.use_remote_provider }}"
+          use_remote_provider="${{ github.event_name == 'schedule' && 'true' || inputs.use_remote_provider }}"
           use_remote_judge="${{ github.event_name == 'schedule' && 'false' || inputs.use_remote_judge }}"
           namespace="gha-social-sim-${GITHUB_RUN_ID}"
           turn_budget_flag=()
@@ -121,6 +133,8 @@ jobs:
             pnpm sim:social:nightly -- \
               --provider="${provider}" \
               --judge-provider="${judge_provider}" \
+              --benchmark-mode="${benchmark_mode}" \
+              --seed="${seed}" \
               --cleanup="${cleanup_mode}" \
               "${turn_budget_flag[@]}" \
               --namespace="${namespace}" \
@@ -131,6 +145,8 @@ jobs:
               --provider="${provider}" \
               --judge-provider="${judge_provider}" \
               --horizon="${horizon}" \
+              --benchmark-mode="${benchmark_mode}" \
+              --seed="${seed}" \
               --cleanup="${cleanup_mode}" \
               "${turn_budget_flag[@]}" \
               --namespace="${namespace}" \
