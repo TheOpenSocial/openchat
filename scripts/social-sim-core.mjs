@@ -1492,7 +1492,7 @@ function planRecoveryFamilyAction(context) {
               "invite_group",
             ),
       targetActorId: fallbackTargetActorId,
-      detachedFromWeakFit: true,
+      detachedFromWeakFit: !fallbackTargetActorId,
     });
   }
 
@@ -1504,7 +1504,7 @@ function planRecoveryFamilyAction(context) {
         "propose_event",
       ),
       targetActorId: fallbackTargetActorId,
-      detachedFromWeakFit: true,
+      detachedFromWeakFit: !fallbackTargetActorId,
     });
   }
 
@@ -1802,6 +1802,22 @@ function planCircleFamilyAction(context) {
       intent:
         canUseNearMatch(world, resolvedRelationship, tuning) ||
         recentRelationshipAction === "reference_memory"
+          ? "invite_group"
+          : "reply",
+      targetActorId,
+    });
+  }
+
+  if (
+    requiredRelationship &&
+    state.stage === "conversation" &&
+    state.stage !== "onboarding"
+  ) {
+    return createPlannedAction({
+      context,
+      intent:
+        canUseNearMatch(world, resolvedRelationship, tuning) ||
+        (resolvedRelationship?.strength ?? 0) >= tuning.thresholds.circleContinuityMin
           ? "invite_group"
           : "reply",
       targetActorId,

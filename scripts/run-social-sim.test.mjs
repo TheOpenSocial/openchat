@@ -354,7 +354,7 @@ test("recovery planners close toward the preferred fallback after detaching", as
   });
 
   assert.equal(turn.targetActorId, "mina");
-  assert.equal(turn.detachedFromWeakFit, true);
+  assert.equal(turn.detachedFromWeakFit, false);
   assert.ok(["reply", "propose_event"].includes(turn.intent));
 });
 
@@ -385,6 +385,40 @@ test("circle organizers prioritize unfinished returning members", async () => {
   });
 
   assert.equal(turn.targetActorId, "circle-luca");
+  assert.equal(turn.intent, "invite_group");
+});
+
+test("circle participants force required recurring-edge closure during conversation", async () => {
+  const brain = createBrainProvider({ provider: "stub" });
+  const worlds = loadSocialSimWorldFixture(
+    path.resolve("scripts/social-sim-worlds.json"),
+    path.resolve("apps/api/test/fixtures/agentic-scenarios.json"),
+  );
+  const world = structuredClone(
+    worlds.find((entry) => entry.id === "long-recurring-circle-fragmentation-v1"),
+  );
+  const actor = world.actors.find((entry) => entry.id === "frag-regular-lio");
+  const targetRelationship = world.relationships.find((entry) => entry.id === "frag-selim-lio");
+  targetRelationship.strength = 0.65;
+  const state = {
+    stage: "conversation",
+    turnIndex: 9,
+    lastActionByActor: new Map(),
+    knownTargets: new Map([
+      ["frag-selim-lio", { action: "reply", turnIndex: 8, confidence: 0.74 }],
+    ]),
+  };
+
+  const turn = await brain.generateActorTurn({
+    world,
+    actor,
+    state,
+    transcript: [],
+    rng: () => 0.2,
+    config: {},
+  });
+
+  assert.equal(turn.targetActorId, "frag-group-selim");
   assert.equal(turn.intent, "invite_group");
 });
 
