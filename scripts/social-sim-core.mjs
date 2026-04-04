@@ -10,7 +10,7 @@ export const DEFAULT_SOCIAL_SIM_TUNING = {
   thresholds: {
     lowStrength: 0.35,
     mediumStrength: 0.72,
-    nearMatchMin: 0.65,
+    nearMatchMin: 0.62,
     weakRelationshipFloor: 0.2,
     networkWeakPenaltyThreshold: 0.38,
     circleContinuityMin: 0.45,
@@ -51,8 +51,8 @@ export const DEFAULT_SOCIAL_SIM_TUNING = {
     circleUnmatchedBonus: 0.12,
     circleContinuityBonus: 0.08,
     nearMatchBonus: 0.16,
-    circleNearMatchBonus: 0.08,
-    networkNearMatchBonus: 0.1,
+    circleNearMatchBonus: 0.06,
+    networkNearMatchBonus: 0.08,
     networkWeakPenalty: -0.45,
     networkMediumBonus: 0.18,
     networkOrganizerBonus: 0.1,
@@ -82,7 +82,7 @@ export const DEFAULT_SOCIAL_SIM_TUNING = {
     memoryMissingScore: 0.08,
     memoryExtraScore: 0.54,
     memoryDefaultScore: 0.28,
-    recoveryWorldRecoveryWeight: 0.2,
+    recoveryWorldRecoveryWeight: 0.26,
   },
   judge: {
     turnBase: 0.32,

@@ -2,6 +2,7 @@
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import {
   DEFAULT_SOCIAL_SIM_ARTIFACT_ROOT,
   DEFAULT_SOCIAL_SIM_TUNING,
@@ -17,9 +18,11 @@ import {
   getSearchSeeds,
   parseSearchArgs,
   scoreCandidate,
+  setNestedValue,
 } from "./run-social-sim-search.mjs";
 
 function parseOptimizeArgs(argv = process.argv.slice(2)) {
+  const searchArgs = parseSearchArgs(argv);
   const flags = new Map();
   for (const arg of argv) {
     if (!arg.startsWith("--")) continue;
@@ -28,86 +31,82 @@ function parseOptimizeArgs(argv = process.argv.slice(2)) {
     flags.set(key, rawValue ?? "true");
   }
   return {
-    refineRounds: Math.max(0, Number(flags.get("refine-rounds") ?? 2)),
-    refineBeam: Math.max(1, Number(flags.get("refine-beam") ?? 1)),
-    neighborMode: flags.get("neighbor-mode") ?? "adjacent",
+    ...searchArgs,
+    refineRounds: Number(flags.get("refine-rounds") ?? 2),
+    refineBeam: Number(flags.get("refine-beam") ?? 2),
   };
 }
 
-function candidateSignature(tuning) {
+function cloneTuning(tuning) {
+  return normalizeSocialSimTuning(tuning);
+}
+
+function tuningKey(tuning) {
   return JSON.stringify(tuning);
 }
 
-function neighborValues(values, currentValue, mode) {
-  const index = values.findIndex((value) => value === currentValue);
-  if (index < 0) return values.slice();
-  if (mode === "all") {
-    return values.filter((value) => value !== currentValue);
-  }
-  const neighborSet = new Set([currentValue]);
-  if (index > 0) neighborSet.add(values[index - 1]);
-  if (index < values.length - 1) neighborSet.add(values[index + 1]);
-  return Array.from(neighborSet);
-}
-
-function buildNeighborDimensions(grid, tuning, mode) {
-  return grid.dimensions.map((dimension) => {
-    const currentValue = dimension.key.split(".").reduce((cursor, key) => cursor?.[key], tuning);
-    return {
-      ...dimension,
-      values: neighborValues(dimension.values, currentValue, mode),
+async function buildBaseline(baseConfig, grid, seeds, artifactRoot) {
+  const baselineSeedRuns = [];
+  for (const seed of seeds) {
+    const baselineConfig = {
+      ...baseConfig,
+      provider: "stub",
+      judgeProvider: "stub",
+      dryRun: true,
+      cleanupMode: "none",
+      artifactRoot,
+      namespace: `social-sim-optimize-baseline-seed-${seed}`,
+      seed,
+      tuning: normalizeSocialSimTuning(baseConfig.tuning ?? DEFAULT_SOCIAL_SIM_TUNING),
     };
-  });
-}
+    const result = await runSocialSimulation(baselineConfig);
+    baselineSeedRuns.push({
+      seed,
+      runId: result.artifact.runId,
+      runDir: result.runDir,
+      summary: result.summary,
+      worlds: result.artifact.worlds,
+      metrics: scoreCandidate(
+        result.summary,
+        result.artifact.worlds,
+        grid.focusWorlds,
+        grid.objective,
+      ),
+    });
+  }
 
-function* coordinateNeighborhood(baseTuning, grid, mode = "adjacent") {
-  const neighborDimensions = buildNeighborDimensions(grid, baseTuning, mode);
-  for (let index = 0; index < neighborDimensions.length; index += 1) {
-    const dimension = neighborDimensions[index];
-    const currentValue = dimension.key.split(".").reduce((cursor, key) => cursor?.[key], baseTuning);
-    for (const value of dimension.values) {
-      if (value === currentValue) continue;
-      const tuning = normalizeSocialSimTuning(baseTuning);
-      const pathParts = dimension.key.split(".");
-      let cursor = tuning;
-      for (let pathIndex = 0; pathIndex < pathParts.length - 1; pathIndex += 1) {
-        cursor = cursor[pathParts[pathIndex]];
-      }
-      cursor[pathParts[pathParts.length - 1]] = value;
-      yield {
-        tuning,
-        changedDimension: dimension.key,
-        changedValue: value,
-        signature: `${dimension.key}:${JSON.stringify(value)}`,
-      };
+  const baselineWorldScores = new Map();
+  for (const seedRun of baselineSeedRuns) {
+    for (const world of seedRun.worlds) {
+      const previous = baselineWorldScores.get(world.worldId) ?? [];
+      previous.push(world.summary.convergenceScore);
+      baselineWorldScores.set(world.worldId, previous);
     }
   }
-}
+  for (const [worldId, scores] of baselineWorldScores.entries()) {
+    baselineWorldScores.set(
+      worldId,
+      scores.reduce((sum, value) => sum + value, 0) / Math.max(scores.length, 1),
+    );
+  }
 
-function buildCandidateArtifact(candidate, focusWorlds, objective) {
   return {
-    signature: candidate.signature,
-    label: candidate.label,
-    metrics: candidate.metrics,
-    tuning: candidate.tuning,
-    worstWorlds: candidate.worstWorlds,
-    seedRuns: candidate.seedRuns,
-    scoreContext: {
-      focusWorlds,
-      objective,
-    },
+    seedRuns: baselineSeedRuns,
+    metrics: aggregateCandidateMetrics(
+      baselineSeedRuns.map((seedRun) => ({ metrics: seedRun.metrics })),
+    ),
+    worldScores: baselineWorldScores,
   };
 }
 
 async function evaluateCandidate({
-  baseConfig,
-  artifactRoot,
-  grid,
-  objective,
-  focusWorlds,
   tuning,
-  label,
+  baseConfig,
+  grid,
   seeds,
+  artifactRoot,
+  baselineWorldScores,
+  label,
 }) {
   const seedRuns = [];
   for (const seed of seeds) {
@@ -118,7 +117,7 @@ async function evaluateCandidate({
       dryRun: true,
       cleanupMode: "none",
       artifactRoot,
-      namespace: label.replace(/[^a-zA-Z0-9-]+/g, "-").slice(0, 48),
+      namespace: `${label}-seed-${seed}`,
       seed,
       tuning,
     };
@@ -130,8 +129,12 @@ async function evaluateCandidate({
       metrics: scoreCandidate(
         result.summary,
         result.artifact.worlds,
-        focusWorlds,
-        objective,
+        grid.focusWorlds,
+        grid.objective,
+        {
+          protectedWorlds: grid.protectedWorlds,
+          baselineWorldScores,
+        },
       ),
       worstWorlds: result.artifact.worlds
         .map((world) => ({
@@ -142,29 +145,21 @@ async function evaluateCandidate({
         .slice(0, 5),
     });
   }
-  const metrics = aggregateCandidateMetrics(seedRuns);
+
   return {
-    label,
-    signature: candidateSignature(tuning),
     tuning,
-    metrics,
+    metrics: aggregateCandidateMetrics(seedRuns),
     seedRuns,
     worstWorlds: seedRuns[0]?.worstWorlds ?? [],
-    gridSize: grid.dimensions.length,
   };
 }
 
 async function main() {
   const baseConfig = parseSocialSimArgs(process.argv.slice(2), process.env);
-  const searchArgs = parseSearchArgs(process.argv.slice(2));
-  const optimizeArgs = parseOptimizeArgs(process.argv.slice(2));
-  const grid = buildCandidateGrid(searchArgs.profile);
-  const seeds = getSearchSeeds(baseConfig, searchArgs);
-  const combinations = cartesianProduct(grid.dimensions.map((dimension) => dimension.values));
-  const limitedCombinations =
-    Number.isFinite(searchArgs.maxCandidates) && searchArgs.maxCandidates > 0
-      ? combinations.slice(0, searchArgs.maxCandidates)
-      : combinations;
+  const parsedArgs = parseOptimizeArgs(process.argv.slice(2));
+  const { profile, topK, maxCandidates, refineRounds, refineBeam } = parsedArgs;
+  const seeds = getSearchSeeds(baseConfig, parsedArgs);
+  const grid = buildCandidateGrid(profile);
   const artifactRoot = path.resolve(
     process.cwd(),
     DEFAULT_SOCIAL_SIM_ARTIFACT_ROOT,
@@ -173,90 +168,83 @@ async function main() {
   );
   mkdirSync(artifactRoot, { recursive: true });
 
-  const matrix = [];
-  for (const [index, combination] of limitedCombinations.entries()) {
+  const baseline = await buildBaseline(baseConfig, grid, seeds, artifactRoot);
+  const combinations = cartesianProduct(grid.dimensions.map((dimension) => dimension.values));
+  const limitedCombinations =
+    maxCandidates > 0 ? combinations.slice(0, maxCandidates) : combinations;
+
+  const seen = new Set();
+  const history = [];
+  let candidateCounter = 0;
+
+  for (const combination of limitedCombinations) {
     const tuning = createCandidateTuning(
-      normalizeSocialSimTuning(baseConfig.tuning ?? DEFAULT_SOCIAL_SIM_TUNING),
+      cloneTuning(baseConfig.tuning ?? DEFAULT_SOCIAL_SIM_TUNING),
       grid.dimensions,
       combination,
     );
-    const candidate = await evaluateCandidate({
-      baseConfig,
-      artifactRoot,
-      grid,
-      objective: grid.objective,
-      focusWorlds: grid.focusWorlds,
+    const key = tuningKey(tuning);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const result = await evaluateCandidate({
       tuning,
-      label: `matrix-${index + 1}`,
+      baseConfig,
+      grid,
       seeds,
+      artifactRoot,
+      baselineWorldScores: baseline.worldScores,
+      label: `social-sim-optimize-${++candidateCounter}`,
     });
-    matrix.push(candidate);
+    history.push({ phase: "matrix", ...result });
   }
 
-  matrix.sort((left, right) => right.metrics.objective - left.metrics.objective);
-  const history = [
-    {
-      stage: "matrix",
-      best: matrix[0] ?? null,
-      topCandidates: matrix.slice(0, Math.max(1, searchArgs.topK ?? 5)),
-    },
-  ];
+  history.sort((left, right) => right.metrics.objective - left.metrics.objective);
+  let beam = history.slice(0, Math.max(1, refineBeam));
 
-  let best = matrix[0] ?? null;
-  const refinementRounds = [];
-  const seen = new Set(matrix.map((candidate) => candidate.signature));
-  let currentBest = best;
-  for (let round = 0; round < optimizeArgs.refineRounds && currentBest; round += 1) {
-    const neighborhood = [];
-    for (const neighbor of coordinateNeighborhood(currentBest.tuning, grid, optimizeArgs.neighborMode)) {
-      if (seen.has(neighbor.signature)) continue;
-      seen.add(neighbor.signature);
-      const candidate = await evaluateCandidate({
-        baseConfig,
-        artifactRoot,
-        grid,
-        objective: grid.objective,
-        focusWorlds: grid.focusWorlds,
-        tuning: neighbor.tuning,
-        label: `refine-${round + 1}-${neighbor.changedDimension}`,
-        seeds,
-      });
-      neighborhood.push({
-        changedDimension: neighbor.changedDimension,
-        changedValue: neighbor.changedValue,
-        candidate,
-      });
+  for (let round = 0; round < refineRounds; round += 1) {
+    const nextBeam = [];
+    for (const candidate of beam) {
+      for (const dimension of grid.dimensions) {
+        for (const value of dimension.values) {
+          const tuning = cloneTuning(candidate.tuning);
+          setNestedValue(tuning, dimension.key.split("."), value);
+          const key = tuningKey(tuning);
+          if (seen.has(key)) continue;
+          seen.add(key);
+          const result = await evaluateCandidate({
+            tuning,
+            baseConfig,
+            grid,
+            seeds,
+            artifactRoot,
+            baselineWorldScores: baseline.worldScores,
+            label: `social-sim-optimize-${++candidateCounter}`,
+          });
+          nextBeam.push({ phase: `refine-${round + 1}`, ...result });
+        }
+      }
     }
-
-    neighborhood.sort((left, right) => right.candidate.metrics.objective - left.candidate.metrics.objective);
-    const roundBest = neighborhood[0]?.candidate ?? null;
-    refinementRounds.push({
-      round: round + 1,
-      evaluatedCount: neighborhood.length,
-      best: roundBest,
-      accepted: Boolean(
-        roundBest && roundBest.metrics.objective > currentBest.metrics.objective + 1e-4,
-      ),
-    });
-    if (!roundBest || roundBest.metrics.objective <= currentBest.metrics.objective + 1e-4) {
-      break;
-    }
-    currentBest = roundBest;
-    best = roundBest;
+    history.push(...nextBeam);
+    history.sort((left, right) => right.metrics.objective - left.metrics.objective);
+    beam = history.slice(0, Math.max(1, refineBeam));
   }
+
+  const topCandidates = history
+    .slice()
+    .sort((left, right) => right.metrics.objective - left.metrics.objective)
+    .slice(0, Math.max(1, topK));
 
   const output = {
-    profile: searchArgs.profile,
+    profile,
     objective: grid.objective,
     seeds,
-    matrixCount: matrix.length,
-    refineRounds: optimizeArgs.refineRounds,
-    neighborMode: optimizeArgs.neighborMode,
     focusWorlds: grid.focusWorlds,
-    matrixTop: matrix.slice(0, Math.max(1, searchArgs.topK ?? 5)),
-    history,
-    refinementRounds,
-    bestCandidate: best ? buildCandidateArtifact(best, grid.focusWorlds, grid.objective) : null,
+    protectedWorlds: grid.protectedWorlds ?? [],
+    baseline: {
+      metrics: baseline.metrics,
+      worldScores: Object.fromEntries(baseline.worldScores.entries()),
+    },
+    topCandidates,
   };
 
   writeFileSync(
@@ -266,16 +254,18 @@ async function main() {
   );
   writeFileSync(
     path.join(artifactRoot, "optimize-best.json"),
-    `${JSON.stringify(output.bestCandidate, null, 2)}\n`,
+    `${JSON.stringify(topCandidates[0] ?? null, null, 2)}\n`,
     "utf8",
   );
   writeFileSync(
     path.join(artifactRoot, "optimize-history.json"),
-    `${JSON.stringify({ history, refinementRounds }, null, 2)}\n`,
+    `${JSON.stringify(history, null, 2)}\n`,
     "utf8",
   );
 
   console.log(JSON.stringify(output, null, 2));
 }
 
-await main();
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+  await main();
+}

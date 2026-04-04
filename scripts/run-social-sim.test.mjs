@@ -1,4 +1,5 @@
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import assert from "node:assert/strict";
@@ -15,6 +16,67 @@ import {
   runSocialSimulation,
   selectSocialSimWorlds,
 } from "./social-sim-core.mjs";
+import {
+  getSearchSeeds,
+  parseSearchArgs,
+} from "./run-social-sim-search.mjs";
+
+function parseTrailingJson(stdout) {
+  const trimmed = stdout.trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch (error) {
+    if (!(error instanceof SyntaxError)) {
+      throw error;
+    }
+  }
+
+  const start = trimmed.indexOf("{");
+  if (start < 0) {
+    throw new Error(`Could not find JSON in output:\n${stdout}`);
+  }
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  let end = -1;
+
+  for (let index = start; index < trimmed.length; index += 1) {
+    const char = trimmed[index];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+    if (char === "{") {
+      depth += 1;
+      continue;
+    }
+    if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        end = index;
+        break;
+      }
+    }
+  }
+
+  if (end < 0) {
+    throw new Error(`Could not find balanced JSON in output:\n${stdout}`);
+  }
+
+  return JSON.parse(trimmed.slice(start, end + 1));
+}
 
 test("parseSocialSimArgs applies sane defaults", () => {
   const config = parseSocialSimArgs([], {
@@ -65,6 +127,36 @@ test("normalizeSocialSimTuning preserves defaults for missing fields", () => {
     tuning.policy.networkOrganizerPostRecoveryTargetStrategy,
     DEFAULT_SOCIAL_SIM_TUNING.policy.networkOrganizerPostRecoveryTargetStrategy,
   );
+});
+
+test("parseSearchArgs preserves explicit seed overrides", () => {
+  const parsed = parseSearchArgs([
+    "--search-profile=weak-worlds-v3",
+    "--seeds=17031,27031,37031",
+    "--top-k=2",
+  ]);
+
+  assert.equal(parsed.profile, "weak-worlds-v3");
+  assert.deepEqual(parsed.seeds, [17031, 27031, 37031]);
+  assert.equal(parsed.topK, 2);
+});
+
+test("getSearchSeeds falls back to stable matrix when no explicit seed is set", () => {
+  const seeds = getSearchSeeds({ seed: 12345 }, {
+    hasExplicitSeed: false,
+    seeds: [],
+  });
+
+  assert.deepEqual(seeds, [17031, 27031, 37031]);
+});
+
+test("getSearchSeeds respects explicit single-seed runs", () => {
+  const seeds = getSearchSeeds({ seed: 12345 }, {
+    hasExplicitSeed: true,
+    seeds: [],
+  });
+
+  assert.deepEqual(seeds, [12345]);
 });
 
 test("loadSocialSimWorldFixture normalizes canonical fixture worlds", () => {
@@ -489,4 +581,55 @@ test("backend bootstrap redacts secret env values in artifacts", async () => {
     globalThis.fetch = originalFetch;
     rmSync(artifactRoot, { recursive: true, force: true });
   }
+});
+
+test("search runner uses stable default seeds and writes summary artifacts", () => {
+  const stdout = execFileSync(
+    process.execPath,
+    [
+      path.resolve("scripts/run-social-sim-search.mjs"),
+      "--search-profile=weak-worlds-v3",
+      "--max-candidates=1",
+      "--top-k=1",
+      "--horizon=short",
+      "--turn-budget=4",
+      "--world=short-direct-match-v1",
+    ],
+    {
+      encoding: "utf8",
+      stdio: "pipe",
+    },
+  );
+
+  const summary = parseTrailingJson(stdout);
+  assert.equal(summary.profile, "weak-worlds-v3");
+  assert.equal(summary.objective, "network-floor-push");
+  assert.deepEqual(summary.seeds, [17031, 27031, 37031]);
+  assert.equal(summary.candidateCount, 1);
+  assert.equal(summary.topCandidates[0].seedRuns.length, 3);
+  assert.ok(summary.topCandidates[0].metrics.networkFloor >= 0);
+});
+
+test("search runner honors explicit multi-seed overrides", () => {
+  const stdout = execFileSync(
+    process.execPath,
+    [
+      path.resolve("scripts/run-social-sim-search.mjs"),
+      "--search-profile=weak-worlds-v3",
+      "--max-candidates=1",
+      "--top-k=1",
+      "--horizon=short",
+      "--turn-budget=4",
+      "--world=short-direct-match-v1",
+      "--seeds=11,22",
+    ],
+    {
+      encoding: "utf8",
+      stdio: "pipe",
+    },
+  );
+
+  const summary = parseTrailingJson(stdout);
+  assert.deepEqual(summary.seeds, [11, 22]);
+  assert.equal(summary.topCandidates[0].seedRuns.length, 2);
 });
