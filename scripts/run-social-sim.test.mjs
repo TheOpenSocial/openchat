@@ -365,6 +365,61 @@ test("remote actor providers fail closed in benchmark mode when remote generatio
   }
 });
 
+test("remote Ollama intents are normalized onto canonical simulator intents", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      message: {
+        content: JSON.stringify({
+          intent: "greet_and_reconnect",
+          targetActorId: "circle-organizer",
+          message:
+            "Hey there! It's good to be back in the circle. I'm looking forward to picking up where we left off.",
+          confidence: 0.85,
+          rationale:
+            "As a returning participant, I want to reconnect with familiar people and continue earlier threads.",
+        }),
+      },
+    }),
+  });
+  try {
+    const brain = createBrainProvider({
+      provider: "ollama",
+      useRemoteProvider: true,
+      ollamaBaseUrl: "https://ollama.example.test",
+      ollamaModel: "deepseek-v3.1:671b",
+      ollamaApiKey: "test-key",
+    });
+    const worlds = loadSocialSimWorldFixture(
+      path.resolve("scripts/social-sim-worlds.json"),
+      path.resolve("apps/api/test/fixtures/agentic-scenarios.json"),
+    );
+    const world = worlds.find((entry) => entry.id === "medium-recurring-circle-v1");
+    const actor = world.actors.find((entry) => entry.id === "circle-iris");
+    const state = {
+      stage: "conversation",
+      turnIndex: 2,
+      lastActionByActor: new Map(),
+      knownTargets: new Map(),
+    };
+
+    const turn = await brain.generateActorTurn({
+      world,
+      actor,
+      state,
+      transcript: [],
+      rng: () => 0.25,
+      config: {},
+    });
+
+    assert.equal(turn.intent, "reference_memory");
+    assert.equal(turn.targetActorId, "circle-organizer");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("recovery worlds detach from weak-fit loops after initial recovery", async () => {
   const brain = createBrainProvider({ provider: "stub" });
   const worlds = loadSocialSimWorldFixture(

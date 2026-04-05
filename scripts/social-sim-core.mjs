@@ -3335,7 +3335,7 @@ class OpenAISocialSimProvider extends RemoteSocialSimProviderBase {
 function normalizeBrainOutput(output, provider, context) {
   const targetActorId =
     typeof output.targetActorId === "string" ? output.targetActorId : null;
-  const intent = normalizeString(output.intent, "follow_up");
+  const intent = canonicalizeRemoteIntent(output, context);
   return {
     provider,
     promptVersion: SOCIAL_SIM_PROMPT_VERSION,
@@ -3364,6 +3364,128 @@ function normalizeBrainOutput(output, provider, context) {
           }))
       : [],
   };
+}
+
+function canonicalizeRemoteIntent(output, context) {
+  const rawIntent = normalizeString(output.intent, "follow_up");
+  const normalized = rawIntent.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+  const message = normalizeString(output.message, "").toLowerCase();
+  const rationale = normalizeString(output.rationale, "").toLowerCase();
+  const combined = `${normalized} ${message} ${rationale}`;
+
+  const canonicalIntents = new Set([
+    "introduce",
+    "ask_preference",
+    "reply",
+    "follow_up",
+    "invite_group",
+    "propose_event",
+    "reference_memory",
+    "recover_no_match",
+    "flag_moderation",
+    "idle",
+    "wait",
+    "unknown",
+  ]);
+  if (canonicalIntents.has(normalized)) {
+    return normalized;
+  }
+
+  const world = context?.world ?? {};
+  const needsRecovery = worldNeedsRecovery(world);
+  const needsMemory = worldNeedsMemory(world);
+  const needsGroupProgress = worldNeedsGroupProgress(world);
+
+  if (
+    combined.includes("moderat") ||
+    combined.includes("safety") ||
+    combined.includes("boundary") ||
+    combined.includes("unsafe")
+  ) {
+    return "flag_moderation";
+  }
+
+  if (
+    combined.includes("recover") ||
+    combined.includes("redirect") ||
+    combined.includes("better_fit") ||
+    combined.includes("detach") ||
+    combined.includes("decline") ||
+    combined.includes("contain_bad_fit")
+  ) {
+    return needsRecovery ? "recover_no_match" : "follow_up";
+  }
+
+  if (
+    combined.includes("memory") ||
+    combined.includes("remember") ||
+    combined.includes("reconnect") ||
+    combined.includes("continuity") ||
+    combined.includes("familiar")
+  ) {
+    return needsMemory ? "reference_memory" : "follow_up";
+  }
+
+  if (
+    combined.includes("group") ||
+    combined.includes("circle") ||
+    combined.includes("collaboration") ||
+    combined.includes("organize") ||
+    combined.includes("coordinate") ||
+    combined.includes("together") ||
+    combined.includes("join")
+  ) {
+    return needsGroupProgress ? "invite_group" : "follow_up";
+  }
+
+  if (
+    combined.includes("event") ||
+    combined.includes("meetup") ||
+    combined.includes("schedule") ||
+    combined.includes("plan") ||
+    combined.includes("proposal") ||
+    combined.includes("next saturday") ||
+    combined.includes("next step")
+  ) {
+    return "propose_event";
+  }
+
+  if (
+    combined.includes("preference") ||
+    combined.includes("what kind") ||
+    combined.includes("what do you think") ||
+    combined.includes("are you into") ||
+    combined.includes("would you prefer")
+  ) {
+    return "ask_preference";
+  }
+
+  if (
+    combined.includes("hello") ||
+    combined.includes("hey") ||
+    combined.includes("hi ") ||
+    combined.includes("introduc") ||
+    combined.includes("greet")
+  ) {
+    return "introduce";
+  }
+
+  if (
+    combined.includes("accept") ||
+    combined.includes("confirm") ||
+    combined.includes("affirm") ||
+    combined.includes("agree") ||
+    combined.includes("acknowledge") ||
+    combined.includes("continue") ||
+    combined.includes("reciprocate") ||
+    combined.includes("share") ||
+    combined.includes("explore") ||
+    combined.includes("strengthen")
+  ) {
+    return "reply";
+  }
+
+  return "follow_up";
 }
 
 class HeuristicJudgeProvider {
