@@ -38,6 +38,8 @@
     "test:agentic:suite:verification": "node scripts/run-agent-test-suite-verification.mjs",
     "test:agentic:suite:verification:failed": "AGENT_TEST_SUITE_RERUN_FAILED_ONLY=1 node scripts/run-agent-test-suite-verification.mjs",
     "test:backend:ops-pack": "node scripts/run-backend-ops-pack.mjs",
+    "eval:golden": "node scripts/evals/golden/run-golden-evals.mjs",
+    "eval:social:benchmark": "node scripts/evals/golden/social-sim-benchmark.mjs",
     "sim:social": "node scripts/run-social-sim.mjs",
     "sim:social:nightly": "node scripts/run-social-sim-nightly.mjs",
     "sim:social:cleanup": "node scripts/run-social-sim.mjs --cleanup=delete",
