@@ -579,6 +579,114 @@ test("remote quiet alternative proposals do not collapse into recovery", async (
   }
 });
 
+test("remote outputs with invalid targets are reconciled to valid planner targets", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      message: {
+        content: JSON.stringify({
+          intent: "welcome_and_organize",
+          targetActorId: "frag-trust-vik",
+          message: "Vik, would you join our next planning check-in?",
+          confidence: 0.82,
+          rationale: "Trying to keep continuity healthy.",
+          memoryReferences: [],
+        }),
+      },
+    }),
+  });
+  try {
+    const brain = createBrainProvider({
+      provider: "ollama",
+      useRemoteProvider: true,
+      ollamaBaseUrl: "https://ollama.example.test",
+      ollamaModel: "deepseek-v3.1:671b",
+      ollamaApiKey: "test-key",
+    });
+    const worlds = loadSocialSimWorldFixture(
+      path.resolve("scripts/social-sim-worlds.json"),
+      path.resolve("apps/api/test/fixtures/agentic-scenarios.json"),
+    );
+    const world = worlds.find((entry) => entry.id === "long-recurring-circle-fragmentation-v1");
+    const actor = world.actors.find((entry) => entry.id === "frag-organizer-ines");
+    const state = {
+      stage: "conversation",
+      turnIndex: 8,
+      lastActionByActor: new Map(),
+      knownTargets: new Map(),
+    };
+
+    const turn = await brain.generateActorTurn({
+      world,
+      actor,
+      state,
+      transcript: [],
+      rng: () => 0.25,
+      config: {},
+    });
+
+    assert.notEqual(turn.targetActorId, "frag-trust-vik");
+    assert.equal(turn.targetActorId, "frag-regular-lio");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("remote outputs do not positively advance forbidden targets", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      message: {
+        content: JSON.stringify({
+          intent: "invite_group",
+          targetActorId: "rebalance-noah",
+          message: "Noah should join the active thread now.",
+          confidence: 0.77,
+          rationale: "Trying to activate the network quickly.",
+          memoryReferences: [],
+        }),
+      },
+    }),
+  });
+  try {
+    const brain = createBrainProvider({
+      provider: "ollama",
+      useRemoteProvider: true,
+      ollamaBaseUrl: "https://ollama.example.test",
+      ollamaModel: "deepseek-v3.1:671b",
+      ollamaApiKey: "test-key",
+    });
+    const worlds = loadSocialSimWorldFixture(
+      path.resolve("scripts/social-sim-worlds.json"),
+      path.resolve("apps/api/test/fixtures/agentic-scenarios.json"),
+    );
+    const world = worlds.find((entry) => entry.id === "long-network-rebalancing-v1");
+    const actor = world.actors.find((entry) => entry.id === "rebalance-noah");
+    const state = {
+      stage: "conversation",
+      turnIndex: 10,
+      lastActionByActor: new Map(),
+      knownTargets: new Map(),
+    };
+
+    const turn = await brain.generateActorTurn({
+      world,
+      actor,
+      state,
+      transcript: [],
+      rng: () => 0.25,
+      config: {},
+    });
+
+    assert.equal(turn.targetActorId, "rebalance-host-mila");
+    assert.equal(turn.intent, "recover_no_match");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("recovery worlds detach from weak-fit loops after initial recovery", async () => {
   const brain = createBrainProvider({ provider: "stub" });
   const worlds = loadSocialSimWorldFixture(

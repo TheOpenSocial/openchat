@@ -2023,6 +2023,8 @@ function planNetworkRebalancingFamilyAction(context) {
     preferredRelationship ?? findBestRelationshipWithState(world, actor, null, state, tuning);
   const weakRelationship = findWeakRelationshipWithState(world, actor, state, tuning);
   const targetActorId = resolveActorTarget(world, actor, targetRelationship);
+  const targetIsForbidden =
+    classifyOracleRelationship(world, targetRelationship) === "forbidden";
   const knownTargets = state.knownTargets ?? new Map();
   const recentRelationshipAction =
     targetRelationship ? knownTargets.get(targetRelationship.id)?.action ?? "" : "";
@@ -2040,7 +2042,15 @@ function planNetworkRebalancingFamilyAction(context) {
   if (state.stage === "onboarding") {
     return createPlannedAction({
       context,
-      intent: "introduce",
+      intent: targetIsForbidden ? "recover_no_match" : "introduce",
+      targetActorId,
+    });
+  }
+
+  if (targetIsForbidden && state.stage !== "onboarding") {
+    return createPlannedAction({
+      context,
+      intent: "recover_no_match",
       targetActorId,
     });
   }
@@ -3531,18 +3541,24 @@ class OpenAISocialSimProvider extends RemoteSocialSimProviderBase {
 }
 
 function normalizeBrainOutput(output, provider, context) {
-  const targetActorId =
+  const rawTargetActorId =
     typeof output.targetActorId === "string" ? output.targetActorId : null;
   const intent = canonicalizeRemoteIntent(output, context);
+  const reconciled = reconcileRemoteActionWithPlanner(context, {
+    intent,
+    targetActorId: rawTargetActorId,
+  });
+  const targetActorId = reconciled.targetActorId;
+  const resolvedIntent = reconciled.intent;
   return {
     provider,
     promptVersion: SOCIAL_SIM_PROMPT_VERSION,
-    intent,
+    intent: resolvedIntent,
     targetActorId,
     message: normalizeString(
       output.message,
       buildMessageForIntent({
-        intent,
+        intent: resolvedIntent,
         actor: context.actor,
         targetActorId,
         world: context.world,
@@ -3561,6 +3577,70 @@ function normalizeBrainOutput(output, provider, context) {
             excerpt: normalizeString(entry.excerpt, ""),
           }))
       : [],
+  };
+}
+
+function findRelationshipByActors(world, actorId, targetActorId) {
+  if (!targetActorId) return null;
+  return world.relationships.find(
+    (relationship) =>
+      relationship.members.includes(actorId) &&
+      relationship.members.includes(targetActorId),
+  ) ?? null;
+}
+
+function hasOutstandingRequiredGroupClosureForActor(world, actorId) {
+  const required = new Set(world.oracle?.requiredGroupClosure ?? []);
+  if (required.size === 0) return false;
+  return world.relationships.some(
+    (relationship) =>
+      required.has(relationship.id) &&
+      relationship.members.includes(actorId) &&
+      relationship.status !== "matched",
+  );
+}
+
+function reconcileRemoteActionWithPlanner(context, action) {
+  const heuristic = planSocialSimAction(context) ?? planGenericBrainAction(context);
+  const relationship = findRelationshipByActors(
+    context.world,
+    context.actor.id,
+    action.targetActorId,
+  );
+  const hasInvalidTarget = Boolean(action.targetActorId) && !relationship;
+  const forbiddenTarget = relationship
+    ? classifyOracleRelationship(context.world, relationship) === "forbidden"
+    : false;
+  const actorNeedsRequiredClosure = hasOutstandingRequiredGroupClosureForActor(
+    context.world,
+    context.actor.id,
+  );
+  const heuristicRelationship = findRelationshipByActors(
+    context.world,
+    context.actor.id,
+    heuristic?.targetActorId ?? null,
+  );
+  const heuristicTargetsRequiredClosure = Boolean(
+    heuristicRelationship && isRequiredGroupClosure(context.world, heuristicRelationship),
+  );
+  const remoteTargetsRequiredClosure = Boolean(
+    relationship && isRequiredGroupClosure(context.world, relationship),
+  );
+
+  if (
+    hasInvalidTarget ||
+    forbiddenTarget ||
+    (actorNeedsRequiredClosure && heuristicTargetsRequiredClosure && !remoteTargetsRequiredClosure)
+  ) {
+    return {
+      intent: heuristic.intent,
+      targetActorId: heuristic.targetActorId ?? null,
+    };
+  }
+
+  return {
+    intent: action.intent,
+    targetActorId: action.targetActorId ?? null,
   };
 }
 
