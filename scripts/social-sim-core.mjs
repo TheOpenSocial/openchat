@@ -1291,6 +1291,7 @@ function findBestOracleRelationshipForActor(
   const excludedIds = new Set(options.excludedIds ?? []);
   const onlyUnmatched = Boolean(options.onlyUnmatched);
   const requireGroupClosure = Boolean(options.requireGroupClosure);
+  const allowAnyGroupClosure = Boolean(options.allowAnyGroupClosure);
   const minStrength = Number.isFinite(options.minStrength) ? options.minStrength : null;
   const candidates = world.relationships.filter((relationship) => {
     if (!relationship.members.includes(actor.id)) return false;
@@ -1298,6 +1299,9 @@ function findBestOracleRelationshipForActor(
     if (onlyUnmatched && relationship.status === "matched") return false;
     if (requireGroupClosure && !isRequiredGroupClosure(world, relationship)) return false;
     if (minStrength !== null && (relationship.strength ?? 0) < minStrength) return false;
+    if (allowAnyGroupClosure && isRequiredGroupClosure(world, relationship)) {
+      return true;
+    }
     const oracleClass = classifyOracleRelationship(world, relationship);
     if (!classes.has(oracleClass)) return false;
     return true;
@@ -1703,10 +1707,12 @@ function planRecoveryFamilyAction(context) {
       context,
       intent:
         state.stage === "matching"
-          ? "reply"
+          ? "propose_event"
           : state.stage === "convergence"
             ? "propose_event"
-            : "reply",
+            : (preferredFallbackRelationship?.strength ?? 0) >= tuning.thresholds.lowStrength
+              ? "propose_event"
+              : "reply",
       targetActorId: fallbackTargetActorId,
       detachedFromWeakFit: true,
     });
@@ -1887,6 +1893,7 @@ function planCircleFamilyAction(context) {
       classes: ["preferred"],
       onlyUnmatched: true,
       requireGroupClosure: true,
+      allowAnyGroupClosure: true,
     }) ??
     findBestOracleRelationshipForActor(world, actor, state, tuning, {
       classes: ["preferred"],
@@ -2228,6 +2235,7 @@ function planDenseSocialGraphFamilyAction(context) {
       classes: ["preferred", "acceptable"],
       onlyUnmatched: true,
       requireGroupClosure: true,
+      allowAnyGroupClosure: true,
       minStrength: tuning.thresholds.lowStrength,
     }) ??
     findBestOracleRelationshipForActor(world, actor, state, tuning, {

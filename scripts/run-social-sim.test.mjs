@@ -713,7 +713,7 @@ test("recovery worlds detach from weak-fit loops after initial recovery", async 
     config: {},
   });
 
-  assert.equal(turn.intent, "reply");
+  assert.equal(turn.intent, "propose_event");
   assert.equal(turn.targetActorId, null);
   assert.equal(turn.detachedFromWeakFit, true);
 });
@@ -724,8 +724,12 @@ test("recovery planners close toward the preferred fallback after detaching", as
     path.resolve("scripts/social-sim-worlds.json"),
     path.resolve("apps/api/test/fixtures/agentic-scenarios.json"),
   );
-  const world = worlds.find((entry) => entry.id === "short-no-match-recovery-v1");
+  const world = structuredClone(
+    worlds.find((entry) => entry.id === "short-no-match-recovery-v1"),
+  );
   const actor = world.actors.find((entry) => entry.id === "cora");
+  const fallbackRelationship = world.relationships.find((entry) => entry.id === "cora-mina");
+  fallbackRelationship.strength = 0.62;
   const state = {
     stage: "conversation",
     turnIndex: 3,
@@ -746,7 +750,7 @@ test("recovery planners close toward the preferred fallback after detaching", as
 
   assert.equal(turn.targetActorId, "mina");
   assert.equal(turn.detachedFromWeakFit, false);
-  assert.ok(["reply", "propose_event"].includes(turn.intent));
+  assert.equal(turn.intent, "propose_event");
 });
 
 test("circle organizers prioritize unfinished returning members", async () => {
@@ -810,6 +814,42 @@ test("circle participants force required recurring-edge closure during conversat
   });
 
   assert.equal(turn.targetActorId, "frag-group-selim");
+  assert.equal(turn.intent, "invite_group");
+});
+
+test("circle planners can force required group closure even when the edge is not preferred", async () => {
+  const brain = createBrainProvider({ provider: "stub" });
+  const worlds = loadSocialSimWorldFixture(
+    path.resolve("scripts/social-sim-worlds.json"),
+    path.resolve("apps/api/test/fixtures/agentic-scenarios.json"),
+  );
+  const world = structuredClone(
+    worlds.find((entry) => entry.id === "long-recurring-circle-fragmentation-v1"),
+  );
+  const actor = world.actors.find((entry) => entry.id === "frag-organizer-ines");
+  const groupClosureRelationship = world.relationships.find((entry) => entry.id === "frag-ines-mara");
+  const preferredRelationship = world.relationships.find((entry) => entry.id === "frag-ines-lio");
+  groupClosureRelationship.strength = 0.63;
+  preferredRelationship.status = "matched";
+  const state = {
+    stage: "conversation",
+    turnIndex: 9,
+    lastActionByActor: new Map(),
+    knownTargets: new Map([
+      ["frag-ines-mara", { action: "reply", turnIndex: 8, confidence: 0.73 }],
+    ]),
+  };
+
+  const turn = await brain.generateActorTurn({
+    world,
+    actor,
+    state,
+    transcript: [],
+    rng: () => 0.2,
+    config: {},
+  });
+
+  assert.equal(turn.targetActorId, "frag-regular-mara");
   assert.equal(turn.intent, "invite_group");
 });
 
@@ -878,6 +918,42 @@ test("dense graph planners prioritize required bridge closure over generic chatt
   });
 
   assert.equal(turn.targetActorId, "holdout-kai");
+  assert.equal(turn.intent, "invite_group");
+});
+
+test("dense graph planners can force required bridge closure even when the edge is not preferred", async () => {
+  const brain = createBrainProvider({ provider: "stub" });
+  const worlds = loadSocialSimWorldFixture(
+    path.resolve("scripts/social-sim-worlds.json"),
+    path.resolve("apps/api/test/fixtures/agentic-scenarios.json"),
+  );
+  const world = structuredClone(
+    worlds.find((entry) => entry.id === "medium-multi-cluster-bridging-v1"),
+  );
+  const actor = world.actors.find((entry) => entry.id === "bridge-circle-yara");
+  const bridgeRelationship = world.relationships.find((entry) => entry.id === "bridge-pair-yara");
+  const preferredRelationship = world.relationships.find((entry) => entry.id === "bridge-olivia-yara");
+  bridgeRelationship.strength = 0.61;
+  preferredRelationship.status = "matched";
+  const state = {
+    stage: "conversation",
+    turnIndex: 6,
+    lastActionByActor: new Map(),
+    knownTargets: new Map([
+      ["bridge-pair-yara", { action: "reply", turnIndex: 5, confidence: 0.76 }],
+    ]),
+  };
+
+  const turn = await brain.generateActorTurn({
+    world,
+    actor,
+    state,
+    transcript: [],
+    rng: () => 0.2,
+    config: {},
+  });
+
+  assert.equal(turn.targetActorId, "bridge-pair-ivy-noel");
   assert.equal(turn.intent, "invite_group");
 });
 
