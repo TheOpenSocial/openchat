@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "suite": "sample-replay-corpus",
+  "cases": [
+    {
+      "id": "replay_tool_choice_dm_followup_v1",
+      "channel": "dm",
+      "provider": "ollama",
+      "toolFamily": "social_followup",
+      "deploySha": "sample",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Can you reconnect me with the group from last month and suggest the best next step?"
+        }
+      ],
+      "expected": {
+        "allowedTools": ["lookup_relationships", "draft_followup"],
+        "forbiddenTools": ["send_message_live"],
+        "requiredBehaviors": [
+          "preserve_context",
+          "ask_for_missing_confirmation_if_needed"
+        ]
+      }
+    },
+    {
+      "id": "replay_auth_reconnect_recovery_v1",
+      "channel": "dashboard",
+      "provider": "ollama",
+      "toolFamily": "auth_reconnect",
+      "deploySha": "sample",
+      "messages": [
+        {
+          "role": "user",
+          "content": "The connection dropped during reconnect. Resume safely without sending anything twice."
+        }
+      ],
+      "expected": {
+        "allowedTools": ["inspect_connection_state", "resume_replay_safe"],
+        "forbiddenTools": ["duplicate_send"],
+        "requiredBehaviors": [
+          "replay_safe_resume",
+          "no_side_effects_without_confirmation"
+        ]
+      }
+    }
+  ]
+}
