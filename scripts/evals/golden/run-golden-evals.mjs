@@ -8,6 +8,7 @@ import {
   summarizeCaseRows,
 } from "../shared/artifacts.mjs";
 import { runSocialSimBenchmarkMatrix } from "./social-sim-benchmark.mjs";
+import { runProductCriticalGoldens } from "./product-critical-goldens.mjs";
 
 function parseGoldenArgs(argv = process.argv.slice(2)) {
   const suites = [];
@@ -19,7 +20,7 @@ function parseGoldenArgs(argv = process.argv.slice(2)) {
     }
   }
   return {
-    suites: suites.length > 0 ? suites : ["social-sim-benchmark"],
+    suites: suites.length > 0 ? suites : ["social-sim-benchmark", "product-critical-goldens"],
   };
 }
 
@@ -55,6 +56,24 @@ export async function runGoldenEvals(argv = process.argv.slice(2), env = process
     });
   }
 
+  if (goldenArgs.suites.includes("product-critical-goldens")) {
+    const productResult = await runProductCriticalGoldens(["--dry-run=1"], {
+      ...env,
+      EVAL_ARTIFACT_ROOT: path.join(envelope.runDir, "suite-artifacts"),
+    });
+    suiteSummaries.push({
+      suite: "product-critical-goldens",
+      summary: productResult.summary,
+    });
+    caseRows.push({
+      caseId: "suite-product-critical-goldens",
+      status: productResult.summary.failedCases > 0 ? "failed" : "passed",
+      score: productResult.summary.averageScore,
+      primaryFailureReason: productResult.summary.primaryFailureReason,
+      suiteArtifactRunId: productResult.runId,
+    });
+  }
+
   const summary = {
     ...summarizeCaseRows(caseRows),
     suiteCount: suiteSummaries.length,
@@ -69,4 +88,3 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   console.log(JSON.stringify(result.summary, null, 2));
   console.log(`artifact written to ${path.join(result.runDir, "run.json")}`);
 }
-

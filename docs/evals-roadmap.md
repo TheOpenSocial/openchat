@@ -27,6 +27,36 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
   - It validates case shape and writes standard artifacts.
   - It does not yet replay real historical traffic.
 
+### Product goldens
+- Second golden suite entrypoint now exists for critical product flows.
+- Current implementation wraps the existing agent test/eval lane contract and writes standard artifacts.
+- Immediate next step is to replace dry-run mode with live curated flow execution for:
+  - reconnect/auth recovery
+  - approval/refusal behavior
+  - tool gating
+  - cross-channel continuity
+
+### Online quality reporting scaffold
+- Standard quality event report runner now exists.
+- Current input is JSONL with fields:
+  - `conversation_id`
+  - `message_id`
+  - `channel`
+  - `provider`
+  - `deploy_sha`
+  - `tool_family`
+  - `quality_score`
+  - `retry_count`
+  - `escalated`
+  - `failure_taxonomy`
+  - `created_at`
+- Current report emits:
+  - average score
+  - failure counts
+  - escalation rate
+  - retry rate
+  - breakdowns by channel/provider/tool family/failure taxonomy
+
 ## Next Steps
 
 ### 1. Convert replay scaffold into real replay
@@ -51,6 +81,7 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
   - safe tool gating
   - cross-channel continuity
 - These should be deterministic and pre-release gated.
+- Replace the current dry-run wrapper in `product-critical-goldens.mjs` with real flow execution and scenario assertions.
 
 ### 3. Add production quality event logging
 - Persist per-conversation quality events with:
@@ -66,6 +97,7 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
   - `failure_taxonomy`
   - `created_at`
 - Use this for nightly and weekly quality reports.
+- Wire report input from real runtime/admin analytics instead of sample JSONL.
 
 ### 4. Add social simulation family metrics to the benchmark
 - Report family-level aggregates explicitly:
@@ -92,8 +124,7 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
 ## Suggested Rollout Order
 
 1. real replay runner
-2. second golden suite for critical product flows
-3. production quality event schema
+2. live product-critical golden execution
+3. production quality event persistence
 4. benchmark dashboards and nightly reports
 5. human review sampling from worst replay and golden failures
-

@@ -58,3 +58,17 @@ test("golden eval runner executes social sim benchmark suite", async () => {
   assert.deepEqual(result.summary.suites[0].summary.seeds, [17031, 27031]);
 });
 
+test("golden eval runner can include product critical suite", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "golden-product-suite-"));
+  const result = await runGoldenEvals(
+    ["--suite=product-critical-goldens"],
+    {
+      ...process.env,
+      EVAL_ARTIFACT_ROOT: root,
+    },
+  );
+
+  assert.equal(result.summary.suiteCount, 1);
+  assert.equal(result.summary.suites[0].suite, "product-critical-goldens");
+  assert.equal(result.summary.suites[0].summary.failedCases, 0);
+});
