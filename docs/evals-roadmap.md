@@ -22,8 +22,11 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
 - Replay corpus contract:
   - `scripts/evals/replay/sample-replay-corpus.json`
   - `scripts/evals/replay/sample-historical-replay-corpus.json`
+  - `scripts/evals/replay/sample-historical-export.jsonl`
 - Replay suite runner:
   - `pnpm eval:replay`
+- Historical replay import:
+  - `pnpm eval:replay:import -- --input=... --output=...`
 - Current runner now supports command-backed, side-effect-free replay cases.
 - Historical replay cases can now carry:
   - conversation transcript/history
@@ -36,6 +39,14 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
 ### Product goldens
 - Second golden suite entrypoint now exists for critical product flows.
 - Current implementation executes the existing agent test/eval lane and captures real suite summary artifacts.
+- Product manifest now enforces:
+  - minimum case count
+  - minimum record count
+  - maximum failed cases
+  - maximum failed records
+  - required check ids
+  - required scenario ids
+  - forbidden failure classes
 - Immediate next step is to replace dry-run mode with live curated flow execution for:
   - reconnect/auth recovery
   - approval/refusal behavior
@@ -70,18 +81,11 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
 ## Next Steps
 
 ### 1. Convert replay runner into historical replay
-- Add a sanitized historical conversation export format.
-- Store:
-  - prompt history
-  - allowed tools
-  - forbidden tools
-  - expected side-effect policy
-  - expected completion properties
-- Extend the existing command-backed replay execution with:
-  - sanitized historical transcript input
-  - tool-call capture
-  - latency capture
-  - output and tool-usage diffing
+- Historical import utility is now in place for JSON and JSONL sanitized exports.
+- Remaining work:
+  - ingest real exported conversation snapshots from runtime/admin systems
+  - execute against real runtime adapters instead of command-backed fixtures
+  - diff actual output/tool traces across versions
 
 ### 2. Expand golden suites beyond social simulation
 - Add curated product goldens for:
@@ -91,7 +95,10 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
   - safe tool gating
   - cross-channel continuity
 - These should be deterministic and pre-release gated.
-- Replace the current suite-wrapper approach in `product-critical-goldens.mjs` with flow-specific scenario assertions and curated live execution.
+- Current runner now asserts suite coverage and threshold failures.
+- Remaining work:
+  - add flow-specific assertions per curated scenario
+  - add curated live execution instead of suite-wrapper-only evaluation
 
 ### 3. Add production quality event logging
 - Persist per-conversation quality events with:

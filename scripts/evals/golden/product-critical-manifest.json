@@ -4,6 +4,10 @@
     "eval": {
       "minCaseCount": 1,
       "minRecordCount": 19,
+      "maxFailedCases": 0,
+      "maxFailedRecords": 0,
+      "requiredCheckIds": ["agentic-evals-snapshot"],
+      "forbiddenFailureClasses": [],
       "requiredScenarioIds": [
         "eval_planning_bounds_v1",
         "eval_injection_fallback_v1",
