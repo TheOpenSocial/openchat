@@ -88,6 +88,43 @@ function parseAgentSuiteArtifact(filePath) {
   }));
 }
 
+function parseAgenticEvalSnapshot(filePath) {
+  const snapshot = JSON.parse(readFileSync(findLatestJsonArtifact(filePath), "utf8"));
+  const scenarios = Array.isArray(snapshot?.scenarios) ? snapshot.scenarios : [];
+  const traceGrade = snapshot?.traceGrade ?? {};
+  const regressions = Array.isArray(snapshot?.regressions) ? snapshot.regressions : [];
+  const dominantRegression =
+    regressions
+      .slice()
+      .sort((left, right) => {
+        const severityRank = { critical: 2, warning: 1 };
+        return (severityRank[right?.severity] ?? 0) - (severityRank[left?.severity] ?? 0);
+      })[0] ?? null;
+
+  return scenarios.map((scenario) => ({
+    conversation_id: snapshot?.generatedAt ?? "agentic-evals-snapshot",
+    message_id: scenario?.scenarioId ?? scenario?.id ?? "unknown",
+    channel: "admin_eval",
+    provider: "unknown",
+    deploy_sha: normalizeString(process.env.GITHUB_SHA, "local"),
+    tool_family: scenario?.dimension ?? "eval",
+    quality_score: Number.isFinite(scenario?.score) ? scenario.score : 0,
+    retry_count: 0,
+    escalated: scenario?.passed === false,
+    failure_taxonomy:
+      scenario?.passed === false
+        ? dominantRegression?.key ?? "eval_scenario_failed"
+        : "none",
+    created_at: snapshot?.generatedAt ?? new Date().toISOString(),
+    trace_grade_status: normalizeString(traceGrade?.status, "unknown"),
+    trace_grade_score: Number.isFinite(traceGrade?.score) ? traceGrade.score : null,
+    regression_count:
+      typeof snapshot?.summary?.regressionCount === "number"
+        ? snapshot.summary.regressionCount
+        : regressions.length,
+  }));
+}
+
 function average(values) {
   return values.length > 0
     ? values.reduce((sum, value) => sum + value, 0) / values.length
@@ -113,7 +150,9 @@ export async function reportQualityEvents(argv = process.argv.slice(2), env = pr
   const rows =
     config.source === "agent-suite"
       ? parseAgentSuiteArtifact(config.eventsPath)
-      : parseJsonLines(config.eventsPath);
+      : config.source === "agentic-evals-snapshot"
+        ? parseAgenticEvalSnapshot(config.eventsPath)
+        : parseJsonLines(config.eventsPath);
   const caseRows = rows.map((row) => ({
     caseId: `${row.conversation_id}:${row.message_id}`,
     status: row.quality_score >= 0.6 ? "passed" : "failed",
@@ -125,6 +164,7 @@ export async function reportQualityEvents(argv = process.argv.slice(2), env = pr
     toolFamily: row.tool_family,
     escalated: Boolean(row.escalated),
     retryCount: Number.isFinite(row.retry_count) ? row.retry_count : 0,
+    traceGradeStatus: normalizeString(row.trace_grade_status, "unknown"),
     createdAt: row.created_at,
   }));
 
@@ -144,6 +184,7 @@ export async function reportQualityEvents(argv = process.argv.slice(2), env = pr
     byProvider: groupCount(caseRows, "provider"),
     byToolFamily: groupCount(caseRows, "toolFamily"),
     byFailureTaxonomy: groupCount(caseRows, "primaryFailureReason"),
+    byTraceGradeStatus: groupCount(caseRows, "traceGradeStatus"),
   };
 
   return finalizeEvalRun(envelope, summary, caseRows, {

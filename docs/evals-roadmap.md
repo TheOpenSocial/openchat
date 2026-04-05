@@ -40,6 +40,7 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
 - It can now summarize either:
   - JSONL quality event streams
   - `run-agent-test-suite` artifacts via `--source=agent-suite`
+  - agentic eval snapshots via `--source=agentic-evals-snapshot`
 - Current input is JSONL with fields:
   - `conversation_id`
   - `message_id`

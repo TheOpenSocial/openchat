@@ -59,3 +59,23 @@ test("quality event report can summarize agent suite artifacts", async () => {
   assert.equal(summary.failedCases, 1);
   assert.equal(summary.byFailureTaxonomy.queue_or_replay, 1);
 });
+
+test("quality event report can summarize agentic eval snapshots", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "quality-report-snapshot-"));
+  const snapshotPath = path.resolve(
+    "scripts/evals/online/sample-agentic-evals-snapshot.json",
+  );
+  const result = await reportQualityEvents(
+    ["--source=agentic-evals-snapshot", `--events=${snapshotPath}`],
+    {
+      ...process.env,
+      EVAL_ARTIFACT_ROOT: root,
+    },
+  );
+  const summary = JSON.parse(readFileSync(path.join(result.runDir, "summary.json"), "utf8"));
+
+  assert.equal(summary.source, "agentic-evals-snapshot");
+  assert.equal(summary.totalCases, 2);
+  assert.equal(summary.failedCases, 1);
+  assert.equal(summary.byTraceGradeStatus.watch, 2);
+});
