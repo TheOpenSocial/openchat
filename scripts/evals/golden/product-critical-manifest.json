@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "layers": {
+    "eval": {
+      "minCaseCount": 1,
+      "minRecordCount": 19,
+      "requiredScenarioIds": [
+        "eval_planning_bounds_v1",
+        "eval_injection_fallback_v1",
+        "eval_moderation_fallback_v1",
+        "eval_human_approval_policy_v1",
+        "eval_failure_capture_v1",
+        "eval_social_outcome_telemetry_v1",
+        "eval_tone_agentic_async_ack_v1",
+        "eval_usefulness_no_match_recovery_v1",
+        "eval_grounding_profile_memory_consistency_v1",
+        "eval_negotiation_quality_v1",
+        "eval_workflow_runtime_traceability_v1"
+      ]
+    }
+  }
+}

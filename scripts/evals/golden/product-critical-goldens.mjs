@@ -11,6 +11,8 @@ import {
   summarizeCaseRows,
 } from "../shared/artifacts.mjs";
 
+const DEFAULT_MANIFEST_PATH = "scripts/evals/golden/product-critical-manifest.json";
+
 function normalizeString(value, fallback = "") {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : fallback;
 }
@@ -35,7 +37,19 @@ function parseArgs(argv = process.argv.slice(2), env = process.env) {
     dryRun: boolFromEnv(flags.get("dry-run") ?? env.GOLDEN_PRODUCT_DRY_RUN, false),
     layer: normalizeString(flags.get("layer") ?? env.GOLDEN_PRODUCT_LAYER, "eval"),
     artifactPath: normalizeString(flags.get("artifact-path") ?? env.GOLDEN_PRODUCT_ARTIFACT_PATH, ""),
+    manifestPath: path.resolve(
+      process.cwd(),
+      normalizeString(flags.get("manifest") ?? env.GOLDEN_PRODUCT_MANIFEST_PATH, DEFAULT_MANIFEST_PATH),
+    ),
   };
+}
+
+function loadManifest(manifestPath) {
+  try {
+    return JSON.parse(readFileSync(manifestPath, "utf8"));
+  } catch {
+    return { version: 1, layers: {} };
+  }
 }
 
 function runProductGoldenCommand(layer, artifactDir) {
@@ -94,6 +108,8 @@ export async function runProductCriticalGoldens(
     evalType: "golden",
     artifactRoot: env.EVAL_ARTIFACT_ROOT,
   });
+  const manifest = loadManifest(config.manifestPath);
+  const layerManifest = manifest?.layers?.[config.layer] ?? {};
 
   let commandResult;
   let suiteArtifact = null;
@@ -131,7 +147,36 @@ export async function runProductCriticalGoldens(
 
   const caseCounts = suiteArtifact?.summary?.caseCounts ?? null;
   const failureClasses = suiteArtifact?.summary?.failureClasses ?? null;
-  const passed = commandResult.status === 0;
+  const scenarioIds = Array.from(
+    new Set(
+      Array.isArray(suiteArtifact?.records)
+        ? suiteArtifact.records
+            .map((record) => (typeof record?.scenarioId === "string" ? record.scenarioId : null))
+            .filter(Boolean)
+        : [],
+    ),
+  );
+  const requiredScenarioIds = Array.isArray(layerManifest.requiredScenarioIds)
+    ? layerManifest.requiredScenarioIds.filter((value) => typeof value === "string")
+    : [];
+  const missingScenarioIds = requiredScenarioIds.filter(
+    (scenarioId) => !scenarioIds.includes(scenarioId),
+  );
+  const caseCountPass =
+    !Number.isFinite(layerManifest.minCaseCount) ||
+    (caseCounts?.total ?? 0) >= layerManifest.minCaseCount;
+  const recordCountPass =
+    !Number.isFinite(layerManifest.minRecordCount) ||
+    (suiteArtifact?.summary?.recordCounts?.total ?? 0) >= layerManifest.minRecordCount;
+  const scenarioCoveragePass = missingScenarioIds.length === 0;
+  const passed =
+    config.dryRun ||
+    (
+      commandResult.status === 0 &&
+      caseCountPass &&
+      recordCountPass &&
+      scenarioCoveragePass
+    );
   const caseRows = [
     {
       caseId: `product-critical-${config.layer}`,
@@ -145,6 +190,12 @@ export async function runProductCriticalGoldens(
       primaryFailureReason:
         passed
           ? "none"
+          : !caseCountPass
+            ? "case_count_below_threshold"
+            : !recordCountPass
+              ? "record_count_below_threshold"
+              : !scenarioCoveragePass
+                ? "missing_required_scenarios"
           : Object.entries(failureClasses ?? {}).sort((left, right) => right[1] - left[1])[0]?.[0] ??
             `agent-test-suite-${config.layer}-failed`,
       layer: config.layer,
@@ -152,6 +203,7 @@ export async function runProductCriticalGoldens(
       stdout: commandResult.stdout,
       stderr: commandResult.stderr,
       suiteSummary: suiteArtifact?.summary ?? null,
+      missingScenarioIds,
     },
   ];
 
@@ -159,10 +211,13 @@ export async function runProductCriticalGoldens(
     ...summarizeCaseRows(caseRows),
     layer: config.layer,
     suiteSummary: suiteArtifact?.summary ?? null,
+    requiredScenarioIds,
+    missingScenarioIds,
   };
 
   return finalizeEvalRun(envelope, summary, caseRows, {
     suiteArtifact,
+    manifestPath: config.manifestPath,
   });
 }
 
