@@ -908,6 +908,92 @@ test("backend bootstrap persists remote run bootstrap failure details", async ()
   }
 });
 
+test("backend bootstrap omits null turnBudget in remote run payload", async () => {
+  const artifactRoot = mkdtempSync(path.join(os.tmpdir(), "social-sim-bootstrap-null-budget-"));
+  const originalFetch = globalThis.fetch;
+  const remoteRunBodies = [];
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (url.endsWith("/api/admin/playground/bootstrap")) {
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            success: true,
+            data: {
+              env: {
+                SMOKE_BASE_URL: "http://localhost:3000",
+              },
+              entities: {},
+              notes: ["bootstrapped"],
+            },
+          };
+        },
+      };
+    }
+    if (url.endsWith("/api/admin/social-sim/runs")) {
+      remoteRunBodies.push(JSON.parse(String(init?.body ?? "{}")));
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            success: true,
+            data: {
+              runId: "remote-run-2",
+            },
+          };
+        },
+      };
+    }
+    throw new Error(`Unexpected fetch in test: ${url}`);
+  };
+
+  try {
+    await runSocialSimulation({
+      provider: "ollama",
+      judgeProvider: "stub",
+      horizon: "short",
+      worldFilter: ["short-direct-match-v1"],
+      scenarioFilter: [],
+      seed: 12345,
+      namespace: "test-social-sim-null-budget",
+      turnBudget: null,
+      cleanupMode: "none",
+      dryRun: false,
+      nightly: false,
+      artifactRoot,
+      fixturePath: path.resolve("scripts/social-sim-worlds.json"),
+      scenarioFixturePath: path.resolve(
+        "apps/api/test/fixtures/agentic-scenarios.json",
+      ),
+      baseUrl: "https://api.example.com",
+      adminUserId: "11111111-1111-4111-8111-111111111111",
+      adminRole: "admin",
+      adminApiKey: "real-admin-key",
+      ollamaBaseUrl: "https://ollama.example.com",
+      ollamaModel: "deepseek-v3.1:671b",
+      ollamaApiKey: "ollama-api-key",
+      openaiApiKey: "",
+      openaiModel: "gpt-4.1-mini",
+      useRemoteProvider: true,
+      useRemoteJudge: false,
+      backendTurnDelayMs: 0,
+      backendRetryCount: 0,
+      backendRetryBaseDelayMs: 0,
+      failOnRemoteFallback: false,
+    });
+
+    assert.equal(remoteRunBodies.length, 1);
+    assert.equal("turnBudget" in remoteRunBodies[0], false);
+    assert.equal(remoteRunBodies[0].actorCount, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    rmSync(artifactRoot, { recursive: true, force: true });
+  }
+});
+
 test("search runner uses stable default seeds and writes summary artifacts", () => {
   const stdout = execFileSync(
     process.execPath,

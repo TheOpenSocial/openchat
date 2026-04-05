@@ -3858,6 +3858,14 @@ class SocialSimBackendAdapter {
         this.config.provider === "stub" ? undefined : this.config.provider;
       const remoteJudgeProvider =
         this.config.judgeProvider === "stub" ? undefined : this.config.judgeProvider;
+      const remoteTurnBudget =
+        Number.isFinite(this.config.turnBudget) && this.config.turnBudget !== null
+          ? this.config.turnBudget
+          : undefined;
+      const remoteActorCount =
+        Number.isFinite(this.config.actorCount) && this.config.actorCount !== null
+          ? this.config.actorCount
+          : worldCount;
       const runResponse = await fetch(`${this.baseUrl}/api/admin/social-sim/runs`, {
         method: "POST",
         headers: {
@@ -3874,8 +3882,8 @@ class SocialSimBackendAdapter {
           horizon: this.config.horizon === "all" ? "medium" : this.config.horizon,
           seed: String(this.config.seed),
           namespace,
-          turnBudget: this.config.turnBudget,
-          actorCount: this.config.actorCount ?? worldCount,
+          ...(remoteTurnBudget !== undefined ? { turnBudget: remoteTurnBudget } : {}),
+          actorCount: remoteActorCount,
           cleanupMode:
             this.config.cleanupMode === "none" ? "archive" : this.config.cleanupMode,
           notes: [
