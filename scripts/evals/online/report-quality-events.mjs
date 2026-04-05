@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 
 import {
@@ -28,6 +28,7 @@ function parseArgs(argv = process.argv.slice(2), env = process.env) {
       process.cwd(),
       normalizeString(flags.get("events") ?? env.EVAL_QUALITY_EVENTS_PATH, DEFAULT_EVENTS_PATH),
     ),
+    source: normalizeString(flags.get("source") ?? env.EVAL_QUALITY_SOURCE, "jsonl"),
   };
 }
 
@@ -38,6 +39,53 @@ function parseJsonLines(filePath) {
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => JSON.parse(line));
+}
+
+function findLatestJsonArtifact(fileOrDirPath) {
+  const stat = statSync(fileOrDirPath);
+  if (!stat.isDirectory()) {
+    return fileOrDirPath;
+  }
+
+  const candidates = [];
+  const stack = [fileOrDirPath];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    for (const entry of readdirSync(current)) {
+      const entryPath = path.join(current, entry);
+      const entryStat = statSync(entryPath);
+      if (entryStat.isDirectory()) {
+        stack.push(entryPath);
+        continue;
+      }
+      if (entryPath.endsWith(".json")) {
+        candidates.push(entryPath);
+      }
+    }
+  }
+
+  return candidates.sort().at(-1) ?? fileOrDirPath;
+}
+
+function parseAgentSuiteArtifact(filePath) {
+  const resolvedPath = findLatestJsonArtifact(filePath);
+  const artifact = JSON.parse(readFileSync(resolvedPath, "utf8"));
+  const records = Array.isArray(artifact?.records) ? artifact.records : [];
+  return records.map((record) => ({
+    conversation_id:
+      record.workflowRunId ?? record.scenarioId ?? record.checkId ?? "unknown",
+    message_id: record.traceId ?? record.scenarioId ?? record.checkId ?? "unknown",
+    channel: record.checkId?.includes("prod-smoke") ? "staging" : "agentic",
+    provider: "unknown",
+    deploy_sha: normalizeString(process.env.GITHUB_SHA, "local"),
+    tool_family: record.failureClass ?? "workflow",
+    quality_score:
+      record.status === "passed" ? 1 : record.status === "skipped" ? 0.5 : 0,
+    retry_count: 0,
+    escalated: record.status === "failed",
+    failure_taxonomy: record.failureClass ?? "none",
+    created_at: new Date().toISOString(),
+  }));
 }
 
 function average(values) {
@@ -62,7 +110,10 @@ export async function reportQualityEvents(argv = process.argv.slice(2), env = pr
     evalType: "online",
     artifactRoot: env.EVAL_ARTIFACT_ROOT,
   });
-  const rows = parseJsonLines(config.eventsPath);
+  const rows =
+    config.source === "agent-suite"
+      ? parseAgentSuiteArtifact(config.eventsPath)
+      : parseJsonLines(config.eventsPath);
   const caseRows = rows.map((row) => ({
     caseId: `${row.conversation_id}:${row.message_id}`,
     status: row.quality_score >= 0.6 ? "passed" : "failed",
@@ -79,6 +130,7 @@ export async function reportQualityEvents(argv = process.argv.slice(2), env = pr
 
   const summary = {
     ...summarizeCaseRows(caseRows),
+    source: config.source,
     averageRetryCount: Number(
       average(caseRows.map((row) => row.retryCount ?? 0)).toFixed(3),
     ),
@@ -104,4 +156,3 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   console.log(JSON.stringify(result.summary, null, 2));
   console.log(`artifact written to ${path.join(result.runDir, "run.json")}`);
 }
-

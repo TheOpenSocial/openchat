@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 
 import { runProductCriticalGoldens } from "./product-critical-goldens.mjs";
 
@@ -20,3 +20,29 @@ test("product critical golden runner writes a standard artifact in dry-run mode"
   assert.equal(run.evalSuite, "product-critical-goldens");
 });
 
+test("product critical golden runner records suite summary from agent test artifacts", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "product-goldens-live-"));
+  const artifactPath = path.join(root, "eval.json");
+  writeFileSync(
+    artifactPath,
+    JSON.stringify({
+      summary: {
+        caseCounts: {
+          total: 2,
+          passed: 2,
+          failed: 0,
+          skipped: 0,
+        },
+        failureClasses: {},
+      },
+    }),
+  );
+  const result = await runProductCriticalGoldens([`--artifact-path=${artifactPath}`, "--layer=eval"], {
+    ...process.env,
+    EVAL_ARTIFACT_ROOT: root,
+  });
+
+  assert.equal(result.summary.layer, "eval");
+  assert.ok(result.summary.suiteSummary);
+  assert.equal(typeof result.summary.suiteSummary.caseCounts.total, "number");
+});

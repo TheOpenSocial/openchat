@@ -8,6 +8,15 @@
       "provider": "ollama",
       "toolFamily": "social_followup",
       "deploySha": "sample",
+      "execution": {
+        "mode": "command",
+        "cmd": "node",
+        "args": [
+          "--input-type=module",
+          "-e",
+          "console.log(JSON.stringify({tool:\"lookup_relationships\", behaviors:[\"preserve_context\",\"ask_for_missing_confirmation_if_needed\"], sideEffects:false}))"
+        ]
+      },
       "messages": [
         {
           "role": "user",
@@ -29,6 +38,15 @@
       "provider": "ollama",
       "toolFamily": "auth_reconnect",
       "deploySha": "sample",
+      "execution": {
+        "mode": "command",
+        "cmd": "node",
+        "args": [
+          "--input-type=module",
+          "-e",
+          "console.log(JSON.stringify({tool:\"resume_replay_safe\", behaviors:[\"replay_safe_resume\",\"no_side_effects_without_confirmation\"], sideEffects:false}))"
+        ]
+      },
       "messages": [
         {
           "role": "user",

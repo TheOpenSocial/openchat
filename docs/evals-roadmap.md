@@ -23,13 +23,12 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
   - `scripts/evals/replay/sample-replay-corpus.json`
 - Replay suite runner:
   - `pnpm eval:replay`
-- Current runner is structural only.
-  - It validates case shape and writes standard artifacts.
-  - It does not yet replay real historical traffic.
+- Current runner now supports command-backed, side-effect-free replay cases.
+- It still needs real historical corpus ingestion and output diffing against production traces.
 
 ### Product goldens
 - Second golden suite entrypoint now exists for critical product flows.
-- Current implementation wraps the existing agent test/eval lane contract and writes standard artifacts.
+- Current implementation executes the existing agent test/eval lane and captures real suite summary artifacts.
 - Immediate next step is to replace dry-run mode with live curated flow execution for:
   - reconnect/auth recovery
   - approval/refusal behavior
@@ -38,6 +37,9 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
 
 ### Online quality reporting scaffold
 - Standard quality event report runner now exists.
+- It can now summarize either:
+  - JSONL quality event streams
+  - `run-agent-test-suite` artifacts via `--source=agent-suite`
 - Current input is JSONL with fields:
   - `conversation_id`
   - `message_id`
@@ -59,7 +61,7 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
 
 ## Next Steps
 
-### 1. Convert replay scaffold into real replay
+### 1. Convert replay runner into historical replay
 - Add a sanitized historical conversation export format.
 - Store:
   - prompt history
@@ -67,10 +69,10 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
   - forbidden tools
   - expected side-effect policy
   - expected completion properties
-- Add a replay execution adapter with:
-  - side effects disabled
-  - tool calls recorded
-  - latency recorded
+- Extend the existing command-backed replay execution with:
+  - sanitized historical transcript input
+  - tool-call capture
+  - latency capture
   - output and tool-usage diffing
 
 ### 2. Expand golden suites beyond social simulation
@@ -81,7 +83,7 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
   - safe tool gating
   - cross-channel continuity
 - These should be deterministic and pre-release gated.
-- Replace the current dry-run wrapper in `product-critical-goldens.mjs` with real flow execution and scenario assertions.
+- Replace the current suite-wrapper approach in `product-critical-goldens.mjs` with flow-specific scenario assertions and curated live execution.
 
 ### 3. Add production quality event logging
 - Persist per-conversation quality events with:
@@ -97,7 +99,7 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
   - `failure_taxonomy`
   - `created_at`
 - Use this for nightly and weekly quality reports.
-- Wire report input from real runtime/admin analytics instead of sample JSONL.
+- Wire report input from real runtime/admin analytics instead of sample JSONL and derived suite artifacts.
 
 ### 4. Add social simulation family metrics to the benchmark
 - Report family-level aggregates explicitly:

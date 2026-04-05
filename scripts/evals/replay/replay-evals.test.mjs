@@ -22,3 +22,14 @@ test("replay eval runner writes standard replay artifacts", async () => {
   assert.equal(summary.corpusSuite, "sample-replay-corpus");
 });
 
+test("replay eval runner executes command-backed cases", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "replay-exec-"));
+  const result = await runReplayEvals([], {
+    ...process.env,
+    EVAL_ARTIFACT_ROOT: root,
+  });
+
+  assert.equal(result.summary.totalCases, 2);
+  assert.equal(result.summary.failedCases, 0);
+  assert.equal(result.summary.primaryFailureReason, "none");
+});

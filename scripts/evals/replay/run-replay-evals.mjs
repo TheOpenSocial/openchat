@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import path from "node:path";
 
 import {
@@ -31,6 +32,8 @@ function parseReplayArgs(argv = process.argv.slice(2), env = process.env) {
     provider: normalizeString(flags.get("provider") ?? env.SOCIAL_SIM_PROVIDER, "ollama"),
     judgeProvider: normalizeString(flags.get("judge-provider") ?? env.SOCIAL_SIM_JUDGE_PROVIDER, "stub"),
     deploySha: normalizeString(flags.get("deploy-sha") ?? env.GITHUB_SHA, "local"),
+    dryRun:
+      normalizeString(flags.get("dry-run") ?? env.EVAL_REPLAY_DRY_RUN, "0") === "1",
   };
 }
 
@@ -44,6 +47,43 @@ function loadReplayCorpus(corpusPath) {
   };
 }
 
+function executeReplayCase(entry, config) {
+  const execution = entry.execution ?? {};
+  if (config.dryRun || execution.mode !== "command") {
+    return {
+      status: 0,
+      stdout: "",
+      stderr: "",
+      parsed: null,
+      note: config.dryRun
+        ? "Replay execution skipped in dry-run mode."
+        : "Replay execution mode not configured.",
+    };
+  }
+  const result = spawnSync(
+    normalizeString(execution.cmd, "node"),
+    Array.isArray(execution.args) ? execution.args : [],
+    {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      shell: process.platform === "win32",
+    },
+  );
+  let parsed = null;
+  try {
+    parsed = JSON.parse(normalizeString(result.stdout, ""));
+  } catch {
+    parsed = null;
+  }
+  return {
+    status: result.status ?? 1,
+    stdout: result.stdout ?? "",
+    stderr: result.stderr ?? "",
+    parsed,
+    note: null,
+  };
+}
+
 function evaluateReplayCase(entry, config) {
   const expected = entry.expected ?? {};
   const allowedTools = Array.isArray(expected.allowedTools) ? expected.allowedTools : [];
@@ -51,29 +91,63 @@ function evaluateReplayCase(entry, config) {
   const requiredBehaviors = Array.isArray(expected.requiredBehaviors)
     ? expected.requiredBehaviors
     : [];
-  const scoreParts = [];
-
-  scoreParts.push(allowedTools.length > 0 ? 0.35 : 0.2);
-  scoreParts.push(forbiddenTools.length > 0 ? 0.35 : 0.2);
-  scoreParts.push(requiredBehaviors.length > 0 ? 0.3 : 0.2);
-
-  const score = Number(scoreParts.reduce((sum, value) => sum + value, 0).toFixed(3));
+  const execution = executeReplayCase(entry, config);
+  const selectedTool = normalizeString(execution.parsed?.tool, "");
+  const behaviors = Array.isArray(execution.parsed?.behaviors)
+    ? execution.parsed.behaviors.filter((value) => typeof value === "string")
+    : [];
+  const sideEffects = execution.parsed?.sideEffects === true;
+  const allowedToolPass =
+    allowedTools.length === 0 || allowedTools.includes(selectedTool);
+  const forbiddenToolPass =
+    forbiddenTools.length === 0 || !forbiddenTools.includes(selectedTool);
+  const behaviorPass =
+    requiredBehaviors.length === 0 ||
+    requiredBehaviors.every((behavior) => behaviors.includes(behavior));
+  const sideEffectPass = !sideEffects;
+  const passed =
+    execution.status === 0 && allowedToolPass && forbiddenToolPass && behaviorPass && sideEffectPass;
+  const score = Number(
+    (
+      (allowedToolPass ? 0.35 : 0) +
+      (forbiddenToolPass ? 0.25 : 0) +
+      (behaviorPass ? 0.25 : 0) +
+      (sideEffectPass ? 0.15 : 0)
+    ).toFixed(3),
+  );
   return {
     caseId: entry.id,
-    status: "passed",
+    status: passed ? "passed" : "failed",
     score,
     channel: normalizeString(entry.channel, "unknown"),
     provider: normalizeString(entry.provider, config.provider),
     judgeProvider: config.judgeProvider,
     toolFamily: normalizeString(entry.toolFamily, "unknown"),
     deploySha: config.deploySha,
-    primaryFailureReason: "none",
+    primaryFailureReason: !allowedToolPass
+      ? "wrong_tool_choice"
+      : !forbiddenToolPass
+        ? "forbidden_tool_used"
+        : !behaviorPass
+          ? "missing_required_behavior"
+          : !sideEffectPass
+            ? "unexpected_side_effect"
+            : execution.status !== 0
+              ? "command_failed"
+              : "none",
     expected: {
       allowedTools,
       forbiddenTools,
       requiredBehaviors,
     },
-    note: "Replay scaffold case validated structurally. Hook real transcript scoring here next.",
+    execution: {
+      selectedTool,
+      behaviors,
+      sideEffects,
+      stdout: execution.stdout,
+      stderr: execution.stderr,
+      note: execution.note,
+    },
   };
 }
 
@@ -106,4 +180,3 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   console.log(JSON.stringify(result.summary, null, 2));
   console.log(`artifact written to ${path.join(result.runDir, "run.json")}`);
 }
-

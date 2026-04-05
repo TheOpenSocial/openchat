@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
+import { mkdtempSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import os from "node:os";
 import path from "node:path";
 
 import {
@@ -32,16 +34,21 @@ function parseArgs(argv = process.argv.slice(2), env = process.env) {
   return {
     dryRun: boolFromEnv(flags.get("dry-run") ?? env.GOLDEN_PRODUCT_DRY_RUN, false),
     layer: normalizeString(flags.get("layer") ?? env.GOLDEN_PRODUCT_LAYER, "eval"),
+    artifactPath: normalizeString(flags.get("artifact-path") ?? env.GOLDEN_PRODUCT_ARTIFACT_PATH, ""),
   };
 }
 
-function runProductGoldenCommand(layer) {
+function runProductGoldenCommand(layer, artifactDir) {
   const command = spawnSync(
     "node",
     ["scripts/run-agent-test-suite.mjs", `--layer=${layer}`],
     {
       cwd: process.cwd(),
       encoding: "utf8",
+      env: {
+        ...process.env,
+        AGENT_TEST_SUITE_ARTIFACT_DIR: artifactDir,
+      },
     },
   );
   return {
@@ -49,6 +56,32 @@ function runProductGoldenCommand(layer) {
     stdout: command.stdout ?? "",
     stderr: command.stderr ?? "",
   };
+}
+
+function findLatestJsonArtifact(fileOrDirPath) {
+  const stat = statSync(fileOrDirPath);
+  if (!stat.isDirectory()) {
+    return fileOrDirPath;
+  }
+
+  const candidates = [];
+  const stack = [fileOrDirPath];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    for (const entry of readdirSync(current)) {
+      const entryPath = path.join(current, entry);
+      const entryStat = statSync(entryPath);
+      if (entryStat.isDirectory()) {
+        stack.push(entryPath);
+        continue;
+      }
+      if (entryPath.endsWith(".json")) {
+        candidates.push(entryPath);
+      }
+    }
+  }
+
+  return candidates.sort().at(-1) ?? null;
 }
 
 export async function runProductCriticalGoldens(
@@ -63,36 +96,74 @@ export async function runProductCriticalGoldens(
   });
 
   let commandResult;
-  if (config.dryRun) {
+  let suiteArtifact = null;
+  if (config.artifactPath) {
+    commandResult = {
+      status: 0,
+      stdout: "artifact-backed product critical golden suite",
+      stderr: "",
+    };
+    try {
+      suiteArtifact = JSON.parse(readFileSync(config.artifactPath, "utf8"));
+    } catch {
+      suiteArtifact = null;
+    }
+  } else if (config.dryRun) {
     commandResult = {
       status: 0,
       stdout: "dry-run product critical golden suite",
       stderr: "",
     };
   } else {
-    commandResult = runProductGoldenCommand(config.layer);
+    const suiteArtifactDir = mkdtempSync(
+      path.join(os.tmpdir(), `product-goldens-${config.layer}-`),
+    );
+    commandResult = runProductGoldenCommand(config.layer, suiteArtifactDir);
+    try {
+      const artifactPath = findLatestJsonArtifact(suiteArtifactDir);
+      suiteArtifact = JSON.parse(
+        readFileSync(artifactPath, "utf8"),
+      );
+    } catch {
+      suiteArtifact = null;
+    }
   }
 
+  const caseCounts = suiteArtifact?.summary?.caseCounts ?? null;
+  const failureClasses = suiteArtifact?.summary?.failureClasses ?? null;
+  const passed = commandResult.status === 0;
   const caseRows = [
     {
       caseId: `product-critical-${config.layer}`,
-      status: commandResult.status === 0 ? "passed" : "failed",
-      score: commandResult.status === 0 ? 1 : 0,
+      status: passed ? "passed" : "failed",
+      score:
+        typeof caseCounts?.total === "number" && caseCounts.total > 0
+          ? Number((caseCounts.passed / caseCounts.total).toFixed(3))
+          : passed
+            ? 1
+            : 0,
       primaryFailureReason:
-        commandResult.status === 0 ? "none" : `agent-test-suite-${config.layer}-failed`,
+        passed
+          ? "none"
+          : Object.entries(failureClasses ?? {}).sort((left, right) => right[1] - left[1])[0]?.[0] ??
+            `agent-test-suite-${config.layer}-failed`,
       layer: config.layer,
       command: `node scripts/run-agent-test-suite.mjs --layer=${config.layer}`,
       stdout: commandResult.stdout,
       stderr: commandResult.stderr,
+      suiteSummary: suiteArtifact?.summary ?? null,
     },
   ];
 
   const summary = {
     ...summarizeCaseRows(caseRows),
     layer: config.layer,
+    suiteSummary: suiteArtifact?.summary ?? null,
   };
 
-  return finalizeEvalRun(envelope, summary, caseRows);
+  return finalizeEvalRun(envelope, summary, caseRows, {
+    suiteArtifact,
+  });
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
@@ -100,4 +171,3 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   console.log(JSON.stringify(result.summary, null, 2));
   console.log(`artifact written to ${path.join(result.runDir, "run.json")}`);
 }
-

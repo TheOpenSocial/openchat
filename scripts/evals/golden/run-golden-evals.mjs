@@ -57,7 +57,7 @@ export async function runGoldenEvals(argv = process.argv.slice(2), env = process
   }
 
   if (goldenArgs.suites.includes("product-critical-goldens")) {
-    const productResult = await runProductCriticalGoldens(["--dry-run=1"], {
+    const productResult = await runProductCriticalGoldens([], {
       ...env,
       EVAL_ARTIFACT_ROOT: path.join(envelope.runDir, "suite-artifacts"),
     });
