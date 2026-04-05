@@ -2763,6 +2763,18 @@ function summarizeRun(worldRuns, config, bootstrap) {
         (right.diagnostics?.severity ?? 0) - (left.diagnostics?.severity ?? 0),
     );
   const measurementWarnings = [];
+  const observedBackendModes = new Set(
+    worldRuns.flatMap((world) =>
+      Array.isArray(world.transcript)
+        ? world.transcript
+            .map((turn) => turn?.backend?.mode)
+            .filter((mode) => typeof mode === "string" && mode.length > 0)
+        : [],
+    ),
+  );
+  const effectiveBackendMode = observedBackendModes.has("backend")
+    ? "backend"
+    : bootstrap?.backendMode ?? "offline";
   const truncatedWorlds = worldRuns.filter(
     (world) => (world.summary?.measurement?.turnBudgetGap ?? 0) > 0,
   );
@@ -2786,8 +2798,8 @@ function summarizeRun(worldRuns, config, bootstrap) {
       measurementWarnings.push("benchmark_judge_not_remote");
     }
   }
-  if (bootstrap?.backendMode && bootstrap.backendMode !== "backend") {
-    measurementWarnings.push(`backend_mode_${bootstrap.backendMode}`);
+  if (effectiveBackendMode && effectiveBackendMode !== "backend") {
+    measurementWarnings.push(`backend_mode_${effectiveBackendMode}`);
   }
   const verdict =
     avgConvergence >= 0.75 && totals.moderationSignals === 0
@@ -2810,6 +2822,7 @@ function summarizeRun(worldRuns, config, bootstrap) {
     familyScores,
     worldDiagnostics,
     measurementWarnings,
+    effectiveBackendMode,
     bootstrap,
     provider: config.provider,
     judgeProvider: config.judgeProvider,

@@ -994,6 +994,122 @@ test("backend bootstrap omits null turnBudget in remote run payload", async () =
   }
 });
 
+test("run summary prefers effective backend mode over bootstrap playground mode", async () => {
+  const artifactRoot = mkdtempSync(path.join(os.tmpdir(), "social-sim-effective-backend-"));
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url.endsWith("/api/admin/playground/bootstrap")) {
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            success: true,
+            data: {
+              env: {
+                SMOKE_BASE_URL: "http://localhost:3000",
+              },
+              entities: {},
+              notes: ["bootstrapped"],
+            },
+          };
+        },
+      };
+    }
+    if (url.endsWith("/api/admin/social-sim/runs")) {
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            success: true,
+            data: {
+              runId: "remote-run-3",
+            },
+          };
+        },
+      };
+    }
+    if (url.endsWith("/api/admin/social-sim/turn")) {
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            success: true,
+            data: {
+              accepted: true,
+              mode: "persisted",
+              runId: "remote-run-3",
+            },
+          };
+        },
+      };
+    }
+    if (url.includes("/api/admin/social-sim/runs/remote-run-3/cleanup")) {
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            success: true,
+            data: {
+              mode: "archive",
+            },
+          };
+        },
+      };
+    }
+    throw new Error(`Unexpected fetch in test: ${url}`);
+  };
+
+  try {
+    const result = await runSocialSimulation({
+      provider: "ollama",
+      judgeProvider: "stub",
+      horizon: "short",
+      worldFilter: ["short-direct-match-v1"],
+      scenarioFilter: [],
+      seed: 12345,
+      namespace: "test-social-sim-effective-backend",
+      turnBudget: 2,
+      cleanupMode: "archive",
+      dryRun: false,
+      nightly: false,
+      artifactRoot,
+      fixturePath: path.resolve("scripts/social-sim-worlds.json"),
+      scenarioFixturePath: path.resolve(
+        "apps/api/test/fixtures/agentic-scenarios.json",
+      ),
+      baseUrl: "https://api.example.com",
+      adminUserId: "11111111-1111-4111-8111-111111111111",
+      adminRole: "admin",
+      adminApiKey: "real-admin-key",
+      ollamaBaseUrl: "https://ollama.example.com",
+      ollamaModel: "deepseek-v3.1:671b",
+      ollamaApiKey: "ollama-api-key",
+      openaiApiKey: "",
+      openaiModel: "gpt-4.1-mini",
+      useRemoteProvider: true,
+      useRemoteJudge: false,
+      backendTurnDelayMs: 0,
+      backendRetryCount: 0,
+      backendRetryBaseDelayMs: 0,
+      failOnRemoteFallback: false,
+    });
+
+    assert.equal(result.summary.effectiveBackendMode, "backend");
+    assert.equal(
+      result.summary.measurementWarnings.includes("backend_mode_playground"),
+      false,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    rmSync(artifactRoot, { recursive: true, force: true });
+  }
+});
+
 test("search runner uses stable default seeds and writes summary artifacts", () => {
   const stdout = execFileSync(
     process.execPath,
