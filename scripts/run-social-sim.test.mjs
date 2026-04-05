@@ -420,6 +420,53 @@ test("remote Ollama intents are normalized onto canonical simulator intents", as
   }
 });
 
+test("remote Ollama actor output tolerates fenced JSON content", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      message: {
+        content: "```json\n{\"intent\":\"affirm_and_refine_collaboration\",\"targetActorId\":\"group-seed-soren\",\"message\":\"That plan sounds good; we can coordinate the next step together.\",\"tone\":\"warm\",\"confidence\":0.79,\"rationale\":\"Coordinating a shared plan helps group progress.\",\"memoryReferences\":[]}\n```",
+      },
+    }),
+  });
+  try {
+    const brain = createBrainProvider({
+      provider: "ollama",
+      useRemoteProvider: true,
+      ollamaBaseUrl: "https://ollama.example.test",
+      ollamaModel: "deepseek-v3.1:671b",
+      ollamaApiKey: "test-key",
+    });
+    const worlds = loadSocialSimWorldFixture(
+      path.resolve("scripts/social-sim-worlds.json"),
+      path.resolve("apps/api/test/fixtures/agentic-scenarios.json"),
+    );
+    const world = worlds.find((entry) => entry.id === "medium-pair-group-discovery-v1");
+    const actor = world.actors.find((entry) => entry.id === "pair-maya-lev");
+    const state = {
+      stage: "conversation",
+      turnIndex: 4,
+      lastActionByActor: new Map(),
+      knownTargets: new Map(),
+    };
+
+    const turn = await brain.generateActorTurn({
+      world,
+      actor,
+      state,
+      transcript: [],
+      rng: () => 0.25,
+      config: {},
+    });
+
+    assert.equal(turn.intent, "invite_group");
+    assert.equal(turn.targetActorId, "group-seed-soren");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("recovery worlds detach from weak-fit loops after initial recovery", async () => {
   const brain = createBrainProvider({ provider: "stub" });
   const worlds = loadSocialSimWorldFixture(

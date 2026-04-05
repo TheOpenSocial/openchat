@@ -122,6 +122,30 @@ export const DEFAULT_SOCIAL_SIM_TUNING = {
 const VALID_PROVIDERS = new Set(["ollama", "openai", "stub"]);
 const VALID_CLEANUP_MODES = new Set(["archive", "delete", "none"]);
 const VALID_WORLD_SETS = new Set(["core", "holdout", "all"]);
+const SOCIAL_SIM_ACTOR_OUTPUT_SCHEMA = {
+  type: "object",
+  required: ["intent", "targetActorId", "message", "tone", "confidence", "rationale", "memoryReferences"],
+  properties: {
+    intent: { type: "string" },
+    targetActorId: { anyOf: [{ type: "string" }, { type: "null" }] },
+    message: { type: "string" },
+    tone: { type: "string" },
+    confidence: { type: "number" },
+    rationale: { type: "string" },
+    memoryReferences: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["key", "confidence", "excerpt"],
+        properties: {
+          key: { type: "string" },
+          confidence: { type: "number" },
+          excerpt: { type: "string" },
+        },
+      },
+    },
+  },
+};
 
 function nowIso() {
   return new Date().toISOString();
@@ -133,6 +157,64 @@ function safeJsonParse(raw, fallback = null) {
   } catch {
     return fallback;
   }
+}
+
+function extractFirstJsonObject(raw) {
+  if (typeof raw !== "string") return null;
+  const start = raw.indexOf("{");
+  if (start < 0) return null;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let index = start; index < raw.length; index += 1) {
+    const char = raw[index];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+    if (char === "{") {
+      depth += 1;
+      continue;
+    }
+    if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return raw.slice(start, index + 1);
+      }
+    }
+  }
+  return null;
+}
+
+function parseStructuredJsonContent(raw, fallback = null) {
+  if (typeof raw !== "string") return fallback;
+  const direct = safeJsonParse(raw, null);
+  if (direct && typeof direct === "object") return direct;
+
+  const trimmed = raw.trim();
+  const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (fenceMatch?.[1]) {
+    const fenced = safeJsonParse(fenceMatch[1], null);
+    if (fenced && typeof fenced === "object") return fenced;
+  }
+
+  const extracted = extractFirstJsonObject(trimmed);
+  if (extracted) {
+    const parsed = safeJsonParse(extracted, null);
+    if (parsed && typeof parsed === "object") return parsed;
+  }
+
+  return fallback;
 }
 
 function deepMerge(base, overrides) {
@@ -3211,14 +3293,16 @@ class RemoteSocialSimProviderBase {
     this.config = config;
     this.kind = "remote";
     this.useRemote = false;
+    this.lastRemoteFailure = null;
   }
 
   async generateActorTurn(context) {
+    this.lastRemoteFailure = null;
     const remote = await this.tryRemote(context);
     if (remote) return remote;
     if (this.useRemote && this.config.failOnRemoteFallback) {
       throw new Error(
-        `Social simulation actor provider "${this.name}" fell back to heuristic output in fail-closed mode.`,
+        `Social simulation actor provider "${this.name}" fell back to heuristic output in fail-closed mode.${this.lastRemoteFailure ? ` ${this.lastRemoteFailure}` : ""}`,
       );
     }
     return defaultBrainAction(context);
@@ -3251,8 +3335,11 @@ class OllamaSocialSimProvider extends RemoteSocialSimProviderBase {
         headers: buildOllamaHeaders(this.apiKey),
         body: JSON.stringify({
           model: this.model,
-          format: "json",
+          format: SOCIAL_SIM_ACTOR_OUTPUT_SCHEMA,
           stream: false,
+          options: {
+            temperature: 0,
+          },
           messages: [
             {
               role: "system",
@@ -3271,11 +3358,22 @@ class OllamaSocialSimProvider extends RemoteSocialSimProviderBase {
       });
       const payload = await response.json().catch(() => null);
       const content = payload?.message?.content;
-      if (!response.ok || typeof content !== "string") return null;
-      const parsed = safeJsonParse(content, null);
-      if (!parsed || typeof parsed !== "object") return null;
+      if (!response.ok) {
+        this.lastRemoteFailure = `status=${response.status} payload=${JSON.stringify(payload)?.slice(0, 400)}`;
+        return null;
+      }
+      if (typeof content !== "string") {
+        this.lastRemoteFailure = `invalid_content_type payload=${JSON.stringify(payload)?.slice(0, 400)}`;
+        return null;
+      }
+      const parsed = parseStructuredJsonContent(content, null);
+      if (!parsed || typeof parsed !== "object") {
+        this.lastRemoteFailure = `invalid_json content=${content.slice(0, 400)}`;
+        return null;
+      }
       return normalizeBrainOutput(parsed, "ollama", context);
-    } catch {
+    } catch (error) {
+      this.lastRemoteFailure = error instanceof Error ? error.message : String(error);
       return null;
     }
   }
@@ -3322,11 +3420,22 @@ class OpenAISocialSimProvider extends RemoteSocialSimProviderBase {
       });
       const payload = await response.json().catch(() => null);
       const content = payload?.choices?.[0]?.message?.content;
-      if (!response.ok || typeof content !== "string") return null;
-      const parsed = safeJsonParse(content, null);
-      if (!parsed || typeof parsed !== "object") return null;
+      if (!response.ok) {
+        this.lastRemoteFailure = `status=${response.status} payload=${JSON.stringify(payload)?.slice(0, 400)}`;
+        return null;
+      }
+      if (typeof content !== "string") {
+        this.lastRemoteFailure = `invalid_content_type payload=${JSON.stringify(payload)?.slice(0, 400)}`;
+        return null;
+      }
+      const parsed = parseStructuredJsonContent(content, null);
+      if (!parsed || typeof parsed !== "object") {
+        this.lastRemoteFailure = `invalid_json content=${content.slice(0, 400)}`;
+        return null;
+      }
       return normalizeBrainOutput(parsed, "openai", context);
-    } catch {
+    } catch (error) {
+      this.lastRemoteFailure = error instanceof Error ? error.message : String(error);
       return null;
     }
   }
