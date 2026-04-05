@@ -467,6 +467,118 @@ test("remote Ollama actor output tolerates fenced JSON content", async () => {
   }
 });
 
+test("remote event safety language does not collapse into moderation by itself", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      message: {
+        content: JSON.stringify({
+          intent: "acknowledge-boundaries",
+          targetActorId: "event-zoe",
+          message:
+            "I appreciate the focus on safety and clear timing. It helps me reconnect and continue the music-event thread comfortably.",
+          confidence: 0.8,
+          rationale:
+            "As a returning participant, I want continuity and clear boundaries without escalating to moderation.",
+          memoryReferences: [],
+        }),
+      },
+    }),
+  });
+  try {
+    const brain = createBrainProvider({
+      provider: "ollama",
+      useRemoteProvider: true,
+      ollamaBaseUrl: "https://ollama.example.test",
+      ollamaModel: "deepseek-v3.1:671b",
+      ollamaApiKey: "test-key",
+    });
+    const worlds = loadSocialSimWorldFixture(
+      path.resolve("scripts/social-sim-worlds.json"),
+      path.resolve("apps/api/test/fixtures/agentic-scenarios.json"),
+    );
+    const world = worlds.find((entry) => entry.id === "long-memory-drift-event-v1");
+    const actor = world.actors.find((entry) => entry.id === "event-jules");
+    const state = {
+      stage: "memory_drift",
+      turnIndex: 6,
+      lastActionByActor: new Map(),
+      knownTargets: new Map(),
+    };
+
+    const turn = await brain.generateActorTurn({
+      world,
+      actor,
+      state,
+      transcript: [],
+      rng: () => 0.25,
+      config: {},
+    });
+
+    assert.equal(turn.intent, "reference_memory");
+    assert.equal(turn.targetActorId, "event-zoe");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("remote quiet alternative proposals do not collapse into recovery", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      message: {
+        content: JSON.stringify({
+          intent: "accept_proposal_and_plan_details",
+          targetActorId: "mina",
+          message:
+            "That sounds perfect - I'd love to join you for a quiet reading or work session. Maybe we could meet at the library or a quiet cafe this week?",
+          confidence: 0.88,
+          rationale:
+            "This is a positive fallback closure with a concrete quiet plan, not another recovery step.",
+          memoryReferences: [],
+        }),
+      },
+    }),
+  });
+  try {
+    const brain = createBrainProvider({
+      provider: "ollama",
+      useRemoteProvider: true,
+      ollamaBaseUrl: "https://ollama.example.test",
+      ollamaModel: "deepseek-v3.1:671b",
+      ollamaApiKey: "test-key",
+    });
+    const worlds = loadSocialSimWorldFixture(
+      path.resolve("scripts/social-sim-worlds.json"),
+      path.resolve("apps/api/test/fixtures/agentic-scenarios.json"),
+    );
+    const world = worlds.find((entry) => entry.id === "short-no-match-recovery-v1");
+    const actor = world.actors.find((entry) => entry.id === "cora");
+    const state = {
+      stage: "convergence",
+      turnIndex: 5,
+      lastActionByActor: new Map([["cora", { intent: "recover_no_match" }]]),
+      knownTargets: new Map(),
+    };
+
+    const turn = await brain.generateActorTurn({
+      world,
+      actor,
+      state,
+      transcript: [],
+      rng: () => 0.25,
+      config: {},
+    });
+
+    assert.equal(turn.intent, "propose_event");
+    assert.equal(turn.targetActorId, "mina");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("recovery worlds detach from weak-fit loops after initial recovery", async () => {
   const brain = createBrainProvider({ provider: "stub" });
   const worlds = loadSocialSimWorldFixture(
@@ -658,6 +770,68 @@ test("dense graph planners prioritize required bridge closure over generic chatt
   });
 
   assert.equal(turn.targetActorId, "holdout-kai");
+  assert.equal(turn.intent, "invite_group");
+});
+
+test("event-and-memory worlds prioritize preferred follow-up closure", async () => {
+  const brain = createBrainProvider({ provider: "stub" });
+  const worlds = loadSocialSimWorldFixture(
+    path.resolve("scripts/social-sim-worlds.json"),
+    path.resolve("apps/api/test/fixtures/agentic-scenarios.json"),
+  );
+  const world = structuredClone(
+    worlds.find((entry) => entry.id === "long-memory-drift-event-v1"),
+  );
+  const actor = world.actors.find((entry) => entry.id === "event-zoe");
+  const targetRelationship = world.relationships.find((entry) => entry.id === "event-return-1");
+  targetRelationship.strength = 0.58;
+  const state = {
+    stage: "memory_drift",
+    turnIndex: 9,
+    lastActionByActor: new Map(),
+    knownTargets: new Map([
+      ["event-return-1", { action: "reference_memory", turnIndex: 8, confidence: 0.74 }],
+    ]),
+  };
+
+  const turn = await brain.generateActorTurn({
+    world,
+    actor,
+    state,
+    transcript: [],
+    rng: () => 0.2,
+    config: {},
+  });
+
+  assert.equal(turn.targetActorId, "event-jules");
+  assert.equal(turn.intent, "propose_event");
+});
+
+test("network rebalancing prefers required healthy closure edges when available", async () => {
+  const brain = createBrainProvider({ provider: "stub" });
+  const worlds = loadSocialSimWorldFixture(
+    path.resolve("scripts/social-sim-worlds.json"),
+    path.resolve("apps/api/test/fixtures/agentic-scenarios.json"),
+  );
+  const world = worlds.find((entry) => entry.id === "long-bad-actor-containment-v1");
+  const actor = world.actors.find((entry) => entry.id === "contain-group-suri");
+  const state = {
+    stage: "conversation",
+    turnIndex: 8,
+    lastActionByActor: new Map(),
+    knownTargets: new Map(),
+  };
+
+  const turn = await brain.generateActorTurn({
+    world,
+    actor,
+    state,
+    transcript: [],
+    rng: () => 0.2,
+    config: {},
+  });
+
+  assert.equal(turn.targetActorId, "contain-regular-kira");
   assert.equal(turn.intent, "invite_group");
 });
 

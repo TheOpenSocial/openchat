@@ -2007,7 +2007,20 @@ function planCircleFamilyAction(context) {
 function planNetworkRebalancingFamilyAction(context) {
   const { actor, state, world, rng } = context;
   const tuning = getTuning(context.config);
-  const targetRelationship = findBestRelationshipWithState(world, actor, null, state, tuning);
+  const preferredRelationship =
+    findBestOracleRelationshipForActor(world, actor, state, tuning, {
+      classes: ["preferred", "acceptable"],
+      onlyUnmatched: true,
+      requireGroupClosure: true,
+      minStrength: tuning.thresholds.lowStrength,
+    }) ??
+    findBestOracleRelationshipForActor(world, actor, state, tuning, {
+      classes: ["preferred", "acceptable"],
+      onlyUnmatched: true,
+      minStrength: tuning.thresholds.lowStrength,
+    });
+  const targetRelationship =
+    preferredRelationship ?? findBestRelationshipWithState(world, actor, null, state, tuning);
   const weakRelationship = findWeakRelationshipWithState(world, actor, state, tuning);
   const targetActorId = resolveActorTarget(world, actor, targetRelationship);
   const knownTargets = state.knownTargets ?? new Map();
@@ -2116,6 +2129,79 @@ function planNetworkRebalancingFamilyAction(context) {
       context,
       intent: "recover_no_match",
       targetActorId: resolveActorTarget(world, actor, weakRelationship),
+    });
+  }
+
+  return null;
+}
+
+function planEventAndMemoryFamilyAction(context) {
+  const { actor, state, world } = context;
+  const tuning = getTuning(context.config);
+  const targetRelationship =
+    findBestOracleRelationshipForActor(world, actor, state, tuning, {
+      classes: ["preferred", "acceptable"],
+      onlyUnmatched: true,
+    }) ??
+    findBestRelationshipWithState(world, actor, null, state, tuning);
+  const targetActorId = resolveActorTarget(world, actor, targetRelationship);
+  const knownTargets = state.knownTargets ?? new Map();
+  const recentRelationshipAction =
+    targetRelationship ? knownTargets.get(targetRelationship.id)?.action ?? "" : "";
+  const oracleClass = classifyOracleRelationship(world, targetRelationship);
+  const strength = targetRelationship?.strength ?? 0;
+  const nearMatch = canUseNearMatch(world, targetRelationship, tuning);
+
+  if (state.stage === "onboarding") {
+    return createPlannedAction({
+      context,
+      intent: "introduce",
+      targetActorId,
+    });
+  }
+
+  if (state.stage === "matching") {
+    return createPlannedAction({
+      context,
+      intent:
+        oracleClass === "preferred" || oracleClass === "acceptable"
+          ? strength >= tuning.thresholds.lowStrength
+            ? "reply"
+            : "ask_preference"
+          : "ask_preference",
+      targetActorId,
+    });
+  }
+
+  if (state.stage === "conversation") {
+    return createPlannedAction({
+      context,
+      intent:
+        nearMatch || strength >= tuning.thresholds.mediumStrength
+          ? "propose_event"
+          : recentRelationshipAction === "reference_memory" || oracleClass === "preferred"
+            ? "reply"
+            : "reference_memory",
+      targetActorId,
+    });
+  }
+
+  if (state.stage === "memory_drift") {
+    return createPlannedAction({
+      context,
+      intent:
+        nearMatch || strength >= tuning.thresholds.lowStrength
+          ? "propose_event"
+          : "reference_memory",
+      targetActorId,
+    });
+  }
+
+  if (state.stage === "convergence") {
+    return createPlannedAction({
+      context,
+      intent: "propose_event",
+      targetActorId,
     });
   }
 
@@ -2244,6 +2330,9 @@ function planSocialSimAction(context) {
   }
   if (family === "network-rebalancing") {
     return planNetworkRebalancingFamilyAction(context);
+  }
+  if (family === "event-and-memory") {
+    return planEventAndMemoryFamilyAction(context);
   }
   if (family === "dense-social-graph") {
     return planDenseSocialGraphFamilyAction(context);
@@ -3481,6 +3570,7 @@ function canonicalizeRemoteIntent(output, context) {
   const message = normalizeString(output.message, "").toLowerCase();
   const rationale = normalizeString(output.rationale, "").toLowerCase();
   const combined = `${normalized} ${message} ${rationale}`;
+  const hasAny = (...needles) => needles.some((needle) => combined.includes(needle));
 
   const canonicalIntents = new Set([
     "introduce",
@@ -3506,90 +3596,164 @@ function canonicalizeRemoteIntent(output, context) {
   const needsGroupProgress = worldNeedsGroupProgress(world);
 
   if (
-    combined.includes("moderat") ||
-    combined.includes("safety") ||
-    combined.includes("boundary") ||
-    combined.includes("unsafe")
+    hasAny(
+      "flag_moderation",
+      "report_moderation",
+      "escalate_moderation",
+      "moderation_check",
+      "unsafe_behavior",
+      "boundary_cross",
+      "violat",
+      "harass",
+      "creepy persistence",
+      "needs moderation",
+      "operator attention",
+      "unsafe",
+    )
   ) {
     return "flag_moderation";
   }
 
   if (
-    combined.includes("recover") ||
-    combined.includes("redirect") ||
-    combined.includes("better_fit") ||
-    combined.includes("detach") ||
-    combined.includes("decline") ||
-    combined.includes("contain_bad_fit")
-  ) {
-    return needsRecovery ? "recover_no_match" : "follow_up";
-  }
-
-  if (
-    combined.includes("memory") ||
-    combined.includes("remember") ||
-    combined.includes("reconnect") ||
-    combined.includes("continuity") ||
-    combined.includes("familiar")
-  ) {
-    return needsMemory ? "reference_memory" : "follow_up";
-  }
-
-  if (
-    combined.includes("group") ||
-    combined.includes("circle") ||
-    combined.includes("collaboration") ||
-    combined.includes("organize") ||
-    combined.includes("coordinate") ||
-    combined.includes("together") ||
-    combined.includes("join")
-  ) {
-    return needsGroupProgress ? "invite_group" : "follow_up";
-  }
-
-  if (
-    combined.includes("event") ||
-    combined.includes("meetup") ||
-    combined.includes("schedule") ||
-    combined.includes("plan") ||
-    combined.includes("proposal") ||
-    combined.includes("next saturday") ||
-    combined.includes("next step")
+    hasAny(
+      "propose",
+      "schedule",
+      "next saturday",
+      "this saturday",
+      "this week",
+      "meet at",
+      "maybe we could meet",
+      "would you be interested in joining",
+      "join you for",
+      "plan another",
+      "schedule that",
+      "upcoming gathering",
+      "dinner-and-music evening",
+      "coffee shop",
+      "library",
+      "cafe",
+    )
   ) {
     return "propose_event";
   }
 
   if (
-    combined.includes("preference") ||
-    combined.includes("what kind") ||
-    combined.includes("what do you think") ||
-    combined.includes("are you into") ||
-    combined.includes("would you prefer")
+    hasAny(
+      "recover_no_match",
+      "redirect_to_stronger_fit",
+      "redirect",
+      "better_fit",
+      "detach",
+      "contain_bad_fit",
+      "bypass_fit_signal",
+      "styles align well",
+      "styles don't align",
+      "not the best fit",
+      "better suited elsewhere",
+      "keep our interactions minimal",
+    )
+  ) {
+    return needsRecovery ? "recover_no_match" : "follow_up";
+  }
+
+  if (
+    hasAny(
+      "memory",
+      "remember",
+      "reconnect",
+      "continuity",
+      "familiar",
+      "returning participant",
+      "good to be back",
+      "pick up where we left off",
+      "prior context",
+      "last time",
+      "reaffirm",
+      "return behavior",
+      "recurring",
+    )
+  ) {
+    return needsMemory ? "reference_memory" : "follow_up";
+  }
+
+  if (
+    hasAny(
+      "group",
+      "circle",
+      "collaboration",
+      "organize",
+      "coordinate",
+      "together",
+      "join",
+      "subgroup",
+      "shared document",
+      "potluck",
+      "board games",
+      "scavenger hunt",
+    )
+  ) {
+    return needsGroupProgress ? "invite_group" : "follow_up";
+  }
+
+  if (
+    hasAny(
+      "event",
+      "meetup",
+      "plan",
+      "proposal",
+      "next step",
+      "concrete next step",
+    )
+  ) {
+    return "propose_event";
+  }
+
+  if (
+    hasAny(
+      "preference",
+      "what kind",
+      "what do you think",
+      "are you into",
+      "would you prefer",
+      "looking for someone",
+    )
   ) {
     return "ask_preference";
   }
 
   if (
-    combined.includes("hello") ||
-    combined.includes("hey") ||
-    combined.includes("hi ") ||
-    combined.includes("introduc") ||
-    combined.includes("greet")
+    hasAny(
+      "hello",
+      "hey",
+      "hi ",
+      "introduc",
+      "greet",
+      "welcome back",
+    )
   ) {
     return "introduce";
   }
 
   if (
-    combined.includes("accept") ||
-    combined.includes("confirm") ||
-    combined.includes("affirm") ||
-    combined.includes("agree") ||
-    combined.includes("acknowledge") ||
-    combined.includes("continue") ||
-    combined.includes("reciprocate") ||
-    combined.includes("share") ||
-    combined.includes("explore") ||
-    combined.includes("strengthen")
+    hasAny(
+      "accept",
+      "confirm",
+      "affirm",
+      "agree",
+      "acknowledge",
+      "continue",
+      "reciprocate",
+      "share",
+      "explore",
+      "strengthen",
+      "sounds perfect",
+      "would love to",
+      "on board",
+      "looking forward",
+      "happy to join",
+      "that sounds good",
+      "appreciate your",
+    )
   ) {
     return "reply";
   }
