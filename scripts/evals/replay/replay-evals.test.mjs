@@ -33,3 +33,18 @@ test("replay eval runner executes command-backed cases", async () => {
   assert.equal(result.summary.failedCases, 0);
   assert.equal(result.summary.primaryFailureReason, "none");
 });
+
+test("replay eval runner supports historical conversation corpus expectations", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "replay-historical-"));
+  const corpusPath = path.resolve(
+    "scripts/evals/replay/sample-historical-replay-corpus.json",
+  );
+  const result = await runReplayEvals([`--corpus=${corpusPath}`], {
+    ...process.env,
+    EVAL_ARTIFACT_ROOT: root,
+  });
+
+  assert.equal(result.summary.totalCases, 2);
+  assert.equal(result.summary.failedCases, 0);
+  assert.equal(result.summary.corpusSuite, "sample-historical-replay-corpus");
+});

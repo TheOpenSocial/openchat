@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "suite": "sample-historical-replay-corpus",
+  "cases": [
+    {
+      "id": "historical_replay_dm_resume_v1",
+      "channel": "dm",
+      "provider": "ollama",
+      "toolFamily": "resume_followup",
+      "deploySha": "sample",
+      "conversation": {
+        "conversationId": "hist-conv-1",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Last week you suggested a tennis group. Can you resume from there without pinging anyone yet?"
+          },
+          {
+            "role": "assistant",
+            "content": "I can pick that back up and suggest the safest next step."
+          },
+          {
+            "role": "user",
+            "content": "Do that, but keep it replay-safe."
+          }
+        ]
+      },
+      "execution": {
+        "mode": "command",
+        "cmd": "node",
+        "args": [
+          "--input-type=module",
+          "-e",
+          "console.log(JSON.stringify({tool:\"resume_replay_safe\", toolCalls:[\"inspect_connection_state\",\"draft_followup\"], behaviors:[\"preserve_context\",\"replay_safe_resume\"], sideEffects:false, outputText:\"I can resume the prior tennis follow-up and keep it replay-safe without sending anything live yet.\"}))"
+        ]
+      },
+      "expected": {
+        "allowedTools": ["resume_replay_safe"],
+        "forbiddenTools": ["send_message_live"],
+        "requiredBehaviors": ["preserve_context", "replay_safe_resume"],
+        "outputIncludes": [
+          "tennis",
+          "replay-safe",
+          "without sending anything live"
+        ],
+        "expectedToolCalls": ["inspect_connection_state", "draft_followup"],
+        "forbiddenToolCalls": ["send_message_live"],
+        "maxLatencyMs": 5000
+      }
+    },
+    {
+      "id": "historical_replay_dashboard_auth_v1",
+      "channel": "dashboard",
+      "provider": "ollama",
+      "toolFamily": "auth_reconnect",
+      "deploySha": "sample",
+      "conversation": {
+        "conversationId": "hist-conv-2",
+        "messages": [
+          {
+            "role": "user",
+            "content": "The dashboard auth expired while reconnecting. Recover cleanly and do not duplicate actions."
+          }
+        ]
+      },
+      "execution": {
+        "mode": "command",
+        "cmd": "node",
+        "args": [
+          "--input-type=module",
+          "-e",
+          "console.log(JSON.stringify({tool:\"resume_replay_safe\", toolCalls:[\"inspect_connection_state\",\"resume_replay_safe\"], behaviors:[\"no_side_effects_without_confirmation\",\"replay_safe_resume\"], sideEffects:false, outputText:\"I can recover the reconnect flow, inspect auth state, and avoid duplicating any prior action.\"}))"
+        ]
+      },
+      "expected": {
+        "allowedTools": ["resume_replay_safe"],
+        "forbiddenTools": ["duplicate_send"],
+        "requiredBehaviors": [
+          "no_side_effects_without_confirmation",
+          "replay_safe_resume"
+        ],
+        "outputIncludes": ["recover", "auth state", "avoid duplicating"],
+        "expectedToolCalls": ["inspect_connection_state", "resume_replay_safe"],
+        "forbiddenToolCalls": ["duplicate_send"],
+        "maxLatencyMs": 5000
+      }
+    }
+  ]
+}

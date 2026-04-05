@@ -21,9 +21,16 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
 ### Replay eval scaffold
 - Replay corpus contract:
   - `scripts/evals/replay/sample-replay-corpus.json`
+  - `scripts/evals/replay/sample-historical-replay-corpus.json`
 - Replay suite runner:
   - `pnpm eval:replay`
 - Current runner now supports command-backed, side-effect-free replay cases.
+- Historical replay cases can now carry:
+  - conversation transcript/history
+  - expected output snippets
+  - expected tool calls
+  - forbidden tool calls
+  - latency budget
 - It still needs real historical corpus ingestion and output diffing against production traces.
 
 ### Product goldens

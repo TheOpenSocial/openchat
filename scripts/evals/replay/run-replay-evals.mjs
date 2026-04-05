@@ -52,6 +52,7 @@ function executeReplayCase(entry, config) {
   if (config.dryRun || execution.mode !== "command") {
     return {
       status: 0,
+      latencyMs: 0,
       stdout: "",
       stderr: "",
       parsed: null,
@@ -60,6 +61,7 @@ function executeReplayCase(entry, config) {
         : "Replay execution mode not configured.",
     };
   }
+  const startedAt = Date.now();
   const result = spawnSync(
     normalizeString(execution.cmd, "node"),
     Array.isArray(execution.args) ? execution.args : [],
@@ -77,6 +79,7 @@ function executeReplayCase(entry, config) {
   }
   return {
     status: result.status ?? 1,
+    latencyMs: Date.now() - startedAt,
     stdout: result.stdout ?? "",
     stderr: result.stderr ?? "",
     parsed,
@@ -91,11 +94,31 @@ function evaluateReplayCase(entry, config) {
   const requiredBehaviors = Array.isArray(expected.requiredBehaviors)
     ? expected.requiredBehaviors
     : [];
+  const expectedOutputIncludes = Array.isArray(expected.outputIncludes)
+    ? expected.outputIncludes.filter((value) => typeof value === "string")
+    : [];
+  const expectedToolCalls = Array.isArray(expected.expectedToolCalls)
+    ? expected.expectedToolCalls.filter((value) => typeof value === "string")
+    : [];
+  const forbiddenToolCalls = Array.isArray(expected.forbiddenToolCalls)
+    ? expected.forbiddenToolCalls.filter((value) => typeof value === "string")
+    : [];
+  const maxLatencyMs = Number.isFinite(expected.maxLatencyMs) ? expected.maxLatencyMs : null;
   const execution = executeReplayCase(entry, config);
   const selectedTool = normalizeString(execution.parsed?.tool, "");
+  const outputText = normalizeString(
+    execution.parsed?.outputText,
+    normalizeString(execution.stdout, ""),
+  );
+  const outputTextLower = outputText.toLowerCase();
   const behaviors = Array.isArray(execution.parsed?.behaviors)
     ? execution.parsed.behaviors.filter((value) => typeof value === "string")
     : [];
+  const toolCalls = Array.isArray(execution.parsed?.toolCalls)
+    ? execution.parsed.toolCalls.filter((value) => typeof value === "string")
+    : selectedTool
+      ? [selectedTool]
+      : [];
   const sideEffects = execution.parsed?.sideEffects === true;
   const allowedToolPass =
     allowedTools.length === 0 || allowedTools.includes(selectedTool);
@@ -105,14 +128,40 @@ function evaluateReplayCase(entry, config) {
     requiredBehaviors.length === 0 ||
     requiredBehaviors.every((behavior) => behaviors.includes(behavior));
   const sideEffectPass = !sideEffects;
+  const outputPass =
+    expectedOutputIncludes.length === 0 ||
+    expectedOutputIncludes.every((snippet) =>
+      outputTextLower.includes(snippet.toLowerCase()),
+    );
+  const expectedToolCallPass =
+    expectedToolCalls.length === 0 ||
+    expectedToolCalls.every((tool) => toolCalls.includes(tool));
+  const forbiddenToolCallPass =
+    forbiddenToolCalls.length === 0 ||
+    forbiddenToolCalls.every((tool) => !toolCalls.includes(tool));
+  const latencyPass =
+    maxLatencyMs === null ||
+    (Number.isFinite(execution.latencyMs) && execution.latencyMs <= maxLatencyMs);
   const passed =
-    execution.status === 0 && allowedToolPass && forbiddenToolPass && behaviorPass && sideEffectPass;
+    execution.status === 0 &&
+    allowedToolPass &&
+    forbiddenToolPass &&
+    behaviorPass &&
+    sideEffectPass &&
+    outputPass &&
+    expectedToolCallPass &&
+    forbiddenToolCallPass &&
+    latencyPass;
   const score = Number(
     (
-      (allowedToolPass ? 0.35 : 0) +
-      (forbiddenToolPass ? 0.25 : 0) +
-      (behaviorPass ? 0.25 : 0) +
-      (sideEffectPass ? 0.15 : 0)
+      (allowedToolPass ? 0.2 : 0) +
+      (forbiddenToolPass ? 0.15 : 0) +
+      (behaviorPass ? 0.15 : 0) +
+      (sideEffectPass ? 0.1 : 0) +
+      (outputPass ? 0.15 : 0) +
+      (expectedToolCallPass ? 0.1 : 0) +
+      (forbiddenToolCallPass ? 0.1 : 0) +
+      (latencyPass ? 0.05 : 0)
     ).toFixed(3),
   );
   return {
@@ -128,22 +177,37 @@ function evaluateReplayCase(entry, config) {
       ? "wrong_tool_choice"
       : !forbiddenToolPass
         ? "forbidden_tool_used"
-        : !behaviorPass
+      : !behaviorPass
           ? "missing_required_behavior"
           : !sideEffectPass
             ? "unexpected_side_effect"
-            : execution.status !== 0
-              ? "command_failed"
-              : "none",
+            : !outputPass
+              ? "missing_expected_output"
+              : !expectedToolCallPass
+                ? "missing_expected_tool_call"
+                : !forbiddenToolCallPass
+                  ? "forbidden_tool_call_observed"
+                  : !latencyPass
+                    ? "latency_budget_exceeded"
+                    : execution.status !== 0
+                      ? "command_failed"
+                      : "none",
     expected: {
       allowedTools,
       forbiddenTools,
       requiredBehaviors,
+      outputIncludes: expectedOutputIncludes,
+      expectedToolCalls,
+      forbiddenToolCalls,
+      maxLatencyMs,
     },
     execution: {
       selectedTool,
+      toolCalls,
       behaviors,
       sideEffects,
+      outputText,
+      latencyMs: execution.latencyMs,
       stdout: execution.stdout,
       stderr: execution.stderr,
       note: execution.note,
