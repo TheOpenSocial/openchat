@@ -43,6 +43,54 @@ function stddev(values) {
   return Math.sqrt(variance);
 }
 
+function aggregateFamilyMetrics(seedSummaries) {
+  const familyRollup = new Map();
+  for (const summary of seedSummaries) {
+    const familyScores = summary?.familyScores ?? {};
+    for (const [family, metrics] of Object.entries(familyScores)) {
+      const current = familyRollup.get(family) ?? {
+        convergenceScores: [],
+        oracleScores: [],
+        oracleProgressScores: [],
+        closurePrecisionScores: [],
+        preferredRecallScores: [],
+        forbiddenAvoidanceScores: [],
+        diagnosticSeverityScores: [],
+      };
+      current.convergenceScores.push(metrics.averageConvergenceScore ?? 0);
+      current.oracleScores.push(metrics.averageOracleScore ?? 0);
+      current.oracleProgressScores.push(metrics.averageOracleProgressScore ?? 0);
+      current.closurePrecisionScores.push(metrics.averageClosurePrecision ?? 0);
+      current.preferredRecallScores.push(metrics.averagePreferredRecall ?? 0);
+      current.forbiddenAvoidanceScores.push(metrics.averageForbiddenAvoidance ?? 0);
+      current.diagnosticSeverityScores.push(metrics.averageDiagnosticSeverity ?? 0);
+      familyRollup.set(family, current);
+    }
+  }
+
+  return Object.fromEntries(
+    Array.from(familyRollup.entries()).map(([family, metrics]) => [
+      family,
+      {
+        meanConvergenceScore: Number(average(metrics.convergenceScores).toFixed(3)),
+        convergenceScoreStdDev: Number(stddev(metrics.convergenceScores).toFixed(3)),
+        meanOracleScore: Number(average(metrics.oracleScores).toFixed(3)),
+        meanOracleProgressScore: Number(average(metrics.oracleProgressScores).toFixed(3)),
+        meanClosurePrecision: Number(average(metrics.closurePrecisionScores).toFixed(3)),
+        meanPreferredRecall: Number(average(metrics.preferredRecallScores).toFixed(3)),
+        meanForbiddenAvoidance: Number(average(metrics.forbiddenAvoidanceScores).toFixed(3)),
+        meanDiagnosticSeverity: Number(average(metrics.diagnosticSeverityScores).toFixed(3)),
+        worstSeedConvergenceScore: Number(
+          (metrics.convergenceScores.length > 0
+            ? Math.min(...metrics.convergenceScores)
+            : 0
+          ).toFixed(3),
+        ),
+      },
+    ]),
+  );
+}
+
 export async function runSocialSimBenchmarkMatrix(argv = process.argv.slice(2), env = process.env) {
   const matrixSeeds = parseSeedList(env.SOCIAL_SIM_BENCHMARK_SEEDS);
   const config = parseSocialSimArgs(argv, env);
@@ -80,6 +128,7 @@ export async function runSocialSimBenchmarkMatrix(argv = process.argv.slice(2), 
       measurementWarnings: result.summary?.measurementWarnings ?? [],
       effectiveBackendMode: result.summary?.effectiveBackendMode ?? "unknown",
       artifactRunId: result.artifact?.runId ?? null,
+      familyScores: result.summary?.familyScores ?? {},
     };
     caseRows.push(row);
     seedResults.push(row);
@@ -88,6 +137,9 @@ export async function runSocialSimBenchmarkMatrix(argv = process.argv.slice(2), 
   const scores = seedResults.map((entry) => entry.score);
   const oracleScores = seedResults.map((entry) => entry.oracleScore);
   const oracleProgressScores = seedResults.map((entry) => entry.oracleProgressScore);
+  const familyMetrics = aggregateFamilyMetrics(
+    seedResults.map((entry) => ({ familyScores: entry.familyScores })),
+  );
   const worstSeed = [...seedResults].sort((left, right) => left.score - right.score)[0] ?? null;
   const summary = {
     ...summarizeCaseRows(caseRows),
@@ -99,6 +151,7 @@ export async function runSocialSimBenchmarkMatrix(argv = process.argv.slice(2), 
     worstSeed: worstSeed?.seed ?? null,
     meanOracleScore: Number(average(oracleScores).toFixed(3)),
     meanOracleProgressScore: Number(average(oracleProgressScores).toFixed(3)),
+    familyMetrics,
     effectiveBackendModes: Array.from(
       new Set(seedResults.map((entry) => entry.effectiveBackendMode).filter(Boolean)),
     ),
@@ -120,4 +173,3 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   console.log(JSON.stringify(result.summary, null, 2));
   console.log(`artifact written to ${path.join(result.runDir, "run.json")}`);
 }
-

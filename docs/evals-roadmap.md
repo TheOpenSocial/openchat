@@ -15,6 +15,7 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
   - mean score
   - score standard deviation
   - worst-seed score
+  - family-level mean and stability metrics
 - Golden suite runner:
   - `pnpm eval:golden`
 
@@ -120,12 +121,7 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
 - Remaining work is wiring that source to persisted analytics exports automatically instead of sample files.
 
 ### 4. Add social simulation family metrics to the benchmark
-- Report family-level aggregates explicitly:
-  - recovery
-  - bridge/graph closure
-  - recurring circle restoration
-  - containment
-  - memory/event continuity
+- Family-level aggregate reporting is now in place for the seed matrix.
 - Add temporal success metrics:
   - recovery transition completion
   - required group closure ordering

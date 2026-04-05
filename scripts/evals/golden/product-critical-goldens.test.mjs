@@ -17,6 +17,7 @@ test("product critical golden runner writes a standard artifact in dry-run mode"
 
   assert.equal(summary.totalCases, 1);
   assert.equal(summary.failedCases, 0);
+  assert.equal(summary.dryRunBypassedAssertions, true);
   assert.equal(run.evalSuite, "product-critical-goldens");
 });
 
