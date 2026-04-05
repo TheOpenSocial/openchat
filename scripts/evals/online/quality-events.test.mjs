@@ -79,3 +79,25 @@ test("quality event report can summarize agentic eval snapshots", async () => {
   assert.equal(summary.failedCases, 1);
   assert.equal(summary.byTraceGradeStatus.watch, 2);
 });
+
+test("quality event report can summarize runtime admin exports", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "quality-report-runtime-export-"));
+  const eventsPath = path.resolve(
+    "scripts/evals/online/sample-runtime-admin-export.json",
+  );
+  const result = await reportQualityEvents(
+    ["--source=runtime-admin-export", `--events=${eventsPath}`],
+    {
+      ...process.env,
+      EVAL_ARTIFACT_ROOT: root,
+    },
+  );
+  const summary = JSON.parse(readFileSync(path.join(result.runDir, "summary.json"), "utf8"));
+
+  assert.equal(summary.source, "runtime-admin-export");
+  assert.equal(summary.totalCases, 2);
+  assert.equal(summary.failedCases, 1);
+  assert.equal(summary.byChannel.telegram, 1);
+  assert.equal(summary.byFailureTaxonomy.tool_selection, 1);
+  assert.equal(summary.byTraceGradeStatus.watch, 1);
+});

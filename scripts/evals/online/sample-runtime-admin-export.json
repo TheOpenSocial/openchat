@@ -1,0 +1,40 @@
+{
+  "events": [
+    {
+      "conversationId": "conv-runtime-001",
+      "messageId": "msg-runtime-001",
+      "channel": "telegram",
+      "provider": "openai",
+      "deploySha": "abc123",
+      "toolFamily": "messaging",
+      "quality": {
+        "score": 0.92
+      },
+      "metrics": {
+        "retryCount": 0
+      },
+      "flags": {
+        "escalated": false
+      },
+      "failure": {
+        "taxonomy": "none"
+      },
+      "traceGradeStatus": "green",
+      "createdAt": "2026-04-05T12:00:00.000Z"
+    },
+    {
+      "conversationId": "conv-runtime-002",
+      "messageId": "msg-runtime-002",
+      "channel": "admin",
+      "provider": "ollama",
+      "deploySha": "def456",
+      "toolFamily": "agent-control",
+      "qualityScore": 0.4,
+      "retryCount": 2,
+      "escalated": true,
+      "failureTaxonomy": "tool_selection",
+      "traceGradeStatus": "watch",
+      "createdAt": "2026-04-05T12:05:00.000Z"
+    }
+  ]
+}

@@ -59,6 +59,7 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
   - JSONL quality event streams
   - `run-agent-test-suite` artifacts via `--source=agent-suite`
   - agentic eval snapshots via `--source=agentic-evals-snapshot`
+  - runtime/admin event exports via `--source=runtime-admin-export`
 - Current input is JSONL with fields:
   - `conversation_id`
   - `message_id`
@@ -96,6 +97,7 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
   - cross-channel continuity
 - These should be deterministic and pre-release gated.
 - Current runner now asserts suite coverage and threshold failures.
+- It now also supports pass-state assertions for critical checks and scenarios.
 - Remaining work:
   - add flow-specific assertions per curated scenario
   - add curated live execution instead of suite-wrapper-only evaluation
@@ -114,7 +116,8 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
   - `failure_taxonomy`
   - `created_at`
 - Use this for nightly and weekly quality reports.
-- Wire report input from real runtime/admin analytics instead of sample JSONL and derived suite artifacts.
+- Runtime/admin export parsing now exists.
+- Remaining work is wiring that source to persisted analytics exports automatically instead of sample files.
 
 ### 4. Add social simulation family metrics to the benchmark
 - Report family-level aggregates explicitly:

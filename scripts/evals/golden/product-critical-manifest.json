@@ -7,6 +7,7 @@
       "maxFailedCases": 0,
       "maxFailedRecords": 0,
       "requiredCheckIds": ["agentic-evals-snapshot"],
+      "requiredPassedCheckIds": ["agentic-evals-snapshot"],
       "forbiddenFailureClasses": [],
       "requiredScenarioIds": [
         "eval_planning_bounds_v1",
@@ -20,6 +21,11 @@
         "eval_grounding_profile_memory_consistency_v1",
         "eval_negotiation_quality_v1",
         "eval_workflow_runtime_traceability_v1"
+      ],
+      "requiredPassedScenarioIds": [
+        "eval_moderation_fallback_v1",
+        "eval_human_approval_policy_v1",
+        "eval_usefulness_no_match_recovery_v1"
       ]
     }
   }

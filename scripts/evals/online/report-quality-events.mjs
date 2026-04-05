@@ -125,6 +125,71 @@ function parseAgenticEvalSnapshot(filePath) {
   }));
 }
 
+function parseRuntimeAdminExport(filePath) {
+  const payload = JSON.parse(readFileSync(findLatestJsonArtifact(filePath), "utf8"));
+  const events = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.events)
+      ? payload.events
+      : Array.isArray(payload?.rows)
+        ? payload.rows
+        : [];
+
+  return events.map((event, index) => {
+    const qualityScoreCandidate =
+      event?.quality_score ??
+      event?.qualityScore ??
+      event?.quality?.score ??
+      null;
+    const retryCountCandidate =
+      event?.retry_count ??
+      event?.retryCount ??
+      event?.metrics?.retryCount ??
+      0;
+    const escalatedCandidate =
+      event?.escalated ??
+      event?.flags?.escalated ??
+      false;
+    const failureTaxonomy =
+      normalizeString(
+        event?.failure_taxonomy ??
+          event?.failureTaxonomy ??
+          event?.failure?.taxonomy,
+        "none",
+      );
+
+    return {
+      conversation_id: normalizeString(
+        event?.conversation_id ?? event?.conversationId,
+        `runtime-export-${index + 1}`,
+      ),
+      message_id: normalizeString(
+        event?.message_id ?? event?.messageId ?? event?.traceId,
+        `message-${index + 1}`,
+      ),
+      channel: normalizeString(event?.channel, "unknown"),
+      provider: normalizeString(event?.provider, "unknown"),
+      deploy_sha: normalizeString(event?.deploy_sha ?? event?.deploySha, "local"),
+      tool_family: normalizeString(
+        event?.tool_family ?? event?.toolFamily,
+        "unknown",
+      ),
+      quality_score: Number.isFinite(qualityScoreCandidate) ? qualityScoreCandidate : 0,
+      retry_count: Number.isFinite(retryCountCandidate) ? retryCountCandidate : 0,
+      escalated: Boolean(escalatedCandidate),
+      failure_taxonomy: failureTaxonomy,
+      created_at: normalizeString(
+        event?.created_at ?? event?.createdAt,
+        new Date().toISOString(),
+      ),
+      trace_grade_status: normalizeString(
+        event?.trace_grade_status ?? event?.traceGradeStatus,
+        "unknown",
+      ),
+    };
+  });
+}
+
 function average(values) {
   return values.length > 0
     ? values.reduce((sum, value) => sum + value, 0) / values.length
@@ -152,6 +217,8 @@ export async function reportQualityEvents(argv = process.argv.slice(2), env = pr
       ? parseAgentSuiteArtifact(config.eventsPath)
       : config.source === "agentic-evals-snapshot"
         ? parseAgenticEvalSnapshot(config.eventsPath)
+        : config.source === "runtime-admin-export"
+          ? parseRuntimeAdminExport(config.eventsPath)
         : parseJsonLines(config.eventsPath);
   const caseRows = rows.map((row) => ({
     caseId: `${row.conversation_id}:${row.message_id}`,

@@ -147,10 +147,12 @@ export async function runProductCriticalGoldens(
 
   const caseCounts = suiteArtifact?.summary?.caseCounts ?? null;
   const failureClasses = suiteArtifact?.summary?.failureClasses ?? null;
+  const suiteCases = Array.isArray(suiteArtifact?.cases) ? suiteArtifact.cases : [];
+  const suiteRecords = Array.isArray(suiteArtifact?.records) ? suiteArtifact.records : [];
   const caseIds = Array.from(
     new Set(
-      Array.isArray(suiteArtifact?.cases)
-        ? suiteArtifact.cases
+      suiteCases
+        ? suiteCases
             .map((entry) => (typeof entry?.id === "string" ? entry.id : null))
             .filter(Boolean)
         : [],
@@ -158,8 +160,8 @@ export async function runProductCriticalGoldens(
   );
   const scenarioIds = Array.from(
     new Set(
-      Array.isArray(suiteArtifact?.records)
-        ? suiteArtifact.records
+      suiteRecords
+        ? suiteRecords
             .map((record) => (typeof record?.scenarioId === "string" ? record.scenarioId : null))
             .filter(Boolean)
         : [],
@@ -171,13 +173,37 @@ export async function runProductCriticalGoldens(
   const requiredCheckIds = Array.isArray(layerManifest.requiredCheckIds)
     ? layerManifest.requiredCheckIds.filter((value) => typeof value === "string")
     : [];
+  const requiredPassedCheckIds = Array.isArray(layerManifest.requiredPassedCheckIds)
+    ? layerManifest.requiredPassedCheckIds.filter((value) => typeof value === "string")
+    : [];
   const forbiddenFailureClasses = Array.isArray(layerManifest.forbiddenFailureClasses)
     ? layerManifest.forbiddenFailureClasses.filter((value) => typeof value === "string")
     : [];
+  const requiredPassedScenarioIds = Array.isArray(layerManifest.requiredPassedScenarioIds)
+    ? layerManifest.requiredPassedScenarioIds.filter((value) => typeof value === "string")
+    : [];
+  const passedCheckIds = new Set(
+    suiteCases
+      .filter((entry) => entry?.status === "passed")
+      .map((entry) => (typeof entry?.id === "string" ? entry.id : null))
+      .filter(Boolean),
+  );
+  const passedScenarioIds = new Set(
+    suiteRecords
+      .filter((record) => record?.status === "passed")
+      .map((record) => (typeof record?.scenarioId === "string" ? record.scenarioId : null))
+      .filter(Boolean),
+  );
   const missingScenarioIds = requiredScenarioIds.filter(
     (scenarioId) => !scenarioIds.includes(scenarioId),
   );
   const missingCheckIds = requiredCheckIds.filter((checkId) => !caseIds.includes(checkId));
+  const missingPassedCheckIds = requiredPassedCheckIds.filter(
+    (checkId) => !passedCheckIds.has(checkId),
+  );
+  const missingPassedScenarioIds = requiredPassedScenarioIds.filter(
+    (scenarioId) => !passedScenarioIds.has(scenarioId),
+  );
   const caseCountPass =
     !Number.isFinite(layerManifest.minCaseCount) ||
     (caseCounts?.total ?? 0) >= layerManifest.minCaseCount;
@@ -192,6 +218,8 @@ export async function runProductCriticalGoldens(
     (suiteArtifact?.summary?.recordCounts?.failed ?? 0) <= layerManifest.maxFailedRecords;
   const scenarioCoveragePass = missingScenarioIds.length === 0;
   const checkCoveragePass = missingCheckIds.length === 0;
+  const passedCheckCoveragePass = missingPassedCheckIds.length === 0;
+  const passedScenarioCoveragePass = missingPassedScenarioIds.length === 0;
   const forbiddenFailureClassMatches = forbiddenFailureClasses.filter(
     (failureClass) => Number(failureClasses?.[failureClass] ?? 0) > 0,
   );
@@ -206,6 +234,8 @@ export async function runProductCriticalGoldens(
       failedRecordCountPass &&
       scenarioCoveragePass &&
       checkCoveragePass &&
+      passedCheckCoveragePass &&
+      passedScenarioCoveragePass &&
       failureClassPass
     );
   const caseRows = [
@@ -231,12 +261,16 @@ export async function runProductCriticalGoldens(
                   ? "too_many_failed_records"
                   : !checkCoveragePass
                     ? "missing_required_checks"
+                    : !passedCheckCoveragePass
+                      ? "required_checks_not_passing"
+                      : !passedScenarioCoveragePass
+                        ? "required_scenarios_not_passing"
                     : !failureClassPass
                       ? "forbidden_failure_class_present"
-                : !scenarioCoveragePass
-                  ? "missing_required_scenarios"
-                  : Object.entries(failureClasses ?? {}).sort((left, right) => right[1] - left[1])[0]?.[0] ??
-                    `agent-test-suite-${config.layer}-failed`,
+                      : !scenarioCoveragePass
+                        ? "missing_required_scenarios"
+                        : Object.entries(failureClasses ?? {}).sort((left, right) => right[1] - left[1])[0]?.[0] ??
+                          `agent-test-suite-${config.layer}-failed`,
       layer: config.layer,
       command: `node scripts/run-agent-test-suite.mjs --layer=${config.layer}`,
       stdout: commandResult.stdout,
@@ -244,6 +278,8 @@ export async function runProductCriticalGoldens(
       suiteSummary: suiteArtifact?.summary ?? null,
       missingScenarioIds,
       missingCheckIds,
+      missingPassedCheckIds,
+      missingPassedScenarioIds,
       forbiddenFailureClassMatches,
     },
   ];
@@ -254,8 +290,12 @@ export async function runProductCriticalGoldens(
     suiteSummary: suiteArtifact?.summary ?? null,
     requiredCheckIds,
     missingCheckIds,
+    requiredPassedCheckIds,
+    missingPassedCheckIds,
     requiredScenarioIds,
     missingScenarioIds,
+    requiredPassedScenarioIds,
+    missingPassedScenarioIds,
     forbiddenFailureClasses,
     forbiddenFailureClassMatches,
   };

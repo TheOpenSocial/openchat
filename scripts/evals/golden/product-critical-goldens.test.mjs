@@ -45,17 +45,17 @@ test("product critical golden runner records suite summary from agent test artif
         failureClasses: {},
       },
       records: [
-        { scenarioId: "eval_planning_bounds_v1" },
-        { scenarioId: "eval_injection_fallback_v1" },
-        { scenarioId: "eval_moderation_fallback_v1" },
-        { scenarioId: "eval_human_approval_policy_v1" },
-        { scenarioId: "eval_failure_capture_v1" },
-        { scenarioId: "eval_social_outcome_telemetry_v1" },
-        { scenarioId: "eval_tone_agentic_async_ack_v1" },
-        { scenarioId: "eval_usefulness_no_match_recovery_v1" },
-        { scenarioId: "eval_grounding_profile_memory_consistency_v1" },
-        { scenarioId: "eval_negotiation_quality_v1" },
-        { scenarioId: "eval_workflow_runtime_traceability_v1" }
+        { scenarioId: "eval_planning_bounds_v1", status: "passed" },
+        { scenarioId: "eval_injection_fallback_v1", status: "passed" },
+        { scenarioId: "eval_moderation_fallback_v1", status: "passed" },
+        { scenarioId: "eval_human_approval_policy_v1", status: "passed" },
+        { scenarioId: "eval_failure_capture_v1", status: "passed" },
+        { scenarioId: "eval_social_outcome_telemetry_v1", status: "passed" },
+        { scenarioId: "eval_tone_agentic_async_ack_v1", status: "passed" },
+        { scenarioId: "eval_usefulness_no_match_recovery_v1", status: "passed" },
+        { scenarioId: "eval_grounding_profile_memory_consistency_v1", status: "passed" },
+        { scenarioId: "eval_negotiation_quality_v1", status: "passed" },
+        { scenarioId: "eval_workflow_runtime_traceability_v1", status: "passed" }
       ]
     }),
   );
@@ -84,7 +84,7 @@ test("product critical golden runner fails when required scenarios are missing",
         recordCounts: { total: 19, passed: 19, failed: 0, skipped: 0 },
         failureClasses: {},
       },
-      records: [{ scenarioId: "eval_planning_bounds_v1" }],
+      records: [{ scenarioId: "eval_planning_bounds_v1", status: "passed" }],
     }),
   );
   const result = await runProductCriticalGoldens(
@@ -96,8 +96,8 @@ test("product critical golden runner fails when required scenarios are missing",
   );
 
   assert.equal(result.summary.failedCases, 1);
-  assert.equal(result.summary.primaryFailureReason, "missing_required_scenarios");
-  assert.ok(result.summary.missingScenarioIds.length > 0);
+  assert.equal(result.summary.primaryFailureReason, "required_scenarios_not_passing");
+  assert.ok(result.summary.missingPassedScenarioIds.length > 0);
 });
 
 test("product critical golden runner fails when required checks are missing", async () => {
@@ -115,17 +115,17 @@ test("product critical golden runner fails when required checks are missing", as
         failureClasses: {},
       },
       records: [
-        { scenarioId: "eval_planning_bounds_v1" },
-        { scenarioId: "eval_injection_fallback_v1" },
-        { scenarioId: "eval_moderation_fallback_v1" },
-        { scenarioId: "eval_human_approval_policy_v1" },
-        { scenarioId: "eval_failure_capture_v1" },
-        { scenarioId: "eval_social_outcome_telemetry_v1" },
-        { scenarioId: "eval_tone_agentic_async_ack_v1" },
-        { scenarioId: "eval_usefulness_no_match_recovery_v1" },
-        { scenarioId: "eval_grounding_profile_memory_consistency_v1" },
-        { scenarioId: "eval_negotiation_quality_v1" },
-        { scenarioId: "eval_workflow_runtime_traceability_v1" },
+        { scenarioId: "eval_planning_bounds_v1", status: "passed" },
+        { scenarioId: "eval_injection_fallback_v1", status: "passed" },
+        { scenarioId: "eval_moderation_fallback_v1", status: "passed" },
+        { scenarioId: "eval_human_approval_policy_v1", status: "passed" },
+        { scenarioId: "eval_failure_capture_v1", status: "passed" },
+        { scenarioId: "eval_social_outcome_telemetry_v1", status: "passed" },
+        { scenarioId: "eval_tone_agentic_async_ack_v1", status: "passed" },
+        { scenarioId: "eval_usefulness_no_match_recovery_v1", status: "passed" },
+        { scenarioId: "eval_grounding_profile_memory_consistency_v1", status: "passed" },
+        { scenarioId: "eval_negotiation_quality_v1", status: "passed" },
+        { scenarioId: "eval_workflow_runtime_traceability_v1", status: "passed" },
       ],
     }),
   );
@@ -175,7 +175,7 @@ test("product critical golden runner fails when forbidden failure classes are pr
         recordCounts: { total: 1, passed: 0, failed: 1, skipped: 0 },
         failureClasses: { queue_or_replay: 1 },
       },
-      records: [{ scenarioId: "eval_planning_bounds_v1" }],
+      records: [{ scenarioId: "eval_planning_bounds_v1", status: "failed" }],
     }),
   );
 
@@ -190,4 +190,130 @@ test("product critical golden runner fails when forbidden failure classes are pr
   assert.equal(result.summary.failedCases, 1);
   assert.equal(result.summary.primaryFailureReason, "too_many_failed_cases");
   assert.deepEqual(result.summary.forbiddenFailureClassMatches, ["queue_or_replay"]);
+});
+
+test("product critical golden runner fails when required checks are present but not passing", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "product-goldens-nonpassing-check-"));
+  const artifactPath = path.join(root, "eval.json");
+  const manifestPath = path.join(root, "manifest.json");
+  writeFileSync(
+    manifestPath,
+    JSON.stringify({
+      version: 1,
+      layers: {
+        eval: {
+          minCaseCount: 1,
+          minRecordCount: 19,
+          maxFailedCases: 1,
+          maxFailedRecords: 1,
+          requiredCheckIds: ["agentic-evals-snapshot"],
+          requiredPassedCheckIds: ["agentic-evals-snapshot"],
+          forbiddenFailureClasses: [],
+          requiredScenarioIds: ["eval_planning_bounds_v1"],
+          requiredPassedScenarioIds: ["eval_moderation_fallback_v1"]
+        },
+      },
+    }),
+  );
+  writeFileSync(
+    artifactPath,
+    JSON.stringify({
+      cases: [
+        { id: "agentic-evals-snapshot", status: "failed" },
+      ],
+      summary: {
+        caseCounts: { total: 1, passed: 0, failed: 1, skipped: 0 },
+        recordCounts: { total: 19, passed: 18, failed: 1, skipped: 0 },
+        failureClasses: {},
+      },
+      records: [
+        { scenarioId: "eval_planning_bounds_v1", status: "passed" },
+        { scenarioId: "eval_injection_fallback_v1", status: "passed" },
+        { scenarioId: "eval_moderation_fallback_v1", status: "passed" },
+        { scenarioId: "eval_human_approval_policy_v1", status: "passed" },
+        { scenarioId: "eval_failure_capture_v1", status: "passed" },
+        { scenarioId: "eval_social_outcome_telemetry_v1", status: "passed" },
+        { scenarioId: "eval_tone_agentic_async_ack_v1", status: "passed" },
+        { scenarioId: "eval_usefulness_no_match_recovery_v1", status: "passed" },
+        { scenarioId: "eval_grounding_profile_memory_consistency_v1", status: "passed" },
+        { scenarioId: "eval_negotiation_quality_v1", status: "passed" },
+        { scenarioId: "eval_workflow_runtime_traceability_v1", status: "passed" },
+      ],
+    }),
+  );
+
+  const result = await runProductCriticalGoldens(
+    [`--artifact-path=${artifactPath}`, "--layer=eval", `--manifest=${manifestPath}`],
+    {
+      ...process.env,
+      EVAL_ARTIFACT_ROOT: root,
+    },
+  );
+
+  assert.equal(result.summary.failedCases, 1);
+  assert.equal(result.summary.primaryFailureReason, "required_checks_not_passing");
+  assert.deepEqual(result.summary.missingPassedCheckIds, ["agentic-evals-snapshot"]);
+});
+
+test("product critical golden runner fails when required scenarios are present but not passing", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "product-goldens-nonpassing-scenario-"));
+  const artifactPath = path.join(root, "eval.json");
+  const manifestPath = path.join(root, "manifest.json");
+  writeFileSync(
+    manifestPath,
+    JSON.stringify({
+      version: 1,
+      layers: {
+        eval: {
+          minCaseCount: 1,
+          minRecordCount: 19,
+          maxFailedCases: 0,
+          maxFailedRecords: 1,
+          requiredCheckIds: ["agentic-evals-snapshot"],
+          requiredPassedCheckIds: ["agentic-evals-snapshot"],
+          forbiddenFailureClasses: [],
+          requiredScenarioIds: ["eval_planning_bounds_v1", "eval_moderation_fallback_v1"],
+          requiredPassedScenarioIds: ["eval_moderation_fallback_v1"]
+        },
+      },
+    }),
+  );
+  writeFileSync(
+    artifactPath,
+    JSON.stringify({
+      cases: [
+        { id: "agentic-evals-snapshot", status: "passed" },
+      ],
+      summary: {
+        caseCounts: { total: 1, passed: 1, failed: 0, skipped: 0 },
+        recordCounts: { total: 19, passed: 18, failed: 1, skipped: 0 },
+        failureClasses: {},
+      },
+      records: [
+        { scenarioId: "eval_planning_bounds_v1", status: "passed" },
+        { scenarioId: "eval_injection_fallback_v1", status: "passed" },
+        { scenarioId: "eval_moderation_fallback_v1", status: "failed" },
+        { scenarioId: "eval_human_approval_policy_v1", status: "passed" },
+        { scenarioId: "eval_failure_capture_v1", status: "passed" },
+        { scenarioId: "eval_social_outcome_telemetry_v1", status: "passed" },
+        { scenarioId: "eval_tone_agentic_async_ack_v1", status: "passed" },
+        { scenarioId: "eval_usefulness_no_match_recovery_v1", status: "passed" },
+        { scenarioId: "eval_grounding_profile_memory_consistency_v1", status: "passed" },
+        { scenarioId: "eval_negotiation_quality_v1", status: "passed" },
+        { scenarioId: "eval_workflow_runtime_traceability_v1", status: "passed" },
+      ],
+    }),
+  );
+
+  const result = await runProductCriticalGoldens(
+    [`--artifact-path=${artifactPath}`, "--layer=eval", `--manifest=${manifestPath}`],
+    {
+      ...process.env,
+      EVAL_ARTIFACT_ROOT: root,
+    },
+  );
+
+  assert.equal(result.summary.failedCases, 1);
+  assert.equal(result.summary.primaryFailureReason, "required_scenarios_not_passing");
+  assert.deepEqual(result.summary.missingPassedScenarioIds, ["eval_moderation_fallback_v1"]);
 });
