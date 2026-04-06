@@ -28,6 +28,8 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
   - `pnpm eval:replay`
 - Workflow replay export fetcher now exists:
   - `pnpm eval:replay:fetch:workflows`
+- Live workflow replay composition now exists:
+  - `pnpm eval:replay:live:workflows`
 - Historical replay import:
   - `pnpm eval:replay:import -- --input=... --output=...`
 - Replay runner can now consume raw historical exports directly:
@@ -99,6 +101,7 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
 ### 1. Convert replay runner into historical replay
 - Historical import utility is now in place for JSON and JSONL sanitized exports.
 - Workflow replay export fetch is now in place for replayable admin workflow traces.
+- Live fetch-and-replay composition is now in place for workflow traces.
 - Remaining work:
   - enrich fetched workflow replay exports with higher-fidelity user/assistant transcript fields
   - diff actual output/tool traces across versions

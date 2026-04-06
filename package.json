@@ -43,6 +43,7 @@
     "eval:golden:product:live": "node scripts/evals/golden/product-critical-goldens.mjs --source=agentic-evals-snapshot",
     "eval:replay": "node scripts/evals/replay/run-replay-evals.mjs",
     "eval:replay:fetch:workflows": "node scripts/evals/replay/fetch-workflow-replay-export.mjs",
+    "eval:replay:live:workflows": "node scripts/evals/replay/run-live-workflow-replay.mjs",
     "eval:replay:import": "node scripts/evals/replay/import-historical-replay.mjs",
     "eval:online:fetch:agentic": "node scripts/evals/online/fetch-agentic-evals-snapshot.mjs",
     "eval:online:fetch:workflows": "node scripts/evals/online/fetch-agent-workflows-snapshot.mjs",
