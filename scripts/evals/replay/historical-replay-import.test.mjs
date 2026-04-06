@@ -29,6 +29,13 @@ test("historical replay import converts jsonl exports into replay corpus cases",
           expectedToolCalls: ["gmail-draft"],
           maxLatencyMs: 2000,
         },
+        observed: {
+          selectedTool: "gmail-draft",
+          toolCalls: ["gmail-draft"],
+          outputText: "Draft saved.",
+          latencyMs: 400,
+          sideEffects: false,
+        },
       }),
     ].join("\n"),
   );
@@ -46,4 +53,5 @@ test("historical replay import converts jsonl exports into replay corpus cases",
   assert.equal(corpus.cases[0].execution.mode, "historical-export");
   assert.deepEqual(corpus.cases[0].expected.allowedTools, ["gmail-draft"]);
   assert.deepEqual(corpus.cases[0].expected.expectedToolCalls, ["gmail-draft"]);
+  assert.equal(corpus.cases[0].observed.selectedTool, "gmail-draft");
 });

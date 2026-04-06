@@ -9,6 +9,10 @@ import {
   finalizeEvalRun,
   summarizeCaseRows,
 } from "../shared/artifacts.mjs";
+import {
+  loadHistoricalReplayRecords,
+  normalizeHistoricalReplayRecord,
+} from "./import-historical-replay.mjs";
 
 const DEFAULT_REPLAY_CORPUS_PATH = "scripts/evals/replay/sample-replay-corpus.json";
 
@@ -25,6 +29,7 @@ function parseReplayArgs(argv = process.argv.slice(2), env = process.env) {
     flags.set(key, rawValue ?? "true");
   }
   return {
+    source: normalizeString(flags.get("source") ?? env.EVAL_REPLAY_SOURCE, "corpus"),
     corpusPath: path.resolve(
       process.cwd(),
       normalizeString(flags.get("corpus") ?? env.EVAL_REPLAY_CORPUS_PATH, DEFAULT_REPLAY_CORPUS_PATH),
@@ -47,8 +52,42 @@ function loadReplayCorpus(corpusPath) {
   };
 }
 
+function loadReplayInput(config) {
+  if (config.source === "historical-export") {
+    const records = loadHistoricalReplayRecords(config.corpusPath);
+    return {
+      version: 1,
+      suite: normalizeString(
+        path.basename(config.corpusPath).replace(/\.(jsonl|json)$/i, ""),
+        "historical-replay-export",
+      ),
+      importedFrom: config.corpusPath,
+      cases: records.map((record, index) =>
+        normalizeHistoricalReplayRecord(record, index),
+      ),
+    };
+  }
+  return loadReplayCorpus(config.corpusPath);
+}
+
 function executeReplayCase(entry, config) {
   const execution = entry.execution ?? {};
+  if (execution.mode === "historical-export") {
+    return {
+      status: 0,
+      latencyMs: Number.isFinite(entry?.observed?.latencyMs) ? entry.observed.latencyMs : 0,
+      stdout: normalizeString(entry?.observed?.outputText, ""),
+      stderr: "",
+      parsed: {
+        tool: normalizeString(entry?.observed?.selectedTool, ""),
+        toolCalls: Array.isArray(entry?.observed?.toolCalls) ? entry.observed.toolCalls : [],
+        behaviors: Array.isArray(entry?.observed?.behaviors) ? entry.observed.behaviors : [],
+        sideEffects: entry?.observed?.sideEffects === true,
+        outputText: normalizeString(entry?.observed?.outputText, ""),
+      },
+      note: "Replay evaluated from recorded historical export observation.",
+    };
+  }
   if (config.dryRun || execution.mode !== "command") {
     return {
       status: 0,
@@ -217,7 +256,7 @@ function evaluateReplayCase(entry, config) {
 
 export async function runReplayEvals(argv = process.argv.slice(2), env = process.env) {
   const config = parseReplayArgs(argv, env);
-  const corpus = loadReplayCorpus(config.corpusPath);
+  const corpus = loadReplayInput(config);
   const envelope = createEvalRunEnvelope({
     evalSuite: "replay-evals",
     evalType: "replay",
@@ -229,6 +268,7 @@ export async function runReplayEvals(argv = process.argv.slice(2), env = process
     ...summarizeCaseRows(caseRows),
     corpusSuite: corpus.suite,
     corpusVersion: corpus.version,
+    source: config.source,
     channels: Array.from(new Set(caseRows.map((row) => row.channel))),
     toolFamilies: Array.from(new Set(caseRows.map((row) => row.toolFamily))),
     deploySha: config.deploySha,

@@ -28,6 +28,8 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
   - `pnpm eval:replay`
 - Historical replay import:
   - `pnpm eval:replay:import -- --input=... --output=...`
+- Replay runner can now consume raw historical exports directly:
+  - `pnpm eval:replay -- --source=historical-export --corpus=...`
 - Current runner now supports command-backed, side-effect-free replay cases.
 - Historical replay cases can now carry:
   - conversation transcript/history
@@ -35,6 +37,7 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
   - expected tool calls
   - forbidden tool calls
   - latency budget
+- Historical exports can also carry observed tool/output data for offline replay scoring.
 - It still needs real historical corpus ingestion and output diffing against production traces.
 
 ### Product goldens

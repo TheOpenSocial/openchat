@@ -37,7 +37,7 @@ function parseArgs(argv = process.argv.slice(2), env = process.env) {
   };
 }
 
-function loadRecords(inputPath) {
+export function loadHistoricalReplayRecords(inputPath) {
   const raw = readFileSync(inputPath, "utf8");
   if (inputPath.endsWith(".jsonl")) {
     return raw
@@ -109,7 +109,38 @@ function normalizeExpected(record) {
   };
 }
 
-function normalizeRecord(record, index) {
+function normalizeObserved(record) {
+  const observed = record?.observed ?? {};
+  const pickArray = (...values) => {
+    for (const value of values) {
+      if (Array.isArray(value)) {
+        return value.filter((entry) => typeof entry === "string");
+      }
+    }
+    return [];
+  };
+
+  const selectedTool = normalizeString(
+    observed.selectedTool ?? observed.tool ?? record.selectedTool ?? record.tool,
+    "",
+  );
+  const outputText = normalizeString(
+    observed.outputText ?? observed.output ?? record.outputText ?? record.output,
+    "",
+  );
+  return {
+    selectedTool,
+    toolCalls: pickArray(observed.toolCalls, record.toolCalls, selectedTool ? [selectedTool] : []),
+    behaviors: pickArray(observed.behaviors, record.behaviors),
+    sideEffects: observed.sideEffects === true || record.sideEffects === true,
+    outputText,
+    latencyMs: Number.isFinite(observed.latencyMs ?? record.latencyMs)
+      ? observed.latencyMs ?? record.latencyMs
+      : 0,
+  };
+}
+
+export function normalizeHistoricalReplayRecord(record, index) {
   const conversationId = normalizeString(
     record?.conversationId ?? record?.id ?? record?.traceId,
     `historical-replay-${index + 1}`,
@@ -127,6 +158,7 @@ function normalizeRecord(record, index) {
       mode: "historical-export",
     },
     expected: normalizeExpected(record),
+    observed: normalizeObserved(record),
     metadata: record?.metadata ?? null,
   };
 }
@@ -140,12 +172,12 @@ export function importHistoricalReplay(argv = process.argv.slice(2), env = proce
     throw new Error("Missing --output for historical replay import.");
   }
 
-  const records = loadRecords(config.inputPath);
+  const records = loadHistoricalReplayRecords(config.inputPath);
   const corpus = {
     version: 1,
     suite: config.suiteName,
     importedFrom: config.inputPath,
-    cases: records.map((record, index) => normalizeRecord(record, index)),
+    cases: records.map((record, index) => normalizeHistoricalReplayRecord(record, index)),
   };
 
   writeFileSync(config.outputPath, JSON.stringify(corpus, null, 2));
