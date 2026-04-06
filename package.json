@@ -44,6 +44,7 @@
     "eval:replay": "node scripts/evals/replay/run-replay-evals.mjs",
     "eval:replay:import": "node scripts/evals/replay/import-historical-replay.mjs",
     "eval:online:fetch:agentic": "node scripts/evals/online/fetch-agentic-evals-snapshot.mjs",
+    "eval:online:fetch:workflows": "node scripts/evals/online/fetch-agent-workflows-snapshot.mjs",
     "eval:online:report": "node scripts/evals/online/report-quality-events.mjs",
     "eval:online:live:agentic": "node scripts/evals/online/run-live-agentic-report.mjs",
     "eval:social:benchmark": "node scripts/evals/golden/social-sim-benchmark.mjs",

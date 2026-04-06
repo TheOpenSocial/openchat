@@ -101,3 +101,24 @@ test("quality event report can summarize runtime admin exports", async () => {
   assert.equal(summary.byFailureTaxonomy.tool_selection, 1);
   assert.equal(summary.byTraceGradeStatus.watch, 1);
 });
+
+test("quality event report can summarize agent workflow snapshots", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "quality-report-workflow-snapshot-"));
+  const snapshotPath = path.resolve(
+    "scripts/evals/online/sample-agent-workflows-snapshot.json",
+  );
+  const result = await reportQualityEvents(
+    ["--source=agent-workflows-snapshot", `--events=${snapshotPath}`],
+    {
+      ...process.env,
+      EVAL_ARTIFACT_ROOT: root,
+    },
+  );
+  const summary = JSON.parse(readFileSync(path.join(result.runDir, "summary.json"), "utf8"));
+
+  assert.equal(summary.source, "agent-workflows-snapshot");
+  assert.equal(summary.totalCases, 2);
+  assert.equal(summary.failedCases, 0);
+  assert.equal(summary.byFailureTaxonomy.matching_or_negotiation, 1);
+  assert.equal(summary.byTraceGradeStatus.watch, 1);
+});

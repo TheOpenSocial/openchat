@@ -63,12 +63,15 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
 - Standard quality event report runner now exists.
 - Admin snapshot fetcher now exists:
   - `pnpm eval:online:fetch:agentic`
+- Workflow snapshot fetcher now exists:
+  - `pnpm eval:online:fetch:workflows`
 - Live composed report now exists:
   - `pnpm eval:online:live:agentic`
 - It can now summarize either:
   - JSONL quality event streams
   - `run-agent-test-suite` artifacts via `--source=agent-suite`
   - agentic eval snapshots via `--source=agentic-evals-snapshot`
+  - agent workflow snapshots via `--source=agent-workflows-snapshot`
   - runtime/admin event exports via `--source=runtime-admin-export`
 - Current input is JSONL with fields:
   - `conversation_id`

@@ -190,6 +190,36 @@ function parseRuntimeAdminExport(filePath) {
   });
 }
 
+function parseAgentWorkflowsSnapshot(filePath) {
+  const snapshot = JSON.parse(readFileSync(findLatestJsonArtifact(filePath), "utf8"));
+  const runs = Array.isArray(snapshot?.runs) ? snapshot.runs : [];
+
+  return runs.map((run, index) => {
+    const health = normalizeString(run?.health, "unknown");
+    const failureTaxonomy = normalizeString(run?.failureClass, "none");
+    const qualityScore =
+      health === "healthy" ? 1 : health === "watch" ? 0.6 : 0.2;
+
+    return {
+      conversation_id: normalizeString(
+        run?.workflowRunId,
+        `workflow-run-${index + 1}`,
+      ),
+      message_id: normalizeString(run?.traceId, `trace-${index + 1}`),
+      channel: "agent_workflow",
+      provider: normalizeString(run?.domain, "unknown"),
+      deploy_sha: normalizeString(process.env.GITHUB_SHA, "local"),
+      tool_family: failureTaxonomy === "none" ? "workflow" : failureTaxonomy,
+      quality_score: qualityScore,
+      retry_count: 0,
+      escalated: health === "critical",
+      failure_taxonomy: failureTaxonomy,
+      created_at: normalizeString(snapshot?.generatedAt, new Date().toISOString()),
+      trace_grade_status: health,
+    };
+  });
+}
+
 function average(values) {
   return values.length > 0
     ? values.reduce((sum, value) => sum + value, 0) / values.length
@@ -217,6 +247,8 @@ export async function reportQualityEvents(argv = process.argv.slice(2), env = pr
       ? parseAgentSuiteArtifact(config.eventsPath)
       : config.source === "agentic-evals-snapshot"
         ? parseAgenticEvalSnapshot(config.eventsPath)
+        : config.source === "agent-workflows-snapshot"
+          ? parseAgentWorkflowsSnapshot(config.eventsPath)
         : config.source === "runtime-admin-export"
           ? parseRuntimeAdminExport(config.eventsPath)
         : parseJsonLines(config.eventsPath);

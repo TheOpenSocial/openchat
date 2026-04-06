@@ -1,0 +1,27 @@
+{
+  "generatedAt": "2026-04-06T03:10:00.000Z",
+  "summary": {
+    "totalRuns": 2,
+    "health": {
+      "healthy": 1,
+      "watch": 1,
+      "critical": 0
+    }
+  },
+  "runs": [
+    {
+      "workflowRunId": "social:intent:wf-1",
+      "traceId": "trace-1",
+      "domain": "social",
+      "health": "healthy",
+      "failureClass": "none"
+    },
+    {
+      "workflowRunId": "social:intent:wf-2",
+      "traceId": "trace-2",
+      "domain": "social",
+      "health": "watch",
+      "failureClass": "matching_or_negotiation"
+    }
+  ]
+}
