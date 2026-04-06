@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
+import { fetchAgenticEvalSnapshot } from "../online/fetch-agentic-evals-snapshot.mjs";
 
 import {
   createEvalRunEnvelope,
@@ -36,6 +37,10 @@ function parseArgs(argv = process.argv.slice(2), env = process.env) {
   return {
     dryRun: boolFromEnv(flags.get("dry-run") ?? env.GOLDEN_PRODUCT_DRY_RUN, false),
     layer: normalizeString(flags.get("layer") ?? env.GOLDEN_PRODUCT_LAYER, "eval"),
+    source: normalizeString(
+      flags.get("source") ?? env.GOLDEN_PRODUCT_SOURCE,
+      "agent-suite",
+    ),
     artifactPath: normalizeString(flags.get("artifact-path") ?? env.GOLDEN_PRODUCT_ARTIFACT_PATH, ""),
     manifestPath: path.resolve(
       process.cwd(),
@@ -70,6 +75,55 @@ function runProductGoldenCommand(layer, artifactDir) {
     stdout: command.stdout ?? "",
     stderr: command.stderr ?? "",
   };
+}
+
+function normalizeSnapshotArtifact(snapshot) {
+  const scenarios = Array.isArray(snapshot?.scenarios) ? snapshot.scenarios : [];
+  const regressions = Array.isArray(snapshot?.regressions) ? snapshot.regressions : [];
+  const failureClasses = regressions.reduce((current, regression) => {
+    const key = normalizeString(regression?.key, "");
+    if (!key) return current;
+    current[key] = (current[key] ?? 0) + 1;
+    return current;
+  }, {});
+
+  return {
+    source: "agentic-evals-snapshot",
+    cases: [
+      {
+        id: "agentic-evals-snapshot",
+        status: normalizeString(snapshot?.summary?.status, "unknown") === "healthy" ? "passed" : "failed",
+      },
+    ],
+    records: scenarios.map((scenario) => ({
+      scenarioId: normalizeString(scenario?.scenarioId, scenario?.id ?? ""),
+      status: scenario?.passed === true ? "passed" : "failed",
+      failureClass: scenario?.passed === true ? null : regressions[0]?.key ?? "eval_scenario_failed",
+    })),
+    summary: {
+      caseCounts: {
+        total: 1,
+        passed: normalizeString(snapshot?.summary?.status, "unknown") === "healthy" ? 1 : 0,
+        failed: normalizeString(snapshot?.summary?.status, "unknown") === "healthy" ? 0 : 1,
+        skipped: 0,
+      },
+      recordCounts: {
+        total: scenarios.length,
+        passed: scenarios.filter((scenario) => scenario?.passed === true).length,
+        failed: scenarios.filter((scenario) => scenario?.passed !== true).length,
+        skipped: 0,
+      },
+      failureClasses,
+    },
+    snapshot,
+  };
+}
+
+function loadArtifactFromPath(source, artifactPath) {
+  const payload = JSON.parse(readFileSync(artifactPath, "utf8"));
+  return source === "agentic-evals-snapshot"
+    ? normalizeSnapshotArtifact(payload)
+    : payload;
 }
 
 function findLatestJsonArtifact(fileOrDirPath) {
@@ -120,7 +174,7 @@ export async function runProductCriticalGoldens(
       stderr: "",
     };
     try {
-      suiteArtifact = JSON.parse(readFileSync(config.artifactPath, "utf8"));
+      suiteArtifact = loadArtifactFromPath(config.source, config.artifactPath);
     } catch {
       suiteArtifact = null;
     }
@@ -134,14 +188,34 @@ export async function runProductCriticalGoldens(
     const suiteArtifactDir = mkdtempSync(
       path.join(os.tmpdir(), `product-goldens-${config.layer}-`),
     );
-    commandResult = runProductGoldenCommand(config.layer, suiteArtifactDir);
-    try {
-      const artifactPath = findLatestJsonArtifact(suiteArtifactDir);
-      suiteArtifact = JSON.parse(
-        readFileSync(artifactPath, "utf8"),
-      );
-    } catch {
-      suiteArtifact = null;
+    if (config.source === "agentic-evals-snapshot") {
+      try {
+        const outputPath = path.join(suiteArtifactDir, "agentic-evals-snapshot.json");
+        await fetchAgenticEvalSnapshot([`--output=${outputPath}`], env);
+        suiteArtifact = loadArtifactFromPath(config.source, outputPath);
+        commandResult = {
+          status: 0,
+          stdout: "live agentic eval snapshot fetched",
+          stderr: "",
+        };
+      } catch (error) {
+        commandResult = {
+          status: 1,
+          stdout: "",
+          stderr: error instanceof Error ? error.message : String(error),
+        };
+        suiteArtifact = null;
+      }
+    } else {
+      commandResult = runProductGoldenCommand(config.layer, suiteArtifactDir);
+      try {
+        const artifactPath = findLatestJsonArtifact(suiteArtifactDir);
+        suiteArtifact = JSON.parse(
+          readFileSync(artifactPath, "utf8"),
+        );
+      } catch {
+        suiteArtifact = null;
+      }
     }
   }
 
@@ -238,16 +312,27 @@ export async function runProductCriticalGoldens(
       passedScenarioCoveragePass &&
       failureClassPass
     );
+  const baseScore =
+    typeof caseCounts?.total === "number" && caseCounts.total > 0
+      ? Number((caseCounts.passed / caseCounts.total).toFixed(3))
+      : 0;
+  const normalizedScore =
+    passed && config.source === "agentic-evals-snapshot"
+      ? Number(
+          (
+            Number.isFinite(suiteArtifact?.snapshot?.summary?.score)
+              ? suiteArtifact.snapshot.summary.score
+              : baseScore || 1
+          ).toFixed(3),
+        )
+      : passed
+        ? baseScore || 1
+        : baseScore;
   const caseRows = [
     {
       caseId: `product-critical-${config.layer}`,
       status: passed ? "passed" : "failed",
-      score:
-        typeof caseCounts?.total === "number" && caseCounts.total > 0
-          ? Number((caseCounts.passed / caseCounts.total).toFixed(3))
-          : passed
-            ? 1
-            : 0,
+      score: normalizedScore,
       primaryFailureReason:
         passed
           ? "none"
@@ -272,6 +357,7 @@ export async function runProductCriticalGoldens(
                         : Object.entries(failureClasses ?? {}).sort((left, right) => right[1] - left[1])[0]?.[0] ??
                           `agent-test-suite-${config.layer}-failed`,
       layer: config.layer,
+      source: config.source,
       command: `node scripts/run-agent-test-suite.mjs --layer=${config.layer}`,
       stdout: commandResult.stdout,
       stderr: commandResult.stderr,
@@ -288,6 +374,7 @@ export async function runProductCriticalGoldens(
   const summary = {
     ...summarizeCaseRows(caseRows),
     layer: config.layer,
+    source: config.source,
     suiteSummary: suiteArtifact?.summary ?? null,
     dryRunBypassedAssertions: config.dryRun,
     assertionsEvaluated: !config.dryRun,

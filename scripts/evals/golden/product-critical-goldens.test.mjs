@@ -318,3 +318,48 @@ test("product critical golden runner fails when required scenarios are present b
   assert.equal(result.summary.primaryFailureReason, "required_scenarios_not_passing");
   assert.deepEqual(result.summary.missingPassedScenarioIds, ["eval_moderation_fallback_v1"]);
 });
+
+test("product critical golden runner can validate an agentic eval snapshot artifact", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "product-goldens-snapshot-"));
+  const artifactPath = path.resolve("scripts/evals/online/sample-agentic-evals-snapshot.json");
+  const manifestPath = path.join(root, "manifest.json");
+  writeFileSync(
+    manifestPath,
+    JSON.stringify({
+      version: 1,
+      layers: {
+        eval: {
+          minCaseCount: 1,
+          minRecordCount: 2,
+          maxFailedCases: 1,
+          maxFailedRecords: 1,
+          requiredCheckIds: ["agentic-evals-snapshot"],
+          requiredPassedCheckIds: [],
+          forbiddenFailureClasses: [],
+          requiredScenarioIds: [
+            "eval_planning_bounds_v1",
+            "eval_moderation_fallback_v1",
+          ],
+          requiredPassedScenarioIds: ["eval_planning_bounds_v1"],
+        },
+      },
+    }),
+  );
+
+  const result = await runProductCriticalGoldens(
+    [
+      "--source=agentic-evals-snapshot",
+      `--artifact-path=${artifactPath}`,
+      "--layer=eval",
+      `--manifest=${manifestPath}`,
+    ],
+    {
+      ...process.env,
+      EVAL_ARTIFACT_ROOT: root,
+    },
+  );
+
+  assert.equal(result.summary.source, "agentic-evals-snapshot");
+  assert.equal(result.summary.failedCases, 0);
+  assert.deepEqual(result.summary.missingScenarioIds, []);
+});

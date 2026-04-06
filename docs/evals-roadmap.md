@@ -40,6 +40,8 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
 ### Product goldens
 - Second golden suite entrypoint now exists for critical product flows.
 - Current implementation executes the existing agent test/eval lane and captures real suite summary artifacts.
+- It now also supports live/admin snapshot validation:
+  - `pnpm eval:golden:product:live`
 - Product manifest now enforces:
   - minimum case count
   - minimum record count
