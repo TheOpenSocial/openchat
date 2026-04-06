@@ -56,6 +56,10 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
 
 ### Online quality reporting scaffold
 - Standard quality event report runner now exists.
+- Admin snapshot fetcher now exists:
+  - `pnpm eval:online:fetch:agentic`
+- Live composed report now exists:
+  - `pnpm eval:online:live:agentic`
 - It can now summarize either:
   - JSONL quality event streams
   - `run-agent-test-suite` artifacts via `--source=agent-suite`
@@ -118,7 +122,8 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
   - `created_at`
 - Use this for nightly and weekly quality reports.
 - Runtime/admin export parsing now exists.
-- Remaining work is wiring that source to persisted analytics exports automatically instead of sample files.
+- Agentic eval snapshot fetch is now wired to the real admin endpoint.
+- Remaining work is wiring persisted analytics exports automatically instead of sample files and expanding beyond the eval snapshot endpoint.
 
 ### 4. Add social simulation family metrics to the benchmark
 - Family-level aggregate reporting is now in place for the seed matrix.
