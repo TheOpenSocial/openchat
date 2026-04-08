@@ -39,6 +39,10 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
   - `pnpm eval:replay:import -- --input=... --output=...`
 - Runtime export sanitization now exists:
   - `pnpm eval:replay:sanitize -- --input=... --output=...`
+- Replay/admin fetchers now reuse the same staging/prod smoke env fallback patterns as CI:
+  - `SMOKE_*`
+  - `STAGING_SMOKE_*`
+  - `PROD_SMOKE_*`
 - Replay runner can now consume raw historical exports directly:
   - `pnpm eval:replay -- --source=historical-export --corpus=...`
 - Current runner now supports command-backed, side-effect-free replay cases.

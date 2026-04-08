@@ -2,6 +2,7 @@
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { resolveSharedAdminEnv } from "../shared/env.mjs";
 
 function normalizeString(value, fallback = "") {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : fallback;
@@ -16,10 +17,11 @@ function parseArgs(argv = process.argv.slice(2), env = process.env) {
     flags.set(key, rawValue ?? "true");
   }
 
+  const shared = resolveSharedAdminEnv(env);
   return {
     baseUrl: normalizeString(
-      flags.get("base-url") ?? env.EVAL_BASE_URL ?? env.SMOKE_BASE_URL,
-      "http://localhost:3001",
+      flags.get("base-url") ?? shared.baseUrl,
+      shared.baseUrl,
     ).replace(/\/+$/, ""),
     outputPath: path.resolve(
       process.cwd(),
@@ -30,24 +32,24 @@ function parseArgs(argv = process.argv.slice(2), env = process.env) {
     ),
     limit: normalizeString(flags.get("limit") ?? env.EVAL_REPLAY_EXPORT_LIMIT, "10"),
     adminUserId: normalizeString(
-      flags.get("admin-user-id") ?? env.EVAL_ADMIN_USER_ID ?? env.SMOKE_ADMIN_USER_ID,
-      "11111111-1111-4111-8111-111111111111",
+      flags.get("admin-user-id") ?? shared.adminUserId,
+      shared.adminUserId,
     ),
     adminRole: normalizeString(
-      flags.get("admin-role") ?? env.EVAL_ADMIN_ROLE ?? env.SMOKE_ADMIN_ROLE,
-      "support",
+      flags.get("admin-role") ?? shared.adminRole,
+      shared.adminRole,
     ),
     adminApiKey: normalizeString(
-      flags.get("admin-api-key") ?? env.EVAL_ADMIN_API_KEY ?? env.SMOKE_ADMIN_API_KEY,
-      "",
+      flags.get("admin-api-key") ?? shared.adminApiKey,
+      shared.adminApiKey,
     ),
     accessToken: normalizeString(
-      flags.get("access-token") ?? env.EVAL_ACCESS_TOKEN ?? env.SMOKE_ACCESS_TOKEN,
-      "",
+      flags.get("access-token") ?? shared.accessToken,
+      shared.accessToken,
     ),
     hostHeader: normalizeString(
-      flags.get("host-header") ?? env.EVAL_HOST_HEADER ?? env.SMOKE_HOST_HEADER,
-      "",
+      flags.get("host-header") ?? shared.hostHeader,
+      shared.hostHeader,
     ),
   };
 }

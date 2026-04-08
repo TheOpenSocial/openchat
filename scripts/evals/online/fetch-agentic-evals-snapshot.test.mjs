@@ -53,3 +53,37 @@ test("fetch agentic eval snapshot surfaces request failures clearly", async () =
     /Failed to fetch agentic eval snapshot from https:\/\/example\.test\/api\/admin\/ops\/agentic-evals: network unreachable/,
   );
 });
+
+test("fetch agentic eval snapshot reuses staging smoke env fallback keys", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "agentic-eval-fetch-fallback-"));
+  const outputPath = path.join(root, "snapshot.json");
+
+  await fetchAgenticEvalSnapshot(
+    [`--output=${outputPath}`],
+    {
+      ...process.env,
+      STAGING_SMOKE_ADMIN_USER_ID: "staging-admin-user",
+      STAGING_SMOKE_ADMIN_API_KEY: "staging-admin-key",
+      STAGING_API_BASE_URL: "https://staging.example.test",
+      STAGING_SMOKE_HOST_HEADER: "staging.example.test",
+    },
+    async (url, options) => {
+      assert.equal(url, "https://staging.example.test/api/admin/ops/agentic-evals");
+      assert.equal(options.headers["x-admin-user-id"], "staging-admin-user");
+      assert.equal(options.headers["x-admin-api-key"], "staging-admin-key");
+      return {
+        ok: true,
+        async json() {
+          return {
+            ok: true,
+            data: {
+              summary: { status: "healthy" },
+              traceGrade: { status: "healthy" },
+              scenarios: [],
+            },
+          };
+        },
+      };
+    },
+  );
+});
