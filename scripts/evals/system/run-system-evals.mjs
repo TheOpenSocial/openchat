@@ -23,6 +23,7 @@ const DEFAULT_PRODUCT_ARTIFACT_PATH =
   "scripts/evals/golden/sample-product-critical-artifact.json";
 const DEFAULT_SANITIZED_RUNTIME_EXPORT_PATH =
   "scripts/evals/replay/sample-sanitized-runtime-export.jsonl";
+const DEFAULT_STAGE_HEARTBEAT_MS = 30000;
 
 function normalizeString(value, fallback = "") {
   return typeof value === "string" && value.trim().length > 0
@@ -209,6 +210,51 @@ function buildConfidenceRows({
   ];
 }
 
+function formatDuration(ms) {
+  const totalSeconds = Math.max(0, Math.round(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}m ${String(seconds).padStart(2, "0")}s`;
+}
+
+function logStage(event, stageId, detail = "") {
+  const timestamp = new Date().toISOString();
+  const suffix = detail ? ` ${detail}` : "";
+  console.log(`[system-evals][${timestamp}][${event}] ${stageId}${suffix}`);
+}
+
+async function runStage(stageId, fn, heartbeatMs = DEFAULT_STAGE_HEARTBEAT_MS) {
+  const startedAt = Date.now();
+  logStage("start", stageId);
+  const interval = setInterval(() => {
+    logStage(
+      "heartbeat",
+      stageId,
+      `(elapsed ${formatDuration(Date.now() - startedAt)})`,
+    );
+  }, heartbeatMs);
+  interval.unref?.();
+
+  try {
+    const result = await fn();
+    logStage(
+      "done",
+      stageId,
+      `(elapsed ${formatDuration(Date.now() - startedAt)})`,
+    );
+    return result;
+  } catch (error) {
+    logStage(
+      "failed",
+      stageId,
+      `(elapsed ${formatDuration(Date.now() - startedAt)}): ${error instanceof Error ? error.message : String(error)}`,
+    );
+    throw error;
+  } finally {
+    clearInterval(interval);
+  }
+}
+
 export async function runSystemEvals(
   argv = process.argv.slice(2),
   env = process.env,
@@ -226,25 +272,32 @@ export async function runSystemEvals(
     evalType: "system",
     artifactRoot: env.EVAL_ARTIFACT_ROOT,
   });
+  logStage(
+    "init",
+    "system-evaluation-matrix",
+    `artifactRoot=${envelope.runDir}`,
+  );
 
   const suiteRows = [];
   const suiteSummaries = [];
   const sharedAdmin = resolveSharedAdminEnv(env);
 
-  const socialSimResult = await deps.runSocialSimBenchmarkMatrix(
-    [
-      "--provider=stub",
-      "--judge-provider=stub",
-      "--benchmark-mode=1",
-      "--dry-run=1",
-      "--horizon=all",
-      "--world-set=core",
-      ...argv,
-    ],
-    {
-      ...env,
-      EVAL_ARTIFACT_ROOT: path.join(envelope.runDir, "suite-artifacts"),
-    },
+  const socialSimResult = await runStage("social-sim-deterministic", () =>
+    deps.runSocialSimBenchmarkMatrix(
+      [
+        "--provider=stub",
+        "--judge-provider=stub",
+        "--benchmark-mode=1",
+        "--dry-run=1",
+        "--horizon=all",
+        "--world-set=core",
+        ...argv,
+      ],
+      {
+        ...env,
+        EVAL_ARTIFACT_ROOT: path.join(envelope.runDir, "suite-artifacts"),
+      },
+    ),
   );
   suiteSummaries.push({
     suiteId: "social-sim-benchmark",
@@ -265,36 +318,38 @@ export async function runSystemEvals(
 
   let liveSocialSimResult = null;
   if (config.useLiveSocialSim) {
-    liveSocialSimResult = await deps.runSocialSimBenchmarkMatrix(
-      [
-        "--benchmark-mode=1",
-        "--horizon=all",
-        "--world-set=core",
-        `--provider=${normalizeString(env.EVAL_SYSTEM_LIVE_SOCIAL_SIM_PROVIDER, "ollama")}`,
-        `--judge-provider=${normalizeString(
-          env.EVAL_SYSTEM_LIVE_SOCIAL_SIM_JUDGE_PROVIDER,
-          "stub",
-        )}`,
-        "--use-remote-provider=1",
-        `--use-remote-judge=${normalizeString(
-          env.EVAL_SYSTEM_LIVE_SOCIAL_SIM_USE_REMOTE_JUDGE,
-          "0",
-        )}`,
-        "--fail-on-remote-fallback=1",
-        "--base-url=" + sharedAdmin.baseUrl,
-        "--admin-user-id=" + sharedAdmin.adminUserId,
-        "--admin-role=" + sharedAdmin.adminRole,
-        "--admin-api-key=" + sharedAdmin.adminApiKey,
-        ...argv,
-      ],
-      {
-        ...env,
-        SOCIAL_SIM_BASE_URL: sharedAdmin.baseUrl,
-        SOCIAL_SIM_ADMIN_USER_ID: sharedAdmin.adminUserId,
-        SOCIAL_SIM_ADMIN_ROLE: sharedAdmin.adminRole,
-        SOCIAL_SIM_ADMIN_API_KEY: sharedAdmin.adminApiKey,
-        EVAL_ARTIFACT_ROOT: path.join(envelope.runDir, "suite-artifacts"),
-      },
+    liveSocialSimResult = await runStage("social-sim-live-provider", () =>
+      deps.runSocialSimBenchmarkMatrix(
+        [
+          "--benchmark-mode=1",
+          "--horizon=all",
+          "--world-set=core",
+          `--provider=${normalizeString(env.EVAL_SYSTEM_LIVE_SOCIAL_SIM_PROVIDER, "ollama")}`,
+          `--judge-provider=${normalizeString(
+            env.EVAL_SYSTEM_LIVE_SOCIAL_SIM_JUDGE_PROVIDER,
+            "stub",
+          )}`,
+          "--use-remote-provider=1",
+          `--use-remote-judge=${normalizeString(
+            env.EVAL_SYSTEM_LIVE_SOCIAL_SIM_USE_REMOTE_JUDGE,
+            "0",
+          )}`,
+          "--fail-on-remote-fallback=1",
+          "--base-url=" + sharedAdmin.baseUrl,
+          "--admin-user-id=" + sharedAdmin.adminUserId,
+          "--admin-role=" + sharedAdmin.adminRole,
+          "--admin-api-key=" + sharedAdmin.adminApiKey,
+          ...argv,
+        ],
+        {
+          ...env,
+          SOCIAL_SIM_BASE_URL: sharedAdmin.baseUrl,
+          SOCIAL_SIM_ADMIN_USER_ID: sharedAdmin.adminUserId,
+          SOCIAL_SIM_ADMIN_ROLE: sharedAdmin.adminRole,
+          SOCIAL_SIM_ADMIN_API_KEY: sharedAdmin.adminApiKey,
+          EVAL_ARTIFACT_ROOT: path.join(envelope.runDir, "suite-artifacts"),
+        },
+      ),
     );
     suiteSummaries.push({
       suiteId: "social-sim-live-benchmark",
@@ -317,12 +372,14 @@ export async function runSystemEvals(
     );
   }
 
-  const productResult = await deps.runProductCriticalGoldens(
-    [`--artifact-path=${config.productArtifactPath}`, ...argv],
-    {
-      ...env,
-      EVAL_ARTIFACT_ROOT: path.join(envelope.runDir, "suite-artifacts"),
-    },
+  const productResult = await runStage("product-critical-goldens", () =>
+    deps.runProductCriticalGoldens(
+      [`--artifact-path=${config.productArtifactPath}`, ...argv],
+      {
+        ...env,
+        EVAL_ARTIFACT_ROOT: path.join(envelope.runDir, "suite-artifacts"),
+      },
+    ),
   );
   suiteSummaries.push({
     suiteId: "product-critical-goldens",
@@ -371,8 +428,8 @@ export async function runSystemEvals(
       config.useLiveWorkflowReplay &&
       replayRun.suiteId === "replay-sanitized-runtime-export"
     ) {
-      const liveWorkflowReplayResult =
-        await deps.runLiveSanitizedWorkflowReplay(
+      const liveWorkflowReplayResult = await runStage(replayRun.suiteId, () =>
+        deps.runLiveSanitizedWorkflowReplay(
           [
             `--export-output=${path.join(
               envelope.runDir,
@@ -386,7 +443,8 @@ export async function runSystemEvals(
             )}`,
           ],
           env,
-        );
+        ),
+      );
       suiteSummaries.push({
         suiteId: replayRun.suiteId,
         summary: liveWorkflowReplayResult.replay.summary,
@@ -410,10 +468,12 @@ export async function runSystemEvals(
       continue;
     }
 
-    const replayResult = await deps.runReplayEvals(replayRun.args, {
-      ...env,
-      EVAL_ARTIFACT_ROOT: path.join(envelope.runDir, "suite-artifacts"),
-    });
+    const replayResult = await runStage(replayRun.suiteId, () =>
+      deps.runReplayEvals(replayRun.args, {
+        ...env,
+        EVAL_ARTIFACT_ROOT: path.join(envelope.runDir, "suite-artifacts"),
+      }),
+    );
     suiteSummaries.push({
       suiteId: replayRun.suiteId,
       summary: replayResult.summary,
@@ -506,6 +566,12 @@ export async function runSystemEvals(
       overallFailures.length === 0 &&
       rollup.failedCases === 0,
   };
+
+  logStage(
+    "summary",
+    "system-evaluation-matrix",
+    `passed=${summary.passed} averageScore=${Number(summary.averageScore ?? 0).toFixed(3)} failedSuites=${summary.failedCases}`,
+  );
 
   return finalizeEvalRun(envelope, summary, suiteRowsWithThresholds, {
     baseline,

@@ -1,4 +1,4 @@
-name: System Live Evals
+name: System Evaluation Matrix
 
 on:
   workflow_dispatch:
@@ -16,6 +16,7 @@ env:
 
 jobs:
   system-live-evals:
+    name: Live Staging System Matrix
     runs-on: [self-hosted, linux, x64, opensocial-prod]
     environment: staging
     timeout-minutes: 45
@@ -55,7 +56,7 @@ jobs:
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
-      - name: Validate staging eval config
+      - name: Validate Staging Evaluation Credentials
         shell: bash
         run: |
           set -euo pipefail
@@ -70,7 +71,7 @@ jobs:
             exit 1
           fi
 
-      - name: Run live system evals
+      - name: Execute Live System Evaluation Matrix
         shell: bash
         run: |
           set -euo pipefail
@@ -80,7 +81,7 @@ jobs:
           fi
           "${cmd[@]}"
 
-      - name: Upload live eval artifacts
+      - name: Publish System Evaluation Artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
