@@ -2,6 +2,12 @@ name: System Live Evals
 
 on:
   workflow_dispatch:
+    inputs:
+      enable_live_social_sim:
+        description: "Include provider-backed social simulation in the live system gate"
+        required: false
+        default: false
+        type: boolean
   schedule:
     - cron: "0 12 * * *"
 
@@ -22,6 +28,17 @@ jobs:
       STAGING_SMOKE_ADMIN_USER_ID: ${{ secrets.STAGING_SMOKE_ADMIN_USER_ID || secrets.SMOKE_ADMIN_USER_ID }}
       STAGING_SMOKE_ADMIN_ROLE: ${{ secrets.STAGING_SMOKE_ADMIN_ROLE || secrets.SMOKE_ADMIN_ROLE || 'admin' }}
       STAGING_SMOKE_ADMIN_API_KEY: ${{ secrets.STAGING_SMOKE_ADMIN_API_KEY || secrets.SMOKE_ADMIN_API_KEY }}
+      SOCIAL_SIM_BASE_URL: ${{ secrets.STAGING_API_BASE_URL }}
+      SOCIAL_SIM_ADMIN_USER_ID: ${{ secrets.STAGING_SMOKE_ADMIN_USER_ID || secrets.SMOKE_ADMIN_USER_ID }}
+      SOCIAL_SIM_ADMIN_ROLE: ${{ secrets.STAGING_SMOKE_ADMIN_ROLE || secrets.SMOKE_ADMIN_ROLE || 'admin' }}
+      SOCIAL_SIM_ADMIN_API_KEY: ${{ secrets.STAGING_SMOKE_ADMIN_API_KEY || secrets.SMOKE_ADMIN_API_KEY }}
+      OLLAMA_BASE_URL: ${{ secrets.OLLAMA_BASE_URL }}
+      OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+      SOCIAL_SIM_OLLAMA_MODEL: ${{ secrets.SOCIAL_SIM_OLLAMA_MODEL || vars.SOCIAL_SIM_OLLAMA_MODEL || 'deepseek-v3.1:671b' }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      EVAL_SYSTEM_LIVE_SOCIAL_SIM_PROVIDER: ollama
+      EVAL_SYSTEM_LIVE_SOCIAL_SIM_JUDGE_PROVIDER: stub
+      EVAL_SYSTEM_LIVE_SOCIAL_SIM_USE_REMOTE_JUDGE: "0"
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -57,7 +74,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          pnpm eval:system:live:workflows
+          cmd=(pnpm eval:system:live:workflows)
+          if [[ "${{ github.event_name == 'workflow_dispatch' && inputs.enable_live_social_sim || false }}" == "true" ]]; then
+            cmd+=(--live-social-sim=1)
+          fi
+          "${cmd[@]}"
 
       - name: Upload live eval artifacts
         if: always()

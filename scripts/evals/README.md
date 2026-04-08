@@ -25,6 +25,8 @@ This directory contains the repository eval stack for simulation, replay, golden
   - system gate using live fetched + sanitized workflow replay
 - `pnpm eval:system:status`
   - prints the latest local system matrix, thresholds, and artifact locations
+- `pnpm eval:system:compare`
+  - compares the latest matrix against the accepted baseline history
 
 ### Golden
 
@@ -80,3 +82,11 @@ For the full architecture and interpretation rules, see:
 
 - [`/Users/cruciblelabs/Documents/openchat/docs/agentic-evals-architecture.md`](/Users/cruciblelabs/Documents/openchat/docs/agentic-evals-architecture.md)
 - [`/Users/cruciblelabs/Documents/openchat/docs/evals-roadmap.md`](/Users/cruciblelabs/Documents/openchat/docs/evals-roadmap.md)
+
+## Current Matrix Additions
+
+The system layer now supports:
+
+- optional live provider-backed social-sim lane via `--live-social-sim=1`
+- confidence rows in the system summary
+- accepted baseline history comparison

@@ -24,6 +24,7 @@ That distinction matters. Most current scores are regression signals, not final 
 - `pnpm eval:system`
 - `pnpm eval:system:live:workflows`
 - `pnpm eval:system:status`
+- `pnpm eval:system:compare`
 
 ### Golden suites
 
@@ -202,15 +203,18 @@ Entry point:
 Baseline:
 
 - [`/Users/cruciblelabs/Documents/openchat/scripts/evals/system/system-baseline.json`](/Users/cruciblelabs/Documents/openchat/scripts/evals/system/system-baseline.json)
+- [`/Users/cruciblelabs/Documents/openchat/scripts/evals/system/system-baseline-history.json`](/Users/cruciblelabs/Documents/openchat/scripts/evals/system/system-baseline-history.json)
 
 Status view:
 
 - [`/Users/cruciblelabs/Documents/openchat/scripts/evals/system/matrix-status.mjs`](/Users/cruciblelabs/Documents/openchat/scripts/evals/system/matrix-status.mjs)
+- [`/Users/cruciblelabs/Documents/openchat/scripts/evals/system/compare-system-baseline.mjs`](/Users/cruciblelabs/Documents/openchat/scripts/evals/system/compare-system-baseline.mjs)
 
 What it does:
 
 - composes:
   - social-sim benchmark
+  - optional live provider-backed social-sim benchmark
   - product critical goldens
   - replay corpus
   - historical replay corpus
@@ -218,6 +222,11 @@ What it does:
   - sanitized runtime export replay
 - enforces suite thresholds
 - emits a combined pass/fail result
+- emits confidence rows for:
+  - deterministic regression confidence
+  - live replay confidence
+  - social realism confidence
+  - real-world correlation confidence
 
 What it means:
 

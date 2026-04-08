@@ -8,6 +8,7 @@ import {
   finalizeEvalRun,
   summarizeCaseRows,
 } from "../shared/artifacts.mjs";
+import { resolveSharedAdminEnv } from "../shared/env.mjs";
 import { runSocialSimBenchmarkMatrix } from "../golden/social-sim-benchmark.mjs";
 import { runProductCriticalGoldens } from "../golden/product-critical-goldens.mjs";
 import { runReplayEvals } from "../replay/run-replay-evals.mjs";
@@ -24,7 +25,9 @@ const DEFAULT_SANITIZED_RUNTIME_EXPORT_PATH =
   "scripts/evals/replay/sample-sanitized-runtime-export.jsonl";
 
 function normalizeString(value, fallback = "") {
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : fallback;
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : fallback;
 }
 
 function parseArgs(argv = process.argv.slice(2), env = process.env) {
@@ -46,14 +49,16 @@ function parseArgs(argv = process.argv.slice(2), env = process.env) {
     replayHistoricalCorpusPath: path.resolve(
       process.cwd(),
       normalizeString(
-        flags.get("historical-corpus") ?? env.EVAL_SYSTEM_HISTORICAL_CORPUS_PATH,
+        flags.get("historical-corpus") ??
+          env.EVAL_SYSTEM_HISTORICAL_CORPUS_PATH,
         DEFAULT_HISTORICAL_CORPUS_PATH,
       ),
     ),
     replayHistoricalExportPath: path.resolve(
       process.cwd(),
       normalizeString(
-        flags.get("historical-export") ?? env.EVAL_SYSTEM_HISTORICAL_EXPORT_PATH,
+        flags.get("historical-export") ??
+          env.EVAL_SYSTEM_HISTORICAL_EXPORT_PATH,
         DEFAULT_HISTORICAL_EXPORT_PATH,
       ),
     ),
@@ -74,7 +79,13 @@ function parseArgs(argv = process.argv.slice(2), env = process.env) {
     ),
     useLiveWorkflowReplay:
       normalizeString(
-        flags.get("live-workflow-replay") ?? env.EVAL_SYSTEM_LIVE_WORKFLOW_REPLAY,
+        flags.get("live-workflow-replay") ??
+          env.EVAL_SYSTEM_LIVE_WORKFLOW_REPLAY,
+        "0",
+      ) === "1",
+    useLiveSocialSim:
+      normalizeString(
+        flags.get("live-social-sim") ?? env.EVAL_SYSTEM_LIVE_SOCIAL_SIM,
         "0",
       ) === "1",
   };
@@ -101,7 +112,9 @@ function compareSuiteAgainstBaseline(row, baselineEntry = {}) {
   if (
     Array.isArray(baselineEntry.requiredPrimaryFailureReasons) &&
     baselineEntry.requiredPrimaryFailureReasons.length > 0 &&
-    !baselineEntry.requiredPrimaryFailureReasons.includes(row.primaryFailureReason)
+    !baselineEntry.requiredPrimaryFailureReasons.includes(
+      row.primaryFailureReason,
+    )
   ) {
     reasons.push("unexpected_primary_failure_reason");
   }
@@ -113,9 +126,12 @@ function compareSuiteAgainstBaseline(row, baselineEntry = {}) {
       const metric = familyMetrics?.[family];
       if (
         Number.isFinite(threshold?.minMeanConvergenceScore) &&
-        Number(metric?.meanConvergenceScore ?? 0) < threshold.minMeanConvergenceScore
+        Number(metric?.meanConvergenceScore ?? 0) <
+          threshold.minMeanConvergenceScore
       ) {
-        familyThresholdFailures.push(`${family}:mean_convergence_below_threshold`);
+        familyThresholdFailures.push(
+          `${family}:mean_convergence_below_threshold`,
+        );
       }
     }
     if (familyThresholdFailures.length > 0) {
@@ -129,12 +145,7 @@ function compareSuiteAgainstBaseline(row, baselineEntry = {}) {
   };
 }
 
-function buildSuiteRow({
-  suiteId,
-  summary,
-  runId,
-  extra = {},
-}) {
+function buildSuiteRow({ suiteId, summary, runId, extra = {} }) {
   return {
     caseId: suiteId,
     suiteId,
@@ -150,6 +161,52 @@ function buildSuiteRow({
     suiteArtifactRunId: runId,
     ...extra,
   };
+}
+
+function buildConfidenceRows({
+  usedLiveWorkflowReplay,
+  usedLiveSocialSim,
+  socialSimDeterministic,
+  socialSimLive,
+  summary,
+}) {
+  return [
+    {
+      id: "deterministic_regression_confidence",
+      level:
+        summary.passed === true && (summary.failedCases ?? 0) === 0
+          ? "high"
+          : "medium",
+      basis:
+        "Deterministic system gate with thresholded synthetic suites and fixed social-sim seeds.",
+    },
+    {
+      id: "live_replay_confidence",
+      level: usedLiveWorkflowReplay ? "medium" : "low",
+      basis: usedLiveWorkflowReplay
+        ? "Live fetched + sanitized workflow replay passed against staging traces."
+        : "No live workflow replay evidence included in this system run.",
+    },
+    {
+      id: "social_realism_confidence",
+      level: usedLiveSocialSim ? "medium" : "low",
+      basis: usedLiveSocialSim
+        ? `Live provider-backed social-sim lane included with mean score ${Number(
+            socialSimLive?.meanScore ?? socialSimLive?.averageScore ?? 0,
+          ).toFixed(3)}.`
+        : `Only deterministic social-sim evidence is present with mean score ${Number(
+            socialSimDeterministic?.meanScore ??
+              socialSimDeterministic?.averageScore ??
+              0,
+          ).toFixed(3)}.`,
+    },
+    {
+      id: "real_world_correlation_confidence",
+      level: "low",
+      basis:
+        "No production outcome correlation model is wired into the matrix yet.",
+    },
+  ];
 }
 
 export async function runSystemEvals(
@@ -172,6 +229,7 @@ export async function runSystemEvals(
 
   const suiteRows = [];
   const suiteSummaries = [];
+  const sharedAdmin = resolveSharedAdminEnv(env);
 
   const socialSimResult = await deps.runSocialSimBenchmarkMatrix(
     [
@@ -205,6 +263,60 @@ export async function runSystemEvals(
     }),
   );
 
+  let liveSocialSimResult = null;
+  if (config.useLiveSocialSim) {
+    liveSocialSimResult = await deps.runSocialSimBenchmarkMatrix(
+      [
+        "--benchmark-mode=1",
+        "--horizon=all",
+        "--world-set=core",
+        `--provider=${normalizeString(env.EVAL_SYSTEM_LIVE_SOCIAL_SIM_PROVIDER, "ollama")}`,
+        `--judge-provider=${normalizeString(
+          env.EVAL_SYSTEM_LIVE_SOCIAL_SIM_JUDGE_PROVIDER,
+          "stub",
+        )}`,
+        "--use-remote-provider=1",
+        `--use-remote-judge=${normalizeString(
+          env.EVAL_SYSTEM_LIVE_SOCIAL_SIM_USE_REMOTE_JUDGE,
+          "0",
+        )}`,
+        "--fail-on-remote-fallback=1",
+        "--base-url=" + sharedAdmin.baseUrl,
+        "--admin-user-id=" + sharedAdmin.adminUserId,
+        "--admin-role=" + sharedAdmin.adminRole,
+        "--admin-api-key=" + sharedAdmin.adminApiKey,
+        ...argv,
+      ],
+      {
+        ...env,
+        SOCIAL_SIM_BASE_URL: sharedAdmin.baseUrl,
+        SOCIAL_SIM_ADMIN_USER_ID: sharedAdmin.adminUserId,
+        SOCIAL_SIM_ADMIN_ROLE: sharedAdmin.adminRole,
+        SOCIAL_SIM_ADMIN_API_KEY: sharedAdmin.adminApiKey,
+        EVAL_ARTIFACT_ROOT: path.join(envelope.runDir, "suite-artifacts"),
+      },
+    );
+    suiteSummaries.push({
+      suiteId: "social-sim-live-benchmark",
+      summary: liveSocialSimResult.summary,
+    });
+    suiteRows.push(
+      buildSuiteRow({
+        suiteId: "social-sim-live-benchmark",
+        summary: liveSocialSimResult.summary,
+        runId: liveSocialSimResult.runId,
+        extra: {
+          meanScore: liveSocialSimResult.summary.meanScore ?? 0,
+          worstSeedScore: liveSocialSimResult.summary.worstSeedScore ?? 0,
+          familyMetrics: liveSocialSimResult.summary.familyMetrics ?? {},
+          effectiveBackendModes:
+            liveSocialSimResult.summary.effectiveBackendModes ?? [],
+          realismLane: "live-provider",
+        },
+      }),
+    );
+  }
+
   const productResult = await deps.runProductCriticalGoldens(
     [`--artifact-path=${config.productArtifactPath}`, ...argv],
     {
@@ -223,7 +335,8 @@ export async function runSystemEvals(
       runId: productResult.runId,
       extra: {
         assertionsEvaluated: productResult.summary.assertionsEvaluated ?? false,
-        dryRunBypassedAssertions: productResult.summary.dryRunBypassedAssertions ?? false,
+        dryRunBypassedAssertions:
+          productResult.summary.dryRunBypassedAssertions ?? false,
       },
     }),
   );
@@ -258,21 +371,22 @@ export async function runSystemEvals(
       config.useLiveWorkflowReplay &&
       replayRun.suiteId === "replay-sanitized-runtime-export"
     ) {
-      const liveWorkflowReplayResult = await deps.runLiveSanitizedWorkflowReplay(
-        [
-          `--export-output=${path.join(
-            envelope.runDir,
-            "suite-artifacts",
-            "live-workflow-replay-export.json",
-          )}`,
-          `--sanitized-output=${path.join(
-            envelope.runDir,
-            "suite-artifacts",
-            "live-workflow-replay-export.sanitized.jsonl",
-          )}`,
-        ],
-        env,
-      );
+      const liveWorkflowReplayResult =
+        await deps.runLiveSanitizedWorkflowReplay(
+          [
+            `--export-output=${path.join(
+              envelope.runDir,
+              "suite-artifacts",
+              "live-workflow-replay-export.json",
+            )}`,
+            `--sanitized-output=${path.join(
+              envelope.runDir,
+              "suite-artifacts",
+              "live-workflow-replay-export.sanitized.jsonl",
+            )}`,
+          ],
+          env,
+        );
       suiteSummaries.push({
         suiteId: replayRun.suiteId,
         summary: liveWorkflowReplayResult.replay.summary,
@@ -283,8 +397,11 @@ export async function runSystemEvals(
           summary: liveWorkflowReplayResult.replay.summary,
           runId: liveWorkflowReplayResult.replay.runId,
           extra: {
-            replaySource: liveWorkflowReplayResult.replay.summary.source ?? "historical-export",
-            corpusSuite: liveWorkflowReplayResult.replay.summary.corpusSuite ?? null,
+            replaySource:
+              liveWorkflowReplayResult.replay.summary.source ??
+              "historical-export",
+            corpusSuite:
+              liveWorkflowReplayResult.replay.summary.corpusSuite ?? null,
             liveFetchBaseUrl: liveWorkflowReplayResult.fetch.baseUrl ?? null,
             sanitizedExportPath: liveWorkflowReplayResult.sanitizedExportPath,
           },
@@ -329,14 +446,18 @@ export async function runSystemEvals(
 
   const failedThresholds = thresholdResults.filter((result) => !result.passed);
   const suiteRowsWithThresholds = suiteRows.map((row) => {
-    const threshold = thresholdResults.find((result) => result.suiteId === row.suiteId);
+    const threshold = thresholdResults.find(
+      (result) => result.suiteId === row.suiteId,
+    );
     return {
       ...row,
       thresholdPassed: threshold?.passed ?? true,
       thresholdFailureReasons: threshold?.reasons ?? [],
       familyThresholdFailures: threshold?.familyThresholdFailures ?? [],
       status:
-        row.status === "failed" || threshold?.passed === false ? "failed" : "passed",
+        row.status === "failed" || threshold?.passed === false
+          ? "failed"
+          : "passed",
     };
   });
 
@@ -366,6 +487,20 @@ export async function runSystemEvals(
     overallThresholds,
     overallThresholdFailures: overallFailures,
     usedLiveWorkflowReplay: config.useLiveWorkflowReplay,
+    usedLiveSocialSim: config.useLiveSocialSim,
+    confidenceRows: buildConfidenceRows({
+      usedLiveWorkflowReplay: config.useLiveWorkflowReplay,
+      usedLiveSocialSim: config.useLiveSocialSim,
+      socialSimDeterministic: socialSimResult.summary,
+      socialSimLive: liveSocialSimResult?.summary ?? null,
+      summary: {
+        passed:
+          failedThresholds.length === 0 &&
+          overallFailures.length === 0 &&
+          rollup.failedCases === 0,
+        failedCases: rollup.failedCases,
+      },
+    }),
     passed:
       failedThresholds.length === 0 &&
       overallFailures.length === 0 &&

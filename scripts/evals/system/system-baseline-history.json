@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "acceptedRuns": [
+    {
+      "id": "2026-04-08-initial-system-baseline",
+      "acceptedAt": "2026-04-08T23:20:00Z",
+      "notes": "Initial accepted deterministic system baseline after live workflow replay lane passed in staging.",
+      "system": {
+        "averageScore": 0.95,
+        "passed": true
+      },
+      "socialSimulation": {
+        "meanScore": 0.698,
+        "scoreStdDev": 0.006,
+        "worstSeedScore": 0.69
+      },
+      "suiteScores": {
+        "social-sim-benchmark": 0.698,
+        "product-critical-goldens": 1,
+        "replay-corpus": 1,
+        "replay-historical-corpus": 1,
+        "replay-historical-export": 1,
+        "replay-sanitized-runtime-export": 1
+      }
+    }
+  ]
+}

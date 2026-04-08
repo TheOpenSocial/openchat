@@ -49,6 +49,7 @@
     "eval:replay:import": "node scripts/evals/replay/import-historical-replay.mjs",
     "eval:replay:sanitize": "node scripts/evals/replay/sanitize-runtime-export.mjs",
     "eval:system": "node scripts/evals/system/run-system-evals.mjs",
+    "eval:system:compare": "node scripts/evals/system/compare-system-baseline.mjs",
     "eval:system:status": "node scripts/evals/system/matrix-status.mjs",
     "eval:system:live:workflows": "node scripts/evals/system/run-system-evals.mjs --live-workflow-replay=1",
     "eval:online:fetch:agentic": "node scripts/evals/online/fetch-agentic-evals-snapshot.mjs",

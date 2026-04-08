@@ -133,11 +133,14 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
   - per-suite artifact references and scores
 - Matrix status command now exists:
   - `pnpm eval:system:status`
+- Baseline history comparison command now exists:
+  - `pnpm eval:system:compare`
 - It resolves the latest system-gate artifact and reports:
   - overall system status
   - current social-sim benchmark score, variance, and family metrics
   - per-suite threshold status
   - per-suite source artifact locations
+  - confidence rows separating deterministic, live replay, and social realism confidence
 - Social-sim thresholding now also checks family-level minimums for:
   - recovery
   - circle
@@ -181,6 +184,7 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
 ### 3. Turn the system gate into a release gate
 - Remaining work:
   - store accepted baseline snapshots per release line
+  - accepted baseline history file is now in place for initial comparisons
   - diff current run against previous accepted baseline
   - wire `pnpm eval:system` into CI and pre-release jobs
 

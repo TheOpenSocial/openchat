@@ -19,19 +19,22 @@ test("system eval runner composes simulated suites and baseline thresholds", asy
             minAverageScore: 0.5,
             maxFailedCases: 1,
             familyThresholds: {
-              recovery: { minMeanConvergenceScore: 0.7 }
-            }
+              recovery: { minMeanConvergenceScore: 0.7 },
+            },
           },
           "product-critical-goldens": { minAverageScore: 1, maxFailedCases: 0 },
           "replay-corpus": { minAverageScore: 1, maxFailedCases: 0 },
           "replay-historical-corpus": { minAverageScore: 1, maxFailedCases: 0 },
           "replay-historical-export": { minAverageScore: 1, maxFailedCases: 0 },
-          "replay-sanitized-runtime-export": { minAverageScore: 1, maxFailedCases: 0 }
+          "replay-sanitized-runtime-export": {
+            minAverageScore: 1,
+            maxFailedCases: 0,
+          },
         },
         overallThresholds: {
           minAverageScore: 0.9,
-          maxFailedSuites: 0
-        }
+          maxFailedSuites: 0,
+        },
       },
       null,
       2,
@@ -57,9 +60,9 @@ test("system eval runner composes simulated suites and baseline thresholds", asy
             worstSeedScore: 0.52,
             familyMetrics: {
               recovery: {
-                meanConvergenceScore: 0.84
-              }
-            }
+                meanConvergenceScore: 0.84,
+              },
+            },
           },
         };
       },
@@ -91,7 +94,8 @@ test("system eval runner composes simulated suites and baseline thresholds", asy
             failedCases: 0,
             averageScore: 1,
             primaryFailureReason: "none",
-            source: suiteId === "historical-export" ? "historical-export" : "corpus",
+            source:
+              suiteId === "historical-export" ? "historical-export" : "corpus",
             corpusSuite:
               suiteId === "historical-corpus"
                 ? "sample-historical-replay-corpus"
@@ -99,23 +103,32 @@ test("system eval runner composes simulated suites and baseline thresholds", asy
                   ? "sample-historical-export"
                   : suiteId === "sanitized-runtime-export"
                     ? "sample-sanitized-runtime-export"
-                  : "sample-replay-corpus",
+                    : "sample-replay-corpus",
           },
         };
       },
       async runLiveSanitizedWorkflowReplay() {
-        throw new Error("live workflow replay should not run in default system gate mode");
+        throw new Error(
+          "live workflow replay should not run in default system gate mode",
+        );
       },
     },
   );
 
-  const summary = JSON.parse(readFileSync(path.join(result.runDir, "summary.json"), "utf8"));
+  const summary = JSON.parse(
+    readFileSync(path.join(result.runDir, "summary.json"), "utf8"),
+  );
   assert.equal(summary.suiteCount, 6);
   assert.equal(summary.thresholdFailures.length, 0);
   assert.equal(summary.overallThresholdFailures.length, 1);
   assert.equal(summary.usedLiveWorkflowReplay, false);
+  assert.equal(summary.usedLiveSocialSim, false);
+  assert.equal(summary.confidenceRows.length, 4);
   assert.equal(summary.passed, false);
-  const socialSimRow = readFileSync(path.join(result.runDir, "cases.jsonl"), "utf8")
+  const socialSimRow = readFileSync(
+    path.join(result.runDir, "cases.jsonl"),
+    "utf8",
+  )
     .trim()
     .split("\n")
     .map((line) => JSON.parse(line))
@@ -136,16 +149,19 @@ test("system eval runner fails thresholded suites explicitly", async () => {
         suiteThresholds: {
           "social-sim-benchmark": {
             familyThresholds: {
-              recovery: { minMeanConvergenceScore: 0.95 }
-            }
+              recovery: { minMeanConvergenceScore: 0.95 },
+            },
           },
           "replay-corpus": { minAverageScore: 1, maxFailedCases: 0 },
-          "replay-sanitized-runtime-export": { minAverageScore: 1, maxFailedCases: 0 }
+          "replay-sanitized-runtime-export": {
+            minAverageScore: 1,
+            maxFailedCases: 0,
+          },
         },
         overallThresholds: {
           minAverageScore: 0.95,
-          maxFailedSuites: 0
-        }
+          maxFailedSuites: 0,
+        },
       },
       null,
       2,
@@ -170,9 +186,9 @@ test("system eval runner fails thresholded suites explicitly", async () => {
             primaryFailureReason: "none",
             familyMetrics: {
               recovery: {
-                meanConvergenceScore: 0.8
-              }
-            }
+                meanConvergenceScore: 0.8,
+              },
+            },
           },
         };
       },
@@ -198,13 +214,17 @@ test("system eval runner fails thresholded suites explicitly", async () => {
             failedCases: isCorpus ? 1 : 0,
             averageScore: isCorpus ? 0.5 : 1,
             primaryFailureReason: isCorpus ? "wrong_tool_choice" : "none",
-            source: argv.includes("--source=historical-export") ? "historical-export" : "corpus",
+            source: argv.includes("--source=historical-export")
+              ? "historical-export"
+              : "corpus",
             corpusSuite: "fixture",
           },
         };
       },
       async runLiveSanitizedWorkflowReplay() {
-        throw new Error("live workflow replay should not run in threshold failure unit test");
+        throw new Error(
+          "live workflow replay should not run in threshold failure unit test",
+        );
       },
     },
   );
@@ -217,7 +237,9 @@ test("system eval runner fails thresholded suites explicitly", async () => {
   const replayFailure = result.summary.thresholdFailures.find(
     (entry) => entry.suiteId === "replay-corpus",
   );
-  assert.ok(socialFailure.reasons.includes("social_sim_family_threshold_failed"));
+  assert.ok(
+    socialFailure.reasons.includes("social_sim_family_threshold_failed"),
+  );
   assert.ok(
     socialFailure.familyThresholdFailures.includes(
       "recovery:mean_convergence_below_threshold",
@@ -227,7 +249,9 @@ test("system eval runner fails thresholded suites explicitly", async () => {
 });
 
 test("system eval runner can use live sanitized workflow replay instead of static sanitized pack", async () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "system-evals-live-workflow-"));
+  const root = mkdtempSync(
+    path.join(os.tmpdir(), "system-evals-live-workflow-"),
+  );
   const baselinePath = path.join(root, "system-baseline.json");
   writeFileSync(
     baselinePath,
@@ -240,12 +264,15 @@ test("system eval runner can use live sanitized workflow replay instead of stati
           "replay-corpus": { minAverageScore: 1, maxFailedCases: 0 },
           "replay-historical-corpus": { minAverageScore: 1, maxFailedCases: 0 },
           "replay-historical-export": { minAverageScore: 1, maxFailedCases: 0 },
-          "replay-sanitized-runtime-export": { minAverageScore: 1, maxFailedCases: 0 }
+          "replay-sanitized-runtime-export": {
+            minAverageScore: 1,
+            maxFailedCases: 0,
+          },
         },
         overallThresholds: {
           minAverageScore: 0.9,
-          maxFailedSuites: 0
-        }
+          maxFailedSuites: 0,
+        },
       },
       null,
       2,
@@ -294,7 +321,9 @@ test("system eval runner can use live sanitized workflow replay instead of stati
             failedCases: 0,
             averageScore: 1,
             primaryFailureReason: "none",
-            source: argv.includes("--source=historical-export") ? "historical-export" : "corpus",
+            source: argv.includes("--source=historical-export")
+              ? "historical-export"
+              : "corpus",
             corpusSuite: "fixture",
           },
         };
@@ -331,4 +360,112 @@ test("system eval runner can use live sanitized workflow replay instead of stati
     .find((row) => row.suiteId === "replay-sanitized-runtime-export");
   assert.equal(liveRow.corpusSuite, "live-sanitized-workflow-replay");
   assert.equal(liveRow.liveFetchBaseUrl, "https://example.test");
+});
+
+test("system eval runner can include live social sim as a separate suite", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "system-evals-live-social-"));
+  const baselinePath = path.join(root, "system-baseline.json");
+  writeFileSync(
+    baselinePath,
+    JSON.stringify(
+      {
+        version: 1,
+        suiteThresholds: {
+          "social-sim-benchmark": { minAverageScore: 0.5, maxFailedCases: 1 },
+          "social-sim-live-benchmark": {
+            minAverageScore: 0.5,
+            maxFailedCases: 1,
+          },
+          "product-critical-goldens": { minAverageScore: 1, maxFailedCases: 0 },
+          "replay-corpus": { minAverageScore: 1, maxFailedCases: 0 },
+          "replay-historical-corpus": { minAverageScore: 1, maxFailedCases: 0 },
+          "replay-historical-export": { minAverageScore: 1, maxFailedCases: 0 },
+          "replay-sanitized-runtime-export": {
+            minAverageScore: 1,
+            maxFailedCases: 0,
+          },
+        },
+        overallThresholds: {
+          minAverageScore: 0.9,
+          maxFailedSuites: 0,
+        },
+      },
+      null,
+      2,
+    ),
+  );
+
+  let socialCalls = 0;
+  const result = await runSystemEvals(
+    [`--baseline=${baselinePath}`, "--live-social-sim=1"],
+    {
+      ...process.env,
+      EVAL_ARTIFACT_ROOT: path.join(root, "artifacts"),
+      EVAL_BASE_URL: "https://example.test",
+      EVAL_ADMIN_USER_ID: "admin-user",
+      EVAL_ADMIN_ROLE: "admin",
+      EVAL_ADMIN_API_KEY: "admin-key",
+    },
+    {
+      async runSocialSimBenchmarkMatrix() {
+        socialCalls += 1;
+        return {
+          runId: `social-sim-run-${socialCalls}`,
+          summary: {
+            totalCases: 1,
+            failedCases: 0,
+            averageScore: socialCalls === 1 ? 0.7 : 0.72,
+            meanScore: socialCalls === 1 ? 0.7 : 0.72,
+            primaryFailureReason: "none",
+            familyMetrics: {},
+            effectiveBackendModes:
+              socialCalls === 1 ? ["offline"] : ["backend"],
+          },
+        };
+      },
+      async runProductCriticalGoldens() {
+        return {
+          runId: "product-run",
+          summary: {
+            totalCases: 1,
+            failedCases: 0,
+            averageScore: 1,
+            primaryFailureReason: "none",
+            assertionsEvaluated: true,
+            dryRunBypassedAssertions: false,
+          },
+        };
+      },
+      async runReplayEvals() {
+        return {
+          runId: "replay-run",
+          summary: {
+            totalCases: 1,
+            failedCases: 0,
+            averageScore: 1,
+            primaryFailureReason: "none",
+            source: "corpus",
+            corpusSuite: "fixture",
+          },
+        };
+      },
+      async runLiveSanitizedWorkflowReplay() {
+        throw new Error(
+          "live workflow replay should not run in live social sim unit test",
+        );
+      },
+    },
+  );
+
+  assert.equal(socialCalls, 2);
+  assert.equal(result.summary.usedLiveSocialSim, true);
+  assert.ok(
+    result.summary.suites.some(
+      (suite) => suite.suiteId === "social-sim-live-benchmark",
+    ),
+  );
+  const realismRow = result.summary.confidenceRows.find(
+    (entry) => entry.id === "social_realism_confidence",
+  );
+  assert.equal(realismRow.level, "medium");
 });

@@ -94,6 +94,53 @@ function buildArtifactPath(artifactRoot, runId) {
   return path.join(artifactRoot, runId, "summary.json");
 }
 
+function buildFallbackConfidenceRows(
+  summary,
+  socialSimSuite,
+  liveSocialSimSuite,
+) {
+  return [
+    {
+      id: "deterministic_regression_confidence",
+      level:
+        summary.passed === true && (summary.failedCases ?? 0) === 0
+          ? "high"
+          : "medium",
+      basis:
+        "Deterministic system gate and thresholded synthetic suites are passing.",
+    },
+    {
+      id: "live_replay_confidence",
+      level: summary.usedLiveWorkflowReplay === true ? "medium" : "low",
+      basis:
+        summary.usedLiveWorkflowReplay === true
+          ? "Live workflow replay was included in this system run."
+          : "No live workflow replay evidence is present in this system run.",
+    },
+    {
+      id: "social_realism_confidence",
+      level: summary.usedLiveSocialSim === true ? "medium" : "low",
+      basis:
+        summary.usedLiveSocialSim === true
+          ? `Live social-sim lane included with mean score ${Number(
+              liveSocialSimSuite?.summary?.meanScore ??
+                liveSocialSimSuite?.summary?.averageScore ??
+                0,
+            ).toFixed(3)}.`
+          : `Only deterministic social-sim evidence is present with mean score ${Number(
+              socialSimSuite?.summary?.meanScore ??
+                socialSimSuite?.summary?.averageScore ??
+                0,
+            ).toFixed(3)}.`,
+    },
+    {
+      id: "real_world_correlation_confidence",
+      level: "low",
+      basis: "No production correlation model is encoded into the matrix yet.",
+    },
+  ];
+}
+
 export function buildSystemMatrixStatus(
   argv = process.argv.slice(2),
   env = process.env,
@@ -139,6 +186,11 @@ export function buildSystemMatrixStatus(
   const socialSimSuite = Array.isArray(summary.suites)
     ? summary.suites.find((entry) => entry.suiteId === "social-sim-benchmark")
     : null;
+  const liveSocialSimSuite = Array.isArray(summary.suites)
+    ? summary.suites.find(
+        (entry) => entry.suiteId === "social-sim-live-benchmark",
+      )
+    : null;
 
   return {
     generatedAt: new Date().toISOString(),
@@ -155,6 +207,15 @@ export function buildSystemMatrixStatus(
       thresholdFailures: summary.thresholdFailures ?? [],
       overallThresholdFailures: summary.overallThresholdFailures ?? [],
       usedLiveWorkflowReplay: summary.usedLiveWorkflowReplay === true,
+      usedLiveSocialSim: summary.usedLiveSocialSim === true,
+      confidenceRows:
+        summary.confidenceRows?.length > 0
+          ? summary.confidenceRows
+          : buildFallbackConfidenceRows(
+              summary,
+              socialSimSuite,
+              liveSocialSimSuite,
+            ),
     },
     socialSimulation: socialSimSuite?.summary
       ? {
@@ -169,6 +230,21 @@ export function buildSystemMatrixStatus(
           familyMetrics: socialSimSuite.summary.familyMetrics ?? {},
           effectiveBackendModes:
             socialSimSuite.summary.effectiveBackendModes ?? [],
+        }
+      : null,
+    liveSocialSimulation: liveSocialSimSuite?.summary
+      ? {
+          averageScore: liveSocialSimSuite.summary.averageScore ?? 0,
+          meanScore: liveSocialSimSuite.summary.meanScore ?? 0,
+          scoreStdDev: liveSocialSimSuite.summary.scoreStdDev ?? 0,
+          worstSeedScore: liveSocialSimSuite.summary.worstSeedScore ?? 0,
+          worstSeed: liveSocialSimSuite.summary.worstSeed ?? null,
+          meanOracleScore: liveSocialSimSuite.summary.meanOracleScore ?? 0,
+          meanOracleProgressScore:
+            liveSocialSimSuite.summary.meanOracleProgressScore ?? 0,
+          familyMetrics: liveSocialSimSuite.summary.familyMetrics ?? {},
+          effectiveBackendModes:
+            liveSocialSimSuite.summary.effectiveBackendModes ?? [],
         }
       : null,
     suiteMatrix,
