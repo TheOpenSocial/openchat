@@ -126,6 +126,13 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
   - overall threshold failures
   - combined pass/fail status
   - per-suite artifact references and scores
+- Matrix status command now exists:
+  - `pnpm eval:system:status`
+- It resolves the latest system-gate artifact and reports:
+  - overall system status
+  - current social-sim benchmark score, variance, and family metrics
+  - per-suite threshold status
+  - per-suite source artifact locations
 - Social-sim thresholding now also checks family-level minimums for:
   - recovery
   - circle
