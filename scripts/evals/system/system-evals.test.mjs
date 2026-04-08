@@ -103,6 +103,9 @@ test("system eval runner composes simulated suites and baseline thresholds", asy
           },
         };
       },
+      async runLiveSanitizedWorkflowReplay() {
+        throw new Error("live workflow replay should not run in default system gate mode");
+      },
     },
   );
 
@@ -110,6 +113,7 @@ test("system eval runner composes simulated suites and baseline thresholds", asy
   assert.equal(summary.suiteCount, 6);
   assert.equal(summary.thresholdFailures.length, 0);
   assert.equal(summary.overallThresholdFailures.length, 1);
+  assert.equal(summary.usedLiveWorkflowReplay, false);
   assert.equal(summary.passed, false);
   const socialSimRow = readFileSync(path.join(result.runDir, "cases.jsonl"), "utf8")
     .trim()
@@ -199,6 +203,9 @@ test("system eval runner fails thresholded suites explicitly", async () => {
           },
         };
       },
+      async runLiveSanitizedWorkflowReplay() {
+        throw new Error("live workflow replay should not run in threshold failure unit test");
+      },
     },
   );
 
@@ -217,4 +224,111 @@ test("system eval runner fails thresholded suites explicitly", async () => {
     ),
   );
   assert.ok(replayFailure.reasons.includes("average_score_below_threshold"));
+});
+
+test("system eval runner can use live sanitized workflow replay instead of static sanitized pack", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "system-evals-live-workflow-"));
+  const baselinePath = path.join(root, "system-baseline.json");
+  writeFileSync(
+    baselinePath,
+    JSON.stringify(
+      {
+        version: 1,
+        suiteThresholds: {
+          "social-sim-benchmark": { minAverageScore: 0.5, maxFailedCases: 1 },
+          "product-critical-goldens": { minAverageScore: 1, maxFailedCases: 0 },
+          "replay-corpus": { minAverageScore: 1, maxFailedCases: 0 },
+          "replay-historical-corpus": { minAverageScore: 1, maxFailedCases: 0 },
+          "replay-historical-export": { minAverageScore: 1, maxFailedCases: 0 },
+          "replay-sanitized-runtime-export": { minAverageScore: 1, maxFailedCases: 0 }
+        },
+        overallThresholds: {
+          minAverageScore: 0.9,
+          maxFailedSuites: 0
+        }
+      },
+      null,
+      2,
+    ),
+  );
+
+  let liveCalled = false;
+  const result = await runSystemEvals(
+    [`--baseline=${baselinePath}`, "--live-workflow-replay=1"],
+    {
+      ...process.env,
+      EVAL_ARTIFACT_ROOT: path.join(root, "artifacts"),
+    },
+    {
+      async runSocialSimBenchmarkMatrix() {
+        return {
+          runId: "social-sim-run",
+          summary: {
+            totalCases: 1,
+            failedCases: 0,
+            averageScore: 1,
+            meanScore: 1,
+            primaryFailureReason: "none",
+            familyMetrics: {},
+          },
+        };
+      },
+      async runProductCriticalGoldens() {
+        return {
+          runId: "product-run",
+          summary: {
+            totalCases: 1,
+            failedCases: 0,
+            averageScore: 1,
+            primaryFailureReason: "none",
+            assertionsEvaluated: true,
+            dryRunBypassedAssertions: false,
+          },
+        };
+      },
+      async runReplayEvals(argv) {
+        return {
+          runId: `replay-${argv.join("-") || "corpus"}`,
+          summary: {
+            totalCases: 1,
+            failedCases: 0,
+            averageScore: 1,
+            primaryFailureReason: "none",
+            source: argv.includes("--source=historical-export") ? "historical-export" : "corpus",
+            corpusSuite: "fixture",
+          },
+        };
+      },
+      async runLiveSanitizedWorkflowReplay() {
+        liveCalled = true;
+        return {
+          fetch: {
+            baseUrl: "https://example.test",
+          },
+          sanitizedExportPath: path.join(root, "live.sanitized.jsonl"),
+          replay: {
+            runId: "live-replay-run",
+            summary: {
+              totalCases: 2,
+              failedCases: 0,
+              averageScore: 1,
+              primaryFailureReason: "none",
+              source: "historical-export",
+              corpusSuite: "live-sanitized-workflow-replay",
+            },
+          },
+        };
+      },
+    },
+  );
+
+  assert.equal(liveCalled, true);
+  assert.equal(result.summary.usedLiveWorkflowReplay, true);
+  const liveRow = readFileSync(path.join(result.runDir, "cases.jsonl"), "utf8")
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line))
+    .find((row) => row.suiteId === "replay-sanitized-runtime-export");
+  assert.equal(liveRow.corpusSuite, "live-sanitized-workflow-replay");
+  assert.equal(liveRow.liveFetchBaseUrl, "https://example.test");
 });

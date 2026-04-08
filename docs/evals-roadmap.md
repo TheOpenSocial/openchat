@@ -12,6 +12,7 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
   - `failures.jsonl`
 - System-level simulated gate now exists:
   - `pnpm eval:system`
+  - `pnpm eval:system:live:workflows`
 - Social simulation benchmark matrix:
   - fixed seeds
   - mean score
@@ -110,6 +111,8 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
   - historical replay corpus
   - historical export replay pack
   - sanitized runtime export replay pack
+- It can now optionally replace the static sanitized runtime replay pack with:
+  - live fetched + sanitized workflow replay traces
 - Product-critical coverage in the system gate now defaults to:
   - `scripts/evals/golden/sample-product-critical-artifact.json`
 - Baseline/threshold contract now exists at:

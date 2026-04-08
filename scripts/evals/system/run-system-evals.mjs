@@ -11,6 +11,7 @@ import {
 import { runSocialSimBenchmarkMatrix } from "../golden/social-sim-benchmark.mjs";
 import { runProductCriticalGoldens } from "../golden/product-critical-goldens.mjs";
 import { runReplayEvals } from "../replay/run-replay-evals.mjs";
+import { runLiveSanitizedWorkflowReplay } from "../replay/run-live-sanitized-workflow-replay.mjs";
 
 const DEFAULT_BASELINE_PATH = "scripts/evals/system/system-baseline.json";
 const DEFAULT_HISTORICAL_CORPUS_PATH =
@@ -71,6 +72,11 @@ function parseArgs(argv = process.argv.slice(2), env = process.env) {
         DEFAULT_SANITIZED_RUNTIME_EXPORT_PATH,
       ),
     ),
+    useLiveWorkflowReplay:
+      normalizeString(
+        flags.get("live-workflow-replay") ?? env.EVAL_SYSTEM_LIVE_WORKFLOW_REPLAY,
+        "0",
+      ) === "1",
   };
 }
 
@@ -153,6 +159,7 @@ export async function runSystemEvals(
     runSocialSimBenchmarkMatrix,
     runProductCriticalGoldens,
     runReplayEvals,
+    runLiveSanitizedWorkflowReplay,
   },
 ) {
   const config = parseArgs(argv, env);
@@ -247,6 +254,45 @@ export async function runSystemEvals(
   ];
 
   for (const replayRun of replayRuns) {
+    if (
+      config.useLiveWorkflowReplay &&
+      replayRun.suiteId === "replay-sanitized-runtime-export"
+    ) {
+      const liveWorkflowReplayResult = await deps.runLiveSanitizedWorkflowReplay(
+        [
+          `--export-output=${path.join(
+            envelope.runDir,
+            "suite-artifacts",
+            "live-workflow-replay-export.json",
+          )}`,
+          `--sanitized-output=${path.join(
+            envelope.runDir,
+            "suite-artifacts",
+            "live-workflow-replay-export.sanitized.jsonl",
+          )}`,
+        ],
+        env,
+      );
+      suiteSummaries.push({
+        suiteId: replayRun.suiteId,
+        summary: liveWorkflowReplayResult.replay.summary,
+      });
+      suiteRows.push(
+        buildSuiteRow({
+          suiteId: replayRun.suiteId,
+          summary: liveWorkflowReplayResult.replay.summary,
+          runId: liveWorkflowReplayResult.replay.runId,
+          extra: {
+            replaySource: liveWorkflowReplayResult.replay.summary.source ?? "historical-export",
+            corpusSuite: liveWorkflowReplayResult.replay.summary.corpusSuite ?? null,
+            liveFetchBaseUrl: liveWorkflowReplayResult.fetch.baseUrl ?? null,
+            sanitizedExportPath: liveWorkflowReplayResult.sanitizedExportPath,
+          },
+        }),
+      );
+      continue;
+    }
+
     const replayResult = await deps.runReplayEvals(replayRun.args, {
       ...env,
       EVAL_ARTIFACT_ROOT: path.join(envelope.runDir, "suite-artifacts"),
@@ -319,6 +365,7 @@ export async function runSystemEvals(
     thresholdFailures: failedThresholds,
     overallThresholds,
     overallThresholdFailures: overallFailures,
+    usedLiveWorkflowReplay: config.useLiveWorkflowReplay,
     passed:
       failedThresholds.length === 0 &&
       overallFailures.length === 0 &&
