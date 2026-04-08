@@ -1,5 +1,10 @@
 # Eval Roadmap
 
+Architecture reference:
+
+- [`/Users/cruciblelabs/Documents/openchat/docs/agentic-evals-architecture.md`](/Users/cruciblelabs/Documents/openchat/docs/agentic-evals-architecture.md)
+- [`/Users/cruciblelabs/Documents/openchat/scripts/evals/README.md`](/Users/cruciblelabs/Documents/openchat/scripts/evals/README.md)
+
 This repository now has the first reusable eval contract under `scripts/evals/`.
 
 ## Implemented
