@@ -19,6 +19,8 @@ const DEFAULT_HISTORICAL_EXPORT_PATH =
   "scripts/evals/replay/sample-historical-export.jsonl";
 const DEFAULT_PRODUCT_ARTIFACT_PATH =
   "scripts/evals/golden/sample-product-critical-artifact.json";
+const DEFAULT_SANITIZED_RUNTIME_EXPORT_PATH =
+  "scripts/evals/replay/sample-sanitized-runtime-export.jsonl";
 
 function normalizeString(value, fallback = "") {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : fallback;
@@ -59,6 +61,14 @@ function parseArgs(argv = process.argv.slice(2), env = process.env) {
       normalizeString(
         flags.get("product-artifact") ?? env.EVAL_SYSTEM_PRODUCT_ARTIFACT_PATH,
         DEFAULT_PRODUCT_ARTIFACT_PATH,
+      ),
+    ),
+    sanitizedRuntimeExportPath: path.resolve(
+      process.cwd(),
+      normalizeString(
+        flags.get("sanitized-runtime-export") ??
+          env.EVAL_SYSTEM_SANITIZED_RUNTIME_EXPORT_PATH,
+        DEFAULT_SANITIZED_RUNTIME_EXPORT_PATH,
       ),
     ),
   };
@@ -225,6 +235,13 @@ export async function runSystemEvals(
       args: [
         "--source=historical-export",
         `--corpus=${config.replayHistoricalExportPath}`,
+      ],
+    },
+    {
+      suiteId: "replay-sanitized-runtime-export",
+      args: [
+        "--source=historical-export",
+        `--corpus=${config.sanitizedRuntimeExportPath}`,
       ],
     },
   ];

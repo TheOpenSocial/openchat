@@ -48,6 +48,11 @@
       "minAverageScore": 1,
       "maxFailedCases": 0,
       "requiredPrimaryFailureReasons": []
+    },
+    "replay-sanitized-runtime-export": {
+      "minAverageScore": 1,
+      "maxFailedCases": 0,
+      "requiredPrimaryFailureReasons": []
     }
   },
   "overallThresholds": {

@@ -34,6 +34,8 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
   - `pnpm eval:replay:live:workflows`
 - Historical replay import:
   - `pnpm eval:replay:import -- --input=... --output=...`
+- Runtime export sanitization now exists:
+  - `pnpm eval:replay:sanitize -- --input=... --output=...`
 - Replay runner can now consume raw historical exports directly:
   - `pnpm eval:replay -- --source=historical-export --corpus=...`
 - Current runner now supports command-backed, side-effect-free replay cases.
@@ -105,6 +107,7 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
   - replay corpus
   - historical replay corpus
   - historical export replay pack
+  - sanitized runtime export replay pack
 - Product-critical coverage in the system gate now defaults to:
   - `scripts/evals/golden/sample-product-critical-artifact.json`
 - Baseline/threshold contract now exists at:
@@ -125,6 +128,10 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
   - malformed provider output recovery
   - cross-channel continuity
   - approval-boundary refusal
+- Sanitized runtime-export fixtures now validate:
+  - identifier masking
+  - token/email/phone redaction
+  - replay scoring on masked traces
 
 ## Next Steps
 

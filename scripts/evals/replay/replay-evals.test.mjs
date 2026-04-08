@@ -5,6 +5,7 @@ import path from "node:path";
 import { mkdtempSync, readFileSync } from "node:fs";
 
 import { runReplayEvals } from "./run-replay-evals.mjs";
+import { sanitizeRuntimeExport } from "./sanitize-runtime-export.mjs";
 
 test("replay eval runner writes standard replay artifacts", async () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "replay-evals-"));
@@ -65,4 +66,26 @@ test("replay eval runner can consume raw historical export files directly", asyn
   assert.equal(result.summary.source, "historical-export");
   assert.equal(result.summary.totalCases, 4);
   assert.equal(result.summary.corpusSuite, "sample-historical-export");
+});
+
+test("runtime export sanitization produces replay-safe exports that still score", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "replay-sanitized-runtime-"));
+  const rawPath = path.resolve("scripts/evals/replay/sample-raw-runtime-export.jsonl");
+  const sanitizedPath = path.join(root, "sanitized-runtime-export.jsonl");
+  sanitizeRuntimeExport([`--input=${rawPath}`, `--output=${sanitizedPath}`]);
+
+  const sanitizedRaw = readFileSync(sanitizedPath, "utf8");
+  assert.match(sanitizedRaw, /\[redacted-email\]/);
+  assert.match(sanitizedRaw, /\[redacted-token\]/);
+
+  const result = await runReplayEvals(
+    [`--source=historical-export`, `--corpus=${sanitizedPath}`],
+    {
+      ...process.env,
+      EVAL_ARTIFACT_ROOT: root,
+    },
+  );
+
+  assert.equal(result.summary.failedCases, 0);
+  assert.equal(result.summary.totalCases, 2);
 });

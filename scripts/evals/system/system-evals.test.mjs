@@ -25,7 +25,8 @@ test("system eval runner composes simulated suites and baseline thresholds", asy
           "product-critical-goldens": { minAverageScore: 1, maxFailedCases: 0 },
           "replay-corpus": { minAverageScore: 1, maxFailedCases: 0 },
           "replay-historical-corpus": { minAverageScore: 1, maxFailedCases: 0 },
-          "replay-historical-export": { minAverageScore: 1, maxFailedCases: 0 }
+          "replay-historical-export": { minAverageScore: 1, maxFailedCases: 0 },
+          "replay-sanitized-runtime-export": { minAverageScore: 1, maxFailedCases: 0 }
         },
         overallThresholds: {
           minAverageScore: 0.9,
@@ -77,7 +78,9 @@ test("system eval runner composes simulated suites and baseline thresholds", asy
       },
       async runReplayEvals(argv) {
         const suiteId = argv.includes("--source=historical-export")
-          ? "historical-export"
+          ? argv.some((arg) => arg.includes("sample-sanitized-runtime-export"))
+            ? "sanitized-runtime-export"
+            : "historical-export"
           : argv.some((arg) => arg.includes("sample-historical-replay-corpus"))
             ? "historical-corpus"
             : "corpus";
@@ -94,6 +97,8 @@ test("system eval runner composes simulated suites and baseline thresholds", asy
                 ? "sample-historical-replay-corpus"
                 : suiteId === "historical-export"
                   ? "sample-historical-export"
+                  : suiteId === "sanitized-runtime-export"
+                    ? "sample-sanitized-runtime-export"
                   : "sample-replay-corpus",
           },
         };
@@ -102,7 +107,7 @@ test("system eval runner composes simulated suites and baseline thresholds", asy
   );
 
   const summary = JSON.parse(readFileSync(path.join(result.runDir, "summary.json"), "utf8"));
-  assert.equal(summary.suiteCount, 5);
+  assert.equal(summary.suiteCount, 6);
   assert.equal(summary.thresholdFailures.length, 0);
   assert.equal(summary.overallThresholdFailures.length, 1);
   assert.equal(summary.passed, false);
@@ -130,7 +135,8 @@ test("system eval runner fails thresholded suites explicitly", async () => {
               recovery: { minMeanConvergenceScore: 0.95 }
             }
           },
-          "replay-corpus": { minAverageScore: 1, maxFailedCases: 0 }
+          "replay-corpus": { minAverageScore: 1, maxFailedCases: 0 },
+          "replay-sanitized-runtime-export": { minAverageScore: 1, maxFailedCases: 0 }
         },
         overallThresholds: {
           minAverageScore: 0.95,
