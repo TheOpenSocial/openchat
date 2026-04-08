@@ -44,6 +44,7 @@
     "eval:replay": "node scripts/evals/replay/run-replay-evals.mjs",
     "eval:replay:fetch:workflows": "node scripts/evals/replay/fetch-workflow-replay-export.mjs",
     "eval:replay:live:workflows": "node scripts/evals/replay/run-live-workflow-replay.mjs",
+    "eval:replay:live:sanitized:workflows": "node scripts/evals/replay/run-live-sanitized-workflow-replay.mjs",
     "eval:replay:import": "node scripts/evals/replay/import-historical-replay.mjs",
     "eval:replay:sanitize": "node scripts/evals/replay/sanitize-runtime-export.mjs",
     "eval:system": "node scripts/evals/system/run-system-evals.mjs",

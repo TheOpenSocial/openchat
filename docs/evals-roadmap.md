@@ -32,6 +32,8 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
   - `pnpm eval:replay:fetch:workflows`
 - Live workflow replay composition now exists:
   - `pnpm eval:replay:live:workflows`
+- Live fetch-sanitize-replay workflow composition now exists:
+  - `pnpm eval:replay:live:sanitized:workflows`
 - Historical replay import:
   - `pnpm eval:replay:import -- --input=... --output=...`
 - Runtime export sanitization now exists:
