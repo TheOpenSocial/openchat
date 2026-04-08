@@ -1,0 +1,68 @@
+name: System Live Evals
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 12 * * *"
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  system-live-evals:
+    runs-on: [self-hosted, linux, x64, opensocial-prod]
+    environment: staging
+    timeout-minutes: 45
+    concurrency:
+      group: system-live-evals-staging
+      cancel-in-progress: false
+    env:
+      EVAL_ARTIFACT_ROOT: .artifacts/system-live-evals/${{ github.run_id }}
+      STAGING_API_BASE_URL: ${{ secrets.STAGING_API_BASE_URL }}
+      STAGING_SMOKE_ADMIN_USER_ID: ${{ secrets.STAGING_SMOKE_ADMIN_USER_ID || secrets.SMOKE_ADMIN_USER_ID }}
+      STAGING_SMOKE_ADMIN_ROLE: ${{ secrets.STAGING_SMOKE_ADMIN_ROLE || secrets.SMOKE_ADMIN_ROLE || 'admin' }}
+      STAGING_SMOKE_ADMIN_API_KEY: ${{ secrets.STAGING_SMOKE_ADMIN_API_KEY || secrets.SMOKE_ADMIN_API_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate staging eval config
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=0
+          for key in STAGING_API_BASE_URL STAGING_SMOKE_ADMIN_USER_ID STAGING_SMOKE_ADMIN_API_KEY; do
+            if [[ -z "${!key:-}" ]]; then
+              echo "Missing required env: ${key}" >&2
+              missing=1
+            fi
+          done
+          if [[ "${missing}" -ne 0 ]]; then
+            exit 1
+          fi
+
+      - name: Run live system evals
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm eval:system:live:workflows
+
+      - name: Upload live eval artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: system-live-evals-${{ github.run_id }}
+          path: .artifacts/system-live-evals/${{ github.run_id }}
+          if-no-files-found: warn
