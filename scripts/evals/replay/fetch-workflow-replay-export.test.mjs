@@ -42,7 +42,7 @@ test("fetch workflow replay export writes replayable conversation export", async
                 domain: "social",
                 replayability: "replayable",
                 health: "healthy",
-                sideEffects: [],
+                sideEffects: [{ type: "message_send" }],
                 stageStatusCounts: { completed: 2 },
               },
               trace: {
@@ -74,6 +74,8 @@ test("fetch workflow replay export writes replayable conversation export", async
   assert.equal(result.runCount, 1);
   assert.equal(written.conversations.length, 1);
   assert.equal(written.conversations[0].conversationId, "social:intent:wf-1");
+  assert.equal(written.conversations[0].expected.allowSideEffects, true);
+  assert.equal(written.conversations[0].observed.sideEffects, true);
   assert.deepEqual(written.conversations[0].observed.toolCalls, [
     "planner",
     "compose-response",

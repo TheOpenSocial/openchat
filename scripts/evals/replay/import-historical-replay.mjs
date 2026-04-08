@@ -106,6 +106,8 @@ function normalizeExpected(record) {
       record.forbiddenToolCalls,
     ),
     maxLatencyMs: Number.isFinite(maxLatencyCandidate) ? maxLatencyCandidate : null,
+    allowSideEffects:
+      expected.allowSideEffects === true || record.allowSideEffects === true,
   };
 }
 

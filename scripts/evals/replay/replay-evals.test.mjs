@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 
 import { runReplayEvals } from "./run-replay-evals.mjs";
 import { sanitizeRuntimeExport } from "./sanitize-runtime-export.mjs";
@@ -88,4 +88,41 @@ test("runtime export sanitization produces replay-safe exports that still score"
 
   assert.equal(result.summary.failedCases, 0);
   assert.equal(result.summary.totalCases, 2);
+});
+
+test("historical export replay allows observed side effects when explicitly expected", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "replay-side-effects-"));
+  const corpusPath = path.join(root, "workflow-export.jsonl");
+  const record = {
+    conversationId: "workflow-run-1",
+    channel: "agent_workflow",
+    provider: "social",
+    toolFamily: "workflow",
+    expected: {
+      allowSideEffects: true,
+      forbiddenTools: [],
+      forbiddenToolCalls: [],
+    },
+    observed: {
+      selectedTool: "send_message",
+      toolCalls: ["send_message"],
+      behaviors: [],
+      outputText: "Message sent.",
+      latencyMs: 120,
+      sideEffects: true,
+    },
+  };
+
+  writeFileSync(corpusPath, `${JSON.stringify(record)}\n`, "utf8");
+
+  const result = await runReplayEvals(
+    [`--source=historical-export`, `--corpus=${corpusPath}`],
+    {
+      ...process.env,
+      EVAL_ARTIFACT_ROOT: root,
+    },
+  );
+
+  assert.equal(result.summary.failedCases, 0);
+  assert.equal(result.summary.primaryFailureReason, "none");
 });

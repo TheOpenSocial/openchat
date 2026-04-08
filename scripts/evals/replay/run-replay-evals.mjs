@@ -143,6 +143,7 @@ function evaluateReplayCase(entry, config) {
     ? expected.forbiddenToolCalls.filter((value) => typeof value === "string")
     : [];
   const maxLatencyMs = Number.isFinite(expected.maxLatencyMs) ? expected.maxLatencyMs : null;
+  const allowSideEffects = expected.allowSideEffects === true;
   const execution = executeReplayCase(entry, config);
   const selectedTool = normalizeString(execution.parsed?.tool, "");
   const outputText = normalizeString(
@@ -166,7 +167,7 @@ function evaluateReplayCase(entry, config) {
   const behaviorPass =
     requiredBehaviors.length === 0 ||
     requiredBehaviors.every((behavior) => behaviors.includes(behavior));
-  const sideEffectPass = !sideEffects;
+  const sideEffectPass = allowSideEffects || !sideEffects;
   const outputPass =
     expectedOutputIncludes.length === 0 ||
     expectedOutputIncludes.every((snippet) =>
@@ -239,6 +240,7 @@ function evaluateReplayCase(entry, config) {
       expectedToolCalls,
       forbiddenToolCalls,
       maxLatencyMs,
+      allowSideEffects,
     },
     execution: {
       selectedTool,

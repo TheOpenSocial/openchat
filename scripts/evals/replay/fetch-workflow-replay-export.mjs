@@ -112,6 +112,8 @@ function normalizeReplayCaseFromWorkflow(detail, index) {
       forbiddenTools: [],
       forbiddenToolCalls: [],
       maxLatencyMs: null,
+      allowSideEffects:
+        Array.isArray(run?.sideEffects) && run.sideEffects.length > 0,
     },
     observed: {
       selectedTool,
