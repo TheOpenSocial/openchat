@@ -17,6 +17,17 @@ Optional automation (backend smoke runner):
   - `SMOKE_USE_UNIQUE_IP` (`true` by default for localhost; set `false` to test strict per-IP abuse throttling behavior)
 - The script verifies key read-only backend endpoints (`health`, admin `ops`, queue, dead-letter, and moderation agent-risk queue) and exits non-zero on any failing check.
 
+Admin API key model:
+- `SMOKE_ADMIN_API_KEY` is not a separately minted credential.
+- It must match the API runtime `ADMIN_API_KEY`.
+- For rotation/generation, use:
+  - `pnpm admin:key:generate`
+- Apply the generated value to:
+  - staging runtime `ADMIN_API_KEY`
+  - production runtime `ADMIN_API_KEY`
+  - GitHub secret `STAGING_SMOKE_ADMIN_API_KEY`
+  - GitHub secret `SMOKE_ADMIN_API_KEY`
+
 Optional automation (incident/readiness verification):
 - Command: `pnpm staging:verify:incident`
 - Required env for staging:
@@ -109,7 +120,7 @@ Optional automation (moderation drill):
   - [ ] `POST /api/admin/jobs/dead-letters/:deadLetterId/replay`
 
 ## 8) Rollout gates (prod approval)
-Cross-check with `PROGRESS.md` §31 before promoting to production:
+Cross-check with `BACKEND_PROGRESS.md` §31 before promoting to production:
 - [ ] Observability: traces/metrics visible for API + workers; alert endpoint (`GET /api/admin/ops/alerts`) reviewed for a quiet baseline.
 - [ ] Incident path: on-call can follow `docs/incident-runbook.md` using current dashboards/links.
 - [ ] Launch controls: feature flags and kill switches exercised in staging (`GET /api/admin/launch-controls`, toggles verified).
