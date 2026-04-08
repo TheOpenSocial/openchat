@@ -89,9 +89,27 @@ function compareSuiteAgainstBaseline(row, baselineEntry = {}) {
   ) {
     reasons.push("unexpected_primary_failure_reason");
   }
+  const familyThresholdFailures = [];
+  if (row.suiteId === "social-sim-benchmark") {
+    const thresholdMap = baselineEntry.familyThresholds ?? {};
+    const familyMetrics = row.familyMetrics ?? {};
+    for (const [family, threshold] of Object.entries(thresholdMap)) {
+      const metric = familyMetrics?.[family];
+      if (
+        Number.isFinite(threshold?.minMeanConvergenceScore) &&
+        Number(metric?.meanConvergenceScore ?? 0) < threshold.minMeanConvergenceScore
+      ) {
+        familyThresholdFailures.push(`${family}:mean_convergence_below_threshold`);
+      }
+    }
+    if (familyThresholdFailures.length > 0) {
+      reasons.push("social_sim_family_threshold_failed");
+    }
+  }
   return {
     passed: reasons.length === 0,
     reasons,
+    familyThresholdFailures,
   };
 }
 
@@ -165,6 +183,7 @@ export async function runSystemEvals(
       extra: {
         meanScore: socialSimResult.summary.meanScore ?? 0,
         worstSeedScore: socialSimResult.summary.worstSeedScore ?? 0,
+        familyMetrics: socialSimResult.summary.familyMetrics ?? {},
       },
     }),
   );
@@ -241,6 +260,7 @@ export async function runSystemEvals(
       suiteId: row.suiteId,
       passed: comparison.passed,
       reasons: comparison.reasons,
+      familyThresholdFailures: comparison.familyThresholdFailures ?? [],
     };
   });
 
@@ -251,6 +271,7 @@ export async function runSystemEvals(
       ...row,
       thresholdPassed: threshold?.passed ?? true,
       thresholdFailureReasons: threshold?.reasons ?? [],
+      familyThresholdFailures: threshold?.familyThresholdFailures ?? [],
       status:
         row.status === "failed" || threshold?.passed === false ? "failed" : "passed",
     };

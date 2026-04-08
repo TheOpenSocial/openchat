@@ -4,7 +4,30 @@
     "social-sim-benchmark": {
       "minAverageScore": 0.55,
       "maxFailedCases": 1,
-      "requiredPrimaryFailureReasons": []
+      "requiredPrimaryFailureReasons": [],
+      "familyThresholds": {
+        "individual-matchmaking": {
+          "minMeanConvergenceScore": 0.54
+        },
+        "recovery": {
+          "minMeanConvergenceScore": 0.8
+        },
+        "pair-and-group": {
+          "minMeanConvergenceScore": 0.8
+        },
+        "circle": {
+          "minMeanConvergenceScore": 0.75
+        },
+        "dense-social-graph": {
+          "minMeanConvergenceScore": 0.7
+        },
+        "event-and-memory": {
+          "minMeanConvergenceScore": 0.4
+        },
+        "network-rebalancing": {
+          "minMeanConvergenceScore": 0.58
+        }
+      }
     },
     "product-critical-goldens": {
       "minAverageScore": 1,

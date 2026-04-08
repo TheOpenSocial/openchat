@@ -16,7 +16,7 @@ test("replay eval runner writes standard replay artifacts", async () => {
   const summary = JSON.parse(readFileSync(path.join(result.runDir, "summary.json"), "utf8"));
   const run = JSON.parse(readFileSync(path.join(result.runDir, "run.json"), "utf8"));
 
-  assert.equal(summary.totalCases, 2);
+  assert.equal(summary.totalCases, 4);
   assert.equal(summary.failedCases, 0);
   assert.equal(run.evalType, "replay");
   assert.equal(summary.corpusSuite, "sample-replay-corpus");
@@ -29,7 +29,7 @@ test("replay eval runner executes command-backed cases", async () => {
     EVAL_ARTIFACT_ROOT: root,
   });
 
-  assert.equal(result.summary.totalCases, 2);
+  assert.equal(result.summary.totalCases, 4);
   assert.equal(result.summary.failedCases, 0);
   assert.equal(result.summary.primaryFailureReason, "none");
 });
@@ -44,7 +44,7 @@ test("replay eval runner supports historical conversation corpus expectations", 
     EVAL_ARTIFACT_ROOT: root,
   });
 
-  assert.equal(result.summary.totalCases, 2);
+  assert.equal(result.summary.totalCases, 4);
   assert.equal(result.summary.failedCases, 0);
   assert.equal(result.summary.corpusSuite, "sample-historical-replay-corpus");
 });
@@ -63,6 +63,6 @@ test("replay eval runner can consume raw historical export files directly", asyn
   );
 
   assert.equal(result.summary.source, "historical-export");
-  assert.equal(result.summary.totalCases, 2);
+  assert.equal(result.summary.totalCases, 4);
   assert.equal(result.summary.corpusSuite, "sample-historical-export");
 });

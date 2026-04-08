@@ -15,7 +15,13 @@ test("system eval runner composes simulated suites and baseline thresholds", asy
       {
         version: 1,
         suiteThresholds: {
-          "social-sim-benchmark": { minAverageScore: 0.5, maxFailedCases: 1 },
+          "social-sim-benchmark": {
+            minAverageScore: 0.5,
+            maxFailedCases: 1,
+            familyThresholds: {
+              recovery: { minMeanConvergenceScore: 0.7 }
+            }
+          },
           "product-critical-goldens": { minAverageScore: 1, maxFailedCases: 0 },
           "replay-corpus": { minAverageScore: 1, maxFailedCases: 0 },
           "replay-historical-corpus": { minAverageScore: 1, maxFailedCases: 0 },
@@ -48,6 +54,11 @@ test("system eval runner composes simulated suites and baseline thresholds", asy
             meanScore: 0.7,
             primaryFailureReason: "group_closure_miss",
             worstSeedScore: 0.52,
+            familyMetrics: {
+              recovery: {
+                meanConvergenceScore: 0.84
+              }
+            }
           },
         };
       },
@@ -102,6 +113,7 @@ test("system eval runner composes simulated suites and baseline thresholds", asy
     .find((row) => row.suiteId === "social-sim-benchmark");
   assert.equal(socialSimRow.thresholdPassed, true);
   assert.equal(socialSimRow.failedCases, 1);
+  assert.deepEqual(socialSimRow.familyThresholdFailures, []);
 });
 
 test("system eval runner fails thresholded suites explicitly", async () => {
@@ -113,6 +125,11 @@ test("system eval runner fails thresholded suites explicitly", async () => {
       {
         version: 1,
         suiteThresholds: {
+          "social-sim-benchmark": {
+            familyThresholds: {
+              recovery: { minMeanConvergenceScore: 0.95 }
+            }
+          },
           "replay-corpus": { minAverageScore: 1, maxFailedCases: 0 }
         },
         overallThresholds: {
@@ -141,6 +158,11 @@ test("system eval runner fails thresholded suites explicitly", async () => {
             averageScore: 1,
             meanScore: 1,
             primaryFailureReason: "none",
+            familyMetrics: {
+              recovery: {
+                meanConvergenceScore: 0.8
+              }
+            }
           },
         };
       },
@@ -175,9 +197,18 @@ test("system eval runner fails thresholded suites explicitly", async () => {
   );
 
   assert.equal(result.summary.passed, false);
-  assert.equal(result.summary.thresholdFailures.length, 1);
-  assert.equal(result.summary.thresholdFailures[0].suiteId, "replay-corpus");
-  assert.ok(
-    result.summary.thresholdFailures[0].reasons.includes("average_score_below_threshold"),
+  assert.equal(result.summary.thresholdFailures.length, 2);
+  const socialFailure = result.summary.thresholdFailures.find(
+    (entry) => entry.suiteId === "social-sim-benchmark",
   );
+  const replayFailure = result.summary.thresholdFailures.find(
+    (entry) => entry.suiteId === "replay-corpus",
+  );
+  assert.ok(socialFailure.reasons.includes("social_sim_family_threshold_failed"));
+  assert.ok(
+    socialFailure.familyThresholdFailures.includes(
+      "recovery:mean_convergence_below_threshold",
+    ),
+  );
+  assert.ok(replayFailure.reasons.includes("average_score_below_threshold"));
 });

@@ -114,6 +114,17 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
   - overall threshold failures
   - combined pass/fail status
   - per-suite artifact references and scores
+- Social-sim thresholding now also checks family-level minimums for:
+  - recovery
+  - circle
+  - dense-social-graph
+  - network-rebalancing
+  - event-and-memory
+- Replay fixtures now include adversarial but expected-safe cases for:
+  - ambiguous intent clarification
+  - malformed provider output recovery
+  - cross-channel continuity
+  - approval-boundary refusal
 
 ## Next Steps
 
