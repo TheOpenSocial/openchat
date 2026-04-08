@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "suiteThresholds": {
+    "social-sim-benchmark": {
+      "minAverageScore": 0.55,
+      "maxFailedCases": 1,
+      "requiredPrimaryFailureReasons": []
+    },
+    "product-critical-goldens": {
+      "minAverageScore": 1,
+      "maxFailedCases": 0,
+      "requiredPrimaryFailureReasons": []
+    },
+    "replay-corpus": {
+      "minAverageScore": 1,
+      "maxFailedCases": 0,
+      "requiredPrimaryFailureReasons": []
+    },
+    "replay-historical-corpus": {
+      "minAverageScore": 1,
+      "maxFailedCases": 0,
+      "requiredPrimaryFailureReasons": []
+    },
+    "replay-historical-export": {
+      "minAverageScore": 1,
+      "maxFailedCases": 0,
+      "requiredPrimaryFailureReasons": []
+    }
+  },
+  "overallThresholds": {
+    "minAverageScore": 0.9,
+    "maxFailedSuites": 0
+  }
+}

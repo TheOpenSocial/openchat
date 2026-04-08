@@ -10,6 +10,8 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
   - `summary.json`
   - `cases.jsonl`
   - `failures.jsonl`
+- System-level simulated gate now exists:
+  - `pnpm eval:system`
 - Social simulation benchmark matrix:
   - fixed seeds
   - mean score
@@ -96,6 +98,23 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
   - retry rate
   - breakdowns by channel/provider/tool family/failure taxonomy
 
+### System validation gate
+- Simulated system gate now composes:
+  - social simulation benchmark
+  - product critical goldens
+  - replay corpus
+  - historical replay corpus
+  - historical export replay pack
+- Product-critical coverage in the system gate now defaults to:
+  - `scripts/evals/golden/sample-product-critical-artifact.json`
+- Baseline/threshold contract now exists at:
+  - `scripts/evals/system/system-baseline.json`
+- Current gate emits:
+  - suite threshold failures
+  - overall threshold failures
+  - combined pass/fail status
+  - per-suite artifact references and scores
+
 ## Next Steps
 
 ### 1. Convert replay runner into historical replay
@@ -120,7 +139,13 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
   - add flow-specific assertions per curated scenario
   - add curated live execution instead of suite-wrapper-only evaluation
 
-### 3. Add production quality event logging
+### 3. Turn the system gate into a release gate
+- Remaining work:
+  - store accepted baseline snapshots per release line
+  - diff current run against previous accepted baseline
+  - wire `pnpm eval:system` into CI and pre-release jobs
+
+### 4. Add production quality event logging
 - Persist per-conversation quality events with:
   - `conversation_id`
   - `message_id`
@@ -138,14 +163,14 @@ This repository now has the first reusable eval contract under `scripts/evals/`.
 - Agentic eval snapshot fetch is now wired to the real admin endpoint.
 - Remaining work is wiring persisted analytics exports automatically instead of sample files and expanding beyond the eval snapshot endpoint.
 
-### 4. Add social simulation family metrics to the benchmark
+### 5. Add social simulation family metrics to the benchmark
 - Family-level aggregate reporting is now in place for the seed matrix.
 - Add temporal success metrics:
   - recovery transition completion
   - required group closure ordering
   - forbidden-edge avoidance after reroute
 
-### 5. Add CI rollout
+### 6. Add CI rollout
 - Pre-merge:
   - fast golden subset
 - Pre-release:

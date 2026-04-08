@@ -45,6 +45,7 @@
     "eval:replay:fetch:workflows": "node scripts/evals/replay/fetch-workflow-replay-export.mjs",
     "eval:replay:live:workflows": "node scripts/evals/replay/run-live-workflow-replay.mjs",
     "eval:replay:import": "node scripts/evals/replay/import-historical-replay.mjs",
+    "eval:system": "node scripts/evals/system/run-system-evals.mjs",
     "eval:online:fetch:agentic": "node scripts/evals/online/fetch-agentic-evals-snapshot.mjs",
     "eval:online:fetch:workflows": "node scripts/evals/online/fetch-agent-workflows-snapshot.mjs",
     "eval:online:report": "node scripts/evals/online/report-quality-events.mjs",
