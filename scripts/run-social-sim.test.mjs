@@ -467,7 +467,7 @@ test("remote Ollama actor output tolerates fenced JSON content", async () => {
   }
 });
 
-test("remote event safety language does not collapse into moderation and can still close toward an event", async () => {
+test("remote event safety language does not collapse into moderation and preserves required memory continuity", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => ({
     ok: true,
@@ -516,7 +516,7 @@ test("remote event safety language does not collapse into moderation and can sti
       config: {},
     });
 
-    assert.equal(turn.intent, "propose_event");
+    assert.equal(turn.intent, "reference_memory");
     assert.equal(turn.targetActorId, "event-zoe");
   } finally {
     globalThis.fetch = originalFetch;
@@ -1101,6 +1101,38 @@ test("event-and-memory worlds prioritize preferred follow-up closure", async () 
 
   assert.equal(turn.targetActorId, "event-jules");
   assert.equal(turn.intent, "propose_event");
+});
+
+test("event-and-memory worlds force one memory signal before event conversion", async () => {
+  const brain = createBrainProvider({ provider: "stub" });
+  const worlds = loadSocialSimWorldFixture(
+    path.resolve("scripts/social-sim-worlds.json"),
+    path.resolve("apps/api/test/fixtures/agentic-scenarios.json"),
+  );
+  const world = structuredClone(
+    worlds.find((entry) => entry.id === "long-memory-drift-event-v1"),
+  );
+  const actor = world.actors.find((entry) => entry.id === "event-jules");
+  const relationship = world.relationships.find((entry) => entry.id === "event-return-2");
+  relationship.strength = 0.82;
+  const state = {
+    stage: "conversation",
+    turnIndex: 2,
+    lastActionByActor: new Map(),
+    knownTargets: new Map(),
+  };
+
+  const turn = await brain.generateActorTurn({
+    world,
+    actor,
+    state,
+    transcript: [],
+    rng: () => 0.25,
+    config: {},
+  });
+
+  assert.equal(turn.intent, "reference_memory");
+  assert.equal(turn.targetActorId, "event-zoe");
 });
 
 test("network rebalancing prefers required healthy closure edges when available", async () => {

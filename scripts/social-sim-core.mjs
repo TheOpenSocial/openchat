@@ -2168,6 +2168,18 @@ function planEventAndMemoryFamilyAction(context) {
   const oracleClass = classifyOracleRelationship(world, targetRelationship);
   const strength = targetRelationship?.strength ?? 0;
   const nearMatch = canUseNearMatch(world, targetRelationship, tuning);
+  const relationshipId = targetRelationship?.id ?? null;
+  const hasMemorySignalForRelationship = Array.isArray(context.transcript)
+    ? context.transcript.some(
+        (turn) =>
+          turn.intent === "reference_memory" &&
+          turn.worldContext?.relationshipId === relationshipId,
+      )
+    : false;
+  const shouldForceMemoryBeforeEvent =
+    worldNeedsMemory(world) &&
+    !hasMemorySignalForRelationship &&
+    recentRelationshipAction !== "reference_memory";
 
   if (state.stage === "onboarding") {
     return createPlannedAction({
@@ -2194,7 +2206,9 @@ function planEventAndMemoryFamilyAction(context) {
     return createPlannedAction({
       context,
       intent:
-        nearMatch || strength >= tuning.thresholds.mediumStrength
+        shouldForceMemoryBeforeEvent
+          ? "reference_memory"
+          : nearMatch || strength >= tuning.thresholds.mediumStrength
           ? "propose_event"
           : recentRelationshipAction === "reference_memory" || oracleClass === "preferred"
             ? "reply"
@@ -2207,7 +2221,9 @@ function planEventAndMemoryFamilyAction(context) {
     return createPlannedAction({
       context,
       intent:
-        nearMatch || strength >= tuning.thresholds.lowStrength
+        shouldForceMemoryBeforeEvent
+          ? "reference_memory"
+          : nearMatch || strength >= tuning.thresholds.lowStrength
           ? "propose_event"
           : "reference_memory",
       targetActorId,
