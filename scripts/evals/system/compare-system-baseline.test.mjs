@@ -34,10 +34,12 @@ test("compare system baseline reports deltas against latest accepted baseline", 
         acceptedRuns: [
           {
             id: "baseline-1",
-            system: { averageScore: 0.9 },
+            system: { averageScore: 0.9, gateScore: 0.92 },
             socialSimulation: { meanScore: 0.65 },
+            liveSocialSimulation: { meanScore: 0.7 },
             suiteScores: {
               "social-sim-benchmark": 0.65,
+              "social-sim-live-benchmark": 0.7,
               "replay-corpus": 1,
             },
           },
@@ -64,6 +66,8 @@ test("compare system baseline reports deltas against latest accepted baseline", 
         thresholdFailures: [],
         overallThresholdFailures: [],
         usedLiveWorkflowReplay: false,
+        usedLiveSocialSim: true,
+        gateScore: 0.94,
         thresholdResults: [],
         suites: [
           {
@@ -71,6 +75,15 @@ test("compare system baseline reports deltas against latest accepted baseline", 
             summary: {
               meanScore: 0.698,
               averageScore: 0.698,
+              familyMetrics: {},
+              effectiveBackendModes: ["offline"],
+            },
+          },
+          {
+            suiteId: "social-sim-live-benchmark",
+            summary: {
+              meanScore: 0.731,
+              averageScore: 0.731,
               familyMetrics: {},
               effectiveBackendModes: ["offline"],
             },
@@ -86,6 +99,13 @@ test("compare system baseline reports deltas against latest accepted baseline", 
     `${JSON.stringify({
       suiteId: "social-sim-benchmark",
       score: 0.698,
+      failedCases: 0,
+      totalCases: 3,
+      primaryFailureReason: "none",
+      suiteArtifactRunId: null,
+    })}\n${JSON.stringify({
+      suiteId: "social-sim-live-benchmark",
+      score: 0.731,
       failedCases: 0,
       totalCases: 3,
       primaryFailureReason: "none",
@@ -112,9 +132,16 @@ test("compare system baseline reports deltas against latest accepted baseline", 
   assert.equal(result.acceptedBaselineId, "baseline-1");
   assert.equal(result.systemDelta.delta, 0.05);
   assert.equal(result.systemDelta.status, "improved");
+  assert.equal(result.gateScoreDelta.delta, 0.02);
+  assert.equal(result.gateScoreDelta.status, "improved");
   assert.equal(result.socialSimulationDelta.delta, 0.048);
+  assert.equal(result.liveSocialSimulationDelta.delta, 0.031);
   const suiteDelta = result.suiteDeltas.find(
     (entry) => entry.suiteId === "social-sim-benchmark",
   );
   assert.equal(suiteDelta.status, "improved");
+  const liveSuiteDelta = result.suiteDeltas.find(
+    (entry) => entry.suiteId === "social-sim-live-benchmark",
+  );
+  assert.equal(liveSuiteDelta.status, "improved");
 });

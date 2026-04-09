@@ -75,6 +75,11 @@ export function compareSystemBaseline(
     systemDelta: {
       currentAverageScore: current.system.averageScore ?? 0,
       baselineAverageScore: acceptedBaseline.system?.averageScore ?? 0,
+      currentGateScore: current.system.gateScore ?? current.system.averageScore ?? 0,
+      baselineGateScore:
+        acceptedBaseline.system?.gateScore ??
+        acceptedBaseline.system?.averageScore ??
+        0,
       delta: toDelta(
         current.system.averageScore,
         acceptedBaseline.system?.averageScore,
@@ -83,6 +88,25 @@ export function compareSystemBaseline(
         toDelta(
           current.system.averageScore,
           acceptedBaseline.system?.averageScore,
+        ),
+      ),
+    },
+    gateScoreDelta: {
+      currentGateScore: current.system.gateScore ?? current.system.averageScore ?? 0,
+      baselineGateScore:
+        acceptedBaseline.system?.gateScore ??
+        acceptedBaseline.system?.averageScore ??
+        0,
+      delta: toDelta(
+        current.system.gateScore ?? current.system.averageScore,
+        acceptedBaseline.system?.gateScore ??
+          acceptedBaseline.system?.averageScore,
+      ),
+      status: deltaStatus(
+        toDelta(
+          current.system.gateScore ?? current.system.averageScore,
+          acceptedBaseline.system?.gateScore ??
+            acceptedBaseline.system?.averageScore,
         ),
       ),
     },
@@ -98,6 +122,22 @@ export function compareSystemBaseline(
             toDelta(
               current.socialSimulation.meanScore,
               acceptedBaseline.socialSimulation?.meanScore,
+            ),
+          ),
+        }
+      : null,
+    liveSocialSimulationDelta: current.liveSocialSimulation
+      ? {
+          currentMeanScore: current.liveSocialSimulation.meanScore ?? 0,
+          baselineMeanScore: acceptedBaseline.liveSocialSimulation?.meanScore ?? 0,
+          delta: toDelta(
+            current.liveSocialSimulation.meanScore,
+            acceptedBaseline.liveSocialSimulation?.meanScore,
+          ),
+          status: deltaStatus(
+            toDelta(
+              current.liveSocialSimulation.meanScore,
+              acceptedBaseline.liveSocialSimulation?.meanScore,
             ),
           ),
         }

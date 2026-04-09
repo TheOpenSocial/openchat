@@ -22,6 +22,45 @@
         "replay-historical-export": 1,
         "replay-sanitized-runtime-export": 1
       }
+    },
+    {
+      "id": "2026-04-09-live-system-baseline",
+      "acceptedAt": "2026-04-09T16:56:30.883Z",
+      "notes": "Accepted live staging system baseline from workflow artifact after seed parallelization and event-memory fix.",
+      "source": {
+        "runUrl": "https://github.com/TheOpenSocial/openchat/actions/runs/24201952690",
+        "headSha": "884488cd4c67ee7d89bbd3e9825391e69d62d556",
+        "evalRunId": "system-evals-2026-04-09T16-41-50-415Z",
+        "completedAt": "2026-04-09T16:56:30.883Z",
+        "usedLiveWorkflowReplay": true,
+        "usedLiveSocialSim": true
+      },
+      "system": {
+        "averageScore": 0.924,
+        "gateScore": 0.9559166666666666,
+        "passed": true,
+        "usedLiveWorkflowReplay": true,
+        "usedLiveSocialSim": true
+      },
+      "socialSimulation": {
+        "meanScore": 0.74,
+        "scoreStdDev": 0.006,
+        "worstSeedScore": 0.732
+      },
+      "liveSocialSimulation": {
+        "meanScore": 0.731,
+        "scoreStdDev": 0.014,
+        "worstSeedScore": 0.714
+      },
+      "suiteScores": {
+        "social-sim-benchmark": 0.74,
+        "social-sim-live-benchmark": 0.731,
+        "product-critical-goldens": 1,
+        "replay-corpus": 1,
+        "replay-historical-corpus": 1,
+        "replay-historical-export": 1,
+        "replay-sanitized-runtime-export": 1
+      }
     }
   ]
 }
