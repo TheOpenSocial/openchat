@@ -117,6 +117,106 @@ describe("requestSecurityMiddleware", () => {
     );
   });
 
+  it("does not abuse-throttle authenticated onboarding inference during normal retries", () => {
+    process.env.ABUSE_THROTTLE_MAX_SCORE = "8";
+    process.env.ABUSE_THROTTLE_BLOCK_MS = "60000";
+
+    const next = vi.fn();
+
+    for (let index = 0; index < 4; index += 1) {
+      const request = createRequest({
+        method: "POST",
+        path: "/api/onboarding/infer",
+        ip: "203.0.113.130",
+        headers: {
+          authorization: "Bearer authenticated-mobile-user",
+        },
+      });
+      const response = createResponse();
+      requestSecurityMiddleware(request, response, next);
+      expect(response.status).not.toHaveBeenCalled();
+    }
+
+    expect(next).toHaveBeenCalledTimes(4);
+  });
+
+  it("still abuse-throttles repeated anonymous onboarding inference", () => {
+    process.env.ABUSE_THROTTLE_MAX_SCORE = "8";
+    process.env.ABUSE_THROTTLE_BLOCK_MS = "60000";
+
+    const next = vi.fn();
+    const request = createRequest({
+      method: "POST",
+      path: "/api/onboarding/infer",
+      ip: "203.0.113.131",
+    });
+    const responses = Array.from({ length: 4 }, () => createResponse());
+
+    for (const response of responses) {
+      requestSecurityMiddleware(request, response, next);
+    }
+
+    expect(next).toHaveBeenCalledTimes(2);
+    expect(responses[2]?.status).toHaveBeenCalledWith(429);
+    expect(responses[2]?.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: false,
+        error: expect.objectContaining({
+          code: "abuse_throttled",
+        }),
+      }),
+    );
+  });
+
+  it("does not abuse-throttle authenticated agent thread reads and replies during normal usage", () => {
+    process.env.ABUSE_THROTTLE_MAX_SCORE = "8";
+    process.env.ABUSE_THROTTLE_BLOCK_MS = "60000";
+
+    const next = vi.fn();
+    const requests = [
+      createRequest({
+        method: "GET",
+        path: "/api/agent/threads/me/summary",
+        ip: "203.0.113.132",
+        headers: {
+          authorization: "Bearer authenticated-mobile-user",
+        },
+      }),
+      createRequest({
+        method: "GET",
+        path: "/api/agent/threads/11111111-1111-4111-8111-111111111111/messages",
+        ip: "203.0.113.132",
+        headers: {
+          authorization: "Bearer authenticated-mobile-user",
+        },
+      }),
+      createRequest({
+        method: "POST",
+        path: "/api/agent/threads/11111111-1111-4111-8111-111111111111/respond",
+        ip: "203.0.113.132",
+        headers: {
+          authorization: "Bearer authenticated-mobile-user",
+        },
+      }),
+      createRequest({
+        method: "POST",
+        path: "/api/agent/threads/11111111-1111-4111-8111-111111111111/respond/stream",
+        ip: "203.0.113.132",
+        headers: {
+          authorization: "Bearer authenticated-mobile-user",
+        },
+      }),
+    ];
+
+    for (const request of requests) {
+      const response = createResponse();
+      requestSecurityMiddleware(request, response, next);
+      expect(response.status).not.toHaveBeenCalled();
+    }
+
+    expect(next).toHaveBeenCalledTimes(4);
+  });
+
   it("isolates abuse throttling by authenticated token instead of shared ip", () => {
     process.env.ABUSE_THROTTLE_MAX_SCORE = "8";
     process.env.ABUSE_THROTTLE_BLOCK_MS = "60000";

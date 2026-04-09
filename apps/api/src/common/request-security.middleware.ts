@@ -141,6 +141,10 @@ function resolveAbuseIdentity(request: Request, ip: string) {
   return `token:${fingerprintAccessToken(accessToken)}`;
 }
 
+function hasAuthenticatedAccessToken(request: Request) {
+  return Boolean(extractAccessTokenForHttp(request as any));
+}
+
 function isWriteMethod(method: string) {
   return (
     method === "POST" ||
@@ -174,6 +178,54 @@ function isVerificationBypassPath(path: string) {
     path.startsWith("/api/agent/threads/") ||
     path.startsWith("/api/admin/ops/agent-workflows")
   );
+}
+
+function isSelfServiceOnboardingPath(path: string) {
+  return (
+    path === "/api/onboarding/infer" ||
+    path === "/api/onboarding/infer-fast" ||
+    path === "/api/onboarding/activation-plan" ||
+    path === "/api/onboarding/activation-bootstrap" ||
+    path === "/api/onboarding/activation-execute"
+  );
+}
+
+function isSelfServiceAgentThreadPath(path: string) {
+  return (
+    path === "/api/agent/threads/me/summary" ||
+    /^\/api\/agent\/threads\/[0-9a-f-]+\/messages\/?$/i.test(path) ||
+    /^\/api\/agent\/threads\/[0-9a-f-]+\/respond(\/stream)?\/?$/i.test(path)
+  );
+}
+
+function computeAbuseRequestScore(input: {
+  isAuthenticated: boolean;
+  isHighRisk: boolean;
+  isTrustedAdmin: boolean;
+  isWrite: boolean;
+  path: string;
+}) {
+  if (input.isTrustedAdmin) {
+    return 1;
+  }
+
+  if (
+    input.isAuthenticated &&
+    (isSelfServiceOnboardingPath(input.path) ||
+      isSelfServiceAgentThreadPath(input.path))
+  ) {
+    return input.isWrite ? 2 : 1;
+  }
+
+  if (input.isHighRisk) {
+    return 8;
+  }
+
+  if (input.isWrite) {
+    return 3;
+  }
+
+  return 1;
 }
 
 function getSingleHeader(
@@ -368,6 +420,7 @@ export function requestSecurityMiddleware(
   const traceId = (request as Request & { traceId?: string }).traceId ?? null;
   const isWrite = isWriteMethod(method);
   const isAuth = isAuthPath(path);
+  const isAuthenticated = hasAuthenticatedAccessToken(request);
   const isPlayground = isPlaygroundPath(path);
   const isVerificationBypass = isVerificationBypassRequest(request, path);
   const isTrustedSocialSimBypass = isTrustedSocialSimBypassRequest(
@@ -519,13 +572,13 @@ export function requestSecurityMiddleware(
       return;
     }
 
-    const requestScore = isTrustedAdminRequest(request, path)
-      ? 1
-      : isHighRiskPath(path)
-        ? 8
-        : isWrite
-          ? 3
-          : 1;
+    const requestScore = computeAbuseRequestScore({
+      isAuthenticated,
+      isHighRisk: isHighRiskPath(path),
+      isTrustedAdmin: isTrustedAdminRequest(request, path),
+      isWrite,
+      path,
+    });
     abuseWindow.count += requestScore;
     if (abuseWindow.count > config.abuseMaxScore) {
       abuseWindow.blockedUntil = now + config.abuseBlockMs;
