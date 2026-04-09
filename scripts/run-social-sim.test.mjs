@@ -8,6 +8,8 @@ import test from "node:test";
 import {
   DEFAULT_SOCIAL_SIM_BENCHMARK_SEED,
   DEFAULT_SOCIAL_SIM_TUNING,
+  computeDirectMatchClosureScore,
+  computeNetworkCoordinationScore,
   createBackendAdapter,
   createBrainProvider,
   createJudgeProvider,
@@ -1235,6 +1237,88 @@ test("runSocialSimulation writes artifacts in dry-run mode", async () => {
   } finally {
     rmSync(artifactRoot, { recursive: true, force: true });
   }
+});
+
+test("individual matchmaking clean direct matches receive direct-closure scoring credit", async () => {
+  const result = await runSocialSimulation({
+    provider: "stub",
+    judgeProvider: "stub",
+    horizon: "short",
+    worldFilter: ["short-direct-match-v1"],
+    scenarioFilter: [],
+    seed: 17031,
+    namespace: "test-social-sim-direct-closure",
+    turnBudget: null,
+    cleanupMode: "none",
+    dryRun: true,
+    nightly: false,
+    artifactRoot: mkdtempSync(path.join(os.tmpdir(), "social-sim-direct-closure-")),
+    fixturePath: path.resolve("scripts/social-sim-worlds.json"),
+    scenarioFixturePath: path.resolve(
+      "apps/api/test/fixtures/agentic-scenarios.json",
+    ),
+    baseUrl: "",
+    adminUserId: "",
+    adminRole: "admin",
+    adminApiKey: "",
+    ollamaBaseUrl: "http://localhost:11434",
+    ollamaModel: "llama3.1",
+    openaiApiKey: "",
+    openaiModel: "gpt-4.1-mini",
+    useRemoteProvider: false,
+    useRemoteJudge: false,
+    backendTurnDelayMs: 0,
+    backendRetryCount: 0,
+    backendRetryBaseDelayMs: 0,
+  });
+
+  const world = result.artifact.worlds.find((entry) => entry.worldId === "short-direct-match-v1");
+  assert.ok(world.summary.convergenceScore >= 0.62);
+  assert.equal(world.summary.scoreBreakdown.directMatchClosureScore, 1);
+});
+
+test("network rebalancing clean coordinated closure receives network coordination credit", () => {
+  const score = computeNetworkCoordinationScore(
+    {
+      family: "network-rebalancing",
+      oracle: {
+        preferredOutcomeEdges: ["a", "b", "c"],
+        requiredGroupClosure: ["b", "c"],
+        requiredIsolations: ["x"],
+      },
+    },
+    {
+      preferredMatchedCount: 3,
+      requiredGroupMatchedCount: 2,
+      isolatedActorCount: 1,
+    },
+    {
+      issueCount: 0,
+    },
+  );
+
+  assert.ok(score >= 0.99);
+});
+
+test("direct matchmaking clean closure receives direct match credit", () => {
+  const score = computeDirectMatchClosureScore(
+    {
+      family: "individual-matchmaking",
+    },
+    {
+      preferredMatchedCount: 1,
+    },
+    {
+      issueCount: 0,
+    },
+    {
+      introductions: 1,
+      replies: 2,
+      stalledTurns: 0,
+    },
+  );
+
+  assert.equal(score, 1);
 });
 
 test("backend adapter retries abuse throttling before falling back offline", async () => {

@@ -90,6 +90,8 @@ export const DEFAULT_SOCIAL_SIM_TUNING = {
     recoveryUnresolvedPenalty: 0.09,
     circleReassemblyWeight: 0.14,
     denseBridgeWeight: 0.12,
+    directMatchClosureWeight: 0.09,
+    networkCoordinationWeight: 0.08,
   },
   judge: {
     turnBase: 0.32,
@@ -1347,6 +1349,47 @@ function computeDenseBridgeScore(world, oracleMetrics) {
     oracleMetrics.closurePrecision,
     oracleMetrics.oracleProgressScore,
   ]);
+}
+
+export function computeDirectMatchClosureScore(world, oracleMetrics, diagnostics, metrics) {
+  if (world.family !== "individual-matchmaking") return 0;
+  if ((diagnostics.issueCount ?? 0) > 0) return 0;
+  if ((oracleMetrics.preferredMatchedCount ?? 0) <= 0) return 0;
+  if ((metrics.stalledTurns ?? 0) > 0) return 0;
+  if ((metrics.introductions ?? 0) <= 0 || (metrics.replies ?? 0) <= 0) return 0;
+  return 1;
+}
+
+export function computeNetworkCoordinationScore(world, oracleMetrics, diagnostics) {
+  if (world.family !== "network-rebalancing") return 0;
+  if ((diagnostics.issueCount ?? 0) > 0) return 0;
+
+  const preferredCompletion = clamp(
+    (oracleMetrics.preferredMatchedCount ?? 0) /
+      Math.max(world.oracle?.preferredOutcomeEdges?.length ?? 0, 1),
+    0,
+    1,
+  );
+  const groupCompletion = clamp(
+    (oracleMetrics.requiredGroupMatchedCount ?? 0) /
+      Math.max(world.oracle?.requiredGroupClosure?.length ?? 0, 1),
+    0,
+    1,
+  );
+  const isolationCompletion = clamp(
+    (oracleMetrics.isolatedActorCount ?? 0) /
+      Math.max(world.oracle?.requiredIsolations?.length ?? 0, 1),
+    0,
+    1,
+  );
+
+  return clamp(
+    preferredCompletion * 0.45 +
+      groupCompletion * 0.35 +
+      isolationCompletion * 0.2,
+    0,
+    1,
+  );
 }
 
 function classifyOracleRelationship(world, relationship) {
@@ -2729,10 +2772,23 @@ function summarizeWorld(world, transcript, metrics, judge, config) {
   const recoveryResolutionScore = computeRecoveryResolutionScore(world, oracleMetrics, metrics);
   const circleReassemblyScore = computeCircleReassemblyScore(world, oracleMetrics);
   const denseBridgeScore = computeDenseBridgeScore(world, oracleMetrics);
+  const directMatchClosureScore = computeDirectMatchClosureScore(
+    world,
+    oracleMetrics,
+    diagnostics,
+    metrics,
+  );
+  const networkCoordinationScore = computeNetworkCoordinationScore(
+    world,
+    oracleMetrics,
+    diagnostics,
+  );
   const familyGoalBonus =
     recoveryResolutionScore * tuning.scoring.recoveryClosureWeight +
     circleReassemblyScore * tuning.scoring.circleReassemblyWeight +
-    denseBridgeScore * tuning.scoring.denseBridgeWeight;
+    denseBridgeScore * tuning.scoring.denseBridgeWeight +
+    directMatchClosureScore * tuning.scoring.directMatchClosureWeight +
+    networkCoordinationScore * tuning.scoring.networkCoordinationWeight;
   const requiredEdgeMissPenalty =
     (diagnostics.groupClosureMisses.length * tuning.scoring.requiredEdgeMissPenalty) +
     (diagnostics.preferredEdgeMisses.length * tuning.scoring.preferredEdgeMissPenalty);
@@ -2833,6 +2889,8 @@ function summarizeWorld(world, transcript, metrics, judge, config) {
       recoveryResolutionScore: Number(recoveryResolutionScore.toFixed(3)),
       circleReassemblyScore: Number(circleReassemblyScore.toFixed(3)),
       denseBridgeScore: Number(denseBridgeScore.toFixed(3)),
+      directMatchClosureScore: Number(directMatchClosureScore.toFixed(3)),
+      networkCoordinationScore: Number(networkCoordinationScore.toFixed(3)),
     },
     measurement: {
       expectedTurnBudget,
