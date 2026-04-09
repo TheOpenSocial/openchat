@@ -365,7 +365,7 @@ test("remote actor providers fail closed in benchmark mode when remote generatio
   }
 });
 
-test("remote Ollama intents are normalized onto canonical simulator intents", async () => {
+test("remote Ollama intents can be upgraded to closure-oriented simulator intents", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => ({
     ok: true,
@@ -413,7 +413,7 @@ test("remote Ollama intents are normalized onto canonical simulator intents", as
       config: {},
     });
 
-    assert.equal(turn.intent, "reference_memory");
+    assert.equal(turn.intent, "invite_group");
     assert.equal(turn.targetActorId, "circle-organizer");
   } finally {
     globalThis.fetch = originalFetch;
@@ -467,7 +467,7 @@ test("remote Ollama actor output tolerates fenced JSON content", async () => {
   }
 });
 
-test("remote event safety language does not collapse into moderation by itself", async () => {
+test("remote event safety language does not collapse into moderation and can still close toward an event", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => ({
     ok: true,
@@ -516,7 +516,7 @@ test("remote event safety language does not collapse into moderation by itself",
       config: {},
     });
 
-    assert.equal(turn.intent, "reference_memory");
+    assert.equal(turn.intent, "propose_event");
     assert.equal(turn.targetActorId, "event-zoe");
   } finally {
     globalThis.fetch = originalFetch;
@@ -682,6 +682,118 @@ test("remote outputs do not positively advance forbidden targets", async () => {
 
     assert.equal(turn.targetActorId, "rebalance-host-mila");
     assert.equal(turn.intent, "recover_no_match");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("remote weak follow-up intents are upgraded to reply in direct-match conversations", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      message: {
+        content: JSON.stringify({
+          intent: "continue_warmly",
+          targetActorId: "ben",
+          message:
+            "That sounds perfect! I've heard great things about the route and coffee after sounds ideal.",
+          confidence: 0.86,
+          rationale:
+            "Continuing the thread warmly feels natural before locking anything down.",
+          memoryReferences: [],
+        }),
+      },
+    }),
+  });
+  try {
+    const brain = createBrainProvider({
+      provider: "ollama",
+      useRemoteProvider: true,
+      ollamaBaseUrl: "https://ollama.example.test",
+      ollamaModel: "deepseek-v3.1:671b",
+      ollamaApiKey: "test-key",
+    });
+    const worlds = loadSocialSimWorldFixture(
+      path.resolve("scripts/social-sim-worlds.json"),
+      path.resolve("apps/api/test/fixtures/agentic-scenarios.json"),
+    );
+    const world = worlds.find((entry) => entry.id === "short-direct-match-v1");
+    const actor = world.actors.find((entry) => entry.id === "aya");
+    const state = {
+      stage: "conversation",
+      turnIndex: 2,
+      lastActionByActor: new Map([["aya", { intent: "propose_event" }]]),
+      knownTargets: new Map([["aya-ben", { action: "propose_event", turnIndex: 0 }]]),
+    };
+
+    const turn = await brain.generateActorTurn({
+      world,
+      actor,
+      state,
+      transcript: [],
+      rng: () => 0.25,
+      config: {},
+    });
+
+    assert.equal(turn.targetActorId, "ben");
+    assert.equal(turn.intent, "reply");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("remote memory-heavy organizer turns are upgraded to invite_group in network rebalancing", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      message: {
+        content: JSON.stringify({
+          intent: "remember_and_reconnect",
+          targetActorId: "rebalance-safety-kai",
+          message:
+            "I remember your focus on clear boundaries and steady community sessions, and I think that perspective would still fit this group well.",
+          confidence: 0.82,
+          rationale:
+            "Reinforcing continuity feels like the best way to keep the thread healthy.",
+          memoryReferences: [],
+        }),
+      },
+    }),
+  });
+  try {
+    const brain = createBrainProvider({
+      provider: "ollama",
+      useRemoteProvider: true,
+      ollamaBaseUrl: "https://ollama.example.test",
+      ollamaModel: "deepseek-v3.1:671b",
+      ollamaApiKey: "test-key",
+    });
+    const worlds = loadSocialSimWorldFixture(
+      path.resolve("scripts/social-sim-worlds.json"),
+      path.resolve("apps/api/test/fixtures/agentic-scenarios.json"),
+    );
+    const world = worlds.find((entry) => entry.id === "long-network-rebalancing-v1");
+    const actor = world.actors.find((entry) => entry.id === "rebalance-group-seed-omar");
+    const state = {
+      stage: "conversation",
+      turnIndex: 6,
+      lastActionByActor: new Map(),
+      knownTargets: new Map(),
+    };
+
+    const turn = await brain.generateActorTurn({
+      world,
+      actor,
+      state,
+      transcript: [],
+      rng: () => 0.25,
+      config: {},
+    });
+
+    assert.equal(turn.targetActorId, "rebalance-safety-kai");
+    assert.equal(turn.intent, "invite_group");
   } finally {
     globalThis.fetch = originalFetch;
   }

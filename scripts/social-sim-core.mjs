@@ -3608,6 +3608,120 @@ function hasOutstandingRequiredGroupClosureForActor(world, actorId) {
   );
 }
 
+function intentStrength(intent) {
+  switch (normalizeString(intent, "follow_up")) {
+    case "recover_no_match":
+      return 5;
+    case "invite_group":
+    case "propose_event":
+      return 4;
+    case "reply":
+      return 3;
+    case "reference_memory":
+      return 2;
+    case "ask_preference":
+    case "introduce":
+      return 1;
+    case "follow_up":
+    default:
+      return 0;
+  }
+}
+
+function shouldPreferHeuristicIntent({
+  context,
+  remoteAction,
+  heuristic,
+  relationship,
+  heuristicRelationship,
+  actorNeedsRequiredClosure,
+}) {
+  if (!heuristic?.intent) return false;
+  if (heuristic.intent === remoteAction.intent) return false;
+  if (intentStrength(heuristic.intent) <= intentStrength(remoteAction.intent)) {
+    return false;
+  }
+
+  const closureCriticalFamily = [
+    "individual-matchmaking",
+    "pair-and-group",
+    "circle",
+    "dense-social-graph",
+    "event-and-memory",
+    "network-rebalancing",
+  ].includes(context.world.family);
+  const closureCriticalStage = [
+    "conversation",
+    "convergence",
+    "memory_drift",
+  ].includes(context.state.stage);
+  if (!closureCriticalFamily || !closureCriticalStage) return false;
+
+  const sameTarget =
+    normalizeString(remoteAction.targetActorId, "") ===
+    normalizeString(heuristic.targetActorId, "");
+  const sameRelationship =
+    relationship?.id && heuristicRelationship?.id
+      ? relationship.id === heuristicRelationship.id
+      : false;
+  const remoteOracleClass = classifyOracleRelationship(
+    context.world,
+    relationship,
+  );
+  const heuristicOracleClass = classifyOracleRelationship(
+    context.world,
+    heuristicRelationship,
+  );
+  const remoteIsWeakClosureIntent = ["follow_up", "reference_memory"].includes(
+    remoteAction.intent,
+  );
+  const heuristicIsClosureIntent = [
+    "reply",
+    "invite_group",
+    "propose_event",
+    "recover_no_match",
+  ].includes(heuristic.intent);
+
+  if (
+    actorNeedsRequiredClosure &&
+    heuristicIsClosureIntent &&
+    remoteIsWeakClosureIntent
+  ) {
+    return true;
+  }
+
+  if (
+    heuristicIsClosureIntent &&
+    remoteIsWeakClosureIntent &&
+    (sameTarget ||
+      sameRelationship ||
+      (heuristicOracleClass !== "forbidden" &&
+        remoteOracleClass !== "preferred" &&
+        remoteOracleClass !== "acceptable"))
+  ) {
+    return true;
+  }
+
+  if (
+    context.world.family === "individual-matchmaking" &&
+    heuristic.intent === "reply" &&
+    remoteAction.intent === "follow_up" &&
+    (sameTarget || sameRelationship)
+  ) {
+    return true;
+  }
+
+  if (
+    context.world.family === "event-and-memory" &&
+    heuristic.intent === "propose_event" &&
+    remoteAction.intent === "reference_memory"
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 function reconcileRemoteActionWithPlanner(context, action) {
   const heuristic = planSocialSimAction(context) ?? planGenericBrainAction(context);
   const relationship = findRelationshipByActors(
@@ -3643,6 +3757,25 @@ function reconcileRemoteActionWithPlanner(context, action) {
     return {
       intent: heuristic.intent,
       targetActorId: heuristic.targetActorId ?? null,
+    };
+  }
+
+  if (
+    shouldPreferHeuristicIntent({
+      context,
+      remoteAction: action,
+      heuristic,
+      relationship,
+      heuristicRelationship,
+      actorNeedsRequiredClosure,
+    })
+  ) {
+    return {
+      intent: heuristic.intent,
+      targetActorId:
+        heuristicTargetsRequiredClosure || !action.targetActorId
+          ? heuristic.targetActorId ?? null
+          : action.targetActorId ?? heuristic.targetActorId ?? null,
     };
   }
 
@@ -4106,6 +4239,7 @@ class OpenAIJudgeProvider extends RemoteJudgeProviderBase {
 }
 
 function buildProviderContext(context) {
+  const plannerHint = planSocialSimAction(context) ?? planGenericBrainAction(context);
   return {
     promptVersion: SOCIAL_SIM_PROMPT_VERSION,
     actor: context.actor,
@@ -4118,11 +4252,24 @@ function buildProviderContext(context) {
       goals: context.world.goals,
       relationships: context.world.relationships,
       evaluationFocus: context.world.evaluationFocus,
+      requiredGroupClosure: context.world.oracle?.requiredGroupClosure ?? [],
+      preferredOutcomeEdges: context.world.oracle?.preferredOutcomeEdges ?? [],
     },
     state: {
       stage: context.state.stage,
       turnIndex: context.state.turnIndex,
       knownTargets: Array.from(context.state.knownTargets.entries()),
+    },
+    plannerHints: {
+      recommendedIntent: plannerHint?.intent ?? null,
+      recommendedTargetActorId: plannerHint?.targetActorId ?? null,
+      worldNeedsRecovery: worldNeedsRecovery(context.world),
+      worldNeedsMemory: worldNeedsMemory(context.world),
+      worldNeedsGroupProgress: worldNeedsGroupProgress(context.world),
+      actorNeedsRequiredGroupClosure: hasOutstandingRequiredGroupClosureForActor(
+        context.world,
+        context.actor.id,
+      ),
     },
     transcriptPreview: context.transcript.slice(-4),
   };
