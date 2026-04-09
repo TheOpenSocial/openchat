@@ -59,6 +59,32 @@ test("golden eval runner executes social sim benchmark suite", async () => {
   assert.ok(result.summary.suites[0].summary.familyMetrics);
   const firstFamily = Object.values(result.summary.suites[0].summary.familyMetrics)[0];
   assert.equal(typeof firstFamily?.meanConvergenceScore, "number");
+  assert.equal(result.summary.suites[0].run.benchmarkConfig.concurrency, 1);
+});
+
+test("golden eval runner can execute social sim seeds concurrently", async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "golden-evals-concurrent-"));
+  const result = await runGoldenEvals(
+    [
+      "--suite=social-sim-benchmark",
+      "--provider=stub",
+      "--judge-provider=stub",
+      "--benchmark-mode=1",
+      "--dry-run=1",
+      "--horizon=all",
+      "--world-set=core",
+    ],
+    {
+      ...process.env,
+      EVAL_ARTIFACT_ROOT: root,
+      SOCIAL_SIM_BENCHMARK_SEEDS: "17031,27031",
+      SOCIAL_SIM_BENCHMARK_CONCURRENCY: "2",
+    },
+  );
+
+  assert.equal(result.summary.suiteCount, 1);
+  assert.deepEqual(result.summary.suites[0].summary.seeds, [17031, 27031]);
+  assert.equal(result.summary.suites[0].run.benchmarkConfig.concurrency, 2);
 });
 
 test("golden eval runner can include product critical suite", async () => {

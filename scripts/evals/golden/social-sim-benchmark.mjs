@@ -17,6 +17,7 @@ const DEFAULT_BENCHMARK_SEEDS = [
   DEFAULT_SOCIAL_SIM_BENCHMARK_SEED + 10000,
   DEFAULT_SOCIAL_SIM_BENCHMARK_SEED + 20000,
 ];
+const DEFAULT_BENCHMARK_CONCURRENCY = 1;
 
 function parseSeedList(value) {
   if (typeof value !== "string" || value.trim().length === 0) {
@@ -27,6 +28,14 @@ function parseSeedList(value) {
     .map((entry) => Number(entry.trim()))
     .filter((entry) => Number.isFinite(entry));
   return seeds.length > 0 ? seeds : DEFAULT_BENCHMARK_SEEDS;
+}
+
+function parseConcurrency(value, max) {
+  const parsed = Number.parseInt(value ?? "", 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return DEFAULT_BENCHMARK_CONCURRENCY;
+  }
+  return Math.min(parsed, Math.max(max, 1));
 }
 
 function average(values) {
@@ -91,8 +100,29 @@ function aggregateFamilyMetrics(seedSummaries) {
   );
 }
 
+async function mapWithConcurrency(items, concurrency, worker) {
+  const results = new Array(items.length);
+  let cursor = 0;
+
+  async function runWorker() {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      results[index] = await worker(items[index], index);
+    }
+  }
+
+  const workerCount = Math.min(Math.max(concurrency, 1), Math.max(items.length, 1));
+  await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
+  return results;
+}
+
 export async function runSocialSimBenchmarkMatrix(argv = process.argv.slice(2), env = process.env) {
   const matrixSeeds = parseSeedList(env.SOCIAL_SIM_BENCHMARK_SEEDS);
+  const benchmarkConcurrency = parseConcurrency(
+    env.SOCIAL_SIM_BENCHMARK_CONCURRENCY,
+    matrixSeeds.length,
+  );
   const config = parseSocialSimArgs(argv, env);
   const envelope = createEvalRunEnvelope({
     evalSuite: "social-sim-benchmark",
@@ -101,8 +131,7 @@ export async function runSocialSimBenchmarkMatrix(argv = process.argv.slice(2), 
   });
 
   const caseRows = [];
-  const seedResults = [];
-  for (const seed of matrixSeeds) {
+  const seedResults = await mapWithConcurrency(matrixSeeds, benchmarkConcurrency, async (seed) => {
     const result = await runSocialSimulation({
       ...config,
       benchmarkMode: true,
@@ -130,9 +159,9 @@ export async function runSocialSimBenchmarkMatrix(argv = process.argv.slice(2), 
       artifactRunId: result.artifact?.runId ?? null,
       familyScores: result.summary?.familyScores ?? {},
     };
-    caseRows.push(row);
-    seedResults.push(row);
-  }
+    return row;
+  });
+  caseRows.push(...seedResults);
 
   const scores = seedResults.map((entry) => entry.score);
   const oracleScores = seedResults.map((entry) => entry.oracleScore);
@@ -164,6 +193,7 @@ export async function runSocialSimBenchmarkMatrix(argv = process.argv.slice(2), 
       horizon: config.horizon,
       benchmarkMode: true,
       worldSet: config.worldSet,
+      concurrency: benchmarkConcurrency,
     },
   });
 }

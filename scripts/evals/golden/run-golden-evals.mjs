@@ -44,6 +44,10 @@ export async function runGoldenEvals(argv = process.argv.slice(2), env = process
     suiteSummaries.push({
       suite: "social-sim-benchmark",
       summary: socialSimResult.summary,
+      run: {
+        runId: socialSimResult.runId,
+        benchmarkConfig: socialSimResult.benchmarkConfig ?? null,
+      },
     });
     caseRows.push({
       caseId: "suite-social-sim-benchmark",
@@ -64,6 +68,9 @@ export async function runGoldenEvals(argv = process.argv.slice(2), env = process
     suiteSummaries.push({
       suite: "product-critical-goldens",
       summary: productResult.summary,
+      run: {
+        runId: productResult.runId,
+      },
     });
     caseRows.push({
       caseId: "suite-product-critical-goldens",
