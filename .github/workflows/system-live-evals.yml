@@ -83,6 +83,14 @@ jobs:
           fi
           "${cmd[@]}"
 
+      - name: Compare Against Accepted System Baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/evals/system/compare-system-baseline.mjs \
+            --artifact-root="${EVAL_ARTIFACT_ROOT}" \
+            --fail-on-regression=1
+
       - name: Publish System Evaluation Artifacts
         if: always()
         uses: actions/upload-artifact@v4

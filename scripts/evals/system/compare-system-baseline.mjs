@@ -30,6 +30,11 @@ function parseArgs(argv = process.argv.slice(2), env = process.env) {
         DEFAULT_BASELINE_HISTORY_PATH,
       ),
     ),
+    failOnRegression:
+      normalizeString(
+        flags.get("fail-on-regression") ?? env.EVAL_SYSTEM_FAIL_ON_REGRESSION,
+        "0",
+      ) === "1",
   };
 }
 
@@ -67,7 +72,7 @@ export function compareSystemBaseline(
   const current = buildSystemMatrixStatus(argv, env);
   const suiteBaselineScores = acceptedBaseline.suiteScores ?? {};
 
-  return {
+  const result = {
     generatedAt: new Date().toISOString(),
     baselineHistoryPath: config.baselineHistoryPath,
     acceptedBaselineId: acceptedBaseline.id,
@@ -155,9 +160,44 @@ export function compareSystemBaseline(
       };
     }),
   };
+
+  const regressions = [];
+  if (result.gateScoreDelta.status === "regressed") {
+    regressions.push(
+      `gateScore regressed (${result.gateScoreDelta.currentGateScore} < ${result.gateScoreDelta.baselineGateScore})`,
+    );
+  }
+  if (result.socialSimulationDelta?.status === "regressed") {
+    regressions.push(
+      `social-sim deterministic mean regressed (${result.socialSimulationDelta.currentMeanScore} < ${result.socialSimulationDelta.baselineMeanScore})`,
+    );
+  }
+  if (acceptedBaseline.liveSocialSimulation && !result.liveSocialSimulationDelta) {
+    regressions.push("live social-sim baseline exists but current run has no live social-sim lane");
+  } else if (result.liveSocialSimulationDelta?.status === "regressed") {
+    regressions.push(
+      `social-sim live mean regressed (${result.liveSocialSimulationDelta.currentMeanScore} < ${result.liveSocialSimulationDelta.baselineMeanScore})`,
+    );
+  }
+  for (const suiteDelta of result.suiteDeltas) {
+    if (suiteDelta.status === "regressed") {
+      regressions.push(
+        `suite ${suiteDelta.suiteId} regressed (${suiteDelta.currentScore} < ${suiteDelta.baselineScore})`,
+      );
+    }
+  }
+  result.regressions = regressions;
+  result.passed = regressions.length === 0;
+  result.config = {
+    failOnRegression: config.failOnRegression,
+  };
+  return result;
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const result = compareSystemBaseline();
   console.log(JSON.stringify(result, null, 2));
+  if (result.config.failOnRegression && result.regressions.length > 0) {
+    throw new Error(`System baseline regression detected: ${result.regressions.join("; ")}`);
+  }
 }

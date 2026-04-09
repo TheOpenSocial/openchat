@@ -144,4 +144,107 @@ test("compare system baseline reports deltas against latest accepted baseline", 
     (entry) => entry.suiteId === "social-sim-live-benchmark",
   );
   assert.equal(liveSuiteDelta.status, "improved");
+  assert.deepEqual(result.regressions, []);
+  assert.equal(result.passed, true);
+});
+
+test("compare system baseline reports live regression explicitly", () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "system-baseline-compare-regression-"));
+  const artifactRoot = path.join(root, "artifacts");
+  mkdirSync(artifactRoot, { recursive: true });
+
+  const baselinePath = path.join(root, "system-baseline.json");
+  writeFileSync(
+    baselinePath,
+    JSON.stringify({ version: 1, suiteThresholds: {}, overallThresholds: {} }, null, 2),
+  );
+
+  const historyPath = path.join(root, "system-baseline-history.json");
+  writeFileSync(
+    historyPath,
+    JSON.stringify(
+      {
+        version: 1,
+        acceptedRuns: [
+          {
+            id: "baseline-live",
+            system: { averageScore: 0.924, gateScore: 0.956 },
+            socialSimulation: { meanScore: 0.74 },
+            liveSocialSimulation: { meanScore: 0.731 },
+            suiteScores: {
+              "social-sim-benchmark": 0.74,
+              "social-sim-live-benchmark": 0.731,
+            },
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+  );
+
+  const systemRunDir = path.join(artifactRoot, "system-evals-2026-04-09T00-00-00-000Z");
+  mkdirSync(systemRunDir, { recursive: true });
+  writeFileSync(
+    path.join(systemRunDir, "summary.json"),
+    JSON.stringify(
+      {
+        passed: true,
+        averageScore: 0.9,
+        gateScore: 0.93,
+        suiteCount: 2,
+        failedCases: 0,
+        thresholdFailures: [],
+        overallThresholdFailures: [],
+        usedLiveWorkflowReplay: true,
+        usedLiveSocialSim: true,
+        thresholdResults: [],
+        suites: [
+          {
+            suiteId: "social-sim-benchmark",
+            summary: { meanScore: 0.74, averageScore: 0.74, familyMetrics: {} },
+          },
+          {
+            suiteId: "social-sim-live-benchmark",
+            summary: { meanScore: 0.7, averageScore: 0.7, familyMetrics: {} },
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+  );
+  writeFileSync(
+    path.join(systemRunDir, "cases.jsonl"),
+    `${JSON.stringify({
+      suiteId: "social-sim-benchmark",
+      score: 0.74,
+      failedCases: 0,
+      totalCases: 3,
+      primaryFailureReason: "none",
+      suiteArtifactRunId: null,
+    })}\n${JSON.stringify({
+      suiteId: "social-sim-live-benchmark",
+      score: 0.7,
+      failedCases: 0,
+      totalCases: 3,
+      primaryFailureReason: "none",
+      suiteArtifactRunId: null,
+    })}\n`,
+  );
+
+  const result = compareSystemBaseline(
+    [
+      `--artifact-root=${artifactRoot}`,
+      `--baseline=${baselinePath}`,
+      `--history=${historyPath}`,
+    ],
+    process.env,
+  );
+
+  assert.equal(result.passed, false);
+  assert.ok(
+    result.regressions.some((entry) => entry.includes("social-sim live mean regressed")),
+  );
+  assert.ok(result.regressions.some((entry) => entry.includes("gateScore regressed")));
 });
