@@ -19,7 +19,7 @@ jobs:
     name: Live Staging System Matrix
     runs-on: [self-hosted, linux, x64, opensocial-prod]
     environment: staging
-    timeout-minutes: 45
+    timeout-minutes: 90
     concurrency:
       group: system-live-evals-staging
       cancel-in-progress: false
@@ -72,6 +72,7 @@ jobs:
           fi
 
       - name: Execute Live System Evaluation Matrix
+        timeout-minutes: 80
         shell: bash
         run: |
           set -euo pipefail
