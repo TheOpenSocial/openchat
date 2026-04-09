@@ -29,6 +29,11 @@
         }
       }
     },
+    "social-sim-live-benchmark": {
+      "minAverageScore": 0.55,
+      "maxFailedCases": 1,
+      "requiredPrimaryFailureReasons": []
+    },
     "product-critical-goldens": {
       "minAverageScore": 1,
       "maxFailedCases": 0,
@@ -56,7 +61,12 @@
     }
   },
   "overallThresholds": {
-    "minAverageScore": 0.9,
-    "maxFailedSuites": 0
+    "minGateScore": 0.9,
+    "maxFailedSuites": 0,
+    "defaultSuiteWeight": 1,
+    "suiteWeights": {
+      "social-sim-benchmark": 0.5,
+      "social-sim-live-benchmark": 0.5
+    }
   }
 }

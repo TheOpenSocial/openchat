@@ -469,3 +469,111 @@ test("system eval runner can include live social sim as a separate suite", async
   );
   assert.equal(realismRow.level, "medium");
 });
+
+test("system eval runner supports weighted gate score for mixed live suites", async () => {
+  const root = mkdtempSync(
+    path.join(os.tmpdir(), "system-evals-weighted-gate-"),
+  );
+  const baselinePath = path.join(root, "system-baseline.json");
+  writeFileSync(
+    baselinePath,
+    JSON.stringify(
+      {
+        version: 1,
+        suiteThresholds: {
+          "social-sim-benchmark": { minAverageScore: 0.55, maxFailedCases: 1 },
+          "social-sim-live-benchmark": {
+            minAverageScore: 0.55,
+            maxFailedCases: 1,
+          },
+          "product-critical-goldens": { minAverageScore: 1, maxFailedCases: 0 },
+          "replay-corpus": { minAverageScore: 1, maxFailedCases: 0 },
+          "replay-historical-corpus": { minAverageScore: 1, maxFailedCases: 0 },
+          "replay-historical-export": { minAverageScore: 1, maxFailedCases: 0 },
+          "replay-sanitized-runtime-export": {
+            minAverageScore: 1,
+            maxFailedCases: 0,
+          },
+        },
+        overallThresholds: {
+          minGateScore: 0.9,
+          maxFailedSuites: 0,
+          defaultSuiteWeight: 1,
+          suiteWeights: {
+            "social-sim-benchmark": 0.5,
+            "social-sim-live-benchmark": 0.5,
+          },
+        },
+      },
+      null,
+      2,
+    ),
+  );
+
+  let socialCalls = 0;
+  const result = await runSystemEvals(
+    [`--baseline=${baselinePath}`, "--live-social-sim=1"],
+    {
+      ...process.env,
+      EVAL_ARTIFACT_ROOT: path.join(root, "artifacts"),
+      EVAL_BASE_URL: "https://example.test",
+      EVAL_ADMIN_USER_ID: "admin-user",
+      EVAL_ADMIN_ROLE: "admin",
+      EVAL_ADMIN_API_KEY: "admin-key",
+    },
+    {
+      async runSocialSimBenchmarkMatrix() {
+        socialCalls += 1;
+        return {
+          runId: `social-sim-run-${socialCalls}`,
+          summary: {
+            totalCases: 1,
+            failedCases: 0,
+            averageScore: socialCalls === 1 ? 0.698 : 0.587,
+            meanScore: socialCalls === 1 ? 0.698 : 0.587,
+            primaryFailureReason: "none",
+            familyMetrics: {},
+            effectiveBackendModes:
+              socialCalls === 1 ? ["offline"] : ["backend"],
+          },
+        };
+      },
+      async runProductCriticalGoldens() {
+        return {
+          runId: "product-run",
+          summary: {
+            totalCases: 1,
+            failedCases: 0,
+            averageScore: 1,
+            primaryFailureReason: "none",
+            assertionsEvaluated: true,
+            dryRunBypassedAssertions: false,
+          },
+        };
+      },
+      async runReplayEvals() {
+        return {
+          runId: "replay-run",
+          summary: {
+            totalCases: 1,
+            failedCases: 0,
+            averageScore: 1,
+            primaryFailureReason: "none",
+            source: "corpus",
+            corpusSuite: "fixture",
+          },
+        };
+      },
+      async runLiveSanitizedWorkflowReplay() {
+        throw new Error(
+          "live workflow replay should not run in weighted gate unit test",
+        );
+      },
+    },
+  );
+
+  assert.equal(result.summary.averageScore < 0.9, true);
+  assert.equal(result.summary.gateScore >= 0.9, true);
+  assert.deepEqual(result.summary.overallThresholdFailures, []);
+  assert.equal(result.summary.passed, true);
+});

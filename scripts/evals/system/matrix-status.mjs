@@ -202,6 +202,7 @@ export function buildSystemMatrixStatus(
     system: {
       passed: summary.passed === true,
       averageScore: summary.averageScore ?? 0,
+      gateScore: summary.gateScore ?? summary.averageScore ?? 0,
       suiteCount: summary.suiteCount ?? suiteMatrix.length,
       failedCases: summary.failedCases ?? 0,
       thresholdFailures: summary.thresholdFailures ?? [],

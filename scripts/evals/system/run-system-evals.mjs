@@ -164,6 +164,30 @@ function buildSuiteRow({ suiteId, summary, runId, extra = {} }) {
   };
 }
 
+function calculateWeightedGateScore(
+  suiteRows,
+  suiteWeights = {},
+  defaultWeight = 1,
+) {
+  let weightedTotal = 0;
+  let totalWeight = 0;
+
+  for (const row of suiteRows) {
+    const configuredWeight = suiteWeights?.[row.suiteId];
+    const weight = Number.isFinite(configuredWeight)
+      ? configuredWeight
+      : defaultWeight;
+    if (weight <= 0) continue;
+    weightedTotal += (row.score ?? 0) * weight;
+    totalWeight += weight;
+  }
+
+  return {
+    gateScore: totalWeight > 0 ? weightedTotal / totalWeight : 0,
+    totalWeight,
+  };
+}
+
 function buildConfidenceRows({
   usedLiveWorkflowReplay,
   usedLiveSocialSim,
@@ -523,12 +547,25 @@ export async function runSystemEvals(
 
   const rollup = summarizeCaseRows(suiteRowsWithThresholds);
   const overallThresholds = baseline?.overallThresholds ?? {};
+  const weightedGate = calculateWeightedGateScore(
+    suiteRowsWithThresholds,
+    overallThresholds.suiteWeights ?? {},
+    Number.isFinite(overallThresholds.defaultSuiteWeight)
+      ? overallThresholds.defaultSuiteWeight
+      : 1,
+  );
   const overallFailures = [];
   if (
     Number.isFinite(overallThresholds.minAverageScore) &&
     rollup.averageScore < overallThresholds.minAverageScore
   ) {
     overallFailures.push("overall_average_score_below_threshold");
+  }
+  if (
+    Number.isFinite(overallThresholds.minGateScore) &&
+    weightedGate.gateScore < overallThresholds.minGateScore
+  ) {
+    overallFailures.push("overall_gate_score_below_threshold");
   }
   if (
     Number.isFinite(overallThresholds.maxFailedSuites) &&
@@ -545,6 +582,8 @@ export async function runSystemEvals(
     thresholdResults,
     thresholdFailures: failedThresholds,
     overallThresholds,
+    gateScore: weightedGate.gateScore,
+    gateScoreWeightTotal: weightedGate.totalWeight,
     overallThresholdFailures: overallFailures,
     usedLiveWorkflowReplay: config.useLiveWorkflowReplay,
     usedLiveSocialSim: config.useLiveSocialSim,
@@ -570,7 +609,7 @@ export async function runSystemEvals(
   logStage(
     "summary",
     "system-evaluation-matrix",
-    `passed=${summary.passed} averageScore=${Number(summary.averageScore ?? 0).toFixed(3)} failedSuites=${summary.failedCases}`,
+    `passed=${summary.passed} averageScore=${Number(summary.averageScore ?? 0).toFixed(3)} gateScore=${Number(summary.gateScore ?? 0).toFixed(3)} failedSuites=${summary.failedCases}`,
   );
 
   return finalizeEvalRun(envelope, summary, suiteRowsWithThresholds, {
