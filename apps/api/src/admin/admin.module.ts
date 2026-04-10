@@ -3,6 +3,7 @@ import { AnalyticsModule } from "../analytics/analytics.module.js";
 import { AuthModule } from "../auth/auth.module.js";
 import { ChatsModule } from "../chats/chats.module.js";
 import { DatabaseModule } from "../database/database.module.js";
+import { ExperienceModule } from "../experience/experience.module.js";
 import { IntentsModule } from "../intents/intents.module.js";
 import { JobsModule } from "../jobs/jobs.module.js";
 import { ModerationModule } from "../moderation/moderation.module.js";
@@ -22,6 +23,7 @@ import { AdminController } from "./admin.controller.js";
     JobsModule,
     AnalyticsModule,
     DatabaseModule,
+    ExperienceModule,
     IntentsModule,
     ModerationModule,
     PersonalizationModule,

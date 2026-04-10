@@ -29,6 +29,7 @@ import { HealthController } from "./health/health.controller.js";
 import { SearchModule } from "./search/search.module.js";
 import { OnboardingModule } from "./onboarding/onboarding.module.js";
 import { RuntimeModule } from "./runtime/runtime.module.js";
+import { ExperienceModule } from "./experience/experience.module.js";
 
 @Module({
   controllers: [HealthController],
@@ -65,6 +66,7 @@ import { RuntimeModule } from "./runtime/runtime.module.js";
     SearchModule,
     OnboardingModule,
     RuntimeModule,
+    ExperienceModule,
   ],
   providers: [
     {
