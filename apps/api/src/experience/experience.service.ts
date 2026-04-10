@@ -18,6 +18,26 @@ type ActivitySectionId =
   | "suggestions"
   | "discoveryHighlights";
 
+type ExperienceHomeLeadIntent = {
+  intentId: string;
+  rawText: string;
+  status: string;
+  requests: {
+    pending: number;
+    accepted: number;
+    rejected: number;
+    expired: number;
+    cancelled: number;
+  };
+};
+
+type ExperienceTopSuggestion = {
+  displayName: string;
+  reason: string;
+  score: number;
+  userId: string;
+};
+
 @Injectable()
 export class ExperienceService {
   constructor(
@@ -101,18 +121,7 @@ export class ExperienceService {
   }
 
   private deriveHomeCoordination(input: {
-    leadIntent: {
-      intentId: string;
-      rawText: string;
-      status: string;
-      requests: {
-        pending: number;
-        accepted: number;
-        rejected: number;
-        expired: number;
-        cancelled: number;
-      };
-    } | null;
+    leadIntent: ExperienceHomeLeadIntent | null;
     coordinationTarget: {
       chatId: string | null;
     } | null;
@@ -123,11 +132,12 @@ export class ExperienceService {
 
     if (input.leadIntent.requests.accepted > 0) {
       return {
+        variant: "accepted" as const,
         title: "Move the match forward",
         body:
           input.leadIntent.requests.accepted === 1
-            ? "You have 1 accepted connection ready for coordination."
-            : `You have ${input.leadIntent.requests.accepted} accepted connections ready for coordination.`,
+            ? "One accepted match is ready. The fastest next move is to coordinate directly."
+            : `${input.leadIntent.requests.accepted} accepted matches are ready. The fastest next move is to coordinate directly.`,
         actionLabel: input.coordinationTarget?.chatId
           ? "Open chat"
           : "Open search",
@@ -137,11 +147,12 @@ export class ExperienceService {
 
     if (input.leadIntent.requests.pending > 0) {
       return {
+        variant: "waiting" as const,
         title: "Waiting on replies",
         body:
           input.leadIntent.requests.pending === 1
-            ? "1 invite is still active on this search."
-            : `${input.leadIntent.requests.pending} invites are still active on this search.`,
+            ? "One invite is still live. Let it breathe before widening the search."
+            : `${input.leadIntent.requests.pending} invites are still live. Let those responses settle before changing direction.`,
         actionLabel: "Review search",
         targetChatId: null,
       };
@@ -209,24 +220,8 @@ export class ExperienceService {
   }
 
   private deriveHomeRecovery(input: {
-    leadIntent: {
-      intentId: string;
-      rawText: string;
-      status: string;
-      requests: {
-        pending: number;
-        accepted: number;
-        rejected: number;
-        expired: number;
-        cancelled: number;
-      };
-    } | null;
-    topSuggestion: {
-      displayName: string;
-      reason: string;
-      score: number;
-      userId: string;
-    } | null;
+    leadIntent: ExperienceHomeLeadIntent | null;
+    topSuggestion: ExperienceTopSuggestion | null;
   }) {
     if (!input.leadIntent) {
       return null;
@@ -237,9 +232,10 @@ export class ExperienceService {
     }
 
     return {
-      title: "Shift the search slightly",
-      body: "If this stays thin, widen timing or switch between 1:1 and a small group.",
+      title: "Widen the timing first",
+      body: "Nothing is strong enough yet. First widen timing or availability before changing the format.",
       actionLabel: "Adjust search",
+      secondaryLabel: "If that still looks thin, try a small group next.",
     };
   }
 
@@ -287,35 +283,45 @@ export class ExperienceService {
         {
           id: "actionRequired" as const satisfies ActivitySectionId,
           title: "Action required",
+          subtitle: "Requests and momentum that need a response now.",
+          emphasis: "urgent" as const,
         },
         {
           id: "updates" as const satisfies ActivitySectionId,
           title: "Updates",
+          subtitle: "Unread changes and fresh system signals.",
+          emphasis: "active" as const,
         },
         {
           id: "activeIntents" as const satisfies ActivitySectionId,
           title: "Active searches",
+          subtitle: "Searches already in motion.",
+          emphasis: "active" as const,
         },
         {
           id: "suggestions" as const satisfies ActivitySectionId,
           title: "Suggestions",
+          subtitle: "People and moves worth considering next.",
+          emphasis: "passive" as const,
         },
         {
           id: "discoveryHighlights" as const satisfies ActivitySectionId,
           title: "Around you",
+          subtitle: "Ambient context from nearby activity.",
+          emphasis: "passive" as const,
         },
       ],
       sections: {
         actionRequired: pendingRequests.slice(0, 6).map((request) => ({
           id: request.id,
           kind: "request" as const,
-          priority: request.status === "pending" ? 100 : 80,
+          priority: request.status === "pending" ? 120 : 105,
           eyebrow: request.status === "pending" ? "Request" : "Request update",
           title:
             request.status === "pending"
-              ? "New request waiting"
+              ? "Respond to this request"
               : request.status === "accepted"
-                ? "Request accepted"
+                ? "A request just opened up"
                 : request.status === "rejected"
                   ? "Request declined"
                   : "Request updated",
@@ -333,7 +339,13 @@ export class ExperienceService {
         updates: notifications.map((notification) => ({
           id: notification.id,
           kind: "notification" as const,
-          priority: notification.isRead ? 35 : 60,
+          priority: notification.isRead
+            ? 45
+            : notification.type === "chat_message"
+              ? 85
+              : notification.type === "request_accepted"
+                ? 82
+                : 70,
           eyebrow: "System",
           title: this.describeNotificationTitle(notification.type),
           body: notification.body,
@@ -346,13 +358,18 @@ export class ExperienceService {
           intentId: intent.intentId,
           priority:
             intent.requests.accepted > 0
-              ? 75
+              ? 95
               : intent.requests.pending > 0
-                ? 65
-                : 50,
-          eyebrow: intent.status,
+                ? 68
+                : 55,
+          eyebrow: intent.requests.accepted > 0 ? "Coordination" : "Search",
           title: intent.rawText,
-          body: `${intent.requests.pending} pending · ${intent.requests.accepted} accepted · ${intent.requests.rejected + intent.requests.expired + intent.requests.cancelled} closed`,
+          body:
+            intent.requests.accepted > 0
+              ? `${intent.requests.accepted} accepted · move this into conversation next.`
+              : intent.requests.pending > 0
+                ? `${intent.requests.pending} pending · wait for replies before widening it.`
+                : `${intent.requests.rejected + intent.requests.expired + intent.requests.cancelled} closed · this search may need adjustment.`,
           rawText: intent.rawText,
           status: intent.status,
           ageMinutes: intent.ageMinutes,
@@ -360,7 +377,7 @@ export class ExperienceService {
         })),
         suggestions: inboxSuggestions.suggestions.map((suggestion, index) => ({
           id: `suggestion:${index}:${suggestion.title}`,
-          priority: Math.max(20, Math.round(suggestion.score * 40)),
+          priority: Math.max(25, Math.round(suggestion.score * 38)),
           eyebrow: `${Math.round(suggestion.score * 100)}% match`,
           title: suggestion.title,
           body: suggestion.reason,
@@ -370,14 +387,14 @@ export class ExperienceService {
         discoveryHighlights: [
           {
             id: "summary:tonight",
-            priority: 30,
+            priority: 28,
             eyebrow: "System",
             title: "Tonight is active",
             body: `${passiveDiscovery.tonight.suggestions.length} people and ${passiveDiscovery.groups.groups.length} group options are available.`,
           },
           {
             id: "summary:reconnects",
-            priority: 25,
+            priority: 22,
             eyebrow: "System",
             title: "Reconnects available",
             body: `${passiveDiscovery.reconnects.reconnects.length} people are worth revisiting.`,
@@ -448,29 +465,15 @@ export class ExperienceService {
   }
 
   private deriveHomeStatus(input: {
-    leadIntent: {
-      intentId: string;
-      rawText: string;
-      status: string;
-      requests: {
-        pending: number;
-        accepted: number;
-        rejected: number;
-        expired: number;
-        cancelled: number;
-      };
-    } | null;
+    leadIntent: ExperienceHomeLeadIntent | null;
     pendingRequestCount: number;
-    topSuggestion: {
-      displayName: string;
-      reason: string;
-      score: number;
-      userId: string;
-    } | null;
+    topSuggestion: ExperienceTopSuggestion | null;
   }): {
+    eyebrow: string;
     title: string;
     body: string;
     tone: "active" | "waiting" | "recovery" | "idle";
+    footnote: string | null;
     nextAction: {
       kind: HomeNextAction;
       label: string;
@@ -478,12 +481,14 @@ export class ExperienceService {
   } {
     if (input.pendingRequestCount > 0) {
       return {
+        eyebrow: "Needs attention",
         title: "People are waiting",
         body:
           input.pendingRequestCount === 1
-            ? "You have 1 pending request that needs a response."
-            : `You have ${input.pendingRequestCount} pending requests that need a response.`,
+            ? "One request needs a response before the search can move forward."
+            : `${input.pendingRequestCount} requests need responses before the search can move forward.`,
         tone: "waiting",
+        footnote: "Handle requests first, then return to matching.",
         nextAction: {
           kind: "review_requests",
           label: "Review requests",
@@ -493,9 +498,11 @@ export class ExperienceService {
 
     if (input.leadIntent && input.leadIntent.requests.accepted > 0) {
       return {
+        eyebrow: "Coordination is live",
         title: "A match is moving",
         body: `${input.leadIntent.requests.accepted} accepted connection${input.leadIntent.requests.accepted === 1 ? "" : "s"} for "${input.leadIntent.rawText}".`,
         tone: "active",
+        footnote: "The next step is direct coordination, not more matching.",
         nextAction: {
           kind: "open_matches",
           label: "Open matches",
@@ -505,11 +512,17 @@ export class ExperienceService {
 
     if (input.leadIntent) {
       return {
+        eyebrow: input.topSuggestion
+          ? "Search is active"
+          : "Search needs adjustment",
         title: "Search is active",
         body: input.topSuggestion
-          ? `Still working on "${input.leadIntent.rawText}".`
-          : `Nothing strong enough yet for "${input.leadIntent.rawText}".`,
+          ? `Best direction so far: keep "${input.leadIntent.rawText}" active while reviewing the strongest lead.`
+          : `Nothing strong enough yet for "${input.leadIntent.rawText}". Widen timing before switching formats.`,
         tone: input.topSuggestion ? "active" : "recovery",
+        footnote: input.topSuggestion
+          ? "Review the strongest lead before changing the search."
+          : "First widen timing, then try a small group if needed.",
         nextAction: {
           kind: "resume_intent",
           label: input.topSuggestion ? "Review search" : "Adjust search",
@@ -519,9 +532,11 @@ export class ExperienceService {
 
     if (input.topSuggestion) {
       return {
+        eyebrow: "Best lead available",
         title: "People are available",
         body: `${input.topSuggestion.displayName} looks promising right now.`,
         tone: "active",
+        footnote: "Review the strongest lead before starting a new search.",
         nextAction: {
           kind: "open_matches",
           label: "See suggestions",
@@ -530,9 +545,11 @@ export class ExperienceService {
     }
 
     return {
+      eyebrow: "Start here",
       title: "Start something social",
       body: "Describe what you want to do and the system will route from there.",
       tone: "idle",
+      footnote: null,
       nextAction: {
         kind: "start_intent",
         label: "Start a plan",

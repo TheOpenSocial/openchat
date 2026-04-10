@@ -1,35 +1,35 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Text, View } from "react-native";
-import Animated, { FadeInRight } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { ChatMessageRecord } from "../lib/api";
+import {
+  API_BASE_URL,
+  api,
+  type ChatMessageRecord,
+  type ChatMetadataRecord,
+} from "../lib/api";
 import { t } from "../i18n/strings";
 import { type RealtimeSession } from "../lib/realtime";
 import { DevOrb } from "../components/DevOrb";
 import { hapticSelection } from "../lib/haptics";
 import { loadOfflineOutbox } from "../lib/offline-outbox";
+import {
+  loadStoredHomeSummary,
+  saveStoredHomeSummary,
+} from "../lib/experience-storage";
 import { useNetworkOnline } from "../lib/use-network-online";
 import { usePrimaryAgentThread } from "../lib/use-primary-agent-thread";
 import { useKeyboardVisible } from "../hooks/useKeyboardVisible";
-import { MobileSession, UserProfileDraft } from "../types";
-import { HomeAgentThreadScreen } from "./HomeAgentThreadScreen";
-import { ActivityScreen } from "./ActivityScreen";
-import { ConnectionsScreen } from "./ConnectionsScreen";
-import { DiscoveryScreen } from "./DiscoveryScreen";
-import { InboxScreen } from "./InboxScreen";
-import { IntentDetailScreen } from "./IntentDetailScreen";
-import { RecurringCirclesScreen } from "./RecurringCirclesScreen";
-import { SavedSearchesScreen } from "./SavedSearchesScreen";
-import { ScheduledTasksScreen } from "./ScheduledTasksScreen";
 import {
-  OtherUserProfileScreen,
-  type OtherProfileContext,
-} from "./OtherUserProfileScreen";
-import { ProfileScreen } from "./ProfileScreen";
-import { SettingsScreen } from "./SettingsScreen";
-import { ChatsListScreen } from "./ChatsListScreen";
+  type AgentTimelineMessage,
+  MobileSession,
+  UserProfileDraft,
+} from "../types";
 import { HomeScreenLayout } from "./home/HomeScreenLayout";
+import { ActivitySurfaceContainer } from "./home/containers/ActivitySurfaceContainer";
+import { ChatsSurfaceContainer } from "./home/containers/ChatsSurfaceContainer";
+import { HomeSurfaceContainer } from "./home/containers/HomeSurfaceContainer";
+import { ProfileSurfaceContainer } from "./home/containers/ProfileSurfaceContainer";
 import { mergeChatMessages } from "./home/domain/chat-utils";
 import { deriveHomeRuntimeViewModel } from "./home/domain/runtime-model";
 import { type LocalChatThread } from "./home/domain/types";
@@ -46,7 +46,7 @@ import { useChatsRealtime } from "./home/hooks/useChatsRealtime";
 import { useChatsHydration } from "./home/hooks/useChatsHydration";
 import { useHomeRecoveryController } from "./home/hooks/useHomeRecoveryController";
 import { useHomeWelcomeSheet } from "./home/hooks/useHomeWelcomeSheet";
-import { useActivityIndicator } from "../features/activity/hooks/useActivityIndicator";
+import { useHomeTransientRoutes } from "./home/hooks/useHomeTransientRoutes";
 import {
   usePushLifecycle,
   type PushRouteIntent,
@@ -56,13 +56,6 @@ import { useActivityStore } from "../store/activity-store";
 import { useHomeShellStore } from "../store/home-shell-store";
 import { useHomeThreadStore } from "../store/home-thread-store";
 import { useChatsStore } from "../store/chats-store";
-
-const HOME_SHELL_BACKGROUND_COLOR = "#212121";
-const HOME_SHELL_CONTAINER_STYLE = {
-  flex: 1,
-  backgroundColor: HOME_SHELL_BACKGROUND_COLOR,
-} as const;
-const FULL_SCREEN_STYLE = { flex: 1 } as const;
 
 export interface HomeScreenProps {
   session: MobileSession;
@@ -105,6 +98,31 @@ function describePushRouteIntent(intent: PushRouteIntent | null) {
       return intent.kind;
   }
 }
+
+function chatMessageSortKey(message: { createdAt: string; id: string }) {
+  return `${message.createdAt}::${message.id}`;
+}
+
+function buildReadMessageStatus(): NonNullable<ChatMessageRecord["status"]> {
+  return {
+    state: "read",
+    deliveredCount: 1,
+    readCount: 1,
+    pendingCount: 0,
+  };
+}
+
+function buildSeedAgentTimeline(locale: "en" | "es"): AgentTimelineMessage[] {
+  return [
+    {
+      id: "seed_1",
+      role: "agent",
+      body: t("homeAgentSeedPrompt", locale),
+    },
+  ];
+}
+
+const THREAD_LOAD_RETRY_DELAYS_MS = [1500, 3000, 5000, 8000] as const;
 
 export function HomeScreen({
   initialAgentMessage = null,
@@ -195,6 +213,11 @@ export function HomeScreen({
   const setDevOrbUnlocked = useHomeShellStore(
     (store) => store.setDevOrbUnlocked,
   );
+  const homeSummary = useHomeShellStore((store) => store.homeSummary);
+  const setHomeSummary = useHomeShellStore((store) => store.setHomeSummary);
+  const setBootstrapHydratedAt = useHomeShellStore(
+    (store) => store.setBootstrapHydratedAt,
+  );
   const syncingChats = useChatsStore((store) => store.syncingChats);
   const setSyncingChats = useChatsStore((store) => store.setSyncingChats);
   const pendingOutboxCount = useChatsStore((store) => store.pendingOutboxCount);
@@ -231,127 +254,24 @@ export function HomeScreen({
   );
   const showDevOrb = __DEV__ || process.env.EXPO_PUBLIC_ENABLE_DEV_ORB === "1";
   const DEV_ORB_UNLOCK_WINDOW_MS = 10 * 60 * 1000;
-  const [otherProfileTarget, setOtherProfileTarget] = useState<{
-    userId: string;
-    context: OtherProfileContext;
-  } | null>(null);
-  const [activityOpen, setActivityOpen] = useState(false);
-  const [inboxOpen, setInboxOpen] = useState(false);
-  const [connectionsOpen, setConnectionsOpen] = useState(false);
-  const [discoveryOpen, setDiscoveryOpen] = useState(false);
-  const [recurringCirclesOpen, setRecurringCirclesOpen] = useState(false);
-  const [savedSearchesOpen, setSavedSearchesOpen] = useState(false);
-  const [scheduledTasksOpen, setScheduledTasksOpen] = useState(false);
-  const [intentDetailIntentId, setIntentDetailIntentId] = useState<
-    string | null
-  >(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const activityHasUnread = useActivityStore((store) => store.hasUnread);
+  const setActivityState = useActivityStore((store) => store.setActivityState);
   const nonChatRealtimeCallbacks = useNonChatRealtimeController({
     setBanner,
   });
   const showPushDebug =
     __DEV__ || process.env.EXPO_PUBLIC_ENABLE_PUSH_DEBUG === "1";
-
-  const renderTransientScreen = useCallback(
-    (screen: React.ReactNode, options?: { animated?: boolean }) => {
-      if (options?.animated === false) {
-        return screen;
-      }
-
-      return (
-        <View className="flex-1 bg-canvas" style={HOME_SHELL_CONTAINER_STYLE}>
-          <Animated.View
-            entering={FadeInRight.duration(220)}
-            style={FULL_SCREEN_STYLE}
-          >
-            {screen}
-          </Animated.View>
-        </View>
-      );
-    },
-    [],
-  );
-
-  const closeTransientRoutes = useCallback(() => {
-    setActivityOpen(false);
-    setConnectionsOpen(false);
-    setDiscoveryOpen(false);
-    setInboxOpen(false);
-    setRecurringCirclesOpen(false);
-    setSavedSearchesOpen(false);
-    setScheduledTasksOpen(false);
-    setIntentDetailIntentId(null);
-    setSettingsOpen(false);
-    setOtherProfileTarget(null);
-  }, []);
-
-  const handlePushRouteIntent = useCallback(
-    (intent: PushRouteIntent) => {
-      closeTransientRoutes();
-
-      switch (intent.kind) {
-        case "activity":
-          setActivityOpen(true);
-          break;
-        case "connections":
-          setConnectionsOpen(true);
-          break;
-        case "discovery":
-          setDiscoveryOpen(true);
-          break;
-        case "home":
-          setActiveTab("home");
-          break;
-        case "inbox":
-          setInboxOpen(true);
-          break;
-        case "intent":
-          setIntentDetailIntentId(intent.intentId);
-          break;
-        case "profile":
-          if (intent.userId === session.userId) {
-            setActiveTab("profile");
-            break;
-          }
-          setOtherProfileTarget({
-            userId: intent.userId,
-            context: {
-              source: "chat",
-              reason: "Opened from a notification.",
-            },
-          });
-          break;
-        case "recurringCircles":
-          setRecurringCirclesOpen(true);
-          break;
-        case "savedSearches":
-          setSavedSearchesOpen(true);
-          break;
-        case "scheduledTasks":
-          setScheduledTasksOpen(true);
-          break;
-        case "settings":
-          setSettingsOpen(true);
-          break;
-        case "chat":
-          setActiveTab("chats");
-          setSelectedChatId(intent.chatId);
-          break;
-        default:
-          break;
-      }
-    },
-    [closeTransientRoutes, session.userId, setActiveTab, setSelectedChatId],
-  );
+  const { actions: transientRouteActions, transientScreen } =
+    useHomeTransientRoutes({
+      initialProfile,
+      onProfileUpdated,
+      session,
+      setActiveTab,
+      setSelectedChatId,
+    });
   const { push, pushDebug } = usePushLifecycle({
     enabled: true,
-    onRouteIntent: handlePushRouteIntent,
-    userId: session.userId,
-  });
-
-  useActivityIndicator({
-    accessToken: session.accessToken,
+    onRouteIntent: transientRouteActions.handlePushRouteIntent,
     userId: session.userId,
   });
 
@@ -417,20 +337,87 @@ export function HomeScreen({
     setPendingOutboxCount(pending.length);
   }, [session.userId, skipNetwork]);
   const agentThreadSyncEnabled = !skipNetwork;
-  const { loading: agentThreadLoading, threadId: agentThreadId } =
-    usePrimaryAgentThread({
-      accessToken: session.accessToken,
-      enabled: agentThreadSyncEnabled,
-      onHydrated: setAgentTimeline,
-      onLoadError: () =>
-        setBanner({
-          tone: "error",
-          text: "Could not load your conversation.",
-        }),
-    });
+  const [agentThreadLoadError, setAgentThreadLoadError] = useState<
+    string | null
+  >(null);
+  const [agentThreadRetryAttempt, setAgentThreadRetryAttempt] = useState(0);
+  const [agentThreadRetryNextAt, setAgentThreadRetryNextAt] = useState<
+    number | null
+  >(null);
+  const {
+    loading: agentThreadLoading,
+    reload: reloadPrimaryAgentThread,
+    threadId: agentThreadId,
+  } = usePrimaryAgentThread({
+    accessToken: session.accessToken,
+    enabled: agentThreadSyncEnabled,
+    onHydrated: (messages) => {
+      setAgentThreadLoadError(null);
+      setAgentThreadRetryAttempt(0);
+      setAgentThreadRetryNextAt(null);
+      setAgentTimeline(
+        messages.length > 0 ? messages : buildSeedAgentTimeline(locale),
+      );
+    },
+    onLoadError: (error) => {
+      const connectionLabel =
+        realtimeState === "connected"
+          ? "socket connected"
+          : realtimeState === "connecting"
+            ? "socket connecting"
+            : "socket offline";
+      const codePart = error.code ? `code=${error.code}` : "code=unknown";
+      const statusPart =
+        typeof error.statusCode === "number"
+          ? `status=${error.statusCode}`
+          : "status=n/a";
+      const offlinePart = error.offline ? "offline" : "online";
+      const transientPart = error.transient ? "retryable" : "non-retryable";
+      const diagnosticMessage =
+        error.message.trim() || t("homeThreadLoadFailedBody", locale);
+      const nextAttempt = agentThreadRetryAttempt + 1;
+      const canAutoRetry =
+        (error.offline || error.transient) &&
+        nextAttempt <= THREAD_LOAD_RETRY_DELAYS_MS.length;
+      const recoveryMessage = error.offline
+        ? "I lost your main thread for a moment. I’m reconnecting now."
+        : error.transient
+          ? "Your main thread is temporarily unavailable. I’m reconnecting now."
+          : "I couldn’t restore your main thread yet.";
+      setAgentThreadLoadError(recoveryMessage);
+      setAgentThreadRetryAttempt(nextAttempt);
+      setAgentThreadRetryNextAt(
+        canAutoRetry
+          ? Date.now() + THREAD_LOAD_RETRY_DELAYS_MS[nextAttempt - 1]
+          : null,
+      );
+      recordTelemetry("home_thread_load_failed", {
+        apiBaseUrl: API_BASE_URL,
+        autoRetryScheduled: canAutoRetry,
+        code: error.code ?? "unknown",
+        message: diagnosticMessage,
+        offline: error.offline,
+        realtimeState,
+        retryAttempt: nextAttempt,
+        statusCode: error.statusCode ?? -1,
+        transient: error.transient,
+      });
+      console.warn("[home-thread-load-failed]", {
+        apiBaseUrl: API_BASE_URL,
+        code: error.code,
+        diagnosticLabel: `${codePart} ${statusPart} ${offlinePart} ${transientPart} ${connectionLabel}`,
+        message: diagnosticMessage,
+        offline: error.offline,
+        realtimeState,
+        statusCode: error.statusCode,
+        transient: error.transient,
+      });
+    },
+  });
   const homeRuntimeViewModel = useMemo(
     () =>
       deriveHomeRuntimeViewModel({
+        hasError: Boolean(agentThreadLoadError),
         messages: agentTimeline,
         pending: pendingIntentSummary,
         sending: sendingIntent,
@@ -438,6 +425,7 @@ export function HomeScreen({
         hasDraft: draftIntentText.trim().length > 0,
       }),
     [
+      agentThreadLoadError,
       agentThreadLoading,
       agentTimeline,
       draftIntentText,
@@ -450,32 +438,178 @@ export function HomeScreen({
     void refreshPendingOutboxCount().catch(() => {});
   }, [refreshPendingOutboxCount]);
 
+  useEffect(() => {
+    let active = true;
+
+    void loadStoredHomeSummary(session.userId).then((storedSummary) => {
+      if (!active || !storedSummary) {
+        return;
+      }
+      setHomeSummary(storedSummary);
+    });
+
+    void api
+      .getExperienceBootstrapSummary(session.userId, session.accessToken)
+      .then((summary) => {
+        if (!active) {
+          return;
+        }
+        setHomeSummary(summary.home);
+        setBootstrapHydratedAt(summary.generatedAt);
+        void saveStoredHomeSummary(session.userId, summary.home).catch(
+          () => {},
+        );
+        setActivityState({
+          hasUnread:
+            summary.activity.counts.unreadNotifications > 0 ||
+            summary.activity.counts.pendingRequests > 0,
+          pendingRequestCount: summary.activity.counts.pendingRequests,
+          lastHydratedAt: summary.generatedAt,
+        });
+      })
+      .catch(() => {
+        if (!active) {
+          return;
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [
+    pendingIntentSummary?.activeIntentCount,
+    session.accessToken,
+    session.userId,
+    setBootstrapHydratedAt,
+    setActivityState,
+    setHomeSummary,
+  ]);
+
+  useEffect(() => {
+    if (
+      agentThreadLoading ||
+      agentTimeline.length > 0 ||
+      onboardingCarryoverState === "processing"
+    ) {
+      return;
+    }
+    setAgentTimeline(buildSeedAgentTimeline(locale));
+  }, [
+    agentThreadLoading,
+    agentTimeline.length,
+    locale,
+    onboardingCarryoverState,
+    setAgentTimeline,
+  ]);
+
+  useEffect(() => {
+    if (!agentThreadRetryNextAt) {
+      return;
+    }
+    const delayMs = agentThreadRetryNextAt - Date.now();
+    if (delayMs <= 0) {
+      setAgentThreadRetryNextAt(null);
+      reloadPrimaryAgentThread();
+      return;
+    }
+    const timeout = setTimeout(() => {
+      setAgentThreadRetryNextAt(null);
+      reloadPrimaryAgentThread();
+    }, delayMs);
+    return () => {
+      clearTimeout(timeout);
+    };
+  }, [agentThreadRetryNextAt, reloadPrimaryAgentThread]);
+
+  const agentThreadRetrySeconds = useMemo(() => {
+    if (!agentThreadRetryNextAt) {
+      return null;
+    }
+    return Math.max(1, Math.ceil((agentThreadRetryNextAt - Date.now()) / 1000));
+  }, [agentThreadRetryNextAt]);
+
+  const simulateHomeReconnectState = useCallback(() => {
+    setActiveTab("home");
+    setAgentTimeline([]);
+    setAgentThreadLoadError("simulated_home_reconnect");
+    setAgentThreadRetryAttempt(1);
+    setAgentThreadRetryNextAt(Date.now() + 8000);
+    setDevOrbOpen(false);
+  }, [setActiveTab, setAgentTimeline, setDevOrbOpen]);
+
   const selectedChat = useMemo(
     () => chats.find((chat) => chat.id === selectedChatId) ?? null,
     [chats, selectedChatId],
   );
+  const [selectedChatMetadata, setSelectedChatMetadata] =
+    useState<ChatMetadataRecord | null>(null);
   const typingUsers = useMemo(
     () => (selectedChatId ? (typingUsersByChat[selectedChatId] ?? []) : []),
     [selectedChatId, typingUsersByChat],
   );
+  const selectedChatPresence = useMemo(() => {
+    if (!selectedChatMetadata || selectedChatMetadata.type !== "dm") {
+      return null;
+    }
+    return (
+      selectedChatMetadata.participants.find(
+        (participant) => participant.userId !== session.userId,
+      )?.presence ?? null
+    );
+  }, [selectedChatMetadata, session.userId]);
+  const readReceiptCursorRef = useRef<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!selectedChatId) {
+      setSelectedChatMetadata(null);
+      return;
+    }
+
+    let cancelled = false;
+    void api
+      .getChatMetadata(selectedChatId, session.accessToken)
+      .then((metadata) => {
+        if (!cancelled) {
+          setSelectedChatMetadata(metadata);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSelectedChatMetadata(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedChatId, session.accessToken]);
 
   const applyRealtimeChatMessage = useCallback(
     (chatId: string, message: ChatMessageRecord) => {
+      const normalizedMessage =
+        message.senderUserId === session.userId && !message.status
+          ? {
+              ...message,
+              status: buildReadMessageStatus(),
+            }
+          : message;
       setChats((current) =>
         current.map((thread) => {
           if (thread.id !== chatId) {
             return thread;
           }
 
-          const mergedMessages = mergeChatMessages(thread.messages, [message]);
+          const mergedMessages = mergeChatMessages(thread.messages, [
+            normalizedMessage,
+          ]);
           const selected = selectedChatIdRef.current === chatId;
           const incrementUnread =
-            !selected && message.senderUserId !== session.userId;
+            !selected && normalizedMessage.senderUserId !== session.userId;
 
           return {
             ...thread,
             messages: mergedMessages,
-            highWatermark: message.createdAt,
+            highWatermark: normalizedMessage.createdAt,
             unreadCount: incrementUnread
               ? thread.unreadCount + 1
               : thread.unreadCount,
@@ -485,6 +619,66 @@ export function HomeScreen({
     },
     [session.userId],
   );
+
+  useEffect(() => {
+    if (!selectedChat || !chatStorageReady || skipNetwork) {
+      return;
+    }
+
+    const previousCursor = readReceiptCursorRef.current[selectedChat.id];
+    const latestMessage = selectedChat.messages.at(-1);
+    const latestCursor = latestMessage
+      ? chatMessageSortKey(latestMessage)
+      : previousCursor;
+
+    const unreadMessages = selectedChat.messages.filter((message) => {
+      if (message.senderUserId === session.userId) {
+        return false;
+      }
+      if (!previousCursor) {
+        return true;
+      }
+      return chatMessageSortKey(message) > previousCursor;
+    });
+
+    if (unreadMessages.length === 0) {
+      if (latestCursor) {
+        readReceiptCursorRef.current[selectedChat.id] = latestCursor;
+      }
+      return;
+    }
+
+    const markRead = async () => {
+      for (const message of unreadMessages) {
+        if (realtimeSessionRef.current) {
+          realtimeSessionRef.current.publishReadReceipt(
+            selectedChat.id,
+            message.id,
+            session.userId,
+          );
+          continue;
+        }
+        await api.markChatMessageRead(
+          selectedChat.id,
+          message.id,
+          session.userId,
+          session.accessToken,
+        );
+      }
+      if (latestCursor) {
+        readReceiptCursorRef.current[selectedChat.id] = latestCursor;
+      }
+    };
+
+    void markRead().catch(() => {});
+  }, [
+    chatStorageReady,
+    realtimeSessionRef,
+    selectedChat,
+    session.accessToken,
+    session.userId,
+    skipNetwork,
+  ]);
 
   const { syncChatThread, syncChatsNow } = useChatSyncController({
     chatStorageReady,
@@ -617,7 +811,10 @@ export function HomeScreen({
     });
 
   const {
+    editOwnChatMessage,
+    deleteOwnChatMessage,
     handleDraftChatMessageChange,
+    reactToChatMessage,
     retryFailedChatMessage,
     sendChatMessage,
   } = useChatMessagingController({
@@ -644,193 +841,46 @@ export function HomeScreen({
     return <View className="flex-1 bg-red-600" testID="home-layout-debug" />;
   }
 
-  if (settingsOpen) {
-    return renderTransientScreen(
-      <SettingsScreen
-        accessToken={session.accessToken}
-        displayName={session.displayName}
-        email={session.email}
-        initialDraft={initialProfile}
-        onClose={() => {
-          setSettingsOpen(false);
-        }}
-        onProfileUpdated={onProfileUpdated}
-        userId={session.userId}
-      />,
-    );
-  }
-
-  if (activityOpen) {
-    return renderTransientScreen(
-      <ActivityScreen
-        accessToken={session.accessToken}
-        onClose={() => {
-          setActivityOpen(false);
-        }}
-        onOpenConnections={() => {
-          setActivityOpen(false);
-          setConnectionsOpen(true);
-        }}
-        onOpenDiscovery={() => {
-          setActivityOpen(false);
-          setDiscoveryOpen(true);
-        }}
-        onOpenInbox={() => {
-          setActivityOpen(false);
-          setInboxOpen(true);
-        }}
-        onOpenIntentDetail={(intentId) => {
-          setActivityOpen(false);
-          setIntentDetailIntentId(intentId);
-        }}
-        onOpenRecurringCircles={() => {
-          setActivityOpen(false);
-          setRecurringCirclesOpen(true);
-        }}
-        onOpenSavedSearches={() => {
-          setActivityOpen(false);
-          setSavedSearchesOpen(true);
-        }}
-        onOpenScheduledTasks={() => {
-          setActivityOpen(false);
-          setScheduledTasksOpen(true);
-        }}
-        userId={session.userId}
-      />,
-    );
-  }
-
-  if (connectionsOpen) {
-    return renderTransientScreen(
-      <ConnectionsScreen
-        accessToken={session.accessToken}
-        onClose={() => {
-          setConnectionsOpen(false);
-        }}
-        onOpenChat={(chatId) => {
-          setConnectionsOpen(false);
-          setActiveTab("chats");
-          setSelectedChatId(chatId);
-        }}
-        onOpenProfile={(targetUserId) => {
-          setConnectionsOpen(false);
-          setOtherProfileTarget({
-            userId: targetUserId,
-            context: {
-              source: "chat",
-              reason: "You are connected through an existing direct chat.",
-            },
-          });
-        }}
-        userId={session.userId}
-      />,
-    );
-  }
-
-  if (discoveryOpen) {
-    return renderTransientScreen(
-      <DiscoveryScreen
-        accessToken={session.accessToken}
-        onClose={() => {
-          setDiscoveryOpen(false);
-        }}
-        onOpenProfile={(targetUserId) => {
-          setDiscoveryOpen(false);
-          setOtherProfileTarget({
-            userId: targetUserId,
-            context: {
-              source: "request",
-              reason:
-                "Suggested from discovery as a strong match for your current intent.",
-            },
-          });
-        }}
-        userId={session.userId}
-      />,
-      { animated: false },
-    );
-  }
-
-  if (recurringCirclesOpen) {
-    return renderTransientScreen(
-      <RecurringCirclesScreen
-        accessToken={session.accessToken}
-        onClose={() => {
-          setRecurringCirclesOpen(false);
-        }}
-        userId={session.userId}
-      />,
-    );
-  }
-
-  if (savedSearchesOpen) {
-    return renderTransientScreen(
-      <SavedSearchesScreen
-        accessToken={session.accessToken}
-        onClose={() => {
-          setSavedSearchesOpen(false);
-        }}
-        userId={session.userId}
-      />,
-    );
-  }
-
-  if (scheduledTasksOpen) {
-    return renderTransientScreen(
-      <ScheduledTasksScreen
-        accessToken={session.accessToken}
-        onClose={() => {
-          setScheduledTasksOpen(false);
-        }}
-        userId={session.userId}
-      />,
-    );
-  }
-
-  if (intentDetailIntentId) {
-    return renderTransientScreen(
-      <IntentDetailScreen
-        accessToken={session.accessToken}
-        intentId={intentDetailIntentId}
-        onClose={() => {
-          setIntentDetailIntentId(null);
-        }}
-        userId={session.userId}
-      />,
-    );
-  }
-
-  if (inboxOpen) {
-    return renderTransientScreen(
-      <InboxScreen
-        accessToken={session.accessToken}
-        onClose={() => {
-          setInboxOpen(false);
-        }}
-        onOpenIntentDetail={(intentId) => {
-          setInboxOpen(false);
-          setIntentDetailIntentId(intentId);
-        }}
-        onOpenProfile={(targetUserId) => {
-          setInboxOpen(false);
-          setOtherProfileTarget({
-            userId: targetUserId,
-            context: {
-              source: "request",
-              reason: "This person sent you a connection request.",
-            },
-          });
-        }}
-        userId={session.userId}
-      />,
-    );
+  if (transientScreen) {
+    return transientScreen;
   }
 
   return (
     <HomeScreenLayout
       activeTab={activeTab}
+      activityContent={
+        <ActivitySurfaceContainer
+          accessToken={session.accessToken}
+          onOpenConnections={() => {
+            hapticSelection();
+            transientRouteActions.openConnections();
+          }}
+          onOpenDiscovery={() => {
+            hapticSelection();
+            transientRouteActions.openDiscovery();
+          }}
+          onOpenIntentDetail={(intentId) => {
+            hapticSelection();
+            transientRouteActions.openIntentDetail(intentId);
+          }}
+          onOpenRecurringCircles={() => {
+            hapticSelection();
+            transientRouteActions.openRecurringCircles();
+          }}
+          onOpenSavedSearches={() => {
+            hapticSelection();
+            transientRouteActions.openSavedSearches();
+          }}
+          onOpenScheduledTasks={() => {
+            hapticSelection();
+            transientRouteActions.openScheduledTasks();
+          }}
+          userId={session.userId}
+        />
+      }
       chatsContent={
-        <ChatsListScreen
+        <ChatsSurfaceContainer
+          accessToken={session.accessToken}
           currentUserId={session.userId}
           draftChatMessage={draftChatMessage}
           loadingMessages={
@@ -838,7 +888,7 @@ export function HomeScreen({
           }
           onOpenUserProfile={(input) => {
             hapticSelection();
-            setOtherProfileTarget(input);
+            transientRouteActions.openProfileFromChat(input);
           }}
           onModerationBlock={async (targetUserId, chatId) => {
             await blockUser(targetUserId, { chatId });
@@ -847,10 +897,14 @@ export function HomeScreen({
             await reportUser(targetUserId, { chatId });
           }}
           onOpenChat={openChat}
+          onDeleteOwnMessage={deleteOwnChatMessage}
+          onEditOwnMessage={editOwnChatMessage}
+          onReactToMessage={reactToChatMessage}
           onRetryFailedMessage={retryFailedChatMessage}
           onSendMessage={sendChatMessage}
           realtimeState={realtimeState}
           selectedChat={selectedChat}
+          selectedChatPresence={selectedChatPresence}
           sendingMessage={sendingChatMessage}
           setDraftChatMessage={handleDraftChatMessageChange}
           threads={chats}
@@ -859,18 +913,19 @@ export function HomeScreen({
       }
       hasNotifications={activityHasUnread || pendingOutboxCount > 0}
       homeContent={
-        <HomeAgentThreadScreen
+        <HomeSurfaceContainer
           agentImageUrl={agentImageUrlDraft}
           canRegenerate={agentTimeline.some(
             (message) => message.role === "user",
           )}
           composerMode={agentComposerMode}
-          composerBottomOffset={keyboardVisible ? 0 : tabBarHeight - 4}
+          composerBottomOffset={keyboardVisible ? 0 : 20}
           decomposeIntent={decomposeIntent}
           decomposeMaxIntents={decomposeMaxIntents}
           draftMessage={draftIntentText}
           locale={locale}
           messages={agentTimeline}
+          homeSummary={homeSummary}
           onboardingCarryover={
             onboardingCarryoverSeed && onboardingCarryoverState
               ? {
@@ -897,8 +952,60 @@ export function HomeScreen({
           runtimeViewModel={homeRuntimeViewModel}
           sending={sendingIntent}
           setDraftMessage={setDraftIntentText}
+          threadLoadErrorMessage={agentThreadLoadError}
+          threadLoadRetryAttempt={agentThreadRetryAttempt}
+          threadLoadRetrySeconds={agentThreadRetrySeconds}
+          threadLoadWillAutoRetry={agentThreadRetryNextAt != null}
           threadLoading={agentThreadLoading}
           onDismissWelcomeSheet={dismissWelcomeSheet}
+          onPressHomeAction={(action) => {
+            hapticSelection();
+            switch (action) {
+              case "review_requests":
+                setActiveTab("activity");
+                break;
+              case "open_matches":
+                transientRouteActions.openDiscovery();
+                break;
+              case "resume_intent":
+                if (homeSummary?.spotlight.leadIntent?.intentId) {
+                  transientRouteActions.openIntentDetail(
+                    homeSummary.spotlight.leadIntent.intentId,
+                  );
+                }
+                break;
+              case "start_intent":
+                setActiveTab("home");
+                break;
+              default:
+                break;
+            }
+          }}
+          onPressLeadIntent={(intentId) => {
+            hapticSelection();
+            transientRouteActions.openIntentDetail(intentId);
+          }}
+          onPressActivity={() => {
+            hapticSelection();
+            setActiveTab("activity");
+          }}
+          onPressCoordination={(targetChatId) => {
+            hapticSelection();
+            if (targetChatId) {
+              setActiveTab("chats");
+              setSelectedChatId(targetChatId);
+              return;
+            }
+            if (homeSummary?.spotlight.leadIntent?.intentId) {
+              transientRouteActions.openIntentDetail(
+                homeSummary.spotlight.leadIntent.intentId,
+              );
+            }
+          }}
+          onPressTopSuggestion={(userId) => {
+            hapticSelection();
+            transientRouteActions.openProfileFromDiscovery(userId);
+          }}
           welcomeSheetVisible={
             welcomeSheetHydrated &&
             welcomeSheetVisible &&
@@ -916,7 +1023,7 @@ export function HomeScreen({
       }}
       onPressNotifications={() => {
         hapticSelection();
-        setActivityOpen(true);
+        setActiveTab("activity");
       }}
       onTabChange={(tab) => {
         hapticSelection();
@@ -965,6 +1072,9 @@ export function HomeScreen({
               setActiveTab("home");
               setDevOrbOpen(false);
             }}
+            onSimulateHomeReconnect={() => {
+              simulateHomeReconnectState();
+            }}
             onSyncChats={() => {
               void syncChatsNow();
             }}
@@ -983,24 +1093,10 @@ export function HomeScreen({
             unlocked={devOrbUnlocked}
             visible={showDevOrb}
           />
-          {otherProfileTarget ? (
-            <OtherUserProfileScreen
-              accessToken={session.accessToken}
-              context={otherProfileTarget.context}
-              currentUserId={session.userId}
-              onClose={() => {
-                setOtherProfileTarget(null);
-              }}
-              onStartConversation={() => {
-                setActiveTab("chats");
-              }}
-              targetUserId={otherProfileTarget.userId}
-            />
-          ) : null}
         </>
       }
       profileContent={
-        <ProfileScreen
+        <ProfileSurfaceContainer
           accessToken={session.accessToken}
           displayName={session.displayName}
           email={session.email}
@@ -1010,10 +1106,6 @@ export function HomeScreen({
           userId={session.userId}
         />
       }
-      onPressSettings={() => {
-        hapticSelection();
-        setSettingsOpen(true);
-      }}
       shellContentBottomInset={shellContentBottomInset}
       skipNetwork={skipNetwork}
       title={
@@ -1021,10 +1113,16 @@ export function HomeScreen({
           ? "OpenSocial"
           : activeTab === "chats"
             ? "Chats"
-            : "Profile"
+            : activeTab === "activity"
+              ? "Activity"
+              : "Profile"
       }
       unreadChatsCount={unreadChatsCount}
       visibleBanner={visibleBanner}
+      onPressSettings={() => {
+        hapticSelection();
+        transientRouteActions.openSettings();
+      }}
     />
   );
 }

@@ -5,6 +5,10 @@ import {
   loadStoredSession,
   saveStoredSession,
 } from "./session-storage";
+import {
+  buildChatThreadDetail,
+  buildChatThreadSummaries,
+} from "./chat-threads";
 
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 type RequestQueryValue = string | number | boolean | null | undefined;
@@ -93,12 +97,32 @@ export interface ChatRecord {
   createdAt: string;
 }
 
+export interface ChatMessageStatusRecord {
+  state: "sent" | "delivered" | "read";
+  deliveredCount: number;
+  readCount: number;
+  pendingCount: number;
+}
+
+export interface ChatMessageReactionRecord {
+  id: string;
+  messageId: string;
+  userId: string;
+  emoji: string;
+  createdAt: string;
+}
+
 export interface ChatMessageRecord {
   id: string;
   chatId: string;
   senderUserId: string;
   body: string;
   createdAt: string;
+  moderationState?: "clean" | "flagged" | "blocked" | "review";
+  editedAt?: string | null;
+  replyToMessageId?: string | null;
+  reactions?: ChatMessageReactionRecord[];
+  status?: ChatMessageStatusRecord;
 }
 
 export interface RecurringCircleRecord {
@@ -172,8 +196,43 @@ export interface ChatMetadataRecord {
     userId: string;
     role: string;
     joinedAt: string;
+    presence?: {
+      online: boolean;
+      state:
+        | "online"
+        | "away"
+        | "invisible"
+        | "available_now"
+        | "available_today";
+      lastSeenAt?: string | null;
+    };
   }>;
   archived: boolean;
+}
+
+export interface ChatThreadSummaryRecord {
+  rootMessage: ChatMessageRecord;
+  replyCount: number;
+  messageCount: number;
+  participantCount: number;
+  lastReplyAt: string | null;
+  lastActivityAt: string;
+}
+
+export interface ChatThreadListResponse {
+  chatId: string;
+  threads: ChatThreadSummaryRecord[];
+}
+
+export interface ChatThreadDetailEntryRecord {
+  depth: number;
+  message: ChatMessageRecord;
+}
+
+export interface ChatThreadDetailResponse {
+  chatId: string;
+  thread: ChatThreadSummaryRecord;
+  entries: ChatThreadDetailEntryRecord[];
 }
 
 export interface ChatSyncResponse {
@@ -205,11 +264,177 @@ export interface PendingIntentsSummaryResponse {
   intents: PendingIntentSummaryItem[];
 }
 
+export interface ExperienceHomeSummaryResponse {
+  generatedAt: string;
+  thread: {
+    id: string;
+    title: string | null;
+    createdAt: string | Date;
+  } | null;
+  status: {
+    eyebrow: string;
+    title: string;
+    body: string;
+    tone: "active" | "waiting" | "recovery" | "idle";
+    footnote: string | null;
+    nextAction: {
+      kind:
+        | "review_requests"
+        | "open_matches"
+        | "resume_intent"
+        | "start_intent";
+      label: string;
+    };
+  };
+  counts: {
+    activeIntents: number;
+    pendingRequests: number;
+    unreadNotifications: number;
+    tonightSuggestions: number;
+    reconnectCandidates: number;
+  };
+  spotlight: {
+    coordination: {
+      variant: "accepted" | "waiting";
+      title: string;
+      body: string;
+      actionLabel: string;
+      targetChatId: string | null;
+    } | null;
+    recovery: {
+      title: string;
+      body: string;
+      actionLabel: string;
+      secondaryLabel: string | null;
+    } | null;
+    leadIntent: {
+      intentId: string;
+      rawText: string;
+      status: string;
+      requests: {
+        pending: number;
+        accepted: number;
+        rejected: number;
+        expired: number;
+        cancelled: number;
+      };
+    } | null;
+    topSuggestion: {
+      userId: string;
+      displayName: string;
+      score: number;
+      reason: string;
+    } | null;
+  };
+}
+
+export interface ExperienceActivitySummaryResponse {
+  generatedAt: string;
+  counts: {
+    unreadNotifications: number;
+    pendingRequests: number;
+    activeIntents: number;
+    discoverySuggestions: number;
+  };
+  orderedSections: Array<{
+    id:
+      | "actionRequired"
+      | "updates"
+      | "activeIntents"
+      | "suggestions"
+      | "discoveryHighlights";
+    title: string;
+    subtitle: string;
+    emphasis: "urgent" | "active" | "passive";
+  }>;
+  sections: {
+    actionRequired: Array<{
+      id: string;
+      kind: "request";
+      priority: number;
+      eyebrow: string;
+      title: string;
+      body: string;
+      status: string;
+      intentId: string | null;
+      createdAt: string | Date;
+      cardSummary: {
+        who?: string;
+        what?: string;
+        when?: string;
+      } | null;
+    }>;
+    updates: Array<{
+      id: string;
+      kind: "notification";
+      priority: number;
+      eyebrow: string;
+      title: string;
+      body: string;
+      type: string;
+      channel: string;
+      isRead: boolean;
+      createdAt: string;
+    }>;
+    activeIntents: Array<{
+      intentId: string;
+      priority: number;
+      eyebrow: string;
+      title: string;
+      body: string;
+      rawText: string;
+      status: string;
+      ageMinutes: number;
+      requests: {
+        pending: number;
+        accepted: number;
+        rejected: number;
+        expired: number;
+        cancelled: number;
+      };
+    }>;
+    suggestions: Array<{
+      id: string;
+      priority: number;
+      eyebrow: string;
+      title: string;
+      body: string;
+      score: number;
+      scoreLabel: string;
+    }>;
+    discoveryHighlights: Array<{
+      id: string;
+      priority: number;
+      eyebrow: string;
+      title: string;
+      body: string;
+    }>;
+    discoverySnapshot: {
+      tonightCount: number;
+      groupCount: number;
+      reconnectCount: number;
+    };
+  };
+}
+
+export interface ExperienceBootstrapSummaryResponse {
+  generatedAt: string;
+  home: ExperienceHomeSummaryResponse;
+  activity: {
+    counts: ExperienceActivitySummaryResponse["counts"];
+  };
+}
+
 export interface UserIntentExplanation {
   intentId: string;
   status: string;
   summary: string;
   factors: string[];
+}
+
+export interface IntentMutationResult {
+  intentId: string;
+  status: string;
 }
 
 export interface SearchSnapshotResponse {
@@ -300,10 +525,51 @@ export interface OnboardingActivationPlanResponse {
   state: "idle" | "pending" | "ready" | "failed";
   source: "llm" | "fallback";
   summary: string;
+  idempotencyKey: string;
+  activationFingerprint: string;
   recommendedAction: {
     kind: "agent_thread_seed" | "intent_create";
     label: string;
     text: string;
+  };
+}
+
+export interface OnboardingActivationBootstrapResponse {
+  onboardingState: string;
+  activation: OnboardingActivationPlanResponse;
+  primaryThread: {
+    id: string;
+    title: string | null;
+    createdAt: string;
+  } | null;
+  discovery: {
+    tonightCount: number;
+    reconnectCount: number;
+    groupCount: number;
+    activeIntentCount: number;
+    topTonight: Array<{
+      userId: string;
+      displayName: string;
+      reason: string;
+      score: number;
+    }>;
+    inboxSuggestions: Array<{
+      title: string;
+      reason: string;
+      score: number;
+    }>;
+  };
+  execution: {
+    scope: "intent.create_from_agent";
+    idempotencyKey: string;
+    status: "idle" | "processing" | "completed" | "failed";
+    hasCachedResponse: boolean;
+    cachedResponse: {
+      threadId?: string | null;
+      intentId?: string | null;
+      status?: string | null;
+      intentCount?: number | null;
+    } | null;
   };
 }
 
@@ -865,6 +1131,36 @@ async function requestNullable<T>(
   return envelope.data ?? null;
 }
 
+async function fetchChatThreadMessages(
+  chatId: string,
+  accessToken?: string,
+  options?: { maxPages?: number; pageSize?: number },
+) {
+  const maxPages = Math.max(options?.maxPages ?? 6, 1);
+  const pageSize = Math.max(options?.pageSize ?? 100, 1);
+  const messages: ChatMessageRecord[] = [];
+  let before: string | undefined;
+
+  for (let index = 0; index < maxPages; index += 1) {
+    const page = await api.listChatMessages(chatId, accessToken, {
+      before,
+      limit: pageSize,
+    });
+    if (page.length === 0) {
+      break;
+    }
+
+    messages.push(...page);
+    before = page.at(-1)?.createdAt;
+
+    if (!before) {
+      break;
+    }
+  }
+
+  return messages;
+}
+
 export interface AgentThreadSummary {
   id: string;
   title: string;
@@ -1080,6 +1376,28 @@ export const api = {
     return request<OnboardingActivationPlanResponse>(
       "POST",
       "/onboarding/activation-plan",
+      { userId, ...payload },
+      accessToken,
+    );
+  },
+  createOnboardingActivationBootstrap(
+    userId: string,
+    payload: {
+      firstIntentText?: string;
+      summary?: string;
+      persona?: string;
+      goals?: string[];
+      interests?: string[];
+      city?: string;
+      country?: string;
+      socialMode?: "one_to_one" | "group" | "either";
+      limit?: number;
+    },
+    accessToken?: string,
+  ) {
+    return request<OnboardingActivationBootstrapResponse>(
+      "POST",
+      "/onboarding/activation-bootstrap",
       { userId, ...payload },
       accessToken,
     );
@@ -1401,11 +1719,85 @@ export const api = {
       accessToken,
     );
   },
+  getExperienceHomeSummary(userId: string, accessToken?: string) {
+    return request<ExperienceHomeSummaryResponse>(
+      "GET",
+      `/experience/${userId}/home-summary`,
+      undefined,
+      accessToken,
+    );
+  },
+  getExperienceBootstrapSummary(userId: string, accessToken?: string) {
+    return request<ExperienceBootstrapSummaryResponse>(
+      "GET",
+      `/experience/${userId}/bootstrap`,
+      undefined,
+      accessToken,
+    );
+  },
+  getExperienceActivitySummary(userId: string, accessToken?: string) {
+    return request<ExperienceActivitySummaryResponse>(
+      "GET",
+      `/experience/${userId}/activity-summary`,
+      undefined,
+      accessToken,
+    );
+  },
   getUserIntentExplanation(intentId: string, accessToken?: string) {
     return request<UserIntentExplanation>(
       "GET",
       `/intents/${intentId}/explanations/user`,
       undefined,
+      accessToken,
+    );
+  },
+  cancelIntent(
+    intentId: string,
+    userId: string,
+    accessToken?: string,
+    options?: { agentThreadId?: string },
+  ) {
+    return request<IntentMutationResult>(
+      "POST",
+      `/intents/${intentId}/cancel`,
+      {
+        userId,
+        ...(options?.agentThreadId
+          ? { agentThreadId: options.agentThreadId }
+          : {}),
+      },
+      accessToken,
+    );
+  },
+  retryIntent(
+    intentId: string,
+    accessToken?: string,
+    options?: { agentThreadId?: string },
+  ) {
+    return request<IntentMutationResult>(
+      "POST",
+      `/intents/${intentId}/retry`,
+      {
+        ...(options?.agentThreadId
+          ? { agentThreadId: options.agentThreadId }
+          : {}),
+      },
+      accessToken,
+    );
+  },
+  widenIntent(
+    intentId: string,
+    accessToken?: string,
+    options?: { agentThreadId?: string },
+  ) {
+    return request<IntentMutationResult>(
+      "POST",
+      `/intents/${intentId}/widen`,
+      {
+        ...(options?.agentThreadId
+          ? { agentThreadId: options.agentThreadId }
+          : {}),
+      },
       accessToken,
     );
   },
@@ -1578,6 +1970,30 @@ export const api = {
       accessToken,
     );
   },
+  pauseScheduledTask(taskId: string, accessToken?: string) {
+    return request<ScheduledTaskRecord>(
+      "POST",
+      `/scheduled-tasks/${taskId}/pause`,
+      {},
+      accessToken,
+    );
+  },
+  resumeScheduledTask(taskId: string, accessToken?: string) {
+    return request<ScheduledTaskRecord>(
+      "POST",
+      `/scheduled-tasks/${taskId}/resume`,
+      {},
+      accessToken,
+    );
+  },
+  archiveScheduledTask(taskId: string, accessToken?: string) {
+    return request<ScheduledTaskRecord>(
+      "DELETE",
+      `/scheduled-tasks/${taskId}`,
+      undefined,
+      accessToken,
+    );
+  },
   listScheduledTaskRuns(taskId: string, limit = 10, accessToken?: string) {
     return request<ScheduledTaskRunRecord[]>(
       "GET",
@@ -1665,13 +2081,46 @@ export const api = {
       accessToken,
     );
   },
-  listChatMessages(chatId: string, accessToken?: string) {
+  listChatMessages(
+    chatId: string,
+    accessToken?: string,
+    options?: { before?: string; limit?: number },
+  ) {
     return request<ChatMessageRecord[]>(
       "GET",
       `/chats/${chatId}/messages`,
       undefined,
       accessToken,
+      {
+        before: options?.before,
+        limit: options?.limit,
+      },
     );
+  },
+  async getChatThreadSummaries(
+    chatId: string,
+    accessToken?: string,
+    options?: { maxPages?: number; pageSize?: number },
+  ): Promise<ChatThreadSummaryRecord[]> {
+    const messages = await fetchChatThreadMessages(
+      chatId,
+      accessToken,
+      options,
+    );
+    return buildChatThreadSummaries(messages);
+  },
+  async getChatThreadDetail(
+    chatId: string,
+    rootMessageId: string,
+    accessToken?: string,
+    options?: { maxPages?: number; pageSize?: number },
+  ): Promise<ChatThreadDetailResponse | null> {
+    const messages = await fetchChatThreadMessages(
+      chatId,
+      accessToken,
+      options,
+    );
+    return buildChatThreadDetail(messages, rootMessageId, chatId);
   },
   getChatMetadata(chatId: string, accessToken?: string) {
     return request<ChatMetadataRecord>(
@@ -1679,6 +2128,26 @@ export const api = {
       `/chats/${chatId}/metadata`,
       undefined,
       accessToken,
+    );
+  },
+  listChatThreads(chatId: string, accessToken?: string) {
+    return this.getChatThreadSummaries(chatId, accessToken).then((threads) => ({
+      chatId,
+      threads,
+    }));
+  },
+  getChatThread(chatId: string, rootMessageId: string, accessToken?: string) {
+    return this.getChatThreadDetail(chatId, rootMessageId, accessToken).then(
+      (thread) => {
+        if (!thread) {
+          throw new ApiRequestError({
+            message: "Thread not found.",
+            code: "not_found",
+            statusCode: 404,
+          });
+        }
+        return thread;
+      },
     );
   },
   syncChatMessages(
@@ -1742,7 +2211,7 @@ export const api = {
     senderUserId: string,
     body: string,
     accessToken?: string,
-    options?: { clientMessageId?: string },
+    options?: { clientMessageId?: string; replyToMessageId?: string },
   ) {
     return request<ChatMessageRecord>(
       "POST",
@@ -1753,6 +2222,73 @@ export const api = {
         ...(options?.clientMessageId
           ? { clientMessageId: options.clientMessageId }
           : {}),
+        ...(options?.replyToMessageId
+          ? { replyToMessageId: options.replyToMessageId }
+          : {}),
+      },
+      accessToken,
+    );
+  },
+  createChatMessageReaction(
+    chatId: string,
+    messageId: string,
+    userId: string,
+    emoji: string,
+    accessToken?: string,
+  ) {
+    return request<ChatMessageReactionRecord>(
+      "POST",
+      `/chats/${chatId}/messages/${messageId}/reactions`,
+      {
+        userId,
+        emoji,
+      },
+      accessToken,
+    );
+  },
+  markChatMessageRead(
+    chatId: string,
+    messageId: string,
+    userId: string,
+    accessToken?: string,
+  ) {
+    return request<Record<string, unknown>>(
+      "POST",
+      `/chats/${chatId}/messages/${messageId}/read`,
+      {
+        userId,
+      },
+      accessToken,
+    );
+  },
+  softDeleteChatMessage(
+    chatId: string,
+    messageId: string,
+    userId: string,
+    accessToken?: string,
+  ) {
+    return request<ChatMessageRecord>(
+      "POST",
+      `/chats/${chatId}/messages/${messageId}/soft-delete`,
+      {
+        userId,
+      },
+      accessToken,
+    );
+  },
+  editChatMessage(
+    chatId: string,
+    messageId: string,
+    userId: string,
+    body: string,
+    accessToken?: string,
+  ) {
+    return request<ChatMessageRecord>(
+      "PATCH",
+      `/chats/${chatId}/messages/${messageId}/edit`,
+      {
+        userId,
+        body,
       },
       accessToken,
     );

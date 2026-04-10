@@ -82,9 +82,11 @@ describe("ExperienceService", () => {
 
     expect(inboxService.listPendingRequests).toHaveBeenCalledWith(USER_ID);
     expect(summary.status).toEqual({
+      eyebrow: "Needs attention",
       title: "People are waiting",
-      body: "You have 2 pending requests that need a response.",
+      body: "2 requests need responses before the search can move forward.",
       tone: "waiting",
+      footnote: "Handle requests first, then return to matching.",
       nextAction: {
         kind: "review_requests",
         label: "Review requests",
@@ -122,9 +124,10 @@ describe("ExperienceService", () => {
     expect(summary.status.tone).toBe("recovery");
     expect(summary.status.body).toContain("Nothing strong enough yet");
     expect(summary.spotlight.recovery).toEqual({
-      title: "Shift the search slightly",
-      body: "If this stays thin, widen timing or switch between 1:1 and a small group.",
+      title: "Widen the timing first",
+      body: "Nothing is strong enough yet. First widen timing or availability before changing the format.",
       actionLabel: "Adjust search",
+      secondaryLabel: "If that still looks thin, try a small group next.",
     });
   });
 
@@ -173,8 +176,9 @@ describe("ExperienceService", () => {
     expect(prisma.intentRequest.findFirst).toHaveBeenCalled();
     expect(prisma.chat.findFirst).toHaveBeenCalled();
     expect(summary.spotlight.coordination).toEqual({
+      variant: "accepted",
       title: "Move the match forward",
-      body: "You have 1 accepted connection ready for coordination.",
+      body: "One accepted match is ready. The fastest next move is to coordinate directly.",
       actionLabel: "Open chat",
       targetChatId: "chat-accepted-1",
     });

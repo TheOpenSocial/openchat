@@ -103,11 +103,9 @@ These are product read models that remove stitched client-side aggregation from 
 
 ### Still Missing
 
-- stable server-owned activity ranking and grouping policy
-- explicit home status header contract for intent recovery modes
 - local snapshot versioning contract for `Home`, `Chats`, `Activity`, `Profile`
 - lightweight unread summary endpoint for shell badges and startup hydration
-- scenario shortcuts in sandbox world for common product states
+- daily-loop expectations folded into the broader eval matrix once the mobile contract settles
 
 ## Execution Backlog
 
@@ -115,32 +113,29 @@ These are product read models that remove stitched client-side aggregation from 
 
 ### Now
 
-1. Add activity snapshot persistence to explicit stores if we need offline-first store-driven rehydration beyond AsyncStorage-backed screen snapshots.
+1. Validate the four sandbox scenarios directly in mobile and tighten any remaining ambiguous copy or routing:
+   - `baseline`
+   - `waiting_replies`
+   - `activity_burst`
+   - `stalled_search`
+   Frontend files:
+   - [HomeStatusHeader.tsx](/Users/cruciblelabs/Documents/openchat/apps/mobile/src/open-chat/HomeStatusHeader.tsx)
+   - [HomeSpotlightCards.tsx](/Users/cruciblelabs/Documents/openchat/apps/mobile/src/open-chat/HomeSpotlightCards.tsx)
+   - [ActivityScreen.tsx](/Users/cruciblelabs/Documents/openchat/apps/mobile/src/screens/ActivityScreen.tsx)
+
+2. Decide whether unread badge/bootstrap hydration needs its own lightweight store beyond the current `experience/bootstrap` path.
    Frontend files:
    - [activity-store.ts](/Users/cruciblelabs/Documents/openchat/apps/mobile/src/store/activity-store.ts)
    - [home-shell-store.ts](/Users/cruciblelabs/Documents/openchat/apps/mobile/src/store/home-shell-store.ts)
-   - [home-thread-store.ts](/Users/cruciblelabs/Documents/openchat/apps/mobile/src/store/home-thread-store.ts)
-
-2. Validate `Home` operational states against sandbox scenarios and tighten any ambiguous handoff state before adding more structural layers.
-   Frontend files:
-   - [OpenChatScreen.tsx](/Users/cruciblelabs/Documents/openchat/apps/mobile/src/open-chat/OpenChatScreen.tsx)
-   - [HomeSpotlightCards.tsx](/Users/cruciblelabs/Documents/openchat/apps/mobile/src/open-chat/HomeSpotlightCards.tsx)
-   - [ThreadMessage.tsx](/Users/cruciblelabs/Documents/openchat/apps/mobile/src/open-chat/ThreadMessage.tsx)
-
-3. Add fuller business-priority policy for `Activity` once product decides the exact weighting between pending requests, accepted momentum, unread updates, and suggestions.
    Backend files:
    - [experience.service.ts](/Users/cruciblelabs/Documents/openchat/apps/api/src/experience/experience.service.ts)
-   - [notifications.service.ts](/Users/cruciblelabs/Documents/openchat/apps/api/src/notifications/notifications.service.ts)
-   - [inbox.service.ts](/Users/cruciblelabs/Documents/openchat/apps/api/src/inbox/inbox.service.ts)
 
 ### Next
 
-4. Add a lightweight shell badge/bootstrap store if startup badge hydration needs to survive more aggressive offline flows.
-   Frontend files:
-   - [activity-store.ts](/Users/cruciblelabs/Documents/openchat/apps/mobile/src/store/activity-store.ts)
-   - [home-shell-store.ts](/Users/cruciblelabs/Documents/openchat/apps/mobile/src/store/home-shell-store.ts)
-   Backend files:
-   - [experience.service.ts](/Users/cruciblelabs/Documents/openchat/apps/api/src/experience/experience.service.ts)
+4. Add daily-loop expectations to the broader eval matrix after the mobile contract stops moving.
+   Eval files:
+   - [/Users/cruciblelabs/Documents/openchat/scripts/evals/system/run-system-evals.mjs](/Users/cruciblelabs/Documents/openchat/scripts/evals/system/run-system-evals.mjs)
+   - [/Users/cruciblelabs/Documents/openchat/scripts/evals/golden/product-critical-goldens.mjs](/Users/cruciblelabs/Documents/openchat/scripts/evals/golden/product-critical-goldens.mjs)
 
 ### Later
 
@@ -257,6 +252,28 @@ These are product read models that remove stitched client-side aggregation from 
 26. Removed the remaining user-facing `Inbox` transient route and folded that path into `Activity`.
     Frontend files:
     - [useHomeTransientRoutes.tsx](/Users/cruciblelabs/Documents/openchat/apps/mobile/src/screens/home/hooks/useHomeTransientRoutes.tsx)
+    - [ActivityScreen.tsx](/Users/cruciblelabs/Documents/openchat/apps/mobile/src/screens/ActivityScreen.tsx)
+
+27. Locked the remaining `Home` and `Activity` product policy into the backend read models.
+    Backend files:
+    - [experience.service.ts](/Users/cruciblelabs/Documents/openchat/apps/api/src/experience/experience.service.ts)
+    - [experience.controller.ts](/Users/cruciblelabs/Documents/openchat/apps/api/src/experience/experience.controller.ts)
+    Tests:
+    - [experience.service.spec.ts](/Users/cruciblelabs/Documents/openchat/apps/api/test/experience.service.spec.ts)
+    - [experience.controller.spec.ts](/Users/cruciblelabs/Documents/openchat/apps/api/test/experience.controller.spec.ts)
+
+28. Promoted `Home` and `Activity` summary hydration into explicit shell stores so the daily loop survives cold start and reconnect more cleanly.
+    Frontend files:
+    - [activity-store.ts](/Users/cruciblelabs/Documents/openchat/apps/mobile/src/store/activity-store.ts)
+    - [home-shell-store.ts](/Users/cruciblelabs/Documents/openchat/apps/mobile/src/store/home-shell-store.ts)
+    - [HomeScreen.tsx](/Users/cruciblelabs/Documents/openchat/apps/mobile/src/screens/HomeScreen.tsx)
+    - [useActivityFeed.ts](/Users/cruciblelabs/Documents/openchat/apps/mobile/src/features/activity/hooks/useActivityFeed.ts)
+
+29. Tightened scenario-specific `Home` and `Activity` presentation so structured state reads before the transcript.
+    Frontend files:
+    - [HomeStatusHeader.tsx](/Users/cruciblelabs/Documents/openchat/apps/mobile/src/open-chat/HomeStatusHeader.tsx)
+    - [HomeSpotlightCards.tsx](/Users/cruciblelabs/Documents/openchat/apps/mobile/src/open-chat/HomeSpotlightCards.tsx)
+    - [OpenChatScreen.tsx](/Users/cruciblelabs/Documents/openchat/apps/mobile/src/open-chat/OpenChatScreen.tsx)
     - [ActivityScreen.tsx](/Users/cruciblelabs/Documents/openchat/apps/mobile/src/screens/ActivityScreen.tsx)
 
 27. Added server-owned `Activity` section ordering and labels so the client no longer hardcodes section titles.

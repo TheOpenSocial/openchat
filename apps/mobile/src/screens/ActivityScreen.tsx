@@ -16,9 +16,8 @@ import { appTheme } from "../theme";
 
 type ActivityScreenProps = {
   accessToken: string;
-  onClose: () => void;
+  onClose?: () => void;
   onOpenConnections?: () => void;
-  onOpenInbox?: () => void;
   onOpenDiscovery?: () => void;
   onOpenIntentDetail?: (intentId: string) => void;
   onOpenRecurringCircles?: () => void;
@@ -32,35 +31,46 @@ export function ActivityScreen({
   onClose,
   onOpenConnections,
   onOpenDiscovery,
-  onOpenInbox,
   onOpenIntentDetail,
   onOpenRecurringCircles,
   onOpenSavedSearches,
   onOpenScheduledTasks,
   userId,
 }: ActivityScreenProps) {
-  const { error, items, loading, pendingRequestCount, refresh, refreshing } =
-    useActivityFeed({
-      accessToken,
-      userId,
-    });
+  const {
+    error,
+    items,
+    loading,
+    pendingRequestCount,
+    refresh,
+    refreshing,
+    sections,
+  } = useActivityFeed({
+    accessToken,
+    userId,
+  });
 
   const headerSubtitle = useMemo(() => {
     if (pendingRequestCount > 0) {
-      return `${pendingRequestCount} request${pendingRequestCount === 1 ? "" : "s"} waiting`;
+      return `${pendingRequestCount} request${pendingRequestCount === 1 ? "" : "s"} need a response now`;
     }
     return "Requests, discovery signals, and system updates";
   }, [pendingRequestCount]);
+  const topSection = sections[0] ?? null;
 
   return (
     <OperationScreenShell
-      closeAccessibilityLabel="Close activity"
-      closeTestID="activity-close"
+      closeAccessibilityLabel={onClose ? "Close activity" : undefined}
+      closeTestID={onClose ? "activity-close" : undefined}
       eyebrow="Activity"
-      onClose={() => {
-        hapticSelection();
-        onClose();
-      }}
+      onClose={
+        onClose
+          ? () => {
+              hapticSelection();
+              onClose();
+            }
+          : undefined
+      }
       scrollProps={{
         refreshControl: (
           <RefreshControl
@@ -73,7 +83,7 @@ export function ActivityScreen({
           />
         ),
       }}
-      subtitle={headerSubtitle}
+      subtitle={topSection?.subtitle ?? headerSubtitle}
       title="What needs your attention"
     >
       <View className="flex-row gap-2 pb-4">
@@ -180,22 +190,63 @@ export function ActivityScreen({
           <Text className="mt-4 text-[14px] text-muted">Loading activity</Text>
         </View>
       ) : items.length > 0 ? (
-        <View className="gap-3">
-          {items.map((item) => (
-            <ActivityRow
-              item={item}
-              key={item.id}
-              onPress={(pressedItem) => {
-                if (pressedItem.kind === "request") {
-                  hapticSelection();
-                  onOpenInbox?.();
-                }
-                if (pressedItem.kind === "intent") {
-                  hapticSelection();
-                  onOpenIntentDetail?.(pressedItem.intentId);
-                }
-              }}
-            />
+        <View className="gap-6">
+          {sections.map((section) => (
+            <View className="gap-3" key={section.id}>
+              <View className="gap-2">
+                <View className="flex-row items-center justify-between gap-3">
+                  <Text className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/34">
+                    {section.title}
+                  </Text>
+                  <View
+                    className={`rounded-full border px-2.5 py-1 ${
+                      section.emphasis === "urgent"
+                        ? "border-white/[0.14] bg-white/[0.08]"
+                        : section.emphasis === "active"
+                          ? "border-white/[0.10] bg-white/[0.05]"
+                          : "border-white/[0.08] bg-white/[0.03]"
+                    }`}
+                  >
+                    <Text
+                      className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${
+                        section.emphasis === "urgent"
+                          ? "text-white/74"
+                          : section.emphasis === "active"
+                            ? "text-white/58"
+                            : "text-white/42"
+                      }`}
+                    >
+                      {section.emphasis === "urgent"
+                        ? "Now"
+                        : section.emphasis === "active"
+                          ? "In motion"
+                          : "Ambient"}
+                    </Text>
+                  </View>
+                </View>
+                <Text className="text-[13px] leading-[19px] text-white/46">
+                  {section.subtitle}
+                </Text>
+              </View>
+              {section.items.map((item) => (
+                <ActivityRow
+                  item={item}
+                  key={item.id}
+                  onPress={(pressedItem) => {
+                    if (pressedItem.kind === "request") {
+                      if (pressedItem.intentId) {
+                        hapticSelection();
+                        onOpenIntentDetail?.(pressedItem.intentId);
+                      }
+                    }
+                    if (pressedItem.kind === "intent") {
+                      hapticSelection();
+                      onOpenIntentDetail?.(pressedItem.intentId);
+                    }
+                  }}
+                />
+              ))}
+            </View>
           ))}
         </View>
       ) : (

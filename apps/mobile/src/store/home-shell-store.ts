@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 
+import type { ExperienceHomeSummaryResponse } from "../lib/api";
 import type { HomeTab } from "../types";
 
 type BannerState = {
@@ -14,6 +15,8 @@ type HomeShellState = {
   draftChatMessage: string;
   devOrbOpen: boolean;
   devOrbUnlocked: boolean;
+  homeSummary: ExperienceHomeSummaryResponse | null;
+  bootstrapHydratedAt: string | null;
 };
 
 type HomeShellActions = {
@@ -23,6 +26,8 @@ type HomeShellActions = {
   setDraftChatMessage: (value: string) => void;
   setDevOrbOpen: (value: boolean) => void;
   setDevOrbUnlocked: (value: boolean) => void;
+  setHomeSummary: (value: ExperienceHomeSummaryResponse | null) => void;
+  setBootstrapHydratedAt: (value: string | null) => void;
   resetShell: () => void;
 };
 
@@ -35,6 +40,8 @@ const defaultState: HomeShellState = {
   draftChatMessage: "",
   devOrbOpen: false,
   devOrbUnlocked: false,
+  homeSummary: null,
+  bootstrapHydratedAt: null,
 };
 
 let state: HomeShellState = defaultState;
@@ -49,6 +56,7 @@ function emit() {
 function setState(patch: Partial<HomeShellState>) {
   const next = { ...state, ...patch };
   state = next;
+  storeSnapshot = { ...state, ...actions };
   emit();
 }
 
@@ -71,10 +79,19 @@ const actions: HomeShellActions = {
   setDevOrbUnlocked(value) {
     setState({ devOrbUnlocked: value });
   },
+  setHomeSummary(value) {
+    setState({ homeSummary: value });
+  },
+  setBootstrapHydratedAt(value) {
+    setState({ bootstrapHydratedAt: value });
+  },
   resetShell() {
     setState(defaultState);
   },
 };
+
+let storeSnapshot: HomeShellStore = { ...state, ...actions };
+const defaultSnapshot: HomeShellStore = { ...defaultState, ...actions };
 
 function subscribe(listener: () => void) {
   listeners.add(listener);
@@ -88,7 +105,7 @@ export function useHomeShellStore<T>(
 ): T {
   return useSyncExternalStore(
     subscribe,
-    () => selector({ ...state, ...actions }),
-    () => selector({ ...defaultState, ...actions }),
+    () => selector(storeSnapshot),
+    () => selector(defaultSnapshot),
   );
 }
