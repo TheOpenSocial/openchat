@@ -26,6 +26,7 @@ import {
   adminSandboxWorldCreateBodySchema,
   adminSandboxWorldIdSchema,
   adminSandboxWorldJoinBodySchema,
+  adminSandboxWorldScenarioBodySchema,
   adminSandboxWorldSummarySchema,
   adminSandboxWorldTickBodySchema,
 } from "./admin-sandbox-world.schemas.js";
@@ -182,6 +183,28 @@ export class AdminPlaygroundController {
     return ok(parseRequestPayload(adminSandboxWorldSummarySchema, data));
   }
 
+  @Get("worlds/:worldId/inspect")
+  async inspectSandboxWorld(
+    @Param("worldId") worldIdParam: string,
+    @Headers("x-admin-user-id") adminUserIdHeader?: string,
+    @Headers("x-admin-role") adminRoleHeader?: string,
+  ) {
+    this.ensurePlaygroundEnabled();
+    const actor = this.parseAdminContext(adminUserIdHeader, adminRoleHeader, [
+      "admin",
+      "support",
+    ]);
+    const worldId = parseRequestPayload(
+      adminSandboxWorldIdSchema,
+      worldIdParam,
+    );
+    const data = await this.playgroundService.inspectSandboxWorld(
+      worldId,
+      actor,
+    );
+    return ok(data);
+  }
+
   @Post("worlds/:worldId/reset")
   async resetSandboxWorld(
     @Param("worldId") worldIdParam: string,
@@ -246,6 +269,34 @@ export class AdminPlaygroundController {
     const data = await this.playgroundService.joinSandboxWorld(
       worldId,
       payload.focalUserId,
+      actor,
+    );
+    return ok(parseRequestPayload(adminSandboxWorldSummarySchema, data));
+  }
+
+  @Post("worlds/:worldId/scenario")
+  async setSandboxWorldScenario(
+    @Param("worldId") worldIdParam: string,
+    @Body() body: unknown,
+    @Headers("x-admin-user-id") adminUserIdHeader?: string,
+    @Headers("x-admin-role") adminRoleHeader?: string,
+  ) {
+    this.ensurePlaygroundEnabled();
+    const actor = this.parseAdminContext(adminUserIdHeader, adminRoleHeader, [
+      "admin",
+    ]);
+    this.ensureMutationAllowed(actor.adminUserId);
+    const worldId = parseRequestPayload(
+      adminSandboxWorldIdSchema,
+      worldIdParam,
+    );
+    const payload = parseRequestPayload(
+      adminSandboxWorldScenarioBodySchema,
+      body,
+    );
+    const data = await this.playgroundService.setSandboxWorldScenario(
+      worldId,
+      payload.scenario,
       actor,
     );
     return ok(parseRequestPayload(adminSandboxWorldSummarySchema, data));

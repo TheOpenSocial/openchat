@@ -63,6 +63,7 @@ describe("AdminPlaygroundService", () => {
       },
       chat: {
         findUnique: vi.fn().mockResolvedValue(null),
+        findFirst: vi.fn().mockResolvedValue({ id: "chat-1" }),
         create: vi.fn().mockResolvedValue({ id: "chat-1" }),
         upsert: vi.fn().mockResolvedValue({ id: "chat-1" }),
         deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
@@ -74,15 +75,19 @@ describe("AdminPlaygroundService", () => {
       },
       intent: {
         upsert: vi.fn().mockResolvedValue({ id: "intent-1" }),
+        update: vi.fn().mockResolvedValue({ id: "intent-1" }),
         deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
       },
       intentRequest: {
+        findFirst: vi.fn().mockResolvedValue(null),
         upsert: vi.fn().mockResolvedValue({ id: "request-1" }),
+        updateMany: vi.fn().mockResolvedValue({ count: 2 }),
         deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
       },
       notification: {
         create: vi.fn().mockResolvedValue({ id: "notification-1" }),
         upsert: vi.fn().mockResolvedValue({ id: "notification-service-1" }),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
         count: vi.fn().mockResolvedValue(3),
         deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
       },
@@ -117,6 +122,14 @@ describe("AdminPlaygroundService", () => {
         .fn()
         .mockResolvedValue({ id: "notification-service-1" }),
     };
+    const experienceService = overrides.experienceService ?? {
+      getHomeSummary: vi.fn().mockResolvedValue({
+        status: { title: "A match is moving" },
+      }),
+      getActivitySummary: vi.fn().mockResolvedValue({
+        counts: { pendingRequests: 1 },
+      }),
+    };
 
     const service = new AdminPlaygroundService(
       prisma,
@@ -125,6 +138,7 @@ describe("AdminPlaygroundService", () => {
       adminAuditService,
       chatsService,
       notificationsService,
+      experienceService,
     );
 
     return {
@@ -135,6 +149,7 @@ describe("AdminPlaygroundService", () => {
       adminAuditService,
       chatsService,
       notificationsService,
+      experienceService,
       cacheStore,
     };
   }
@@ -241,5 +256,93 @@ describe("AdminPlaygroundService", () => {
     expect(prisma.connection.upsert).toHaveBeenCalled();
     expect(prisma.intent.upsert).toHaveBeenCalled();
     expect(prisma.notification.upsert).toHaveBeenCalled();
+  });
+
+  it("applies waiting-replies scenario to a joined sandbox world", async () => {
+    const { service, prisma } = createService();
+
+    await service.joinSandboxWorld(
+      "design-sandbox-v1",
+      "77777777-7777-4777-8777-777777777777",
+      ACTOR,
+    );
+    const updated = await service.setSandboxWorldScenario(
+      "design-sandbox-v1",
+      "waiting_replies",
+      ACTOR,
+    );
+
+    expect(updated.worldId).toBe("design-sandbox-v1");
+    expect(prisma.intentRequest.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "pending",
+          respondedAt: null,
+        }),
+      }),
+    );
+    expect(prisma.notification.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          body: "Your search is live and you are waiting on replies.",
+        }),
+      }),
+    );
+  });
+
+  it("applies stalled-search scenario to a joined sandbox world", async () => {
+    const { service, prisma } = createService();
+
+    await service.joinSandboxWorld(
+      "design-sandbox-v1",
+      "77777777-7777-4777-8777-777777777777",
+      ACTOR,
+    );
+    const updated = await service.setSandboxWorldScenario(
+      "design-sandbox-v1",
+      "stalled_search",
+      ACTOR,
+    );
+
+    expect(updated.worldId).toBe("design-sandbox-v1");
+    expect(prisma.intent.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "f1111111-1111-4111-8111-111111111111" },
+        data: expect.objectContaining({
+          rawText:
+            "Find a very niche late-night online design systems salon this week.",
+          status: "matching",
+        }),
+      }),
+    );
+    expect(prisma.intentRequest.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "rejected",
+        }),
+      }),
+    );
+  });
+
+  it("inspects the sandbox world experience state for the joined focal user", async () => {
+    const { service, experienceService } = createService();
+
+    await service.joinSandboxWorld(
+      "design-sandbox-v1",
+      "77777777-7777-4777-8777-777777777777",
+      ACTOR,
+    );
+    const inspection = await service.inspectSandboxWorld(
+      "design-sandbox-v1",
+      ACTOR,
+    );
+
+    expect(experienceService.getHomeSummary).toHaveBeenCalledWith(
+      "77777777-7777-4777-8777-777777777777",
+    );
+    expect(experienceService.getActivitySummary).toHaveBeenCalledWith(
+      "77777777-7777-4777-8777-777777777777",
+    );
+    expect(inspection.experience.home.status.title).toBe("A match is moving");
   });
 });

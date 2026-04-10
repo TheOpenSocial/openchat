@@ -76,12 +76,69 @@ async function callJson(baseUrl, pathname, init) {
   return payload?.data ?? payload;
 }
 
+function assertCondition(condition, message) {
+  if (!condition) {
+    throw new Error(message);
+  }
+}
+
+function validateScenarioPayload(scenario, payload) {
+  const home = payload?.experience?.home;
+  const activity = payload?.experience?.activity;
+
+  assertCondition(home && activity, "inspect payload is missing experience summaries");
+
+  switch (scenario) {
+    case "baseline":
+      assertCondition(
+        home.status?.tone === "active" || home.status?.tone === "waiting",
+        `baseline expected active or waiting home tone, received ${home.status?.tone ?? "unknown"}`,
+      );
+      assertCondition(
+        home.spotlight?.coordination != null || home.spotlight?.topSuggestion != null,
+        "baseline expected coordination or top suggestion spotlight",
+      );
+      return;
+    case "waiting_replies":
+      assertCondition(
+        home.spotlight?.coordination?.title === "Waiting on replies",
+        `waiting_replies expected coordination title "Waiting on replies", received ${home.spotlight?.coordination?.title ?? "unknown"}`,
+      );
+      assertCondition(
+        home.spotlight?.coordination?.targetChatId == null,
+        "waiting_replies should not hand off directly to chat",
+      );
+      return;
+    case "activity_burst":
+      assertCondition(
+        Number(activity.counts?.unreadNotifications ?? 0) > 0,
+        "activity_burst expected unread notifications",
+      );
+      return;
+    case "stalled_search":
+      assertCondition(
+        home.status?.tone === "recovery",
+        `stalled_search expected recovery tone, received ${home.status?.tone ?? "unknown"}`,
+      );
+      assertCondition(
+        home.spotlight?.recovery != null,
+        "stalled_search expected recovery spotlight",
+      );
+      return;
+    default:
+      throw new Error(`Unsupported validation scenario: ${scenario}`);
+  }
+}
+
 function printUsage() {
   console.log(`Usage:
   node scripts/playground-sandbox-world.mjs --action=create [--world-id=${DEFAULT_WORLD_ID}] [--focal-user-id=<uuid>] [--reset=1]
   node scripts/playground-sandbox-world.mjs --action=get [--world-id=${DEFAULT_WORLD_ID}]
+  node scripts/playground-sandbox-world.mjs --action=inspect [--world-id=${DEFAULT_WORLD_ID}]
+  node scripts/playground-sandbox-world.mjs --action=validate [--world-id=${DEFAULT_WORLD_ID}] --scenario=<baseline|waiting_replies|activity_burst|stalled_search>
   node scripts/playground-sandbox-world.mjs --action=join [--world-id=${DEFAULT_WORLD_ID}] --focal-user-id=<uuid>
   node scripts/playground-sandbox-world.mjs --action=tick [--world-id=${DEFAULT_WORLD_ID}] [--note="..."]
+  node scripts/playground-sandbox-world.mjs --action=scenario [--world-id=${DEFAULT_WORLD_ID}] --scenario=<baseline|waiting_replies|activity_burst|stalled_search>
   node scripts/playground-sandbox-world.mjs --action=reset [--world-id=${DEFAULT_WORLD_ID}]
 
 Environment:
@@ -130,6 +187,17 @@ async function main() {
       );
       break;
     }
+    case "inspect": {
+      data = await callJson(
+        baseUrl,
+        `/api/admin/playground/worlds/${worldId}/inspect`,
+        {
+          method: "GET",
+          headers,
+        },
+      );
+      break;
+    }
     case "join": {
       const focalUserId = requireArg("--focal-user-id");
       data = await callJson(
@@ -165,6 +233,48 @@ async function main() {
           headers,
         },
       );
+      break;
+    }
+    case "scenario": {
+      const scenario = requireArg("--scenario");
+      data = await callJson(
+        baseUrl,
+        `/api/admin/playground/worlds/${worldId}/scenario`,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ scenario }),
+        },
+      );
+      break;
+    }
+    case "validate": {
+      const scenario = requireArg("--scenario");
+      await callJson(
+        baseUrl,
+        `/api/admin/playground/worlds/${worldId}/scenario`,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ scenario }),
+        },
+      );
+      data = await callJson(
+        baseUrl,
+        `/api/admin/playground/worlds/${worldId}/inspect`,
+        {
+          method: "GET",
+          headers,
+        },
+      );
+      validateScenarioPayload(scenario, data);
+      data = {
+        validated: true,
+        scenario,
+        worldId,
+        home: data.experience.home.status,
+        activityCounts: data.experience.activity.counts,
+      };
       break;
     }
     default:

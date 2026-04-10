@@ -115,6 +115,25 @@ function createController(overrides: Partial<Record<string, any>> = {}) {
         agentMessageIds: [],
       },
     }),
+    inspectSandboxWorld: vi.fn().mockResolvedValue({
+      world: {
+        worldId: "design-sandbox-v1",
+        fixtureLabel: "Design Sandbox v1",
+        status: "joined",
+      },
+      experience: {
+        home: {
+          status: {
+            title: "A match is moving",
+          },
+        },
+        activity: {
+          counts: {
+            pendingRequests: 1,
+          },
+        },
+      },
+    }),
     resetSandboxWorld: vi.fn().mockResolvedValue({
       worldId: "design-sandbox-v1",
       status: "reset",
@@ -157,6 +176,31 @@ function createController(overrides: Partial<Record<string, any>> = {}) {
       directChatCount: 2,
       groupChatCount: 1,
       notificationCount: 3,
+      syntheticActors: [],
+      notes: [],
+      seededEntityIds: {
+        syntheticUserIds: [],
+        connectionIds: [],
+        chatIds: [],
+        chatMessageIds: [],
+        notificationIds: [],
+        intentIds: [],
+        intentRequestIds: [],
+        agentMessageIds: [],
+      },
+    }),
+    setSandboxWorldScenario: vi.fn().mockResolvedValue({
+      worldId: "design-sandbox-v1",
+      fixtureLabel: "Design Sandbox v1",
+      status: "joined",
+      createdAt: "2026-03-26T00:00:00.000Z",
+      updatedAt: "2026-03-26T00:00:10.000Z",
+      joinedAt: "2026-03-26T00:00:00.000Z",
+      focalUserId: "77777777-7777-4777-8777-777777777777",
+      actorCount: 7,
+      directChatCount: 2,
+      groupChatCount: 1,
+      notificationCount: 4,
       syntheticActors: [],
       notes: [],
       seededEntityIds: {
@@ -289,6 +333,26 @@ describe("AdminPlaygroundController", () => {
     expect(fetched.data.status).toBe("ready");
   });
 
+  it("inspects a sandbox world daily-loop state", async () => {
+    const { controller, service } = createController();
+    const response = (await controller.inspectSandboxWorld(
+      "design-sandbox-v1",
+      ADMIN_USER_ID,
+      "support",
+    )) as any;
+
+    expect(service.inspectSandboxWorld).toHaveBeenCalledWith(
+      "design-sandbox-v1",
+      {
+        adminUserId: ADMIN_USER_ID,
+        role: "support",
+      },
+    );
+    expect(response.data.experience.home.status.title).toBe(
+      "A match is moving",
+    );
+  });
+
   it("joins and ticks a sandbox world", async () => {
     const { controller, service } = createController();
     const focalUserId = "77777777-7777-4777-8777-777777777777";
@@ -314,5 +378,23 @@ describe("AdminPlaygroundController", () => {
     expect(service.tickSandboxWorld).toHaveBeenCalled();
     expect(joined.data.status).toBe("joined");
     expect(ticked.data.notificationCount).toBe(4);
+  });
+
+  it("applies a sandbox world scenario", async () => {
+    const { controller, service } = createController();
+
+    const response = (await controller.setSandboxWorldScenario(
+      "design-sandbox-v1",
+      { scenario: "stalled_search" },
+      ADMIN_USER_ID,
+      "admin",
+    )) as any;
+
+    expect(service.setSandboxWorldScenario).toHaveBeenCalledWith(
+      "design-sandbox-v1",
+      "stalled_search",
+      { adminUserId: ADMIN_USER_ID, role: "admin" },
+    );
+    expect(response.data.status).toBe("joined");
   });
 });

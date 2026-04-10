@@ -9,6 +9,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { ChatsService } from "../chats/chats.service.js";
+import { ExperienceService } from "../experience/experience.service.js";
 import { NotificationsService } from "../notifications/notifications.service.js";
 import {
   getSandboxWorldDefinition,
@@ -47,6 +48,11 @@ type VerificationRunRecord = {
 };
 
 type SandboxWorldId = "design-sandbox-v1";
+type SandboxWorldScenario =
+  | "baseline"
+  | "waiting_replies"
+  | "activity_burst"
+  | "stalled_search";
 
 type SandboxWorldRecord = {
   worldId: SandboxWorldId;
@@ -97,6 +103,8 @@ export class AdminPlaygroundService {
     private readonly chatsService?: ChatsService,
     @Optional()
     private readonly notificationsService?: NotificationsService,
+    @Optional()
+    private readonly experienceService?: ExperienceService,
   ) {}
 
   async getState(actor: { adminUserId: string; role: AdminRole }) {
@@ -509,6 +517,43 @@ export class AdminPlaygroundService {
     );
   }
 
+  async inspectSandboxWorld(
+    worldId: SandboxWorldId,
+    actor: { adminUserId: string; role: AdminRole },
+  ) {
+    const world = await this.getSandboxWorld(worldId, actor);
+    if (!world.focalUserId) {
+      throw new Error("sandbox world has no focal user joined");
+    }
+    if (!this.experienceService) {
+      throw new Error("experience service is unavailable");
+    }
+
+    const [home, activity] = await Promise.all([
+      this.experienceService.getHomeSummary(world.focalUserId),
+      this.experienceService.getActivitySummary(world.focalUserId),
+    ]);
+
+    await this.adminAuditService.recordAction({
+      adminUserId: actor.adminUserId,
+      role: actor.role,
+      action: "admin.playground_sandbox_world_inspect",
+      entityType: "admin_playground",
+      entityId: worldId,
+      metadata: {
+        focalUserId: world.focalUserId,
+      },
+    });
+
+    return {
+      world,
+      experience: {
+        home,
+        activity,
+      },
+    };
+  }
+
   async resetSandboxWorld(
     worldId: SandboxWorldId,
     actor: { adminUserId: string; role: AdminRole },
@@ -633,6 +678,30 @@ export class AdminPlaygroundService {
       },
     });
     return updated;
+  }
+
+  async setSandboxWorldScenario(
+    worldId: SandboxWorldId,
+    scenario: SandboxWorldScenario,
+    actor: { adminUserId: string; role: AdminRole },
+  ) {
+    const existing = await this.requireSandboxWorldRecord(worldId);
+    const focalUserId = existing.focalUserId;
+    await this.teardownSandboxWorld(worldId);
+    let next = await this.seedSandboxWorld(worldId, focalUserId);
+    next = await this.applySandboxWorldScenario(worldId, scenario, next);
+    await this.adminAuditService.recordAction({
+      adminUserId: actor.adminUserId,
+      role: actor.role,
+      action: "admin.playground_sandbox_world_scenario",
+      entityType: "admin_playground",
+      entityId: worldId,
+      metadata: {
+        scenario,
+        focalUserId: next.focalUserId,
+      },
+    });
+    return next;
   }
 
   isPlaygroundEnabled() {
@@ -1125,6 +1194,131 @@ export class AdminPlaygroundService {
     await this.prisma.user.deleteMany({
       where: { id: { in: seededEntityIds.syntheticUserIds } },
     });
+  }
+
+  private async applySandboxWorldScenario(
+    worldId: SandboxWorldId,
+    scenario: SandboxWorldScenario,
+    record: SandboxWorldRecord,
+  ) {
+    const definition = getSandboxWorldDefinition(worldId);
+    const nowIso = new Date().toISOString();
+
+    switch (scenario) {
+      case "baseline":
+        return this.upsertSandboxWorldRecord({
+          ...record,
+          updatedAt: nowIso,
+          notes: [...record.notes, "Scenario applied: baseline."].slice(-8),
+        });
+
+      case "waiting_replies": {
+        await this.prisma.intentRequest.updateMany({
+          where: { id: { in: record.seededEntityIds.intentRequestIds } },
+          data: {
+            status: RequestStatus.PENDING,
+            respondedAt: null,
+          },
+        });
+        const firstNotificationId = definition.focalNotifications[0]?.id;
+        if (firstNotificationId) {
+          await this.prisma.notification.updateMany({
+            where: { id: firstNotificationId },
+            data: {
+              body: "Your search is live and you are waiting on replies.",
+            },
+          });
+        }
+        return this.upsertSandboxWorldRecord({
+          ...record,
+          updatedAt: nowIso,
+          notes: [
+            ...record.notes,
+            "Scenario applied: waiting replies on the lead search.",
+          ].slice(-8),
+        });
+      }
+
+      case "activity_burst": {
+        const focalUserId = record.focalUserId;
+        if (!focalUserId) {
+          throw new Error("sandbox world has no focal user joined");
+        }
+        const extraNotificationId = randomUUID();
+        await this.prisma.notification.create({
+          data: {
+            id: extraNotificationId,
+            recipientUserId: focalUserId,
+            type: NotificationType.AGENT_UPDATE,
+            body: "Two fresh updates landed in your sandbox activity feed.",
+            channel: "in_app",
+          },
+        });
+        const ticked = await this.tickSandboxWorld(
+          worldId,
+          {
+            note: "Maya followed up and the dinner circle is gaining momentum.",
+          },
+          { adminUserId: record.focalUserId ?? "sandbox", role: "admin" },
+        );
+        return this.upsertSandboxWorldRecord({
+          ...ticked,
+          updatedAt: new Date().toISOString(),
+          notificationCount: ticked.notificationCount + 1,
+          seededEntityIds: {
+            ...ticked.seededEntityIds,
+            notificationIds: [
+              ...new Set([
+                ...ticked.seededEntityIds.notificationIds,
+                extraNotificationId,
+              ]),
+            ],
+          },
+          notes: [...ticked.notes, "Scenario applied: activity burst."].slice(
+            -8,
+          ),
+        });
+      }
+
+      case "stalled_search": {
+        await this.prisma.intent.update({
+          where: { id: definition.focalIntent.id },
+          data: {
+            rawText:
+              "Find a very niche late-night online design systems salon this week.",
+            parsedIntent: {
+              intentType: "social",
+              topics: ["late-night design systems salon"],
+              modality: "online",
+              timingConstraints: ["late night", "this week"],
+              groupSizeTarget: 2,
+            } as never,
+            status: "matching",
+          },
+        });
+        await this.prisma.intentRequest.updateMany({
+          where: { id: { in: record.seededEntityIds.intentRequestIds } },
+          data: {
+            status: RequestStatus.REJECTED,
+            respondedAt: new Date(),
+          },
+        });
+        await this.prisma.notification.updateMany({
+          where: { id: { in: record.seededEntityIds.notificationIds } },
+          data: {
+            isRead: true,
+          },
+        });
+        return this.upsertSandboxWorldRecord({
+          ...record,
+          updatedAt: nowIso,
+          notes: [
+            ...record.notes,
+            "Scenario applied: stalled search with no active momentum.",
+          ].slice(-8),
+        });
+      }
+    }
   }
 
   private async ensureSandboxUser(persona: SandboxPersona) {

@@ -25,6 +25,17 @@ export const adminSandboxWorldTickBodySchema = z
   })
   .default(() => ({}));
 
+export const adminSandboxWorldScenarioSchema = z.enum([
+  "baseline",
+  "waiting_replies",
+  "activity_burst",
+  "stalled_search",
+]);
+
+export const adminSandboxWorldScenarioBodySchema = z.object({
+  scenario: adminSandboxWorldScenarioSchema,
+});
+
 export const adminSandboxWorldActorSummarySchema = z.object({
   userId: uuidSchema,
   displayName: z.string().min(1),
