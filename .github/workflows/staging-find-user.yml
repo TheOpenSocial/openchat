@@ -1,0 +1,87 @@
+name: Staging Find User
+
+on:
+  workflow_dispatch:
+    inputs:
+      query:
+        description: "Email, display name, username, or UUID fragment"
+        required: true
+        default: jefferson
+        type: string
+      limit:
+        description: "Max rows"
+        required: false
+        default: "10"
+        type: string
+
+jobs:
+  staging-find-user:
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.7.1
+
+      - name: Install root dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Query staging users
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL || secrets.DATABASE_URL }}
+          USER_QUERY: ${{ inputs.query }}
+          USER_LIMIT: ${{ inputs.limit }}
+        run: |
+          set -euo pipefail
+          node <<'NODE' | tee staging-user-query.json
+          const { Client } = require("pg");
+
+          async function main() {
+            const client = new Client({ connectionString: process.env.DATABASE_URL });
+            const query = String(process.env.USER_QUERY || "").trim();
+            const limit = Math.max(1, Math.min(Number(process.env.USER_LIMIT || "10"), 50));
+            if (!query) throw new Error("USER_QUERY is required");
+            await client.connect();
+            const sql = `
+              select
+                id,
+                email,
+                display_name as "displayName",
+                username,
+                created_at as "createdAt",
+                updated_at as "updatedAt"
+              from users
+              where
+                cast(id as text) ilike $1
+                or coalesce(email, '') ilike $1
+                or display_name ilike $1
+                or coalesce(username, '') ilike $1
+              order by updated_at desc
+              limit $2
+            `;
+            const result = await client.query(sql, [ `%${query}%`, limit ]);
+            console.log(JSON.stringify({ query, count: result.rows.length, rows: result.rows }, null, 2));
+            await client.end();
+          }
+
+          main().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
+
+      - name: Upload user query output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-user-query
+          path: staging-user-query.json
