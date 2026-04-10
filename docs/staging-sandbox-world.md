@@ -52,11 +52,49 @@ Inspect current state:
 pnpm playground:sandbox -- --action=get --world-id=design-sandbox-v1
 ```
 
+Inspect the current daily-loop read models for the joined focal user:
+
+```bash
+pnpm playground:sandbox -- --action=inspect --world-id=design-sandbox-v1
+```
+
 Advance the world by one synthetic step:
 
 ```bash
 pnpm playground:sandbox -- --action=tick --world-id=design-sandbox-v1 --note="Maya confirmed Thursday evening works."
 ```
+
+Jump to a named scenario:
+
+```bash
+pnpm playground:sandbox -- --action=scenario --world-id=design-sandbox-v1 --scenario=baseline
+pnpm playground:sandbox -- --action=scenario --world-id=design-sandbox-v1 --scenario=waiting_replies
+pnpm playground:sandbox -- --action=scenario --world-id=design-sandbox-v1 --scenario=activity_burst
+pnpm playground:sandbox -- --action=scenario --world-id=design-sandbox-v1 --scenario=stalled_search
+```
+
+Validate a named scenario against the daily-loop contract:
+
+```bash
+pnpm playground:sandbox:validate -- --world-id=design-sandbox-v1 --scenario=baseline
+pnpm playground:sandbox:validate -- --world-id=design-sandbox-v1 --scenario=waiting_replies
+pnpm playground:sandbox:validate -- --world-id=design-sandbox-v1 --scenario=activity_burst
+pnpm playground:sandbox:validate -- --world-id=design-sandbox-v1 --scenario=stalled_search
+```
+
+Run the full staging validation lane in GitHub Actions:
+
+- Workflow: `Staging Sandbox Validation`
+- Validates:
+  - `baseline`
+  - `waiting_replies`
+  - `activity_burst`
+  - `stalled_search`
+- Optional:
+  - `prepare_world=true`
+  - `focal_user_id=<your-staging-user-uuid>`
+
+This workflow uploads one JSON artifact per scenario plus a combined markdown summary.
 
 Reset the world:
 
@@ -71,3 +109,4 @@ pnpm playground:sandbox -- --action=reset --world-id=design-sandbox-v1
 3. Join your real staging user into the world.
 4. Open mobile or web on staging.
 5. Use `tick` to generate more activity while testing notifications, chats, and home-thread behavior.
+6. Use `scenario` to jump directly between baseline, waiting, burst, and stalled-search states.

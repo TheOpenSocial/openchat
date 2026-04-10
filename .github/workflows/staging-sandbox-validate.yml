@@ -1,0 +1,136 @@
+name: Staging Sandbox Validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      world_id:
+        description: "Sandbox world id"
+        required: false
+        default: design-sandbox-v1
+        type: string
+      prepare_world:
+        description: "Create or reset the world before validation"
+        required: false
+        default: false
+        type: boolean
+      focal_user_id:
+        description: "Required when prepare_world=true to join a focal user before validation"
+        required: false
+        type: string
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  staging-sandbox-validate:
+    name: Validate Staging Sandbox Daily Loop
+    runs-on: [self-hosted, linux, x64, opensocial-prod]
+    environment: staging
+    timeout-minutes: 30
+    concurrency:
+      group: staging-sandbox-validate
+      cancel-in-progress: false
+    env:
+      ARTIFACT_ROOT: .artifacts/staging-sandbox-validate/${{ github.run_id }}
+      PLAYGROUND_BASE_URL: ${{ secrets.STAGING_API_BASE_URL || secrets.API_BASE_URL || 'https://api.opensocial.so' }}
+      PLAYGROUND_ADMIN_USER_ID: ${{ secrets.STAGING_SMOKE_ADMIN_USER_ID || secrets.SMOKE_ADMIN_USER_ID }}
+      PLAYGROUND_ADMIN_ROLE: admin
+      PLAYGROUND_ADMIN_API_KEY: ${{ secrets.STAGING_SMOKE_ADMIN_API_KEY || secrets.SMOKE_ADMIN_API_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate Staging Sandbox Credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=0
+          for key in PLAYGROUND_BASE_URL PLAYGROUND_ADMIN_USER_ID PLAYGROUND_ADMIN_API_KEY; do
+            if [[ -z "${!key:-}" ]]; then
+              echo "Missing required env: ${key}" >&2
+              missing=1
+            fi
+          done
+          if [[ "${missing}" -ne 0 ]]; then
+            exit 1
+          fi
+
+      - name: Prepare Sandbox World
+        if: ${{ inputs.prepare_world }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${ARTIFACT_ROOT}"
+          if [[ -z "${{ inputs.focal_user_id }}" ]]; then
+            echo "focal_user_id is required when prepare_world=true" >&2
+            exit 1
+          fi
+
+          node scripts/playground-sandbox-world.mjs \
+            --action=create \
+            --world-id="${{ inputs.world_id }}" \
+            --focal-user-id="${{ inputs.focal_user_id }}" \
+            --reset=1 | tee "${ARTIFACT_ROOT}/prepare-create.json"
+
+          node scripts/playground-sandbox-world.mjs \
+            --action=join \
+            --world-id="${{ inputs.world_id }}" \
+            --focal-user-id="${{ inputs.focal_user_id }}" | tee "${ARTIFACT_ROOT}/prepare-join.json"
+
+      - name: Run Sandbox Scenario Validations
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${ARTIFACT_ROOT}"
+          summary_file="${ARTIFACT_ROOT}/summary.md"
+          : > "${summary_file}"
+
+          scenarios=(baseline waiting_replies activity_burst stalled_search)
+
+          {
+            echo "# Staging Sandbox Validation"
+            echo
+            echo "- world_id: \`${{ inputs.world_id }}\`"
+            echo "- run_id: \`${{ github.run_id }}\`"
+            echo "- prepare_world: \`${{ inputs.prepare_world }}\`"
+            echo
+          } >> "${summary_file}"
+
+          for scenario in "${scenarios[@]}"; do
+            output_file="${ARTIFACT_ROOT}/${scenario}.json"
+            echo "Validating scenario: ${scenario}"
+            node scripts/playground-sandbox-world.mjs \
+              --action=validate \
+              --world-id="${{ inputs.world_id }}" \
+              --scenario="${scenario}" | tee "${output_file}"
+
+            {
+              echo "## ${scenario}"
+              echo
+              echo '```json'
+              cat "${output_file}"
+              echo
+              echo '```'
+              echo
+            } >> "${summary_file}"
+          done
+
+      - name: Publish Sandbox Validation Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-sandbox-validate-${{ github.run_id }}
+          path: .artifacts/staging-sandbox-validate/${{ github.run_id }}
+          if-no-files-found: warn
