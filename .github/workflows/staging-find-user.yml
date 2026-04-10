@@ -16,12 +16,8 @@ on:
 
 jobs:
   staging-find-user:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, opensocial-prod]
     environment: staging
-    env:
-      DEPLOY_HOST: ${{ secrets.STAGING_DEPLOY_HOST }}
-      DEPLOY_USER: ${{ secrets.STAGING_DEPLOY_USER || 'ec2-user' }}
-      SSH_KEY_PATH: /tmp/staging_deploy_key
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -37,39 +33,19 @@ jobs:
           node-version: 22
           package-manager-cache: false
 
-      - name: Prepare deploy SSH key
-        shell: bash
-        env:
-          STAGING_DEPLOY_SSH_KEY: ${{ secrets.STAGING_DEPLOY_SSH_KEY }}
-        run: |
-          set -euo pipefail
-          if [[ -z "${STAGING_DEPLOY_SSH_KEY:-}" ]]; then
-            echo "STAGING_DEPLOY_SSH_KEY secret is required." >&2
-            exit 1
-          fi
-          printf "%s\n" "$STAGING_DEPLOY_SSH_KEY" > "$SSH_KEY_PATH"
-          chmod 600 "$SSH_KEY_PATH"
-
       - name: Install root dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Hydrate DATABASE_URL from staging deploy env
-        if: ${{ env.DATABASE_URL == '' }}
+      - name: Hydrate DATABASE_URL from local staging deploy env
         shell: bash
-        env:
-          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL || secrets.DATABASE_URL }}
         run: |
           set -euo pipefail
-          db_line_remote="$(
-            ssh -i "$SSH_KEY_PATH" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "${DEPLOY_USER}@${DEPLOY_HOST}" \
-              "set -euo pipefail; f='/opt/opensocial/.env.production'; if [[ -f \"\$f\" ]]; then grep -m1 '^DATABASE_URL=' \"\$f\" || true; fi" \
-            || true
-          )"
-          if [[ -n "$db_line_remote" ]]; then
-            echo "DATABASE_URL=${db_line_remote#DATABASE_URL=}" >> "$GITHUB_ENV"
+          db_line="$(grep -m1 '^DATABASE_URL=' /opt/opensocial/.env.production || true)"
+          if [[ -n "$db_line" ]]; then
+            echo "DATABASE_URL=${db_line#DATABASE_URL=}" >> "$GITHUB_ENV"
             exit 0
           fi
-          echo "DATABASE_URL could not be hydrated from staging deploy env." >&2
+          echo "DATABASE_URL could not be hydrated from /opt/opensocial/.env.production." >&2
           exit 1
 
       - name: Query staging users
