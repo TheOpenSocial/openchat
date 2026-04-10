@@ -107,7 +107,7 @@ test("system eval runner composes simulated suites and baseline thresholds", asy
           },
         };
       },
-      async runLiveSanitizedWorkflowReplay() {
+      async runLiveBroadReplay() {
         throw new Error(
           "live workflow replay should not run in default system gate mode",
         );
@@ -221,7 +221,7 @@ test("system eval runner fails thresholded suites explicitly", async () => {
           },
         };
       },
-      async runLiveSanitizedWorkflowReplay() {
+      async runLiveBroadReplay() {
         throw new Error(
           "live workflow replay should not run in threshold failure unit test",
         );
@@ -248,7 +248,7 @@ test("system eval runner fails thresholded suites explicitly", async () => {
   assert.ok(replayFailure.reasons.includes("average_score_below_threshold"));
 });
 
-test("system eval runner can use live sanitized workflow replay instead of static sanitized pack", async () => {
+test("system eval runner can use live broad replay instead of static sanitized pack", async () => {
   const root = mkdtempSync(
     path.join(os.tmpdir(), "system-evals-live-workflow-"),
   );
@@ -328,13 +328,19 @@ test("system eval runner can use live sanitized workflow replay instead of stati
           },
         };
       },
-      async runLiveSanitizedWorkflowReplay() {
+      async runLiveBroadReplay() {
         liveCalled = true;
         return {
-          fetch: {
+          workflowReplay: {
+            fetch: {
+              baseUrl: "https://example.test",
+            },
+            sanitizedExportPath: path.join(root, "live.sanitized.jsonl"),
+          },
+          snapshotFetch: {
             baseUrl: "https://example.test",
           },
-          sanitizedExportPath: path.join(root, "live.sanitized.jsonl"),
+          combinedReplayPath: path.join(root, "live-broad-replay.jsonl"),
           replay: {
             runId: "live-replay-run",
             summary: {
@@ -343,7 +349,7 @@ test("system eval runner can use live sanitized workflow replay instead of stati
               averageScore: 1,
               primaryFailureReason: "none",
               source: "historical-export",
-              corpusSuite: "live-sanitized-workflow-replay",
+              corpusSuite: "live-broad-replay",
             },
           },
         };
@@ -358,7 +364,7 @@ test("system eval runner can use live sanitized workflow replay instead of stati
     .split("\n")
     .map((line) => JSON.parse(line))
     .find((row) => row.suiteId === "replay-sanitized-runtime-export");
-  assert.equal(liveRow.corpusSuite, "live-sanitized-workflow-replay");
+  assert.equal(liveRow.corpusSuite, "live-broad-replay");
   assert.equal(liveRow.liveFetchBaseUrl, "https://example.test");
 });
 
@@ -449,7 +455,7 @@ test("system eval runner can include live social sim as a separate suite", async
           },
         };
       },
-      async runLiveSanitizedWorkflowReplay() {
+      async runLiveBroadReplay() {
         throw new Error(
           "live workflow replay should not run in live social sim unit test",
         );
@@ -564,7 +570,7 @@ test("system eval runner supports weighted gate score for mixed live suites", as
           },
         };
       },
-      async runLiveSanitizedWorkflowReplay() {
+      async runLiveBroadReplay() {
         throw new Error(
           "live workflow replay should not run in weighted gate unit test",
         );

@@ -12,7 +12,7 @@ import { resolveSharedAdminEnv } from "../shared/env.mjs";
 import { runSocialSimBenchmarkMatrix } from "../golden/social-sim-benchmark.mjs";
 import { runProductCriticalGoldens } from "../golden/product-critical-goldens.mjs";
 import { runReplayEvals } from "../replay/run-replay-evals.mjs";
-import { runLiveSanitizedWorkflowReplay } from "../replay/run-live-sanitized-workflow-replay.mjs";
+import { runLiveBroadReplay } from "../replay/run-live-broad-replay.mjs";
 
 const DEFAULT_BASELINE_PATH = "scripts/evals/system/system-baseline.json";
 const DEFAULT_HISTORICAL_CORPUS_PATH =
@@ -286,7 +286,7 @@ export async function runSystemEvals(
     runSocialSimBenchmarkMatrix,
     runProductCriticalGoldens,
     runReplayEvals,
-    runLiveSanitizedWorkflowReplay,
+    runLiveBroadReplay,
   },
 ) {
   const config = parseArgs(argv, env);
@@ -453,7 +453,7 @@ export async function runSystemEvals(
       replayRun.suiteId === "replay-sanitized-runtime-export"
     ) {
       const liveWorkflowReplayResult = await runStage(replayRun.suiteId, () =>
-        deps.runLiveSanitizedWorkflowReplay(
+        deps.runLiveBroadReplay(
           [
             `--export-output=${path.join(
               envelope.runDir,
@@ -465,6 +465,7 @@ export async function runSystemEvals(
               "suite-artifacts",
               "live-workflow-replay-export.sanitized.jsonl",
             )}`,
+            `--artifact-dir=${path.join(envelope.runDir, "suite-artifacts", "live-broad-replay")}`,
           ],
           env,
         ),
@@ -484,8 +485,13 @@ export async function runSystemEvals(
               "historical-export",
             corpusSuite:
               liveWorkflowReplayResult.replay.summary.corpusSuite ?? null,
-            liveFetchBaseUrl: liveWorkflowReplayResult.fetch.baseUrl ?? null,
-            sanitizedExportPath: liveWorkflowReplayResult.sanitizedExportPath,
+            liveFetchBaseUrl:
+              liveWorkflowReplayResult.workflowReplay.fetch?.baseUrl ??
+              liveWorkflowReplayResult.snapshotFetch.baseUrl ??
+              null,
+            sanitizedExportPath:
+              liveWorkflowReplayResult.workflowReplay.sanitizedExportPath ?? null,
+            combinedReplayPath: liveWorkflowReplayResult.combinedReplayPath ?? null,
           },
         }),
       );
