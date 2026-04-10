@@ -1,0 +1,90 @@
+name: Staging Sandbox World
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Sandbox world action"
+        required: true
+        default: create
+        type: choice
+        options:
+          - create
+          - get
+          - join
+          - tick
+          - reset
+      world_id:
+        description: "Sandbox world id"
+        required: false
+        default: design-sandbox-v1
+        type: string
+      focal_user_id:
+        description: "Required for join; optional for create"
+        required: false
+        type: string
+      reset_first:
+        description: "Reset before create"
+        required: false
+        default: false
+        type: boolean
+      note:
+        description: "Optional tick note"
+        required: false
+        type: string
+
+jobs:
+  staging-sandbox-world:
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.7.1
+
+      - name: Install root dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Execute staging sandbox world action
+        env:
+          PLAYGROUND_BASE_URL: ${{ secrets.STAGING_API_BASE_URL || secrets.API_BASE_URL || 'https://api.opensocial.so' }}
+          PLAYGROUND_ADMIN_USER_ID: ${{ secrets.STAGING_SMOKE_ADMIN_USER_ID || secrets.SMOKE_ADMIN_USER_ID }}
+          PLAYGROUND_ADMIN_ROLE: ${{ secrets.STAGING_SMOKE_ADMIN_ROLE || secrets.SMOKE_ADMIN_ROLE || 'admin' }}
+          PLAYGROUND_ADMIN_API_KEY: ${{ secrets.STAGING_SMOKE_ADMIN_API_KEY || secrets.SMOKE_ADMIN_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          args=(
+            --action="${{ inputs.action }}"
+            --world-id="${{ inputs.world_id }}"
+          )
+
+          if [[ -n "${{ inputs.focal_user_id }}" ]]; then
+            args+=(--focal-user-id="${{ inputs.focal_user_id }}")
+          fi
+
+          if [[ "${{ inputs.reset_first }}" == "true" ]]; then
+            args+=(--reset=1)
+          fi
+
+          if [[ -n "${{ inputs.note }}" ]]; then
+            args+=(--note="${{ inputs.note }}")
+          fi
+
+          node scripts/playground-sandbox-world.mjs "${args[@]}" | tee sandbox-world-output.json
+
+      - name: Upload sandbox world output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-sandbox-world-output
+          path: sandbox-world-output.json
