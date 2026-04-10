@@ -31,6 +31,10 @@ function parseArgs(argv = process.argv.slice(2), env = process.env) {
       ),
     ),
     limit: normalizeString(flags.get("limit") ?? env.EVAL_REPLAY_EXPORT_LIMIT, "10"),
+    fetchLimit: normalizeString(
+      flags.get("fetch-limit") ?? env.EVAL_REPLAY_EXPORT_FETCH_LIMIT,
+      "50",
+    ),
     adminUserId: normalizeString(
       flags.get("admin-user-id") ?? shared.adminUserId,
       shared.adminUserId,
@@ -52,6 +56,11 @@ function parseArgs(argv = process.argv.slice(2), env = process.env) {
       shared.hostHeader,
     ),
   };
+}
+
+function toPositiveInt(value, fallback) {
+  const parsed = Number.parseInt(value ?? "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 function buildHeaders(config) {
@@ -126,6 +135,8 @@ function normalizeReplayCaseFromWorkflow(detail, index) {
     metadata: {
       workflowRunId: run.workflowRunId ?? null,
       traceId: run.traceId ?? null,
+      failureClass: failureTaxonomy,
+      domain: run.domain ?? null,
       replayability: run.replayability ?? null,
       health: run.health ?? null,
       stageStatusCounts: run.stageStatusCounts ?? null,
@@ -134,16 +145,72 @@ function normalizeReplayCaseFromWorkflow(detail, index) {
   };
 }
 
+function workflowSelectionScore(run) {
+  const health = normalizeString(run?.health, "unknown");
+  const domain = normalizeString(run?.domain, "unknown");
+  const replayability = normalizeString(run?.replayability, "unknown");
+  const sideEffects = Array.isArray(run?.sideEffects) ? run.sideEffects.length : 0;
+  let score = 0;
+  if (replayability === "replayable") score += 4;
+  if (health !== "healthy") score += 3;
+  if (domain !== "unknown") score += 2;
+  if (sideEffects > 0) score += 1;
+  return score;
+}
+
+export function selectDiverseWorkflowRuns(runs, limit) {
+  const target = toPositiveInt(limit, 10);
+  const pool = Array.isArray(runs) ? runs.slice() : [];
+  const selected = [];
+  const seenIds = new Set();
+  const seenDomains = new Set();
+  const seenHealth = new Set();
+
+  const sorted = pool.sort((left, right) => {
+    const delta = workflowSelectionScore(right) - workflowSelectionScore(left);
+    if (delta !== 0) return delta;
+    return normalizeString(left?.workflowRunId).localeCompare(
+      normalizeString(right?.workflowRunId),
+    );
+  });
+
+  function takeWhere(predicate) {
+    for (const run of sorted) {
+      const workflowRunId = normalizeString(run?.workflowRunId, "");
+      if (!workflowRunId || seenIds.has(workflowRunId)) continue;
+      if (!predicate(run)) continue;
+      selected.push(run);
+      seenIds.add(workflowRunId);
+      seenDomains.add(normalizeString(run?.domain, "unknown"));
+      seenHealth.add(normalizeString(run?.health, "unknown"));
+      if (selected.length >= target) return true;
+    }
+    return selected.length >= target;
+  }
+
+  takeWhere((run) => !seenDomains.has(normalizeString(run?.domain, "unknown")));
+  takeWhere((run) => !seenHealth.has(normalizeString(run?.health, "unknown")));
+  takeWhere((run) => normalizeString(run?.health, "unknown") !== "healthy");
+  takeWhere(() => true);
+
+  return selected.slice(0, target);
+}
+
 export async function fetchWorkflowReplayExport(
   argv = process.argv.slice(2),
   env = process.env,
   fetchImpl = fetch,
 ) {
   const config = parseArgs(argv, env);
+  const limit = toPositiveInt(config.limit, 10);
+  const fetchLimit = Math.max(toPositiveInt(config.fetchLimit, 50), limit);
   const headers = buildHeaders(config);
-  const listUrl = `${config.baseUrl}/api/admin/ops/agent-workflows?limit=${encodeURIComponent(config.limit)}&replayability=replayable`;
+  const listUrl = `${config.baseUrl}/api/admin/ops/agent-workflows?limit=${encodeURIComponent(fetchLimit)}&replayability=replayable`;
   const snapshot = await requestJson(fetchImpl, listUrl, headers);
-  const runs = Array.isArray(snapshot?.runs) ? snapshot.runs : [];
+  const runs = selectDiverseWorkflowRuns(
+    Array.isArray(snapshot?.runs) ? snapshot.runs : [],
+    limit,
+  );
 
   const details = [];
   for (const run of runs) {
@@ -161,6 +228,8 @@ export async function fetchWorkflowReplayExport(
     source: {
       baseUrl: config.baseUrl,
       type: "agent-workflows",
+      requestedRunCount: limit,
+      fetchedRunCount: Array.isArray(snapshot?.runs) ? snapshot.runs.length : 0,
       runCount: details.length,
     },
     conversations: details.map((detail, index) =>

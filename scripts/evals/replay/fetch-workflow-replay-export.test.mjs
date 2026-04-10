@@ -4,7 +4,10 @@ import os from "node:os";
 import path from "node:path";
 import { mkdtempSync, readFileSync } from "node:fs";
 
-import { fetchWorkflowReplayExport } from "./fetch-workflow-replay-export.mjs";
+import {
+  fetchWorkflowReplayExport,
+  selectDiverseWorkflowRuns,
+} from "./fetch-workflow-replay-export.mjs";
 
 test("fetch workflow replay export writes replayable conversation export", async () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "workflow-replay-export-"));
@@ -80,4 +83,24 @@ test("fetch workflow replay export writes replayable conversation export", async
     "planner",
     "compose-response",
   ]);
+  assert.equal(written.source.requestedRunCount, 2);
+  assert.equal(written.source.fetchedRunCount, 1);
+});
+
+test("selectDiverseWorkflowRuns prefers domain and health diversity before filling remainder", () => {
+  const selected = selectDiverseWorkflowRuns(
+    [
+      { workflowRunId: "wf-1", domain: "social", health: "healthy", replayability: "replayable" },
+      { workflowRunId: "wf-2", domain: "support", health: "warning", replayability: "replayable" },
+      { workflowRunId: "wf-3", domain: "social", health: "healthy", replayability: "replayable" },
+      { workflowRunId: "wf-4", domain: "finance", health: "healthy", replayability: "replayable" },
+      { workflowRunId: "wf-5", domain: "support", health: "critical", replayability: "replayable" },
+    ],
+    3,
+  );
+
+  assert.equal(selected.length, 3);
+  assert.ok(selected.some((entry) => entry.workflowRunId === "wf-2"));
+  assert.ok(selected.some((entry) => entry.workflowRunId === "wf-4"));
+  assert.equal(new Set(selected.map((entry) => entry.domain)).size, 3);
 });
