@@ -18,16 +18,73 @@ describe("AdminPlaygroundService", () => {
     const prisma = overrides.prisma ?? {
       user: {
         upsert: vi.fn().mockResolvedValue({}),
+        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
       },
       userProfile: {
         upsert: vi.fn().mockResolvedValue({}),
+        update: vi.fn().mockResolvedValue({}),
+        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+      userInterest: {
+        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+        createMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+      userTopic: {
+        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+        createMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+      userAvailabilityWindow: {
+        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+        createMany: vi.fn().mockResolvedValue({ count: 0 }),
       },
       agentThread: {
         findUnique: vi
           .fn()
           .mockResolvedValueOnce(null)
           .mockResolvedValue({ id: "thread" }),
+        update: vi.fn().mockResolvedValue({ id: "thread" }),
         create: vi.fn().mockResolvedValue({ id: "thread" }),
+        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+      agentMessage: {
+        upsert: vi.fn().mockResolvedValue({ id: "agent-message-1" }),
+        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+      connection: {
+        upsert: vi.fn().mockResolvedValue({}),
+        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+      connectionParticipant: {
+        upsert: vi.fn().mockResolvedValue({}),
+        findFirst: vi.fn().mockResolvedValue(null),
+        create: vi.fn().mockResolvedValue({}),
+        update: vi.fn().mockResolvedValue({}),
+        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+      chat: {
+        findUnique: vi.fn().mockResolvedValue(null),
+        create: vi.fn().mockResolvedValue({ id: "chat-1" }),
+        upsert: vi.fn().mockResolvedValue({ id: "chat-1" }),
+        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+      chatMessage: {
+        findUnique: vi.fn().mockResolvedValue(null),
+        create: vi.fn().mockResolvedValue({ id: "chat-message-1" }),
+        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+      intent: {
+        upsert: vi.fn().mockResolvedValue({ id: "intent-1" }),
+        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+      intentRequest: {
+        upsert: vi.fn().mockResolvedValue({ id: "request-1" }),
+        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+      notification: {
+        create: vi.fn().mockResolvedValue({ id: "notification-1" }),
+        upsert: vi.fn().mockResolvedValue({ id: "notification-service-1" }),
+        count: vi.fn().mockResolvedValue(3),
+        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
       },
     };
     const authService = overrides.authService ?? {
@@ -50,12 +107,24 @@ describe("AdminPlaygroundService", () => {
     const adminAuditService = overrides.adminAuditService ?? {
       recordAction: vi.fn().mockResolvedValue({}),
     };
+    const chatsService = overrides.chatsService ?? {
+      createMessage: vi
+        .fn()
+        .mockResolvedValue({ id: "chat-message-service-1" }),
+    };
+    const notificationsService = overrides.notificationsService ?? {
+      createInAppNotification: vi
+        .fn()
+        .mockResolvedValue({ id: "notification-service-1" }),
+    };
 
     const service = new AdminPlaygroundService(
       prisma,
       authService,
       appCacheService,
       adminAuditService,
+      chatsService,
+      notificationsService,
     );
 
     return {
@@ -64,6 +133,8 @@ describe("AdminPlaygroundService", () => {
       authService,
       appCacheService,
       adminAuditService,
+      chatsService,
+      notificationsService,
       cacheStore,
     };
   }
@@ -142,5 +213,33 @@ describe("AdminPlaygroundService", () => {
         canaryVerdict: "critical",
       }),
     );
+  });
+
+  it("creates, joins, and resets the sandbox world", async () => {
+    const { service, prisma } = createService();
+
+    const created = await service.createSandboxWorld(
+      { worldId: "design-sandbox-v1" },
+      ACTOR,
+    );
+    const joined = await service.joinSandboxWorld(
+      "design-sandbox-v1",
+      "77777777-7777-4777-8777-777777777777",
+      ACTOR,
+    );
+    const ticked = await service.tickSandboxWorld(
+      "design-sandbox-v1",
+      { note: "Synthetic follow-up" },
+      ACTOR,
+    );
+    const reset = await service.resetSandboxWorld("design-sandbox-v1", ACTOR);
+
+    expect(created.worldId).toBe("design-sandbox-v1");
+    expect(joined.status).toBe("joined");
+    expect(ticked.notificationCount).toBeGreaterThanOrEqual(1);
+    expect(reset.status).toBe("reset");
+    expect(prisma.connection.upsert).toHaveBeenCalled();
+    expect(prisma.intent.upsert).toHaveBeenCalled();
+    expect(prisma.notification.upsert).toHaveBeenCalled();
   });
 });

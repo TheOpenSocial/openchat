@@ -5,6 +5,7 @@ import {
   ForbiddenException,
   Get,
   Headers,
+  Param,
   Post,
   Query,
 } from "@nestjs/common";
@@ -21,6 +22,13 @@ import {
 import { PublicRoute } from "../auth/public-route.decorator.js";
 import { ok } from "../common/api-response.js";
 import { parseRequestPayload } from "../common/validation.js";
+import {
+  adminSandboxWorldCreateBodySchema,
+  adminSandboxWorldIdSchema,
+  adminSandboxWorldJoinBodySchema,
+  adminSandboxWorldSummarySchema,
+  adminSandboxWorldTickBodySchema,
+} from "./admin-sandbox-world.schemas.js";
 import { AdminPlaygroundService } from "./admin-playground.service.js";
 import type { AdminRole } from "./admin-audit.service.js";
 
@@ -131,6 +139,116 @@ export class AdminPlaygroundController {
     return ok(
       parseRequestPayload(adminPlaygroundRotateProbeTokenResponseSchema, data),
     );
+  }
+
+  @Post("worlds")
+  async createSandboxWorld(
+    @Body() body: unknown,
+    @Headers("x-admin-user-id") adminUserIdHeader?: string,
+    @Headers("x-admin-role") adminRoleHeader?: string,
+  ) {
+    this.ensurePlaygroundEnabled();
+    const actor = this.parseAdminContext(adminUserIdHeader, adminRoleHeader, [
+      "admin",
+    ]);
+    this.ensureMutationAllowed(actor.adminUserId);
+    const payload = parseRequestPayload(
+      adminSandboxWorldCreateBodySchema,
+      body,
+    );
+    const data = await this.playgroundService.createSandboxWorld(
+      payload,
+      actor,
+    );
+    return ok(parseRequestPayload(adminSandboxWorldSummarySchema, data));
+  }
+
+  @Get("worlds/:worldId")
+  async getSandboxWorld(
+    @Param("worldId") worldIdParam: string,
+    @Headers("x-admin-user-id") adminUserIdHeader?: string,
+    @Headers("x-admin-role") adminRoleHeader?: string,
+  ) {
+    this.ensurePlaygroundEnabled();
+    const actor = this.parseAdminContext(adminUserIdHeader, adminRoleHeader, [
+      "admin",
+      "support",
+    ]);
+    const worldId = parseRequestPayload(
+      adminSandboxWorldIdSchema,
+      worldIdParam,
+    );
+    const data = await this.playgroundService.getSandboxWorld(worldId, actor);
+    return ok(parseRequestPayload(adminSandboxWorldSummarySchema, data));
+  }
+
+  @Post("worlds/:worldId/reset")
+  async resetSandboxWorld(
+    @Param("worldId") worldIdParam: string,
+    @Headers("x-admin-user-id") adminUserIdHeader?: string,
+    @Headers("x-admin-role") adminRoleHeader?: string,
+  ) {
+    this.ensurePlaygroundEnabled();
+    const actor = this.parseAdminContext(adminUserIdHeader, adminRoleHeader, [
+      "admin",
+    ]);
+    this.ensureMutationAllowed(actor.adminUserId);
+    const worldId = parseRequestPayload(
+      adminSandboxWorldIdSchema,
+      worldIdParam,
+    );
+    const data = await this.playgroundService.resetSandboxWorld(worldId, actor);
+    return ok(data);
+  }
+
+  @Post("worlds/:worldId/tick")
+  async tickSandboxWorld(
+    @Param("worldId") worldIdParam: string,
+    @Body() body: unknown,
+    @Headers("x-admin-user-id") adminUserIdHeader?: string,
+    @Headers("x-admin-role") adminRoleHeader?: string,
+  ) {
+    this.ensurePlaygroundEnabled();
+    const actor = this.parseAdminContext(adminUserIdHeader, adminRoleHeader, [
+      "admin",
+    ]);
+    this.ensureMutationAllowed(actor.adminUserId);
+    const worldId = parseRequestPayload(
+      adminSandboxWorldIdSchema,
+      worldIdParam,
+    );
+    const payload = parseRequestPayload(adminSandboxWorldTickBodySchema, body);
+    const data = await this.playgroundService.tickSandboxWorld(
+      worldId,
+      payload,
+      actor,
+    );
+    return ok(parseRequestPayload(adminSandboxWorldSummarySchema, data));
+  }
+
+  @Post("worlds/:worldId/join")
+  async joinSandboxWorld(
+    @Param("worldId") worldIdParam: string,
+    @Body() body: unknown,
+    @Headers("x-admin-user-id") adminUserIdHeader?: string,
+    @Headers("x-admin-role") adminRoleHeader?: string,
+  ) {
+    this.ensurePlaygroundEnabled();
+    const actor = this.parseAdminContext(adminUserIdHeader, adminRoleHeader, [
+      "admin",
+    ]);
+    this.ensureMutationAllowed(actor.adminUserId);
+    const worldId = parseRequestPayload(
+      adminSandboxWorldIdSchema,
+      worldIdParam,
+    );
+    const payload = parseRequestPayload(adminSandboxWorldJoinBodySchema, body);
+    const data = await this.playgroundService.joinSandboxWorld(
+      worldId,
+      payload.focalUserId,
+      actor,
+    );
+    return ok(parseRequestPayload(adminSandboxWorldSummarySchema, data));
   }
 
   @Get("artifacts")

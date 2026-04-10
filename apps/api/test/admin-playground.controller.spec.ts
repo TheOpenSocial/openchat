@@ -65,6 +65,111 @@ function createController(overrides: Partial<Record<string, any>> = {}) {
       generatedAt: "2026-03-26T00:00:00.000Z",
       notes: [],
     }),
+    createSandboxWorld: vi.fn().mockResolvedValue({
+      worldId: "design-sandbox-v1",
+      fixtureLabel: "Design Sandbox v1",
+      status: "ready",
+      createdAt: "2026-03-26T00:00:00.000Z",
+      updatedAt: "2026-03-26T00:00:00.000Z",
+      joinedAt: null,
+      focalUserId: "77777777-7777-4777-8777-777777777777",
+      actorCount: 7,
+      directChatCount: 2,
+      groupChatCount: 1,
+      notificationCount: 3,
+      syntheticActors: [],
+      notes: [],
+      seededEntityIds: {
+        syntheticUserIds: [],
+        connectionIds: [],
+        chatIds: [],
+        chatMessageIds: [],
+        notificationIds: [],
+        intentIds: [],
+        intentRequestIds: [],
+        agentMessageIds: [],
+      },
+    }),
+    getSandboxWorld: vi.fn().mockResolvedValue({
+      worldId: "design-sandbox-v1",
+      fixtureLabel: "Design Sandbox v1",
+      status: "ready",
+      createdAt: "2026-03-26T00:00:00.000Z",
+      updatedAt: "2026-03-26T00:00:00.000Z",
+      joinedAt: null,
+      focalUserId: "77777777-7777-4777-8777-777777777777",
+      actorCount: 7,
+      directChatCount: 2,
+      groupChatCount: 1,
+      notificationCount: 3,
+      syntheticActors: [],
+      notes: [],
+      seededEntityIds: {
+        syntheticUserIds: [],
+        connectionIds: [],
+        chatIds: [],
+        chatMessageIds: [],
+        notificationIds: [],
+        intentIds: [],
+        intentRequestIds: [],
+        agentMessageIds: [],
+      },
+    }),
+    resetSandboxWorld: vi.fn().mockResolvedValue({
+      worldId: "design-sandbox-v1",
+      status: "reset",
+      resetAt: "2026-03-26T00:00:00.000Z",
+    }),
+    tickSandboxWorld: vi.fn().mockResolvedValue({
+      worldId: "design-sandbox-v1",
+      fixtureLabel: "Design Sandbox v1",
+      status: "joined",
+      createdAt: "2026-03-26T00:00:00.000Z",
+      updatedAt: "2026-03-26T00:00:05.000Z",
+      joinedAt: "2026-03-26T00:00:00.000Z",
+      focalUserId: "77777777-7777-4777-8777-777777777777",
+      actorCount: 7,
+      directChatCount: 2,
+      groupChatCount: 1,
+      notificationCount: 4,
+      syntheticActors: [],
+      notes: [],
+      seededEntityIds: {
+        syntheticUserIds: [],
+        connectionIds: [],
+        chatIds: [],
+        chatMessageIds: [],
+        notificationIds: [],
+        intentIds: [],
+        intentRequestIds: [],
+        agentMessageIds: [],
+      },
+    }),
+    joinSandboxWorld: vi.fn().mockResolvedValue({
+      worldId: "design-sandbox-v1",
+      fixtureLabel: "Design Sandbox v1",
+      status: "joined",
+      createdAt: "2026-03-26T00:00:00.000Z",
+      updatedAt: "2026-03-26T00:00:00.000Z",
+      joinedAt: "2026-03-26T00:00:00.000Z",
+      focalUserId: "77777777-7777-4777-8777-777777777777",
+      actorCount: 7,
+      directChatCount: 2,
+      groupChatCount: 1,
+      notificationCount: 3,
+      syntheticActors: [],
+      notes: [],
+      seededEntityIds: {
+        syntheticUserIds: [],
+        connectionIds: [],
+        chatIds: [],
+        chatMessageIds: [],
+        notificationIds: [],
+        intentIds: [],
+        intentRequestIds: [],
+        agentMessageIds: [],
+      },
+    }),
     listArtifacts: vi.fn().mockResolvedValue({
       generatedAt: "2026-03-26T00:00:00.000Z",
       artifacts: [],
@@ -160,5 +265,54 @@ describe("AdminPlaygroundController", () => {
     );
     expect(response.data.layer).toBe("verification");
     expect(response.data.status).toBe("passed");
+  });
+
+  it("creates and reads a sandbox world", async () => {
+    const { controller, service } = createController();
+    const created = (await controller.createSandboxWorld(
+      {},
+      ADMIN_USER_ID,
+      "admin",
+    )) as any;
+    const fetched = (await controller.getSandboxWorld(
+      "design-sandbox-v1",
+      ADMIN_USER_ID,
+      "support",
+    )) as any;
+
+    expect(service.createSandboxWorld).toHaveBeenCalled();
+    expect(service.getSandboxWorld).toHaveBeenCalledWith("design-sandbox-v1", {
+      adminUserId: ADMIN_USER_ID,
+      role: "support",
+    });
+    expect(created.data.worldId).toBe("design-sandbox-v1");
+    expect(fetched.data.status).toBe("ready");
+  });
+
+  it("joins and ticks a sandbox world", async () => {
+    const { controller, service } = createController();
+    const focalUserId = "77777777-7777-4777-8777-777777777777";
+
+    const joined = (await controller.joinSandboxWorld(
+      "design-sandbox-v1",
+      { focalUserId },
+      ADMIN_USER_ID,
+      "admin",
+    )) as any;
+    const ticked = (await controller.tickSandboxWorld(
+      "design-sandbox-v1",
+      { note: "Synthetic follow-up" },
+      ADMIN_USER_ID,
+      "admin",
+    )) as any;
+
+    expect(service.joinSandboxWorld).toHaveBeenCalledWith(
+      "design-sandbox-v1",
+      focalUserId,
+      { adminUserId: ADMIN_USER_ID, role: "admin" },
+    );
+    expect(service.tickSandboxWorld).toHaveBeenCalled();
+    expect(joined.data.status).toBe("joined");
+    expect(ticked.data.notificationCount).toBe(4);
   });
 });
