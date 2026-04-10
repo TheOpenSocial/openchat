@@ -492,6 +492,49 @@ jobs:
             exit "$status"
           fi
 
+      - name: Verify staging sandbox daily-loop scenarios
+        env:
+          PLAYGROUND_BASE_URL: https://api.opensocial.so
+          PLAYGROUND_ADMIN_USER_ID: ${{ secrets.STAGING_SMOKE_ADMIN_USER_ID || secrets.SMOKE_ADMIN_USER_ID }}
+          PLAYGROUND_ADMIN_ROLE: admin
+          PLAYGROUND_ADMIN_API_KEY: ${{ secrets.STAGING_SMOKE_ADMIN_API_KEY || secrets.SMOKE_ADMIN_API_KEY }}
+          ARTIFACT_ROOT: .artifacts/staging-sandbox-validate/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          mkdir -p "${ARTIFACT_ROOT}"
+          summary_file="${ARTIFACT_ROOT}/summary.md"
+          : > "${summary_file}"
+
+          scenarios=(baseline waiting_replies activity_burst stalled_search)
+
+          {
+            echo "# Staging Sandbox Validation"
+            echo
+            echo "- world_id: \`design-sandbox-v1\`"
+            echo "- source: \`deploy-staging verify-staging\`"
+            echo "- run_id: \`${{ github.run_id }}\`"
+            echo
+          } >> "${summary_file}"
+
+          for scenario in "${scenarios[@]}"; do
+            output_file="${ARTIFACT_ROOT}/${scenario}.json"
+            echo "Validating sandbox scenario: ${scenario}"
+            node scripts/playground-sandbox-world.mjs \
+              --action=validate \
+              --world-id="design-sandbox-v1" \
+              --scenario="${scenario}" | tee "${output_file}"
+
+            {
+              echo "## ${scenario}"
+              echo
+              echo '```json'
+              cat "${output_file}"
+              echo
+              echo '```'
+              echo
+            } >> "${summary_file}"
+          done
+
       - name: Upload verification artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -502,3 +545,4 @@ jobs:
             /tmp/openchat-agent-suite-verification-latest.json
             .artifacts/backend-ops-pack/**/*.json
             .artifacts/agent-test-suite/**/*.json
+            .artifacts/staging-sandbox-validate/${{ github.run_id }}/**/*
