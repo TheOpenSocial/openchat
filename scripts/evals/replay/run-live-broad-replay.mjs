@@ -3,7 +3,9 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { fetchAgentWorkflowsSnapshot } from "../online/fetch-agent-workflows-snapshot.mjs";
 import { fetchAgenticEvalSnapshot } from "../online/fetch-agentic-evals-snapshot.mjs";
+import { convertAgentWorkflowsSnapshotToReplay } from "./convert-agent-workflows-snapshot-to-replay.mjs";
 import { convertAgenticSnapshotToReplay } from "./convert-agentic-snapshot-to-replay.mjs";
 import { runLiveSanitizedWorkflowReplay } from "./run-live-sanitized-workflow-replay.mjs";
 import { runReplayEvals } from "./run-replay-evals.mjs";
@@ -27,6 +29,8 @@ function parseArgs(argv = process.argv.slice(2), env = process.env) {
   return {
     workflowExportPath: path.join(rootDir, "live-workflow-replay-export.json"),
     workflowSanitizedPath: path.join(rootDir, "live-workflow-replay-export.sanitized.jsonl"),
+    workflowSnapshotPath: path.join(rootDir, "agent-workflows-snapshot.json"),
+    workflowSnapshotReplayPath: path.join(rootDir, "agent-workflows-snapshot.replay.jsonl"),
     snapshotPath: path.join(rootDir, "agentic-evals-snapshot.json"),
     snapshotReplayPath: path.join(rootDir, "agentic-evals-snapshot.replay.jsonl"),
     combinedReplayPath: path.join(rootDir, "live-broad-replay.jsonl"),
@@ -54,7 +58,9 @@ export async function runLiveBroadReplay(
   argv = process.argv.slice(2),
   env = process.env,
   deps = {
+    fetchAgentWorkflowsSnapshot,
     fetchAgenticEvalSnapshot,
+    convertAgentWorkflowsSnapshotToReplay,
     convertAgenticSnapshotToReplay,
     runLiveSanitizedWorkflowReplay,
     runReplayEvals,
@@ -72,6 +78,18 @@ export async function runLiveBroadReplay(
     env,
   );
 
+  const workflowSnapshotFetch = await deps.fetchAgentWorkflowsSnapshot(
+    [`--output=${config.workflowSnapshotPath}`, ...passthroughArgs],
+    env,
+  );
+  const workflowSnapshotReplay = await deps.convertAgentWorkflowsSnapshotToReplay(
+    [
+      `--input=${config.workflowSnapshotPath}`,
+      `--output=${config.workflowSnapshotReplayPath}`,
+    ],
+    env,
+  );
+
   const snapshotFetch = await deps.fetchAgenticEvalSnapshot(
     [`--output=${config.snapshotPath}`, ...passthroughArgs],
     env,
@@ -83,6 +101,7 @@ export async function runLiveBroadReplay(
 
   const combinedRows = [
     ...readJsonLines(config.workflowSanitizedPath),
+    ...readJsonLines(config.workflowSnapshotReplayPath),
     ...readJsonLines(config.snapshotReplayPath),
   ];
   writeFileSync(config.combinedReplayPath, `${combinedRows.join("\n")}\n`, "utf8");
@@ -94,6 +113,8 @@ export async function runLiveBroadReplay(
 
   return {
     workflowReplay,
+    workflowSnapshotFetch,
+    workflowSnapshotReplay,
     snapshotFetch,
     snapshotReplay,
     replay,
@@ -108,6 +129,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       {
         combinedReplayPath: result.combinedReplayPath,
         workflowReplaySummary: result.workflowReplay.replay.summary,
+        workflowSnapshotFetch: result.workflowSnapshotFetch,
         snapshotFetch: result.snapshotFetch,
         replaySummary: result.replay.summary,
       },
