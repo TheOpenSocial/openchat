@@ -165,11 +165,17 @@ export class AdminController {
       payload.smokeBaseUrl.trim().length > 0
         ? payload.smokeBaseUrl.trim()
         : undefined;
+    const smokeUserId =
+      typeof payload.smokeUserId === "string" &&
+      payload.smokeUserId.trim().length > 0
+        ? payload.smokeUserId.trim()
+        : undefined;
 
     const session = await this.adminPlaygroundService.bootstrap(
       {
         laneId,
         smokeBaseUrl,
+        smokeUserId,
       },
       {
         adminUserId,
@@ -201,6 +207,11 @@ export class AdminController {
       payload.smokeBaseUrl.trim().length > 0
         ? payload.smokeBaseUrl.trim()
         : undefined;
+    const smokeUserId =
+      typeof payload.smokeUserId === "string" &&
+      payload.smokeUserId.trim().length > 0
+        ? payload.smokeUserId.trim()
+        : undefined;
 
     if (!this.adminPlaygroundService) {
       throw new NotFoundException("playground service unavailable");
@@ -210,6 +221,7 @@ export class AdminController {
       {
         laneId,
         smokeBaseUrl,
+        smokeUserId,
       },
       admin,
     );

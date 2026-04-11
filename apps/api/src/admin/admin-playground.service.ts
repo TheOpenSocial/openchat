@@ -20,6 +20,7 @@ type BootstrapInput = {
   rotateProbeToken?: boolean;
   laneId?: string;
   smokeBaseUrl?: string;
+  smokeUserId?: string;
 };
 
 type RunSuiteInput = {
@@ -148,15 +149,16 @@ export class AdminPlaygroundService {
     const traceId = randomUUID();
     const workflowRunId = `admin:playground:bootstrap:${runId}`;
 
+    const requestedSmokeUserId = input.smokeUserId?.trim();
     const smokeUserId = this.resolveStableUuid(
-      process.env.PLAYGROUND_SMOKE_USER_ID,
+      requestedSmokeUserId || process.env.PLAYGROUND_SMOKE_USER_ID,
       "77777777-7777-4777-8777-777777777777",
     );
     const smokeAdminUserId = this.resolveStableUuid(
       process.env.PLAYGROUND_SMOKE_ADMIN_USER_ID,
       "88888888-8888-4888-8888-888888888888",
     );
-    const smokeThreadId = this.resolveStableUuid(
+    const defaultSmokeThreadId = this.resolveStableUuid(
       process.env.PLAYGROUND_SMOKE_THREAD_ID,
       "99999999-9999-4999-8999-999999999999",
     );
@@ -166,8 +168,20 @@ export class AdminPlaygroundService {
       `verification-lane-${smokeUserId.slice(0, 8)}`;
     const baseUrl = input.smokeBaseUrl?.trim() || this.resolveBaseUrl();
 
-    await this.ensureUser(smokeUserId, "Playground Smoke User");
+    const existingSmokeUser = await this.prisma.user.findUnique({
+      where: { id: smokeUserId },
+      select: { displayName: true, email: true },
+    });
+    const smokeDisplayName =
+      existingSmokeUser?.displayName?.trim() || "Playground Smoke User";
+    await this.ensureUser(smokeUserId, smokeDisplayName);
     await this.ensureUser(smokeAdminUserId, "Playground Smoke Admin");
+    const existingSmokeThread = await this.prisma.agentThread.findFirst({
+      where: { userId: smokeUserId },
+      select: { id: true },
+      orderBy: { createdAt: "asc" },
+    });
+    const smokeThreadId = existingSmokeThread?.id || defaultSmokeThreadId;
     await this.ensureAgentThread(smokeThreadId, smokeUserId);
 
     const tokens = await this.authService.issueSessionTokens(smokeUserId, {
@@ -200,6 +214,10 @@ export class AdminPlaygroundService {
       SMOKE_USER_ID: smokeUserId,
       SMOKE_AGENT_THREAD_ID: smokeThreadId,
       SMOKE_ADMIN_USER_ID: smokeAdminUserId,
+      SMOKE_DISPLAY_NAME: smokeDisplayName,
+      ...(existingSmokeUser?.email?.trim()
+        ? { SMOKE_EMAIL: existingSmokeUser.email.trim() }
+        : {}),
       AGENTIC_BENCH_ACCESS_TOKEN: tokens.accessToken,
       AGENTIC_BENCH_USER_ID: smokeUserId,
       AGENTIC_BENCH_THREAD_ID: smokeThreadId,

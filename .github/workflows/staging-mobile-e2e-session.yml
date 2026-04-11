@@ -2,6 +2,11 @@ name: Staging Mobile E2E Session
 
 on:
   workflow_dispatch:
+    inputs:
+      smoke_user_id:
+        description: "Optional target user id for the emitted mobile session"
+        required: false
+        type: string
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -22,6 +27,7 @@ jobs:
       SMOKE_APPLICATION_KEY: ${{ secrets.STAGING_SMOKE_SESSION_APPLICATION_KEY || secrets.SMOKE_SESSION_APPLICATION_KEY }}
       SMOKE_APPLICATION_TOKEN: ${{ secrets.STAGING_SMOKE_SESSION_APPLICATION_TOKEN || secrets.SMOKE_SESSION_APPLICATION_TOKEN }}
       SMOKE_BOOTSTRAP_REQUIRED: "1"
+      SMOKE_TARGET_USER_ID: ${{ inputs.smoke_user_id }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5

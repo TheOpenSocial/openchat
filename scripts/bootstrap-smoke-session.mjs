@@ -9,6 +9,7 @@ const adminRole = (process.env.SMOKE_ADMIN_ROLE || "admin").trim();
 const adminApiKey = (process.env.SMOKE_ADMIN_API_KEY || "").trim();
 const applicationKey = (process.env.SMOKE_APPLICATION_KEY || "").trim();
 const applicationToken = (process.env.SMOKE_APPLICATION_TOKEN || "").trim();
+const targetUserId = (process.env.SMOKE_TARGET_USER_ID || "").trim();
 const required = process.env.SMOKE_BOOTSTRAP_REQUIRED !== "0";
 const maxAttempts = Math.max(
   1,
@@ -50,6 +51,7 @@ async function main() {
   console.log(`- applicationKey: ${applicationKey ? "set" : "unset"}`);
   console.log(`- applicationToken: ${applicationToken ? "set" : "unset"}`);
   console.log(`- hostHeader: ${hostHeader || "(unset)"}`);
+  console.log(`- targetUserId: ${targetUserId || "(unset)"}`);
 
   if (!baseUrl) {
     const message = "missing SMOKE_BASE_URL";
@@ -120,7 +122,13 @@ async function main() {
         const response = await fetch(candidate.url, {
           method: "POST",
           headers: candidate.headers,
-          body: JSON.stringify({}),
+          body: JSON.stringify(
+            targetUserId
+              ? {
+                  smokeUserId: targetUserId,
+                }
+              : {},
+          ),
         });
         const { payload, raw } = await readPayload(response);
 
@@ -164,7 +172,13 @@ async function main() {
           const fallbackResponse = await fetch(fallbackUrl, {
             method: "POST",
             headers: candidate.headers,
-            body: JSON.stringify({}),
+            body: JSON.stringify(
+              targetUserId
+                ? {
+                    smokeUserId: targetUserId,
+                  }
+                : {},
+            ),
           });
           const { payload: fallbackPayload, raw: fallbackRaw } =
             await readPayload(fallbackResponse);
