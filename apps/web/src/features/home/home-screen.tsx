@@ -595,13 +595,25 @@ export function HomeScreen() {
               <WorkspaceList>
                 {pendingSummary.intents.map((intent) => (
                   <WorkspaceListItem key={intent.intentId}>
-                    <p className="font-medium text-white/92">
-                      {intent.rawText}
-                    </p>
-                    <p className="mt-1 text-xs leading-5 text-ash">
-                      {intent.status} · pending {intent.requests.pending} ·
-                      accepted {intent.requests.accepted}
-                    </p>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <Link
+                          className="font-medium text-white/92 transition hover:text-amber-50"
+                          href={`/intents/${intent.intentId}`}
+                        >
+                          {intent.rawText}
+                        </Link>
+                        <p className="mt-1 text-xs leading-5 text-ash">
+                          {intent.status} · pending {intent.requests.pending} ·
+                          accepted {intent.requests.accepted}
+                        </p>
+                      </div>
+                      <Link href={`/intents/${intent.intentId}`}>
+                        <Button size="sm" type="button" variant="secondary">
+                          Open
+                        </Button>
+                      </Link>
+                    </div>
                   </WorkspaceListItem>
                 ))}
               </WorkspaceList>

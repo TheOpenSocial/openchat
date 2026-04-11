@@ -20,16 +20,7 @@ function iconNameForItem(item: ActivityItem) {
 }
 
 function eyebrowForItem(item: ActivityItem) {
-  switch (item.kind) {
-    case "request":
-      return item.status === "pending" ? "Request" : "Request update";
-    case "intent":
-      return item.status;
-    case "discovery":
-      return item.scoreLabel;
-    case "summary":
-      return "System";
-  }
+  return item.eyebrow;
 }
 
 export function ActivityRow({

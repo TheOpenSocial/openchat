@@ -1,5 +1,6 @@
 import { InjectQueue } from "@nestjs/bullmq";
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   Logger,
@@ -8,6 +9,7 @@ import {
 } from "@nestjs/common";
 import { OpenAIClient } from "@opensocial/openai";
 import { Prisma } from "@prisma/client";
+import { formatChatReplyBody, parseChatMessageBody } from "@opensocial/types";
 import { Queue } from "bullmq";
 import { randomUUID } from "node:crypto";
 import { AnalyticsService } from "../analytics/analytics.service.js";
@@ -15,6 +17,8 @@ import { PrismaService } from "../database/prisma.service.js";
 import { LaunchControlsService } from "../launch-controls/launch-controls.service.js";
 import { ModerationService } from "../moderation/moderation.service.js";
 import { PersonalizationService } from "../personalization/personalization.service.js";
+import { RealtimeEventsService } from "../realtime/realtime-events.service.js";
+import { PresenceService } from "../realtime/presence.service.js";
 
 const MESSAGE_IDEMPOTENCY_TTL_MS = 60 * 60 * 1000;
 const CHAT_SYNC_MAX_LIMIT = 200;
@@ -86,6 +90,10 @@ export class ChatsService {
     private readonly moderationService?: ModerationService,
     @Optional()
     private readonly personalizationService?: PersonalizationService,
+    @Optional()
+    private readonly realtimeEventsService?: RealtimeEventsService,
+    @Optional()
+    private readonly presenceService?: PresenceService,
   ) {
     this.openAIClient = new OpenAIClient({
       apiKey: process.env.OPENAI_API_KEY ?? "",
@@ -129,6 +137,7 @@ export class ChatsService {
       isSystem?: boolean;
       idempotencyKey?: string;
       moderationState?: "clean" | "flagged" | "blocked" | "review";
+      replyToMessageId?: string;
     },
   ) {
     this.pruneIdempotencyCache();
@@ -146,17 +155,40 @@ export class ChatsService {
       }
     }
 
-    let messageBody = body;
+    const parsedBody = parseChatMessageBody(body);
+    let messageBody = parsedBody.body;
     let moderationState = options?.moderationState;
     let pendingReviewTerms: string[] = [];
+    const replyToMessageId =
+      options?.replyToMessageId ?? parsedBody.reply?.messageId ?? null;
 
     if (!options?.isSystem) {
       await this.assertActiveParticipant(chatId, senderUserId);
+      if (replyToMessageId) {
+        if (!this.prisma.chatMessage?.findFirst) {
+          throw new NotFoundException("reply target not found");
+        }
+        const replyTarget = await this.prisma.chatMessage.findFirst({
+          where: {
+            id: replyToMessageId,
+            chatId,
+          },
+          select: {
+            id: true,
+          },
+        });
+        if (!replyTarget) {
+          throw new NotFoundException("reply target not found");
+        }
+      }
       const strictModerationEnabled =
         await this.isModerationStrictnessEnabled();
       const moderationSurfaceEnabled =
         await this.isMessageModerationSurfaceEnabled();
-      const prefilterModeration = this.evaluateTextModeration(body, false);
+      const prefilterModeration = this.evaluateTextModeration(
+        messageBody,
+        false,
+      );
       if (prefilterModeration.decision === "blocked") {
         await this.recordBlockedMessageModeration(
           chatId,
@@ -169,7 +201,7 @@ export class ChatsService {
         moderationState = "review";
       } else {
         const moderation = await this.evaluateMessageModeration(
-          body,
+          messageBody,
           strictModerationEnabled,
         );
         if (moderation.decision === "blocked") {
@@ -207,6 +239,7 @@ export class ChatsService {
         chatId,
         senderUserId,
         body: messageBody,
+        ...(replyToMessageId ? { replyToMessageId } : {}),
         ...(moderationState ? { moderationState } : {}),
       },
     });
@@ -265,7 +298,7 @@ export class ChatsService {
         chatId,
         senderUserId,
         messageId: message.id,
-        body,
+        body: messageBody,
         moderationState:
           moderationState === "review"
             ? "review"
@@ -309,6 +342,9 @@ export class ChatsService {
       chatId,
       uniqueMessages.map((message) => message.id),
     );
+    const reactionsByMessageId = await this.buildMessageReactionMap(
+      uniqueMessages.map((message) => message.id),
+    );
 
     const visibleMessages = uniqueMessages.filter((message) =>
       this.isMessageVisibleToViewer(message, viewerUserId),
@@ -316,6 +352,7 @@ export class ChatsService {
 
     return visibleMessages.map((message) => ({
       ...message,
+      reactions: reactionsByMessageId.get(message.id) ?? [],
       status: statusByMessageId.get(message.id) ?? {
         state: "sent",
         deliveredCount: 0,
@@ -323,6 +360,192 @@ export class ChatsService {
         pendingCount: 0,
       },
     }));
+  }
+
+  async listThreads(chatId: string, viewerUserId?: string) {
+    if (viewerUserId) {
+      await this.assertActiveParticipant(chatId, viewerUserId);
+    }
+    if (!this.prisma.chatMessage?.findMany) {
+      throw new NotFoundException("chat not found");
+    }
+
+    const messages = await this.prisma.chatMessage.findMany({
+      where: {
+        chatId,
+      },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    });
+    const uniqueMessages = this.dedupeMessages(messages);
+    const visibleMessages = uniqueMessages.filter((message) =>
+      this.isMessageVisibleToViewer(message, viewerUserId),
+    );
+    if (visibleMessages.length === 0) {
+      return {
+        chatId,
+        threads: [],
+      };
+    }
+
+    const parentByMessageId = new Map(
+      uniqueMessages.map((message) => [
+        message.id,
+        message.replyToMessageId ?? null,
+      ]),
+    );
+    const rootIdByMessageId = new Map<string, string>();
+    for (const message of uniqueMessages) {
+      rootIdByMessageId.set(
+        message.id,
+        this.resolveThreadRootMessageId(message.id, parentByMessageId),
+      );
+    }
+
+    const hydratedMessages = await this.hydrateMessagesForThreadResponse(
+      chatId,
+      visibleMessages,
+    );
+    const hydratedById = new Map(
+      hydratedMessages.map((message) => [message.id, message] as const),
+    );
+    const threadsByRootId = new Map<
+      string,
+      {
+        rootMessage: (typeof hydratedMessages)[number];
+        messages: (typeof hydratedMessages)[number][];
+      }
+    >();
+
+    for (const message of hydratedMessages) {
+      const rootId = rootIdByMessageId.get(message.id);
+      if (!rootId) {
+        continue;
+      }
+      const rootMessage = hydratedById.get(rootId);
+      if (!rootMessage) {
+        continue;
+      }
+      const existing = threadsByRootId.get(rootId);
+      if (existing) {
+        if (
+          !existing.messages.some(
+            (threadMessage) => threadMessage.id === message.id,
+          )
+        ) {
+          existing.messages.push(message);
+        }
+        continue;
+      }
+      threadsByRootId.set(rootId, {
+        rootMessage,
+        messages: [rootMessage, ...(message.id === rootId ? [] : [message])],
+      });
+    }
+
+    const threads = Array.from(threadsByRootId.values())
+      .map((thread) =>
+        this.buildThreadSummary(thread.rootMessage, thread.messages),
+      )
+      .filter((thread) => thread.replyCount > 0)
+      .sort((left, right) => {
+        if (left.lastActivityAt === right.lastActivityAt) {
+          return (
+            right.rootMessage.createdAt.getTime() -
+            left.rootMessage.createdAt.getTime()
+          );
+        }
+        return right.lastActivityAt.localeCompare(left.lastActivityAt);
+      });
+
+    return {
+      chatId,
+      threads,
+    };
+  }
+
+  async getThread(
+    chatId: string,
+    rootMessageId: string,
+    viewerUserId?: string,
+  ) {
+    if (viewerUserId) {
+      await this.assertActiveParticipant(chatId, viewerUserId);
+    }
+    if (!this.prisma.chatMessage?.findMany) {
+      throw new NotFoundException("thread not found");
+    }
+
+    const messages = await this.prisma.chatMessage.findMany({
+      where: {
+        chatId,
+      },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    });
+    const uniqueMessages = this.dedupeMessages(messages);
+    const targetMessage = uniqueMessages.find(
+      (message) => message.id === rootMessageId,
+    );
+    if (!targetMessage) {
+      throw new NotFoundException("thread not found");
+    }
+
+    const parentByMessageId = new Map(
+      uniqueMessages.map((message) => [
+        message.id,
+        message.replyToMessageId ?? null,
+      ]),
+    );
+    const resolvedRootMessageId = this.resolveThreadRootMessageId(
+      targetMessage.id,
+      parentByMessageId,
+    );
+    const rootMessage = uniqueMessages.find(
+      (message) => message.id === resolvedRootMessageId,
+    );
+    if (!rootMessage) {
+      throw new NotFoundException("thread not found");
+    }
+
+    const visibleMessages = uniqueMessages.filter((message) =>
+      this.isMessageVisibleToViewer(message, viewerUserId),
+    );
+    const visibleRootMessage = visibleMessages.find(
+      (message) => message.id === rootMessage.id,
+    );
+    if (!visibleRootMessage) {
+      throw new NotFoundException("thread not found");
+    }
+
+    const threadMessages = visibleMessages.filter(
+      (message) =>
+        this.resolveThreadRootMessageId(message.id, parentByMessageId) ===
+        rootMessage.id,
+    );
+    const hydratedMessages = await this.hydrateMessagesForThreadResponse(
+      chatId,
+      threadMessages,
+    );
+    const hydratedRootMessage = hydratedMessages.find(
+      (message) => message.id === rootMessage.id,
+    );
+    if (!hydratedRootMessage) {
+      throw new NotFoundException("thread not found");
+    }
+
+    const thread = this.buildThreadSummary(
+      hydratedRootMessage,
+      hydratedMessages,
+    );
+    const entries = this.buildThreadEntries(
+      hydratedMessages,
+      hydratedRootMessage.id,
+    );
+
+    return {
+      chatId,
+      thread,
+      entries,
+    };
   }
 
   private async ingestMessageMemorySafe(input: {
@@ -910,11 +1133,25 @@ export class ChatsService {
       throw new NotFoundException("chat not found");
     }
 
-    const participants = chat.connection.participants.map((participant) => ({
-      userId: participant.userId,
-      role: participant.role,
-      joinedAt: participant.joinedAt,
-    }));
+    const participants = chat.connection.participants.map((participant) => {
+      const snapshot = this.presenceService?.getPresenceSnapshot(
+        participant.userId,
+      );
+      return {
+        userId: participant.userId,
+        role: participant.role,
+        joinedAt: participant.joinedAt,
+        ...(snapshot
+          ? {
+              presence: {
+                online: snapshot.online,
+                state: snapshot.state,
+                lastSeenAt: snapshot.lastSeenAt,
+              },
+            }
+          : {}),
+      };
+    });
 
     return {
       chatId: chat.id,
@@ -1109,6 +1346,9 @@ export class ChatsService {
       chatId,
       uniqueMessages.map((message) => message.id),
     );
+    const reactionsByMessageId = await this.buildMessageReactionMap(
+      uniqueMessages.map((message) => message.id),
+    );
 
     const unreadCount = this.prisma.chatMessage?.count
       ? await this.prisma.chatMessage.count({
@@ -1133,6 +1373,7 @@ export class ChatsService {
     return {
       messages: uniqueMessages.map((message) => ({
         ...message,
+        reactions: reactionsByMessageId.get(message.id) ?? [],
         status: statusByMessageId.get(message.id) ?? {
           state: "sent",
           deliveredCount: 0,
@@ -1146,6 +1387,153 @@ export class ChatsService {
       hasMore: uniqueMessages.length >= cappedLimit,
       deduped: uniqueMessages.length !== messages.length,
     };
+  }
+
+  private async hydrateMessagesForThreadResponse(
+    chatId: string,
+    messages: Array<{
+      id: string;
+      senderUserId: string;
+      body: string;
+      moderationState: "clean" | "flagged" | "blocked" | "review";
+      createdAt: Date;
+      editedAt?: Date | null;
+      replyToMessageId?: string | null;
+    }>,
+  ) {
+    const statusByMessageId = await this.buildMessageStatusMap(
+      chatId,
+      messages.map((message) => message.id),
+    );
+    const reactionsByMessageId = await this.buildMessageReactionMap(
+      messages.map((message) => message.id),
+    );
+
+    return messages.map((message) => ({
+      ...message,
+      reactions: reactionsByMessageId.get(message.id) ?? [],
+      status: statusByMessageId.get(message.id) ?? {
+        state: "sent" as const,
+        deliveredCount: 0,
+        readCount: 0,
+        pendingCount: 0,
+      },
+    }));
+  }
+
+  private resolveThreadRootMessageId(
+    messageId: string,
+    parentByMessageId: Map<string, string | null>,
+  ) {
+    const visited = new Set<string>();
+    let currentMessageId = messageId;
+    while (!visited.has(currentMessageId)) {
+      visited.add(currentMessageId);
+      const parentMessageId = parentByMessageId.get(currentMessageId);
+      if (!parentMessageId) {
+        return currentMessageId;
+      }
+      currentMessageId = parentMessageId;
+    }
+    return currentMessageId;
+  }
+
+  private buildThreadSummary<
+    TMessage extends {
+      id: string;
+      senderUserId: string;
+      createdAt: Date;
+    },
+  >(rootMessage: TMessage, messages: TMessage[]) {
+    const sortedMessages = [...messages].sort((left, right) => {
+      const leftTime = left.createdAt.getTime();
+      const rightTime = right.createdAt.getTime();
+      if (leftTime === rightTime) {
+        return left.id.localeCompare(right.id);
+      }
+      return leftTime - rightTime;
+    });
+    const replyMessages = sortedMessages.filter(
+      (message) => message.id !== rootMessage.id,
+    );
+    const lastActivityAt =
+      sortedMessages.at(-1)?.createdAt.toISOString() ??
+      rootMessage.createdAt.toISOString();
+    const lastReplyAt = replyMessages.at(-1)?.createdAt.toISOString() ?? null;
+
+    return {
+      rootMessage,
+      replyCount: replyMessages.length,
+      messageCount: sortedMessages.length,
+      participantCount: new Set(
+        sortedMessages.map((message) => message.senderUserId),
+      ).size,
+      lastReplyAt,
+      lastActivityAt,
+    };
+  }
+
+  private buildThreadEntries<
+    TMessage extends {
+      id: string;
+      createdAt: Date;
+      replyToMessageId?: string | null;
+    },
+  >(messages: TMessage[], rootMessageId: string) {
+    const messageById = new Map(
+      messages.map((message) => [message.id, message]),
+    );
+    const childrenByParentId = new Map<string, TMessage[]>();
+
+    for (const message of messages) {
+      if (!message.replyToMessageId) {
+        continue;
+      }
+      const current = childrenByParentId.get(message.replyToMessageId) ?? [];
+      current.push(message);
+      childrenByParentId.set(message.replyToMessageId, current);
+    }
+
+    for (const [parentId, childMessages] of childrenByParentId.entries()) {
+      childMessages.sort((left, right) => {
+        const leftTime = left.createdAt.getTime();
+        const rightTime = right.createdAt.getTime();
+        if (leftTime === rightTime) {
+          return left.id.localeCompare(right.id);
+        }
+        return leftTime - rightTime;
+      });
+      childrenByParentId.set(parentId, childMessages);
+    }
+
+    const rootMessage = messageById.get(rootMessageId);
+    if (!rootMessage) {
+      return [];
+    }
+
+    const queue: Array<{ depth: number; message: TMessage }> = [
+      { depth: 0, message: rootMessage },
+    ];
+    const entries: Array<{ depth: number; message: TMessage }> = [];
+    const visited = new Set<string>();
+
+    while (queue.length > 0) {
+      const current = queue.shift();
+      if (!current || visited.has(current.message.id)) {
+        continue;
+      }
+      visited.add(current.message.id);
+      entries.push(current);
+      const children = childrenByParentId.get(current.message.id) ?? [];
+      for (const child of children) {
+        queue.push({
+          depth: current.depth + 1,
+          message: child,
+        });
+      }
+    }
+
+    return entries;
   }
 
   async markReadReceipt(chatId: string, messageId: string, userId: string) {
@@ -1202,6 +1590,247 @@ export class ChatsService {
         body: "[deleted]",
       },
     });
+  }
+
+  async editMessage(
+    chatId: string,
+    messageId: string,
+    userId: string,
+    body: string,
+  ) {
+    await this.assertActiveParticipant(chatId, userId);
+    const existingMessage = await this.prisma.chatMessage.findFirst({
+      where: { id: messageId, chatId },
+      select: {
+        id: true,
+        senderUserId: true,
+        body: true,
+      },
+    });
+    if (!existingMessage) {
+      throw new NotFoundException("message not found");
+    }
+    if (existingMessage.senderUserId !== userId) {
+      throw new ForbiddenException("message cannot be edited by this user");
+    }
+    if (existingMessage.body.trim() === "[deleted]") {
+      throw new BadRequestException("deleted messages cannot be edited");
+    }
+
+    const parsedBody = parseChatMessageBody(body);
+    const editedText = parsedBody.body.trim();
+    if (!editedText) {
+      throw new BadRequestException("message body is required");
+    }
+    let editedBody = body.trim();
+
+    const strictModerationEnabled = await this.isModerationStrictnessEnabled();
+    const moderationSurfaceEnabled =
+      await this.isMessageModerationSurfaceEnabled();
+    const prefilterModeration = this.evaluateTextModeration(editedText, false);
+    if (prefilterModeration.decision === "blocked") {
+      await this.recordBlockedMessageModeration(
+        chatId,
+        userId,
+        prefilterModeration.matchedTerms,
+      );
+      throw new ForbiddenException("message blocked by moderation policy");
+    }
+
+    let moderationState: "clean" | "review" = "clean";
+    let pendingReviewTerms: string[] = [];
+    if (moderationSurfaceEnabled && strictModerationEnabled) {
+      moderationState = "review";
+    } else {
+      const moderation = await this.evaluateMessageModeration(
+        editedText,
+        strictModerationEnabled,
+      );
+      if (moderation.decision === "blocked") {
+        await this.recordBlockedMessageModeration(
+          chatId,
+          userId,
+          moderation.matchedTerms,
+        );
+        throw new ForbiddenException("message blocked by moderation policy");
+      }
+      if (moderation.decision === "review") {
+        editedBody = parsedBody.reply
+          ? formatChatReplyBody("[hidden by moderation]", parsedBody.reply)
+          : "[hidden by moderation]";
+        moderationState = "review";
+        pendingReviewTerms = moderation.matchedTerms;
+      }
+    }
+
+    const updatedMessage = await this.prisma.chatMessage.update({
+      where: { id: existingMessage.id },
+      data: {
+        body: editedBody,
+        editedAt: new Date(),
+        moderationState,
+      },
+    });
+
+    if (strictModerationEnabled && moderationSurfaceEnabled) {
+      await this.enqueueMessageModeration(
+        updatedMessage.id,
+        chatId,
+        userId,
+        editedText,
+      );
+    } else if (pendingReviewTerms.length > 0) {
+      await this.recordPendingReviewMessageModeration(
+        chatId,
+        updatedMessage.id,
+        userId,
+        pendingReviewTerms,
+      );
+    }
+
+    const statusByMessageId = await this.buildMessageStatusMap(chatId, [
+      updatedMessage.id,
+    ]);
+    const reactionsByMessageId = await this.buildMessageReactionMap([
+      updatedMessage.id,
+    ]);
+    const hydratedMessage = {
+      ...updatedMessage,
+      reactions: reactionsByMessageId.get(updatedMessage.id) ?? [],
+      status: statusByMessageId.get(updatedMessage.id) ?? {
+        state: "sent" as const,
+        deliveredCount: 0,
+        readCount: 0,
+        pendingCount: 0,
+      },
+    };
+
+    await this.writeAuditRecord(
+      "chat.message_edited",
+      "chat_message",
+      updatedMessage.id,
+      userId,
+      {
+        chatId,
+        editedAt:
+          hydratedMessage.editedAt instanceof Date
+            ? hydratedMessage.editedAt.toISOString()
+            : hydratedMessage.editedAt,
+      },
+    );
+
+    const realtimeMessage = {
+      ...hydratedMessage,
+      createdAt: hydratedMessage.createdAt.toISOString(),
+      editedAt: hydratedMessage.editedAt?.toISOString() ?? null,
+      reactions: hydratedMessage.reactions.map((reaction) => ({
+        ...reaction,
+        createdAt: reaction.createdAt.toISOString(),
+      })),
+    };
+    this.realtimeEventsService?.emitChatMessageUpdated(chatId, {
+      roomId: chatId,
+      message: realtimeMessage,
+    });
+
+    return hydratedMessage;
+  }
+
+  async createMessageReaction(
+    chatId: string,
+    messageId: string,
+    userId: string,
+    emoji: string,
+  ) {
+    await this.assertActiveParticipant(chatId, userId);
+    if (
+      !this.prisma.chatMessage?.findFirst ||
+      !this.prisma.chatMessageReaction?.findFirst ||
+      !this.prisma.chatMessageReaction?.create
+    ) {
+      throw new NotFoundException("reaction not found");
+    }
+
+    const message = await this.prisma.chatMessage.findFirst({
+      where: {
+        id: messageId,
+        chatId,
+      },
+      select: {
+        id: true,
+      },
+    });
+    if (!message) {
+      throw new NotFoundException("message not found");
+    }
+
+    const normalizedEmoji = emoji.trim();
+    if (!normalizedEmoji) {
+      throw new BadRequestException("reaction emoji is required");
+    }
+
+    const existing = await this.prisma.chatMessageReaction.findFirst({
+      where: {
+        messageId,
+        userId,
+        emoji: normalizedEmoji,
+      },
+      select: {
+        id: true,
+        messageId: true,
+        userId: true,
+        emoji: true,
+        createdAt: true,
+      },
+    });
+    if (existing) {
+      return existing;
+    }
+
+    return this.prisma.chatMessageReaction.create({
+      data: {
+        messageId,
+        userId,
+        emoji: normalizedEmoji,
+      },
+    });
+  }
+
+  async listMessageReactions(
+    chatId: string,
+    messageId: string,
+    userId: string,
+  ) {
+    await this.assertActiveParticipant(chatId, userId);
+    if (
+      !this.prisma.chatMessage?.findFirst ||
+      !this.prisma.chatMessageReaction?.findMany
+    ) {
+      throw new NotFoundException("reaction not found");
+    }
+
+    const message = await this.prisma.chatMessage.findFirst({
+      where: {
+        id: messageId,
+        chatId,
+      },
+      select: {
+        id: true,
+      },
+    });
+    if (!message) {
+      throw new NotFoundException("message not found");
+    }
+
+    const reactions = await this.prisma.chatMessageReaction.findMany({
+      where: {
+        messageId,
+      },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    });
+    return {
+      reactions,
+    };
   }
 
   createSystemMessage(
@@ -1485,6 +2114,55 @@ export class ChatsService {
         deliveredAt: now,
       })),
     });
+  }
+
+  private async buildMessageReactionMap(messageIds: string[]) {
+    if (messageIds.length === 0 || !this.prisma.chatMessageReaction?.findMany) {
+      return new Map<
+        string,
+        Array<{
+          id: string;
+          messageId: string;
+          userId: string;
+          emoji: string;
+          createdAt: Date;
+        }>
+      >();
+    }
+
+    const reactions = await this.prisma.chatMessageReaction.findMany({
+      where: {
+        messageId: {
+          in: messageIds,
+        },
+      },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      select: {
+        id: true,
+        messageId: true,
+        userId: true,
+        emoji: true,
+        createdAt: true,
+      },
+    });
+
+    const byMessageId = new Map<
+      string,
+      Array<{
+        id: string;
+        messageId: string;
+        userId: string;
+        emoji: string;
+        createdAt: Date;
+      }>
+    >();
+    for (const reaction of reactions) {
+      const current = byMessageId.get(reaction.messageId) ?? [];
+      current.push(reaction);
+      byMessageId.set(reaction.messageId, current);
+    }
+
+    return byMessageId;
   }
 
   private async buildMessageStatusMap(chatId: string, messageIds: string[]) {

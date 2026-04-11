@@ -13,7 +13,7 @@ Included:
 - infra, observability, testing, and release docs
 - design spec for mockups and wireframes
 - behavioral use cases
-- PROGRESS.md master implementation checklist
+- BACKEND_PROGRESS.md master implementation checklist
 
 Suggested consumption order:
 1. README.md
@@ -24,4 +24,4 @@ Suggested consumption order:
 6. 12_realtime_chat_presence.md
 7. 04_design.md
 8. 30_user_use_cases_and_behavioral_spec.md
-9. PROGRESS.md
+9. BACKEND_PROGRESS.md

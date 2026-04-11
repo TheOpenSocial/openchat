@@ -29,6 +29,7 @@ This document maps `16_security_threat_model.md` requirements to implemented bac
 - Existing controller-level role gates retained.
 - Added admin access middleware with optional API key requirement, user allowlist, and user-role binding validation (`apps/api/src/admin/admin-security.middleware.ts`).
 - Admin actions remain audit-logged.
+- Security posture now flags the unsupported configuration where `ADMIN_API_KEY` is enabled while hosted admin dashboard redirects are also enabled, since the browser dashboard does not send `x-admin-api-key`.
 
 ### AI-specific controls
 - Prompt-injection guardrails added in `@opensocial/openai`: suspicious policy/tool override patterns trigger safe fallback behavior and are captured in failure telemetry (`packages/openai/src/index.ts`).
@@ -40,10 +41,9 @@ This document maps `16_security_threat_model.md` requirements to implemented bac
 
 ## Remaining high-priority security gaps
 
-- Secrets rotation policy enforcement across all runtime secrets (JWT and integration secrets).
-- Encryption-at-rest/in-transit enforcement checks (environment and infra policy validation in runtime/startup paths).
+- Integration-secret rotation policy enforcement beyond the JWT signing chain.
 - Dependency currency automation in CI (beyond local scripts).
-- Threat-model verification drills in staging.
+- Threat-model verification drills in staging with archived evidence.
 
 ## Operational commands
 

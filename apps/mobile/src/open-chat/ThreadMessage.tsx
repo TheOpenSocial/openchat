@@ -15,10 +15,6 @@ export const RUNTIME_SYSTEM_MESSAGE_PREFIX = "__runtime_status__:";
  */
 export function ThreadMessage({ body, role }: ThreadMessageProps) {
   const compactBody = body.trim();
-  const conciseAgentBody =
-    role === "agent" && compactBody.length > 190
-      ? "Got it. I'm finding people who fit this."
-      : compactBody;
 
   if (role === "workflow") {
     return (
@@ -78,9 +74,9 @@ export function ThreadMessage({ body, role }: ThreadMessageProps) {
   }
 
   return (
-    <View className="mb-4 max-w-[92%] self-start">
-      <Text className="text-[18px] leading-[27px] tracking-[-0.01em] text-white/90">
-        {conciseAgentBody}
+    <View className="mb-3 max-w-[90%] self-start">
+      <Text className="text-[16px] leading-[24px] tracking-[-0.008em] text-white/82">
+        {compactBody}
       </Text>
     </View>
   );

@@ -76,7 +76,11 @@ function NameAvatar({
       </View>
       <View className="mt-4 flex-row items-center gap-2 rounded-full border border-hairline bg-surfaceMuted/85 px-3 py-2">
         <Ionicons color={appTheme.colors.ink} name="camera-outline" size={15} />
-        <Text className="text-[12px] font-medium text-ink/90">
+        <Text
+          className="text-[12px] font-medium text-ink/90"
+          allowFontScaling
+          minimumFontScale={0.85}
+        >
           {uploading ? "Uploading photo" : "Change photo"}
         </Text>
       </View>
@@ -95,13 +99,23 @@ function SectionLabel({
 }) {
   return (
     <View className="gap-2">
-      <Text className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
+      <Text className="text-[12px] font-semibold uppercase tracking-[0.14em] text-muted">
         {eyebrow}
       </Text>
-      <Text className="text-[32px] font-semibold tracking-[-0.05em] text-ink">
+      <Text
+        className="text-[32px] font-semibold tracking-[-0.05em] text-ink"
+        allowFontScaling
+        adjustsFontSizeToFit
+        minimumFontScale={0.82}
+        numberOfLines={2}
+      >
         {title}
       </Text>
-      <Text className="max-w-[310px] text-[14px] leading-[21px] text-muted">
+      <Text
+        className="max-w-full text-[14px] leading-[21px] text-muted"
+        allowFontScaling
+        minimumFontScale={0.85}
+      >
         {subtitle}
       </Text>
     </View>
@@ -311,15 +325,19 @@ export function SettingsScreen({
 
   return (
     <SafeAreaView
-      className="flex-1 bg-[#050506]"
+      className="flex-1 bg-canvas"
       edges={["top", "bottom", "left", "right"]}
-      style={{ flex: 1, backgroundColor: "#050506" }}
+      style={{ flex: 1, backgroundColor: appTheme.colors.background }}
     >
       {loadingModal}
 
       <LinearGradient
         className="absolute inset-0"
-        colors={["#0a0b0d", "#050506", "#050506"]}
+        colors={[
+          appTheme.colors.panelStrong,
+          appTheme.colors.background,
+          appTheme.colors.background,
+        ]}
         end={{ x: 0.9, y: 1 }}
         start={{ x: 0.15, y: 0 }}
       />
@@ -353,7 +371,11 @@ export function SettingsScreen({
               size={20}
             />
           </Pressable>
-          <Text className="text-[13px] font-semibold uppercase tracking-[0.12em] text-muted">
+          <Text
+            className="text-[13px] font-semibold uppercase tracking-[0.12em] text-muted"
+            allowFontScaling
+            minimumFontScale={0.85}
+          >
             Settings
           </Text>
           <View className="h-9 w-9" />

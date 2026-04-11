@@ -22,11 +22,12 @@ export type MainAppTab = HomeTab;
 
 interface AppBottomTabsProps {
   activeTab: MainAppTab;
+  hasActivity?: boolean;
   unreadChats?: number;
   onChange: (tab: MainAppTab) => void;
 }
 
-const TAB_ORDER: MainAppTab[] = ["chats", "home", "profile"];
+const TAB_ORDER: MainAppTab[] = ["chats", "home", "activity", "profile"];
 
 const TAB_META: Record<
   MainAppTab,
@@ -44,12 +45,17 @@ const TAB_META: Record<
   home: {
     icon: "sparkles-outline",
     label: "Home",
-    hint: "Tab 2 of 3. Opens the home workspace.",
+    hint: "Tab 2 of 4. Opens the home workspace.",
+  },
+  activity: {
+    icon: "notifications-outline",
+    label: "Activity",
+    hint: "Tab 3 of 4. Shows what changed and what needs action.",
   },
   profile: {
     icon: "person-outline",
     label: "Profile",
-    hint: "Tab 3 of 3. Opens your profile.",
+    hint: "Tab 4 of 4. Opens your profile.",
   },
 };
 
@@ -123,6 +129,8 @@ function TabItem({
           className={`text-[10px] font-semibold tracking-[0.02em] ${
             isActive ? "text-canvas" : "text-muted"
           }`}
+          allowFontScaling
+          minimumFontScale={0.8}
           numberOfLines={1}
         >
           {meta.label}
@@ -134,6 +142,7 @@ function TabItem({
 
 export function AppBottomTabs({
   activeTab,
+  hasActivity = false,
   onChange,
   unreadChats = 0,
 }: AppBottomTabsProps) {
@@ -154,7 +163,7 @@ export function AppBottomTabs({
   };
 
   const indicatorStyle = useAnimatedStyle(() => {
-    const slotWidth = containerWidth.value / 3;
+    const slotWidth = containerWidth.value / TAB_ORDER.length;
     const indicatorWidth = Math.max(slotWidth - 36, 0);
     const centeredOffset = Math.max(0, (slotWidth - indicatorWidth) / 2);
 
@@ -212,7 +221,7 @@ export function AppBottomTabs({
           backgroundColor: appTheme.colors.background,
           borderTopColor: appTheme.colors.hairline,
           borderTopWidth: 1,
-          shadowColor: "#000",
+          shadowColor: appTheme.colors.background,
           shadowOffset: { width: 0, height: -2 },
           shadowOpacity: 0.14,
           shadowRadius: 12,
@@ -244,6 +253,14 @@ export function AppBottomTabs({
               <TabItem
                 activeIndex={activeIndex}
                 index={2}
+                badgeCount={hasActivity ? 1 : 0}
+                isActive={activeTab === "activity"}
+                onPress={() => onChange("activity")}
+                tab="activity"
+              />
+              <TabItem
+                activeIndex={activeIndex}
+                index={3}
                 isActive={activeTab === "profile"}
                 onPress={() => onChange("profile")}
                 tab="profile"

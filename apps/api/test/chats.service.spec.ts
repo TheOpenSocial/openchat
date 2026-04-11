@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { ChatsService } from "../src/chats/chats.service.js";
+import { PresenceService } from "../src/realtime/presence.service.js";
 
 describe("ChatsService", () => {
   it("ingests dm messages into governed memory with explicit preference detection", async () => {
@@ -422,6 +423,258 @@ describe("ChatsService", () => {
     expect(prisma.messageReceipt.create).toHaveBeenCalledTimes(1);
   });
 
+  it("stores reply linkage when creating a reply message", async () => {
+    const prisma: any = {
+      chat: {
+        findUnique: vi.fn().mockResolvedValue({ connectionId: "conn-1" }),
+      },
+      connectionParticipant: {
+        findFirst: vi.fn().mockResolvedValue({ id: "participant-1" }),
+        findMany: vi
+          .fn()
+          .mockResolvedValue([{ userId: "user-1" }, { userId: "user-2" }]),
+      },
+      block: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      userPreference: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      userReport: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      chatMessage: {
+        findFirst: vi.fn().mockResolvedValue({ id: "msg-parent" }),
+        create: vi.fn().mockResolvedValue({
+          id: "msg-child",
+          chatId: "chat-1",
+          replyToMessageId: "msg-parent",
+          createdAt: new Date(),
+        }),
+      },
+      messageReceipt: {
+        create: vi.fn().mockResolvedValue({}),
+        createMany: vi.fn().mockResolvedValue({ count: 1 }),
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+    };
+
+    const service = new ChatsService(prisma);
+    const result = await service.createMessage(
+      "chat-1",
+      "user-1",
+      "Thanks for the update",
+      {
+        replyToMessageId: "msg-parent",
+      },
+    );
+
+    expect(prisma.chatMessage.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          replyToMessageId: "msg-parent",
+        }),
+      }),
+    );
+    expect(result.replyToMessageId).toBe("msg-parent");
+  });
+
+  it("derives thread summaries from reply chains", async () => {
+    const prisma: any = {
+      chat: {
+        findUnique: vi.fn().mockResolvedValue({ connectionId: "conn-1" }),
+      },
+      connectionParticipant: {
+        findFirst: vi.fn().mockResolvedValue({ id: "participant-1" }),
+        count: vi.fn().mockResolvedValue(2),
+      },
+      chatMessage: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: "msg-root",
+            chatId: "chat-1",
+            senderUserId: "user-1",
+            body: "root",
+            moderationState: "clean",
+            replyToMessageId: null,
+            createdAt: new Date("2026-04-05T21:00:00.000Z"),
+            editedAt: null,
+          },
+          {
+            id: "msg-reply-1",
+            chatId: "chat-1",
+            senderUserId: "user-2",
+            body: "reply 1",
+            moderationState: "clean",
+            replyToMessageId: "msg-root",
+            createdAt: new Date("2026-04-05T21:01:00.000Z"),
+            editedAt: null,
+          },
+          {
+            id: "msg-reply-2",
+            chatId: "chat-1",
+            senderUserId: "user-1",
+            body: "reply 2",
+            moderationState: "clean",
+            replyToMessageId: "msg-reply-1",
+            createdAt: new Date("2026-04-05T21:02:00.000Z"),
+            editedAt: null,
+          },
+        ]),
+      },
+      messageReceipt: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      chatMessageReaction: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+    };
+
+    const service = new ChatsService(prisma);
+    const result = await service.listThreads("chat-1", "user-1");
+
+    expect(result.chatId).toBe("chat-1");
+    expect(result.threads).toHaveLength(1);
+    expect(result.threads[0]).toEqual(
+      expect.objectContaining({
+        rootMessage: expect.objectContaining({
+          id: "msg-root",
+        }),
+        replyCount: 2,
+        messageCount: 3,
+        participantCount: 2,
+        lastReplyAt: "2026-04-05T21:02:00.000Z",
+        lastActivityAt: "2026-04-05T21:02:00.000Z",
+      }),
+    );
+  });
+
+  it("returns thread detail for a reply by resolving the root message", async () => {
+    const prisma: any = {
+      chat: {
+        findUnique: vi.fn().mockResolvedValue({ connectionId: "conn-1" }),
+      },
+      connectionParticipant: {
+        findFirst: vi.fn().mockResolvedValue({ id: "participant-1" }),
+        count: vi.fn().mockResolvedValue(2),
+      },
+      chatMessage: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: "msg-root",
+            chatId: "chat-1",
+            senderUserId: "user-1",
+            body: "root",
+            moderationState: "clean",
+            replyToMessageId: null,
+            createdAt: new Date("2026-04-05T21:00:00.000Z"),
+            editedAt: null,
+          },
+          {
+            id: "msg-reply-1",
+            chatId: "chat-1",
+            senderUserId: "user-2",
+            body: "reply 1",
+            moderationState: "clean",
+            replyToMessageId: "msg-root",
+            createdAt: new Date("2026-04-05T21:01:00.000Z"),
+            editedAt: null,
+          },
+          {
+            id: "msg-reply-2",
+            chatId: "chat-1",
+            senderUserId: "user-1",
+            body: "reply 2",
+            moderationState: "clean",
+            replyToMessageId: "msg-reply-1",
+            createdAt: new Date("2026-04-05T21:02:00.000Z"),
+            editedAt: null,
+          },
+        ]),
+      },
+      messageReceipt: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      chatMessageReaction: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+    };
+
+    const service = new ChatsService(prisma);
+    const result = await service.getThread("chat-1", "msg-reply-2", "user-1");
+
+    expect(result.thread.rootMessage.id).toBe("msg-root");
+    expect(result.thread.replyCount).toBe(2);
+    expect(result.entries.map((entry) => entry.message.id)).toEqual([
+      "msg-root",
+      "msg-reply-1",
+      "msg-reply-2",
+    ]);
+  });
+
+  it("includes lightweight participant presence metadata on chat metadata", async () => {
+    const prisma: any = {
+      chat: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "chat-1",
+          type: "dm",
+          connectionId: "conn-1",
+          createdAt: new Date("2026-04-05T21:00:00.000Z"),
+          connection: {
+            id: "conn-1",
+            type: "dm",
+            status: "active",
+            createdByUserId: "user-1",
+            participants: [
+              {
+                userId: "user-1",
+                role: "member",
+                joinedAt: new Date("2026-04-05T20:00:00.000Z"),
+              },
+              {
+                userId: "user-2",
+                role: "member",
+                joinedAt: new Date("2026-04-05T20:01:00.000Z"),
+              },
+            ],
+          },
+        }),
+      },
+      connectionParticipant: {
+        findFirst: vi.fn().mockResolvedValue({ id: "participant-1" }),
+      },
+    };
+    const presenceService = new PresenceService();
+    presenceService.markOnline("user-2", "away");
+    presenceService.markOffline("user-2");
+
+    const service = new ChatsService(
+      prisma,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      presenceService,
+    );
+
+    const metadata = await service.getChatMetadata("chat-1", "user-1");
+
+    expect(metadata.participants).toHaveLength(2);
+    expect(metadata.participants[1]).toEqual(
+      expect.objectContaining({
+        userId: "user-2",
+        role: "member",
+        presence: expect.objectContaining({
+          online: false,
+          state: "invisible",
+          lastSeenAt: expect.any(String),
+        }),
+      }),
+    );
+  });
+
   it("marks read receipt by updating existing record", async () => {
     const prisma: any = {
       chatMessage: {
@@ -571,6 +824,88 @@ describe("ChatsService", () => {
     );
   });
 
+  it("edits an owned message, records edit metadata, and emits a realtime update", async () => {
+    const realtimeEventsService = {
+      emitChatMessageUpdated: vi.fn(),
+    };
+    const prisma: any = {
+      chat: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "chat-1",
+          connectionId: "conn-1",
+        }),
+      },
+      connectionParticipant: {
+        findFirst: vi.fn().mockResolvedValue({ id: "participant-1" }),
+        count: vi.fn().mockResolvedValue(2),
+      },
+      chatMessage: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "msg-1",
+          senderUserId: "user-1",
+          body: "hello there",
+        }),
+        update: vi.fn().mockResolvedValue({
+          id: "msg-1",
+          chatId: "chat-1",
+          senderUserId: "user-1",
+          body: "hello edited",
+          moderationState: "clean",
+          replyToMessageId: null,
+          createdAt: new Date("2026-04-05T21:00:00.000Z"),
+          editedAt: new Date("2026-04-05T21:05:00.000Z"),
+        }),
+      },
+      messageReceipt: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      chatMessageReaction: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+    };
+
+    const service = new ChatsService(
+      prisma,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      realtimeEventsService as any,
+    );
+
+    const result = await service.editMessage(
+      "chat-1",
+      "msg-1",
+      "user-1",
+      "hello edited",
+    );
+
+    expect(prisma.chatMessage.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "msg-1" },
+        data: expect.objectContaining({
+          body: "hello edited",
+          moderationState: "clean",
+          editedAt: expect.any(Date),
+        }),
+      }),
+    );
+    expect(result.body).toBe("hello edited");
+    expect(result.editedAt).toBeInstanceOf(Date);
+    expect(realtimeEventsService.emitChatMessageUpdated).toHaveBeenCalledWith(
+      "chat-1",
+      expect.objectContaining({
+        roomId: "chat-1",
+        message: expect.objectContaining({
+          id: "msg-1",
+          body: "hello edited",
+          editedAt: "2026-04-05T21:05:00.000Z",
+        }),
+      }),
+    );
+  });
+
   it("archives group chats when participant leave drops below threshold", async () => {
     const prisma: any = {
       chat: {
@@ -690,6 +1025,17 @@ describe("ChatsService", () => {
           },
         ]),
       },
+      chatMessageReaction: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: "reaction-1",
+            messageId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            userId: "user-3",
+            emoji: "👍",
+            createdAt: new Date(baseTime.getTime() + 1_500),
+          },
+        ]),
+      },
     };
 
     const service = new ChatsService(prisma);
@@ -706,6 +1052,68 @@ describe("ChatsService", () => {
     expect(sync.messages[1].id).toBe("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
     expect(sync.unreadCount).toBe(1);
     expect(sync.messages[0].status.state).toBe("delivered");
+    expect(sync.messages[0].reactions).toEqual([
+      expect.objectContaining({
+        id: "reaction-1",
+        emoji: "👍",
+      }),
+    ]);
+  });
+
+  it("creates and lists message reactions", async () => {
+    const prisma: any = {
+      chat: {
+        findUnique: vi.fn().mockResolvedValue({ connectionId: "conn-1" }),
+      },
+      connectionParticipant: {
+        findFirst: vi.fn().mockResolvedValue({ id: "participant-1" }),
+      },
+      chatMessage: {
+        findFirst: vi.fn().mockResolvedValue({ id: "msg-1" }),
+      },
+      chatMessageReaction: {
+        findFirst: vi.fn().mockResolvedValue(null),
+        create: vi.fn().mockResolvedValue({
+          id: "reaction-1",
+          messageId: "msg-1",
+          userId: "user-1",
+          emoji: "👍",
+          createdAt: new Date(),
+        }),
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: "reaction-1",
+            messageId: "msg-1",
+            userId: "user-1",
+            emoji: "👍",
+            createdAt: new Date(),
+          },
+        ]),
+      },
+    };
+
+    const service = new ChatsService(prisma);
+    const created = await service.createMessageReaction(
+      "chat-1",
+      "msg-1",
+      "user-1",
+      " 👍 ",
+    );
+    const listed = await service.listMessageReactions(
+      "chat-1",
+      "msg-1",
+      "user-1",
+    );
+
+    expect(prisma.chatMessageReaction.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          emoji: "👍",
+        }),
+      }),
+    );
+    expect(created.emoji).toBe("👍");
+    expect(listed.reactions).toHaveLength(1);
   });
 
   it("blocks harmful messages before persistence", async () => {

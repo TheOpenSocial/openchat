@@ -1,4 +1,6 @@
 PODS:
+  - EXApplication (55.0.12):
+    - ExpoModulesCore
   - EXConstants (55.0.9):
     - ExpoModulesCore
   - Expo (55.0.8):
@@ -82,6 +84,8 @@ PODS:
     - React-Core
     - React-runtimescheduler
     - ReactCommon
+  - ExpoNotifications (55.0.16):
+    - ExpoModulesCore
   - ExpoSpeechRecognition (3.1.2):
     - ExpoModulesCore
   - ExpoSplashScreen (55.0.12):
@@ -2156,6 +2160,7 @@ PODS:
   - Yoga (0.0.0)
 
 DEPENDENCIES:
+  - "EXApplication (from `../../../node_modules/.pnpm/expo-application@55.0.12_expo@55.0.8/node_modules/expo-application/ios`)"
   - "EXConstants (from `../../../node_modules/.pnpm/expo-constants@55.0.9_expo@55.0.8_react-native@0.83.2_@babel+core@7.29.0_@react-native+_81122909e4f71d030d1a79dc3947e77b/node_modules/expo-constants/ios`)"
   - "Expo (from `../../../node_modules/.pnpm/expo@55.0.8_patch_hash=1cd7cb6e03a85de4a481fec126192661a85312f017fb58a965796ce73da15723_16d7f7d295073b851292229d87223793/node_modules/expo`)"
   - "ExpoAsset (from `../../../node_modules/.pnpm/expo-asset@55.0.10_expo@55.0.8_react-native@0.83.2_@babel+core@7.29.0_@react-native+met_2226a8469f65456c5d5fdd19270ab229/node_modules/expo-asset/ios`)"
@@ -2173,6 +2178,7 @@ DEPENDENCIES:
   - "ExpoLogBox (from `../../../node_modules/.pnpm/@expo+log-box@55.0.7_@expo+dom-webview@55.0.3_expo@55.0.8_react-native@0.83.2_@babel+co_cc3f467705b191db95a8f174f343cf41/node_modules/@expo/log-box`)"
   - "ExpoModulesCore (from `../../../node_modules/.pnpm/expo-modules-core@55.0.17_patch_hash=85d16df82b283b009c2157cf249795d746a6306c73a609751b_070eaa8778758cbdc4d2aa270570bf86/node_modules/expo-modules-core`)"
   - "ExpoModulesJSI (from `../../../node_modules/.pnpm/expo-modules-core@55.0.17_patch_hash=85d16df82b283b009c2157cf249795d746a6306c73a609751b_070eaa8778758cbdc4d2aa270570bf86/node_modules/expo-modules-core`)"
+  - "ExpoNotifications (from `../../../node_modules/.pnpm/expo-notifications@55.0.16_expo@55.0.8_react-native@0.83.2_@babel+core@7.29.0_@react-na_faf5ca1ce1cc788d3bb8f171b928f384/node_modules/expo-notifications/ios`)"
   - "ExpoSpeechRecognition (from `../../../node_modules/.pnpm/expo-speech-recognition@3.1.2_expo@55.0.8_react-native@0.83.2_@babel+core@7.29.0_@react_d95bde309e79f4c149badd8c3b4e6ff6/node_modules/expo-speech-recognition/ios`)"
   - "ExpoSplashScreen (from `../../../node_modules/.pnpm/expo-splash-screen@55.0.12_expo@55.0.8_typescript@5.9.3/node_modules/expo-splash-screen/ios`)"
   - "ExpoVideo (from `../../../node_modules/.pnpm/expo-video@55.0.11_expo@55.0.8_react-native@0.83.2_@babel+core@7.29.0_@react-native+met_6c17737c0bc74e8999f521d184ccd03e/node_modules/expo-video/ios`)"
@@ -2263,6 +2269,8 @@ SPEC REPOS:
     - lottie-ios
 
 EXTERNAL SOURCES:
+  EXApplication:
+    :path: "../../../node_modules/.pnpm/expo-application@55.0.12_expo@55.0.8/node_modules/expo-application/ios"
   EXConstants:
     :path: "../../../node_modules/.pnpm/expo-constants@55.0.9_expo@55.0.8_react-native@0.83.2_@babel+core@7.29.0_@react-native+_81122909e4f71d030d1a79dc3947e77b/node_modules/expo-constants/ios"
   Expo:
@@ -2297,6 +2305,8 @@ EXTERNAL SOURCES:
     :path: "../../../node_modules/.pnpm/expo-modules-core@55.0.17_patch_hash=85d16df82b283b009c2157cf249795d746a6306c73a609751b_070eaa8778758cbdc4d2aa270570bf86/node_modules/expo-modules-core"
   ExpoModulesJSI:
     :path: "../../../node_modules/.pnpm/expo-modules-core@55.0.17_patch_hash=85d16df82b283b009c2157cf249795d746a6306c73a609751b_070eaa8778758cbdc4d2aa270570bf86/node_modules/expo-modules-core"
+  ExpoNotifications:
+    :path: "../../../node_modules/.pnpm/expo-notifications@55.0.16_expo@55.0.8_react-native@0.83.2_@babel+core@7.29.0_@react-na_faf5ca1ce1cc788d3bb8f171b928f384/node_modules/expo-notifications/ios"
   ExpoSpeechRecognition:
     :path: "../../../node_modules/.pnpm/expo-speech-recognition@3.1.2_expo@55.0.8_react-native@0.83.2_@babel+core@7.29.0_@react_d95bde309e79f4c149badd8c3b4e6ff6/node_modules/expo-speech-recognition/ios"
   ExpoSplashScreen:
@@ -2466,6 +2476,7 @@ EXTERNAL SOURCES:
     :path: "../../../node_modules/.pnpm/react-native@0.83.2_@babel+core@7.29.0_@react-native+metro-config@0.84.1_@babel+core@7._4631f9d896bf563309d3b2786309f8ec/node_modules/react-native/ReactCommon/yoga"
 
 SPEC CHECKSUMS:
+  EXApplication: 4c1984dfe22040aff943d5ee3711420d2b447237
   EXConstants: 898c24a310046c0e68335619d0f379099a52e199
   Expo: d425652228e12e472b46f0eca1032fcdebe55701
   ExpoAsset: 4efd0227e808dfa84d286aa3663ded641ef73479
@@ -2483,6 +2494,7 @@ SPEC CHECKSUMS:
   ExpoLogBox: 89b634d5a8a64c4a6a7caad8f9985a28463c7002
   ExpoModulesCore: 1c43431035ab7ea1492b0537bc4a60390480ea25
   ExpoModulesJSI: 7345645083e98be9c33c10027601aff2e445ba72
+  ExpoNotifications: 71db05b1d1e1aaf6ead79f859faa1adfe3cc09ff
   ExpoSpeechRecognition: 3e416e568451e62678e8085469bcaff557b0b2b9
   ExpoSplashScreen: 755302759fbcf4af56b8ad5fb76e535dcf812f91
   ExpoVideo: ba3b3de16404dd6affe10e04c1856dc05a8cc600

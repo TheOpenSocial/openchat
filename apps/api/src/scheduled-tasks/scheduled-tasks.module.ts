@@ -1,5 +1,6 @@
 import { BullModule } from "@nestjs/bullmq";
 import { Module, forwardRef } from "@nestjs/common";
+import { AdminAuditService } from "../admin/admin-audit.service.js";
 import { AgentModule } from "../agent/agent.module.js";
 import { DiscoveryModule } from "../discovery/discovery.module.js";
 import { ExecutionReconciliationModule } from "../execution-reconciliation/execution-reconciliation.module.js";
@@ -17,7 +18,7 @@ import { ScheduledTasksService } from "./scheduled-tasks.service.js";
     forwardRef(() => AgentModule),
     LaunchControlsModule,
   ],
-  providers: [ScheduledTasksService],
+  providers: [ScheduledTasksService, AdminAuditService],
   controllers: [ScheduledTasksController],
   exports: [ScheduledTasksService],
 })

@@ -1,0 +1,95 @@
+import { memo, useEffect, useMemo, useRef } from "react";
+import { View } from "react-native";
+
+import systemBlob from "../../assets/brand/gradient-blob.json";
+
+export type SystemBlobAnimationHandle = {
+  pause?: () => void;
+  play?: (startFrame?: number, endFrame?: number) => void;
+  setSpeed?: (speed: number) => void;
+};
+
+function SystemBlobAnimationComponent({
+  size = 196,
+  lottieRef,
+  initialFrame,
+  rotationDeg = 0,
+  staticFrame = false,
+}: {
+  size?: number;
+  lottieRef?: { current: SystemBlobAnimationHandle | null };
+  initialFrame?: number;
+  rotationDeg?: number;
+  staticFrame?: boolean;
+}) {
+  const innerRef = useRef<SystemBlobAnimationHandle | null>(null);
+  const LottieView = useMemo<any>(() => {
+    try {
+      return (
+        // eslint-disable-next-line @typescript-eslint/no-require-imports -- Avoid crashing startup if native Lottie isn't ready yet.
+        require("lottie-react-native").default
+      );
+    } catch {
+      return null;
+    }
+  }, []);
+
+  useEffect(() => {
+    const targetRef = innerRef.current;
+    if (!targetRef || typeof initialFrame !== "number") {
+      return;
+    }
+
+    const totalFrames =
+      typeof systemBlob.op === "number" ? Math.max(systemBlob.op - 1, 1) : 599;
+    const startFrame = Math.min(Math.max(0, Math.round(initialFrame)), totalFrames);
+    const timerId = setTimeout(() => {
+      if (staticFrame) {
+        targetRef.play?.(startFrame, startFrame + 1);
+        const pauseTimerId = setTimeout(() => {
+          targetRef.pause?.();
+        }, 16);
+        return () => clearTimeout(pauseTimerId);
+      }
+      targetRef.play?.(startFrame, totalFrames);
+    }, 0);
+
+    return () => clearTimeout(timerId);
+  }, [initialFrame, staticFrame]);
+
+  const assignRef = (instance: SystemBlobAnimationHandle | null) => {
+    innerRef.current = instance;
+    if (lottieRef) {
+      lottieRef.current = instance;
+    }
+  };
+
+  if (!LottieView) {
+    return (
+      <View
+        style={{
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: "rgba(255,255,255,0.02)",
+        }}
+      />
+    );
+  }
+
+  return (
+    <LottieView
+      autoPlay={!staticFrame && typeof initialFrame !== "number"}
+      loop={!staticFrame}
+      ref={assignRef as never}
+      source={systemBlob}
+      style={{
+        width: size,
+        height: size,
+        transform: [{ rotate: `${rotationDeg}deg` }],
+      }}
+    />
+  );
+}
+
+export const SystemBlobAnimation = memo(SystemBlobAnimationComponent);

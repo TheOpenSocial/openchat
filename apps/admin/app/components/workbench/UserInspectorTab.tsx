@@ -1,5 +1,10 @@
 import { JsonView } from "@/app/components/JsonView";
 import { Panel } from "@/app/components/Panel";
+import {
+  type SavedSearchesSnapshot,
+  type ScheduledTaskRunsSnapshot,
+  type ScheduledTasksSnapshot,
+} from "./operator-surface-types";
 
 export function UserInspectorTab({
   adminButtonClass,
@@ -23,6 +28,7 @@ export function UserInspectorTab({
   savedSearchSnapshot,
   scheduledTaskRunsSnapshot,
   scheduledTaskSnapshot,
+  adminScheduledTaskId,
   searchQuery,
   searchSnapshot,
   sessionSnapshot,
@@ -42,7 +48,11 @@ export function UserInspectorTab({
   setRestrictReason,
   setRevokeSessionId,
   setSearchQuery,
+  setAdminScheduledTaskId,
   setUserId,
+  loadAdminScheduledTasksSnapshot,
+  loadAdminScheduledTaskRunsSnapshot,
+  loadSavedSearchesSnapshot,
   summarizePendingIntents,
 }: {
   adminButtonClass: string;
@@ -63,9 +73,10 @@ export function UserInspectorTab({
   recurringCircleSnapshot: unknown;
   restrictReason: string;
   ruleSnapshot: unknown;
-  savedSearchSnapshot: unknown;
-  scheduledTaskRunsSnapshot: unknown;
-  scheduledTaskSnapshot: unknown;
+  savedSearchSnapshot: SavedSearchesSnapshot | null;
+  scheduledTaskRunsSnapshot: ScheduledTaskRunsSnapshot | null;
+  scheduledTaskSnapshot: ScheduledTasksSnapshot | null;
+  adminScheduledTaskId: string;
   searchQuery: string;
   searchSnapshot: unknown;
   sessionSnapshot: unknown;
@@ -85,7 +96,11 @@ export function UserInspectorTab({
   setRestrictReason: (value: string) => void;
   setRevokeSessionId: (value: string) => void;
   setSearchQuery: (value: string) => void;
+  setAdminScheduledTaskId: (value: string) => void;
   setUserId: (value: string) => void;
+  loadAdminScheduledTasksSnapshot: () => Promise<unknown>;
+  loadAdminScheduledTaskRunsSnapshot: () => Promise<unknown>;
+  loadSavedSearchesSnapshot: () => Promise<unknown>;
   summarizePendingIntents: () => Promise<unknown>;
 }) {
   return (
@@ -121,6 +136,17 @@ export function UserInspectorTab({
               onChange={(event) => setSearchQuery(event.currentTarget.value)}
               placeholder="tennis"
               value={searchQuery}
+            />
+          </label>
+          <label className={adminLabelClass}>
+            scheduled task id
+            <input
+              className={adminInputClass}
+              onChange={(event) =>
+                setAdminScheduledTaskId(event.currentTarget.value)
+              }
+              placeholder="task uuid"
+              value={adminScheduledTaskId}
             />
           </label>
         </div>
@@ -161,6 +187,28 @@ export function UserInspectorTab({
             Revoke one session
           </button>
           <button
+            className={adminButtonGhostClass}
+            onClick={loadSavedSearchesSnapshot}
+            type="button"
+          >
+            Load saved-search snapshots
+          </button>
+          <button
+            className={adminButtonGhostClass}
+            onClick={loadAdminScheduledTasksSnapshot}
+            type="button"
+          >
+            Load scheduled-task catalog
+          </button>
+          <button
+            className={adminButtonGhostClass}
+            disabled={!adminScheduledTaskId.trim()}
+            onClick={loadAdminScheduledTaskRunsSnapshot}
+            type="button"
+          >
+            Load selected task runs
+          </button>
+          <button
             className={adminButtonDangerClass}
             onClick={revokeAllSessions}
             type="button"
@@ -168,6 +216,11 @@ export function UserInspectorTab({
             Revoke all sessions
           </button>
         </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Saved-search and scheduled-task snapshots are read-only operator
+          views. Fill the task id above before loading runs so the run list and
+          write actions target the intended job.
+        </p>
         <div className="mt-3 grid gap-3 lg:grid-cols-2">
           <label className={adminLabelClass}>
             deactivate reason

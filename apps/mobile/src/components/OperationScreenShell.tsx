@@ -13,11 +13,11 @@ import { appTheme } from "../theme";
 
 type OperationScreenShellProps = {
   children: ReactNode;
-  closeAccessibilityLabel: string;
+  closeAccessibilityLabel?: string;
   closeHint?: string;
   closeTestID?: string;
   eyebrow: string;
-  onClose: () => void;
+  onClose?: () => void;
   scrollContentContainerStyle?: ScrollViewProps["contentContainerStyle"];
   scrollProps?: Omit<ScrollViewProps, "children" | "contentContainerStyle">;
   subtitle: string;
@@ -51,20 +51,22 @@ export function OperationScreenShell({
               {subtitle}
             </Text>
           </View>
-          <Pressable
-            accessibilityHint={closeHint}
-            accessibilityLabel={closeAccessibilityLabel}
-            accessibilityRole="button"
-            className="mt-1 h-11 w-11 items-center justify-center rounded-full border border-hairline bg-surfaceMuted"
-            hitSlop={8}
-            onPress={onClose}
-            style={({ pressed }) => ({
-              opacity: pressed ? appTheme.motion.pressOpacity : 1,
-            })}
-            testID={closeTestID}
-          >
-            <Ionicons color={appTheme.colors.ink} name="close" size={18} />
-          </Pressable>
+          {onClose && closeAccessibilityLabel ? (
+            <Pressable
+              accessibilityHint={closeHint}
+              accessibilityLabel={closeAccessibilityLabel}
+              accessibilityRole="button"
+              className="mt-1 h-11 w-11 items-center justify-center rounded-full border border-hairline bg-surfaceMuted"
+              hitSlop={8}
+              onPress={onClose}
+              style={({ pressed }) => ({
+                opacity: pressed ? appTheme.motion.pressOpacity : 1,
+              })}
+              testID={closeTestID}
+            >
+              <Ionicons color={appTheme.colors.ink} name="close" size={18} />
+            </Pressable>
+          ) : null}
         </View>
 
         <ScrollView

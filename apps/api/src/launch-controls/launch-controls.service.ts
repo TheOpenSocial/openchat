@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   ServiceUnavailableException,
@@ -193,6 +194,7 @@ export class LaunchControlsService {
     enableRecurringBriefings?: boolean;
     enableRecurringCircles?: boolean;
   }) {
+    const currentSnapshot = await this.getSnapshot(true);
     const updates = [
       ["globalKillSwitch", input.globalKillSwitch],
       ["inviteOnlyMode", input.inviteOnlyMode],
@@ -214,14 +216,30 @@ export class LaunchControlsService {
       ["enableRecurringCircles", input.enableRecurringCircles],
     ] as const;
 
-    const changed: Record<string, Prisma.InputJsonValue> = {};
+    const changedTo: Record<string, Prisma.InputJsonValue> = {};
+    const changedFrom: Record<string, Prisma.InputJsonValue> = {};
     for (const [field, value] of updates) {
       if (value === undefined) {
         continue;
       }
+      const currentValue = currentSnapshot[field];
+      if (this.valuesEqual(currentValue, value)) {
+        continue;
+      }
       const key = SETTING_KEYS[field];
       await this.upsertSystemSetting(key, value);
-      changed[field] = value as Prisma.InputJsonValue;
+      changedFrom[field] = currentValue as Prisma.InputJsonValue;
+      changedTo[field] = value as Prisma.InputJsonValue;
+    }
+
+    const changedKeys = Object.keys(changedTo);
+    if (changedKeys.length === 0) {
+      throw new BadRequestException("no launch-control changes requested");
+    }
+    if (this.reasonRequiredForUpdate(changedTo) && !input.reason?.trim()) {
+      throw new BadRequestException(
+        "reason is required for invite-only, kill-switch, or disabling changes",
+      );
     }
 
     await this.prisma.auditLog.create({
@@ -232,12 +250,38 @@ export class LaunchControlsService {
         entityType: "system",
         metadata: {
           reason: input.reason ?? null,
-          changed,
+          changedKeys,
+          changedFrom,
+          changedTo,
         } as Prisma.InputJsonValue,
       },
     });
 
     return this.getSnapshot(true);
+  }
+
+  private reasonRequiredForUpdate(
+    changedTo: Record<string, Prisma.InputJsonValue>,
+  ) {
+    if (
+      changedTo.globalKillSwitch === true ||
+      changedTo.inviteOnlyMode === true
+    ) {
+      return true;
+    }
+    return Object.entries(changedTo).some(([key, value]) => {
+      if (key === "alphaCohortUserIds") {
+        return false;
+      }
+      return value === false;
+    });
+  }
+
+  private valuesEqual(left: unknown, right: unknown) {
+    if (Array.isArray(left) && Array.isArray(right)) {
+      return JSON.stringify(left) === JSON.stringify(right);
+    }
+    return left === right;
   }
 
   private isActionEnabled(

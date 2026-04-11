@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   buildStepExecutionRecord,
+  buildOpsPackExplainability,
   buildVerificationHistoryRecord,
   buildVerificationRunIngestBody,
   ingestVerificationRunArtifact,
@@ -66,6 +67,30 @@ test("buildVerificationHistoryRecord and ingest body preserve per-step evidence"
   assert.equal(ingestBody.summary.stepId, "release_check_api");
   assert.equal(ingestBody.summary.stepSummary, "release gate baseline");
   assert.equal(ingestBody.artifact.runId, "backend-ops-pack-test");
+});
+
+test("buildOpsPackExplainability summarizes blocking conditions", () => {
+  const explainability = buildOpsPackExplainability({
+    status: "failed",
+    missingRunbooks: [{ file: "docs/admin-runbook.md", exists: false }],
+    envReadinessFailures: [
+      {
+        stepId: "moderation_drill",
+        missingEnv: ["MODERATION_DRILL_ACCESS_TOKEN"],
+      },
+    ],
+    steps: [
+      {
+        id: "moderation_drill",
+        status: "failed",
+        failureClass: "command_failed",
+      },
+    ],
+  });
+
+  assert.equal(explainability.blockingStepId, "moderation_drill");
+  assert.match(explainability.summary, /blocked by moderation_drill/);
+  assert.equal(explainability.nextActions.length, 3);
 });
 
 test("ingestVerificationRunArtifact posts verification history when credentials are present", async (t) => {

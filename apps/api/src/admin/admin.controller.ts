@@ -1288,6 +1288,21 @@ export class AdminController {
       verification: runs.filter((run) => run.lane === "verification").length,
       prodSmoke: runs.filter((run) => run.lane === "prod-smoke").length,
     };
+    const latestByLane = {
+      suite: filteredRuns.find((run) => run.lane === "suite") ?? null,
+      verification:
+        filteredRuns.find((run) => run.lane === "verification") ?? null,
+      prodSmoke: filteredRuns.find((run) => run.lane === "prod-smoke") ?? null,
+    };
+    const explainability = this.buildVerificationRunsExplainability({
+      runs,
+      filteredRuns,
+      latestByLane,
+      query: {
+        lane: query.lane ?? null,
+        status: query.status ?? null,
+      },
+    });
 
     await this.adminAuditService.recordAction({
       adminUserId: admin.adminUserId,
@@ -1309,7 +1324,9 @@ export class AdminController {
         availableRuns: filteredRuns.length,
         byStatus,
         byLane,
+        latestByLane,
       },
+      explainability,
       runs,
     });
   }
@@ -1798,6 +1815,12 @@ export class AdminController {
         return left.stage.localeCompare(right.stage);
       })
       .slice(0, 10);
+    const explainability = this.buildWorkflowListExplainability({
+      filteredRuns,
+      failureClasses,
+      topFailureStages,
+      stageStatusCounts,
+    });
 
     return ok({
       generatedAt: new Date().toISOString(),
@@ -1833,6 +1856,7 @@ export class AdminController {
         topFailureStages,
         stageStatusCounts,
       },
+      explainability,
       runs: filteredRuns.map((run) => this.addWorkflowTriage(run)),
     });
   }
@@ -1914,7 +1938,10 @@ export class AdminController {
       },
     });
 
-    return ok(snapshot);
+    return ok({
+      ...snapshot,
+      explainability: this.buildAgentOutcomesExplainability(snapshot),
+    });
   }
 
   @Get("ops/agent-actions")
@@ -2157,6 +2184,78 @@ export class AdminController {
       },
     });
 
+    const items = normalizedRows.map((row) => {
+      const thread = row.threadId
+        ? (threadById.get(row.threadId) ?? null)
+        : null;
+      const latestUserMessage = row.threadId
+        ? (latestUserMessageByThreadId.get(row.threadId) ?? null)
+        : null;
+      const checkpoint = row.traceId
+        ? (checkpointByTraceId.get(row.traceId) ?? null)
+        : null;
+      return {
+        id: row.id,
+        actorUserId: row.actorUserId,
+        threadId: row.threadId,
+        createdAt: row.createdAt.toISOString(),
+        traceId: row.traceId,
+        tool: row.tool,
+        status: row.status,
+        role: row.role,
+        reason: row.reason,
+        summary: row.summary,
+        input: row.input ?? null,
+        output: row.output ?? null,
+        thread: thread
+          ? {
+              title: thread.title ?? null,
+              createdAt: thread.createdAt.toISOString(),
+            }
+          : null,
+        latestUserMessage: latestUserMessage
+          ? {
+              id: latestUserMessage.id,
+              content: latestUserMessage.content,
+              createdAt: latestUserMessage.createdAt.toISOString(),
+            }
+          : null,
+        linkedCheckpoint: checkpoint
+          ? {
+              id: checkpoint.id,
+              actionType: checkpoint.actionType,
+              tool: checkpoint.tool,
+              riskLevel: checkpoint.riskLevel,
+              status: checkpoint.status,
+              decisionReason: checkpoint.decisionReason,
+              requestedByRole: checkpoint.requestedByRole,
+              createdAt: checkpoint.createdAt.toISOString(),
+              resolvedAt: checkpoint.resolvedAt?.toISOString() ?? null,
+            }
+          : null,
+        relatedTraceEvents: row.traceId
+          ? (relatedTraceEventsByTraceId.get(row.traceId) ?? [])
+          : [],
+        replayHint: this.buildAgentActionReplayHint({
+          status: row.status,
+          tool: row.tool,
+          reason: row.reason,
+          checkpointStatus: checkpoint?.status ?? null,
+        }),
+      };
+    });
+    const explainability = this.buildAgentActionsExplainability({
+      filters: {
+        limit,
+        tool: payload.tool ?? null,
+        status: payload.status ?? null,
+        actorUserId: payload.actorUserId ?? null,
+        threadId: payload.threadId ?? null,
+        traceId: payload.traceId ?? null,
+      },
+      items,
+    });
+
     return ok({
       filters: {
         limit,
@@ -2166,66 +2265,8 @@ export class AdminController {
         threadId: payload.threadId ?? null,
         traceId: payload.traceId ?? null,
       },
-      items: normalizedRows.map((row) => {
-        const thread = row.threadId
-          ? (threadById.get(row.threadId) ?? null)
-          : null;
-        const latestUserMessage = row.threadId
-          ? (latestUserMessageByThreadId.get(row.threadId) ?? null)
-          : null;
-        const checkpoint = row.traceId
-          ? (checkpointByTraceId.get(row.traceId) ?? null)
-          : null;
-        return {
-          id: row.id,
-          actorUserId: row.actorUserId,
-          threadId: row.threadId,
-          createdAt: row.createdAt.toISOString(),
-          traceId: row.traceId,
-          tool: row.tool,
-          status: row.status,
-          role: row.role,
-          reason: row.reason,
-          summary: row.summary,
-          input: row.input ?? null,
-          output: row.output ?? null,
-          thread: thread
-            ? {
-                title: thread.title ?? null,
-                createdAt: thread.createdAt.toISOString(),
-              }
-            : null,
-          latestUserMessage: latestUserMessage
-            ? {
-                id: latestUserMessage.id,
-                content: latestUserMessage.content,
-                createdAt: latestUserMessage.createdAt.toISOString(),
-              }
-            : null,
-          linkedCheckpoint: checkpoint
-            ? {
-                id: checkpoint.id,
-                actionType: checkpoint.actionType,
-                tool: checkpoint.tool,
-                riskLevel: checkpoint.riskLevel,
-                status: checkpoint.status,
-                decisionReason: checkpoint.decisionReason,
-                requestedByRole: checkpoint.requestedByRole,
-                createdAt: checkpoint.createdAt.toISOString(),
-                resolvedAt: checkpoint.resolvedAt?.toISOString() ?? null,
-              }
-            : null,
-          relatedTraceEvents: row.traceId
-            ? (relatedTraceEventsByTraceId.get(row.traceId) ?? [])
-            : [],
-          replayHint: this.buildAgentActionReplayHint({
-            status: row.status,
-            tool: row.tool,
-            reason: row.reason,
-            checkpointStatus: checkpoint?.status ?? null,
-          }),
-        };
-      }),
+      explainability,
+      items,
     });
   }
 
@@ -3816,6 +3857,97 @@ export class AdminController {
     };
   }
 
+  private buildVerificationRunsExplainability(input: {
+    runs: VerificationRunRecord[];
+    filteredRuns: VerificationRunRecord[];
+    latestByLane: {
+      suite: VerificationRunRecord | null;
+      verification: VerificationRunRecord | null;
+      prodSmoke: VerificationRunRecord | null;
+    };
+    query: {
+      lane: string | null;
+      status: string | null;
+    };
+  }) {
+    const latestProblemRun =
+      input.filteredRuns.find(
+        (run) =>
+          run.status === "failed" ||
+          run.canaryVerdict === "critical" ||
+          run.status === "skipped" ||
+          run.canaryVerdict === "watch",
+      ) ?? null;
+    const latestBlockedReasons = this.readStringArray(
+      latestProblemRun?.summary?.blockedReasons ??
+        latestProblemRun?.artifact?.blockedReasons,
+    );
+    const latestStepId = this.readString(latestProblemRun?.summary?.stepId);
+    const laneCoverage = {
+      suite: Boolean(input.latestByLane.suite),
+      verification: Boolean(input.latestByLane.verification),
+      prodSmoke: Boolean(input.latestByLane.prodSmoke),
+    };
+    const allLanesHealthy = Object.values(input.latestByLane).every(
+      (run) =>
+        run && run.status === "passed" && run.canaryVerdict === "healthy",
+    );
+    const summary =
+      input.runs.length === 0
+        ? "No verification runs have been ingested yet."
+        : allLanesHealthy
+          ? "Latest verification evidence is healthy across all lanes."
+          : latestProblemRun
+            ? `Latest risky verification signal is ${latestProblemRun.lane}:${latestProblemRun.status} (${latestProblemRun.canaryVerdict}).`
+            : "Verification evidence exists but lane health is mixed.";
+
+    const nextActions = [
+      {
+        id: "open_latest_verification_runs",
+        label: "Inspect recent verification runs",
+        endpoint: "/api/admin/ops/verification-runs?limit=10",
+        reason:
+          latestProblemRun?.status === "failed"
+            ? "The latest risky verification run failed and should be reviewed first."
+            : "Review the most recent verification evidence before rollout.",
+      },
+      {
+        id: "open_failed_workflows",
+        label: "Inspect non-healthy workflow runs",
+        endpoint: "/api/admin/ops/agent-workflows?failuresOnly=true",
+        reason:
+          "Use workflow failures to confirm whether verification issues are runtime regressions or isolated drill failures.",
+      },
+    ];
+    if (!laneCoverage.prodSmoke) {
+      nextActions.push({
+        id: "ingest_prod_smoke_lane",
+        label: "Ingest prod-smoke evidence",
+        endpoint: "/api/admin/ops/verification-runs?lane=prod-smoke",
+        reason:
+          "No prod-smoke run is present in admin evidence yet; canary confidence is incomplete.",
+      });
+    }
+
+    return {
+      summary,
+      latestProblemRun: latestProblemRun
+        ? {
+            runId: latestProblemRun.runId,
+            lane: latestProblemRun.lane,
+            status: latestProblemRun.status,
+            canaryVerdict: latestProblemRun.canaryVerdict,
+            blockedReasons: latestBlockedReasons,
+            stepId: latestStepId,
+          }
+        : null,
+      laneCoverage,
+      allLanesHealthy,
+      nextActions,
+      activeFilters: input.query,
+    };
+  }
+
   private async readVerificationRuns(): Promise<VerificationRunRecord[]> {
     const value = await this.appCacheService.getJson<unknown[]>(
       AdminController.VERIFICATION_RUN_CACHE_KEY,
@@ -4352,6 +4484,114 @@ export class AdminController {
       .sort((left, right) => right.count - left.count);
   }
 
+  private buildWorkflowListExplainability(input: {
+    filteredRuns: Array<{
+      workflowRunId: string;
+      health: "healthy" | "watch" | "critical";
+      replayability: "replayable" | "partial" | "inspect_only";
+      integrity: {
+        sideEffectCount: number;
+        dedupedSideEffectCount: number;
+        reusedRelations: string[];
+      };
+      stages: Array<{ stage: string; status: string; at: string }>;
+      stageStatusCounts: {
+        started: number;
+        completed: number;
+        skipped: number;
+        blocked: number;
+        degraded: number;
+        failed: number;
+        unknown: number;
+      };
+      latestCheckpoint: {
+        stage: string;
+        status: string;
+        at: string;
+      } | null;
+    }>;
+    failureClasses: {
+      none: number;
+      llmOrSchema: number;
+      moderationOrPolicy: number;
+      matchingOrNegotiation: number;
+      queueOrReplay: number;
+      persistenceOrDedupe: number;
+      notificationOrFollowup: number;
+      latencyOrCapacity: number;
+      observabilityGap: number;
+    };
+    topFailureStages: Array<{
+      stage: string;
+      status: "failed" | "blocked" | "degraded";
+      count: number;
+    }>;
+    stageStatusCounts: {
+      started: number;
+      completed: number;
+      skipped: number;
+      blocked: number;
+      degraded: number;
+      failed: number;
+      unknown: number;
+    };
+  }) {
+    const enrichedRuns = input.filteredRuns.map((run) =>
+      this.addWorkflowTriage(run),
+    );
+    const primaryFailureClass =
+      this.buildFailureClassSummary(input.failureClasses)[0] ?? null;
+    const primaryFailureStage = input.topFailureStages[0] ?? null;
+    const criticalRun =
+      enrichedRuns.find((run) => run.health === "critical") ?? null;
+    const summary =
+      enrichedRuns.length === 0
+        ? "No workflow runs matched the current filter."
+        : !primaryFailureClass || primaryFailureClass.class === "none"
+          ? "Filtered workflow runs are healthy."
+          : `Primary workflow failure class is ${primaryFailureClass.class}.`;
+
+    const nextActions: Array<{
+      id: string;
+      label: string;
+      endpoint: string;
+      reason: string;
+    }> = [
+      {
+        id: "open_workflow_failures",
+        label: "Inspect workflow failures",
+        endpoint: "/api/admin/ops/agent-workflows?failuresOnly=true",
+        reason:
+          primaryFailureClass?.hint ??
+          "Inspect the most recent non-healthy workflow runs.",
+      },
+    ];
+    if (primaryFailureStage) {
+      nextActions.push({
+        id: "filter_by_primary_stage",
+        label: "Filter by suspect stage",
+        endpoint: `/api/admin/ops/agent-workflows?suspectStage=${encodeURIComponent(primaryFailureStage.stage)}&failuresOnly=true`,
+        reason:
+          "Filter to the most common degraded/blocked/failed stage first.",
+      });
+    }
+
+    return {
+      summary,
+      primaryFailureClass,
+      primaryFailureStage,
+      criticalRun: criticalRun
+        ? {
+            workflowRunId: criticalRun.workflowRunId,
+            replayability: criticalRun.replayability,
+            triage: criticalRun.triage,
+          }
+        : null,
+      stageStatusCounts: input.stageStatusCounts,
+      nextActions,
+    };
+  }
+
   private buildAgentReliabilityExplainability(input: {
     workflowHealth: { healthy: number; watch: number; critical: number };
     failureClassSummary: Array<{
@@ -4445,6 +4685,168 @@ export class AdminController {
       evalStatus,
       memorySignals: input.memorySignals,
       workflowHealth: input.workflowHealth,
+      nextActions,
+    };
+  }
+
+  private buildAgentOutcomesExplainability(input: {
+    summary: {
+      totalActions: number;
+      executedActions: number;
+      deniedActions: number;
+      failedActions: number;
+    };
+    toolAttempts: Array<{
+      tool: string;
+      attempted: number;
+      executed: number;
+      denied: number;
+      failed: number;
+    }>;
+    introRequestAcceptance?: {
+      acceptanceRate: number | null;
+    };
+    circleJoinConversion?: {
+      conversionRate: number | null;
+    };
+    followupUsefulness?: {
+      usefulnessRate: number | null;
+      completionRate: number | null;
+    };
+  }) {
+    const topTool =
+      [...input.toolAttempts].sort(
+        (left, right) => right.attempted - left.attempted,
+      )[0] ?? null;
+    const failedOrDenied =
+      input.summary.deniedActions + input.summary.failedActions;
+    const summary =
+      input.summary.totalActions === 0
+        ? "No recent agent action telemetry is available."
+        : failedOrDenied === 0
+          ? "Agent outcomes are healthy across the current window."
+          : `Agent outcomes show ${failedOrDenied} denied/failed actions in the current window.`;
+
+    const nextActions = [
+      {
+        id: "open_agent_actions",
+        label: "Inspect recent agent actions",
+        endpoint: "/api/admin/ops/agent-actions?limit=25",
+        reason:
+          failedOrDenied > 0
+            ? "Denied/failed actions are the fastest path to root cause."
+            : "Use action traces to confirm healthy execution patterns.",
+      },
+      {
+        id: "open_agent_reliability",
+        label: "Inspect reliability snapshot",
+        endpoint: "/api/admin/ops/agent-reliability",
+        reason:
+          "Cross-check outcomes against workflow failures and verification status.",
+      },
+    ];
+    if ((input.followupUsefulness?.usefulnessRate ?? 1) < 0.6) {
+      nextActions.push({
+        id: "inspect_followup_usefulness",
+        label: "Inspect follow-up usefulness",
+        endpoint: "/api/admin/ops/agent-outcomes",
+        reason:
+          "Follow-up usefulness is low; confirm whether follow-up scheduling or action quality is drifting.",
+      });
+    }
+
+    return {
+      summary,
+      topTool,
+      rates: {
+        introAcceptanceRate:
+          input.introRequestAcceptance?.acceptanceRate ?? null,
+        circleConversionRate:
+          input.circleJoinConversion?.conversionRate ?? null,
+        followupUsefulnessRate:
+          input.followupUsefulness?.usefulnessRate ?? null,
+        followupCompletionRate:
+          input.followupUsefulness?.completionRate ?? null,
+      },
+      nextActions,
+    };
+  }
+
+  private buildAgentActionsExplainability(input: {
+    filters: {
+      limit: number;
+      tool: string | null;
+      status: string | null;
+      actorUserId: string | null;
+      threadId: string | null;
+      traceId: string | null;
+    };
+    items: Array<{
+      tool: string | null;
+      status: string | null;
+      replayHint: string;
+      linkedCheckpoint: {
+        id: string;
+        status: string;
+        decisionReason: string | null;
+      } | null;
+      traceId: string | null;
+    }>;
+  }) {
+    const statusCounts = {
+      executed: input.items.filter((item) => item.status === "executed").length,
+      denied: input.items.filter((item) => item.status === "denied").length,
+      failed: input.items.filter((item) => item.status === "failed").length,
+      pending: input.items.filter((item) => item.status === "pending").length,
+      other: input.items.filter(
+        (item) =>
+          item.status !== "executed" &&
+          item.status !== "denied" &&
+          item.status !== "failed" &&
+          item.status !== "pending",
+      ).length,
+    };
+    const primaryItem =
+      input.items.find((item) => item.status === "failed") ??
+      input.items.find((item) => item.status === "denied") ??
+      input.items.find((item) => item.status === "pending") ??
+      input.items[0] ??
+      null;
+    const summary =
+      input.items.length === 0
+        ? "No agent actions matched the current filter."
+        : primaryItem?.status === "failed"
+          ? "Recent agent actions include failures that require trace inspection."
+          : primaryItem?.status === "denied"
+            ? "Recent agent actions are being denied; review approval and policy checkpoints."
+            : "Recent agent actions are available for trace inspection.";
+
+    const nextActions = primaryItem
+      ? [
+          {
+            id: "inspect_primary_action_trace",
+            label: "Inspect primary action trace",
+            endpoint: primaryItem.traceId
+              ? `/api/admin/ops/agent-actions?traceId=${encodeURIComponent(primaryItem.traceId)}`
+              : "/api/admin/ops/agent-actions?limit=25",
+            reason: primaryItem.replayHint,
+          },
+        ]
+      : [];
+
+    return {
+      summary,
+      statusCounts,
+      primaryItem: primaryItem
+        ? {
+            tool: primaryItem.tool,
+            status: primaryItem.status,
+            checkpointStatus: primaryItem.linkedCheckpoint?.status ?? null,
+            checkpointDecisionReason:
+              primaryItem.linkedCheckpoint?.decisionReason ?? null,
+          }
+        : null,
+      activeFilters: input.filters,
       nextActions,
     };
   }
@@ -4616,6 +5018,15 @@ export class AdminController {
 
   private readString(value: unknown): string | null {
     return typeof value === "string" && value.trim().length > 0 ? value : null;
+  }
+
+  private readStringArray(value: unknown): string[] {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return value
+      .map((entry) => this.readString(entry))
+      .filter((entry): entry is string => Boolean(entry));
   }
 
   private buildAgentActionReplayHint(args: {

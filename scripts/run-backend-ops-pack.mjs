@@ -183,6 +183,59 @@ export function buildVerificationRunIngestBody(record, artifact) {
   };
 }
 
+export function buildOpsPackExplainability({
+  status,
+  missingRunbooks,
+  envReadinessFailures,
+  steps,
+}) {
+  const failedStep = steps.find((step) => step.status === "failed") ?? null;
+  const summary =
+    status === "passed"
+      ? "Backend ops pack is healthy. Required checks passed."
+      : failedStep
+        ? `Backend ops pack is blocked by ${failedStep.id}.`
+        : missingRunbooks.length > 0
+          ? "Backend ops pack is blocked by missing runbooks."
+          : envReadinessFailures.length > 0
+            ? "Backend ops pack is blocked by missing environment readiness."
+            : "Backend ops pack is blocked.";
+
+  const nextActions = [];
+  if (missingRunbooks.length > 0) {
+    nextActions.push({
+      id: "restore_runbooks",
+      label: "Restore required runbooks",
+      reason: `Missing files: ${missingRunbooks.map((check) => check.file).join(", ")}`,
+    });
+  }
+  if (envReadinessFailures.length > 0) {
+    nextActions.push({
+      id: "fill_env_gaps",
+      label: "Fill missing environment readiness",
+      reason: envReadinessFailures
+        .map((readiness) => `${readiness.stepId}: ${readiness.missingEnv.join(", ")}`)
+        .join(" | "),
+    });
+  }
+  if (failedStep) {
+    nextActions.push({
+      id: "inspect_failed_step",
+      label: "Inspect failed step",
+      reason:
+        failedStep.failureClass === "timeout"
+          ? `${failedStep.id} timed out; inspect step timeout, service readiness, and queue pressure.`
+          : `${failedStep.id} failed; inspect the command output and linked admin verification evidence.`,
+    });
+  }
+
+  return {
+    summary,
+    blockingStepId: failedStep?.id ?? null,
+    nextActions,
+  };
+}
+
 function runCommand(step) {
   const startedAt = Date.now();
   const timeoutMs = resolveStepTimeoutMs(step.id);
@@ -475,6 +528,12 @@ async function main() {
     ],
     steps,
     verificationRunIngestions,
+    explainability: buildOpsPackExplainability({
+      status,
+      missingRunbooks,
+      envReadinessFailures,
+      steps,
+    }),
   };
 
   artifact.verificationRunIngest = await ingestVerificationRunArtifact(artifact);

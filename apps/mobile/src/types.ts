@@ -5,7 +5,7 @@ import type {
 
 export type AppStage = "auth" | "onboarding" | "home";
 
-export type HomeTab = "home" | "chats" | "profile";
+export type HomeTab = "home" | "chats" | "activity" | "profile";
 
 export type SocialMode = "one_to_one" | "group" | "either";
 

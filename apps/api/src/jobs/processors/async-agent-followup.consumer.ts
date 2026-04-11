@@ -332,28 +332,28 @@ export class AsyncAgentFollowupConsumer extends WorkerHost {
     const nextActionHint = this.buildNextActionHint(rawText);
 
     if (template === "no_match_yet") {
-      return `Nothing strong enough yet${contextLabel}. I’m still searching in the background. ${nextActionHint}`;
+      return `No strong match yet${contextLabel}. ${nextActionHint}`;
     }
 
     if (template === "progress_update") {
       if (counts.accepted > 0 && counts.pending > 0) {
-        return `Quick update${contextLabel}: ${counts.accepted} accepted, and I still have ${counts.pending} more in motion. ${nextActionHint}`;
+        return `${counts.accepted} accepted and ${counts.pending} still active${contextLabel}. ${nextActionHint}`;
       }
       if (counts.accepted > 0) {
-        return `Quick update${contextLabel}: ${counts.accepted} accepted so far. ${nextActionHint}`;
+        return `${counts.accepted} accepted so far${contextLabel}. ${nextActionHint}`;
       }
-      return `Quick update${contextLabel}: I still have ${counts.pending} in motion and I’m watching for the strongest response. ${nextActionHint}`;
+      return `${counts.pending} still active${contextLabel}. ${nextActionHint}`;
     }
 
     if (counts.accepted > 0 && counts.pending > 0) {
-      return `Quick update${contextLabel}: ${counts.accepted} accepted, and ${counts.pending} are still in motion. ${nextActionHint}`;
+      return `${counts.accepted} accepted and ${counts.pending} still active${contextLabel}. ${nextActionHint}`;
     }
 
     if (counts.accepted > 0 && counts.pending === 0) {
-      return `Good news${contextLabel}: ${counts.accepted} accepted so far. ${nextActionHint}`;
+      return `${counts.accepted} accepted${contextLabel}. ${nextActionHint}`;
     }
 
-    return `Still in motion${contextLabel}: ${counts.pending} pending invite${counts.pending === 1 ? "" : "s"}. ${nextActionHint}`;
+    return `${counts.pending} pending invite${counts.pending === 1 ? "" : "s"}${contextLabel}. ${nextActionHint}`;
   }
 
   private buildFollowupContextLabel(rawText: string) {

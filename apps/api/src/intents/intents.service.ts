@@ -998,7 +998,7 @@ export class IntentsService {
         if (workflowThreadId) {
           await this.agentService.appendWorkflowUpdate(
             workflowThreadId,
-            `Quick update: nothing strong enough yet, so I widened the search and kicked off another pass (level ${timeoutEscalation.targetLevel}).`,
+            `Nothing strong enough yet, so I widened the search and started another pass (level ${timeoutEscalation.targetLevel}).`,
             {
               intentId,
               fanoutCount: 0,
@@ -1011,7 +1011,7 @@ export class IntentsService {
         await this.notificationsService.createInAppNotification(
           intent.userId,
           NotificationType.AGENT_UPDATE,
-          "Still on it in the background. I widened the search and started another pass.",
+          "I widened the search and started another pass.",
         );
         await this.workflowRuntimeService?.checkpoint({
           workflowRunId,
@@ -1037,8 +1037,7 @@ export class IntentsService {
           template: "progress_update",
           notificationType: NotificationType.AGENT_UPDATE,
           delayMs: 45_000,
-          message:
-            "Quick update: I widened the search and started another background pass.",
+          message: "I widened the search and started another pass.",
         });
         await this.enqueueDelayedRoutingRetry({
           intentId,
@@ -1787,16 +1786,16 @@ export class IntentsService {
     const dedupedSuggestions = Array.from(new Set(suggestions)).slice(0, 3);
     const suggestionText =
       dedupedSuggestions.length > 0
-        ? `The fastest next move is to ${dedupedSuggestions.join(", ")}.`
-        : "The fastest next move is to widen timing, try online or in-person, or switch between 1:1 and a small group.";
+        ? `Best next move: ${dedupedSuggestions.join(", ")}.`
+        : "Best next move: widen timing, switch format, or try 1:1 versus a small group.";
 
     const backgroundText = options.includeBackground
-      ? " I’m still searching in the background."
+      ? " Search is still active."
       : "";
 
     const topicText = primaryTopic ? ` for ${primaryTopic}` : "";
 
-    return `Nothing strong enough yet${topicText}.${backgroundText} ${suggestionText}`.trim();
+    return `No strong match yet${topicText}.${backgroundText} ${suggestionText}`.trim();
   }
 
   private clampIntentCount(value: number) {

@@ -179,6 +179,21 @@ const catalogs = {
     homeQueuedActions: "{count} action{plural} queued for sync.",
     homeAgentSeedPrompt:
       "What would you like to do today, or who would you like to meet?",
+    homeThreadLoadFailedTitle: "Could not load your conversation",
+    homeThreadLoadFailedBody:
+      "The main conversation did not load correctly. Try again.",
+    homeThreadRetryCta: "Retry",
+    homeThreadRecoveryKicker: "Agentic social",
+    homeThreadRecoveryTitle: "Reconnecting your main thread",
+    homeThreadRecoveryBody:
+      "I’m restoring your conversation and will place it back here as soon as the thread responds.",
+    homeThreadRecoveryWaitingTitle: "Waiting to reconnect your main thread",
+    homeThreadRecoveryWaitingBody:
+      "I’m keeping this conversation ready and will reconnect as soon as the thread is available.",
+    homeThreadRetryingCountdown:
+      "Reconnecting to your main thread in {seconds}s · attempt {attempt}",
+    homeThreadRetryManualHint:
+      "If this keeps happening, retry once the connection settles.",
     openChatPresenceTitle: "Agentic social",
     openChatPresenceSubtitle: "Ready when you are.",
     openChatEmptyTitle: "What do you want to do?",
@@ -531,6 +546,22 @@ const catalogs = {
     homeQueuedActions: "{count} acción{plural} en cola para sincronizar.",
     homeAgentSeedPrompt:
       "¿Qué te gustaría hacer hoy, o a quién te gustaría conocer?",
+    homeThreadLoadFailedTitle: "No se pudo cargar tu conversación",
+    homeThreadLoadFailedBody:
+      "La conversación principal no se cargó correctamente. Inténtalo de nuevo.",
+    homeThreadRetryCta: "Reintentar",
+    homeThreadRecoveryKicker: "Social agéntico",
+    homeThreadRecoveryTitle: "Reconectando tu hilo principal",
+    homeThreadRecoveryBody:
+      "Estoy restaurando tu conversación y la voy a traer de vuelta aquí apenas el hilo responda.",
+    homeThreadRecoveryWaitingTitle:
+      "Esperando para reconectar tu hilo principal",
+    homeThreadRecoveryWaitingBody:
+      "Mantengo esta conversación lista y reconectaré apenas el hilo vuelva a estar disponible.",
+    homeThreadRetryingCountdown:
+      "Reconectando tu hilo principal en {seconds}s · intento {attempt}",
+    homeThreadRetryManualHint:
+      "Si esto sigue pasando, reintenta cuando la conexión se estabilice.",
     openChatPresenceTitle: "Social agéntico",
     openChatPresenceSubtitle: "Listo cuando tú quieras.",
     openChatEmptyTitle: "¿Qué quieres hacer?",

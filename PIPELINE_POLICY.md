@@ -2,7 +2,7 @@
 
 ## Role boundaries
 
-- PM updates planning artifacts (`PROJECT.md`, `PROGRESS.md`, `QUESTIONS.md`).
+- PM updates planning artifacts (`PROJECT.md`, `BACKEND_PROGRESS.md`, `QUESTIONS.md`).
 - Implementer edits product code/config only; it must not update planning artifacts.
 - Validator verifies implementation using commands/tests/build evidence.
 - PM gate checks completion quality before final task completion.

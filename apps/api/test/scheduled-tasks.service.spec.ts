@@ -265,4 +265,99 @@ describe("ScheduledTasksService", () => {
       }),
     );
   });
+
+  it("supports admin pause/resume/archive/run-now operations", async () => {
+    const queue: any = {
+      add: vi.fn().mockResolvedValue({}),
+    };
+    const prisma: any = {
+      scheduledTask: {
+        findUnique: vi
+          .fn()
+          .mockResolvedValueOnce({
+            id: TASK_ID,
+            userId: USER_ID,
+            status: "active",
+          })
+          .mockResolvedValueOnce({
+            id: TASK_ID,
+            userId: USER_ID,
+            status: "paused",
+            scheduleConfig: {
+              kind: "weekly",
+              days: ["thu"],
+              hour: 18,
+              minute: 0,
+              timezone: "UTC",
+            },
+          })
+          .mockResolvedValueOnce({
+            id: TASK_ID,
+            userId: USER_ID,
+            status: "active",
+          })
+          .mockResolvedValueOnce({
+            id: TASK_ID,
+            userId: USER_ID,
+            status: "active",
+          }),
+        update: vi
+          .fn()
+          .mockResolvedValueOnce({
+            id: TASK_ID,
+            userId: USER_ID,
+            status: "paused",
+          })
+          .mockResolvedValueOnce({
+            id: TASK_ID,
+            userId: USER_ID,
+            status: "active",
+            nextRunAt: new Date("2026-04-09T18:00:00.000Z"),
+          })
+          .mockResolvedValueOnce({
+            id: TASK_ID,
+            userId: USER_ID,
+            status: "archived",
+            nextRunAt: null,
+          }),
+      },
+      scheduledTaskRun: {
+        create: vi.fn().mockResolvedValue({
+          id: RUN_ID,
+          scheduledTaskId: TASK_ID,
+          userId: USER_ID,
+        }),
+      },
+    };
+
+    const service = new ScheduledTasksService(prisma, queue);
+
+    const paused = await service.adminPauseTask(TASK_ID);
+    const resumed = await service.adminResumeTask(TASK_ID);
+    const archived = await service.adminArchiveTask(TASK_ID);
+    const queued = await service.adminRunTaskNow(TASK_ID);
+
+    expect(paused.status).toBe("paused");
+    expect(resumed.status).toBe("active");
+    expect(archived.status).toBe("archived");
+    expect(queued).toEqual({
+      taskId: TASK_ID,
+      runId: RUN_ID,
+      userId: USER_ID,
+      status: "queued",
+    });
+    expect(queue.add).toHaveBeenCalledWith(
+      "ScheduledTaskRun",
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          scheduledTaskId: TASK_ID,
+          scheduledTaskRunId: RUN_ID,
+          trigger: "manual",
+        }),
+      }),
+      expect.objectContaining({
+        jobId: `scheduled-task-run:${RUN_ID}`,
+      }),
+    );
+  });
 });

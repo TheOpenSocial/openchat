@@ -137,6 +137,7 @@ const drillArtifact = {
   },
   enforcementPath: null,
   failureReason: null,
+  explainability: null,
   steps: [],
   success: false,
 };
@@ -151,6 +152,47 @@ function recordStep(step) {
     at: new Date().toISOString(),
     ...step,
   });
+}
+
+function buildDrillExplainability() {
+  const latestFailedStep =
+    [...drillArtifact.steps]
+      .reverse()
+      .find((step) => step.status === "failed") ?? null;
+  const summary = drillArtifact.success
+    ? "Moderation drill completed successfully and produced operator evidence."
+    : latestFailedStep
+      ? `Moderation drill failed during ${latestFailedStep.id}.`
+      : "Moderation drill did not complete successfully.";
+
+  const nextActions = [];
+  if (!drillArtifact.evidence.queueVerified) {
+    nextActions.push({
+      id: "check_moderation_queue",
+      label: "Check moderation queue visibility",
+      reason: "The drill could not confirm queue visibility for the target flag.",
+    });
+  }
+  if (!drillArtifact.evidence.auditVerified) {
+    nextActions.push({
+      id: "check_audit_trail",
+      label: "Check moderation audit trail",
+      reason: "The drill could not confirm audit visibility for assignment/triage.",
+    });
+  }
+  if (latestFailedStep) {
+    nextActions.push({
+      id: "inspect_failed_step",
+      label: "Inspect failed drill step",
+      reason: latestFailedStep.error ?? "Review the failed drill step output.",
+    });
+  }
+
+  return {
+    summary,
+    latestFailedStep: latestFailedStep?.id ?? null,
+    nextActions,
+  };
 }
 
 function sleep(ms) {
@@ -800,6 +842,7 @@ async function main() {
   drillArtifact.ids.flagId = flagId;
   drillArtifact.ids.reportId = reportId;
   drillArtifact.timings.totalMs = Date.now() - new Date(drillArtifact.generatedAt).getTime();
+  drillArtifact.explainability = buildDrillExplainability();
   persistArtifact();
 
   console.log("");
@@ -815,6 +858,7 @@ try {
     error instanceof Error ? error.message : String(error);
   drillArtifact.timings.totalMs =
     Date.now() - new Date(drillArtifact.generatedAt).getTime();
+  drillArtifact.explainability = buildDrillExplainability();
   try {
     persistArtifact();
   } catch {}

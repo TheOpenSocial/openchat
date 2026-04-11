@@ -4,17 +4,20 @@ import { Platform, Pressable, Text, type PressableProps } from "react-native";
 import { cn } from "../../lib/cn";
 import { appTheme } from "../../theme";
 
-const chipVariants = cva("rounded-full border px-3.5 py-1.5", {
-  variants: {
-    selected: {
-      true: "border-accent/50 bg-accentMuted",
-      false: "border-hairline bg-surfaceMuted/90",
+const chipVariants = cva(
+  "min-h-[44px] flex-row items-center justify-center rounded-full border px-3.5 py-2",
+  {
+    variants: {
+      selected: {
+        true: "border-accent/50 bg-accentMuted",
+        false: "border-hairline bg-surfaceMuted/90",
+      },
+    },
+    defaultVariants: {
+      selected: false,
     },
   },
-  defaultVariants: {
-    selected: false,
-  },
-});
+);
 
 const chipTextVariants = cva("text-[13px] font-medium", {
   variants: {

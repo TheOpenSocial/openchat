@@ -6,10 +6,10 @@ import {
   View,
 } from "react-native";
 
+import { appTheme } from "../theme";
 import { cn } from "../lib/cn";
 
-/** Slightly brighter than hairline for legibility on `surface` */
-const PLACEHOLDER_MUTED = "#949494";
+const PLACEHOLDER_MUTED = appTheme.colors.muted;
 
 interface ComposerInputProps extends TextInputProps {
   containerClassName?: string;
@@ -35,6 +35,7 @@ export function ComposerInput({
     >
       <TextInput
         className={cn("text-[15px] leading-[25px] text-ink", className)}
+        allowFontScaling
         placeholderTextColor={placeholderTextColor}
         testID={testID}
         textAlignVertical="top"

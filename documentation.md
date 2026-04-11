@@ -75,7 +75,7 @@ pnpm deps:update:latest
 
 Rule:
 - keep backend/security-critical libraries on latest stable unless blocked by a verified compatibility constraint.
-- for frontend/tooling lanes, track major upgrades in `PROGRESS.md` with explicit blockers and migration owners.
+- for frontend/tooling lanes, track major upgrades in `FRONTEND_PROGRESS.md` with explicit blockers and migration owners.
 
 ## Central settings sync
 Repo-level environment URLs and OAuth helper values are centralized in `settings.json`.

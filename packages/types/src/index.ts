@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export * from "./agent-transcript.js";
+export * from "./chat-replies.js";
 
 export const uuidSchema = z.string().uuid();
 export const isoDateTimeSchema = z.string().datetime();
@@ -1472,6 +1473,105 @@ export const createChatBodySchema = z.object({
   type: z.enum(["dm", "group"]),
 });
 
+export const chatMessageReactionSchema = z.object({
+  id: uuidSchema,
+  messageId: uuidSchema,
+  userId: uuidSchema,
+  emoji: z.string().min(1).max(32),
+  createdAt: isoDateTimeSchema,
+});
+
+export const chatMessageStatusSchema = z.object({
+  state: z.enum(["sent", "delivered", "read"]),
+  deliveredCount: z.number().int().min(0),
+  readCount: z.number().int().min(0),
+  pendingCount: z.number().int().min(0),
+});
+
+export const chatMessageListItemSchema = z.object({
+  id: uuidSchema,
+  chatId: uuidSchema,
+  senderUserId: uuidSchema,
+  body: z.string(),
+  moderationState: z.nativeEnum(ModerationStatus),
+  createdAt: isoDateTimeSchema,
+  editedAt: isoDateTimeSchema.nullable().optional(),
+  replyToMessageId: uuidSchema.nullable().optional(),
+  reactions: z.array(chatMessageReactionSchema).default([]),
+  status: chatMessageStatusSchema,
+});
+
+export const chatMessageListResponseSchema = z.object({
+  messages: z.array(chatMessageListItemSchema),
+  unreadCount: z.number().int().min(0),
+  highWatermark: isoDateTimeSchema.nullable(),
+  hasMore: z.boolean(),
+  deduped: z.boolean(),
+});
+
+export const chatParticipantPresenceSchema = z.object({
+  online: z.boolean(),
+  state: z.enum([
+    "online",
+    "away",
+    "invisible",
+    "available_now",
+    "available_today",
+  ]),
+  lastSeenAt: isoDateTimeSchema.nullable().optional(),
+});
+
+export const chatMetadataParticipantSchema = z.object({
+  userId: uuidSchema,
+  role: z.string(),
+  joinedAt: isoDateTimeSchema,
+  presence: chatParticipantPresenceSchema.optional(),
+});
+
+export const chatMetadataResponseSchema = z.object({
+  chatId: uuidSchema,
+  type: z.enum(["dm", "group"]),
+  connectionId: uuidSchema,
+  createdAt: isoDateTimeSchema,
+  connectionType: z.enum(["dm", "group"]),
+  connectionStatus: z.string(),
+  ownerUserId: uuidSchema,
+  participantCount: z.number().int().min(0),
+  participants: z.array(chatMetadataParticipantSchema),
+  archived: z.boolean(),
+});
+
+export const chatMessageReactionListResponseSchema = z.object({
+  reactions: z.array(chatMessageReactionSchema),
+});
+
+export const chatMessageSyncResponseSchema = chatMessageListResponseSchema;
+
+export const chatThreadSummarySchema = z.object({
+  rootMessage: chatMessageListItemSchema,
+  replyCount: z.number().int().min(0),
+  messageCount: z.number().int().min(1),
+  participantCount: z.number().int().min(1),
+  lastReplyAt: isoDateTimeSchema.nullable(),
+  lastActivityAt: isoDateTimeSchema,
+});
+
+export const chatThreadListResponseSchema = z.object({
+  chatId: uuidSchema,
+  threads: z.array(chatThreadSummarySchema),
+});
+
+export const chatThreadDetailEntrySchema = z.object({
+  depth: z.number().int().min(0),
+  message: chatMessageListItemSchema,
+});
+
+export const chatThreadDetailResponseSchema = z.object({
+  chatId: uuidSchema,
+  thread: chatThreadSummarySchema,
+  entries: z.array(chatThreadDetailEntrySchema),
+});
+
 export const listChatMessagesQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional(),
   before: isoDateTimeSchema.optional(),
@@ -1481,6 +1581,17 @@ export const createChatMessageBodySchema = z.object({
   senderUserId: uuidSchema,
   body: z.string().min(1),
   clientMessageId: uuidSchema.optional(),
+  replyToMessageId: uuidSchema.optional(),
+});
+
+export const editChatMessageBodySchema = z.object({
+  userId: uuidSchema,
+  body: z.string().min(1),
+});
+
+export const createChatMessageReactionBodySchema = z.object({
+  userId: uuidSchema,
+  emoji: z.string().min(1).max(32),
 });
 
 export const readReceiptBodySchema = z.object({
@@ -1702,6 +1813,52 @@ export const adminPlaygroundStateResponseSchema = z.object({
   hasProbeToken: z.boolean(),
   baseUrl: z.string().min(1),
   requiredEnvStatus: z.record(z.string(), z.boolean()),
+});
+
+export const adminPlaygroundSandboxWorldIdSchema = z.enum([
+  "design-sandbox-v1",
+]);
+
+export const adminPlaygroundSandboxWorldCreateBodySchema = z
+  .object({
+    worldId: adminPlaygroundSandboxWorldIdSchema.default("design-sandbox-v1"),
+    focalUserId: uuidSchema.optional(),
+    reset: z.boolean().optional(),
+  })
+  .default({
+    worldId: "design-sandbox-v1",
+  });
+
+export const adminPlaygroundSandboxWorldJoinBodySchema = z.object({
+  focalUserId: uuidSchema,
+});
+
+export const adminPlaygroundSandboxWorldTickBodySchema = z
+  .object({
+    note: z.string().min(1).max(240).optional(),
+  })
+  .default(() => ({}));
+
+export const adminPlaygroundSandboxWorldActorSummarySchema = z.object({
+  userId: uuidSchema,
+  displayName: z.string().min(1),
+  role: z.enum(["focal", "synthetic"]),
+});
+
+export const adminPlaygroundSandboxWorldSummarySchema = z.object({
+  worldId: adminPlaygroundSandboxWorldIdSchema,
+  fixtureLabel: z.string().min(1),
+  status: z.enum(["ready", "joined", "reset"]),
+  createdAt: isoDateTimeSchema,
+  updatedAt: isoDateTimeSchema,
+  joinedAt: isoDateTimeSchema.nullable(),
+  focalUserId: uuidSchema.nullable(),
+  actorCount: z.number().int().nonnegative(),
+  directChatCount: z.number().int().nonnegative(),
+  groupChatCount: z.number().int().nonnegative(),
+  notificationCount: z.number().int().nonnegative(),
+  syntheticActors: z.array(adminPlaygroundSandboxWorldActorSummarySchema),
+  notes: z.array(z.string().min(1)).default([]),
 });
 
 export const socialSimProviderSchema = z.enum(["ollama", "openai"]);
@@ -2223,6 +2380,12 @@ export const launchControlsUpdateBodySchema = z
   })
   .default({});
 
+export const adminActionReasonBodySchema = z
+  .object({
+    reason: z.string().min(1).max(500).optional(),
+  })
+  .default({});
+
 export const scheduledTaskTypeSchema = z.enum([
   "saved_search",
   "discovery_briefing",
@@ -2458,6 +2621,7 @@ export const realtimeChatSendPayloadSchema = z.object({
   senderUserId: uuidSchema,
   clientMessageId: uuidSchema,
   body: z.string().min(1),
+  replyToMessageId: uuidSchema.optional(),
 });
 
 export const realtimeChatMessageServerPayloadSchema =
@@ -2465,7 +2629,16 @@ export const realtimeChatMessageServerPayloadSchema =
     serverMessageId: uuidSchema,
     sequence: z.number().int().min(1),
     sentAt: isoDateTimeSchema,
+    moderationState: z.nativeEnum(ModerationStatus).optional(),
+    editedAt: isoDateTimeSchema.nullable().optional(),
+    reactions: z.array(chatMessageReactionSchema).optional(),
+    status: chatMessageStatusSchema.optional(),
   });
+
+export const realtimeChatMessageUpdatedPayloadSchema = z.object({
+  roomId: uuidSchema,
+  message: chatMessageListItemSchema,
+});
 
 export const realtimeChatTypingPayloadSchema = z.object({
   roomId: uuidSchema,
@@ -2488,6 +2661,7 @@ export const realtimePresenceUpdatedPayloadSchema = z.object({
   userId: uuidSchema,
   online: z.boolean(),
   state: realtimePresenceStateSchema.optional(),
+  lastSeenAt: isoDateTimeSchema.nullable().optional(),
 });
 
 export const realtimeConnectionRecoveredPayloadSchema = z.object({
@@ -2519,6 +2693,7 @@ export const realtimeServerEventPayloadSchemas = {
   "connection.recovered": realtimeConnectionRecoveredPayloadSchema,
   "chat.message.created": z.unknown(),
   "chat.message": realtimeChatMessageServerPayloadSchema,
+  "chat.message.updated": realtimeChatMessageUpdatedPayloadSchema,
   "chat.replay": realtimeChatReplayPayloadSchema,
   "chat.typing": realtimeChatTypingPayloadSchema,
   "chat.receipt": realtimeReceiptReadPayloadSchema,
@@ -2568,8 +2743,41 @@ export type RealtimeClientEventPayload<T extends RealtimeClientEventName> =
   z.infer<(typeof realtimeClientEventPayloadSchemas)[T]>;
 export type RealtimeServerEventPayload<T extends RealtimeServerEventName> =
   z.infer<(typeof realtimeServerEventPayloadSchemas)[T]>;
+export type RealtimePresenceState = z.infer<typeof realtimePresenceStateSchema>;
 
 export type ApiResponseEnvelope = z.infer<typeof apiResponseEnvelopeSchema>;
+export type ChatMessageReaction = z.infer<typeof chatMessageReactionSchema>;
+export type ChatMessageStatus = z.infer<typeof chatMessageStatusSchema>;
+export type ChatMessageListItem = z.infer<typeof chatMessageListItemSchema>;
+export type ChatMessageListResponse = z.infer<
+  typeof chatMessageListResponseSchema
+>;
+export type ChatParticipantPresence = z.infer<
+  typeof chatParticipantPresenceSchema
+>;
+export type ChatMetadataParticipant = z.infer<
+  typeof chatMetadataParticipantSchema
+>;
+export type ChatMetadataResponse = z.infer<typeof chatMetadataResponseSchema>;
+export type ChatThreadSummary = z.infer<typeof chatThreadSummarySchema>;
+export type ChatThreadListResponse = z.infer<
+  typeof chatThreadListResponseSchema
+>;
+export type ChatThreadDetailEntry = z.infer<typeof chatThreadDetailEntrySchema>;
+export type ChatThreadDetailResponse = z.infer<
+  typeof chatThreadDetailResponseSchema
+>;
+export type ChatMessageReactionListResponse = z.infer<
+  typeof chatMessageReactionListResponseSchema
+>;
+export type ChatMessageSyncResponse = z.infer<
+  typeof chatMessageSyncResponseSchema
+>;
+export type CreateChatMessageBody = z.infer<typeof createChatMessageBodySchema>;
+export type EditChatMessageBody = z.infer<typeof editChatMessageBodySchema>;
+export type CreateChatMessageReactionBody = z.infer<
+  typeof createChatMessageReactionBodySchema
+>;
 export type IntentPayload = z.infer<typeof intentPayloadSchema>;
 export type QueueEnvelope = z.infer<typeof queueEnvelopeSchema>;
 export type SocialSimProvider = z.infer<typeof socialSimProviderSchema>;

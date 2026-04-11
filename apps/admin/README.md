@@ -18,7 +18,7 @@ pnpm --filter @opensocial/admin dev
 2. **Local dev:** `http://localhost:3001/auth/callback` is allowed by the API without extra env.
 3. **Production:** set **`ADMIN_DASHBOARD_REDIRECT_URIS`** on the API to the full callback URL (comma-separated if multiple).
 4. The signed-in user id is sent as **`x-admin-user-id`**. **`ADMIN_ALLOWED_USER_IDS`** / **`ADMIN_ROLE_BINDINGS`** still apply.
-5. If the API has **`ADMIN_API_KEY`**, enter it on the sign-in screen or in **Overview → Context** (stored in `localStorage` in this browser only).
+5. The hosted admin UI does not send **`x-admin-api-key`**. For browser operators, keep **`ADMIN_API_KEY`** empty and rely on Google sign-in plus admin allowlists/role bindings. Reserve **`ADMIN_API_KEY`** for non-browser tools that inject the header directly.
 
 ## Authenticated routes
 

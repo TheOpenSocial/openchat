@@ -1,12 +1,17 @@
 "use client";
 
 import {
+  Activity,
   BellRing,
   Compass,
   Home,
   MessageSquare,
   Orbit,
+  Search,
   Settings2,
+  SlidersHorizontal,
+  TimerReset,
+  UsersRound,
   UserRound,
 } from "lucide-react";
 import Link from "next/link";
@@ -17,14 +22,20 @@ import { Alert } from "@/src/components/ui/alert";
 import { Badge } from "@/src/components/ui/badge";
 import { Button } from "@/src/components/ui/button";
 import { cn } from "@/src/lib/cn";
+import { RouteTransition } from "@/src/components/layout/RouteTransition";
 
 const navItems = [
   { href: "/home", label: "Home", icon: Home },
+  { href: "/activity", label: "Activity", icon: Activity },
   { href: "/requests", label: "Requests", icon: BellRing },
+  { href: "/connections", label: "Connections", icon: UsersRound },
   { href: "/chats", label: "Chats", icon: MessageSquare },
   { href: "/discover", label: "Discover", icon: Compass },
   { href: "/circles", label: "Circles", icon: Orbit },
   { href: "/automations", label: "Automations", icon: Settings2 },
+  { href: "/saved-searches", label: "Saved searches", icon: Search },
+  { href: "/scheduled-tasks", label: "Scheduled tasks", icon: TimerReset },
+  { href: "/settings", label: "Settings", icon: SlidersHorizontal },
   { href: "/profile", label: "Profile", icon: UserRound },
 ] as const;
 
@@ -44,6 +55,7 @@ export function AppShell({
   title?: string;
 }) {
   const pathname = usePathname();
+  const routeKey = pathname ?? "/";
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-[1240px] px-4 pb-8 pt-4 md:px-6 md:pb-10 md:pt-5">
@@ -127,7 +139,7 @@ export function AppShell({
             </div>
           ) : null}
 
-          {children}
+          <RouteTransition routeKey={routeKey}>{children}</RouteTransition>
         </section>
       </div>
     </main>

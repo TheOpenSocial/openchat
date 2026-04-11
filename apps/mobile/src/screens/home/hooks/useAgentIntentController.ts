@@ -401,6 +401,7 @@ export function useAgentIntentController({
         }
 
         if (isOfflineApiError(error) || isRetryableApiError(error)) {
+          const offlineFailure = isOfflineApiError(error);
           await queueOfflineComposerSend({
             userId: sessionUserId,
             mode: agentComposerMode,
@@ -425,12 +426,16 @@ export function useAgentIntentController({
             {
               id: `agent_queue_${timelineIdBase}`,
               role: "agent",
-              body: "Network dropped, so I queued this and will retry automatically.",
+              body: offlineFailure
+                ? "Network dropped, so I queued this and will retry automatically."
+                : "The service is temporarily unavailable, so I queued this and will retry automatically.",
             },
           ]);
           setBanner({
             tone: "info",
-            text: "Network issue detected. Your message is queued and will retry automatically.",
+            text: offlineFailure
+              ? "Network issue detected. Your message is queued and will retry automatically."
+              : "The service is temporarily unavailable. Your message is queued and will retry automatically.",
           });
           options?.onOutcome?.("queued");
           return;

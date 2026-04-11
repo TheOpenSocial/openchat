@@ -1,6 +1,11 @@
 "use client";
 
 import { useCallback } from "react";
+import type {
+  SavedSearchesSnapshot,
+  ScheduledTaskRunsSnapshot,
+  ScheduledTasksSnapshot,
+} from "./operator-surface-types";
 
 type RequestApi = <T>(
   method: "GET" | "POST" | "PUT" | "PATCH",
@@ -50,9 +55,11 @@ export function useEntityInspectorActions(input: {
   setInboxSnapshot: (value: unknown) => void;
   setRecurringCircleSnapshot: (value: unknown) => void;
   setRecurringCircleSessionSnapshot: (value: unknown) => void;
-  setSavedSearchSnapshot: (value: unknown) => void;
-  setScheduledTaskSnapshot: (value: unknown) => void;
-  setScheduledTaskRunsSnapshot: (value: unknown) => void;
+  setSavedSearchSnapshot: (value: SavedSearchesSnapshot | null) => void;
+  setScheduledTaskSnapshot: (value: ScheduledTasksSnapshot | null) => void;
+  setScheduledTaskRunsSnapshot: (
+    value: ScheduledTaskRunsSnapshot | null,
+  ) => void;
   setDiscoveryPassiveSnapshot: (value: unknown) => void;
   setDiscoveryInboxSnapshot: (value: unknown) => void;
   setPendingIntentSummarySnapshot: (value: unknown) => void;
@@ -193,9 +200,15 @@ export function useEntityInspectorActions(input: {
           input.setInboxSnapshot(payload.inbox);
           input.setRecurringCircleSnapshot(payload.circles);
           input.setRecurringCircleSessionSnapshot(payload.circleSessions);
-          input.setSavedSearchSnapshot(payload.savedSearches);
-          input.setScheduledTaskSnapshot(payload.scheduledTasks);
-          input.setScheduledTaskRunsSnapshot(payload.scheduledTaskRuns);
+          input.setSavedSearchSnapshot(
+            payload.savedSearches as SavedSearchesSnapshot,
+          );
+          input.setScheduledTaskSnapshot(
+            payload.scheduledTasks as ScheduledTasksSnapshot,
+          );
+          input.setScheduledTaskRunsSnapshot(
+            payload.scheduledTaskRuns as ScheduledTaskRunsSnapshot,
+          );
           input.setDiscoveryPassiveSnapshot(payload.discoveryPassive);
           input.setDiscoveryInboxSnapshot(payload.discoveryInbox);
           input.setPendingIntentSummarySnapshot(payload.pendingIntentSummary);

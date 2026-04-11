@@ -9,6 +9,7 @@ import {
 import type { ChatMessageRecord } from "../../../lib/api";
 import {
   createRealtimeSession,
+  type RealtimeCallbacks,
   type RealtimeConnectionState,
   type RealtimeSession,
 } from "../../../lib/realtime";
@@ -31,6 +32,14 @@ type UseChatsRealtimeInput = {
     typeof setTimeout
   > | null>;
   realtimeSessionRef: MutableRefObject<RealtimeSession | null>;
+  realtimeCallbacks?: Pick<
+    RealtimeCallbacks,
+    | "onConnectionCreated"
+    | "onIntentUpdated"
+    | "onModerationNotice"
+    | "onRequestCreated"
+    | "onRequestUpdated"
+  >;
   selectedChatId: string | null;
   selectedChatIdRef: MutableRefObject<string | null>;
   sessionAccessToken: string;
@@ -50,6 +59,7 @@ export function useChatsRealtime({
   localTypingChatIdRef,
   localTypingStopTimeoutRef,
   realtimeSessionRef,
+  realtimeCallbacks,
   selectedChatId,
   selectedChatIdRef,
   sessionAccessToken,
@@ -62,6 +72,49 @@ export function useChatsRealtime({
   const typingClearTimersRef = useRef<
     Map<string, ReturnType<typeof setTimeout>>
   >(new Map());
+
+  const applyReadReceipt = useCallback(
+    (chatId: string, messageId: string) => {
+      setChats((current) =>
+        current.map((thread) => {
+          if (thread.id !== chatId) {
+            return thread;
+          }
+
+          return {
+            ...thread,
+            messages: thread.messages.map((message) => {
+              if (
+                message.id !== messageId ||
+                message.senderUserId !== sessionUserId
+              ) {
+                return message;
+              }
+
+              const status = message.status ?? {
+                state: "read" as const,
+                deliveredCount: 1,
+                readCount: 1,
+                pendingCount: 0,
+              };
+
+              return {
+                ...message,
+                status: {
+                  ...status,
+                  state: "read" as const,
+                  deliveredCount: Math.max(status.deliveredCount, 1),
+                  readCount: Math.max(status.readCount + 1, 1),
+                  pendingCount: Math.max(status.pendingCount - 1, 0),
+                },
+              };
+            }),
+          };
+        }),
+      );
+    },
+    [sessionUserId, setChats],
+  );
 
   const clearTypingUser = useCallback(
     (chatId: string, userId: string) => {
@@ -114,6 +167,15 @@ export function useChatsRealtime({
         onConnectionStateChange: setRealtimeState,
         onChatMessageCreated: (chatId, message) => {
           applyRealtimeChatMessage(chatId, message);
+        },
+        onChatMessageUpdated: (chatId, message) => {
+          applyRealtimeChatMessage(chatId, message);
+        },
+        onChatReceipt: ({ chatId, messageId, userId }) => {
+          if (userId === sessionUserId) {
+            return;
+          }
+          applyReadReceipt(chatId, messageId);
         },
         onChatReplay: (chatId, messages) => {
           if (messages.length === 0) {
@@ -171,6 +233,7 @@ export function useChatsRealtime({
           }, 3_000);
           typingClearTimersRef.current.set(timerKey, clearTimer);
         },
+        ...realtimeCallbacks,
       },
     });
 
@@ -193,6 +256,7 @@ export function useChatsRealtime({
     };
   }, [
     applyRealtimeChatMessage,
+    applyReadReceipt,
     chatStorageReady,
     chatsRef,
     clearTypingUser,
@@ -200,6 +264,7 @@ export function useChatsRealtime({
     localTypingChatIdRef,
     localTypingStopTimeoutRef,
     realtimeSessionRef,
+    realtimeCallbacks,
     sessionAccessToken,
     sessionUserId,
     setChats,

@@ -28,6 +28,7 @@ interface DevOrbProps {
   onCreateGroupSandbox: () => Promise<void>;
   onSyncChats: () => void;
   onResetAgent: () => void;
+  onSimulateHomeReconnect: () => void;
 }
 
 export function DevOrb({
@@ -36,6 +37,7 @@ export function DevOrb({
   onCreateGroupSandbox,
   onLock,
   onResetAgent,
+  onSimulateHomeReconnect,
   onSyncChats,
   onToggle,
   onUnlock,
@@ -206,6 +208,14 @@ export function DevOrb({
               >
                 <Text className="text-[12px] font-semibold text-white/90">
                   Reset Agent
+                </Text>
+              </Pressable>
+              <Pressable
+                className="mt-2 rounded-2xl border border-white/10 bg-white/[0.06] px-3 py-2.5"
+                onPress={onSimulateHomeReconnect}
+              >
+                <Text className="text-[12px] font-semibold text-white/90">
+                  Simulate Home Reconnect
                 </Text>
               </Pressable>
               <Pressable

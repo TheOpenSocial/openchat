@@ -1,4 +1,5 @@
 import {
+  ModerationStatus,
   realtimeClientEventPayloadSchemas,
   realtimeConnectionAuthenticatePayloadSchema,
   realtimeServerEventPayloadSchemas,
@@ -8,6 +9,7 @@ import {
   type RealtimeServerEventName,
   uuidSchema,
 } from "@opensocial/types";
+import type { ModerationState } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { Inject, Optional, forwardRef } from "@nestjs/common";
 import {
@@ -30,6 +32,7 @@ import {
   recordWebsocketError,
 } from "../common/ops-metrics.js";
 import { LaunchControlsService } from "../launch-controls/launch-controls.service.js";
+import { PresenceService } from "./presence.service.js";
 
 const REALTIME_REPLAY_WINDOW_MS = 10 * 60 * 1000;
 const SOCKET_USER_ID_DATA_KEY = "authUserId";
@@ -59,6 +62,8 @@ export class RealtimeGateway
     private readonly launchControlsService?: LaunchControlsService,
     @Optional()
     private readonly authService?: AuthService,
+    @Optional()
+    private readonly presenceService?: PresenceService,
   ) {
     this.chatsService = chatsService as ChatsService | undefined;
   }
@@ -88,10 +93,14 @@ export class RealtimeGateway
 
     recordWebsocketConnectionOpened();
     client.join(`user:${userId}`);
+    const onlineSnapshot = this.presenceService?.markOnline(userId);
     this.emitToClient(client, "presence.updated", {
       userId,
       online: true,
       state: "online",
+      ...(onlineSnapshot?.lastSeenAt
+        ? { lastSeenAt: onlineSnapshot.lastSeenAt }
+        : {}),
     });
 
     if (handshakeAuthPayload && handshakeAuthPayload.userId === userId) {
@@ -103,10 +112,14 @@ export class RealtimeGateway
     recordWebsocketConnectionClosed();
     const userId = this.readSocketUserId(client) ?? this.extractUserId(client);
     if (userId) {
+      const offlineSnapshot = this.presenceService?.markOffline(userId);
       this.emitToRoom(`user:${userId}`, "presence.updated", {
         userId,
-        online: false,
-        state: "invisible",
+        online: offlineSnapshot?.online ?? false,
+        state: offlineSnapshot?.state ?? "invisible",
+        ...(offlineSnapshot?.lastSeenAt
+          ? { lastSeenAt: offlineSnapshot.lastSeenAt }
+          : {}),
       });
     }
   }
@@ -229,6 +242,7 @@ export class RealtimeGateway
           payload.body,
           {
             idempotencyKey: payload.clientMessageId,
+            replyToMessageId: payload.replyToMessageId,
           },
         );
         serverPayload = {
@@ -236,6 +250,12 @@ export class RealtimeGateway
           serverMessageId: persisted.id,
           sequence: this.nextRoomSequence(payload.roomId),
           sentAt: persisted.createdAt.toISOString(),
+          ...(persisted.replyToMessageId
+            ? { replyToMessageId: persisted.replyToMessageId }
+            : {}),
+          ...(persisted.moderationState
+            ? { moderationState: persisted.moderationState }
+            : {}),
         };
       } catch {
         recordWebsocketError("chat_send_rejected");
@@ -330,16 +350,22 @@ export class RealtimeGateway
         });
       }
     }
-    this.emitToRoom(`user:${payload.userId}`, "presence.updated", {
+    const snapshot = this.presenceService?.markState(
+      payload.userId,
+      payload.state,
+    );
+    const presencePayload = {
       userId: payload.userId,
-      online: true,
-      state: payload.state,
-    });
-    this.emitGlobal("presence.changed", {
-      userId: payload.userId,
-      online: true,
-      state: payload.state,
-    });
+      online: snapshot?.online ?? true,
+      state: snapshot?.state ?? payload.state,
+      ...(snapshot?.lastSeenAt ? { lastSeenAt: snapshot.lastSeenAt } : {}),
+    };
+    this.emitToRoom(
+      `user:${payload.userId}`,
+      "presence.updated",
+      presencePayload,
+    );
+    this.emitGlobal("presence.changed", presencePayload);
     return { ok: true };
   }
 
@@ -668,6 +694,22 @@ export class RealtimeGateway
       senderUserId: string;
       body: string;
       createdAt: Date;
+      replyToMessageId?: string | null;
+      moderationState?: ModerationStatus | ModerationState;
+      editedAt?: Date | null;
+      reactions?: Array<{
+        id: string;
+        messageId: string;
+        userId: string;
+        emoji: string;
+        createdAt: Date;
+      }>;
+      status?: {
+        state: "sent" | "delivered" | "read";
+        deliveredCount: number;
+        readCount: number;
+        pendingCount: number;
+      };
     },
   ): RealtimeServerEventPayload<"chat.message"> {
     return {
@@ -678,6 +720,25 @@ export class RealtimeGateway
       serverMessageId: message.id,
       sequence: this.nextRoomSequence(roomId),
       sentAt: message.createdAt.toISOString(),
+      ...(message.replyToMessageId
+        ? { replyToMessageId: message.replyToMessageId }
+        : {}),
+      ...(message.moderationState
+        ? {
+            moderationState:
+              message.moderationState as unknown as ModerationStatus,
+          }
+        : {}),
+      ...(message.editedAt ? { editedAt: message.editedAt.toISOString() } : {}),
+      ...(message.reactions
+        ? {
+            reactions: message.reactions.map((reaction) => ({
+              ...reaction,
+              createdAt: reaction.createdAt.toISOString(),
+            })),
+          }
+        : {}),
+      ...(message.status ? { status: message.status } : {}),
     };
   }
 

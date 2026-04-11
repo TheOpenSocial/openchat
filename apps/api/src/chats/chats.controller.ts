@@ -1,9 +1,19 @@
-import { Body, Controller, Get, Param, Post, Query } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from "@nestjs/common";
 import {
   chatLeaveBodySchema,
+  editChatMessageBodySchema,
   chatSyncQuerySchema,
   createChatBodySchema,
   createChatMessageBodySchema,
+  createChatMessageReactionBodySchema,
   hideChatMessageBodySchema,
   listChatMessagesQuerySchema,
   readReceiptBodySchema,
@@ -63,6 +73,28 @@ export class ChatsController {
     return ok(await this.chatsService.getChatMetadata(chatId, actorUserId));
   }
 
+  @Get(":chatId/threads")
+  async listThreads(
+    @Param("chatId") chatIdParam: string,
+    @ActorUserId() actorUserId: string,
+  ) {
+    const chatId = parseRequestPayload(uuidSchema, chatIdParam);
+    return ok(await this.chatsService.listThreads(chatId, actorUserId));
+  }
+
+  @Get(":chatId/threads/:rootMessageId")
+  async getThread(
+    @Param("chatId") chatIdParam: string,
+    @Param("rootMessageId") rootMessageIdParam: string,
+    @ActorUserId() actorUserId: string,
+  ) {
+    const chatId = parseRequestPayload(uuidSchema, chatIdParam);
+    const rootMessageId = parseRequestPayload(uuidSchema, rootMessageIdParam);
+    return ok(
+      await this.chatsService.getThread(chatId, rootMessageId, actorUserId),
+    );
+  }
+
   @Get(":chatId/sync")
   async syncMessages(
     @Param("chatId") chatIdParam: string,
@@ -108,7 +140,78 @@ export class ChatsController {
     return ok(
       await this.chatsService.createMessage(chatId, actorUserId, payload.body, {
         idempotencyKey: payload.clientMessageId,
+        replyToMessageId: payload.replyToMessageId,
       }),
+    );
+  }
+
+  @Patch(":chatId/messages/:messageId")
+  async editMessage(
+    @Param("chatId") chatIdParam: string,
+    @Param("messageId") messageIdParam: string,
+    @Body() body: unknown,
+    @ActorUserId() actorUserId: string,
+  ) {
+    const chatId = parseRequestPayload(uuidSchema, chatIdParam);
+    const messageId = parseRequestPayload(uuidSchema, messageIdParam);
+    const payload = parseRequestPayload(editChatMessageBodySchema, body);
+    assertActorOwnsUser(
+      actorUserId,
+      payload.userId,
+      "edit user does not match authenticated user",
+    );
+    return ok(
+      await this.chatsService.editMessage(
+        chatId,
+        messageId,
+        actorUserId,
+        payload.body,
+      ),
+    );
+  }
+
+  @Post(":chatId/messages/:messageId/reactions")
+  async createReaction(
+    @Param("chatId") chatIdParam: string,
+    @Param("messageId") messageIdParam: string,
+    @Body() body: unknown,
+    @ActorUserId() actorUserId: string,
+  ) {
+    const chatId = parseRequestPayload(uuidSchema, chatIdParam);
+    const messageId = parseRequestPayload(uuidSchema, messageIdParam);
+    const payload = parseRequestPayload(
+      createChatMessageReactionBodySchema,
+      body,
+    );
+    assertActorOwnsUser(
+      actorUserId,
+      payload.userId,
+      "reaction user does not match authenticated user",
+    );
+    return ok(
+      await this.chatsService.createMessageReaction(
+        chatId,
+        messageId,
+        actorUserId,
+        payload.emoji,
+      ),
+    );
+  }
+
+  @Get(":chatId/messages/:messageId/reactions")
+  async listReactions(
+    @Param("chatId") chatIdParam: string,
+    @Param("messageId") messageIdParam: string,
+    @ActorUserId() actorUserId: string,
+  ) {
+    const chatId = parseRequestPayload(uuidSchema, chatIdParam);
+    const messageId = parseRequestPayload(uuidSchema, messageIdParam);
+    return ok(
+      await this.chatsService.listMessageReactions(
+        chatId,
+        messageId,
+        actorUserId,
+      ),
     );
   }
 

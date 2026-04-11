@@ -15,7 +15,7 @@ const buttonVariants = cva("items-center justify-center rounded-2xl px-4", {
     },
     size: {
       default: "h-12 min-h-[48px]",
-      sm: "h-10 min-h-[40px] rounded-xl px-3",
+      sm: "h-11 min-h-[44px] rounded-xl px-3",
     },
     disabled: {
       true: "opacity-60",
@@ -30,7 +30,7 @@ const buttonVariants = cva("items-center justify-center rounded-2xl px-4", {
 const buttonTextVariants = cva("font-semibold", {
   variants: {
     variant: {
-      default: "text-[#0d0d0d]",
+      default: "",
       secondary: "text-ink",
       outline: "text-ink",
     },
@@ -73,7 +73,7 @@ export function Button({
       ? {
           color:
             variant === "default"
-              ? "rgba(13,13,13,0.12)"
+              ? appTheme.colors.background
               : "rgba(255,255,255,0.08)",
           borderless: false,
         }
@@ -100,6 +100,14 @@ export function Button({
       {children ?? (
         <Text
           className={cn(buttonTextVariants({ size, variant }), labelClassName)}
+          allowFontScaling
+          minimumFontScale={0.85}
+          style={{
+            color:
+              variant === "default"
+                ? appTheme.colors.background
+                : appTheme.colors.ink,
+          }}
         >
           {label}
         </Text>

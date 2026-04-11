@@ -493,7 +493,7 @@ function ProductionApp() {
     <SafeAreaProvider style={{ flex: 1 }}>
       <StatusBar style="light" />
       {bootstrapReady ? (
-        <AnimatedScreen screenKey={stageKey}>
+        <AnimatedScreen routeKey={stageKey}>
           {stage === "auth" ? (
             <AuthScreen
               errorMessage={authError}
