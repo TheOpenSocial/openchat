@@ -11,9 +11,12 @@ on:
         options:
           - create
           - get
+          - inspect
           - join
+          - scenario
           - tick
           - reset
+          - validate
       world_id:
         description: "Sandbox world id"
         required: false
@@ -32,6 +35,16 @@ on:
         description: "Optional tick note"
         required: false
         type: string
+      scenario:
+        description: "Scenario for scenario/validate actions"
+        required: false
+        type: choice
+        default: baseline
+        options:
+          - baseline
+          - waiting_replies
+          - activity_burst
+          - stalled_search
 
 jobs:
   staging-sandbox-world:
@@ -79,6 +92,10 @@ jobs:
 
           if [[ -n "${{ inputs.note }}" ]]; then
             args+=(--note="${{ inputs.note }}")
+          fi
+
+          if [[ -n "${{ inputs.scenario }}" ]]; then
+            args+=(--scenario="${{ inputs.scenario }}")
           fi
 
           node scripts/playground-sandbox-world.mjs "${args[@]}" | tee sandbox-world-output.json
