@@ -49,6 +49,13 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/bootstrap-smoke-session.mjs
+
+      - name: Refresh smoke session token
+        shell: bash
+        env:
+          SMOKE_REFRESH_REQUIRED: "1"
+        run: |
+          set -euo pipefail
           node scripts/refresh-smoke-session.mjs
 
       - name: Emit mobile e2e session artifact
