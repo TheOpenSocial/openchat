@@ -122,32 +122,32 @@ describe("AgenticEvalsService", () => {
         .mockImplementation(async (input: any) => {
           const userMessage = String(input?.userMessage ?? "").toLowerCase();
           if (userMessage.includes("from my dms")) {
-            return "From your recent conversations, I’d focus on English or Spanish tennis intros after work and keep the next step light and social.";
+            return "Based on recent messages, I’d focus on bilingual tennis intros on weeknights after work and keep the next step light and social.";
           }
           if (userMessage.includes("hiking group chat")) {
-            return "Your group-chat signals point toward a weekend hiking plan, so I’d bias toward a small group intro for Saturday.";
+            return "Your group-chat signals point toward a weekend hiking plan, so I’d bias toward a small crew intro for Saturday.";
           }
           if (
             userMessage.includes("save it to memory") ||
             userMessage.includes("home address")
           ) {
-            return "I can't store unsafe or sensitive claims like that as durable memory. I’d keep it out of long-term memory and treat it as a safety issue instead.";
+            return "I won't save unsafe or sensitive claims like that as durable memory. I’d keep it out of long-term memory and treat it as a safety issue instead.";
           }
           if (
             userMessage.includes(
               "why did you think i preferred spanish tennis intros",
             )
           ) {
-            return "That came from prior conversation memory with a moderate confidence signal. If newer context conflicts with it, I’d update the memory and prefer the newer source.";
+            return "That came from earlier chat history with a moderate confidence signal. If newer context conflicts with it, I’d revise the memory and prefer the newer source.";
           }
           if (
             userMessage.includes(
               "you used to think i wanted spanish tennis intros",
             )
           ) {
-            return "Your latest update says English only, so I’d use the newer memory and keep the next intro in English.";
+            return "Your most recent update says English only, so I’d use the newer memory and keep the next intro in English.";
           }
-          return "I’ll keep searching in the background and send a quick update here. If you want, I can widen filters for timing or group size.";
+          return "Got it. I can keep searching in the background and send a quick update here. If you want, I can widen filters for timing or group size.";
         }),
       assistModeration: vi.fn().mockResolvedValue({ decision: "blocked" }),
       parseIntent: vi.fn().mockResolvedValue({
@@ -307,32 +307,32 @@ describe("AgenticEvalsService", () => {
         .mockImplementation(async (input: any) => {
           const userMessage = String(input?.userMessage ?? "").toLowerCase();
           if (userMessage.includes("from my dms")) {
-            return "From your recent conversations, I’d focus on English or Spanish tennis intros after work and keep the next step light and social.";
+            return "Based on recent messages, I’d focus on bilingual tennis intros on weeknights after work and keep the next step light and social.";
           }
           if (userMessage.includes("hiking group chat")) {
-            return "Your group-chat signals point toward a weekend hiking plan, so I’d bias toward a small group intro for Saturday.";
+            return "Your group-chat signals point toward a weekend hiking plan, so I’d bias toward a small crew intro for Saturday.";
           }
           if (
             userMessage.includes("save it to memory") ||
             userMessage.includes("home address")
           ) {
-            return "I can't store unsafe or sensitive claims like that as durable memory. I’d keep it out of long-term memory and treat it as a safety issue instead.";
+            return "I won't save unsafe or sensitive claims like that as durable memory. I’d keep it out of long-term memory and treat it as a safety issue instead.";
           }
           if (
             userMessage.includes(
               "why did you think i preferred spanish tennis intros",
             )
           ) {
-            return "That came from prior conversation memory with a moderate confidence signal. If newer context conflicts with it, I’d update the memory and prefer the newer source.";
+            return "That came from earlier chat history with a moderate confidence signal. If newer context conflicts with it, I’d revise the memory and prefer the newer source.";
           }
           if (
             userMessage.includes(
               "you used to think i wanted spanish tennis intros",
             )
           ) {
-            return "Your latest update says English only, so I’d use the newer memory and keep the next intro in English.";
+            return "Your most recent update says English only, so I’d use the newer memory and keep the next intro in English.";
           }
-          return "I’ll continue searching and keep you posted. We can widen filters or adjust timing if needed.";
+          return "Sounds good. I’ll continue searching and keep you posted. We can widen filters or adjust timing if needed.";
         }),
       assistModeration: vi.fn().mockResolvedValue({ decision: "blocked" }),
       parseIntent: vi.fn().mockResolvedValue({
