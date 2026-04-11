@@ -86,7 +86,9 @@ const TRACE_GRADE_WEIGHTS: Record<EvalDimension, number> = {
 
 @Injectable()
 export class AgenticEvalsService {
-  private readonly evalOpenAI = new OpenAIClient({ apiKey: "" });
+  private readonly evalOpenAI = new OpenAIClient({
+    apiKey: process.env.OPENAI_API_KEY ?? "",
+  });
 
   constructor(
     private readonly analyticsService: AnalyticsService,

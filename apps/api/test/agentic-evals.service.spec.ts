@@ -2,6 +2,26 @@ import { describe, expect, it, vi } from "vitest";
 import { AgenticEvalsService } from "../src/admin/agentic-evals.service.js";
 
 describe("AgenticEvalsService", () => {
+  it("uses runtime OpenAI credentials for live eval execution", () => {
+    const previous = process.env.OPENAI_API_KEY;
+    process.env.OPENAI_API_KEY = "test-openai-key";
+
+    try {
+      const service = new AgenticEvalsService(
+        { getAgentOutcomeMetrics: vi.fn() } as any,
+        { listRecentRuns: vi.fn() } as any,
+      );
+
+      expect((service as any).evalOpenAI.apiEnabled).toBe(true);
+    } finally {
+      if (previous === undefined) {
+        delete process.env.OPENAI_API_KEY;
+      } else {
+        process.env.OPENAI_API_KEY = previous;
+      }
+    }
+  });
+
   it("includes social outcome telemetry in the eval snapshot", async () => {
     const analyticsService: any = {
       getAgentOutcomeMetrics: vi.fn().mockResolvedValue({
