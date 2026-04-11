@@ -10,12 +10,23 @@ This doc ties together **mobile** and **web** browser automation for milestone `
 - Requires a running Expo app; for deterministic auth without Google, use:
   - `EXPO_PUBLIC_ENABLE_E2E_AUTH_BYPASS=1`
   - `EXPO_PUBLIC_ENABLE_E2E_LOCAL_MODE=1` (local chat / intent path without backend)
+  - or `EXPO_PUBLIC_E2E_SESSION_B64=<base64 StoredSession>` for staging-backed runs
 
 Run (from `apps/mobile`):
 
 ```bash
 pnpm test:e2e:maestro
 pnpm test:e2e:maestro:daily-loop
+
+Staging-backed daily-loop run:
+
+```bash
+PLAYGROUND_BASE_URL=https://api.opensocial.so \
+PLAYGROUND_ADMIN_USER_ID=... \
+PLAYGROUND_ADMIN_API_KEY=... \
+EXPO_PUBLIC_E2E_SESSION_B64=... \
+pnpm test:mobile:daily-loop:staging -- --scenario=baseline
+```
 ```
 
 ## Web (Playwright, design mock — no API)

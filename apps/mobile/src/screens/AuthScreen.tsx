@@ -21,6 +21,8 @@ interface AuthScreenProps {
   loading: boolean;
   errorMessage: string | null;
   locale?: AppLocale;
+  onE2EBypass?: () => Promise<void> | void;
+  showE2EBypass?: boolean;
 }
 
 WebBrowser.maybeCompleteAuthSession();
@@ -34,6 +36,8 @@ export function AuthScreen({
   loading,
   locale = "en",
   onAuthenticated,
+  onE2EBypass,
+  showE2EBypass = false,
 }: AuthScreenProps) {
   const [oauthLoading, setOauthLoading] = useState(false);
   const mobileRedirectUri = useMemo(() => Linking.createURL("auth/google"), []);
@@ -130,9 +134,13 @@ export function AuthScreen({
                 locale={locale}
                 loading={loading}
                 oauthLoading={oauthLoading}
+                onE2EBypassPress={() => {
+                  void onE2EBypass?.();
+                }}
                 onGooglePress={() => {
                   void handleGoogleOAuth();
                 }}
+                showE2EBypass={showE2EBypass}
               />
             </Animated.View>
           </View>

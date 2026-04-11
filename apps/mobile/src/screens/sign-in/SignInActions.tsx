@@ -18,6 +18,8 @@ type SignInActionsProps = {
   loading: boolean;
   oauthLoading: boolean;
   onGooglePress: () => void;
+  onE2EBypassPress?: () => void;
+  showE2EBypass?: boolean;
 };
 
 export function SignInActions({
@@ -25,6 +27,8 @@ export function SignInActions({
   loading,
   oauthLoading,
   onGooglePress,
+  onE2EBypassPress,
+  showE2EBypass = false,
 }: SignInActionsProps) {
   const fade = useRef(new Animated.Value(0)).current;
   const [reduceMotion, setReduceMotion] = useState(false);
@@ -59,6 +63,15 @@ export function SignInActions({
 
   return (
     <Animated.View style={[styles.column, { opacity: fade }]}>
+      {showE2EBypass && onE2EBypassPress ? (
+        <PrimaryChromeButton
+          disabled={busy}
+          label="Continue"
+          loading={false}
+          onPress={onE2EBypassPress}
+          testID="auth-e2e-bypass-button"
+        />
+      ) : null}
       <PrimaryChromeButton
         disabled={busy}
         label={t("authContinueWithGoogle", locale)}
@@ -67,7 +80,11 @@ export function SignInActions({
         testID="auth-google-button"
       />
 
-      <Text style={styles.footnote}>{t("authBrowserFootnote", locale)}</Text>
+      <Text style={styles.footnote}>
+        {showE2EBypass
+          ? "E2E bypass enabled for automation."
+          : t("authBrowserFootnote", locale)}
+      </Text>
     </Animated.View>
   );
 }

@@ -62,6 +62,7 @@ export interface HomeScreenProps {
   initialProfile: UserProfileDraft;
   onProfileUpdated: (profile: UserProfileDraft) => void;
   onResetSession: () => Promise<void>;
+  skipNetwork?: boolean;
   /** When set, sent as the first agent-thread message once the primary thread is ready (e.g. post-onboarding). */
   initialAgentMessage?: string | null;
   /** Called after the seed message attempt finishes (success or error). */
@@ -131,6 +132,7 @@ export function HomeScreen({
   onProfileUpdated,
   onResetSession,
   session,
+  skipNetwork = false,
 }: HomeScreenProps) {
   void initialProfile;
   const insets = useSafeAreaInsets();
@@ -143,7 +145,6 @@ export function HomeScreen({
     userId: session.userId,
   });
   const keyboardVisible = useKeyboardVisible();
-  const skipNetwork = false;
   const activeTab = useHomeShellStore((store) => store.activeTab);
   const setActiveTab = useHomeShellStore((store) => store.setActiveTab);
   const agentVoiceTranscriptRef = useRef<string | null>(null);

@@ -23,6 +23,7 @@ import { uploadProfilePhotoFromPickerAsset } from "./src/lib/profile-photo-uploa
 import {
   clearStoredSession,
   loadStoredSession,
+  type StoredSession,
   saveStoredSession,
 } from "./src/lib/session-storage";
 import { trackTelemetryEvent } from "./src/lib/telemetry";
@@ -37,6 +38,47 @@ import { OnboardingFlow } from "./src/onboarding/OnboardingFlow";
 import { AuthScreen } from "./src/screens/AuthScreen";
 import { AppStage, MobileSession, UserProfileDraft } from "./src/types";
 const MOBILE_LOCALE_STORAGE_KEY = "opensocial.mobile.locale.v1";
+const E2E_BYPASS_ENABLED =
+  process.env.EXPO_PUBLIC_ENABLE_E2E_AUTH_BYPASS === "1";
+const E2E_LOCAL_MODE_ENABLED =
+  process.env.EXPO_PUBLIC_ENABLE_E2E_LOCAL_MODE === "1";
+
+function parseE2ESession(): StoredSession | null {
+  const encoded = process.env.EXPO_PUBLIC_E2E_SESSION_B64?.trim();
+  if (!encoded) {
+    return null;
+  }
+
+  try {
+    const json = globalThis.atob
+      ? globalThis.atob(encoded)
+      : Buffer.from(encoded, "base64").toString("utf8");
+    const parsed = JSON.parse(json) as StoredSession;
+    if (!parsed.userId || !parsed.accessToken || !parsed.refreshToken) {
+      return null;
+    }
+    return {
+      ...parsed,
+      profileCompleted: parsed.profileCompleted ?? true,
+      onboardingState: parsed.onboardingState ?? "complete",
+    };
+  } catch {
+    return null;
+  }
+}
+
+function buildLocalE2ESession(): StoredSession {
+  return {
+    userId: "e2e-local-user",
+    displayName: "Maestro User",
+    email: "maestro@local.test",
+    accessToken: "local-e2e-access-token",
+    refreshToken: "local-e2e-refresh-token",
+    sessionId: "local-e2e-session",
+    profileCompleted: true,
+    onboardingState: "complete",
+  };
+}
 
 function ProductionApp() {
   const [isBootstrapping, setIsBootstrapping] = useState(true);
@@ -62,6 +104,7 @@ function ProductionApp() {
     string | null
   >(null);
   const appOpenedTrackedRef = useRef<string | null>(null);
+  const e2eSessionRef = useRef<StoredSession | null>(parseE2ESession());
 
   const mobileSessionFromStored = useCallback(
     (
@@ -155,10 +198,33 @@ function ProductionApp() {
     let mounted = true;
 
     const restore = async () => {
+      const injectedSession =
+        e2eSessionRef.current ??
+        (E2E_LOCAL_MODE_ENABLED ? buildLocalE2ESession() : null);
+      if (injectedSession) {
+        await saveStoredSession(injectedSession);
+      }
+
       let stored = null as Awaited<ReturnType<typeof loadStoredSession>>;
       try {
         stored = await loadStoredSession();
         if (!stored) {
+          return;
+        }
+
+        if (E2E_LOCAL_MODE_ENABLED) {
+          if (!mounted) {
+            return;
+          }
+          const currentStored = stored;
+          const restoredSession = mobileSessionFromStored(currentStored);
+          setSession(restoredSession);
+          setProfile((current) => ({
+            ...current,
+            displayName: currentStored.displayName,
+          }));
+          setStage(currentStored.profileCompleted ? "home" : "onboarding");
+          setIsBootstrapping(false);
           return;
         }
 
@@ -235,6 +301,34 @@ function ProductionApp() {
   }, [locale, mobileSessionFromStored]);
 
   const handleAuthenticate = async (code: string) => {
+    if (E2E_BYPASS_ENABLED) {
+      const bypassSession =
+        e2eSessionRef.current ??
+        (E2E_LOCAL_MODE_ENABLED ? buildLocalE2ESession() : null);
+      if (bypassSession) {
+        setAuthLoading(true);
+        setAuthError(null);
+        try {
+          await saveStoredSession(bypassSession);
+          const nextSession = mobileSessionFromStored(bypassSession);
+          setSession(nextSession);
+          setProfile((current) => ({
+            ...current,
+            displayName: bypassSession.displayName,
+          }));
+          await transitionToStage(
+            bypassSession.profileCompleted ? "home" : "onboarding",
+            { delayMs: 160 },
+          );
+        } catch (error) {
+          setAuthError(String(error));
+        } finally {
+          setAuthLoading(false);
+        }
+        return;
+      }
+    }
+
     setAuthLoading(true);
     setAuthError(null);
 
@@ -499,7 +593,9 @@ function ProductionApp() {
               errorMessage={authError}
               locale={locale}
               loading={authLoading}
+              onE2EBypass={() => handleAuthenticate("__e2e_bypass__")}
               onAuthenticated={handleAuthenticate}
+              showE2EBypass={E2E_BYPASS_ENABLED}
             />
           ) : null}
           {stage === "onboarding" && session ? (
@@ -527,6 +623,7 @@ function ProductionApp() {
                       onProfileUpdated={setProfile}
                       onResetSession={handleResetSession}
                       session={session}
+                      skipNetwork={E2E_LOCAL_MODE_ENABLED}
                     />
                   );
                 } catch {

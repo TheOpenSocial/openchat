@@ -30,6 +30,7 @@
     "admin:key:generate": "node scripts/generate-admin-api-key.mjs",
     "playground:sandbox": "node scripts/playground-sandbox-world.mjs",
     "playground:sandbox:validate": "node scripts/playground-sandbox-world.mjs --action=validate",
+    "test:mobile:daily-loop:staging": "node scripts/run-mobile-daily-loop-staging.mjs",
     "staging:smoke:api": "node scripts/staging-smoke-api.mjs",
     "staging:smoke:llm-runtime": "node scripts/staging-smoke-llm-runtime.mjs",
     "staging:smoke:verification-lane": "node scripts/run-agent-prod-smoke-lane.mjs",

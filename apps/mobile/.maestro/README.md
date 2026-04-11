@@ -4,16 +4,34 @@ See also `docs/frontend-critical-path.md` for the combined mobile + web automati
 
 ## Prerequisites
 - iOS Simulator booted
-- app started with E2E bypass + local mode enabled (backend-independent run):
+
+## Backend-independent shell run
+
+Start the app with E2E bypass + local mode:
 
 ```bash
 EXPO_PUBLIC_ENABLE_E2E_AUTH_BYPASS=1 EXPO_PUBLIC_ENABLE_E2E_LOCAL_MODE=1 pnpm --filter @opensocial/mobile dev -- --ios
 ```
 
-Optional backend-integrated run:
+## Backend-integrated run
+
+Start the app with an injected real session:
 
 ```bash
-EXPO_PUBLIC_ENABLE_E2E_AUTH_BYPASS=1 EXPO_PUBLIC_API_BASE_URL=http://127.0.0.1:3000/api pnpm --filter @opensocial/mobile dev -- --ios
+EXPO_PUBLIC_ENABLE_E2E_AUTH_BYPASS=1 \
+EXPO_PUBLIC_E2E_SESSION_B64="<base64-encoded StoredSession JSON>" \
+EXPO_PUBLIC_API_BASE_URL=https://api.opensocial.so \
+pnpm --filter @opensocial/mobile dev -- --ios
+```
+
+For staging sandbox validation, set the scenario before running Maestro:
+
+```bash
+PLAYGROUND_BASE_URL=https://api.opensocial.so \
+PLAYGROUND_ADMIN_USER_ID=... \
+PLAYGROUND_ADMIN_API_KEY=... \
+EXPO_PUBLIC_E2E_SESSION_B64=... \
+pnpm test:mobile:daily-loop:staging -- --scenario=baseline
 ```
 
 ## Run critical-path flow
