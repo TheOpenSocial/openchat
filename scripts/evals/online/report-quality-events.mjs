@@ -220,6 +220,110 @@ function parseAgentWorkflowsSnapshot(filePath) {
   });
 }
 
+function reliabilityStatusScore(status) {
+  if (status === "healthy" || status === "passed" || status === "green") return 1;
+  if (status === "watch" || status === "skipped" || status === "yellow") return 0.6;
+  if (status === "critical" || status === "failed" || status === "red") return 0.2;
+  return 0.4;
+}
+
+function parseAgentReliabilitySnapshot(filePath) {
+  const snapshot = JSON.parse(readFileSync(findLatestJsonArtifact(filePath), "utf8"));
+  const generatedAt = normalizeString(snapshot?.generatedAt, new Date().toISOString());
+  const workflowHealth = snapshot?.workflow?.health ?? {};
+  const workflowTotal =
+    Number(snapshot?.workflow?.totalRuns ?? 0) ||
+    Number(workflowHealth.healthy ?? 0) +
+      Number(workflowHealth.watch ?? 0) +
+      Number(workflowHealth.critical ?? 0);
+  const workflowQuality =
+    workflowTotal > 0
+      ? (
+          (Number(workflowHealth.healthy ?? 0) +
+            Number(workflowHealth.watch ?? 0) * 0.6 +
+            Number(workflowHealth.critical ?? 0) * 0.2) /
+          workflowTotal
+        )
+      : 0;
+  const latestVerificationStatus = normalizeString(
+    snapshot?.verification?.latest?.status,
+    "unknown",
+  );
+
+  return [
+    {
+      conversation_id: generatedAt,
+      message_id: "agent_reliability_canary",
+      channel: "admin_reliability",
+      provider: "agent-reliability-snapshot",
+      deploy_sha: normalizeString(process.env.GITHUB_SHA, "local"),
+      tool_family: "canary",
+      quality_score: reliabilityStatusScore(
+        normalizeString(snapshot?.canary?.verdict, "unknown"),
+      ),
+      retry_count: 0,
+      escalated: normalizeString(snapshot?.canary?.verdict, "unknown") === "critical",
+      failure_taxonomy:
+        normalizeString(snapshot?.canary?.verdict, "unknown") === "critical"
+          ? "canary_critical"
+          : "none",
+      created_at: generatedAt,
+      trace_grade_status: normalizeString(snapshot?.eval?.status, "unknown"),
+    },
+    {
+      conversation_id: generatedAt,
+      message_id: "agent_reliability_workflow_health",
+      channel: "admin_reliability",
+      provider: "agent-reliability-snapshot",
+      deploy_sha: normalizeString(process.env.GITHUB_SHA, "local"),
+      tool_family: "workflow_health",
+      quality_score: Number(workflowQuality.toFixed(3)),
+      retry_count: 0,
+      escalated: Number(workflowHealth.critical ?? 0) > 0,
+      failure_taxonomy:
+        Number(workflowHealth.critical ?? 0) > 0
+          ? "workflow_health_critical"
+          : "none",
+      created_at: generatedAt,
+      trace_grade_status: normalizeString(snapshot?.eval?.status, "unknown"),
+    },
+    {
+      conversation_id: generatedAt,
+      message_id: "agent_reliability_eval_status",
+      channel: "admin_reliability",
+      provider: "agent-reliability-snapshot",
+      deploy_sha: normalizeString(process.env.GITHUB_SHA, "local"),
+      tool_family: "eval_status",
+      quality_score: reliabilityStatusScore(
+        normalizeString(snapshot?.eval?.status, "unknown"),
+      ),
+      retry_count: 0,
+      escalated: normalizeString(snapshot?.eval?.status, "unknown") === "critical",
+      failure_taxonomy:
+        normalizeString(snapshot?.eval?.status, "unknown") === "critical"
+          ? "eval_status_critical"
+          : "none",
+      created_at: generatedAt,
+      trace_grade_status: normalizeString(snapshot?.eval?.traceGrade?.status, "unknown"),
+    },
+    {
+      conversation_id: generatedAt,
+      message_id: "agent_reliability_verification_latest",
+      channel: "admin_reliability",
+      provider: "agent-reliability-snapshot",
+      deploy_sha: normalizeString(process.env.GITHUB_SHA, "local"),
+      tool_family: "verification",
+      quality_score: reliabilityStatusScore(latestVerificationStatus),
+      retry_count: 0,
+      escalated: latestVerificationStatus === "failed",
+      failure_taxonomy:
+        latestVerificationStatus === "failed" ? "verification_failed" : "none",
+      created_at: generatedAt,
+      trace_grade_status: normalizeString(snapshot?.eval?.traceGrade?.status, "unknown"),
+    },
+  ];
+}
+
 function average(values) {
   return values.length > 0
     ? values.reduce((sum, value) => sum + value, 0) / values.length
@@ -249,6 +353,8 @@ export async function reportQualityEvents(argv = process.argv.slice(2), env = pr
         ? parseAgenticEvalSnapshot(config.eventsPath)
         : config.source === "agent-workflows-snapshot"
           ? parseAgentWorkflowsSnapshot(config.eventsPath)
+        : config.source === "agent-reliability-snapshot"
+          ? parseAgentReliabilitySnapshot(config.eventsPath)
         : config.source === "runtime-admin-export"
           ? parseRuntimeAdminExport(config.eventsPath)
         : parseJsonLines(config.eventsPath);

@@ -122,3 +122,30 @@ test("quality event report can summarize agent workflow snapshots", async () => 
   assert.equal(summary.byFailureTaxonomy.matching_or_negotiation, 1);
   assert.equal(summary.byTraceGradeStatus.watch, 1);
 });
+
+test("quality event report can summarize agent reliability snapshots", async () => {
+  const root = mkdtempSync(
+    path.join(os.tmpdir(), "quality-report-reliability-snapshot-"),
+  );
+  const snapshotPath = path.resolve(
+    "scripts/evals/online/sample-agent-reliability-snapshot.json",
+  );
+  const result = await reportQualityEvents(
+    ["--source=agent-reliability-snapshot", `--events=${snapshotPath}`],
+    {
+      ...process.env,
+      EVAL_ARTIFACT_ROOT: root,
+    },
+  );
+  const summary = JSON.parse(
+    readFileSync(path.join(result.runDir, "summary.json"), "utf8"),
+  );
+
+  assert.equal(summary.source, "agent-reliability-snapshot");
+  assert.equal(summary.totalCases, 4);
+  assert.equal(summary.failedCases, 0);
+  assert.equal(summary.averageScore, 0.76);
+  assert.equal(summary.byChannel.admin_reliability, 4);
+  assert.equal(summary.byToolFamily.canary, 1);
+  assert.equal(summary.byToolFamily.workflow_health, 1);
+});

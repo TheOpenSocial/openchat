@@ -354,11 +354,33 @@ test("system eval runner can use live broad replay instead of static sanitized p
           },
         };
       },
+      async fetchAgentReliabilitySnapshot() {
+        return {
+          outputPath: path.join(root, "agent-reliability-snapshot.json"),
+          baseUrl: "https://example.test",
+          workflowTotalRuns: 5,
+          evalStatus: "watch",
+          canaryVerdict: "watch",
+        };
+      },
+      async reportQualityEvents() {
+        return {
+          runId: "runtime-signals-run",
+          summary: {
+            totalCases: 4,
+            failedCases: 0,
+            averageScore: 0.7,
+            primaryFailureReason: "none",
+            source: "agent-reliability-snapshot",
+          },
+        };
+      },
     },
   );
 
   assert.equal(liveCalled, true);
   assert.equal(result.summary.usedLiveWorkflowReplay, true);
+  assert.equal(result.summary.runtimeSignals.summary.averageScore, 0.7);
   const liveRow = readFileSync(path.join(result.runDir, "cases.jsonl"), "utf8")
     .trim()
     .split("\n")

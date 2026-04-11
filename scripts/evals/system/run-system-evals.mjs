@@ -13,6 +13,8 @@ import { runSocialSimBenchmarkMatrix } from "../golden/social-sim-benchmark.mjs"
 import { runProductCriticalGoldens } from "../golden/product-critical-goldens.mjs";
 import { runReplayEvals } from "../replay/run-replay-evals.mjs";
 import { runLiveBroadReplay } from "../replay/run-live-broad-replay.mjs";
+import { fetchAgentReliabilitySnapshot } from "../online/fetch-agent-reliability-snapshot.mjs";
+import { reportQualityEvents } from "../online/report-quality-events.mjs";
 
 const DEFAULT_BASELINE_PATH = "scripts/evals/system/system-baseline.json";
 const DEFAULT_HISTORICAL_CORPUS_PATH =
@@ -191,6 +193,7 @@ function calculateWeightedGateScore(
 function buildConfidenceRows({
   usedLiveWorkflowReplay,
   usedLiveSocialSim,
+  runtimeSignals,
   socialSimDeterministic,
   socialSimLive,
   summary,
@@ -227,9 +230,12 @@ function buildConfidenceRows({
     },
     {
       id: "real_world_correlation_confidence",
-      level: "low",
-      basis:
-        "No production outcome correlation model is wired into the matrix yet.",
+      level: runtimeSignals ? "medium" : "low",
+      basis: runtimeSignals
+        ? `Live admin reliability signals included with average score ${Number(
+            runtimeSignals.averageScore ?? 0,
+          ).toFixed(3)}.`
+        : "No production outcome correlation model is wired into the matrix yet.",
     },
   ];
 }
@@ -287,6 +293,8 @@ export async function runSystemEvals(
     runProductCriticalGoldens,
     runReplayEvals,
     runLiveBroadReplay,
+    fetchAgentReliabilitySnapshot,
+    reportQualityEvents,
   },
 ) {
   const config = parseArgs(argv, env);
@@ -305,6 +313,7 @@ export async function runSystemEvals(
   const suiteRows = [];
   const suiteSummaries = [];
   const sharedAdmin = resolveSharedAdminEnv(env);
+  let runtimeSignalReport = null;
 
   const socialSimResult = await runStage("social-sim-deterministic", () =>
     deps.runSocialSimBenchmarkMatrix(
@@ -521,6 +530,33 @@ export async function runSystemEvals(
     );
   }
 
+  if (config.useLiveWorkflowReplay) {
+    const runtimeSignalFetch = await runStage("runtime-signal-fetch", () =>
+      deps.fetchAgentReliabilitySnapshot(
+        [
+          `--output=${path.join(
+            envelope.runDir,
+            "suite-artifacts",
+            "agent-reliability-snapshot.json",
+          )}`,
+        ],
+        env,
+      ),
+    );
+    runtimeSignalReport = await runStage("runtime-signal-report", () =>
+      deps.reportQualityEvents(
+        [
+          "--source=agent-reliability-snapshot",
+          `--events=${runtimeSignalFetch.outputPath}`,
+        ],
+        {
+          ...env,
+          EVAL_ARTIFACT_ROOT: path.join(envelope.runDir, "suite-artifacts"),
+        },
+      ),
+    );
+  }
+
   const thresholdResults = suiteRows.map((row) => {
     const comparison = compareSuiteAgainstBaseline(
       row,
@@ -596,6 +632,7 @@ export async function runSystemEvals(
     confidenceRows: buildConfidenceRows({
       usedLiveWorkflowReplay: config.useLiveWorkflowReplay,
       usedLiveSocialSim: config.useLiveSocialSim,
+      runtimeSignals: runtimeSignalReport?.summary ?? null,
       socialSimDeterministic: socialSimResult.summary,
       socialSimLive: liveSocialSimResult?.summary ?? null,
       summary: {
@@ -606,6 +643,12 @@ export async function runSystemEvals(
         failedCases: rollup.failedCases,
       },
     }),
+    runtimeSignals: runtimeSignalReport
+      ? {
+          runId: runtimeSignalReport.runId,
+          summary: runtimeSignalReport.summary,
+        }
+      : null,
     passed:
       failedThresholds.length === 0 &&
       overallFailures.length === 0 &&
