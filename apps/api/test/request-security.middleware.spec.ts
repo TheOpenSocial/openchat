@@ -217,6 +217,55 @@ describe("requestSecurityMiddleware", () => {
     expect(next).toHaveBeenCalledTimes(4);
   });
 
+  it("does not abuse-throttle authenticated experience reads during normal daily-loop usage", () => {
+    process.env.ABUSE_THROTTLE_MAX_SCORE = "8";
+    process.env.ABUSE_THROTTLE_BLOCK_MS = "60000";
+
+    const next = vi.fn();
+    const requests = [
+      createRequest({
+        method: "GET",
+        path: "/api/profiles/11111111-1111-4111-8111-111111111111/completion",
+        ip: "203.0.113.133",
+        headers: {
+          authorization: "Bearer authenticated-mobile-user",
+        },
+      }),
+      createRequest({
+        method: "GET",
+        path: "/api/experience/11111111-1111-4111-8111-111111111111/bootstrap",
+        ip: "203.0.113.133",
+        headers: {
+          authorization: "Bearer authenticated-mobile-user",
+        },
+      }),
+      createRequest({
+        method: "GET",
+        path: "/api/experience/11111111-1111-4111-8111-111111111111/home-summary",
+        ip: "203.0.113.133",
+        headers: {
+          authorization: "Bearer authenticated-mobile-user",
+        },
+      }),
+      createRequest({
+        method: "GET",
+        path: "/api/experience/11111111-1111-4111-8111-111111111111/activity-summary",
+        ip: "203.0.113.133",
+        headers: {
+          authorization: "Bearer authenticated-mobile-user",
+        },
+      }),
+    ];
+
+    for (const request of requests) {
+      const response = createResponse();
+      requestSecurityMiddleware(request, response, next);
+      expect(response.status).not.toHaveBeenCalled();
+    }
+
+    expect(next).toHaveBeenCalledTimes(4);
+  });
+
   it("isolates abuse throttling by authenticated token instead of shared ip", () => {
     process.env.ABUSE_THROTTLE_MAX_SCORE = "8";
     process.env.ABUSE_THROTTLE_BLOCK_MS = "60000";

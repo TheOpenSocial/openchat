@@ -80,19 +80,46 @@ function buildLocalE2ESession(): StoredSession {
   };
 }
 
+function mobileSessionFromStoredSession(stored: StoredSession): MobileSession {
+  return {
+    userId: stored.userId,
+    displayName: stored.displayName,
+    email: stored.email ?? null,
+    accessToken: stored.accessToken,
+    refreshToken: stored.refreshToken,
+    sessionId: stored.sessionId,
+  };
+}
+
 function ProductionApp() {
-  const [isBootstrapping, setIsBootstrapping] = useState(true);
+  const initialE2ESessionRef = useRef<StoredSession | null>(
+    parseE2ESession() ??
+      (E2E_LOCAL_MODE_ENABLED ? buildLocalE2ESession() : null),
+  );
+  const [isBootstrapping, setIsBootstrapping] = useState(
+    initialE2ESessionRef.current ? false : true,
+  );
   const [splashLayerVisible, setSplashLayerVisible] = useState(true);
-  const [stage, setStage] = useState<AppStage>("auth");
+  const [stage, setStage] = useState<AppStage>(() =>
+    initialE2ESessionRef.current
+      ? initialE2ESessionRef.current.profileCompleted
+        ? "home"
+        : "onboarding"
+      : "auth",
+  );
   const [authError, setAuthError] = useState<string | null>(null);
   const [onboardingError, setOnboardingError] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
   const [onboardingLoading, setOnboardingLoading] = useState(false);
   const [stageCurtainVisible, setStageCurtainVisible] = useState(false);
   const [locale, setLocale] = useState<AppLocale>("en");
-  const [session, setSession] = useState<MobileSession | null>(null);
+  const [session, setSession] = useState<MobileSession | null>(() =>
+    initialE2ESessionRef.current
+      ? mobileSessionFromStoredSession(initialE2ESessionRef.current)
+      : null,
+  );
   const [profile, setProfile] = useState<UserProfileDraft>({
-    displayName: "Explorer",
+    displayName: initialE2ESessionRef.current?.displayName ?? "Explorer",
     bio: "",
     city: "",
     country: "",
@@ -104,21 +131,7 @@ function ProductionApp() {
     string | null
   >(null);
   const appOpenedTrackedRef = useRef<string | null>(null);
-  const e2eSessionRef = useRef<StoredSession | null>(parseE2ESession());
-
-  const mobileSessionFromStored = useCallback(
-    (
-      stored: NonNullable<Awaited<ReturnType<typeof loadStoredSession>>>,
-    ): MobileSession => ({
-      userId: stored.userId,
-      displayName: stored.displayName,
-      email: stored.email ?? null,
-      accessToken: stored.accessToken,
-      refreshToken: stored.refreshToken,
-      sessionId: stored.sessionId,
-    }),
-    [],
-  );
+  const e2eSessionRef = initialE2ESessionRef;
 
   useEffect(() => {
     AsyncStorage.getItem(MOBILE_LOCALE_STORAGE_KEY)
@@ -153,6 +166,13 @@ function ProductionApp() {
   );
 
   useEffect(() => {
+    if (E2E_LOCAL_MODE_ENABLED) {
+      configureApiAuthLifecycle({});
+      return () => {
+        configureApiAuthLifecycle({});
+      };
+    }
+
     configureApiAuthLifecycle({
       onSessionRefreshed: (tokens) => {
         setSession((current) => {
@@ -198,16 +218,27 @@ function ProductionApp() {
     let mounted = true;
 
     const restore = async () => {
+      if (E2E_LOCAL_MODE_ENABLED && initialE2ESessionRef.current) {
+        await saveStoredSession(initialE2ESessionRef.current).catch(() => {});
+        if (mounted) {
+          setIsBootstrapping(false);
+        }
+        return;
+      }
+
       const injectedSession =
         e2eSessionRef.current ??
         (E2E_LOCAL_MODE_ENABLED ? buildLocalE2ESession() : null);
+      let stored = null as Awaited<ReturnType<typeof loadStoredSession>>;
       if (injectedSession) {
         await saveStoredSession(injectedSession);
+        stored = injectedSession;
       }
 
-      let stored = null as Awaited<ReturnType<typeof loadStoredSession>>;
       try {
-        stored = await loadStoredSession();
+        if (!stored) {
+          stored = await loadStoredSession();
+        }
         if (!stored) {
           return;
         }
@@ -217,7 +248,7 @@ function ProductionApp() {
             return;
           }
           const currentStored = stored;
-          const restoredSession = mobileSessionFromStored(currentStored);
+          const restoredSession = mobileSessionFromStoredSession(currentStored);
           setSession(restoredSession);
           setProfile((current) => ({
             ...current,
@@ -233,7 +264,7 @@ function ProductionApp() {
           stored.accessToken,
         );
         const latestStored = (await loadStoredSession()) ?? stored;
-        const restoredSession = mobileSessionFromStored(latestStored);
+        const restoredSession = mobileSessionFromStoredSession(latestStored);
 
         if (!mounted) {
           return;
@@ -298,7 +329,7 @@ function ProductionApp() {
     return () => {
       mounted = false;
     };
-  }, [locale, mobileSessionFromStored]);
+  }, [locale]);
 
   const handleAuthenticate = async (code: string) => {
     if (E2E_BYPASS_ENABLED) {
@@ -310,7 +341,7 @@ function ProductionApp() {
         setAuthError(null);
         try {
           await saveStoredSession(bypassSession);
-          const nextSession = mobileSessionFromStored(bypassSession);
+          const nextSession = mobileSessionFromStoredSession(bypassSession);
           setSession(nextSession);
           setProfile((current) => ({
             ...current,
@@ -365,7 +396,7 @@ function ProductionApp() {
         refreshToken: nextSession.refreshToken,
         sessionId: nextSession.sessionId,
       };
-      const hydratedSession = mobileSessionFromStored(latestStored);
+      const hydratedSession = mobileSessionFromStoredSession(latestStored);
 
       setSession(hydratedSession);
       setProfile((current) => ({

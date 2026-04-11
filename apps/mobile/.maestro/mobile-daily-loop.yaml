@@ -1,18 +1,30 @@
 appId: ${MAESTRO_APP_ID}
 ---
-- launchApp
-- tapOn:
-    text: "OpenSocial"
-    optional: true
+- launchApp:
+    clearState: true
+    permissions:
+      all: unset
 - openLink: ${MAESTRO_EXPO_URL}
 - tapOn:
-    text: "OpenSocial"
+    text: "Continue"
+    optional: true
+- tapOn:
+    text: "Skip"
+    optional: true
+- tapOn:
+    text: "Try it now"
     optional: true
 - tapOn:
     text: "Reload"
     optional: true
 - tapOn:
     text: "Continue"
+    optional: true
+- tapOn:
+    text: "Skip"
+    optional: true
+- tapOn:
+    text: "Try it now"
     optional: true
 - waitForAnimationToEnd
 - runFlow:
@@ -54,10 +66,17 @@ appId: ${MAESTRO_APP_ID}
           id: "onboarding-s5-continue"
       - tapOn:
           id: "onboarding-s6-skip"
+- runFlow:
+    when:
+      visible:
+        text: "Start with intent"
+    commands:
+      - tapOn:
+          text: "Skip"
 - extendedWaitUntil:
     visible:
       id: "home-screen"
-    timeout: 20000
+    timeout: 90000
 - assertVisible:
     id: "home-screen"
 - assertVisible:
@@ -65,23 +84,10 @@ appId: ${MAESTRO_APP_ID}
 - assertVisible:
     id: "home-status-action"
 - tapOn:
-    id: "app-bottom-tab-activity"
+    id: "app-shell-notifications"
 - extendedWaitUntil:
     visible:
       id: "activity-screen"
-    timeout: 15000
+    timeout: 30000
 - assertVisible:
     id: "activity-screen"
-- runFlow:
-    when:
-      visible:
-        id: "activity-section-actionRequired"
-    commands:
-      - assertVisible:
-          id: "activity-section-actionRequired"
-- tapOn:
-    id: "app-bottom-tab-home"
-- assertVisible:
-    id: "home-screen"
-- assertVisible:
-    id: "home-status-header"

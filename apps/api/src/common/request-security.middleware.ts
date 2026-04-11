@@ -198,6 +198,14 @@ function isSelfServiceAgentThreadPath(path: string) {
   );
 }
 
+function isSelfServiceExperiencePath(path: string) {
+  return (
+    /^\/api\/experience\/[0-9a-f-]+\/(home-summary|activity-summary|bootstrap)\/?$/i.test(
+      path,
+    ) || /^\/api\/profiles\/[0-9a-f-]+\/completion\/?$/i.test(path)
+  );
+}
+
 function computeAbuseRequestScore(input: {
   isAuthenticated: boolean;
   isHighRisk: boolean;
@@ -212,7 +220,8 @@ function computeAbuseRequestScore(input: {
   if (
     input.isAuthenticated &&
     (isSelfServiceOnboardingPath(input.path) ||
-      isSelfServiceAgentThreadPath(input.path))
+      isSelfServiceAgentThreadPath(input.path) ||
+      isSelfServiceExperiencePath(input.path))
   ) {
     return input.isWrite ? 2 : 1;
   }
