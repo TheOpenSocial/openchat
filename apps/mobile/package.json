@@ -16,6 +16,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:e2e:maestro": "MAESTRO_APP_ID=${MAESTRO_APP_ID:-host.exp.Exponent} MAESTRO_EXPO_URL=${MAESTRO_EXPO_URL:-exp://localhost:8089} maestro test .maestro/mobile-critical-path.yaml",
+    "test:e2e:maestro:daily-loop": "MAESTRO_APP_ID=${MAESTRO_APP_ID:-host.exp.Exponent} MAESTRO_EXPO_URL=${MAESTRO_EXPO_URL:-exp://localhost:8089} maestro test .maestro/mobile-daily-loop.yaml",
     "test:e2e:maestro:design": "MAESTRO_APP_ID=${MAESTRO_APP_ID:-host.exp.Exponent} MAESTRO_EXPO_URL=${MAESTRO_EXPO_URL:-exp://localhost:8089} maestro test .maestro/mobile-design-mock.yaml"
   },
   "dependencies": {

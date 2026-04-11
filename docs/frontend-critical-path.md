@@ -5,6 +5,7 @@ This doc ties together **mobile** and **web** browser automation for milestone `
 ## Mobile (Maestro)
 
 - Flow file: `apps/mobile/.maestro/mobile-critical-path.yaml`
+- Daily-loop shell flow: `apps/mobile/.maestro/mobile-daily-loop.yaml`
 - Design preview: `apps/mobile/.maestro/mobile-design-mock.yaml`
 - Requires a running Expo app; for deterministic auth without Google, use:
   - `EXPO_PUBLIC_ENABLE_E2E_AUTH_BYPASS=1`
@@ -14,6 +15,7 @@ Run (from `apps/mobile`):
 
 ```bash
 pnpm test:e2e:maestro
+pnpm test:e2e:maestro:daily-loop
 ```
 
 ## Web (Playwright, design mock — no API)

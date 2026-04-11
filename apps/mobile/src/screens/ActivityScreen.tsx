@@ -71,6 +71,7 @@ export function ActivityScreen({
             }
           : undefined
       }
+      screenTestID="activity-screen"
       scrollProps={{
         refreshControl: (
           <RefreshControl
@@ -192,7 +193,11 @@ export function ActivityScreen({
       ) : items.length > 0 ? (
         <View className="gap-6">
           {sections.map((section) => (
-            <View className="gap-3" key={section.id}>
+            <View
+              className="gap-3"
+              key={section.id}
+              testID={`activity-section-${section.id}`}
+            >
               <View className="gap-2">
                 <View className="flex-row items-center justify-between gap-3">
                   <Text className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/34">

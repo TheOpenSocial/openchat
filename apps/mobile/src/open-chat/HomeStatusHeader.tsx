@@ -67,7 +67,10 @@ export function HomeStatusHeader({
   const tone = toneClasses(summary.status.tone);
 
   return (
-    <View className="mb-4 mt-1 rounded-[28px] border border-white/[0.08] bg-white/[0.035] px-4 py-4">
+    <View
+      className="mb-4 mt-1 rounded-[28px] border border-white/[0.08] bg-white/[0.035] px-4 py-4"
+      testID="home-status-header"
+    >
       <View className="flex-row items-start justify-between gap-3">
         <View className="min-w-0 flex-1">
           <Text className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/34">
@@ -101,6 +104,7 @@ export function HomeStatusHeader({
           style={({ pressed }) => ({
             opacity: pressed ? appTheme.motion.pressOpacity : 1,
           })}
+          testID="home-status-action"
         >
           <Text className="text-[11px] font-semibold tracking-[0.01em]">
             {summary.status.nextAction.label}

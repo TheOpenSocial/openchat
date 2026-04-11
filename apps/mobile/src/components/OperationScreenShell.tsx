@@ -18,6 +18,7 @@ type OperationScreenShellProps = {
   closeTestID?: string;
   eyebrow: string;
   onClose?: () => void;
+  screenTestID?: string;
   scrollContentContainerStyle?: ScrollViewProps["contentContainerStyle"];
   scrollProps?: Omit<ScrollViewProps, "children" | "contentContainerStyle">;
   subtitle: string;
@@ -31,13 +32,18 @@ export function OperationScreenShell({
   closeTestID,
   eyebrow,
   onClose,
+  screenTestID,
   scrollContentContainerStyle,
   scrollProps,
   subtitle,
   title,
 }: OperationScreenShellProps) {
   return (
-    <SafeAreaView className="flex-1 bg-canvas" style={{ flex: 1 }}>
+    <SafeAreaView
+      className="flex-1 bg-canvas"
+      style={{ flex: 1 }}
+      testID={screenTestID}
+    >
       <View className="flex-1 bg-canvas" style={{ flex: 1 }}>
         <View className="flex-row items-start justify-between px-5 pb-5 pt-3">
           <View className="max-w-[280px] gap-2">

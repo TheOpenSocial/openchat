@@ -44,6 +44,7 @@ function AttentionCard({
       style={({ pressed }) => ({
         opacity: pressed ? appTheme.motion.pressOpacity : 1,
       })}
+      testID="home-card-attention"
     >
       <SurfaceCard className="min-w-0 flex-1 rounded-[24px] bg-white/[0.03]">
         <Text className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/34">
@@ -75,6 +76,7 @@ function RecoveryCard({
       style={({ pressed }) => ({
         opacity: pressed ? appTheme.motion.pressOpacity : 1,
       })}
+      testID="home-card-recovery"
     >
       <SurfaceCard className="min-w-0 flex-1 rounded-[24px] border border-white/[0.12] bg-white/[0.045]">
         <Text className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/34">
@@ -116,6 +118,11 @@ function CoordinationCard({
       style={({ pressed }) => ({
         opacity: pressed ? appTheme.motion.pressOpacity : 1,
       })}
+      testID={
+        coordination.variant === "accepted"
+          ? "home-card-coordination-accepted"
+          : "home-card-coordination-waiting"
+      }
     >
       <SurfaceCard className="min-w-0 flex-1 rounded-[24px] bg-white/[0.03]">
         <Text className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/34">
@@ -155,6 +162,7 @@ function LeadIntentCard({
       style={({ pressed }) => ({
         opacity: pressed ? appTheme.motion.pressOpacity : 1,
       })}
+      testID="home-card-lead-intent"
     >
       <SurfaceCard className="min-w-0 flex-1 rounded-[24px] bg-white/[0.03]">
         <Text className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/34">
@@ -189,6 +197,7 @@ function TopSuggestionCard({
       style={({ pressed }) => ({
         opacity: pressed ? appTheme.motion.pressOpacity : 1,
       })}
+      testID="home-card-top-suggestion"
     >
       <SurfaceCard className="min-w-0 flex-1 rounded-[24px] bg-white/[0.03]">
         <Text className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/34">
