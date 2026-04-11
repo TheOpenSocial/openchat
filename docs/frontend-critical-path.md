@@ -27,6 +27,14 @@ PLAYGROUND_ADMIN_API_KEY=... \
 EXPO_PUBLIC_E2E_SESSION_B64=... \
 pnpm test:mobile:daily-loop:staging -- --scenario=baseline
 ```
+
+To obtain `EXPO_PUBLIC_E2E_SESSION_B64`, dispatch:
+
+```bash
+gh workflow run "Staging Mobile E2E Session"
+```
+
+Then download the `staging-mobile-e2e-session-<run_id>` artifact and read `mobile-e2e-session.json`.
 ```
 
 ## Web (Playwright, design mock — no API)
