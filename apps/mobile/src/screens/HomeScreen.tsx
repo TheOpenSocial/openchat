@@ -7,6 +7,7 @@ import {
   api,
   type ChatMessageRecord,
   type ChatMetadataRecord,
+  type ExperienceHomeSummaryResponse,
 } from "../lib/api";
 import { t } from "../i18n/strings";
 import { type RealtimeSession } from "../lib/realtime";
@@ -121,6 +122,85 @@ function buildSeedAgentTimeline(locale: "en" | "es"): AgentTimelineMessage[] {
       body: t("homeAgentSeedPrompt", locale),
     },
   ];
+}
+
+function buildLocalHomeSummary(
+  locale: "en" | "es",
+): ExperienceHomeSummaryResponse {
+  const prompt =
+    locale === "es"
+      ? "Encontrar gente para jugar o hablar hoy"
+      : "Find people to play or talk with today";
+
+  return {
+    generatedAt: new Date().toISOString(),
+    thread: {
+      id: "local-e2e-thread",
+      title: locale === "es" ? "Tu hilo principal" : "Your main thread",
+      createdAt: new Date().toISOString(),
+    },
+    status: {
+      tone: "active",
+      eyebrow: locale === "es" ? "Listo ahora" : "Ready now",
+      title:
+        locale === "es"
+          ? "Buscando una buena opcion para hoy"
+          : "Looking for a good option for today",
+      body:
+        locale === "es"
+          ? "El hilo esta listo. Prueba una idea concreta o abre Activity para ver movimiento."
+          : "The thread is ready. Try a concrete idea or open Activity to review movement.",
+      footnote:
+        locale === "es"
+          ? "Modo local para validar el loop diario."
+          : "Local mode for daily-loop validation.",
+      nextAction: {
+        kind: "start_intent",
+        label: locale === "es" ? "Empezar" : "Start now",
+      },
+    },
+    counts: {
+      activeIntents: 1,
+      pendingRequests: 1,
+      unreadNotifications: 1,
+      tonightSuggestions: 2,
+      reconnectCandidates: 1,
+    },
+    spotlight: {
+      coordination: {
+        variant: "waiting",
+        title: locale === "es" ? "Esperando respuestas" : "Waiting on replies",
+        body:
+          locale === "es"
+            ? "Ya hay movimiento. Si quieres, revisa Activity o entra a Chats."
+            : "There is already movement. Check Activity or move into Chats.",
+        actionLabel: locale === "es" ? "Ver activity" : "Open Activity",
+        targetChatId: null,
+      },
+      recovery: null,
+      leadIntent: {
+        intentId: "local-e2e-intent",
+        rawText: prompt,
+        status: "active",
+        requests: {
+          pending: 1,
+          accepted: 0,
+          rejected: 0,
+          expired: 0,
+          cancelled: 0,
+        },
+      },
+      topSuggestion: {
+        userId: "local-e2e-suggestion",
+        displayName: "Maya",
+        score: 0.86,
+        reason:
+          locale === "es"
+            ? "Disponible ahora y compatible con este plan."
+            : "Available now and aligned with this plan.",
+      },
+    },
+  };
 }
 
 const THREAD_LOAD_RETRY_DELAYS_MS = [1500, 3000, 5000, 8000] as const;
@@ -377,11 +457,15 @@ export function HomeScreen({
       const diagnosticMessage =
         error.message.trim() || t("homeThreadLoadFailedBody", locale);
       const nextAttempt = agentThreadRetryAttempt + 1;
+      const isAbuseThrottle = error.code === "abuse_throttled";
       const canAutoRetry =
+        !isAbuseThrottle &&
         (error.offline || error.transient) &&
         nextAttempt <= THREAD_LOAD_RETRY_DELAYS_MS.length;
       const recoveryMessage = error.offline
         ? "I lost your main thread for a moment. I’m reconnecting now."
+        : isAbuseThrottle
+          ? "Your main thread is rate-limited for a moment. I’m holding here instead of retrying."
         : error.transient
           ? "Your main thread is temporarily unavailable. I’m reconnecting now."
           : "I couldn’t restore your main thread yet.";
@@ -441,6 +525,21 @@ export function HomeScreen({
 
   useEffect(() => {
     let active = true;
+
+    if (skipNetwork) {
+      const localSummary = buildLocalHomeSummary(locale);
+      setHomeSummary(localSummary);
+      setBootstrapHydratedAt(localSummary.generatedAt);
+      setActivityState({
+        hasUnread: true,
+        pendingRequestCount: 1,
+        lastHydratedAt: localSummary.generatedAt,
+      });
+      void saveStoredHomeSummary(session.userId, localSummary).catch(() => {});
+      return () => {
+        active = false;
+      };
+    }
 
     void loadStoredHomeSummary(session.userId).then((storedSummary) => {
       if (!active || !storedSummary) {

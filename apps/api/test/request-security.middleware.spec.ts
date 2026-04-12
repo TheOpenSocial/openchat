@@ -266,6 +266,32 @@ describe("requestSecurityMiddleware", () => {
     expect(next).toHaveBeenCalledTimes(4);
   });
 
+  it("does not abuse-throttle repeated authenticated home bootstrap reads", () => {
+    process.env.ABUSE_THROTTLE_MAX_SCORE = "8";
+    process.env.ABUSE_THROTTLE_BLOCK_MS = "60000";
+
+    const next = vi.fn();
+
+    for (let index = 0; index < 20; index += 1) {
+      const request = createRequest({
+        method: "GET",
+        path:
+          index % 2 === 0
+            ? "/api/agent/threads/me/summary"
+            : "/api/agent/threads/11111111-1111-4111-8111-111111111111/messages",
+        ip: "203.0.113.134",
+        headers: {
+          authorization: "Bearer authenticated-mobile-user",
+        },
+      });
+      const response = createResponse();
+      requestSecurityMiddleware(request, response, next);
+      expect(response.status).not.toHaveBeenCalled();
+    }
+
+    expect(next).toHaveBeenCalledTimes(20);
+  });
+
   it("isolates abuse throttling by authenticated token instead of shared ip", () => {
     process.env.ABUSE_THROTTLE_MAX_SCORE = "8";
     process.env.ABUSE_THROTTLE_BLOCK_MS = "60000";

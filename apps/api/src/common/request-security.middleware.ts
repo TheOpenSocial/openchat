@@ -223,7 +223,7 @@ function computeAbuseRequestScore(input: {
       isSelfServiceAgentThreadPath(input.path) ||
       isSelfServiceExperiencePath(input.path))
   ) {
-    return input.isWrite ? 2 : 1;
+    return input.isWrite ? 1 : 0;
   }
 
   if (input.isHighRisk) {

@@ -5,28 +5,50 @@ appId: ${MAESTRO_APP_ID}
     permissions:
       all: unset
 - openLink: ${MAESTRO_EXPO_URL}
-- tapOn:
-    text: "Continue"
-    optional: true
-- tapOn:
-    text: "Skip"
-    optional: true
-- tapOn:
-    text: "Try it now"
-    optional: true
-- tapOn:
-    text: "Reload"
-    optional: true
-- tapOn:
-    text: "Continue"
-    optional: true
-- tapOn:
-    text: "Skip"
-    optional: true
-- tapOn:
-    text: "Try it now"
-    optional: true
+- runFlow:
+    when:
+      visible:
+        text: "Continue"
+    commands:
+      - tapOn:
+          text: "Continue"
+- runFlow:
+    when:
+      visible:
+        text: "Reload"
+    commands:
+      - tapOn:
+          text: "Reload"
+- runFlow:
+    when:
+      visible:
+        text: "Continue"
+    commands:
+      - tapOn:
+          text: "Continue"
 - waitForAnimationToEnd
+- openLink: ${MAESTRO_EXPO_URL}
+- runFlow:
+    when:
+      visible:
+        text: "Go home"
+    commands:
+      - tapOn:
+          text: "Go home"
+- runFlow:
+    when:
+      visible:
+        text: "Continue"
+    commands:
+      - tapOn:
+          text: "Continue"
+- runFlow:
+    when:
+      visible:
+        text: "Reload"
+    commands:
+      - tapOn:
+          text: "Reload"
 - runFlow:
     when:
       visible:
