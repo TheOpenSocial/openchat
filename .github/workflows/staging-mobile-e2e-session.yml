@@ -14,7 +14,7 @@ env:
 jobs:
   staging-mobile-e2e-session:
     name: Emit Staging Mobile E2E Session
-    runs-on: [self-hosted, linux, x64, opensocial-prod]
+    runs-on: ubuntu-latest
     environment: staging
     timeout-minutes: 20
     env:
