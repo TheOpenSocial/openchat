@@ -7,6 +7,7 @@ import type { AgentTimelineMessage } from "../types";
 type UsePrimaryAgentThreadOptions = {
   enabled: boolean;
   accessToken: string;
+  preferredThreadId?: string | null;
   onHydrated: (messages: AgentTimelineMessage[]) => void;
   onLoadError: () => void;
 };
@@ -18,14 +19,17 @@ type UsePrimaryAgentThreadOptions = {
 export function usePrimaryAgentThread({
   accessToken,
   enabled,
+  preferredThreadId = null,
   onHydrated,
   onLoadError,
 }: UsePrimaryAgentThreadOptions): {
   threadId: string | null;
   loading: boolean;
+  reload: () => void;
 } {
   const [threadId, setThreadId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [reloadNonce, setReloadNonce] = useState(0);
   const onHydratedRef = useRef(onHydrated);
   const onLoadErrorRef = useRef(onLoadError);
   onHydratedRef.current = onHydrated;
@@ -43,25 +47,26 @@ export function usePrimaryAgentThread({
 
     void (async () => {
       try {
-        const summary = await api.getMyAgentThreadSummary(accessToken);
+        const effectiveThreadId =
+          preferredThreadId ??
+          (await api.getMyAgentThreadSummary(accessToken))?.id ??
+          null;
         if (cancelled) {
           return;
         }
-        if (!summary) {
+        if (!effectiveThreadId) {
           setThreadId(null);
           return;
         }
-        setThreadId(summary.id);
+        setThreadId(effectiveThreadId);
         const messages = await api.listAgentThreadMessages(
-          summary.id,
+          effectiveThreadId,
           accessToken,
         );
         if (cancelled) {
           return;
         }
-        if (messages.length > 0) {
-          onHydratedRef.current(agentThreadMessagesToTranscript(messages));
-        }
+        onHydratedRef.current(agentThreadMessagesToTranscript(messages));
       } catch {
         if (!cancelled) {
           onLoadErrorRef.current();
@@ -76,7 +81,13 @@ export function usePrimaryAgentThread({
     return () => {
       cancelled = true;
     };
-  }, [accessToken, enabled]);
+  }, [accessToken, enabled, preferredThreadId, reloadNonce]);
 
-  return { loading, threadId };
+  return {
+    loading,
+    threadId,
+    reload: () => {
+      setReloadNonce((current) => current + 1);
+    },
+  };
 }
