@@ -23,8 +23,8 @@ import { uploadProfilePhotoFromPickerAsset } from "./src/lib/profile-photo-uploa
 import {
   clearStoredSession,
   loadStoredSession,
-  type StoredSession,
   saveStoredSession,
+  type StoredSession,
 } from "./src/lib/session-storage";
 import { trackTelemetryEvent } from "./src/lib/telemetry";
 import {

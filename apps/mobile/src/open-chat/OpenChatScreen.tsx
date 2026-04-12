@@ -171,7 +171,6 @@ export function OpenChatScreen({
       }
       return true;
     });
-
     const dedupedMessages = nextMessages.filter((message, index) => {
       const previous = nextMessages[index - 1];
       if (!previous || previous.role !== message.role) {
@@ -211,6 +210,17 @@ export function OpenChatScreen({
     return dedupedMessages.slice(-5);
   }, [homeSummary, messages]);
   const hasTranscriptMessages = filteredMessages.length > 0;
+  const seedPromptBody = t("homeAgentSeedPrompt", locale).trim();
+  const hasOnlySeedPrompt =
+    filteredMessages.length === 1 &&
+    filteredMessages[0]?.role === "agent" &&
+    (filteredMessages[0]?.body?.trim() ?? "") === seedPromptBody;
+  const suppressSeedPromptUnderError =
+    typeof threadLoadErrorMessage === "string" &&
+    threadLoadErrorMessage.trim().length > 0 &&
+    hasOnlySeedPrompt;
+  const hasRenderableTranscriptMessages =
+    hasTranscriptMessages && !suppressSeedPromptUnderError;
 
   const rawRuntime = useMemo(() => {
     const derived = deriveThreadRuntimeModel(
@@ -273,6 +283,9 @@ export function OpenChatScreen({
     showOnboardingCarryover && onboardingCarryover?.state === "processing";
   const showThreadLoadingState =
     threadLoading && !hasTranscriptMessages && !showOnboardingCarryover;
+  const showThreadLoadErrorState =
+    typeof threadLoadErrorMessage === "string" &&
+    threadLoadErrorMessage.trim().length > 0;
   const [composerOverlayHeight, setComposerOverlayHeight] = useState(154);
   const [atBottom, setAtBottom] = useState(true);
   const [pendingUpdates, setPendingUpdates] = useState(0);
@@ -311,7 +324,8 @@ export function OpenChatScreen({
 
   useEffect(() => {
     if (
-      hasTranscriptMessages ||
+      hasRenderableTranscriptMessages ||
+      showThreadLoadErrorState ||
       carryoverProcessing ||
       showOnboardingCarryover
     ) {
@@ -351,8 +365,8 @@ export function OpenChatScreen({
     ]).start();
   }, [
     carryoverProcessing,
-    filteredMessages,
-    hasTranscriptMessages,
+    hasRenderableTranscriptMessages,
+    showThreadLoadErrorState,
     showOnboardingCarryover,
     starterOpacity,
     starterTranslateY,
@@ -438,7 +452,7 @@ export function OpenChatScreen({
         </View>
       ) : null}
 
-      {hasTranscriptMessages ? (
+      {hasRenderableTranscriptMessages ? (
         <View className="-mx-5 min-h-0 flex-1">
           <ChatTranscriptList
             contentPaddingBottom={transcriptBottomPadding}
