@@ -30,6 +30,11 @@ import { ChatsService } from "./chats.service.js";
 export class ChatsController {
   constructor(private readonly chatsService: ChatsService) {}
 
+  @Get()
+  async listChats(@ActorUserId() actorUserId: string) {
+    return ok(await this.chatsService.listChatsForUser(actorUserId));
+  }
+
   @Post()
   async createChat(@Body() body: unknown, @ActorUserId() actorUserId: string) {
     const payload = parseRequestPayload(createChatBodySchema, body);

@@ -97,6 +97,18 @@ export interface ChatRecord {
   createdAt: string;
 }
 
+export interface ChatListItemRecord {
+  id: string;
+  connectionId: string;
+  title: string;
+  type: "dm" | "group";
+  createdAt: string;
+  highWatermark: string | null;
+  unreadCount: number;
+  participantCount: number | null;
+  connectionStatus: string | null;
+}
+
 export interface ChatMessageStatusRecord {
   state: "sent" | "delivered" | "read";
   deliveredCount: number;
@@ -2078,6 +2090,14 @@ export const api = {
         connectionId,
         type,
       },
+      accessToken,
+    );
+  },
+  listChats(accessToken?: string) {
+    return request<ChatListItemRecord[]>(
+      "GET",
+      "/chats",
+      undefined,
       accessToken,
     );
   },

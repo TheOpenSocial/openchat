@@ -466,9 +466,9 @@ export function HomeScreen({
         ? "I lost your main thread for a moment. I’m reconnecting now."
         : isAbuseThrottle
           ? "Your main thread is rate-limited for a moment. I’m holding here instead of retrying."
-        : error.transient
-          ? "Your main thread is temporarily unavailable. I’m reconnecting now."
-          : "I couldn’t restore your main thread yet.";
+          : error.transient
+            ? "Your main thread is temporarily unavailable. I’m reconnecting now."
+            : "I couldn’t restore your main thread yet.";
       setAgentThreadLoadError(recoveryMessage);
       setAgentThreadRetryAttempt(nextAttempt);
       setAgentThreadRetryNextAt(
@@ -816,6 +816,7 @@ export function HomeScreen({
   });
 
   useChatsHydration({
+    sessionAccessToken: session.accessToken,
     skipNetwork,
     userId: session.userId,
     setBanner,

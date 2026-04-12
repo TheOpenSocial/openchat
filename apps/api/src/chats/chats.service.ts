@@ -1167,6 +1167,103 @@ export class ChatsService {
     };
   }
 
+  async listChatsForUser(userId: string) {
+    if (
+      !this.prisma.chat?.findMany ||
+      !this.prisma.connectionParticipant?.findMany ||
+      !this.prisma.user?.findMany
+    ) {
+      return [];
+    }
+
+    const chats = await this.prisma.chat.findMany({
+      where: {
+        connection: {
+          participants: {
+            some: {
+              userId,
+              leftAt: null,
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        type: true,
+        createdAt: true,
+        connectionId: true,
+        messages: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: {
+            createdAt: true,
+          },
+        },
+        connection: {
+          select: {
+            status: true,
+            participants: {
+              where: { leftAt: null },
+              orderBy: [{ role: "asc" }, { joinedAt: "asc" }],
+              select: {
+                userId: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const participantUserIds = Array.from(
+      new Set(
+        chats.flatMap((chat) =>
+          chat.connection.participants.map((participant) => participant.userId),
+        ),
+      ),
+    );
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: participantUserIds } },
+      select: {
+        id: true,
+        displayName: true,
+      },
+    });
+    const displayNameByUserId = new Map(
+      users.map((user) => [user.id, user.displayName]),
+    );
+
+    return chats.map((chat) => {
+      const otherParticipants = chat.connection.participants.filter(
+        (participant) => participant.userId !== userId,
+      );
+      const title =
+        chat.type === "group"
+          ? otherParticipants
+              .slice(0, 3)
+              .map((participant) =>
+                displayNameByUserId.get(participant.userId)?.trim(),
+              )
+              .filter(Boolean)
+              .join(", ") || "Group"
+          : displayNameByUserId
+              .get(otherParticipants[0]?.userId ?? "")
+              ?.trim() || "Direct chat";
+
+      return {
+        id: chat.id,
+        connectionId: chat.connectionId,
+        type: chat.type,
+        title,
+        createdAt: chat.createdAt,
+        highWatermark: chat.messages[0]?.createdAt ?? null,
+        unreadCount: 0,
+        participantCount: chat.connection.participants.length,
+        connectionStatus: chat.connection.status,
+      };
+    });
+  }
+
   async leaveChat(chatId: string, userId: string) {
     if (
       !this.prisma.chat?.findUnique ||
