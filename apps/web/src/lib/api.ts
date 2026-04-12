@@ -43,6 +43,15 @@ export interface OnboardingActivationPlanResponse {
   };
 }
 
+export interface WaitlistEntryRecord {
+  id: string;
+  email: string;
+  normalizedEmail: string;
+  source: string;
+  status: string;
+  createdAt: string;
+}
+
 export interface InboxRequestRecord {
   id: string;
   intentId: string;
@@ -785,6 +794,12 @@ export async function getGoogleOAuthStartUrl(
 }
 
 export const api = {
+  joinWaitlist(email: string, source = "web-landing") {
+    return request<WaitlistEntryRecord>("POST", "/waitlist", {
+      email,
+      source,
+    });
+  },
   authGoogleCallback(code: string) {
     return request<AuthResult>("POST", "/auth/google/callback", { code });
   },

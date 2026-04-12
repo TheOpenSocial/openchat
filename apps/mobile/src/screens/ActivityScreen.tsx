@@ -57,6 +57,38 @@ export function ActivityScreen({
     return "Requests, discovery signals, and system updates";
   }, [pendingRequestCount]);
   const topSection = sections[0] ?? null;
+  const utilityActions = [
+    {
+      id: "connections",
+      label: "Connections",
+      onPress: onOpenConnections,
+      testID: "activity-open-connections",
+    },
+    {
+      id: "discovery",
+      label: "Discovery",
+      onPress: onOpenDiscovery,
+      testID: "activity-open-discovery",
+    },
+    {
+      id: "circles",
+      label: "Circles",
+      onPress: onOpenRecurringCircles,
+      testID: "activity-open-recurring-circles",
+    },
+    {
+      id: "searches",
+      label: "Searches",
+      onPress: onOpenSavedSearches,
+      testID: "activity-open-saved-searches",
+    },
+    {
+      id: "tasks",
+      label: "Tasks",
+      onPress: onOpenScheduledTasks,
+      testID: "activity-open-scheduled-tasks",
+    },
+  ];
 
   return (
     <OperationScreenShell
@@ -87,101 +119,31 @@ export function ActivityScreen({
       subtitle={topSection?.subtitle ?? headerSubtitle}
       title="What needs your attention"
     >
-      <View className="flex-row gap-2 pb-4">
-        <Pressable
-          accessibilityLabel="Open connections"
-          accessibilityRole="button"
-          className="flex-1 rounded-full border border-white/10 bg-white/[0.04] px-4 py-3"
-          hitSlop={8}
-          onPress={() => {
-            hapticSelection();
-            onOpenConnections?.();
-          }}
-          style={({ pressed }) => ({
-            opacity: pressed ? appTheme.motion.pressOpacity : 1,
-          })}
-          testID="activity-open-connections"
+      {topSection?.emphasis === "urgent" ? (
+        <View
+          className="mb-5 rounded-[24px] border bg-surface px-4 py-4"
+          style={{ borderColor: appTheme.colors.hairlineStrong }}
         >
-          <Text className="text-center text-[13px] font-semibold tracking-[-0.01em] text-white/84">
-            Connections
+          <Text
+            className="text-[10px] font-semibold uppercase tracking-[0.14em]"
+            style={{ color: appTheme.colors.inkFaint }}
+          >
+            Live priority
           </Text>
-        </Pressable>
-        <Pressable
-          accessibilityLabel="Open discovery"
-          accessibilityRole="button"
-          className="flex-1 rounded-full border border-white/10 bg-white/[0.04] px-4 py-3"
-          hitSlop={8}
-          onPress={() => {
-            hapticSelection();
-            onOpenDiscovery?.();
-          }}
-          style={({ pressed }) => ({
-            opacity: pressed ? appTheme.motion.pressOpacity : 1,
-          })}
-          testID="activity-open-discovery"
-        >
-          <Text className="text-center text-[13px] font-semibold tracking-[-0.01em] text-white/84">
-            Discovery
+          <Text
+            className="mt-2 text-[17px] font-semibold tracking-[-0.03em]"
+            style={{ color: appTheme.colors.ink }}
+          >
+            Start with the items that need a reply now
           </Text>
-        </Pressable>
-      </View>
-
-      <View className="flex-row gap-2 pb-4">
-        <Pressable
-          accessibilityLabel="Open recurring circles"
-          accessibilityRole="button"
-          className="flex-1 rounded-full border border-white/10 bg-white/[0.04] px-4 py-3"
-          hitSlop={8}
-          onPress={() => {
-            hapticSelection();
-            onOpenRecurringCircles?.();
-          }}
-          style={({ pressed }) => ({
-            opacity: pressed ? appTheme.motion.pressOpacity : 1,
-          })}
-          testID="activity-open-recurring-circles"
-        >
-          <Text className="text-center text-[13px] font-semibold tracking-[-0.01em] text-white/84">
-            Circles
+          <Text
+            className="mt-3 text-[13px] leading-[20px]"
+            style={{ color: appTheme.colors.inkMuted }}
+          >
+            {topSection.subtitle}
           </Text>
-        </Pressable>
-        <Pressable
-          accessibilityLabel="Open saved searches"
-          accessibilityRole="button"
-          className="flex-1 rounded-full border border-white/10 bg-white/[0.04] px-4 py-3"
-          hitSlop={8}
-          onPress={() => {
-            hapticSelection();
-            onOpenSavedSearches?.();
-          }}
-          style={({ pressed }) => ({
-            opacity: pressed ? appTheme.motion.pressOpacity : 1,
-          })}
-          testID="activity-open-saved-searches"
-        >
-          <Text className="text-center text-[13px] font-semibold tracking-[-0.01em] text-white/84">
-            Searches
-          </Text>
-        </Pressable>
-        <Pressable
-          accessibilityLabel="Open scheduled tasks"
-          accessibilityRole="button"
-          className="flex-1 rounded-full border border-white/10 bg-white/[0.04] px-4 py-3"
-          hitSlop={8}
-          onPress={() => {
-            hapticSelection();
-            onOpenScheduledTasks?.();
-          }}
-          style={({ pressed }) => ({
-            opacity: pressed ? appTheme.motion.pressOpacity : 1,
-          })}
-          testID="activity-open-scheduled-tasks"
-        >
-          <Text className="text-center text-[13px] font-semibold tracking-[-0.01em] text-white/84">
-            Tasks
-          </Text>
-        </Pressable>
-      </View>
+        </View>
+      ) : null}
 
       {error ? <InlineNotice text={error} tone="error" /> : null}
 
@@ -191,7 +153,7 @@ export function ActivityScreen({
           <Text className="mt-4 text-[14px] text-muted">Loading activity</Text>
         </View>
       ) : items.length > 0 ? (
-        <View className="gap-6">
+        <View className="gap-7">
           {sections.map((section) => (
             <View
               className="gap-3"
@@ -200,26 +162,37 @@ export function ActivityScreen({
             >
               <View className="gap-2">
                 <View className="flex-row items-center justify-between gap-3">
-                  <Text className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/34">
+                  <Text
+                    className="text-[11px] font-semibold uppercase tracking-[0.14em]"
+                    style={{ color: appTheme.colors.inkFaint }}
+                  >
                     {section.title}
                   </Text>
                   <View
-                    className={`rounded-full border px-2.5 py-1 ${
-                      section.emphasis === "urgent"
-                        ? "border-white/[0.14] bg-white/[0.08]"
-                        : section.emphasis === "active"
-                          ? "border-white/[0.10] bg-white/[0.05]"
-                          : "border-white/[0.08] bg-white/[0.03]"
-                    }`}
+                    className="min-h-8 rounded-full border px-2.5 py-1.5"
+                    style={{
+                      backgroundColor:
+                        section.emphasis === "urgent"
+                          ? appTheme.colors.panel
+                          : section.emphasis === "active"
+                            ? appTheme.colors.panelMuted
+                            : appTheme.colors.panelSoft,
+                      borderColor:
+                        section.emphasis === "urgent"
+                          ? appTheme.colors.hairlineStrong
+                          : appTheme.colors.hairline,
+                    }}
                   >
                     <Text
-                      className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${
-                        section.emphasis === "urgent"
-                          ? "text-white/74"
-                          : section.emphasis === "active"
-                            ? "text-white/58"
-                            : "text-white/42"
-                      }`}
+                      className="text-[10px] font-semibold uppercase tracking-[0.12em]"
+                      style={{
+                        color:
+                          section.emphasis === "urgent"
+                            ? appTheme.colors.inkSoft
+                            : section.emphasis === "active"
+                              ? appTheme.colors.inkMuted
+                              : appTheme.colors.inkFaint,
+                      }}
                     >
                       {section.emphasis === "urgent"
                         ? "Now"
@@ -229,7 +202,10 @@ export function ActivityScreen({
                     </Text>
                   </View>
                 </View>
-                <Text className="text-[13px] leading-[19px] text-white/46">
+                <Text
+                  className="text-[13px] leading-[19px]"
+                  style={{ color: appTheme.colors.inkMuted }}
+                >
                   {section.subtitle}
                 </Text>
               </View>
@@ -253,6 +229,40 @@ export function ActivityScreen({
               ))}
             </View>
           ))}
+          <View className="gap-3 pt-1">
+            <Text
+              className="text-[10px] font-semibold uppercase tracking-[0.14em]"
+              style={{ color: appTheme.colors.inkFaint }}
+            >
+              Quick links
+            </Text>
+            <View className="flex-row flex-wrap gap-2">
+              {utilityActions.map((action) => (
+                <Pressable
+                  accessibilityLabel={`Open ${action.label.toLowerCase()}`}
+                  accessibilityRole="button"
+                  className="min-h-11 rounded-full border bg-surfaceMuted px-4 py-3"
+                  key={action.id}
+                  onPress={() => {
+                    hapticSelection();
+                    action.onPress?.();
+                  }}
+                  style={({ pressed }) => ({
+                    borderColor: appTheme.colors.hairline,
+                    opacity: pressed ? appTheme.motion.pressOpacity : 1,
+                  })}
+                  testID={action.testID}
+                >
+                  <Text
+                    className="text-[13px] font-semibold tracking-[-0.01em]"
+                    style={{ color: appTheme.colors.inkSoft }}
+                  >
+                    {action.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
         </View>
       ) : (
         <View className="rounded-[28px] border border-white/8 bg-white/[0.03] px-5 py-6">

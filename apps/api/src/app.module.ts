@@ -30,6 +30,7 @@ import { SearchModule } from "./search/search.module.js";
 import { OnboardingModule } from "./onboarding/onboarding.module.js";
 import { RuntimeModule } from "./runtime/runtime.module.js";
 import { ExperienceModule } from "./experience/experience.module.js";
+import { WaitlistModule } from "./waitlist/waitlist.module.js";
 
 @Module({
   controllers: [HealthController],
@@ -67,6 +68,7 @@ import { ExperienceModule } from "./experience/experience.module.js";
     OnboardingModule,
     RuntimeModule,
     ExperienceModule,
+    WaitlistModule,
   ],
   providers: [
     {

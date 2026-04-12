@@ -27,14 +27,14 @@ export function ComposerInput({
   return (
     <View
       className={cn(
-        "rounded-[26px] border border-hairline bg-surface px-4 py-2.5",
+        "rounded-[24px] border border-hairline bg-surface px-4 py-2",
         containerClassName,
       )}
       collapsable={false}
       style={containerStyle}
     >
       <TextInput
-        className={cn("text-[15px] leading-[25px] text-ink", className)}
+        className={cn("text-[15px] leading-[22px] text-ink", className)}
         allowFontScaling
         placeholderTextColor={placeholderTextColor}
         testID={testID}

@@ -28,13 +28,13 @@ export function AppShell({
 }: AppShellProps) {
   void activeTab;
   const insets = useSafeAreaInsets();
-  const headerHeight = insets.top + 46;
+  const headerHeight = insets.top + 34;
 
   return (
     <View style={{ flex: 1 }}>
       <View
         className="min-h-0 flex-1"
-        style={{ flex: 1, paddingTop: insets.top + 4 }}
+        style={{ flex: 1, paddingTop: insets.top + 1 }}
       >
         {children}
       </View>

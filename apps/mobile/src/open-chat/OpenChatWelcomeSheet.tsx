@@ -157,6 +157,7 @@ export function OpenChatWelcomeSheet({
                   hapticSelection();
                   onClose();
                 }}
+                testID="home-welcome-close"
                 style={({ pressed }) => ({
                   opacity: pressed ? appTheme.motion.pressOpacity : 1,
                 })}
@@ -220,6 +221,7 @@ export function OpenChatWelcomeSheet({
                   hapticImpact();
                   onClose();
                 }}
+                testID="home-welcome-primary"
                 style={({ pressed }) => ({
                   opacity: pressed ? appTheme.motion.pressOpacity : 1,
                 })}
@@ -235,6 +237,7 @@ export function OpenChatWelcomeSheet({
                   hapticSelection();
                   onClose();
                 }}
+                testID="home-welcome-skip"
                 style={({ pressed }) => ({
                   opacity: pressed ? appTheme.motion.pressOpacity : 1,
                 })}

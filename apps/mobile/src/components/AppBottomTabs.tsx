@@ -49,7 +49,7 @@ const TAB_META: Record<
   },
   activity: {
     icon: "notifications-outline",
-    label: "Activity",
+    label: "Updates",
     hint: "Tab 3 of 4. Shows what changed and what needs action.",
   },
   profile: {
@@ -104,17 +104,17 @@ function TabItem({
         flex: 1,
         alignItems: "center",
         justifyContent: "center",
-        minHeight: 56,
+        minHeight: 58,
         opacity: pressed ? appTheme.motion.pressOpacity : 1,
         transform: [{ scale: pressed ? 0.988 : 1 }],
       })}
       testID={`app-bottom-tab-${tab}`}
     >
       <Animated.View
-        className="h-10 w-10 items-center justify-center"
+        className="min-w-[64px] items-center justify-center"
         style={animatedIconStyle}
       >
-        <View className="h-10 w-10 items-center justify-center">
+        <View className="h-9 w-9 items-center justify-center">
           <Ionicons
             color={isActive ? appTheme.colors.background : appTheme.colors.ink}
             style={{ opacity: isActive ? 1 : 0.62 }}
@@ -130,6 +130,7 @@ function TabItem({
             isActive ? "text-canvas" : "text-muted"
           }`}
           allowFontScaling
+          adjustsFontSizeToFit
           minimumFontScale={0.8}
           numberOfLines={1}
         >
@@ -164,7 +165,7 @@ export function AppBottomTabs({
 
   const indicatorStyle = useAnimatedStyle(() => {
     const slotWidth = containerWidth.value / TAB_ORDER.length;
-    const indicatorWidth = Math.max(slotWidth - 36, 0);
+    const indicatorWidth = Math.max(slotWidth - 26, 0);
     const centeredOffset = Math.max(0, (slotWidth - indicatorWidth) / 2);
 
     return {
@@ -231,10 +232,10 @@ export function AppBottomTabs({
         <View>
           <View className="overflow-hidden">
             <Animated.View
-              className="absolute bottom-[5px] left-0 top-[5px] rounded-full border border-hairline bg-ink"
+              className="absolute bottom-[6px] left-0 top-[6px] rounded-full border border-hairline bg-ink"
               style={indicatorStyle}
             />
-            <View className="flex-row items-center py-[3px]">
+            <View className="flex-row items-center py-[4px]">
               <TabItem
                 activeIndex={activeIndex}
                 badgeCount={unreadChats}

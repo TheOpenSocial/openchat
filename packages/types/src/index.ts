@@ -611,6 +611,20 @@ export const authRevokeAllSessionsBodySchema = z.object({
   exceptSessionId: uuidSchema.optional(),
 });
 
+export const waitlistCreateBodySchema = z.object({
+  email: z.string().trim().email().max(320),
+  source: z.string().trim().min(1).max(64).optional(),
+});
+
+export const waitlistCreateResponseSchema = z.object({
+  id: uuidSchema,
+  email: z.string().email(),
+  normalizedEmail: z.string().email(),
+  source: z.string().min(1).max(64),
+  status: z.string().min(1).max(64),
+  createdAt: isoDateTimeSchema,
+});
+
 export const profileUpdateBodySchema = z.object({
   displayName: z.string().min(1).max(120).optional(),
   bio: z.string().max(500).optional(),

@@ -1,0 +1,32 @@
+appId: ${MAESTRO_APP_ID}
+---
+- tapOn:
+    text: "Open"
+    optional: true
+- tapOn:
+    text: "Continue"
+    optional: true
+- tapOn:
+    text: "Reload"
+    optional: true
+- tapOn:
+    text: "Skip"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "home-screen"
+    timeout: 45000
+- assertVisible:
+    id: "home-screen"
+- assertVisible:
+    id: "home-status-header"
+- assertVisible:
+    id: "home-status-action"
+- tapOn:
+    id: "app-bottom-tab-activity"
+- extendedWaitUntil:
+    visible:
+      id: "activity-screen"
+    timeout: 30000
+- assertVisible:
+    id: "activity-screen"

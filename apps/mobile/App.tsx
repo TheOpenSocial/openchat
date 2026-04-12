@@ -230,14 +230,24 @@ function ProductionApp() {
         e2eSessionRef.current ??
         (E2E_LOCAL_MODE_ENABLED ? buildLocalE2ESession() : null);
       let stored = null as Awaited<ReturnType<typeof loadStoredSession>>;
+      const existingStored = await loadStoredSession();
       if (injectedSession) {
-        await saveStoredSession(injectedSession);
-        stored = injectedSession;
+        const shouldPreserveStoredSession =
+          !!existingStored &&
+          existingStored.userId === injectedSession.userId &&
+          existingStored.sessionId === injectedSession.sessionId;
+
+        if (shouldPreserveStoredSession) {
+          stored = existingStored;
+        } else {
+          await saveStoredSession(injectedSession);
+          stored = injectedSession;
+        }
       }
 
       try {
         if (!stored) {
-          stored = await loadStoredSession();
+          stored = existingStored ?? (await loadStoredSession());
         }
         if (!stored) {
           return;

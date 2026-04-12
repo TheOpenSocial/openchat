@@ -36,6 +36,16 @@ async function bootstrap() {
   app.use(requestLoggingMiddleware);
   app.use(requestSecurityMiddleware);
   app.use(adminSecurityMiddleware);
+  app.enableCors({
+    origin: [
+      "http://localhost:3002",
+      "http://127.0.0.1:3002",
+      "http://localhost:3000",
+      "http://127.0.0.1:3000",
+    ],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["content-type", "authorization", "idempotency-key"],
+  });
 
   app.setGlobalPrefix("api");
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));

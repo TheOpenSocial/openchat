@@ -1,6 +1,7 @@
 import { Text, View } from "react-native";
 
 import { SystemBlobAnimation } from "../components/SystemBlobAnimation";
+import { appTheme } from "../theme";
 import type { ChatBubbleRole } from "../types";
 
 interface ThreadMessageProps {
@@ -28,9 +29,18 @@ export function ThreadMessage({ body, role }: ThreadMessageProps) {
 
   if (role === "user") {
     return (
-      <View className="mb-4 max-w-[88%] self-end">
-        <View className="rounded-[22px] border border-white/10 bg-white/[0.06] px-4 py-3.5">
-          <Text className="text-[16px] leading-[24px] text-white/96">
+      <View className="mb-2 max-w-[78%] self-end">
+        <View
+          className="rounded-[17px] border px-3.5 py-2"
+          style={{
+            backgroundColor: appTheme.colors.panelMuted,
+            borderColor: appTheme.colors.hairline,
+          }}
+        >
+          <Text
+            className="text-[13px] leading-[18px]"
+            style={{ color: appTheme.colors.ink }}
+          >
             {compactBody}
           </Text>
         </View>
@@ -54,10 +64,19 @@ export function ThreadMessage({ body, role }: ThreadMessageProps) {
         .slice(RUNTIME_SYSTEM_MESSAGE_PREFIX.length)
         .trim();
       return (
-        <View className="mb-4 self-start rounded-[16px] border border-white/[0.08] bg-white/[0.03] px-3 py-2.5">
+        <View
+          className="mb-4 self-start rounded-[16px] border px-3 py-2.5"
+          style={{
+            backgroundColor: appTheme.colors.panelSoft,
+            borderColor: appTheme.colors.hairline,
+          }}
+        >
           <View className="flex-row items-center gap-2.5">
             <SystemBlobAnimation size={28} />
-            <Text className="text-[13px] leading-[18px] font-medium text-white/70">
+            <Text
+              className="text-[13px] font-medium leading-[18px]"
+              style={{ color: appTheme.colors.inkSoft }}
+            >
               {label || "Working on it…"}
             </Text>
           </View>
@@ -65,8 +84,17 @@ export function ThreadMessage({ body, role }: ThreadMessageProps) {
       );
     }
     return (
-      <View className="mb-3 self-start rounded-full border border-white/[0.06] bg-white/[0.03] px-3 py-1.5">
-        <Text className="text-[12px] leading-[18px] font-medium text-white/52">
+      <View
+        className="mb-3 self-start rounded-full border px-3 py-1.5"
+        style={{
+          backgroundColor: appTheme.colors.panelSoft,
+          borderColor: appTheme.colors.hairline,
+        }}
+      >
+        <Text
+          className="text-[12px] font-medium leading-[18px]"
+          style={{ color: appTheme.colors.inkMuted }}
+        >
           {compactBody}
         </Text>
       </View>
@@ -74,8 +102,12 @@ export function ThreadMessage({ body, role }: ThreadMessageProps) {
   }
 
   return (
-    <View className="mb-3 max-w-[90%] self-start">
-      <Text className="text-[16px] leading-[24px] tracking-[-0.008em] text-white/82">
+    <View className="mb-2 max-w-[74%] self-start">
+      <Text
+        className="text-[13px] leading-[18px] tracking-[-0.004em]"
+        style={{ color: appTheme.colors.inkSoft }}
+        numberOfLines={6}
+      >
         {compactBody}
       </Text>
     </View>

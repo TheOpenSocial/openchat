@@ -4,12 +4,9 @@ import {
   Animated,
   FlatList,
   type LayoutChangeEvent,
-  LayoutAnimation,
-  Platform,
   Pressable,
   ScrollView,
   Text,
-  UIManager,
   View,
 } from "react-native";
 
@@ -24,7 +21,9 @@ import { t } from "../i18n/strings";
 import type { TelemetryEventName } from "../lib/telemetry";
 import type { AgentTimelineMessage } from "../types";
 import type { HomeRuntimeViewModel } from "../screens/home/domain/types";
+import { appTheme } from "../theme";
 import { OpenChatComposer } from "./OpenChatComposer";
+import { HomeComposerBanners } from "./HomeComposerBanners";
 import { OpenChatHeader } from "./OpenChatHeader";
 import { HomeStatusHeader } from "./HomeStatusHeader";
 import { HomeSpotlightCards } from "./HomeSpotlightCards";
@@ -32,7 +31,6 @@ import { OpenChatWelcomeSheet } from "./OpenChatWelcomeSheet";
 import { StarterPrompts } from "./StarterPrompts";
 import { ThreadMessage } from "./ThreadMessage";
 import { RUNTIME_SYSTEM_MESSAGE_PREFIX } from "./ThreadMessage";
-import { ThreadStatusTransition } from "./ThreadStatusTransition";
 import { useThreadRuntimePresentation } from "./useThreadRuntimePresentation";
 import {
   deriveThreadRuntimeModel,
@@ -174,14 +172,44 @@ export function OpenChatScreen({
       return true;
     });
 
-    return nextMessages.filter((message, index) => {
+    const dedupedMessages = nextMessages.filter((message, index) => {
       const previous = nextMessages[index - 1];
       if (!previous || previous.role !== message.role) {
         return true;
       }
-      return previous.body.trim() !== message.body.trim();
+      const previousBody = previous.body.trim();
+      const currentBody = message.body.trim();
+      if (previousBody === currentBody) {
+        return false;
+      }
+
+      if (message.role === "agent") {
+        const normalize = (value: string) =>
+          value
+            .toLowerCase()
+            .replace(/\s+/g, " ")
+            .replace(/[“”"'`]/g, "")
+            .trim();
+        const previousComparable = normalize(previousBody).slice(0, 110);
+        const currentComparable = normalize(currentBody).slice(0, 110);
+        if (
+          previousComparable.length > 40 &&
+          currentComparable.length > 40 &&
+          previousComparable === currentComparable
+        ) {
+          return false;
+        }
+      }
+
+      return true;
     });
-  }, [messages]);
+
+    if (!homeSummary || dedupedMessages.length <= 5) {
+      return dedupedMessages;
+    }
+
+    return dedupedMessages.slice(-5);
+  }, [homeSummary, messages]);
   const hasTranscriptMessages = filteredMessages.length > 0;
 
   const rawRuntime = useMemo(() => {
@@ -219,6 +247,7 @@ export function OpenChatScreen({
   const phase = runtime.phase;
   const transcriptMessages = useMemo(() => {
     const shouldShowRuntimeSystem =
+      !homeSummary &&
       hasUserTurn(filteredMessages) &&
       (runtime.state === "matching" ||
         runtime.state === "sending" ||
@@ -234,13 +263,6 @@ export function OpenChatScreen({
     };
     return [...filteredMessages, runtimeMessage];
   }, [filteredMessages, runtime.state, runtime.thinkingLabel]);
-
-  useEffect(() => {
-    if (Platform.OS === "android") {
-      UIManager.setLayoutAnimationEnabledExperimental?.(true);
-    }
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-  }, [filteredMessages.length]);
 
   const canSend =
     runtimeViewModel?.canSend ?? (draftMessage.trim().length > 0 && !sending);
@@ -286,13 +308,6 @@ export function OpenChatScreen({
 
     setPendingUpdates((current) => current + 1);
   }, [atBottom, transcriptMessages.length]);
-
-  useEffect(() => {
-    if (Platform.OS === "android") {
-      UIManager.setLayoutAnimationEnabledExperimental?.(true);
-    }
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-  }, [showOnboardingCarryover, onboardingCarryover?.state]);
 
   useEffect(() => {
     if (
@@ -353,7 +368,10 @@ export function OpenChatScreen({
   };
 
   return (
-    <View className="min-h-0 flex-1 bg-[#050506] px-5 pt-3">
+    <View
+      className="min-h-0 flex-1 px-5 pt-3"
+      style={{ backgroundColor: appTheme.colors.background }}
+    >
       <OpenChatHeader locale={locale} showPresence={!userActive} />
       <HomeStatusHeader
         onPressAction={onPressHomeAction}
@@ -365,12 +383,6 @@ export function OpenChatScreen({
         onPressLeadIntent={onPressLeadIntent}
         onPressTopSuggestion={onPressTopSuggestion}
         summary={homeSummary}
-      />
-      <ThreadStatusTransition
-        contextLabel={null}
-        hint={null}
-        showThinking={false}
-        thinkingLabel={runtime.thinkingLabel}
       />
 
       {showOnboardingCarryover ? (
@@ -428,14 +440,9 @@ export function OpenChatScreen({
 
       {hasTranscriptMessages ? (
         <View className="-mx-5 min-h-0 flex-1">
-          <View className="px-5 pb-2">
-            <Text className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/28">
-              Conversation
-            </Text>
-          </View>
           <ChatTranscriptList
             contentPaddingBottom={transcriptBottomPadding}
-            contentPaddingTop={16}
+            contentPaddingTop={8}
             listRef={transcriptRef}
             messages={transcriptMessages}
             onAtBottomChange={setAtBottom}
@@ -500,7 +507,7 @@ export function OpenChatScreen({
             minHeight: "100%",
             paddingBottom: transcriptBottomPadding + 16,
             paddingHorizontal: 20,
-            paddingTop: 72,
+            paddingTop: 56,
           }}
           keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
@@ -550,14 +557,22 @@ export function OpenChatScreen({
           <Pressable
             accessibilityLabel="Jump to latest update"
             accessibilityRole="button"
-            className="rounded-full border border-white/[0.1] bg-white/[0.08] px-3.5 py-2"
+            className="min-h-11 rounded-full border px-4 py-3"
             onPress={() => {
               hapticSelection();
               transcriptRef.current?.scrollToEnd({ animated: true });
               setPendingUpdates(0);
             }}
+            style={({ pressed }) => ({
+              backgroundColor: appTheme.colors.panel,
+              borderColor: appTheme.colors.hairlineStrong,
+              opacity: pressed ? appTheme.motion.pressOpacity : 1,
+            })}
           >
-            <Text className="text-[12px] font-medium text-white/90">
+            <Text
+              className="text-[12px] font-medium"
+              style={{ color: appTheme.colors.ink }}
+            >
               {pendingUpdates > 1 ? `${pendingUpdates} updates` : "New update"}
             </Text>
           </Pressable>
@@ -568,7 +583,7 @@ export function OpenChatScreen({
         className="absolute"
         onLayout={onComposerLayout}
         pointerEvents="box-none"
-        style={{ bottom: composerInsetBottom, left: 5, right: 5 }}
+        style={{ bottom: composerInsetBottom, left: 8, right: 8 }}
       >
         <OpenChatComposer
           canSend={canSend}
@@ -580,6 +595,15 @@ export function OpenChatScreen({
           onVoiceTranscript={onVoiceTranscript}
           sendTestID="agent-send-intent-button"
           sending={sending}
+          topAccessory={
+            <HomeComposerBanners
+              onPressActivity={onPressActivity}
+              onPressCoordination={onPressCoordination}
+              onPressLeadIntent={onPressLeadIntent}
+              onPressTopSuggestion={onPressTopSuggestion}
+              summary={homeSummary}
+            />
+          }
           value={draftMessage}
         />
       </View>

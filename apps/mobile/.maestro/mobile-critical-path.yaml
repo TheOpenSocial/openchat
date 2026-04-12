@@ -1,18 +1,29 @@
 appId: ${MAESTRO_APP_ID}
 ---
-- launchApp
-- tapOn:
-    text: "OpenSocial"
-    optional: true
+- launchApp:
+    permissions:
+      all: unset
 - openLink: ${MAESTRO_EXPO_URL}
 - tapOn:
-    text: "OpenSocial"
+    text: "Continue"
+    optional: true
+- tapOn:
+    text: "Skip"
+    optional: true
+- tapOn:
+    text: "Try it now"
     optional: true
 - tapOn:
     text: "Reload"
     optional: true
 - tapOn:
     text: "Continue"
+    optional: true
+- tapOn:
+    text: "Skip"
+    optional: true
+- tapOn:
+    text: "Try it now"
     optional: true
 - waitForAnimationToEnd
 - runFlow:
@@ -61,41 +72,25 @@ appId: ${MAESTRO_APP_ID}
 - assertVisible:
     id: "home-screen"
 - assertVisible:
-    id: "home-drawer-open-button"
+    id: "home-status-header"
 - tapOn:
-    id: "home-drawer-open-button"
+    id: "app-shell-settings"
 - assertVisible:
-    id: "home-drawer-sheet"
+    id: "settings-close"
 - tapOn:
-    id: "home-drawer-close"
+    id: "settings-close"
 - waitForAnimationToEnd
-# After the drawer, XCUITest intermittently omits tab `testID`s; first tab is Home (agent chat).
 - tapOn:
-    point: "12%,96%"
-- tapOn:
-    point: "50%,87%"
-- inputText: "Looking for a football conversation now."
-- tapOn:
-    point: "91%,87%"
-- tapOn:
-    id: "home-tab-chats"
-- tapOn:
-    id: "chat-create-button"
+    id: "app-shell-notifications"
 - extendedWaitUntil:
     visible:
-      id: "chat-thread-latest"
+      id: "activity-screen"
     timeout: 15000
-- tapOn:
-    id: "chat-thread-latest"
-- waitForAnimationToEnd
-- tapOn:
-    point: "48%,70%"
-- inputText: "Hello from maestro"
-- pressKey: Enter
-- waitForAnimationToEnd
-- extendedWaitUntil:
-    visible:
-      id: "chat-user-message"
-    timeout: 20000
 - assertVisible:
-    id: "chat-user-message"
+    id: "activity-screen"
+- tapOn:
+    id: "app-bottom-tab-home"
+- assertVisible:
+    id: "home-screen"
+- assertVisible:
+    id: "home-status-header"

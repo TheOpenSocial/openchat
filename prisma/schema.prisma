@@ -969,3 +969,21 @@ model CommerceDispute {
   @@index([workflowRunId])
   @@map("commerce_disputes")
 }
+
+model WaitlistEntry {
+  id              String   @id @default(uuid()) @db.Uuid
+  email           String
+  normalizedEmail String   @unique @map("normalized_email")
+  source          String   @default("web")
+  status          String   @default("pending")
+  ipAddress       String?  @map("ip_address")
+  userAgent       String?  @map("user_agent")
+  referer         String?
+  notes           Json?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@index([status, createdAt])
+  @@index([createdAt])
+  @@map("waitlist_entries")
+}

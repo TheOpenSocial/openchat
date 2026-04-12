@@ -1,17 +1,10 @@
-import { BlurView } from "expo-blur";
-import {
-  GlassView,
-  isGlassEffectAPIAvailable,
-  isLiquidGlassAvailable,
-} from "expo-glass-effect";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   NativeSyntheticEvent,
-  Platform,
   Pressable,
-  StyleSheet,
   TextInputContentSizeChangeEventData,
   View,
 } from "react-native";
@@ -43,25 +36,14 @@ type OpenChatComposerProps = {
   locale: AppLocale;
   voiceEnabled?: boolean;
   onVoiceTranscript?: (line: string) => void;
+  topAccessory?: ReactNode;
 };
 
-const INPUT_LINE_HEIGHT = 25;
+const INPUT_LINE_HEIGHT = 22;
 const INPUT_BASE_HEIGHT = INPUT_LINE_HEIGHT;
 const INPUT_MAX_LINES = 6;
 const INPUT_MAX_HEIGHT = INPUT_LINE_HEIGHT * INPUT_MAX_LINES;
-const INPUT_CONTAINER_VERTICAL_PADDING = 12;
-
-function supportsLiquidGlass(): boolean {
-  if (Platform.OS !== "ios") {
-    return false;
-  }
-
-  try {
-    return isLiquidGlassAvailable() && isGlassEffectAPIAvailable();
-  } catch {
-    return false;
-  }
-}
+const INPUT_CONTAINER_VERTICAL_PADDING = 8;
 
 /**
  * Anchored composer: minimal, multiline, premium dark field.
@@ -78,6 +60,7 @@ export function OpenChatComposer({
   sendAccessibilityLabel,
   sendTestID,
   sending,
+  topAccessory,
   value,
   voiceEnabled = true,
 }: OpenChatComposerProps) {
@@ -89,7 +72,6 @@ export function OpenChatComposer({
     placeholder ?? t("openChatComposerPlaceholder", locale);
   const effectiveSendAccessibilityLabel =
     sendAccessibilityLabel ?? t("openChatSendMessage", locale);
-  const glassAvailable = useMemo(() => supportsLiquidGlass(), []);
   const emphasis = useSharedValue(0);
 
   useEffect(() => {
@@ -100,28 +82,18 @@ export function OpenChatComposer({
   }, [emphasis, focused, showActive]);
 
   const shellStyle = useAnimatedStyle(() => {
-    const surfaceOpacity = glassAvailable
-      ? interpolate(emphasis.value, [0, 1], [0.04, 0.08])
-      : interpolate(emphasis.value, [0, 1], [0.82, 1]);
-
-    const shadowOpacity = interpolate(emphasis.value, [0, 1], [0.1, 0.16]);
-
     return {
-      backgroundColor: glassAvailable
-        ? `rgba(6,8,11,${surfaceOpacity})`
-        : `rgba(8,10,14,${0.14 * surfaceOpacity})`,
-
+      backgroundColor: appTheme.colors.panelStrong,
+      borderColor:
+        emphasis.value > 0.5
+          ? appTheme.colors.hairlineStrong
+          : appTheme.colors.hairline,
       shadowColor: "#000000",
-      shadowOffset: { width: 0, height: 18 },
-      shadowOpacity,
-      shadowRadius: 28,
-      transform: [
-        {
-          translateY: 0,
-        },
-      ],
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: interpolate(emphasis.value, [0, 1], [0.08, 0.14]),
+      shadowRadius: 20,
     };
-  });
+  }, []);
 
   const sendButtonStyle = useAnimatedStyle(() => ({
     transform: [
@@ -181,43 +153,15 @@ export function OpenChatComposer({
   }, [focused, value]);
 
   return (
-    <Animated.View className="overflow-hidden px-4 py-4" style={shellStyle}>
-      {glassAvailable ? (
-        <GlassView
-          colorScheme="dark"
-          glassEffectStyle="clear"
-          isInteractive
-          style={{
-            ...StyleSheet.absoluteFill,
-            backgroundColor: "rgba(7,9,12,0.015)",
-            borderRadius: 28,
-            padding: 20,
-          }}
-        />
-      ) : (
-        <BlurView
-          intensity={28}
-          style={StyleSheet.absoluteFillObject}
-          tint="dark"
-        />
-      )}
-      <View
-        pointerEvents="none"
-        style={[
-          StyleSheet.absoluteFill,
-          {
-            backgroundColor: glassAvailable
-              ? "rgba(7,9,12,0.015)"
-              : "rgba(7,9,12,0.08)",
-          },
-        ]}
-      />
-      <View className="gap-2">
+    <Animated.View
+      className="overflow-hidden rounded-[24px] border px-4 py-2"
+      style={shellStyle}
+    >
+      <View className="gap-1">
+        {topAccessory ? <View className="pb-0.5">{topAccessory}</View> : null}
         <ComposerInput
-          className="px-0 py-0 text-[18px] leading-[25px] text-white/96"
-          containerClassName={cn(
-            "min-w-0 border-0 bg-transparent px-2.5 py-1.5",
-          )}
+          className="px-0 py-0 text-[16px] leading-[21px] text-white/94"
+          containerClassName={cn("min-w-0 border-0 bg-transparent px-1 py-0.5")}
           containerStyle={{
             minHeight: inputHeight + INPUT_CONTAINER_VERTICAL_PADDING,
           }}
@@ -241,117 +185,67 @@ export function OpenChatComposer({
           testID={inputTestID}
           value={value}
         />
-        <View className="flex-row items-center justify-between px-1 pb-0.5">
+        <View className="flex-row items-center justify-between px-1 pb-0">
           <View className="flex-row items-center gap-2">
-            <View className="h-9 flex-row items-center justify-center rounded-full bg-white/[0.06] px-3">
+            <View
+              className="h-7 flex-row items-center justify-center rounded-full border px-3"
+              style={{
+                backgroundColor: appTheme.colors.panelMuted,
+                borderColor: appTheme.colors.hairline,
+              }}
+            >
               <Ionicons
-                color="rgba(255,255,255,0.8)"
+                color={appTheme.colors.inkSoft}
                 name="flash-outline"
-                size={14}
+                size={12}
               />
               <View className="w-1.5" />
-              <Animated.Text className="text-[14px] font-medium text-white/80">
+              <Animated.Text
+                className="text-[12px] font-medium"
+                style={{ color: appTheme.colors.inkSoft }}
+              >
                 Auto
               </Animated.Text>
             </View>
           </View>
           <View className="flex-row items-center gap-1.5">
             {voiceEnabled ? (
-              <View className="h-11 w-11 items-center justify-center overflow-hidden rounded-full">
-                {glassAvailable ? (
-                  <GlassView
-                    colorScheme="dark"
-                    glassEffectStyle="clear"
-                    isInteractive
-                    tintColor="rgba(255,255,255,0.22)"
-                    style={{
-                      ...StyleSheet.absoluteFill,
-                      borderRadius: 100,
-                    }}
-                  />
-                ) : (
-                  <BlurView
-                    intensity={34}
-                    style={StyleSheet.absoluteFillObject}
-                    tint="dark"
-                  />
-                )}
-                <View
-                  pointerEvents="none"
-                  style={[
-                    StyleSheet.absoluteFillObject,
-                    {
-                      backgroundColor: glassAvailable
-                        ? "rgba(255,255,255,0.02)"
-                        : "rgba(255,255,255,0.08)",
-                      borderColor: glassAvailable
-                        ? "transparent"
-                        : "rgba(255,255,255,0.18)",
-                      borderWidth: glassAvailable ? 0 : 1,
-                    },
-                  ]}
-                />
+              <View
+                className="h-9 w-9 items-center justify-center overflow-hidden rounded-full border"
+                style={{
+                  backgroundColor: appTheme.colors.panelMuted,
+                  borderColor: appTheme.colors.hairline,
+                }}
+              >
                 <VoiceMicButton
-                  className="mb-0 h-11 w-11 rounded-full bg-transparent"
+                  className="mb-0 h-9 w-9 rounded-full bg-transparent"
                   disabled={sending}
-                  iconColorActive="#ffffff"
-                  iconColorIdle="rgba(255,255,255,0.62)"
-                  iconSize={18}
+                  iconColorActive={appTheme.colors.ink}
+                  iconColorIdle={appTheme.colors.inkMuted}
+                  iconSize={16}
                   onFinalTranscript={mergeVoice}
                   voiceEnabled={voiceEnabled}
                 />
               </View>
             ) : null}
             <Animated.View style={sendButtonStyle}>
-              <View className="h-11 w-11 overflow-hidden rounded-full">
-                {glassAvailable ? (
-                  <GlassView
-                    colorScheme="dark"
-                    glassEffectStyle="clear"
-                    isInteractive
-                    style={{
-                      ...StyleSheet.absoluteFill,
-                      borderRadius: 100,
-                    }}
-                    tintColor={
-                      showActive
-                        ? "rgba(255,255,255,0.28)"
-                        : "rgba(255,255,255,0.2)"
-                    }
-                  />
-                ) : (
-                  <BlurView
-                    intensity={34}
-                    style={StyleSheet.absoluteFillObject}
-                    tint="dark"
-                  />
-                )}
-                <View
-                  pointerEvents="none"
-                  style={[
-                    StyleSheet.absoluteFillObject,
-                    {
-                      backgroundColor: showActive
-                        ? glassAvailable
-                          ? "rgba(255,255,255,0.04)"
-                          : "rgba(255,255,255,0.14)"
-                        : glassAvailable
-                          ? "rgba(255,255,255,0.02)"
-                          : "rgba(255,255,255,0.08)",
-                    },
-                  ]}
-                />
+              <View
+                className="h-9 w-9 overflow-hidden rounded-full border"
+                style={{
+                  backgroundColor: showActive
+                    ? appTheme.colors.ink
+                    : appTheme.colors.panelMuted,
+                  borderColor: showActive
+                    ? appTheme.colors.ink
+                    : appTheme.colors.hairline,
+                }}
+              >
                 <Pressable
                   accessibilityLabel={effectiveSendAccessibilityLabel}
                   accessibilityRole="button"
                   accessibilityState={{ disabled: !canSend || sending }}
-                  android_ripple={
-                    Platform.OS === "android" && showActive
-                      ? { color: "rgba(255,255,255,0.16)", borderless: true }
-                      : undefined
-                  }
                   className={cn(
-                    "h-11 w-11 items-center border-0 justify-center bg-transparent",
+                    "h-9 w-9 items-center border-0 justify-center bg-transparent",
                   )}
                   disabled={!canSend || sending}
                   hitSlop={8}
@@ -367,14 +261,23 @@ export function OpenChatComposer({
                     testID={sendTestID}
                   >
                     {sending ? (
-                      <ActivityIndicator color="#ffffff" size="small" />
+                      <ActivityIndicator
+                        color={
+                          showActive
+                            ? appTheme.colors.background
+                            : appTheme.colors.ink
+                        }
+                        size="small"
+                      />
                     ) : (
                       <Ionicons
                         color={
-                          showActive ? "#ffffff" : "rgba(255,255,255,0.52)"
+                          showActive
+                            ? appTheme.colors.background
+                            : appTheme.colors.inkMuted
                         }
                         name="arrow-up"
-                        size={20}
+                        size={18}
                       />
                     )}
                   </View>
