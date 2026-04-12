@@ -15,6 +15,7 @@ export type PrimaryAgentThreadLoadError = {
 type UsePrimaryAgentThreadOptions = {
   enabled: boolean;
   accessToken: string;
+  preferredThreadId?: string | null;
   onHydrated: (messages: AgentTimelineMessage[]) => void;
   onLoadError: (error: PrimaryAgentThreadLoadError) => void;
 };
@@ -58,6 +59,7 @@ function normalizePrimaryAgentThreadLoadError(
 export function usePrimaryAgentThread({
   accessToken,
   enabled,
+  preferredThreadId = null,
   onHydrated,
   onLoadError,
 }: UsePrimaryAgentThreadOptions): {
@@ -85,17 +87,21 @@ export function usePrimaryAgentThread({
 
     void (async () => {
       try {
-        const summary = await api.getMyAgentThreadSummary(accessToken);
-        if (cancelled) {
-          return;
+        let effectiveThreadId = preferredThreadId?.trim() || null;
+        if (!effectiveThreadId) {
+          const summary = await api.getMyAgentThreadSummary(accessToken);
+          if (cancelled) {
+            return;
+          }
+          if (!summary) {
+            setThreadId(null);
+            return;
+          }
+          effectiveThreadId = summary.id;
         }
-        if (!summary) {
-          setThreadId(null);
-          return;
-        }
-        setThreadId(summary.id);
+        setThreadId(effectiveThreadId);
         const messages = await api.listAgentThreadMessages(
-          summary.id,
+          effectiveThreadId,
           accessToken,
         );
         if (cancelled) {
@@ -116,7 +122,7 @@ export function usePrimaryAgentThread({
     return () => {
       cancelled = true;
     };
-  }, [accessToken, enabled, reloadNonce]);
+  }, [accessToken, enabled, preferredThreadId, reloadNonce]);
 
   return {
     loading,
