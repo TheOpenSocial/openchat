@@ -24,6 +24,7 @@ import {
   clearStoredSession,
   loadStoredSession,
   saveStoredSession,
+  type StoredSession,
 } from "./src/lib/session-storage";
 import { trackTelemetryEvent } from "./src/lib/telemetry";
 import {
@@ -37,6 +38,54 @@ import { OnboardingFlow } from "./src/onboarding/OnboardingFlow";
 import { AuthScreen } from "./src/screens/AuthScreen";
 import { AppStage, MobileSession, UserProfileDraft } from "./src/types";
 const MOBILE_LOCALE_STORAGE_KEY = "opensocial.mobile.locale.v1";
+const INJECTED_E2E_SESSION_B64 =
+  process.env.EXPO_PUBLIC_E2E_SESSION_B64?.trim() || null;
+
+function decodeBase64Json(input: string) {
+  const decode =
+    typeof globalThis.atob === "function"
+      ? globalThis.atob.bind(globalThis)
+      : null;
+  if (!decode) {
+    return null;
+  }
+
+  try {
+    return decode(input);
+  } catch {
+    return null;
+  }
+}
+
+function loadInjectedSession(): StoredSession | null {
+  if (!INJECTED_E2E_SESSION_B64) {
+    return null;
+  }
+
+  const decoded = decodeBase64Json(INJECTED_E2E_SESSION_B64);
+  if (!decoded) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(decoded) as StoredSession;
+    if (
+      !parsed?.userId ||
+      !parsed?.accessToken ||
+      !parsed?.refreshToken ||
+      !parsed?.sessionId
+    ) {
+      return null;
+    }
+    return {
+      ...parsed,
+      profileCompleted: parsed.profileCompleted ?? true,
+      onboardingState: parsed.onboardingState ?? "complete",
+    };
+  } catch {
+    return null;
+  }
+}
 
 function ProductionApp() {
   const [isBootstrapping, setIsBootstrapping] = useState(true);
@@ -157,6 +206,10 @@ function ProductionApp() {
     const restore = async () => {
       let stored = null as Awaited<ReturnType<typeof loadStoredSession>>;
       try {
+        const injected = loadInjectedSession();
+        if (injected) {
+          await saveStoredSession(injected);
+        }
         stored = await loadStoredSession();
         if (!stored) {
           return;
@@ -493,7 +546,7 @@ function ProductionApp() {
     <SafeAreaProvider style={{ flex: 1 }}>
       <StatusBar style="light" />
       {bootstrapReady ? (
-        <AnimatedScreen screenKey={stageKey}>
+        <AnimatedScreen routeKey={stageKey}>
           {stage === "auth" ? (
             <AuthScreen
               errorMessage={authError}

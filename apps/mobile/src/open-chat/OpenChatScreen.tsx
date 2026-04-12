@@ -69,6 +69,8 @@ export type OpenChatScreenProps = {
   runtimeViewModel?: HomeRuntimeViewModel;
   welcomeSheetVisible?: boolean;
   onDismissWelcomeSheet?: () => void;
+  threadLoadErrorMessage?: string | null;
+  onRetryThreadLoad?: (() => void) | null;
 };
 
 export function OpenChatScreen({
@@ -99,6 +101,8 @@ export function OpenChatScreen({
   runtimeViewModel,
   welcomeSheetVisible = false,
   onDismissWelcomeSheet,
+  threadLoadErrorMessage = null,
+  onRetryThreadLoad = null,
 }: OpenChatScreenProps) {
   void agentImageUrl;
   void canRegenerate;
@@ -127,6 +131,18 @@ export function OpenChatScreen({
       return !DEBUG_PATTERNS.some((pattern) => pattern.test(body));
     });
   }, [messages]);
+  const hasTranscriptMessages = filteredMessages.length > 0;
+  const seedPromptBody = t("homeAgentSeedPrompt", locale).trim();
+  const hasOnlySeedPrompt =
+    filteredMessages.length === 1 &&
+    filteredMessages[0]?.role === "agent" &&
+    (filteredMessages[0]?.body?.trim() ?? "") === seedPromptBody;
+  const suppressSeedPromptUnderError =
+    typeof threadLoadErrorMessage === "string" &&
+    threadLoadErrorMessage.trim().length > 0 &&
+    hasOnlySeedPrompt;
+  const hasRenderableTranscriptMessages =
+    hasTranscriptMessages && !suppressSeedPromptUnderError;
 
   const rawRuntime = useMemo(() => {
     const derived = deriveThreadRuntimeModel(
@@ -193,6 +209,11 @@ export function OpenChatScreen({
     (phase === "empty" || phase === "active" || !userActive);
   const carryoverProcessing =
     showOnboardingCarryover && onboardingCarryover?.state === "processing";
+  const showThreadLoadingState =
+    threadLoading && !hasTranscriptMessages && !showOnboardingCarryover;
+  const showThreadLoadErrorState =
+    typeof threadLoadErrorMessage === "string" &&
+    threadLoadErrorMessage.trim().length > 0;
   const [composerOverlayHeight, setComposerOverlayHeight] = useState(154);
   const [atBottom, setAtBottom] = useState(true);
   const [pendingUpdates, setPendingUpdates] = useState(0);
@@ -219,7 +240,7 @@ export function OpenChatScreen({
 
   useEffect(() => {
     if (
-      hasUserTurn(filteredMessages) ||
+      hasRenderableTranscriptMessages ||
       carryoverProcessing ||
       showOnboardingCarryover
     ) {
@@ -259,7 +280,7 @@ export function OpenChatScreen({
     ]).start();
   }, [
     carryoverProcessing,
-    filteredMessages,
+    hasRenderableTranscriptMessages,
     showOnboardingCarryover,
     starterOpacity,
     starterTranslateY,
@@ -337,7 +358,40 @@ export function OpenChatScreen({
         </View>
       ) : null}
 
-      {hasUserTurn(filteredMessages) ? (
+      {typeof threadLoadErrorMessage === "string" &&
+      threadLoadErrorMessage.trim().length > 0 ? (
+        <View className="mb-4 rounded-[20px] border border-white/[0.08] bg-white/[0.03] px-4 py-4">
+          <Text className="text-[15px] font-semibold tracking-[-0.02em] text-white/92">
+            {threadLoadErrorMessage}
+          </Text>
+          <Text className="mt-1.5 text-[13px] leading-[20px] text-white/48">
+            {t("homeThreadLoadFailedBody", locale)}
+          </Text>
+          {onRetryThreadLoad ? (
+            <Pressable
+              accessibilityRole="button"
+              className="mt-3 self-start rounded-full border border-white/12 bg-white/[0.06] px-3.5 py-2"
+              onPress={onRetryThreadLoad}
+            >
+              <Text className="text-[12px] font-semibold text-white/92">
+                {t("homeThreadRetryCta", locale)}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+
+      {showThreadLoadingState ? (
+        <View className="min-h-0 flex-1 items-center justify-center py-8">
+          <ActivityIndicator color="rgba(255,255,255,0.72)" size="small" />
+          <Text className="mt-4 text-center text-[22px] font-semibold tracking-tight text-white/92">
+            OpenSocial
+          </Text>
+          <Text className="mt-3 max-w-[280px] text-center text-[14px] leading-[21px] text-white/42">
+            {t("agentHistoryLoading", locale)}
+          </Text>
+        </View>
+      ) : hasRenderableTranscriptMessages ? (
         <View className="-mx-5 min-h-0 flex-1">
           <ChatTranscriptList
             contentPaddingBottom={composerOverlayHeight + 18}
@@ -361,6 +415,8 @@ export function OpenChatScreen({
             Processing your first intent.
           </Text>
         </View>
+      ) : showThreadLoadErrorState ? (
+        <View className="min-h-0 flex-1" />
       ) : (
         <ScrollView
           className="-mx-5 min-h-0 flex-1"
