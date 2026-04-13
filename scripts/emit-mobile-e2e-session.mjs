@@ -26,9 +26,38 @@ function requireEnv(name) {
   return value;
 }
 
+async function validateAccessToken({
+  accessToken,
+  baseUrl,
+  hostHeader,
+  userId,
+}) {
+  if (!baseUrl) {
+    return;
+  }
+
+  const response = await fetch(
+    `${baseUrl.replace(/\/+$/, "")}/api/profiles/${userId}/completion`,
+    {
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        ...(hostHeader ? { Host: hostHeader } : {}),
+      },
+    },
+  );
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || !payload?.success) {
+    const preview = JSON.stringify(payload).slice(0, 300);
+    throw new Error(
+      `Unable to validate mobile E2E access token (${response.status}): ${preview}`,
+    );
+  }
+}
+
 async function maybeRefreshSession({
   accessToken,
   baseUrl,
+  hostHeader,
   refreshToken,
   sessionId,
 }) {
@@ -40,6 +69,7 @@ async function maybeRefreshSession({
     method: "POST",
     headers: {
       "content-type": "application/json",
+      ...(hostHeader ? { Host: hostHeader } : {}),
     },
     body: JSON.stringify({
       refreshToken,
@@ -71,6 +101,7 @@ async function maybeRefreshSession({
 async function main() {
   const userId = requireEnv("SMOKE_USER_ID");
   const baseUrl = process.env.SMOKE_BASE_URL?.trim() || "";
+  const hostHeader = process.env.SMOKE_HOST_HEADER?.trim() || "";
   const initialAccessToken = requireEnv("SMOKE_ACCESS_TOKEN");
   const refreshToken = requireEnv("SMOKE_REFRESH_TOKEN");
   const initialSessionId =
@@ -84,8 +115,16 @@ async function main() {
   const refreshed = await maybeRefreshSession({
     accessToken: initialAccessToken,
     baseUrl,
+    hostHeader,
     refreshToken,
     sessionId: initialSessionId,
+  });
+
+  await validateAccessToken({
+    accessToken: refreshed.accessToken,
+    baseUrl,
+    hostHeader,
+    userId,
   });
 
   const payload = {

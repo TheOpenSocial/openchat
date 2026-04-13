@@ -3,6 +3,7 @@
 import { appendFileSync } from "node:fs";
 
 const baseUrl = (process.env.SMOKE_BASE_URL || "").trim().replace(/\/+$/, "");
+const hostHeader = (process.env.SMOKE_HOST_HEADER || "").trim();
 const refreshToken = (process.env.SMOKE_REFRESH_TOKEN || "").trim();
 const required = process.env.SMOKE_REFRESH_REQUIRED === "1";
 
@@ -18,6 +19,7 @@ function persistEnv(key, value) {
 async function main() {
   console.log("Smoke session refresh");
   console.log(`- baseUrl: ${baseUrl || "(unset)"}`);
+  console.log(`- hostHeader: ${hostHeader || "(unset)"}`);
   console.log(`- refreshToken: ${refreshToken ? "set" : "unset"}`);
   console.log(`- required: ${required ? "yes" : "no"}`);
 
@@ -37,6 +39,7 @@ async function main() {
       method: "POST",
       headers: {
         "content-type": "application/json",
+        ...(hostHeader ? { Host: hostHeader } : {}),
       },
       body: JSON.stringify({
         refreshToken,
