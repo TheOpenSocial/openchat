@@ -12,28 +12,47 @@ function createPrismaStub() {
 
   return {
     async $queryRawUnsafe<T = unknown>(query: string, ...params: any[]) {
-      if (query.includes("FROM protocol_apps") && query.includes("WHERE app_id =")) {
+      if (
+        query.includes("FROM protocol_apps") &&
+        query.includes("WHERE app_id =")
+      ) {
         const row = apps.get(params[0]);
         return (row ? [row] : []) as T;
       }
       if (query.includes("FROM protocol_apps")) {
         return [...apps.values()] as T;
       }
-      if (query.includes("FROM protocol_webhook_subscriptions") && query.includes("status = 'active'")) {
+      if (
+        query.includes("FROM protocol_webhook_subscriptions") &&
+        query.includes("status = 'active'")
+      ) {
         const [appId, eventName] = params;
         return (subscriptions.get(appId) ?? []).filter(
-          (row) => row.status === "active" && (row.event_names ?? []).includes(eventName),
+          (row) =>
+            row.status === "active" &&
+            (row.event_names ?? []).includes(eventName),
         ) as T;
       }
       if (query.includes("FROM protocol_webhook_subscriptions")) {
         const [appId] = params;
         return (subscriptions.get(appId) ?? []) as T;
       }
-      if (query.includes("FROM protocol_webhook_deliveries")) {
+      if (
+        query.includes("FROM protocol_webhook_deliveries") &&
+        query.includes("subscription_id = $2")
+      ) {
         const [appId, subscriptionId] = params;
         return (deliveries.get(appId) ?? []).filter(
           (row) => row.subscription_id === subscriptionId,
         ) as T;
+      }
+      if (query.includes("FROM protocol_webhook_deliveries")) {
+        const [appId, sinceCursor] = params;
+        return (deliveries.get(appId) ?? []).filter((row) => {
+          const eventCursor =
+            row.event_cursor == null ? 0 : Number(row.event_cursor);
+          return sinceCursor === 0 || eventCursor > Number(sinceCursor);
+        }) as T;
       }
       if (query.includes("FROM protocol_event_log")) {
         const [appId, sinceCursor] = params;
@@ -85,6 +104,20 @@ function createPrismaStub() {
         });
         return 1;
       }
+      if (query.includes("UPDATE protocol_apps")) {
+        const existing = apps.get(params[0]);
+        if (!existing) {
+          return 0;
+        }
+        const updated = {
+          ...existing,
+          status: params[1],
+          registration_json: JSON.parse(params[2]),
+          app_token_hash: params[3],
+        };
+        apps.set(params[0], updated);
+        return 1;
+      }
       if (query.includes("INSERT INTO protocol_webhook_subscriptions")) {
         const row = {
           subscription_id: params[0],
@@ -100,7 +133,10 @@ function createPrismaStub() {
           created_at: params[10],
           updated_at: params[11],
         };
-        subscriptions.set(row.app_id, [...(subscriptions.get(row.app_id) ?? []), row]);
+        subscriptions.set(row.app_id, [
+          ...(subscriptions.get(row.app_id) ?? []),
+          row,
+        ]);
         return 1;
       }
       if (query.includes("INSERT INTO protocol_webhook_deliveries")) {
@@ -123,11 +159,25 @@ function createPrismaStub() {
           created_at: params[15],
           updated_at: params[16],
         };
-        deliveries.set(row.app_id, [...(deliveries.get(row.app_id) ?? []), row]);
+        deliveries.set(row.app_id, [
+          ...(deliveries.get(row.app_id) ?? []),
+          row,
+        ]);
         return 1;
       }
       return 0;
     },
+  };
+}
+
+function createDeliveryWorkerStub() {
+  return {
+    claimDueDeliveries: async (limit = 25) => ({
+      claimedCount: 0,
+      claimedAt: "2026-04-13T00:00:00.000Z",
+      deliveries: [],
+      limit,
+    }),
   };
 }
 
@@ -143,11 +193,27 @@ function createRegistrationPayload(): AppRegistrationRequest {
       webhookUrl: "https://alpha.example.com/hooks/opensocial",
       metadata: {},
       capabilities: {
-        scopes: ["protocol.read", "webhooks.manage", "events.subscribe"],
+        scopes: [
+          "protocol.read",
+          "protocol.write",
+          "webhooks.manage",
+          "events.subscribe",
+        ],
         resources: ["app_registration", "webhook_subscription", "manifest"],
-        actions: ["app.read", "webhook.subscribe", "event.replay"],
+        actions: [
+          "app.read",
+          "app.update",
+          "webhook.subscribe",
+          "event.replay",
+        ],
         events: ["app.registered", "webhook.delivered", "app.updated"],
-        capabilities: ["app.read", "webhook.read", "webhook.write", "event.read"],
+        capabilities: [
+          "app.read",
+          "app.write",
+          "webhook.read",
+          "webhook.write",
+          "event.read",
+        ],
         canActAsAgent: false,
         canManageWebhooks: true,
       },
@@ -161,16 +227,32 @@ function createRegistrationPayload(): AppRegistrationRequest {
       summary: "Protocol partner",
       categories: ["coordination"],
       capabilities: {
-        scopes: ["protocol.read", "webhooks.manage", "events.subscribe"],
+        scopes: [
+          "protocol.read",
+          "protocol.write",
+          "webhooks.manage",
+          "events.subscribe",
+        ],
         resources: ["app_registration", "webhook_subscription", "manifest"],
-        actions: ["app.read", "webhook.subscribe", "event.replay"],
+        actions: [
+          "app.read",
+          "app.update",
+          "webhook.subscribe",
+          "event.replay",
+        ],
         events: ["app.registered", "webhook.delivered", "app.updated"],
-        capabilities: ["app.read", "webhook.read", "webhook.write", "event.read"],
+        capabilities: [
+          "app.read",
+          "app.write",
+          "webhook.read",
+          "webhook.write",
+          "event.read",
+        ],
         canActAsAgent: false,
         canManageWebhooks: true,
       },
       resources: ["app_registration", "webhook_subscription", "manifest"],
-      actions: ["app.read", "webhook.subscribe", "event.replay"],
+      actions: ["app.read", "app.update", "webhook.subscribe", "event.replay"],
       events: ["app.registered", "webhook.delivered", "app.updated"],
       webhooks: [],
       agent: {
@@ -180,14 +262,28 @@ function createRegistrationPayload(): AppRegistrationRequest {
       },
       metadata: {},
     },
-    requestedScopes: ["protocol.read", "webhooks.manage", "events.subscribe"],
-    requestedCapabilities: ["app.read", "webhook.read", "webhook.write", "event.read"],
+    requestedScopes: [
+      "protocol.read",
+      "protocol.write",
+      "webhooks.manage",
+      "events.subscribe",
+    ],
+    requestedCapabilities: [
+      "app.read",
+      "app.write",
+      "webhook.read",
+      "webhook.write",
+      "event.read",
+    ],
   };
 }
 
 describe("ProtocolService", () => {
   it("registers an app and issues a token", async () => {
-    const service = new ProtocolService(createPrismaStub() as any);
+    const service = new ProtocolService(
+      createPrismaStub() as any,
+      createDeliveryWorkerStub() as any,
+    );
 
     const result = await service.registerApp(createRegistrationPayload());
 
@@ -198,7 +294,10 @@ describe("ProtocolService", () => {
   });
 
   it("creates subscriptions, deliveries, and replay events", async () => {
-    const service = new ProtocolService(createPrismaStub() as any);
+    const service = new ProtocolService(
+      createPrismaStub() as any,
+      createDeliveryWorkerStub() as any,
+    );
     const registration = await service.registerApp(createRegistrationPayload());
 
     const subscription = await service.createWebhook(
@@ -240,7 +339,10 @@ describe("ProtocolService", () => {
   });
 
   it("stores and returns replay cursors", async () => {
-    const service = new ProtocolService(createPrismaStub() as any);
+    const service = new ProtocolService(
+      createPrismaStub() as any,
+      createDeliveryWorkerStub() as any,
+    );
     const registration = await service.registerApp(createRegistrationPayload());
 
     const initial = await service.getReplayCursor(
@@ -255,5 +357,121 @@ describe("ProtocolService", () => {
 
     expect(initial.cursor).toBe("0");
     expect(saved.cursor).toBe("21");
+  });
+
+  it("rejects invalid replay cursors for replay and cursor persistence", async () => {
+    const service = new ProtocolService(
+      createPrismaStub() as any,
+      createDeliveryWorkerStub() as any,
+    );
+    const registration = await service.registerApp(createRegistrationPayload());
+
+    await expect(
+      service.replayEvents(
+        "partner.alpha",
+        registration.credentials.appToken,
+        "not-a-cursor",
+      ),
+    ).rejects.toThrow("invalid event replay cursor");
+
+    await expect(
+      service.saveReplayCursor(
+        "partner.alpha",
+        registration.credentials.appToken,
+        "-1",
+      ),
+    ).rejects.toThrow("invalid event replay cursor");
+  });
+
+  it("rotates app tokens and invalidates the previous token", async () => {
+    const service = new ProtocolService(
+      createPrismaStub() as any,
+      createDeliveryWorkerStub() as any,
+    );
+    const registration = await service.registerApp(createRegistrationPayload());
+
+    const rotated = await service.rotateAppToken(
+      "partner.alpha",
+      registration.credentials.appToken,
+    );
+
+    expect(rotated.credentials.appToken).not.toBe(
+      registration.credentials.appToken,
+    );
+
+    await expect(
+      service.listWebhooks("partner.alpha", registration.credentials.appToken),
+    ).rejects.toThrow("invalid protocol app token");
+
+    const refreshed = await service.listWebhooks(
+      "partner.alpha",
+      rotated.credentials.appToken,
+    );
+    expect(refreshed).toEqual([]);
+  });
+
+  it("revokes app tokens and blocks subsequent access", async () => {
+    const service = new ProtocolService(
+      createPrismaStub() as any,
+      createDeliveryWorkerStub() as any,
+    );
+    const registration = await service.registerApp(createRegistrationPayload());
+
+    const revoked = await service.revokeAppToken(
+      "partner.alpha",
+      registration.credentials.appToken,
+    );
+
+    expect(revoked.revoked).toBe(true);
+    expect(revoked.registration.status).toBe("revoked");
+
+    await expect(service.listApps()).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          status: "revoked",
+          registration: expect.objectContaining({ status: "revoked" }),
+        }),
+      ]),
+    );
+
+    await expect(
+      service.listWebhooks("partner.alpha", registration.credentials.appToken),
+    ).rejects.toThrow("protocol app is revoked");
+  });
+
+  it("inspects the delivery queue for an app", async () => {
+    const service = new ProtocolService(
+      createPrismaStub() as any,
+      createDeliveryWorkerStub() as any,
+    );
+    const registration = await service.registerApp(createRegistrationPayload());
+    const subscription = await service.createWebhook(
+      "partner.alpha",
+      registration.credentials.appToken,
+      {
+        targetUrl: "https://alpha.example.com/hooks/opensocial",
+        events: ["app.updated"],
+        resources: ["app_registration"],
+        deliveryMode: "json",
+        retryPolicy: {
+          maxAttempts: 5,
+          backoffMs: 1000,
+          maxBackoffMs: 10000,
+        },
+        metadata: {},
+      },
+    );
+
+    const queue = await service.inspectDeliveryQueue(
+      "partner.alpha",
+      registration.credentials.appToken,
+    );
+
+    expect(queue.appId).toBe("partner.alpha");
+    expect(queue.deliveries).toHaveLength(1);
+    expect(queue.deliveries[0].subscriptionId).toBe(
+      subscription.subscriptionId,
+    );
+    expect(queue.queuedCount).toBe(1);
   });
 });

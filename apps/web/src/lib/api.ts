@@ -852,6 +852,12 @@ export const api = {
   getProtocolDiscovery() {
     return protocolClient.getDiscovery();
   },
+  listProtocolApps() {
+    return protocolClient.listApps();
+  },
+  getProtocolApp(appId: string) {
+    return protocolClient.getApp(appId);
+  },
   registerProtocolApp(input: ProtocolAppRegistrationRequestInput) {
     return protocolClient.registerApp(input);
   },
@@ -865,12 +871,37 @@ export const api = {
   ) {
     return protocolClient.createWebhook(appId, appToken, payload);
   },
+  rotateProtocolAppToken(
+    appId: string,
+    appToken: string,
+    input?: Parameters<typeof protocolClient.rotateAppToken>[2],
+  ) {
+    return protocolClient.rotateAppToken(appId, appToken, input);
+  },
+  revokeProtocolAppToken(
+    appId: string,
+    appToken: string,
+    input?: Parameters<typeof protocolClient.revokeAppToken>[2],
+  ) {
+    return protocolClient.revokeAppToken(appId, appToken, input);
+  },
   listProtocolWebhookDeliveries(
     appId: string,
     appToken: string,
     subscriptionId: string,
   ) {
-    return protocolClient.listWebhookDeliveries(appId, appToken, subscriptionId);
+    return protocolClient.listWebhookDeliveries(
+      appId,
+      appToken,
+      subscriptionId,
+    );
+  },
+  inspectProtocolDeliveryQueue(
+    appId: string,
+    appToken: string,
+    cursor?: string,
+  ) {
+    return protocolClient.inspectDeliveryQueue(appId, appToken, cursor);
   },
   replayProtocolEvents(appId: string, appToken: string, cursor?: string) {
     return protocolClient.replayEvents(appId, appToken, cursor);

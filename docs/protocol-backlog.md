@@ -40,6 +40,19 @@ The protocol should expose three kinds of integration:
 2. Write actions
 3. Subscribe to events
 
+## Current Shipped State
+
+The protocol is no longer just a concept. The following pieces are already present in the backend and should be treated as the stable base for the next phase:
+
+- Protocol app registration is persisted on top of the `protocol_apps` rows.
+- App tokens are issued, hashed, verified, rotated, and revoked at the protocol layer.
+- Webhook subscriptions are persisted, signed, and recorded as deliveries.
+- The event log and replay cursor state are persisted.
+- The protocol manifest, discovery document, and event catalog are exposed from the protocol service.
+- Scoped grant storage already exists in the schema through `protocol_app_scope_grants`, but the API model still needs to be fully surfaced and enforced.
+
+Use this as the baseline for all next backlog items. Do not reintroduce generic social primitives like posts or follows.
+
 ## Package Direction
 
 The initial package family should be small and explicit:
@@ -61,30 +74,54 @@ These packages should mirror the backend domain rather than inventing new abstra
    - Explicitly exclude posts, follows, feeds, likes, and other generic social primitives.
    - Lock the namespace rules for core events versus third-party extensions.
 
-2. Define app registration and capability manifests.
+2. Define consent and scoped grants on top of persisted protocol app rows.
+   - User-delegated scopes
+   - App-scoped permissions
+   - Agent-scoped permissions
+   - Grant subject model for app, user, service, and agent
+   - Grant status lifecycle: active, revoked
+   - Audit trail for every grant and revocation
+
+3. Define app registration and capability manifests as the base contract.
    - App identity and ownership
    - Redirect URIs and callback URLs
    - Client credentials or public keys
    - Requested scopes and capability grants
    - Allowed integration surfaces for read, write, and event consumption
 
-3. Define scope enforcement and auditability.
-   - User-delegated scopes
-   - App-scoped permissions
-   - Agent-scoped permissions
-   - Revocation and token lifecycle
-   - Audit trail for every third-party action
+4. Define the persistence model for protocol replay and delivery records.
+   - Durable protocol event log
+   - Replay cursors and cursor state envelopes
+   - Webhook subscription persistence
+   - Delivery record persistence
+   - Snapshotting or cache-backed state recovery where needed
 
 ### Next
 
-4. Build the event delivery model for external consumers.
+5. Build the event delivery worker for external consumers.
    - Webhook subscriptions
    - Event signatures
    - Retry policy
    - Replay from cursor
    - Delivery status tracking
+   - Queue processing and backoff behavior
+   - Dead-letter handling and recovery
 
-5. Define the external action APIs that third parties can call.
+6. Tighten token management and app credential lifecycle.
+   - App token issuance
+   - Token hashing and verification
+   - Rotation and revocation
+   - Expiry and refresh policy where applicable
+   - Audit trail for credential use
+
+7. Finish consent and scope grant enforcement for third-party access.
+   - User consent for delegated actions
+   - Scope grants and revocation
+   - Capability approval for sensitive actions
+   - Agent approval flows where human review is required
+   - Deny rules for unsupported primitives like posts and follows
+
+8. Define the external action APIs that third parties can call.
    - Create/update intents
    - Accept/reject requests
    - Send chat messages
@@ -92,13 +129,14 @@ These packages should mirror the backend domain rather than inventing new abstra
    - Publish notifications where allowed
    - Register agent activity where allowed
 
-6. Add frontend wiring for protocol-aware clients.
+9. Add frontend wiring for protocol-aware clients.
    - Shared protocol client package for mobile/web
    - Typed API wrappers for protocol resources
    - Event stream consumption in the app shell
    - UI surfaces that can reflect third-party actions and inbound events
+   - First-party surfaces that expose protocol state without exposing internals
 
-7. Add third-party agent integration support.
+10. Add third-party agent integration support.
    - Agent registration
    - Event subscriptions by family
    - Scoped action execution
@@ -106,48 +144,44 @@ These packages should mirror the backend domain rather than inventing new abstra
 
 ### Later
 
-9. Add protocol replay and migration support.
-   - Durable event log
-   - Cursor-based replay
-   - Backfill and migration tooling
-   - Versioned event schemas
+11. Add partner-focused extension points.
+   - Namespaced metadata
+   - Namespaced custom events
+   - Namespaced actions where explicitly allowed
+   - Feature flags per app or tenant
 
-10. Add partner-focused extension points.
-    - Namespaced metadata
-    - Namespaced custom events
-    - Namespaced actions where explicitly allowed
-    - Feature flags per app or tenant
+12. Add protocol governance and compatibility policy.
+   - Versioning rules
+   - Deprecation windows
+   - Backward compatibility guarantees
+   - Breaking-change review process
 
-11. Add protocol governance and compatibility policy.
-    - Versioning rules
-    - Deprecation windows
-    - Backward compatibility guarantees
-    - Breaking-change review process
-
-12. Add operational docs and integration examples.
-    - Sample third-party app flow
-    - Sample agent flow
-    - Event subscription example
-    - Auth and scope example
+13. Add operational docs and integration examples.
+   - Sample third-party app flow
+   - Sample agent flow
+   - Event subscription example
+   - Auth and scope example
 
 ## Backend Tasks
 
-- Define the v0 protocol resource and event vocabulary.
-- Add app registration persistence and capability manifests.
+- Ship the event delivery worker for external consumers.
+- Wire rotate/revoke lifecycle through persisted protocol app rows and audit events.
+- Surface consent/scoped grants through the protocol API and enforce them against persisted grant rows.
 - Add scope checks for every external action path.
 - Add audit logging for all third-party and agent actions.
 - Add explicit deny rules for unsupported primitives like posts and follows.
 - Add signed webhook delivery with retry and replay support.
-- Add event cursors and durable replay mechanics.
+- Add cursor-based replay mechanics and stateful replay envelopes.
 
 ## Auth and App Registration Tasks
 
 - Add an app registration flow.
 - Support scoped API tokens for apps and agents.
+- Add token hashing, verification, rotation, and revocation.
 - Support user-delegated consent where a third party acts on behalf of a user.
 - Support service tokens where a third party integrates at the platform level.
 - Record granted scopes and capability manifests.
-- Make token issuance and revocation explicit.
+- Make consent grants explicit and revocable.
 - Make auth failures observable and diagnosable.
 
 ## Event and Webhook Tasks
@@ -155,8 +189,8 @@ These packages should mirror the backend domain rather than inventing new abstra
 - Define the event taxonomy for the protocol.
 - Add webhook subscriptions per event family.
 - Sign every webhook payload.
-- Add retry, backoff, and dead-letter handling.
-- Add replay from cursor for missed events.
+- Add retry, backoff, and dead-letter handling in the delivery worker.
+- Add replay from cursor for missed events and expose cursor state to clients.
 - Add delivery observability so partners can see what was delivered and what failed.
 - Keep event payloads versioned and backward-compatible.
 
@@ -164,15 +198,17 @@ These packages should mirror the backend domain rather than inventing new abstra
 
 - Add a shared protocol client package for mobile and web.
 - Wire the frontend to protocol-backed reads instead of app-specific stitched endpoints where possible.
-- Add UI affordances for third-party app activity and integrations.
+- Add UI affordances for third-party app activity, consent grants, and integrations.
 - Add protocol-aware surfaces for external actions, event notifications, and agent activity.
 - Keep the current product shell focused on Home, Activity, Chats, and Profile.
+- Add protocol surfaces that are visible to users without turning the app into a developer console.
 - Expose protocol state without turning the UI into a developer console.
 
 ## Success Criteria
 
 - A third-party app can register, request scopes, and call approved actions without backend internals.
 - A third-party app can subscribe to relevant events and receive signed webhook delivery.
+- Protocol state can survive restarts through persisted app, delivery, and replay cursor records.
 - The frontend can consume the protocol through shared packages rather than bespoke one-off integrations.
 - The core OpenSocial product remains intact and still omits unsupported social primitives like posts and follows.
 - The protocol can scale to new clients and partners without exposing the whole backend surface.
@@ -189,7 +225,8 @@ These packages should mirror the backend domain rather than inventing new abstra
 ## Immediate Execution Order
 
 1. Finalize protocol resources, event names, and exclusions.
-2. Add app registration, capability manifests, and scope enforcement.
-3. Add webhook subscriptions, signatures, and replay.
-4. Wire the frontend to the protocol client package.
-5. Add external action APIs and agent support.
+2. Finish consent and scoped grant enforcement on persisted app rows.
+3. Add the delivery worker with signatures, retry, and dead-letter handling.
+4. Tighten token management and the rotate/revoke lifecycle.
+5. Wire the frontend to the protocol client package and protocol surfaces.
+6. Add external action APIs and agent support.

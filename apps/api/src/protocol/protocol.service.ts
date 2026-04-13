@@ -46,6 +46,7 @@ import {
   issueProtocolAppToken,
   verifyProtocolAppToken,
 } from "./protocol-credentials.js";
+import { ProtocolWebhookDeliveryWorkerService } from "./protocol-webhook-delivery-worker.service.js";
 import { signProtocolWebhookPayload } from "./protocol-webhooks.js";
 
 type ProtocolAppRow = {
@@ -89,7 +90,28 @@ type ProtocolCursorRow = {
   updated_at: Date | string;
 };
 
+type ProtocolWebhookDeliveryRow = {
+  delivery_id: string;
+  subscription_id: string;
+  app_id: string;
+  event_cursor: bigint | number | string | null;
+  event_name: string;
+  status: string;
+  attempt_count: number;
+  next_attempt_at: Date | string | null;
+  last_attempt_at: Date | string | null;
+  delivered_at: Date | string | null;
+  response_status_code: number | null;
+  error_message: string | null;
+  signature: string | null;
+  payload: unknown;
+  metadata: unknown;
+  created_at: Date | string;
+  updated_at: Date | string;
+};
+
 type RegisteredProtocolApp = {
+  status: string;
   registration: AppRegistration;
   manifest: ProtocolManifest;
   issuedScopes: ProtocolScopeName[];
@@ -99,7 +121,10 @@ type RegisteredProtocolApp = {
 
 @Injectable()
 export class ProtocolService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly deliveryWorker: ProtocolWebhookDeliveryWorkerService,
+  ) {}
 
   getManifest(): ProtocolManifest {
     return buildProtocolManifest({
@@ -142,6 +167,103 @@ export class ProtocolService {
       throw new NotFoundException("protocol app not found");
     }
     return this.mapAppRow(row);
+  }
+
+  async rotateAppToken(appId: string, appToken: string) {
+    const app = await this.requireAppAccess(appId, appToken, {
+      scopes: ["protocol.write"],
+      capabilities: ["app.write"],
+    });
+
+    const now = new Date().toISOString();
+    const nextToken = issueProtocolAppToken();
+    const nextTokenHash = hashProtocolAppToken(nextToken);
+    const nextRegistration = appRegistrationSchema.parse({
+      ...app.registration,
+      status: app.registration.status === "revoked" ? "draft" : "active",
+      updatedAt: now,
+    });
+
+    await this.prisma.$executeRawUnsafe(
+      `UPDATE protocol_apps
+       SET status = $2,
+           registration_json = $3::jsonb,
+           app_token_hash = $4,
+           updated_at = $5::timestamptz
+       WHERE app_id = $1`,
+      app.registration.appId,
+      "active",
+      JSON.stringify(nextRegistration),
+      nextTokenHash,
+      now,
+    );
+
+    await this.recordEvent({
+      actorAppId: app.registration.appId,
+      event: "app.updated",
+      resource: "app_registration",
+      payload: {
+        appId: app.registration.appId,
+        update: "app_token_rotated",
+      },
+    });
+
+    return {
+      registration: nextRegistration,
+      manifest: app.manifest,
+      issuedScopes: app.issuedScopes,
+      issuedCapabilities: app.issuedCapabilities,
+      credentials: {
+        appToken: nextToken,
+      },
+    };
+  }
+
+  async revokeAppToken(appId: string, appToken: string) {
+    const app = await this.requireAppAccess(appId, appToken, {
+      scopes: ["protocol.write"],
+      capabilities: ["app.write"],
+    });
+
+    const now = new Date().toISOString();
+    const revokedRegistration = appRegistrationSchema.parse({
+      ...app.registration,
+      status: "revoked",
+      updatedAt: now,
+    });
+    const revokedHash = hashProtocolAppToken(issueProtocolAppToken());
+
+    await this.prisma.$executeRawUnsafe(
+      `UPDATE protocol_apps
+       SET status = $2,
+           registration_json = $3::jsonb,
+           app_token_hash = $4,
+           updated_at = $5::timestamptz
+       WHERE app_id = $1`,
+      app.registration.appId,
+      "revoked",
+      JSON.stringify(revokedRegistration),
+      revokedHash,
+      now,
+    );
+
+    await this.recordEvent({
+      actorAppId: app.registration.appId,
+      event: "app.updated",
+      resource: "app_registration",
+      payload: {
+        appId: app.registration.appId,
+        update: "app_token_revoked",
+      },
+    });
+
+    return {
+      registration: revokedRegistration,
+      manifest: app.manifest,
+      issuedScopes: app.issuedScopes,
+      issuedCapabilities: app.issuedCapabilities,
+      revoked: true,
+    };
   }
 
   async registerApp(
@@ -252,7 +374,9 @@ export class ProtocolService {
       capabilities: ["webhook.read"],
     });
 
-    const rows = await this.prisma.$queryRawUnsafe<ProtocolWebhookSubscriptionRow[]>(
+    const rows = await this.prisma.$queryRawUnsafe<
+      ProtocolWebhookSubscriptionRow[]
+    >(
       `SELECT subscription_id, app_id, status, target_url, event_names, resource_names, delivery_mode, retry_policy, secret_ref, metadata, created_at, updated_at
        FROM protocol_webhook_subscriptions
        WHERE app_id = $1
@@ -331,7 +455,9 @@ export class ProtocolService {
       scopes: ["webhooks.manage"],
       capabilities: ["webhook.read"],
     });
-    const rows = await this.prisma.$queryRawUnsafe<any[]>(
+    const rows = await this.prisma.$queryRawUnsafe<
+      ProtocolWebhookDeliveryRow[]
+    >(
       `SELECT delivery_id, subscription_id, app_id, event_cursor, event_name, status, attempt_count, next_attempt_at, last_attempt_at, delivered_at, response_status_code, error_message, signature, payload, metadata, created_at, updated_at
        FROM protocol_webhook_deliveries
        WHERE app_id = $1 AND subscription_id = $2
@@ -339,26 +465,49 @@ export class ProtocolService {
       app.registration.appId,
       subscriptionId,
     );
-    return rows.map((row) =>
-      protocolWebhookDeliverySchema.parse({
-        protocolId: protocolIds.protocol,
-        deliveryId: row.delivery_id,
-        subscriptionId: row.subscription_id,
-        eventName: row.event_name,
-        status: row.status,
-        attemptCount: row.attempt_count,
-        nextAttemptAt: this.toIsoString(row.next_attempt_at),
-        lastAttemptAt: this.toIsoString(row.last_attempt_at),
-        deliveredAt: this.toIsoString(row.delivered_at),
-        responseStatusCode: row.response_status_code,
-        errorMessage: row.error_message,
-        signature: row.signature,
-        payload: row.payload,
-        metadata: row.metadata ?? {},
-        createdAt: this.toIsoString(row.created_at),
-        updatedAt: this.toIsoString(row.updated_at),
-      }),
+    return rows.map((row) => this.mapDeliveryRow(row));
+  }
+
+  async inspectDeliveryQueue(appId: string, appToken: string, cursor?: string) {
+    const app = await this.requireAppAccess(appId, appToken, {
+      scopes: ["webhooks.manage"],
+      capabilities: ["webhook.read"],
+    });
+    const sinceCursor = cursor ? Number.parseInt(cursor, 10) : 0;
+    if (Number.isNaN(sinceCursor) || sinceCursor < 0) {
+      throw new ForbiddenException("invalid delivery queue cursor");
+    }
+
+    const rows = await this.prisma.$queryRawUnsafe<
+      ProtocolWebhookDeliveryRow[]
+    >(
+      `SELECT delivery_id, subscription_id, app_id, event_cursor, event_name, status, attempt_count, next_attempt_at, last_attempt_at, delivered_at, response_status_code, error_message, signature, payload, metadata, created_at, updated_at
+       FROM protocol_webhook_deliveries
+       WHERE app_id = $1
+         AND ($2::bigint = 0 OR COALESCE(event_cursor, 0) > $2::bigint)
+       ORDER BY created_at DESC
+       LIMIT 100`,
+      app.registration.appId,
+      sinceCursor,
     );
+
+    const deliveries = rows.map((row) => this.mapDeliveryRow(row));
+    return {
+      appId: app.registration.appId,
+      generatedAt: new Date().toISOString(),
+      queuedCount: deliveries.filter((row) => row.status === "queued").length,
+      inFlightCount: deliveries.filter((row) => row.status === "retrying")
+        .length,
+      failedCount: deliveries.filter((row) => row.status === "failed").length,
+      deadLetteredCount: deliveries.filter(
+        (row) => row.status === "dead_lettered",
+      ).length,
+      deliveries,
+    };
+  }
+
+  async claimDueWebhookDeliveries(limit = 25) {
+    return this.deliveryWorker.claimDueDeliveries(limit);
   }
 
   async replayEvents(appId: string, appToken: string, cursor?: string) {
@@ -436,7 +585,9 @@ export class ProtocolService {
     manifestScopes: ProtocolScopeName[],
   ) {
     const available = new Set<ProtocolScopeName>([
-      ...registrationScopes.map((scope) => protocolScopeNameSchema.parse(scope)),
+      ...registrationScopes.map((scope) =>
+        protocolScopeNameSchema.parse(scope),
+      ),
       ...manifestScopes.map((scope) => protocolScopeNameSchema.parse(scope)),
     ]);
     const requestedScopes = requested.length > 0 ? requested : [...available];
@@ -458,7 +609,9 @@ export class ProtocolService {
     ]);
     const requestedCapabilities =
       requested.length > 0 ? requested : [...available];
-    return requestedCapabilities.filter((capability) => available.has(capability));
+    return requestedCapabilities.filter((capability) =>
+      available.has(capability),
+    );
   }
 
   private async requireAppAccess(
@@ -477,6 +630,9 @@ export class ProtocolService {
       throw new UnauthorizedException("missing protocol app token");
     }
     const app = this.mapStoredApp(row);
+    if (app.status === "revoked") {
+      throw new ForbiddenException("protocol app is revoked");
+    }
     if (!verifyProtocolAppToken(appToken, app.appTokenHash)) {
       throw new ForbiddenException("invalid protocol app token");
     }
@@ -516,6 +672,7 @@ export class ProtocolService {
   private mapAppRow(row: ProtocolAppRow) {
     const app = this.mapStoredApp(row);
     return {
+      status: app.status,
       registration: app.registration,
       manifest: app.manifest,
       issuedScopes: app.issuedScopes,
@@ -525,6 +682,7 @@ export class ProtocolService {
 
   private mapStoredApp(row: ProtocolAppRow): RegisteredProtocolApp {
     return {
+      status: row.status,
       registration: appRegistrationSchema.parse(row.registration_json),
       manifest: manifestSchema.parse(row.manifest_json),
       issuedScopes: (row.issued_scopes ?? []).map((scope) =>
@@ -537,7 +695,9 @@ export class ProtocolService {
     };
   }
 
-  private mapWebhookRow(row: ProtocolWebhookSubscriptionRow): WebhookSubscription {
+  private mapWebhookRow(
+    row: ProtocolWebhookSubscriptionRow,
+  ): WebhookSubscription {
     return webhookSubscriptionSchema.parse({
       protocolId: protocolIds.webhookSubscription,
       subscriptionId: row.subscription_id,
@@ -582,6 +742,27 @@ export class ProtocolService {
     });
   }
 
+  private mapDeliveryRow(row: ProtocolWebhookDeliveryRow) {
+    return protocolWebhookDeliverySchema.parse({
+      protocolId: protocolIds.protocol,
+      deliveryId: row.delivery_id,
+      subscriptionId: row.subscription_id,
+      eventName: row.event_name,
+      status: row.status,
+      attemptCount: row.attempt_count,
+      nextAttemptAt: this.toIsoString(row.next_attempt_at),
+      lastAttemptAt: this.toIsoString(row.last_attempt_at),
+      deliveredAt: this.toIsoString(row.delivered_at),
+      responseStatusCode: row.response_status_code,
+      errorMessage: row.error_message,
+      signature: row.signature,
+      payload: row.payload,
+      metadata: row.metadata ?? {},
+      createdAt: this.toIsoString(row.created_at),
+      updatedAt: this.toIsoString(row.updated_at),
+    });
+  }
+
   private async recordEvent(input: {
     actorAppId?: string;
     event: EventName;
@@ -605,16 +786,17 @@ export class ProtocolService {
       return;
     }
 
-    const subscriptionRows =
-      await this.prisma.$queryRawUnsafe<ProtocolWebhookSubscriptionRow[]>(
-        `SELECT subscription_id, app_id, status, target_url, event_names, resource_names, delivery_mode, retry_policy, secret_ref, metadata, created_at, updated_at
+    const subscriptionRows = await this.prisma.$queryRawUnsafe<
+      ProtocolWebhookSubscriptionRow[]
+    >(
+      `SELECT subscription_id, app_id, status, target_url, event_names, resource_names, delivery_mode, retry_policy, secret_ref, metadata, created_at, updated_at
          FROM protocol_webhook_subscriptions
          WHERE app_id = $1
            AND status = 'active'
            AND $2 = ANY(event_names)`,
-        input.actorAppId,
-        input.event,
-      );
+      input.actorAppId,
+      input.event,
+    );
 
     const envelope = this.mapEventRow(eventRow);
     for (const subscriptionRow of subscriptionRows) {
@@ -662,6 +844,8 @@ export class ProtocolService {
     if (!value) {
       return undefined;
     }
-    return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+    return value instanceof Date
+      ? value.toISOString()
+      : new Date(value).toISOString();
   }
 }

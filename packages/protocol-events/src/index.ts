@@ -173,6 +173,7 @@ export function buildProtocolEventEnvelope(
 
 export const protocolWebhookDeliveryStatusValues = [
   "queued",
+  "retrying",
   "delivered",
   "failed",
   "dead_lettered",

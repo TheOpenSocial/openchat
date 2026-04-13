@@ -24,6 +24,7 @@ import { appTheme } from "../theme";
 import type { UserProfileDraft } from "../types";
 import { useSelfProfileData } from "./profile/useProfileData";
 import { joinDisplayName, splitDisplayName } from "./settings/domain/name";
+import { ProtocolIntegrationsPanel } from "./settings/ProtocolIntegrationsPanel";
 
 type SettingsScreenProps = {
   accessToken: string;
@@ -460,6 +461,8 @@ export function SettingsScreen({
                   {error}
                 </Text>
               ) : null}
+
+              <ProtocolIntegrationsPanel />
             </View>
           </ScrollView>
         </View>

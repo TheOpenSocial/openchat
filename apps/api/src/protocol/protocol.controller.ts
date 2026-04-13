@@ -59,6 +59,34 @@ export class ProtocolController {
     return ok(await this.protocolService.registerApp(payload));
   }
 
+  @Post("apps/:appId/token/rotate")
+  async rotateAppToken(
+    @Param("appId") appIdParam: string,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+  ) {
+    const appId = parseRequestPayload(identifierSchema, appIdParam);
+    return ok(
+      await this.protocolService.rotateAppToken(
+        appId,
+        readProtocolAppToken(headers) ?? "",
+      ),
+    );
+  }
+
+  @Post("apps/:appId/token/revoke")
+  async revokeAppToken(
+    @Param("appId") appIdParam: string,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+  ) {
+    const appId = parseRequestPayload(identifierSchema, appIdParam);
+    return ok(
+      await this.protocolService.revokeAppToken(
+        appId,
+        readProtocolAppToken(headers) ?? "",
+      ),
+    );
+  }
+
   @Get("apps/:appId")
   async getApp(@Param("appId") appIdParam: string) {
     const appId = parseRequestPayload(identifierSchema, appIdParam);
@@ -103,12 +131,31 @@ export class ProtocolController {
     @Headers() headers: Record<string, string | string[] | undefined>,
   ) {
     const appId = parseRequestPayload(identifierSchema, appIdParam);
-    const subscriptionId = parseRequestPayload(identifierSchema, subscriptionIdParam);
+    const subscriptionId = parseRequestPayload(
+      identifierSchema,
+      subscriptionIdParam,
+    );
     return ok(
       this.protocolService.listWebhookDeliveries(
         appId,
         readProtocolAppToken(headers) ?? "",
         subscriptionId,
+      ),
+    );
+  }
+
+  @Get("apps/:appId/delivery-queue")
+  async inspectDeliveryQueue(
+    @Param("appId") appIdParam: string,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+    @Query("cursor") cursor?: string,
+  ) {
+    const appId = parseRequestPayload(identifierSchema, appIdParam);
+    return ok(
+      await this.protocolService.inspectDeliveryQueue(
+        appId,
+        readProtocolAppToken(headers) ?? "",
+        cursor,
       ),
     );
   }

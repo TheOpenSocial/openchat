@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, type ChangeEvent } from "react";
 
 import {
   WorkspaceHeader,
@@ -13,6 +13,7 @@ import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
 import { Label } from "@/src/components/ui/label";
 import { useAppSession } from "@/src/features/app-shell/app-session";
+import { ProtocolIntegrationsPanel } from "@/src/features/settings/protocol-integrations-panel";
 import { api } from "@/src/lib/api";
 
 export function SettingsScreen() {
@@ -31,7 +32,7 @@ export function SettingsScreen() {
   } = useAppSession();
   const [saving, setSaving] = useState(false);
 
-  const onPhotoChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const onPhotoChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
     if (!file) {
       return;
@@ -112,7 +113,7 @@ export function SettingsScreen() {
             <Label htmlFor="display-name">Display name</Label>
             <Input
               id="display-name"
-              onChange={(event) =>
+              onChange={(event: ChangeEvent<HTMLInputElement>) =>
                 setProfileDraft((current) => ({
                   ...current,
                   displayName: event.currentTarget.value,
@@ -186,6 +187,8 @@ export function SettingsScreen() {
       </WorkspacePanel>
 
       <div className="space-y-4">
+        <ProtocolIntegrationsPanel />
+
         <WorkspacePanel>
           <WorkspaceHeader
             description="Keep the shell lightweight while still making the route easy to reach."
