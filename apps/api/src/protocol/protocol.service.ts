@@ -5,20 +5,26 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from "@nestjs/common";
-import { randomBytes } from "node:crypto";
+import { randomUUID } from "node:crypto";
+import { PrismaService } from "../database/prisma.service.js";
 import {
   buildProtocolDiscoveryDocument,
   buildProtocolManifest,
 } from "@opensocial/protocol-server";
-import { protocolEventCatalog } from "@opensocial/protocol-events";
+import {
+  buildProtocolWebhookDelivery,
+  protocolEventCatalog,
+  protocolWebhookDeliverySchema,
+} from "@opensocial/protocol-events";
 import {
   appRegistrationRequestSchema,
   appRegistrationSchema,
   capabilityNameSchema,
   eventNameSchema,
-  identifierSchema,
+  manifestSchema,
   protocolEventEnvelopeSchema,
   protocolIds,
+  protocolReplayCursorSchema,
   protocolScopeNameSchema,
   webhookSubscriptionCreateSchema,
   webhookSubscriptionSchema,
@@ -30,24 +36,70 @@ import {
   type ProtocolDiscoveryDocument,
   type ProtocolEventEnvelope,
   type ProtocolManifest,
+  type ProtocolReplayCursor,
   type ProtocolScopeName,
   type WebhookSubscription,
   type WebhookSubscriptionCreate,
 } from "@opensocial/protocol-types";
+import {
+  hashProtocolAppToken,
+  issueProtocolAppToken,
+  verifyProtocolAppToken,
+} from "./protocol-credentials.js";
+import { signProtocolWebhookPayload } from "./protocol-webhooks.js";
+
+type ProtocolAppRow = {
+  app_id: string;
+  status: string;
+  registration_json: unknown;
+  manifest_json: unknown;
+  issued_scopes: string[] | null;
+  issued_capabilities: string[] | null;
+  app_token_hash: string;
+};
+
+type ProtocolWebhookSubscriptionRow = {
+  subscription_id: string;
+  app_id: string;
+  status: string;
+  target_url: string;
+  event_names: string[] | null;
+  resource_names: string[] | null;
+  delivery_mode: string;
+  retry_policy: unknown;
+  secret_ref: string | null;
+  metadata: unknown;
+  created_at: Date | string;
+  updated_at: Date | string;
+};
+
+type ProtocolEventLogRow = {
+  cursor: bigint | number | string;
+  actor_app_id: string | null;
+  event_name: string;
+  resource: string | null;
+  payload: unknown;
+  metadata: unknown;
+  created_at: Date | string;
+};
+
+type ProtocolCursorRow = {
+  app_id: string;
+  cursor: bigint | number | string;
+  updated_at: Date | string;
+};
 
 type RegisteredProtocolApp = {
   registration: AppRegistration;
   manifest: ProtocolManifest;
   issuedScopes: ProtocolScopeName[];
   issuedCapabilities: CapabilityName[];
-  appToken: string;
+  appTokenHash: string;
 };
 
 @Injectable()
 export class ProtocolService {
-  private readonly apps = new Map<string, RegisteredProtocolApp>();
-  private readonly webhookSubscriptions = new Map<string, WebhookSubscription[]>();
-  private readonly eventLog: ProtocolEventEnvelope[] = [];
+  constructor(private readonly prisma: PrismaService) {}
 
   getManifest(): ProtocolManifest {
     return buildProtocolManifest({
@@ -75,31 +127,26 @@ export class ProtocolService {
     return protocolEventCatalog;
   }
 
-  listApps() {
-    return [...this.apps.values()].map((app) => ({
-      registration: app.registration,
-      manifest: app.manifest,
-      issuedScopes: app.issuedScopes,
-      issuedCapabilities: app.issuedCapabilities,
-    }));
+  async listApps() {
+    const rows = await this.prisma.$queryRawUnsafe<ProtocolAppRow[]>(
+      `SELECT app_id, status, registration_json, manifest_json, issued_scopes, issued_capabilities, app_token_hash
+       FROM protocol_apps
+       ORDER BY app_id ASC`,
+    );
+    return rows.map((row) => this.mapAppRow(row));
   }
 
-  getApp(appId: string) {
-    const parsedAppId = identifierSchema.parse(appId);
-    const app = this.apps.get(parsedAppId);
-    if (!app) {
+  async getApp(appId: string) {
+    const row = await this.findAppRow(appId);
+    if (!row) {
       throw new NotFoundException("protocol app not found");
     }
-
-    return {
-      registration: app.registration,
-      manifest: app.manifest,
-      issuedScopes: app.issuedScopes,
-      issuedCapabilities: app.issuedCapabilities,
-    };
+    return this.mapAppRow(row);
   }
 
-  registerApp(input: AppRegistrationRequest): ProtocolAppRegistrationResult {
+  async registerApp(
+    input: AppRegistrationRequest,
+  ): Promise<ProtocolAppRegistrationResult> {
     const payload = appRegistrationRequestSchema.parse(input);
     const registration = appRegistrationSchema.parse(payload.registration);
     const manifest = buildProtocolManifest({
@@ -121,7 +168,8 @@ export class ProtocolService {
       );
     }
 
-    if (this.apps.has(registration.appId)) {
+    const existing = await this.findAppRow(registration.appId);
+    if (existing) {
       throw new ConflictException("protocol app already registered");
     }
 
@@ -148,36 +196,34 @@ export class ProtocolService {
         capabilities: issuedCapabilities,
       },
     });
-
-    const storedManifest = buildProtocolManifest({
-      appId: manifest.appId,
-      version: manifest.version,
-      name: manifest.name,
-      summary: manifest.summary,
-      description: manifest.description,
-      homepageUrl: manifest.homepageUrl,
-      iconUrl: manifest.iconUrl,
-      categories: manifest.categories,
+    const storedManifest = manifestSchema.parse({
+      ...manifest,
       capabilities: {
         ...manifest.capabilities,
         scopes: issuedScopes,
         capabilities: issuedCapabilities,
       },
-      metadata: manifest.metadata,
     });
 
-    const appToken = this.issueToken();
-    const storedApp: RegisteredProtocolApp = {
-      registration: storedRegistration,
-      manifest: storedManifest,
+    const appToken = issueProtocolAppToken();
+    const appTokenHash = hashProtocolAppToken(appToken);
+
+    await this.prisma.$executeRawUnsafe(
+      `INSERT INTO protocol_apps
+       (app_id, status, registration_json, manifest_json, issued_scopes, issued_capabilities, app_token_hash, created_at, updated_at)
+       VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::text[], $6::text[], $7, $8::timestamptz, $9::timestamptz)`,
+      storedRegistration.appId,
+      "active",
+      JSON.stringify(storedRegistration),
+      JSON.stringify(storedManifest),
       issuedScopes,
       issuedCapabilities,
-      appToken,
-    };
+      appTokenHash,
+      now,
+      now,
+    );
 
-    this.apps.set(storedRegistration.appId, storedApp);
-    this.webhookSubscriptions.set(storedRegistration.appId, []);
-    this.recordEvent({
+    await this.recordEvent({
       actorAppId: storedRegistration.appId,
       event: "app.registered",
       resource: "app_registration",
@@ -200,20 +246,29 @@ export class ProtocolService {
     };
   }
 
-  listWebhooks(appId: string, appToken: string) {
-    const app = this.requireAppAccess(appId, appToken, {
+  async listWebhooks(appId: string, appToken: string) {
+    const app = await this.requireAppAccess(appId, appToken, {
       scopes: ["webhooks.manage"],
       capabilities: ["webhook.read"],
     });
-    return [...(this.webhookSubscriptions.get(app.registration.appId) ?? [])];
+
+    const rows = await this.prisma.$queryRawUnsafe<ProtocolWebhookSubscriptionRow[]>(
+      `SELECT subscription_id, app_id, status, target_url, event_names, resource_names, delivery_mode, retry_policy, secret_ref, metadata, created_at, updated_at
+       FROM protocol_webhook_subscriptions
+       WHERE app_id = $1
+       ORDER BY created_at ASC`,
+      app.registration.appId,
+    );
+
+    return rows.map((row) => this.mapWebhookRow(row));
   }
 
-  createWebhook(
+  async createWebhook(
     appId: string,
     appToken: string,
     input: WebhookSubscriptionCreate,
   ) {
-    const app = this.requireAppAccess(appId, appToken, {
+    const app = await this.requireAppAccess(appId, appToken, {
       scopes: ["webhooks.manage"],
       capabilities: ["webhook.write"],
     });
@@ -221,25 +276,39 @@ export class ProtocolService {
     const now = new Date().toISOString();
     const subscription = webhookSubscriptionSchema.parse({
       protocolId: protocolIds.webhookSubscription,
-      subscriptionId: `${app.registration.appId}.${this.issueToken(8)}`,
+      subscriptionId: `${app.registration.appId}.${randomUUID()}`,
       appId: app.registration.appId,
       targetUrl: payload.targetUrl,
       events: payload.events,
       resources: payload.resources,
       status: "active",
       deliveryMode: payload.deliveryMode,
+      secretRef: payload.secretRef,
       retryPolicy: payload.retryPolicy,
       metadata: payload.metadata,
       createdAt: now,
       updatedAt: now,
     });
 
-    const subscriptions =
-      this.webhookSubscriptions.get(app.registration.appId) ?? [];
-    subscriptions.push(subscription);
-    this.webhookSubscriptions.set(app.registration.appId, subscriptions);
+    await this.prisma.$executeRawUnsafe(
+      `INSERT INTO protocol_webhook_subscriptions
+       (subscription_id, app_id, status, target_url, event_names, resource_names, delivery_mode, retry_policy, secret_ref, metadata, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5::text[], $6::text[], $7, $8::jsonb, $9, $10::jsonb, $11::timestamptz, $12::timestamptz)`,
+      subscription.subscriptionId,
+      subscription.appId,
+      subscription.status,
+      subscription.targetUrl,
+      subscription.events,
+      subscription.resources,
+      subscription.deliveryMode,
+      JSON.stringify(subscription.retryPolicy),
+      subscription.secretRef ?? null,
+      JSON.stringify(subscription.metadata),
+      now,
+      now,
+    );
 
-    this.recordEvent({
+    await this.recordEvent({
       actorAppId: app.registration.appId,
       event: "app.updated",
       resource: "app_registration",
@@ -249,39 +318,116 @@ export class ProtocolService {
         subscriptionId: subscription.subscriptionId,
       },
     });
-    this.recordEvent({
-      actorAppId: app.registration.appId,
-      event: "webhook.delivered",
-      resource: "webhook_subscription",
-      payload: {
-        appId: app.registration.appId,
-        subscriptionId: subscription.subscriptionId,
-        state: "registered",
-      },
-    });
 
     return subscription;
   }
 
-  replayEvents(appId: string, appToken: string, cursor?: string) {
-    const app = this.requireAppAccess(appId, appToken, {
+  async listWebhookDeliveries(
+    appId: string,
+    appToken: string,
+    subscriptionId: string,
+  ) {
+    const app = await this.requireAppAccess(appId, appToken, {
+      scopes: ["webhooks.manage"],
+      capabilities: ["webhook.read"],
+    });
+    const rows = await this.prisma.$queryRawUnsafe<any[]>(
+      `SELECT delivery_id, subscription_id, app_id, event_cursor, event_name, status, attempt_count, next_attempt_at, last_attempt_at, delivered_at, response_status_code, error_message, signature, payload, metadata, created_at, updated_at
+       FROM protocol_webhook_deliveries
+       WHERE app_id = $1 AND subscription_id = $2
+       ORDER BY created_at DESC`,
+      app.registration.appId,
+      subscriptionId,
+    );
+    return rows.map((row) =>
+      protocolWebhookDeliverySchema.parse({
+        protocolId: protocolIds.protocol,
+        deliveryId: row.delivery_id,
+        subscriptionId: row.subscription_id,
+        eventName: row.event_name,
+        status: row.status,
+        attemptCount: row.attempt_count,
+        nextAttemptAt: this.toIsoString(row.next_attempt_at),
+        lastAttemptAt: this.toIsoString(row.last_attempt_at),
+        deliveredAt: this.toIsoString(row.delivered_at),
+        responseStatusCode: row.response_status_code,
+        errorMessage: row.error_message,
+        signature: row.signature,
+        payload: row.payload,
+        metadata: row.metadata ?? {},
+        createdAt: this.toIsoString(row.created_at),
+        updatedAt: this.toIsoString(row.updated_at),
+      }),
+    );
+  }
+
+  async replayEvents(appId: string, appToken: string, cursor?: string) {
+    const app = await this.requireAppAccess(appId, appToken, {
       scopes: ["events.subscribe"],
       capabilities: ["event.read"],
     });
-    const since = cursor ? new Date(cursor).getTime() : null;
-    if (cursor && Number.isNaN(since)) {
+    const sinceCursor = cursor ? Number.parseInt(cursor, 10) : 0;
+    if (Number.isNaN(sinceCursor) || sinceCursor < 0) {
       throw new ForbiddenException("invalid event replay cursor");
     }
 
-    return this.eventLog.filter((entry) => {
-      if (entry.actorAppId && entry.actorAppId !== app.registration.appId) {
-        return false;
-      }
-      if (since === null) {
-        return true;
-      }
-      return new Date(entry.issuedAt).getTime() > since;
+    const rows = await this.prisma.$queryRawUnsafe<ProtocolEventLogRow[]>(
+      `SELECT cursor, actor_app_id, event_name, resource, payload, metadata, created_at
+       FROM protocol_event_log
+       WHERE (actor_app_id = $1 OR actor_app_id IS NULL) AND cursor > $2
+       ORDER BY cursor ASC
+       LIMIT 200`,
+      app.registration.appId,
+      sinceCursor,
+    );
+
+    return rows.map((row) => this.mapEventRow(row));
+  }
+
+  async getReplayCursor(appId: string, appToken: string) {
+    const app = await this.requireAppAccess(appId, appToken, {
+      scopes: ["events.subscribe"],
+      capabilities: ["event.read"],
     });
+    const rows = await this.prisma.$queryRawUnsafe<ProtocolCursorRow[]>(
+      `SELECT app_id, cursor, updated_at
+       FROM protocol_event_cursors
+       WHERE app_id = $1
+       LIMIT 1`,
+      app.registration.appId,
+    );
+    const row = rows[0];
+    if (!row) {
+      return protocolReplayCursorSchema.parse({
+        appId: app.registration.appId,
+        cursor: "0",
+        updatedAt: new Date().toISOString(),
+      });
+    }
+    return this.mapCursorRow(row);
+  }
+
+  async saveReplayCursor(appId: string, appToken: string, cursor: string) {
+    const app = await this.requireAppAccess(appId, appToken, {
+      scopes: ["events.subscribe"],
+      capabilities: ["event.read"],
+    });
+    const parsedCursor = Number.parseInt(cursor, 10);
+    if (Number.isNaN(parsedCursor) || parsedCursor < 0) {
+      throw new ForbiddenException("invalid event replay cursor");
+    }
+    const now = new Date().toISOString();
+    const rows = await this.prisma.$queryRawUnsafe<ProtocolCursorRow[]>(
+      `INSERT INTO protocol_event_cursors (app_id, cursor, updated_at)
+       VALUES ($1, $2::bigint, $3::timestamptz)
+       ON CONFLICT (app_id)
+       DO UPDATE SET cursor = EXCLUDED.cursor, updated_at = EXCLUDED.updated_at
+       RETURNING app_id, cursor, updated_at`,
+      app.registration.appId,
+      parsedCursor,
+      now,
+    );
+    return this.mapCursorRow(rows[0]);
   }
 
   private issueScopes(
@@ -315,7 +461,7 @@ export class ProtocolService {
     return requestedCapabilities.filter((capability) => available.has(capability));
   }
 
-  private requireAppAccess(
+  private async requireAppAccess(
     appId: string,
     appToken: string,
     requirements: {
@@ -323,15 +469,15 @@ export class ProtocolService {
       capabilities?: CapabilityName[];
     } = {},
   ) {
-    const parsedAppId = identifierSchema.parse(appId);
-    const app = this.apps.get(parsedAppId);
-    if (!app) {
+    const row = await this.findAppRow(appId);
+    if (!row) {
       throw new NotFoundException("protocol app not found");
     }
     if (!appToken?.trim()) {
       throw new UnauthorizedException("missing protocol app token");
     }
-    if (app.appToken !== appToken.trim()) {
+    const app = this.mapStoredApp(row);
+    if (!verifyProtocolAppToken(appToken, app.appTokenHash)) {
       throw new ForbiddenException("invalid protocol app token");
     }
 
@@ -356,25 +502,166 @@ export class ProtocolService {
     return app;
   }
 
-  private issueToken(byteLength = 24) {
-    return randomBytes(byteLength).toString("hex");
+  private async findAppRow(appId: string) {
+    const rows = await this.prisma.$queryRawUnsafe<ProtocolAppRow[]>(
+      `SELECT app_id, status, registration_json, manifest_json, issued_scopes, issued_capabilities, app_token_hash
+       FROM protocol_apps
+       WHERE app_id = $1
+       LIMIT 1`,
+      appId,
+    );
+    return rows[0] ?? null;
   }
 
-  private recordEvent(input: {
+  private mapAppRow(row: ProtocolAppRow) {
+    const app = this.mapStoredApp(row);
+    return {
+      registration: app.registration,
+      manifest: app.manifest,
+      issuedScopes: app.issuedScopes,
+      issuedCapabilities: app.issuedCapabilities,
+    };
+  }
+
+  private mapStoredApp(row: ProtocolAppRow): RegisteredProtocolApp {
+    return {
+      registration: appRegistrationSchema.parse(row.registration_json),
+      manifest: manifestSchema.parse(row.manifest_json),
+      issuedScopes: (row.issued_scopes ?? []).map((scope) =>
+        protocolScopeNameSchema.parse(scope),
+      ),
+      issuedCapabilities: (row.issued_capabilities ?? []).map((capability) =>
+        capabilityNameSchema.parse(capability),
+      ),
+      appTokenHash: row.app_token_hash,
+    };
+  }
+
+  private mapWebhookRow(row: ProtocolWebhookSubscriptionRow): WebhookSubscription {
+    return webhookSubscriptionSchema.parse({
+      protocolId: protocolIds.webhookSubscription,
+      subscriptionId: row.subscription_id,
+      appId: row.app_id,
+      targetUrl: row.target_url,
+      events: row.event_names ?? [],
+      resources: row.resource_names ?? [],
+      status: row.status,
+      deliveryMode: row.delivery_mode,
+      retryPolicy: row.retry_policy,
+      secretRef: row.secret_ref ?? undefined,
+      metadata: row.metadata ?? {},
+      createdAt: this.toIsoString(row.created_at),
+      updatedAt: this.toIsoString(row.updated_at),
+    });
+  }
+
+  private mapEventRow(row: ProtocolEventLogRow): ProtocolEventEnvelope {
+    const metadata =
+      row.metadata && typeof row.metadata === "object"
+        ? { ...(row.metadata as Record<string, unknown>) }
+        : {};
+    return protocolEventEnvelopeSchema.parse({
+      protocolId: protocolIds.protocol,
+      actorAppId: row.actor_app_id ?? undefined,
+      issuedAt: this.toIsoString(row.created_at),
+      event: eventNameSchema.parse(row.event_name),
+      resource: row.resource ?? undefined,
+      payload: row.payload,
+      metadata: {
+        ...metadata,
+        cursor: String(row.cursor),
+      },
+    });
+  }
+
+  private mapCursorRow(row: ProtocolCursorRow): ProtocolReplayCursor {
+    return protocolReplayCursorSchema.parse({
+      appId: row.app_id,
+      cursor: String(row.cursor),
+      updatedAt: this.toIsoString(row.updated_at),
+    });
+  }
+
+  private async recordEvent(input: {
     actorAppId?: string;
     event: EventName;
     resource?: "app_registration" | "webhook_subscription";
     payload: unknown;
   }) {
-    const envelope = protocolEventEnvelopeSchema.parse({
-      protocolId: protocolIds.protocol,
-      issuedAt: new Date().toISOString(),
-      actorAppId: input.actorAppId,
-      event: eventNameSchema.parse(input.event),
-      resource: input.resource,
-      payload: input.payload,
-      metadata: {},
-    });
-    this.eventLog.push(envelope);
+    const issuedAt = new Date().toISOString();
+    const rows = await this.prisma.$queryRawUnsafe<ProtocolEventLogRow[]>(
+      `INSERT INTO protocol_event_log (actor_app_id, event_name, resource, payload, metadata, created_at)
+       VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::timestamptz)
+       RETURNING cursor, actor_app_id, event_name, resource, payload, metadata, created_at`,
+      input.actorAppId ?? null,
+      input.event,
+      input.resource ?? null,
+      JSON.stringify(input.payload),
+      JSON.stringify({}),
+      issuedAt,
+    );
+    const eventRow = rows[0];
+    if (!eventRow || !input.actorAppId) {
+      return;
+    }
+
+    const subscriptionRows =
+      await this.prisma.$queryRawUnsafe<ProtocolWebhookSubscriptionRow[]>(
+        `SELECT subscription_id, app_id, status, target_url, event_names, resource_names, delivery_mode, retry_policy, secret_ref, metadata, created_at, updated_at
+         FROM protocol_webhook_subscriptions
+         WHERE app_id = $1
+           AND status = 'active'
+           AND $2 = ANY(event_names)`,
+        input.actorAppId,
+        input.event,
+      );
+
+    const envelope = this.mapEventRow(eventRow);
+    for (const subscriptionRow of subscriptionRows) {
+      const delivery = buildProtocolWebhookDelivery({
+        deliveryId: randomUUID(),
+        subscriptionId: subscriptionRow.subscription_id,
+        eventName: input.event,
+        status: "queued",
+        attemptCount: 0,
+        signature: signProtocolWebhookPayload(envelope),
+        payload: envelope,
+        metadata: {
+          appId: input.actorAppId,
+          targetUrl: subscriptionRow.target_url,
+        },
+        createdAt: issuedAt,
+        updatedAt: issuedAt,
+      });
+      await this.prisma.$executeRawUnsafe(
+        `INSERT INTO protocol_webhook_deliveries
+         (delivery_id, subscription_id, app_id, event_cursor, event_name, status, attempt_count, next_attempt_at, last_attempt_at, delivered_at, response_status_code, error_message, signature, payload, metadata, created_at, updated_at)
+         VALUES ($1, $2, $3, $4::bigint, $5, $6, $7, $8::timestamptz, $9::timestamptz, $10::timestamptz, $11, $12, $13, $14::jsonb, $15::jsonb, $16::timestamptz, $17::timestamptz)`,
+        delivery.deliveryId,
+        delivery.subscriptionId,
+        input.actorAppId,
+        String(eventRow.cursor),
+        delivery.eventName,
+        delivery.status,
+        delivery.attemptCount,
+        delivery.nextAttemptAt ?? null,
+        delivery.lastAttemptAt ?? null,
+        delivery.deliveredAt ?? null,
+        delivery.responseStatusCode ?? null,
+        delivery.errorMessage ?? null,
+        delivery.signature ?? null,
+        JSON.stringify(delivery.payload),
+        JSON.stringify(delivery.metadata),
+        issuedAt,
+        issuedAt,
+      );
+    }
+  }
+
+  private toIsoString(value: Date | string | null | undefined) {
+    if (!value) {
+      return undefined;
+    }
+    return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
   }
 }

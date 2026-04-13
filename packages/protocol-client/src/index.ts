@@ -1,7 +1,13 @@
 import {
+  protocolWebhookDeliverySchema,
+  type ProtocolWebhookDelivery,
+} from "@opensocial/protocol-events";
+import {
   appRegistrationRequestSchema,
   protocolAppRegistrationResultSchema,
   protocolDiscoveryDocumentSchema,
+  protocolEventEnvelopeSchema,
+  protocolReplayCursorSchema,
   manifestSchema,
   webhookSubscriptionCreateSchema,
   webhookSubscriptionSchema,
@@ -10,7 +16,9 @@ import {
   type CapabilityName,
   type ProtocolAppRegistrationResult,
   type ProtocolDiscoveryDocument,
+  type ProtocolEventEnvelope,
   type ProtocolManifest,
+  type ProtocolReplayCursor,
   type ProtocolScopeName,
   type WebhookSubscription,
   type WebhookSubscriptionCreate,
@@ -35,6 +43,25 @@ export type ProtocolClient = {
     appToken: string,
     payload: WebhookSubscriptionCreate,
   ) => Promise<WebhookSubscription>;
+  listWebhookDeliveries: (
+    appId: string,
+    appToken: string,
+    subscriptionId: string,
+  ) => Promise<ProtocolWebhookDelivery[]>;
+  replayEvents: (
+    appId: string,
+    appToken: string,
+    cursor?: string,
+  ) => Promise<ProtocolEventEnvelope[]>;
+  getReplayCursor: (
+    appId: string,
+    appToken: string,
+  ) => Promise<ProtocolReplayCursor>;
+  saveReplayCursor: (
+    appId: string,
+    appToken: string,
+    cursor: string,
+  ) => Promise<ProtocolReplayCursor>;
   buildAppRegistrationRequest: (
     input: ProtocolAppRegistrationRequestInput,
   ) => AppRegistrationRequest;
@@ -95,6 +122,62 @@ export function createProtocolClient(
       });
       const envelope = (await response.json()) as { data?: unknown } | undefined;
       return webhookSubscriptionSchema.parse(envelope?.data ?? envelope);
+    },
+    async listWebhookDeliveries(appId, appToken, subscriptionId) {
+      const response = await transport.request(
+        `/protocol/apps/${appId}/webhooks/${subscriptionId}/deliveries`,
+        {
+          headers: {
+            "x-protocol-app-token": appToken,
+          },
+        },
+      );
+      const payload = (await response.json()) as { data?: unknown } | undefined;
+      return protocolWebhookDeliverySchema.array().parse(payload?.data ?? payload);
+    },
+    async replayEvents(appId, appToken, cursor) {
+      const search = cursor
+        ? `?cursor=${encodeURIComponent(cursor)}`
+        : "";
+      const response = await transport.request(
+        `/protocol/apps/${appId}/events/replay${search}`,
+        {
+          headers: {
+            "x-protocol-app-token": appToken,
+          },
+        },
+      );
+      const payload = (await response.json()) as { data?: unknown } | undefined;
+      return protocolEventEnvelopeSchema
+        .array()
+        .parse(payload?.data ?? payload);
+    },
+    async getReplayCursor(appId, appToken) {
+      const response = await transport.request(
+        `/protocol/apps/${appId}/events/cursor`,
+        {
+          headers: {
+            "x-protocol-app-token": appToken,
+          },
+        },
+      );
+      const payload = (await response.json()) as { data?: unknown } | undefined;
+      return protocolReplayCursorSchema.parse(payload?.data ?? payload);
+    },
+    async saveReplayCursor(appId, appToken, cursor) {
+      const response = await transport.request(
+        `/protocol/apps/${appId}/events/cursor`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-protocol-app-token": appToken,
+          },
+          body: JSON.stringify({ cursor }),
+        },
+      );
+      const payload = (await response.json()) as { data?: unknown } | undefined;
+      return protocolReplayCursorSchema.parse(payload?.data ?? payload);
     },
     buildAppRegistrationRequest(input) {
       return buildProtocolAppRegistrationRequest(input);

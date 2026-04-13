@@ -865,6 +865,22 @@ export const api = {
   ) {
     return protocolClient.createWebhook(appId, appToken, payload);
   },
+  listProtocolWebhookDeliveries(
+    appId: string,
+    appToken: string,
+    subscriptionId: string,
+  ) {
+    return protocolClient.listWebhookDeliveries(appId, appToken, subscriptionId);
+  },
+  replayProtocolEvents(appId: string, appToken: string, cursor?: string) {
+    return protocolClient.replayEvents(appId, appToken, cursor);
+  },
+  getProtocolReplayCursor(appId: string, appToken: string) {
+    return protocolClient.getReplayCursor(appId, appToken);
+  },
+  saveProtocolReplayCursor(appId: string, appToken: string, cursor: string) {
+    return protocolClient.saveReplayCursor(appId, appToken, cursor);
+  },
   buildProtocolAppRegistrationRequest(
     input: ProtocolAppRegistrationRequestInput,
   ) {

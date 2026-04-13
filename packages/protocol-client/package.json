@@ -13,15 +13,16 @@
     }
   },
   "scripts": {
-    "prebuild": "pnpm --filter @opensocial/protocol-types build",
+    "prebuild": "pnpm --filter @opensocial/protocol-types build && pnpm --filter @opensocial/protocol-events build",
     "build": "tsc -p tsconfig.json",
-    "pretypecheck": "pnpm --filter @opensocial/protocol-types build",
+    "pretypecheck": "pnpm --filter @opensocial/protocol-types build && pnpm --filter @opensocial/protocol-events build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint \"src/**/*.ts\" --max-warnings=0",
-    "pretest": "pnpm --filter @opensocial/protocol-types build",
+    "pretest": "pnpm --filter @opensocial/protocol-types build && pnpm --filter @opensocial/protocol-events build",
     "test": "echo 'no tests yet for protocol-client package'"
   },
   "dependencies": {
+    "@opensocial/protocol-events": "workspace:*",
     "@opensocial/protocol-types": "workspace:*"
   }
 }

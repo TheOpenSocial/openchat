@@ -21,11 +21,22 @@ describe("ProtocolController", () => {
       registerApp: (payload: unknown) => payload,
       getApp: () => ({ appId: "alpha" }),
       listWebhooks: () => [],
+      listWebhookDeliveries: () => [],
       createWebhook: (_appId: string, token: string, payload: unknown) => ({
         token,
         payload,
       }),
       replayEvents: () => [],
+      getReplayCursor: () => ({
+        appId: "alpha.app",
+        cursor: "0",
+        updatedAt: "2026-04-13T00:00:00.000Z",
+      }),
+      saveReplayCursor: (_appId: string, _token: string, cursor: string) => ({
+        appId: "alpha.app",
+        cursor,
+        updatedAt: "2026-04-13T00:00:00.000Z",
+      }),
     } as any);
 
     const response = (await controller.getManifest()) as any;
@@ -44,11 +55,22 @@ describe("ProtocolController", () => {
       registerApp: () => ({}),
       getApp: () => ({}),
       listWebhooks: () => [],
+      listWebhookDeliveries: () => [],
       createWebhook: (_appId: string, token: string, payload: Record<string, unknown>) => ({
         token,
         payload,
       }),
       replayEvents: () => [],
+      getReplayCursor: () => ({
+        appId: "alpha.app",
+        cursor: "0",
+        updatedAt: "2026-04-13T00:00:00.000Z",
+      }),
+      saveReplayCursor: (_appId: string, _token: string, cursor: string) => ({
+        appId: "alpha.app",
+        cursor,
+        updatedAt: "2026-04-13T00:00:00.000Z",
+      }),
     } as any);
 
     const response = (await controller.createWebhook(
@@ -65,5 +87,74 @@ describe("ProtocolController", () => {
     expect(response.success).toBe(true);
     expect(response.data.token).toBe("secret-token");
     expect(response.data.payload.targetUrl).toContain("example.com");
+  });
+
+  it("routes delivery and cursor endpoints through the app token", async () => {
+    const controller = new ProtocolController({
+      getManifest: () => ({}),
+      getDiscovery: () => ({}),
+      listEvents: () => [],
+      listApps: () => [],
+      registerApp: () => ({}),
+      getApp: () => ({}),
+      listWebhooks: () => [],
+      listWebhookDeliveries: (_appId: string, token: string, subscriptionId: string) => ({
+        token,
+        subscriptionId,
+      }),
+      createWebhook: () => ({}),
+      replayEvents: (_appId: string, token: string, cursor?: string) => ({
+        token,
+        cursor,
+      }),
+      getReplayCursor: (_appId: string, token: string) => ({
+        appId: "alpha.app",
+        token,
+        cursor: "0",
+        updatedAt: "2026-04-13T00:00:00.000Z",
+      }),
+      saveReplayCursor: (_appId: string, token: string, cursor: string) => ({
+        appId: "alpha.app",
+        token,
+        cursor,
+        updatedAt: "2026-04-13T00:00:00.000Z",
+      }),
+    } as any);
+
+    const deliveries = (await controller.listWebhookDeliveries(
+      "alpha.app",
+      "subscription-1",
+      {
+        "x-protocol-app-token": "secret-token",
+      },
+    )) as any;
+    const replay = (await controller.replayEvents(
+      "alpha.app",
+      {
+        "x-protocol-app-token": "secret-token",
+      },
+      "12",
+    )) as any;
+    const currentCursor = (await controller.getReplayCursor(
+      "alpha.app",
+      {
+        "x-protocol-app-token": "secret-token",
+      },
+    )) as any;
+    const savedCursor = (await controller.saveReplayCursor(
+      "alpha.app",
+      {
+        "x-protocol-app-token": "secret-token",
+      },
+      {
+        cursor: "44",
+      },
+    )) as any;
+
+    expect(deliveries.data.token).toBe("secret-token");
+    expect(deliveries.data.subscriptionId).toBe("subscription-1");
+    expect(replay.data.cursor).toBe("12");
+    expect(currentCursor.data.cursor).toBe("0");
+    expect(savedCursor.data.cursor).toBe("44");
   });
 });

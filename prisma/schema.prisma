@@ -106,6 +106,32 @@ enum CommerceDisputeStatus {
   rejected
 }
 
+enum ProtocolAppStatus {
+  pending
+  active
+  suspended
+  revoked
+}
+
+enum ProtocolScopeGrantStatus {
+  active
+  revoked
+}
+
+enum ProtocolWebhookSubscriptionStatus {
+  active
+  paused
+  disabled
+}
+
+enum ProtocolWebhookDeliveryStatus {
+  pending
+  retrying
+  delivered
+  failed
+  dead_lettered
+}
+
 model User {
   id                         String                    @id @default(uuid()) @db.Uuid
   email                      String?                   @unique
@@ -133,6 +159,7 @@ model User {
   commerceOffersAsBuyer      CommerceOffer[]           @relation("CommerceOfferBuyer")
   commerceOffersAsSeller     CommerceOffer[]           @relation("CommerceOfferSeller")
   commerceDisputesOpened     CommerceDispute[]
+  protocolApps               ProtocolApp[]             @relation("ProtocolAppOwner")
 
   @@map("users")
 }
@@ -621,6 +648,91 @@ model OutboxEvent {
   @@map("outbox_events")
 }
 
+model ProtocolApp {
+  id                 String   @id @default(uuid()) @db.Uuid
+  appId              String   @unique @map("app_id")
+  status             String   @default("active")
+  registrationJson   Json     @map("registration_json")
+  manifestJson       Json     @map("manifest_json")
+  issuedScopes       String[] @default([]) @map("issued_scopes")
+  issuedCapabilities String[] @default([]) @map("issued_capabilities")
+  appTokenHash       String   @map("app_token_hash")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@index([status, createdAt])
+  @@map("protocol_apps")
+}
+
+model ProtocolWebhookSubscription {
+  id            String   @id @default(uuid()) @db.Uuid
+  subscriptionId String  @unique @map("subscription_id")
+  appId         String   @map("app_id")
+  status        String   @default("active")
+  targetUrl     String   @map("target_url")
+  eventNames    String[] @default([]) @map("event_names")
+  resourceNames String[] @default([]) @map("resource_names")
+  deliveryMode  String   @default("json") @map("delivery_mode")
+  retryPolicy   Json     @map("retry_policy")
+  secretRef     String?  @map("secret_ref")
+  metadata      Json?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@index([appId, status, createdAt])
+  @@map("protocol_webhook_subscriptions")
+}
+
+model ProtocolWebhookDelivery {
+  id                 String   @id @default(uuid()) @db.Uuid
+  deliveryId         String   @unique @map("delivery_id")
+  subscriptionId     String   @map("subscription_id")
+  appId              String   @map("app_id")
+  eventCursor        BigInt?  @map("event_cursor")
+  eventName          String   @map("event_name")
+  status             String   @default("queued")
+  attemptCount       Int      @default(0) @map("attempt_count")
+  nextAttemptAt      DateTime? @map("next_attempt_at")
+  lastAttemptAt      DateTime? @map("last_attempt_at")
+  deliveredAt        DateTime? @map("delivered_at")
+  responseStatusCode Int?     @map("response_status_code")
+  errorMessage       String?  @map("error_message")
+  signature          String?  
+  payload            Json
+  metadata           Json?
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@index([subscriptionId, status, createdAt])
+  @@index([appId, eventName, createdAt])
+  @@map("protocol_webhook_deliveries")
+}
+
+model ProtocolEventLog {
+  cursor      BigInt   @id @default(autoincrement())
+  eventId     String   @unique @default(uuid()) @map("event_id") @db.Uuid
+  actorAppId  String?  @map("actor_app_id")
+  eventName   String   @map("event_name")
+  resource    String?
+  payload     Json
+  metadata    Json?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([actorAppId, cursor])
+  @@index([eventName, cursor])
+  @@map("protocol_event_log")
+}
+
+model ProtocolEventCursor {
+  id        String   @id @default(uuid()) @db.Uuid
+  appId     String   @map("app_id")
+  cursor    BigInt   @default(0)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([appId])
+  @@map("protocol_event_cursors")
+}
+
 model ClientMutation {
   id             String   @id @default(uuid()) @db.Uuid
   userId         String   @map("user_id") @db.Uuid
@@ -986,4 +1098,116 @@ model WaitlistEntry {
   @@index([status, createdAt])
   @@index([createdAt])
   @@map("waitlist_entries")
+}
+
+model ProtocolApp {
+  id                 String                       @id @default(uuid()) @db.Uuid
+  ownerUserId        String?                      @map("owner_user_id") @db.Uuid
+  name               String
+  slug               String                       @unique
+  clientId           String                       @unique @map("client_id")
+  clientSecretHash   String?                      @map("client_secret_hash")
+  status             ProtocolAppStatus             @default(pending)
+  description        String?
+  redirectUris       String[]                     @default([]) @map("redirect_uris")
+  allowedOrigins     String[]                     @default([]) @map("allowed_origins")
+  requestedScopes    String[]                     @default([]) @map("requested_scopes")
+  capabilityManifest Json?                        @map("capability_manifest")
+  lastUsedAt         DateTime?                    @map("last_used_at")
+  revokedAt          DateTime?                    @map("revoked_at")
+  createdAt          DateTime                     @default(now()) @map("created_at")
+  updatedAt          DateTime                     @updatedAt @map("updated_at")
+  ownerUser          User?                        @relation("ProtocolAppOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  scopeGrants        ProtocolAppScopeGrant[]
+  webhookSubscriptions ProtocolWebhookSubscription[]
+  replayCursors      ProtocolEventReplayCursor[]
+
+  @@index([ownerUserId, createdAt])
+  @@index([status, createdAt])
+  @@map("protocol_apps")
+}
+
+model ProtocolAppScopeGrant {
+  id              String                @id @default(uuid()) @db.Uuid
+  appId           String                @map("app_id") @db.Uuid
+  scope           String
+  capabilities    String[]              @default([]) @map("capabilities")
+  subjectType     String                @default("app") @map("subject_type")
+  subjectId       String?               @map("subject_id") @db.Uuid
+  status          ProtocolScopeGrantStatus @default(active)
+  grantedByUserId String?               @map("granted_by_user_id") @db.Uuid
+  grantedAt       DateTime              @default(now()) @map("granted_at")
+  revokedAt       DateTime?             @map("revoked_at")
+  createdAt       DateTime              @default(now()) @map("created_at")
+  updatedAt       DateTime              @updatedAt @map("updated_at")
+  app             ProtocolApp           @relation(fields: [appId], references: [id], onDelete: Cascade)
+
+  @@unique([appId, scope, subjectType, subjectId])
+  @@index([appId, status])
+  @@map("protocol_app_scope_grants")
+}
+
+model ProtocolWebhookSubscription {
+  id             String                          @id @default(uuid()) @db.Uuid
+  appId          String                          @map("app_id") @db.Uuid
+  eventFamily    String                          @map("event_family")
+  endpointUrl    String                          @map("endpoint_url")
+  status         ProtocolWebhookSubscriptionStatus @default(active)
+  secretHash     String?                         @map("secret_hash")
+  filters        Json?
+  failureCount   Int                             @default(0) @map("failure_count")
+  lastDeliveredAt DateTime?                      @map("last_delivered_at")
+  lastFailureAt  DateTime?                       @map("last_failure_at")
+  createdAt      DateTime                        @default(now()) @map("created_at")
+  updatedAt      DateTime                        @updatedAt @map("updated_at")
+  app            ProtocolApp                     @relation(fields: [appId], references: [id], onDelete: Cascade)
+  deliveries     ProtocolWebhookDelivery[]
+  replayCursors  ProtocolEventReplayCursor[]
+
+  @@unique([appId, eventFamily, endpointUrl])
+  @@index([appId, status])
+  @@map("protocol_webhook_subscriptions")
+}
+
+model ProtocolWebhookDelivery {
+  id              String                          @id @default(uuid()) @db.Uuid
+  subscriptionId  String                          @map("subscription_id") @db.Uuid
+  eventId         String?                         @map("event_id") @db.Uuid
+  eventType       String                          @map("event_type")
+  payload         Json
+  dedupeKey       String?                         @map("dedupe_key")
+  attemptCount    Int                             @default(0) @map("attempt_count")
+  status          ProtocolWebhookDeliveryStatus   @default(pending)
+  nextAttemptAt   DateTime?                       @map("next_attempt_at")
+  deliveredAt     DateTime?                       @map("delivered_at")
+  failedAt        DateTime?                       @map("failed_at")
+  responseStatus  Int?                            @map("response_status")
+  responseBody    String?                         @map("response_body")
+  errorCode       String?                         @map("error_code")
+  errorMessage    String?                         @map("error_message")
+  createdAt       DateTime                        @default(now()) @map("created_at")
+  updatedAt       DateTime                        @updatedAt @map("updated_at")
+  subscription    ProtocolWebhookSubscription      @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId, status, createdAt])
+  @@index([status, nextAttemptAt])
+  @@unique([subscriptionId, eventId])
+  @@map("protocol_webhook_deliveries")
+}
+
+model ProtocolEventReplayCursor {
+  id              String                       @id @default(uuid()) @db.Uuid
+  appId           String                       @map("app_id") @db.Uuid
+  subscriptionId  String                       @unique @map("subscription_id") @db.Uuid
+  cursor          String
+  lastEventId     String?                      @map("last_event_id") @db.Uuid
+  lastEventType   String?                      @map("last_event_type")
+  lastDeliveredAt DateTime?                    @map("last_delivered_at")
+  createdAt       DateTime                     @default(now()) @map("created_at")
+  updatedAt       DateTime                     @updatedAt @map("updated_at")
+  app             ProtocolApp                  @relation(fields: [appId], references: [id], onDelete: Cascade)
+  subscription    ProtocolWebhookSubscription  @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([appId, updatedAt])
+  @@map("protocol_event_replay_cursors")
 }

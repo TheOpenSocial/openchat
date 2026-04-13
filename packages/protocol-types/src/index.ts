@@ -495,3 +495,12 @@ export const protocolEventEnvelopeSchema = protocolEnvelopeSchema.extend({
   payload: z.unknown(),
 });
 export type ProtocolEventEnvelope = z.infer<typeof protocolEventEnvelopeSchema>;
+
+export const protocolReplayCursorSchema = z
+  .object({
+    appId: identifierSchema,
+    cursor: z.string().min(1),
+    updatedAt: isoDateTimeSchema,
+  })
+  .strict();
+export type ProtocolReplayCursor = z.infer<typeof protocolReplayCursorSchema>;

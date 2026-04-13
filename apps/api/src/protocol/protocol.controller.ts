@@ -10,6 +10,7 @@ import {
 import {
   appRegistrationRequestSchema,
   identifierSchema,
+  protocolReplayCursorSchema,
   webhookSubscriptionCreateSchema,
 } from "@opensocial/protocol-types";
 import { PublicRoute } from "../auth/public-route.decorator.js";
@@ -49,19 +50,19 @@ export class ProtocolController {
 
   @Get("apps")
   async listApps() {
-    return ok(this.protocolService.listApps());
+    return ok(await this.protocolService.listApps());
   }
 
   @Post("apps/register")
   async registerApp(@Body() body: unknown) {
     const payload = parseRequestPayload(appRegistrationRequestSchema, body);
-    return ok(this.protocolService.registerApp(payload));
+    return ok(await this.protocolService.registerApp(payload));
   }
 
   @Get("apps/:appId")
   async getApp(@Param("appId") appIdParam: string) {
     const appId = parseRequestPayload(identifierSchema, appIdParam);
-    return ok(this.protocolService.getApp(appId));
+    return ok(await this.protocolService.getApp(appId));
   }
 
   @Get("apps/:appId/webhooks")
@@ -71,7 +72,10 @@ export class ProtocolController {
   ) {
     const appId = parseRequestPayload(identifierSchema, appIdParam);
     return ok(
-      this.protocolService.listWebhooks(appId, readProtocolAppToken(headers) ?? ""),
+      await this.protocolService.listWebhooks(
+        appId,
+        readProtocolAppToken(headers) ?? "",
+      ),
     );
   }
 
@@ -84,10 +88,27 @@ export class ProtocolController {
     const appId = parseRequestPayload(identifierSchema, appIdParam);
     const payload = parseRequestPayload(webhookSubscriptionCreateSchema, body);
     return ok(
-      this.protocolService.createWebhook(
+      await this.protocolService.createWebhook(
         appId,
         readProtocolAppToken(headers) ?? "",
         payload,
+      ),
+    );
+  }
+
+  @Get("apps/:appId/webhooks/:subscriptionId/deliveries")
+  async listWebhookDeliveries(
+    @Param("appId") appIdParam: string,
+    @Param("subscriptionId") subscriptionIdParam: string,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+  ) {
+    const appId = parseRequestPayload(identifierSchema, appIdParam);
+    const subscriptionId = parseRequestPayload(identifierSchema, subscriptionIdParam);
+    return ok(
+      this.protocolService.listWebhookDeliveries(
+        appId,
+        readProtocolAppToken(headers) ?? "",
+        subscriptionId,
       ),
     );
   }
@@ -100,10 +121,44 @@ export class ProtocolController {
   ) {
     const appId = parseRequestPayload(identifierSchema, appIdParam);
     return ok(
-      this.protocolService.replayEvents(
+      await this.protocolService.replayEvents(
         appId,
         readProtocolAppToken(headers) ?? "",
         cursor,
+      ),
+    );
+  }
+
+  @Get("apps/:appId/events/cursor")
+  async getReplayCursor(
+    @Param("appId") appIdParam: string,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+  ) {
+    const appId = parseRequestPayload(identifierSchema, appIdParam);
+    return ok(
+      this.protocolService.getReplayCursor(
+        appId,
+        readProtocolAppToken(headers) ?? "",
+      ),
+    );
+  }
+
+  @Post("apps/:appId/events/cursor")
+  async saveReplayCursor(
+    @Param("appId") appIdParam: string,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+    @Body() body: unknown,
+  ) {
+    const appId = parseRequestPayload(identifierSchema, appIdParam);
+    const payload = parseRequestPayload(
+      protocolReplayCursorSchema.pick({ cursor: true }).extend({}),
+      body,
+    );
+    return ok(
+      this.protocolService.saveReplayCursor(
+        appId,
+        readProtocolAppToken(headers) ?? "",
+        payload.cursor,
       ),
     );
   }

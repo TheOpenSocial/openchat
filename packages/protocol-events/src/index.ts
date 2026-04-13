@@ -217,8 +217,11 @@ export const protocolWebhookDeliverySchema = z
     deliveredAt: isoDateTimeSchema.nullish(),
     responseStatusCode: z.number().int().min(100).max(599).nullish(),
     errorMessage: z.string().max(2000).nullish(),
+    signature: z.string().optional().nullable(),
     payload: z.unknown(),
     metadata: z.record(z.string(), z.unknown()).default({}),
+    createdAt: isoDateTimeSchema.optional(),
+    updatedAt: isoDateTimeSchema.optional(),
   })
   .strict();
 export type ProtocolWebhookDelivery = z.infer<
