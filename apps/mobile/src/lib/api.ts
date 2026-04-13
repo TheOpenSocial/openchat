@@ -9,7 +9,11 @@ import {
   buildChatThreadDetail,
   buildChatThreadSummaries,
 } from "./chat-threads";
-import type { ProtocolManifest } from "@opensocial/protocol-types";
+import {
+  buildProtocolAppRegistrationRequest,
+  createProtocolClient,
+  type ProtocolAppRegistrationRequestInput,
+} from "@opensocial/protocol-client";
 
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 type RequestQueryValue = string | number | boolean | null | undefined;
@@ -712,6 +716,10 @@ const useLocalApiInDev =
 export const API_BASE_URL =
   normalizeExpoPublicApiBaseUrl(process.env.EXPO_PUBLIC_API_BASE_URL) ??
   (__DEV__ && useLocalApiInDev ? devApiBase : REMOTE_API_BASE_URL);
+
+const protocolClient = createProtocolClient({
+  request: (path, init) => fetch(`${API_BASE_URL}${path}`, init),
+});
 
 let refreshInFlight: Promise<SessionTokens> | null = null;
 let authLifecycleHandlers: AuthLifecycleHandlers = {};
@@ -1756,13 +1764,29 @@ export const api = {
       accessToken,
     );
   },
-  getProtocolManifest(accessToken?: string) {
-    return request<ProtocolManifest>(
-      "GET",
-      "/protocol/manifest",
-      undefined,
-      accessToken,
-    );
+  getProtocolManifest() {
+    return protocolClient.getManifest();
+  },
+  getProtocolDiscovery() {
+    return protocolClient.getDiscovery();
+  },
+  registerProtocolApp(input: ProtocolAppRegistrationRequestInput) {
+    return protocolClient.registerApp(input);
+  },
+  listProtocolWebhooks(appId: string, appToken: string) {
+    return protocolClient.listWebhooks(appId, appToken);
+  },
+  createProtocolWebhook(
+    appId: string,
+    appToken: string,
+    payload: Parameters<typeof protocolClient.createWebhook>[2],
+  ) {
+    return protocolClient.createWebhook(appId, appToken, payload);
+  },
+  buildProtocolAppRegistrationRequest(
+    input: ProtocolAppRegistrationRequestInput,
+  ) {
+    return buildProtocolAppRegistrationRequest(input);
   },
   getUserIntentExplanation(intentId: string, accessToken?: string) {
     return request<UserIntentExplanation>(

@@ -226,6 +226,42 @@ export const webhookSubscriptionSchema = z
   .strict();
 export type WebhookSubscription = z.infer<typeof webhookSubscriptionSchema>;
 
+export const webhookSubscriptionCreateSchema = z
+  .object({
+    targetUrl: urlSchema,
+    events: z.array(eventNameSchema).min(1),
+    resources: z.array(resourceNameSchema).default([]),
+    deliveryMode: webhookDeliveryModeSchema.default("json"),
+    secretRef: z.string().min(1).max(200).optional(),
+    retryPolicy: webhookRetryPolicySchema.default({
+      maxAttempts: 8,
+      backoffMs: 1000,
+      maxBackoffMs: 60000,
+    }),
+    metadata: z.record(z.string(), z.unknown()).default({}),
+  })
+  .strict();
+export type WebhookSubscriptionCreate = z.infer<
+  typeof webhookSubscriptionCreateSchema
+>;
+
+export const webhookSubscriptionUpdateSchema = z
+  .object({
+    subscriptionId: identifierSchema,
+    targetUrl: urlSchema.optional(),
+    events: z.array(eventNameSchema).optional(),
+    resources: z.array(resourceNameSchema).optional(),
+    status: webhookSubscriptionStatusSchema.optional(),
+    deliveryMode: webhookDeliveryModeSchema.optional(),
+    secretRef: z.string().min(1).max(200).optional().nullable(),
+    retryPolicy: webhookRetryPolicySchema.optional(),
+    metadata: z.record(z.string(), z.unknown()).optional(),
+  })
+  .strict();
+export type WebhookSubscriptionUpdate = z.infer<
+  typeof webhookSubscriptionUpdateSchema
+>;
+
 export const appRegistrationStatusValues = [
   "draft",
   "active",
@@ -276,6 +312,56 @@ export const appRegistrationSchema = z
   })
   .strict();
 export type AppRegistration = z.infer<typeof appRegistrationSchema>;
+
+export const appRegistrationCreateSchema = z
+  .object({
+    name: z.string().min(1).max(120),
+    summary: z.string().min(1).max(280).optional(),
+    description: z.string().max(2000).optional(),
+    kind: appRegistrationKindSchema.default("web"),
+    ownerUserId: uuidSchema.optional(),
+    homepageUrl: urlSchema.optional(),
+    iconUrl: urlSchema.optional(),
+    logoUrl: urlSchema.optional(),
+    publicKey: z.string().min(32).optional(),
+    redirectUris: z.array(urlSchema).default([]),
+    webhookUrl: urlSchema.optional(),
+    webhookSecretRef: z.string().min(1).max(200).optional(),
+    capabilities: capabilityMatrixSchema.default({
+      scopes: [],
+      resources: [],
+      actions: [],
+      events: [],
+      capabilities: [],
+      canActAsAgent: false,
+      canManageWebhooks: false,
+    }),
+    metadata: z.record(z.string(), z.unknown()).default({}),
+  })
+  .strict();
+export type AppRegistrationCreate = z.infer<typeof appRegistrationCreateSchema>;
+
+export const appRegistrationUpdateSchema = z
+  .object({
+    appId: identifierSchema,
+    name: z.string().min(1).max(120).optional(),
+    summary: z.string().min(1).max(280).optional().nullable(),
+    description: z.string().max(2000).optional().nullable(),
+    kind: appRegistrationKindSchema.optional(),
+    status: appRegistrationStatusSchema.optional(),
+    ownerUserId: uuidSchema.optional().nullable(),
+    homepageUrl: urlSchema.optional().nullable(),
+    iconUrl: urlSchema.optional().nullable(),
+    logoUrl: urlSchema.optional().nullable(),
+    publicKey: z.string().min(32).optional().nullable(),
+    redirectUris: z.array(urlSchema).optional(),
+    webhookUrl: urlSchema.optional().nullable(),
+    webhookSecretRef: z.string().min(1).max(200).optional().nullable(),
+    capabilities: capabilityMatrixSchema.optional(),
+    metadata: z.record(z.string(), z.unknown()).optional(),
+  })
+  .strict();
+export type AppRegistrationUpdate = z.infer<typeof appRegistrationUpdateSchema>;
 
 export const manifestAgentModeValues = ["observe", "suggest", "act"] as const;
 export const manifestAgentModeSchema = z.enum(manifestAgentModeValues);
@@ -352,6 +438,44 @@ export type AppRegistrationRequest = z.infer<
   typeof appRegistrationRequestSchema
 >;
 export type ProtocolAppRegistrationRequest = AppRegistrationRequest;
+
+export const protocolAppCredentialSchema = z
+  .object({
+    appToken: z.string().min(16).max(256),
+  })
+  .strict();
+export type ProtocolAppCredential = z.infer<typeof protocolAppCredentialSchema>;
+
+export const protocolAppRegistrationResultSchema = z
+  .object({
+    registration: appRegistrationSchema,
+    manifest: manifestSchema,
+    issuedScopes: z.array(protocolScopeNameSchema).default([]),
+    issuedCapabilities: z.array(capabilityNameSchema).default([]),
+    credentials: protocolAppCredentialSchema,
+  })
+  .strict();
+export type ProtocolAppRegistrationResult = z.infer<
+  typeof protocolAppRegistrationResultSchema
+>;
+
+export const protocolDiscoveryDocumentSchema = z
+  .object({
+    manifest: manifestSchema,
+    events: z.array(
+      z
+        .object({
+          name: eventNameSchema,
+          resource: resourceNameSchema,
+          summary: z.string().min(1),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
+export type ProtocolDiscoveryDocument = z.infer<
+  typeof protocolDiscoveryDocumentSchema
+>;
 
 export const protocolEnvelopeSchema = z
   .object({

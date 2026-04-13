@@ -3,17 +3,21 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "pnpm --filter @opensocial/protocol-types build && pnpm --filter @opensocial/protocol-client build",
     "dev": "next dev -p 3002",
+    "prebuild": "pnpm --filter @opensocial/protocol-types build && pnpm --filter @opensocial/protocol-client build",
     "build": "next build",
     "start": "next start -p 3002",
     "lint": "eslint \"app/**/*.{ts,tsx}\" \"src/**/*.{ts,tsx}\" \"e2e/**/*.ts\" next.config.ts playwright.config.ts --max-warnings=0",
-    "pretypecheck": "pnpm --filter @opensocial/types build && next typegen",
+    "pretypecheck": "pnpm --filter @opensocial/types build && pnpm --filter @opensocial/protocol-types build && pnpm --filter @opensocial/protocol-client build && next typegen",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "pretest": "pnpm --filter @opensocial/protocol-types build && pnpm --filter @opensocial/protocol-client build",
     "test": "echo 'no tests yet for web app'",
     "test:e2e": "playwright test",
     "test:e2e:install": "playwright install chromium"
   },
   "dependencies": {
+    "@opensocial/protocol-client": "workspace:*",
     "@opensocial/types": "workspace:*",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

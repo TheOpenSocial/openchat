@@ -1,8 +1,10 @@
 import {
   capabilityMatrixSchema,
   manifestSchema,
+  protocolDiscoveryDocumentSchema,
   protocolIds,
   type CapabilityMatrix,
+  type ProtocolDiscoveryDocument,
   type ProtocolManifest,
 } from "@opensocial/protocol-types";
 import { protocolEventCatalog } from "@opensocial/protocol-events";
@@ -120,10 +122,10 @@ export function buildProtocolManifest(
 
 export function buildProtocolDiscoveryDocument(
   input: ProtocolManifestBuilderInput = {},
-) {
+) : ProtocolDiscoveryDocument {
   const manifest = buildProtocolManifest(input);
-  return {
+  return protocolDiscoveryDocumentSchema.parse({
     manifest,
     events: protocolEventCatalog,
-  };
+  });
 }

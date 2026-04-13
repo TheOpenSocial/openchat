@@ -22,6 +22,7 @@
     "test": "echo 'no tests yet for protocol-events package'"
   },
   "dependencies": {
+    "zod": "^4.3.6",
     "@opensocial/protocol-types": "workspace:*"
   }
 }

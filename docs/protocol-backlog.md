@@ -56,42 +56,35 @@ These packages should mirror the backend domain rather than inventing new abstra
 
 ### Now
 
-1. Write the v0 protocol spec from the current OpenSocial domain model.
-   - Define the core resources, actions, and events.
-   - Define which product modules are in scope and which are explicitly excluded.
-   - Establish the namespace rules for core events and third-party extensions.
+1. Define the protocol v0 contract for external apps.
+   - Confirm the core resources: identity, profile, intent, request, connection, chat, circle, notification, agent thread, and realtime event.
+   - Explicitly exclude posts, follows, feeds, likes, and other generic social primitives.
+   - Lock the namespace rules for core events versus third-party extensions.
 
-2. Extract shared protocol types from the application into package-owned contracts.
-   - Identity and profile types
-   - Intent and request types
-   - Chat and message types
-   - Notification and realtime event types
-   - Capability and auth-scoped app types
+2. Define app registration and capability manifests.
+   - App identity and ownership
+   - Redirect URIs and callback URLs
+   - Client credentials or public keys
+   - Requested scopes and capability grants
+   - Allowed integration surfaces for read, write, and event consumption
 
-3. Define the third-party app registration model.
-   - App identity
-   - Redirect URIs
-   - Client credentials / public keys
-   - Requested scopes
-   - Allowed callback/webhook URLs
-   - Capability manifest
-
-4. Define the server-side capability enforcement model.
+3. Define scope enforcement and auditability.
    - User-delegated scopes
    - App-scoped permissions
    - Agent-scoped permissions
-   - Audit trail for actions taken by third parties
+   - Revocation and token lifecycle
+   - Audit trail for every third-party action
 
 ### Next
 
-5. Build the event delivery model for external consumers.
+4. Build the event delivery model for external consumers.
    - Webhook subscriptions
    - Event signatures
    - Retry policy
    - Replay from cursor
    - Delivery status tracking
 
-6. Define the external action APIs that third parties can call.
+5. Define the external action APIs that third parties can call.
    - Create/update intents
    - Accept/reject requests
    - Send chat messages
@@ -99,13 +92,13 @@ These packages should mirror the backend domain rather than inventing new abstra
    - Publish notifications where allowed
    - Register agent activity where allowed
 
-7. Add frontend wiring for protocol-aware clients.
+6. Add frontend wiring for protocol-aware clients.
    - Shared protocol client package for mobile/web
    - Typed API wrappers for protocol resources
    - Event stream consumption in the app shell
    - UI surfaces that can reflect third-party actions and inbound events
 
-8. Add third-party agent integration support.
+7. Add third-party agent integration support.
    - Agent registration
    - Event subscriptions by family
    - Scoped action execution
@@ -139,14 +132,13 @@ These packages should mirror the backend domain rather than inventing new abstra
 
 ## Backend Tasks
 
-- Define protocol resources in the backend around the real product domain.
-- Create an internal protocol layer that maps cleanly onto the existing modules.
-- Add app registration persistence.
-- Add scope and capability checks for every external action.
-- Add signed webhook delivery with retry and replay support.
-- Add event cursors and durable replay mechanics.
+- Define the v0 protocol resource and event vocabulary.
+- Add app registration persistence and capability manifests.
+- Add scope checks for every external action path.
 - Add audit logging for all third-party and agent actions.
 - Add explicit deny rules for unsupported primitives like posts and follows.
+- Add signed webhook delivery with retry and replay support.
+- Add event cursors and durable replay mechanics.
 
 ## Auth and App Registration Tasks
 
@@ -196,10 +188,8 @@ These packages should mirror the backend domain rather than inventing new abstra
 
 ## Immediate Execution Order
 
-1. Finalize the protocol resource and event vocabulary.
-2. Extract shared types into protocol packages.
-3. Add app registration, scopes, and capability enforcement.
-4. Add webhooks and replay.
-5. Wire the frontend to the protocol client package.
-6. Add third-party agent support.
-
+1. Finalize protocol resources, event names, and exclusions.
+2. Add app registration, capability manifests, and scope enforcement.
+3. Add webhook subscriptions, signatures, and replay.
+4. Wire the frontend to the protocol client package.
+5. Add external action APIs and agent support.

@@ -165,6 +165,9 @@ importers:
       '@opensocial/openai':
         specifier: workspace:*
         version: link:../../packages/openai
+      '@opensocial/protocol-events':
+        specifier: workspace:*
+        version: link:../../packages/protocol-events
       '@opensocial/protocol-server':
         specifier: workspace:*
         version: link:../../packages/protocol-server
@@ -274,6 +277,9 @@ importers:
       '@expo/vector-icons':
         specifier: ^15.1.1
         version: 15.1.1(expo-font@55.0.4(expo@55.0.8)(react-native@0.83.2(@babel/core@7.29.0)(@react-native/metro-config@0.84.1(@babel/core@7.29.0))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3))(react-native@0.83.2(@babel/core@7.29.0)(@react-native/metro-config@0.84.1(@babel/core@7.29.0))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3)
+      '@opensocial/protocol-client':
+        specifier: workspace:*
+        version: link:../../packages/protocol-client
       '@opensocial/protocol-types':
         specifier: workspace:*
         version: link:../../packages/protocol-types
@@ -389,6 +395,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@opensocial/protocol-client':
+        specifier: workspace:*
+        version: link:../../packages/protocol-client
       '@opensocial/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -486,6 +495,9 @@ importers:
       '@opensocial/protocol-types':
         specifier: workspace:*
         version: link:../protocol-types
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
 
   packages/protocol-server:
     dependencies:

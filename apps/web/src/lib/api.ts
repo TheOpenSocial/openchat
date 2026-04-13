@@ -4,6 +4,11 @@ import {
   saveStoredSession,
 } from "./session";
 import { webEnv } from "./env";
+import {
+  buildProtocolAppRegistrationRequest,
+  createProtocolClient,
+  type ProtocolAppRegistrationRequestInput,
+} from "@opensocial/protocol-client";
 
 export interface SessionTokens {
   accessToken: string;
@@ -362,6 +367,10 @@ type RequestOptions = {
 };
 
 export const API_BASE_URL = webEnv.apiBaseUrl;
+
+const protocolClient = createProtocolClient({
+  request: (path, init) => fetch(`${API_BASE_URL}${path}`, init),
+});
 
 let refreshInFlight: Promise<SessionTokens> | null = null;
 let authLifecycleHandlers: AuthLifecycleHandlers = {};
@@ -836,6 +845,30 @@ export const api = {
         ? { headers: { "idempotency-key": options.idempotencyKey } }
         : {}),
     });
+  },
+  getProtocolManifest() {
+    return protocolClient.getManifest();
+  },
+  getProtocolDiscovery() {
+    return protocolClient.getDiscovery();
+  },
+  registerProtocolApp(input: ProtocolAppRegistrationRequestInput) {
+    return protocolClient.registerApp(input);
+  },
+  listProtocolWebhooks(appId: string, appToken: string) {
+    return protocolClient.listWebhooks(appId, appToken);
+  },
+  createProtocolWebhook(
+    appId: string,
+    appToken: string,
+    payload: Parameters<typeof protocolClient.createWebhook>[2],
+  ) {
+    return protocolClient.createWebhook(appId, appToken, payload);
+  },
+  buildProtocolAppRegistrationRequest(
+    input: ProtocolAppRegistrationRequestInput,
+  ) {
+    return buildProtocolAppRegistrationRequest(input);
   },
   replaceInterests(
     userId: string,
