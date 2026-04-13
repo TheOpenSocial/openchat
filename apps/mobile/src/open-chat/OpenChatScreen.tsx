@@ -203,11 +203,43 @@ export function OpenChatScreen({
       return true;
     });
 
-    if (!homeSummary || dedupedMessages.length <= 5) {
+    if (!homeSummary) {
       return dedupedMessages;
     }
 
-    return dedupedMessages.slice(-5);
+    const lastUserIndex = [...dedupedMessages]
+      .map((message) => message.role)
+      .lastIndexOf("user");
+
+    if (lastUserIndex < 0) {
+      return dedupedMessages.slice(-1);
+    }
+
+    const recentUserMessage = dedupedMessages[lastUserIndex];
+    const recentAgentReply =
+      dedupedMessages
+        .slice(lastUserIndex + 1)
+        .filter(
+          (message) =>
+            message.role === "agent" ||
+            message.role === "system" ||
+            message.role === "error",
+        )
+        .at(-1) ??
+      dedupedMessages
+        .slice(0, lastUserIndex)
+        .filter(
+          (message) =>
+            message.role === "agent" ||
+            message.role === "system" ||
+            message.role === "error",
+        )
+        .at(-1) ??
+      null;
+
+    return recentAgentReply
+      ? [recentUserMessage, recentAgentReply]
+      : [recentUserMessage];
   }, [homeSummary, messages]);
   const hasTranscriptMessages = filteredMessages.length > 0;
   const seedPromptBody = t("homeAgentSeedPrompt", locale).trim();

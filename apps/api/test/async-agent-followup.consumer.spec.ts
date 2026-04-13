@@ -108,12 +108,12 @@ describe("AsyncAgentFollowupConsumer", () => {
     );
     expect(agentService.createAgentMessage).toHaveBeenCalledWith(
       "thread-latest",
-      expect.stringContaining("Quick update"),
+      expect.stringContaining("1 accepted and 1 still active"),
     );
     expect(notificationsService.createInAppNotification).toHaveBeenCalledWith(
       "11111111-1111-4111-8111-111111111111",
       "agent_update",
-      expect.stringContaining("Quick update"),
+      expect.stringContaining("1 accepted and 1 still active"),
     );
   });
 

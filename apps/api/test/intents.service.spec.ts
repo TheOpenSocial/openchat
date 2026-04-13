@@ -920,7 +920,7 @@ describe("IntentsService", () => {
     expect(notificationsService.createInAppNotification).toHaveBeenCalledWith(
       "11111111-1111-4111-8111-111111111111",
       "agent_update",
-      expect.stringContaining("The fastest next move"),
+      expect.stringContaining("Best next move"),
     );
     expect(notificationQueue.add).toHaveBeenCalledWith(
       "AsyncAgentFollowup",
@@ -968,7 +968,7 @@ describe("IntentsService", () => {
     expect(message).toContain("tennis");
     expect(message).toContain("widen timing");
     expect(message).toContain("1:1 or a small group");
-    expect(message).toContain("I’m still searching in the background");
+    expect(message).toContain("Search is still active");
   });
 
   it("reuses delayed retry idempotency keys across repeated no-candidate passes", async () => {
@@ -1141,7 +1141,7 @@ describe("IntentsService", () => {
     expect(notificationsService.createInAppNotification).toHaveBeenCalledWith(
       "11111111-1111-4111-8111-111111111111",
       "agent_update",
-      expect.stringContaining("The fastest next move"),
+      expect.stringContaining("Best next move"),
     );
     expect(notificationQueue.add).not.toHaveBeenCalledWith(
       "AsyncAgentFollowup",
