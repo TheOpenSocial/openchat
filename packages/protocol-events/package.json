@@ -1,0 +1,27 @@
+{
+  "name": "@opensocial/protocol-events",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "prebuild": "pnpm --filter @opensocial/protocol-types build",
+    "build": "tsc -p tsconfig.json",
+    "pretypecheck": "pnpm --filter @opensocial/protocol-types build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint \"src/**/*.ts\" --max-warnings=0",
+    "pretest": "pnpm --filter @opensocial/protocol-types build",
+    "test": "echo 'no tests yet for protocol-events package'"
+  },
+  "dependencies": {
+    "@opensocial/protocol-types": "workspace:*"
+  }
+}

@@ -9,6 +9,7 @@ import {
   buildChatThreadDetail,
   buildChatThreadSummaries,
 } from "./chat-threads";
+import type { ProtocolManifest } from "@opensocial/protocol-types";
 
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 type RequestQueryValue = string | number | boolean | null | undefined;
@@ -1751,6 +1752,14 @@ export const api = {
     return request<ExperienceActivitySummaryResponse>(
       "GET",
       `/experience/${userId}/activity-summary`,
+      undefined,
+      accessToken,
+    );
+  },
+  getProtocolManifest(accessToken?: string) {
+    return request<ProtocolManifest>(
+      "GET",
+      "/protocol/manifest",
       undefined,
       accessToken,
     );

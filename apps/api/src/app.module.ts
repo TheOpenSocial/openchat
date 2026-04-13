@@ -30,6 +30,7 @@ import { SearchModule } from "./search/search.module.js";
 import { OnboardingModule } from "./onboarding/onboarding.module.js";
 import { RuntimeModule } from "./runtime/runtime.module.js";
 import { ExperienceModule } from "./experience/experience.module.js";
+import { ProtocolModule } from "./protocol/protocol.module.js";
 import { WaitlistModule } from "./waitlist/waitlist.module.js";
 
 @Module({
@@ -68,6 +69,7 @@ import { WaitlistModule } from "./waitlist/waitlist.module.js";
     OnboardingModule,
     RuntimeModule,
     ExperienceModule,
+    ProtocolModule,
     WaitlistModule,
   ],
   providers: [
