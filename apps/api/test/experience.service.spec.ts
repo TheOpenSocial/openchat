@@ -183,4 +183,46 @@ describe("ExperienceService", () => {
       targetChatId: "chat-accepted-1",
     });
   });
+
+  it("labels protocol-originated notifications as integration updates", async () => {
+    const { service } = createService({
+      prisma: {
+        notification: {
+          count: vi.fn().mockResolvedValue(1),
+          findMany: vi.fn().mockResolvedValue([
+            {
+              id: "notif-protocol-1",
+              body: "A recurring circle is active.",
+              type: "agent_update",
+              channel: "in_app",
+              isRead: false,
+              metadata: {
+                provenance: {
+                  source: "protocol",
+                  action: "circle.create",
+                },
+              },
+              createdAt: new Date("2026-04-13T00:00:00.000Z"),
+            },
+          ]),
+        },
+        intentRequest: {
+          findFirst: vi.fn().mockResolvedValue(null),
+        },
+        chat: {
+          findFirst: vi.fn().mockResolvedValue(null),
+        },
+      },
+    });
+
+    const summary = await service.getActivitySummary(USER_ID);
+
+    expect(summary.sections.updates[0]).toEqual(
+      expect.objectContaining({
+        eyebrow: "Integration",
+        title: "Circle created",
+        body: "A recurring circle is active.",
+      }),
+    );
+  });
 });

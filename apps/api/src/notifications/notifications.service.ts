@@ -8,6 +8,7 @@ import {
 import { NotificationType } from "@opensocial/types";
 import { Queue } from "bullmq";
 import { randomUUID } from "node:crypto";
+import type { Prisma } from "@prisma/client";
 import { AnalyticsService } from "../analytics/analytics.service.js";
 import { getLocalHour } from "../common/timezone-scheduling.js";
 import {
@@ -76,6 +77,7 @@ export class NotificationsService {
     recipientUserId: string,
     type: NotificationType,
     body: string,
+    metadata?: Record<string, unknown>,
   ) {
     const dedupeWindowStart = new Date(Date.now() - 5 * 60_000);
     const duplicate = await this.prisma.notification.findFirst({
@@ -97,6 +99,9 @@ export class NotificationsService {
         recipientUserId,
         type,
         body,
+        ...(metadata
+          ? { metadata: metadata as unknown as Prisma.InputJsonValue }
+          : {}),
         channel,
       },
     });

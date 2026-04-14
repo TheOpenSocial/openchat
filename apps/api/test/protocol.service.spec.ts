@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { AppRegistrationRequest } from "@opensocial/protocol-types";
 import { ProtocolService } from "../src/protocol/protocol.service.js";
 import { ProtocolWebhookDeliveryWorkerService } from "../src/protocol/protocol-webhook-delivery-worker.service.js";
@@ -663,6 +663,14 @@ function createRecurringCirclesServiceStub() {
   };
 }
 
+function createNotificationsServiceStub() {
+  return {
+    createInAppNotification: vi.fn().mockResolvedValue({
+      id: "00000000-0000-4000-8000-000000000108",
+    }),
+  };
+}
+
 function createProtocolService() {
   return new ProtocolService(
     createPrismaStub() as any,
@@ -673,6 +681,7 @@ function createProtocolService() {
     createInboxServiceStub() as any,
     createChatsServiceStub() as any,
     createRecurringCirclesServiceStub() as any,
+    createNotificationsServiceStub() as any,
   );
 }
 
@@ -1025,7 +1034,18 @@ describe("ProtocolService", () => {
   });
 
   it("invokes protocol actions after a delegated grant is present", async () => {
-    const service = createProtocolService();
+    const notificationsService = createNotificationsServiceStub();
+    const service = new ProtocolService(
+      createPrismaStub() as any,
+      createDeliveryWorkerStub() as any,
+      createDeliveryRunnerStub() as any,
+      createProtocolQueueStub() as any,
+      createIntentsServiceStub() as any,
+      createInboxServiceStub() as any,
+      createChatsServiceStub() as any,
+      createRecurringCirclesServiceStub() as any,
+      notificationsService as any,
+    );
     const registration = await service.registerApp(createRegistrationPayload());
     await service.createAppGrant(
       "partner.alpha",
@@ -1131,6 +1151,9 @@ describe("ProtocolService", () => {
     expect(createdCircle.action).toBe("circle.create");
     expect(joinedCircle.action).toBe("circle.join");
     expect(leftCircle.action).toBe("circle.leave");
+    expect(notificationsService.createInAppNotification).toHaveBeenCalledTimes(
+      3,
+    );
   });
 
   it("runs due deliveries through the app-scoped runner endpoint", async () => {
@@ -1159,6 +1182,8 @@ describe("ProtocolService", () => {
       createIntentsServiceStub() as any,
       createInboxServiceStub() as any,
       createChatsServiceStub() as any,
+      createRecurringCirclesServiceStub() as any,
+      createNotificationsServiceStub() as any,
     );
     const seededRegistration = await seeded.registerApp(
       createRegistrationPayload(),
@@ -1205,6 +1230,8 @@ describe("ProtocolService", () => {
       createIntentsServiceStub() as any,
       createInboxServiceStub() as any,
       createChatsServiceStub() as any,
+      createRecurringCirclesServiceStub() as any,
+      createNotificationsServiceStub() as any,
     );
     const registration = await service.registerApp(createRegistrationPayload());
     await prisma.$executeRawUnsafe(
@@ -1264,6 +1291,8 @@ describe("ProtocolService", () => {
       createIntentsServiceStub() as any,
       createInboxServiceStub() as any,
       createChatsServiceStub() as any,
+      createRecurringCirclesServiceStub() as any,
+      createNotificationsServiceStub() as any,
     );
     const registration = await service.registerApp(createRegistrationPayload());
 
@@ -1317,6 +1346,8 @@ describe("ProtocolService", () => {
       createIntentsServiceStub() as any,
       createInboxServiceStub() as any,
       createChatsServiceStub() as any,
+      createRecurringCirclesServiceStub() as any,
+      createNotificationsServiceStub() as any,
     );
     const registration = await service.registerApp(createRegistrationPayload());
 
@@ -1343,6 +1374,8 @@ describe("ProtocolService", () => {
       createIntentsServiceStub() as any,
       createInboxServiceStub() as any,
       createChatsServiceStub() as any,
+      createRecurringCirclesServiceStub() as any,
+      createNotificationsServiceStub() as any,
     );
 
     const result = await service.dispatchGlobalDueWebhookDeliveries({

@@ -266,6 +266,7 @@ export class ExperienceService {
         type: true,
         channel: true,
         isRead: true,
+        metadata: true,
         createdAt: true,
       },
     });
@@ -341,13 +342,18 @@ export class ExperienceService {
           kind: "notification" as const,
           priority: notification.isRead
             ? 45
-            : notification.type === "chat_message"
-              ? 85
-              : notification.type === "request_accepted"
-                ? 82
-                : 70,
-          eyebrow: "System",
-          title: this.describeNotificationTitle(notification.type),
+            : this.isProtocolNotification(notification)
+              ? 78
+              : notification.type === "chat_message"
+                ? 85
+                : notification.type === "request_accepted"
+                  ? 82
+                  : 70,
+          eyebrow: this.describeNotificationEyebrow(notification),
+          title: this.describeNotificationTitle(
+            notification.type,
+            notification.metadata,
+          ),
           body: notification.body,
           type: notification.type,
           channel: notification.channel,
@@ -409,7 +415,20 @@ export class ExperienceService {
     };
   }
 
-  private describeNotificationTitle(type: string) {
+  private describeNotificationTitle(type: string, metadata?: unknown) {
+    const provenance = this.readNotificationProvenance(metadata);
+    if (provenance?.source === "protocol") {
+      switch (provenance.action) {
+        case "circle.create":
+          return "Circle created";
+        case "circle.join":
+          return "Circle updated";
+        case "circle.leave":
+          return "Circle membership changed";
+        default:
+          return "Integration update";
+      }
+    }
     switch (type) {
       case "request_created":
         return "New request";
@@ -422,6 +441,44 @@ export class ExperienceService {
       default:
         return "Update";
     }
+  }
+
+  private describeNotificationEyebrow(notification: {
+    type: string;
+    metadata?: unknown;
+  }) {
+    const provenance = this.readNotificationProvenance(notification.metadata);
+    if (provenance?.source === "protocol") {
+      return "Integration";
+    }
+    return "System";
+  }
+
+  private isProtocolNotification(notification: { metadata?: unknown }) {
+    return (
+      this.readNotificationProvenance(notification.metadata)?.source ===
+      "protocol"
+    );
+  }
+
+  private readNotificationProvenance(metadata: unknown): {
+    source?: string;
+    action?: string;
+  } | null {
+    if (!metadata || typeof metadata !== "object") {
+      return null;
+    }
+    const value = (metadata as { provenance?: unknown }).provenance;
+    if (!value || typeof value !== "object") {
+      return null;
+    }
+    const provenance = value as { source?: unknown; action?: unknown };
+    return {
+      source:
+        typeof provenance.source === "string" ? provenance.source : undefined,
+      action:
+        typeof provenance.action === "string" ? provenance.action : undefined,
+    };
   }
 
   private describeRequestBody(request: {

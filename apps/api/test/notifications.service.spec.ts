@@ -26,6 +26,46 @@ describe("NotificationsService", () => {
     expect(prisma.notification.create).not.toHaveBeenCalled();
   });
 
+  it("persists notification metadata when provided", async () => {
+    const prisma: any = {
+      notification: {
+        findFirst: vi.fn().mockResolvedValue(null),
+        create: vi
+          .fn()
+          .mockResolvedValue({ id: "notif-meta-1", channel: "in_app" }),
+      },
+      userPreference: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+    };
+
+    const service = new NotificationsService(prisma);
+    await service.createInAppNotification(
+      "user-1",
+      NotificationType.AGENT_UPDATE,
+      "Protocol-originated update",
+      {
+        provenance: {
+          source: "protocol",
+          action: "circle.create",
+        },
+      },
+    );
+
+    expect(prisma.notification.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          metadata: {
+            provenance: {
+              source: "protocol",
+              action: "circle.create",
+            },
+          },
+        }),
+      }),
+    );
+  });
+
   it("routes non-urgent notification to digest during quiet hours", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-21T01:30:00.000Z"));

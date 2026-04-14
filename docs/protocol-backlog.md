@@ -76,6 +76,7 @@ The protocol is no longer just a concept. The following pieces are already prese
 - First-party mobile and web settings surfaces now frame grants as delegated access and expose dead-letter replay controls.
 - First-party runtime and agent intent/request flows now have protocol-service call-through paths for the cleanest social actions.
 - First-party agent circle creation and circle membership actions now call through the protocol service instead of bypassing it.
+- Protocol-originated circle actions now emit provenance-backed user notifications, and first-party Activity can label them as integration updates without exposing protocol internals.
 
 Use this as the baseline for all next backlog items. Do not reintroduce generic social primitives like posts or follows.
 
@@ -256,4 +257,4 @@ These packages should mirror the backend domain rather than inventing new abstra
 3. Normalize protocol-backed first-party action paths beyond chat send, intent, request, and recurring-circle actions.
 4. Add operator/admin visibility for protocol lag, replay pressure, and token/grant audit usage.
 5. Add the next external action APIs and agent support beyond circles.
-6. Wire user-visible protocol events into first-party activity surfaces without exposing backend internals.
+6. Expand user-visible protocol events in first-party activity surfaces beyond circle notifications, without exposing backend internals.

@@ -14,6 +14,7 @@ import {
   buildProtocolDiscoveryDocument,
   buildProtocolManifest,
 } from "@opensocial/protocol-server";
+import { NotificationType } from "@opensocial/types";
 import {
   buildProtocolWebhookDelivery,
   protocolEventCatalog,
@@ -91,6 +92,7 @@ import {
 import { ChatsService } from "../chats/chats.service.js";
 import { InboxService } from "../inbox/inbox.service.js";
 import { IntentsService } from "../intents/intents.service.js";
+import { NotificationsService } from "../notifications/notifications.service.js";
 import { RecurringCirclesService } from "../recurring-circles/recurring-circles.service.js";
 import { ProtocolWebhookDeliveryRunnerService } from "./protocol-webhook-delivery-runner.service.js";
 import { ProtocolWebhookDeliveryWorkerService } from "./protocol-webhook-delivery-worker.service.js";
@@ -236,6 +238,8 @@ export class ProtocolService {
     @Optional() private readonly chatsService?: ChatsService,
     @Optional()
     private readonly recurringCirclesService?: RecurringCirclesService,
+    @Optional()
+    private readonly notificationsService?: NotificationsService,
   ) {}
 
   getManifest(): ProtocolManifest {
@@ -1940,6 +1944,16 @@ export class ProtocolService {
             : "app",
       },
     });
+    await this.emitProtocolNotification(
+      payload.actorUserId,
+      "A recurring circle is active.",
+      {
+        action: "circle.create",
+        resource: "circle",
+        circleId: circle.id,
+        actorAppId: context.actorAppId,
+      },
+    );
 
     return protocolCircleActionResultSchema.parse({
       action: "circle.create",
@@ -1983,6 +1997,19 @@ export class ProtocolService {
             : "app",
       },
     });
+    await this.emitProtocolNotification(
+      payload.memberUserId,
+      payload.memberUserId === payload.actorUserId
+        ? "Your recurring circle membership is active."
+        : "You were added to a recurring circle.",
+      {
+        action: "circle.join",
+        resource: "circle",
+        circleId: member.circleId,
+        actorAppId: context.actorAppId,
+        ownerUserId: payload.actorUserId,
+      },
+    );
 
     return protocolCircleActionResultSchema.parse({
       action: "circle.join",
@@ -2023,6 +2050,17 @@ export class ProtocolService {
             : "app",
       },
     });
+    await this.emitProtocolNotification(
+      payload.memberUserId,
+      "Your recurring circle membership changed.",
+      {
+        action: "circle.leave",
+        resource: "circle",
+        circleId: member.circleId,
+        actorAppId: context.actorAppId,
+        ownerUserId: payload.actorUserId,
+      },
+    );
 
     return protocolCircleActionResultSchema.parse({
       action: "circle.leave",
@@ -2033,6 +2071,27 @@ export class ProtocolService {
       memberUserId: payload.memberUserId,
       metadata: payload.metadata ?? {},
     });
+  }
+
+  private async emitProtocolNotification(
+    recipientUserId: string,
+    body: string,
+    provenance: Record<string, unknown>,
+  ) {
+    if (!this.notificationsService) {
+      return;
+    }
+    await this.notificationsService.createInAppNotification(
+      recipientUserId,
+      NotificationType.AGENT_UPDATE,
+      body,
+      {
+        provenance: {
+          source: "protocol",
+          ...provenance,
+        },
+      },
+    );
   }
 
   private issueScopes(

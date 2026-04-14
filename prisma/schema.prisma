@@ -534,6 +534,7 @@ model Notification {
   recipientUserId String   @map("recipient_user_id") @db.Uuid
   type            String
   body            String
+  metadata        Json?
   channel         String   @default("in_app")
   isRead          Boolean  @default(false) @map("is_read")
   createdAt       DateTime @default(now()) @map("created_at")
