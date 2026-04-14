@@ -1,5 +1,5 @@
 import { BullModule } from "@nestjs/bullmq";
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { ChatsModule } from "../chats/chats.module.js";
 import { InboxModule } from "../inbox/inbox.module.js";
 import { IntentsModule } from "../intents/intents.module.js";
@@ -13,7 +13,7 @@ import { ProtocolWebhookDeliveryWorkerService } from "./protocol-webhook-deliver
     BullModule.registerQueue({ name: "protocol-webhooks" }),
     IntentsModule,
     InboxModule,
-    ChatsModule,
+    forwardRef(() => ChatsModule),
   ],
   controllers: [ProtocolController],
   providers: [

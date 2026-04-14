@@ -1806,12 +1806,48 @@ export const api = {
   listProtocolGrants(appId: string, appToken: string) {
     return protocolClient.listGrants(appId, appToken);
   },
+  listProtocolConsentRequests(appId: string, appToken: string) {
+    return protocolClient.listConsentRequests(appId, appToken);
+  },
   createProtocolGrant(
     appId: string,
     appToken: string,
     payload: Parameters<typeof protocolClient.createGrant>[2],
   ) {
     return protocolClient.createGrant(appId, appToken, payload);
+  },
+  createProtocolConsentRequest(
+    appId: string,
+    appToken: string,
+    payload: Parameters<typeof protocolClient.createConsentRequest>[2],
+  ) {
+    return protocolClient.createConsentRequest(appId, appToken, payload);
+  },
+  approveProtocolConsentRequest(
+    appId: string,
+    appToken: string,
+    requestId: string,
+    payload: Parameters<typeof protocolClient.approveConsentRequest>[3],
+  ) {
+    return protocolClient.approveConsentRequest(
+      appId,
+      appToken,
+      requestId,
+      payload,
+    );
+  },
+  rejectProtocolConsentRequest(
+    appId: string,
+    appToken: string,
+    requestId: string,
+    payload: Parameters<typeof protocolClient.rejectConsentRequest>[3],
+  ) {
+    return protocolClient.rejectConsentRequest(
+      appId,
+      appToken,
+      requestId,
+      payload,
+    );
   },
   revokeProtocolGrant(
     appId: string,

@@ -319,6 +319,43 @@ export class ChatsService {
     return message;
   }
 
+  async getPersistedMessageForResponse(chatId: string, messageId: string) {
+    const message = await this.prisma.chatMessage.findFirst({
+      where: {
+        id: messageId,
+        chatId,
+      },
+      select: {
+        id: true,
+        chatId: true,
+        senderUserId: true,
+        body: true,
+        moderationState: true,
+        createdAt: true,
+        editedAt: true,
+        replyToMessageId: true,
+      },
+    });
+
+    if (!message) {
+      throw new NotFoundException("chat message not found");
+    }
+
+    const [hydrated] = await this.hydrateMessagesForThreadResponse(chatId, [
+      {
+        id: message.id,
+        senderUserId: message.senderUserId,
+        body: message.body,
+        moderationState: message.moderationState,
+        createdAt: message.createdAt,
+        editedAt: message.editedAt ?? null,
+        replyToMessageId: message.replyToMessageId ?? null,
+      },
+    ]);
+
+    return hydrated;
+  }
+
   async listMessages(
     chatId: string,
     limit = 50,

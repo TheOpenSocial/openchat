@@ -7,6 +7,9 @@ import {
   protocolAppUsageSummarySchema,
   protocolChatMessageActionResultSchema,
   protocolChatSendMessageActionSchema,
+  protocolAppConsentRequestCreateSchema,
+  protocolAppConsentRequestDecisionSchema,
+  protocolAppConsentRequestSchema,
   protocolAppScopeGrantCreateSchema,
   protocolAppScopeGrantRevokeSchema,
   protocolAppScopeGrantSchema,
@@ -35,6 +38,9 @@ import {
   type ProtocolAppScopeGrantCreate,
   type ProtocolAppScopeGrantRevoke,
   type ProtocolAppRegistrationResult,
+  type ProtocolAppConsentRequest,
+  type ProtocolAppConsentRequestCreate,
+  type ProtocolAppConsentRequestDecision,
   type ProtocolAppUsageSummary,
   type ProtocolChatMessageActionResult,
   type ProtocolChatSendMessageAction,
@@ -83,11 +89,32 @@ export type ProtocolClient = {
     appId: string,
     appToken: string,
   ) => Promise<ProtocolGrantRecord[]>;
+  listConsentRequests: (
+    appId: string,
+    appToken: string,
+  ) => Promise<ProtocolConsentRequestRecord[]>;
   createGrant: (
     appId: string,
     appToken: string,
     payload: ProtocolGrantCreateInput,
   ) => Promise<ProtocolGrantRecord>;
+  createConsentRequest: (
+    appId: string,
+    appToken: string,
+    payload: ProtocolConsentRequestCreateInput,
+  ) => Promise<ProtocolConsentRequestRecord>;
+  approveConsentRequest: (
+    appId: string,
+    appToken: string,
+    requestId: string,
+    payload: ProtocolConsentRequestDecisionInput,
+  ) => Promise<ProtocolConsentRequestRecord>;
+  rejectConsentRequest: (
+    appId: string,
+    appToken: string,
+    requestId: string,
+    payload: ProtocolConsentRequestDecisionInput,
+  ) => Promise<ProtocolConsentRequestRecord>;
   revokeGrant: (
     appId: string,
     appToken: string,
@@ -267,6 +294,10 @@ export type ProtocolDeliveryQueueInspection = {
 export type ProtocolGrantRecord = ProtocolAppScopeGrant;
 export type ProtocolGrantCreateInput = ProtocolAppScopeGrantCreate;
 export type ProtocolGrantRevokeInput = ProtocolAppScopeGrantRevoke;
+export type ProtocolConsentRequestRecord = ProtocolAppConsentRequest;
+export type ProtocolConsentRequestCreateInput = ProtocolAppConsentRequestCreate;
+export type ProtocolConsentRequestDecisionInput =
+  ProtocolAppConsentRequestDecision;
 export type ProtocolIntentCreateInput = ProtocolIntentCreateAction;
 export type ProtocolRequestSendInput = ProtocolIntentRequestSendAction;
 export type ProtocolRequestDecisionInput = ProtocolRequestDecisionAction;
@@ -356,6 +387,20 @@ export function createProtocolClient(
         .array()
         .parse(payload?.data ?? payload);
     },
+    async listConsentRequests(appId, appToken) {
+      const response = await transport.request(
+        `/protocol/apps/${appId}/consent-requests`,
+        {
+          headers: {
+            "x-protocol-app-token": appToken,
+          },
+        },
+      );
+      const payload = (await response.json()) as { data?: unknown } | undefined;
+      return protocolAppConsentRequestSchema
+        .array()
+        .parse(payload?.data ?? payload);
+    },
     async createGrant(appId, appToken, payload) {
       const requestPayload = protocolAppScopeGrantCreateSchema.parse(payload);
       const response = await transport.request(
@@ -392,6 +437,63 @@ export function createProtocolClient(
         | { data?: unknown }
         | undefined;
       return protocolAppScopeGrantSchema.parse(envelope?.data ?? envelope);
+    },
+    async createConsentRequest(appId, appToken, payload) {
+      const requestPayload =
+        protocolAppConsentRequestCreateSchema.parse(payload);
+      const response = await transport.request(
+        `/protocol/apps/${appId}/consent-requests`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-protocol-app-token": appToken,
+          },
+          body: JSON.stringify(requestPayload),
+        },
+      );
+      const envelope = (await response.json()) as
+        | { data?: unknown }
+        | undefined;
+      return protocolAppConsentRequestSchema.parse(envelope?.data ?? envelope);
+    },
+    async approveConsentRequest(appId, appToken, requestId, payload) {
+      const requestPayload =
+        protocolAppConsentRequestDecisionSchema.parse(payload);
+      const response = await transport.request(
+        `/protocol/apps/${appId}/consent-requests/${requestId}/approve`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-protocol-app-token": appToken,
+          },
+          body: JSON.stringify(requestPayload),
+        },
+      );
+      const envelope = (await response.json()) as
+        | { data?: unknown }
+        | undefined;
+      return protocolAppConsentRequestSchema.parse(envelope?.data ?? envelope);
+    },
+    async rejectConsentRequest(appId, appToken, requestId, payload) {
+      const requestPayload =
+        protocolAppConsentRequestDecisionSchema.parse(payload);
+      const response = await transport.request(
+        `/protocol/apps/${appId}/consent-requests/${requestId}/reject`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-protocol-app-token": appToken,
+          },
+          body: JSON.stringify(requestPayload),
+        },
+      );
+      const envelope = (await response.json()) as
+        | { data?: unknown }
+        | undefined;
+      return protocolAppConsentRequestSchema.parse(envelope?.data ?? envelope);
     },
     async rotateAppToken(appId, appToken, input) {
       const response = await transport.request(

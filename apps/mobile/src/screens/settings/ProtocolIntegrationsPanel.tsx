@@ -14,6 +14,9 @@ type ProtocolWebhookSummary = Awaited<
 type ProtocolScopeGrantRecord = Awaited<
   ReturnType<typeof api.listProtocolGrants>
 >[number];
+type ProtocolConsentRequestRecord = Awaited<
+  ReturnType<typeof api.listProtocolConsentRequests>
+>[number];
 type ProtocolUsageSummary = Awaited<
   ReturnType<typeof api.getProtocolUsageSummary>
 >;
@@ -64,6 +67,13 @@ export function ProtocolIntegrationsPanel() {
   const [grants, setGrants] = useState<ProtocolScopeGrantRecord[]>([]);
   const [grantsLoading, setGrantsLoading] = useState(false);
   const [grantsError, setGrantsError] = useState<string | null>(null);
+  const [consentRequests, setConsentRequests] = useState<
+    ProtocolConsentRequestRecord[]
+  >([]);
+  const [consentRequestsLoading, setConsentRequestsLoading] = useState(false);
+  const [consentRequestsError, setConsentRequestsError] = useState<
+    string | null
+  >(null);
   const [usageSummary, setUsageSummary] = useState<ProtocolUsageSummary | null>(
     null,
   );
@@ -89,12 +99,20 @@ export function ProtocolIntegrationsPanel() {
   );
   const [grantSubjectType, setGrantSubjectType] = useState("user");
   const [grantSubjectId, setGrantSubjectId] = useState("");
+  const [requestScope, setRequestScope] = useState("actions.invoke");
+  const [requestCapabilities, setRequestCapabilities] = useState(
+    "intent.write,request.write,chat.write",
+  );
+  const [requestSubjectType, setRequestSubjectType] = useState("user");
+  const [requestSubjectId, setRequestSubjectId] = useState("");
 
   const resetInspectionState = (options?: { clearToken?: boolean }) => {
     setWebhooks([]);
     setWebhooksError(null);
     setGrants([]);
     setGrantsError(null);
+    setConsentRequests([]);
+    setConsentRequestsError(null);
     setUsageSummary(null);
     setUsageError(null);
     setUsageNotice(null);
@@ -186,17 +204,145 @@ export function ProtocolIntegrationsPanel() {
 
     setGrantsLoading(true);
     setGrantsError(null);
+    setConsentRequestsError(null);
     try {
-      const nextGrants = await api.listProtocolGrants(
-        selectedAppId.trim(),
-        appToken.trim(),
-      );
-      setGrants(nextGrants);
+      const [nextGrantsResult, nextConsentRequestsResult] =
+        await Promise.allSettled([
+          api.listProtocolGrants(selectedAppId.trim(), appToken.trim()),
+          api.listProtocolConsentRequests(
+            selectedAppId.trim(),
+            appToken.trim(),
+          ),
+        ]);
+      if (nextGrantsResult.status === "fulfilled") {
+        setGrants(nextGrantsResult.value);
+      } else {
+        setGrants([]);
+        setGrantsError(
+          `Could not load grants: ${String(nextGrantsResult.reason)}`,
+        );
+      }
+      if (nextConsentRequestsResult.status === "fulfilled") {
+        setConsentRequests(nextConsentRequestsResult.value);
+        setConsentRequestsError(null);
+      } else {
+        setConsentRequests([]);
+        setConsentRequestsError(
+          `Could not load consent requests: ${String(
+            nextConsentRequestsResult.reason,
+          )}`,
+        );
+      }
     } catch (loadError) {
       setGrants([]);
+      setConsentRequests([]);
       setGrantsError(`Could not load grants: ${String(loadError)}`);
+      setConsentRequestsError(
+        `Could not load consent requests: ${String(loadError)}`,
+      );
     } finally {
       setGrantsLoading(false);
+    }
+  };
+
+  const createConsentRequest = async () => {
+    if (!selectedAppId.trim() || !appToken.trim()) {
+      setConsentRequestsError(
+        "Select an app and paste its token before creating a consent request.",
+      );
+      return;
+    }
+    setConsentRequestsLoading(true);
+    setConsentRequestsError(null);
+    try {
+      const created = await api.createProtocolConsentRequest(
+        selectedAppId.trim(),
+        appToken.trim(),
+        {
+          scope: requestScope as never,
+          capabilities: requestCapabilities
+            .split(",")
+            .map((value) => value.trim())
+            .filter(Boolean) as never,
+          subjectType: requestSubjectType as never,
+          subjectId: requestSubjectId.trim() || undefined,
+          metadata: { source: "mobile_settings_panel" },
+        },
+      );
+      setConsentRequests((current) => [
+        created,
+        ...current.filter((request) => request.requestId !== created.requestId),
+      ]);
+    } catch (createError) {
+      setConsentRequestsError(
+        `Could not create consent request: ${String(createError)}`,
+      );
+    } finally {
+      setConsentRequestsLoading(false);
+    }
+  };
+
+  const approveConsentRequest = async (requestId: string) => {
+    if (!selectedAppId.trim() || !appToken.trim()) {
+      setConsentRequestsError(
+        "Select an app and paste its token before approving.",
+      );
+      return;
+    }
+    setConsentRequestsLoading(true);
+    setConsentRequestsError(null);
+    try {
+      const updated = await api.approveProtocolConsentRequest(
+        selectedAppId.trim(),
+        appToken.trim(),
+        requestId,
+        {
+          metadata: { source: "mobile_settings_panel" },
+        },
+      );
+      setConsentRequests((current) =>
+        current.map((request) =>
+          request.requestId === requestId ? updated : request,
+        ),
+      );
+    } catch (approveError) {
+      setConsentRequestsError(
+        `Could not approve request: ${String(approveError)}`,
+      );
+    } finally {
+      setConsentRequestsLoading(false);
+    }
+  };
+
+  const rejectConsentRequest = async (requestId: string) => {
+    if (!selectedAppId.trim() || !appToken.trim()) {
+      setConsentRequestsError(
+        "Select an app and paste its token before rejecting.",
+      );
+      return;
+    }
+    setConsentRequestsLoading(true);
+    setConsentRequestsError(null);
+    try {
+      const updated = await api.rejectProtocolConsentRequest(
+        selectedAppId.trim(),
+        appToken.trim(),
+        requestId,
+        {
+          metadata: { source: "mobile_settings_panel" },
+        },
+      );
+      setConsentRequests((current) =>
+        current.map((request) =>
+          request.requestId === requestId ? updated : request,
+        ),
+      );
+    } catch (rejectError) {
+      setConsentRequestsError(
+        `Could not reject request: ${String(rejectError)}`,
+      );
+    } finally {
+      setConsentRequestsLoading(false);
     }
   };
 
@@ -764,6 +910,10 @@ export function ProtocolIntegrationsPanel() {
                 value={usageSummary.grantCounts.active}
               />
               <Metric
+                label="Pending requests"
+                value={usageSummary.consentRequestCounts.pending}
+              />
+              <Metric
                 label="Revoked grants"
                 value={usageSummary.grantCounts.revoked}
               />
@@ -953,6 +1103,145 @@ export function ProtocolIntegrationsPanel() {
             {grantsError}
           </Text>
         ) : null}
+
+        <View className="space-y-2 rounded-[24px] border border-hairline bg-surfaceMuted/50 px-3 py-3">
+          <Text className="text-[12px] font-semibold uppercase tracking-[0.16em] text-muted">
+            Pending consent requests
+          </Text>
+          <Text className="text-[13px] leading-6 text-muted">
+            Requests stay separate from active grants. Approving one resolves it
+            into a grant; rejecting leaves current grants untouched.
+          </Text>
+
+          <CalmTextField
+            autoCapitalize="none"
+            autoCorrect={false}
+            containerClassName="gap-2"
+            inputClassName="text-ink"
+            label="Permission scope"
+            onChangeText={setRequestScope}
+            placeholder="actions.invoke"
+            value={requestScope}
+          />
+          <CalmTextField
+            autoCapitalize="none"
+            autoCorrect={false}
+            containerClassName="gap-2"
+            inputClassName="text-ink"
+            label="Allowed capabilities"
+            onChangeText={setRequestCapabilities}
+            placeholder="intent.write,request.write,chat.write"
+            value={requestCapabilities}
+          />
+          <CalmTextField
+            autoCapitalize="none"
+            autoCorrect={false}
+            containerClassName="gap-2"
+            inputClassName="text-ink"
+            label="Subject kind"
+            onChangeText={setRequestSubjectType}
+            placeholder="user"
+            value={requestSubjectType}
+          />
+          <CalmTextField
+            autoCapitalize="none"
+            autoCorrect={false}
+            containerClassName="gap-2"
+            inputClassName="text-ink"
+            label="Subject id"
+            onChangeText={setRequestSubjectId}
+            placeholder="user uuid"
+            value={requestSubjectId}
+          />
+
+          <PrimaryButton
+            label={
+              consentRequestsLoading ? "Saving..." : "Request consent approval"
+            }
+            loading={consentRequestsLoading}
+            onPress={() => {
+              void createConsentRequest();
+            }}
+            variant="secondary"
+          />
+        </View>
+
+        {consentRequestsError ? (
+          <Text className="text-[13px] leading-6 text-[#fca5a5]">
+            {consentRequestsError}
+          </Text>
+        ) : null}
+
+        <View className="space-y-2">
+          <Text className="text-[12px] font-semibold uppercase tracking-[0.16em] text-muted">
+            Consent request ledger
+          </Text>
+          {consentRequests.length === 0 ? (
+            <Text className="text-[13px] text-muted">
+              {selectedApp
+                ? "No consent requests loaded yet."
+                : "Select an app above to inspect its consent requests."}
+            </Text>
+          ) : (
+            consentRequests.map((request) => (
+              <View
+                key={request.requestId}
+                className="gap-2 rounded-2xl border border-hairline bg-surfaceMuted/70 px-3 py-3"
+              >
+                <View className="flex-row items-start justify-between gap-3">
+                  <View className="min-w-0 flex-1">
+                    <Text className="text-[13px] font-medium text-ink">
+                      {request.scope}
+                    </Text>
+                    <Text className="text-[12px] text-muted">
+                      {request.subjectType} · {request.subjectId}
+                    </Text>
+                  </View>
+                  <Text className="text-[11px] uppercase tracking-[0.16em] text-muted">
+                    {request.status}
+                  </Text>
+                </View>
+                <Text className="text-[12px] text-muted">
+                  {request.requestId}
+                </Text>
+                <View className="flex-row flex-wrap gap-2">
+                  <Chip
+                    label={`requested ${request.requestedAt.slice(0, 10)}`}
+                  />
+                  {request.approvedAt ? (
+                    <Chip
+                      label={`approved ${request.approvedAt.slice(0, 10)}`}
+                    />
+                  ) : null}
+                  {request.rejectedAt ? (
+                    <Chip
+                      label={`rejected ${request.rejectedAt.slice(0, 10)}`}
+                    />
+                  ) : null}
+                </View>
+                {request.status === "pending" ? (
+                  <View className="flex-row flex-wrap gap-2">
+                    <PrimaryButton
+                      label="Approve"
+                      loading={consentRequestsLoading}
+                      onPress={() => {
+                        void approveConsentRequest(request.requestId);
+                      }}
+                    />
+                    <PrimaryButton
+                      label="Reject"
+                      loading={consentRequestsLoading}
+                      onPress={() => {
+                        void rejectConsentRequest(request.requestId);
+                      }}
+                      variant="secondary"
+                    />
+                  </View>
+                ) : null}
+              </View>
+            ))
+          )}
+        </View>
 
         <View className="space-y-2">
           <Text className="text-[12px] font-semibold uppercase tracking-[0.16em] text-muted">

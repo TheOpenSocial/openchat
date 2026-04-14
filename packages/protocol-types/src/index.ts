@@ -8,6 +8,8 @@ export const protocolIds = {
   manifest: `${protocolNamespace}.manifest.${protocolVersion}` as const,
   appRegistration:
     `${protocolNamespace}.app-registration.${protocolVersion}` as const,
+  appConsentRequest:
+    `${protocolNamespace}.app-consent-request.${protocolVersion}` as const,
   webhookSubscription:
     `${protocolNamespace}.webhook-subscription.${protocolVersion}` as const,
 } as const;
@@ -16,6 +18,7 @@ export const protocolIdValues = [
   protocolIds.protocol,
   protocolIds.manifest,
   protocolIds.appRegistration,
+  protocolIds.appConsentRequest,
   protocolIds.webhookSubscription,
 ] as const;
 
@@ -48,6 +51,7 @@ export const resourceNameValues = [
   "notification",
   "agent_thread",
   "app_registration",
+  "app_consent_request",
   "webhook_subscription",
   "manifest",
 ] as const;
@@ -509,6 +513,15 @@ export const protocolAppUsageSummarySchema = z
         revoked: z.number().int().min(0),
       })
       .strict(),
+    consentRequestCounts: z
+      .object({
+        pending: z.number().int().min(0),
+        approved: z.number().int().min(0),
+        rejected: z.number().int().min(0),
+        cancelled: z.number().int().min(0),
+        expired: z.number().int().min(0),
+      })
+      .strict(),
     deliveryCounts: z
       .object({
         queued: z.number().int().min(0),
@@ -586,6 +599,20 @@ export const protocolGrantStatusValues = ["active", "revoked"] as const;
 export const protocolGrantStatusSchema = z.enum(protocolGrantStatusValues);
 export type ProtocolGrantStatus = z.infer<typeof protocolGrantStatusSchema>;
 
+export const protocolConsentRequestStatusValues = [
+  "pending",
+  "approved",
+  "rejected",
+  "cancelled",
+  "expired",
+] as const;
+export const protocolConsentRequestStatusSchema = z.enum(
+  protocolConsentRequestStatusValues,
+);
+export type ProtocolConsentRequestStatus = z.infer<
+  typeof protocolConsentRequestStatusSchema
+>;
+
 export const protocolAppScopeGrantSchema = z
   .object({
     grantId: uuidSchema,
@@ -604,6 +631,59 @@ export const protocolAppScopeGrantSchema = z
   })
   .strict();
 export type ProtocolAppScopeGrant = z.infer<typeof protocolAppScopeGrantSchema>;
+
+export const protocolAppConsentRequestSchema = z
+  .object({
+    protocolId: z.literal(protocolIds.appConsentRequest),
+    requestId: uuidSchema,
+    appId: identifierSchema,
+    scope: protocolScopeNameSchema,
+    capabilities: z.array(capabilityNameSchema).default([]),
+    subjectType: protocolGrantSubjectTypeSchema.default("app"),
+    subjectId: z.string().min(1).max(200),
+    status: protocolConsentRequestStatusSchema.default("pending"),
+    requestedByUserId: uuidSchema.optional().nullable(),
+    approvedByUserId: uuidSchema.optional().nullable(),
+    rejectedByUserId: uuidSchema.optional().nullable(),
+    approvedGrantId: uuidSchema.optional().nullable(),
+    requestedAt: isoDateTimeSchema,
+    approvedAt: isoDateTimeSchema.optional().nullable(),
+    rejectedAt: isoDateTimeSchema.optional().nullable(),
+    cancelledAt: isoDateTimeSchema.optional().nullable(),
+    expiredAt: isoDateTimeSchema.optional().nullable(),
+    metadata: z.record(z.string(), z.unknown()).default({}),
+    createdAt: isoDateTimeSchema,
+    updatedAt: isoDateTimeSchema,
+  })
+  .strict();
+export type ProtocolAppConsentRequest = z.infer<
+  typeof protocolAppConsentRequestSchema
+>;
+
+export const protocolAppConsentRequestCreateSchema = z
+  .object({
+    scope: protocolScopeNameSchema,
+    capabilities: z.array(capabilityNameSchema).default([]),
+    subjectType: protocolGrantSubjectTypeSchema.default("app"),
+    subjectId: z.string().min(1).max(200).optional(),
+    requestedByUserId: uuidSchema.optional(),
+    metadata: z.record(z.string(), z.unknown()).default({}),
+  })
+  .strict();
+export type ProtocolAppConsentRequestCreate = z.infer<
+  typeof protocolAppConsentRequestCreateSchema
+>;
+
+export const protocolAppConsentRequestDecisionSchema = z
+  .object({
+    approvedByUserId: uuidSchema.optional(),
+    rejectedByUserId: uuidSchema.optional(),
+    metadata: z.record(z.string(), z.unknown()).default({}),
+  })
+  .strict();
+export type ProtocolAppConsentRequestDecision = z.infer<
+  typeof protocolAppConsentRequestDecisionSchema
+>;
 
 export const protocolAppScopeGrantCreateSchema = z
   .object({

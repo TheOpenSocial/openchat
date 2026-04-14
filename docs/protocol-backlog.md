@@ -50,6 +50,7 @@ The protocol is no longer just a concept. The following pieces are already prese
 - The event log and replay cursor state are persisted.
 - The protocol manifest, discovery document, and event catalog are exposed from the protocol service.
 - Scoped grants are persisted and exposed through `protocol_app_scope_grants` with `subjectType=user|app|service|agent`.
+- A separate consent-request resource now exists with list/create/approve/reject flows, so approval lifecycle stays separate from active enforcement grants.
 - The first external action surface is now live for:
   - `intent.create`
   - `request.send`
@@ -135,11 +136,11 @@ These packages should mirror the backend domain rather than inventing new abstra
    - Audit trail for credential use
    - First-party write controls and visibility into token/grant audit state
 
-7. Finish consent and scope grant enforcement for third-party access.
-   - Enforce `protocol_app_scope_grants` against app, user, service, and agent subjects.
-   - Support user consent for delegated actions.
-   - Support capability approval for sensitive actions.
-   - Support agent approval flows where human review is required.
+7. Expand consent-request enforcement for third-party access.
+   - Resolve consent requests into active grants without mixing request lifecycle into grant status.
+   - Support approval and rejection flows with audit history.
+   - Surface pending consent requests in first-party settings on mobile and web.
+   - Extend request lifecycles beyond manual approve/reject only if a real partner flow needs it.
    - Deny unsupported primitives like posts and follows.
 
 8. Define the external action APIs that third parties can call.
@@ -150,12 +151,11 @@ These packages should mirror the backend domain rather than inventing new abstra
    - Publish notifications where allowed
    - Register agent activity where allowed
 
-9. Add frontend wiring for protocol-aware clients.
-   - Shared protocol client package for mobile/web
-   - Typed API wrappers for protocol resources
-   - Event stream consumption in the app shell
-   - UI surfaces that can reflect third-party actions and inbound events
-   - First-party surfaces that expose protocol state without exposing internals
+9. Expand frontend wiring for protocol-aware clients.
+   - Keep shared protocol client package and typed wrappers as the baseline.
+   - Add event stream consumption in the app shell where protocol events become user-visible.
+   - Tighten first-party surfaces that reflect third-party actions and inbound events.
+   - Expose protocol state without turning the UI into a developer console.
 
 10. Add third-party agent integration support.
    - Agent registration
@@ -220,8 +220,8 @@ These packages should mirror the backend domain rather than inventing new abstra
 
 - Add a shared protocol client package for mobile and web.
 - Wire the frontend to protocol-backed reads instead of app-specific stitched endpoints where possible.
-- Add UI affordances for third-party app activity, consent grants, and integrations.
-- Add writable token and grant controls to first-party protocol settings surfaces.
+- Add UI affordances for third-party app activity, consent requests, grants, and integrations.
+- Add writable token, consent, and grant controls to first-party protocol settings surfaces.
 - Add protocol-aware surfaces for external actions, event notifications, and agent activity.
 - Keep the current product shell focused on Home, Activity, Chats, and Profile.
 - Add protocol surfaces that are visible to users without turning the app into a developer console.
@@ -248,8 +248,8 @@ These packages should mirror the backend domain rather than inventing new abstra
 ## Immediate Execution Order
 
 1. Finalize protocol resources, event names, and exclusions.
-2. Finish consent and scoped grant enforcement on persisted app rows.
-3. Add the delivery worker with signatures, retry, and dead-letter handling.
-4. Tighten token management and the rotate/revoke lifecycle.
+2. Expand consent-request lifecycle and approval policy on persisted app rows.
+3. Normalize protocol-backed first-party action paths beyond chat send, intent, and request actions.
+4. Add operator/admin visibility for protocol lag, replay pressure, and token/grant audit usage.
 5. Add the next external action APIs and agent support.
-6. Wire the frontend to the protocol client package and protocol surfaces for user-visible integrations.
+6. Wire user-visible protocol events into first-party activity surfaces without exposing backend internals.

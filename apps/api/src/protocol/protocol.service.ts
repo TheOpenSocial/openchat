@@ -25,6 +25,9 @@ import {
   capabilityNameSchema,
   eventNameSchema,
   manifestSchema,
+  protocolAppConsentRequestCreateSchema,
+  protocolAppConsentRequestDecisionSchema,
+  protocolAppConsentRequestSchema,
   protocolAppUsageSummarySchema,
   protocolWebhookDeliveryGlobalDispatchResultSchema,
   protocolWebhookDeliveryAttemptSchema,
@@ -34,6 +37,7 @@ import {
   protocolAppScopeGrantCreateSchema,
   protocolAppScopeGrantRevokeSchema,
   protocolAppScopeGrantSchema,
+  protocolConsentRequestStatusSchema,
   protocolEventEnvelopeSchema,
   protocolIds,
   protocolIntentActionResultSchema,
@@ -52,6 +56,9 @@ import {
   type CapabilityName,
   type ProtocolChatSendMessageAction,
   type EventName,
+  type ProtocolAppConsentRequest,
+  type ProtocolAppConsentRequestCreate,
+  type ProtocolAppConsentRequestDecision,
   type ProtocolAppScopeGrant,
   type ProtocolAppScopeGrantCreate,
   type ProtocolAppScopeGrantRevoke,
@@ -174,6 +181,28 @@ type ProtocolAppScopeGrantRow = {
   updated_at: Date | string;
 };
 
+type ProtocolAppConsentRequestRow = {
+  id: string;
+  app_id: string;
+  scope: string;
+  capabilities: string[] | null;
+  subject_type: string;
+  subject_id: string | null;
+  status: string;
+  requested_by_user_id: string | null;
+  approved_by_user_id: string | null;
+  rejected_by_user_id: string | null;
+  approved_grant_id: string | null;
+  requested_at: Date | string;
+  approved_at: Date | string | null;
+  rejected_at: Date | string | null;
+  cancelled_at: Date | string | null;
+  expired_at: Date | string | null;
+  metadata: unknown;
+  created_at: Date | string;
+  updated_at: Date | string;
+};
+
 type RegisteredProtocolApp = {
   status: string;
   registration: AppRegistration;
@@ -259,6 +288,25 @@ export class ProtocolService {
     return rows.map((row) => this.mapGrantRow(row));
   }
 
+  async listAppConsentRequests(appId: string, appToken: string) {
+    const app = await this.requireAppAccess(appId, appToken, {
+      scopes: ["protocol.read"],
+      capabilities: ["app.read"],
+    });
+
+    const rows = await this.prisma.$queryRawUnsafe<
+      ProtocolAppConsentRequestRow[]
+    >(
+      `SELECT id, app_id, scope, capabilities, subject_type, subject_id, status, requested_by_user_id, approved_by_user_id, rejected_by_user_id, approved_grant_id, requested_at, approved_at, rejected_at, cancelled_at, expired_at, metadata, created_at, updated_at
+       FROM protocol_app_consent_requests
+       WHERE app_id = $1
+       ORDER BY created_at DESC`,
+      app.registration.appId,
+    );
+
+    return rows.map((row) => this.mapConsentRequestRow(row));
+  }
+
   async createAppGrant(
     appId: string,
     appToken: string,
@@ -270,44 +318,7 @@ export class ProtocolService {
     });
     const payload = protocolAppScopeGrantCreateSchema.parse(input);
     const now = new Date().toISOString();
-    const subjectType = protocolGrantSubjectTypeSchema.parse(
-      payload.subjectType,
-    );
-    const subjectId =
-      subjectType === "app"
-        ? payload.subjectId?.trim() || app.registration.appId
-        : payload.subjectId?.trim();
-
-    if (!subjectId) {
-      throw new ForbiddenException(`${subjectType} subjectId is required`);
-    }
-
-    const rows = await this.prisma.$queryRawUnsafe<ProtocolAppScopeGrantRow[]>(
-      `INSERT INTO protocol_app_scope_grants
-       (app_id, scope, capabilities, subject_type, subject_id, status, granted_by_user_id, granted_at, metadata, created_at, updated_at)
-       VALUES ($1, $2, $3::text[], $4, $5, 'active', $6::uuid, $7::timestamptz, $8::jsonb, $9::timestamptz, $10::timestamptz)
-       ON CONFLICT (app_id, scope, subject_type, subject_id)
-       DO UPDATE SET capabilities = EXCLUDED.capabilities,
-                     status = 'active',
-                     granted_by_user_id = EXCLUDED.granted_by_user_id,
-                     granted_at = EXCLUDED.granted_at,
-                     revoked_at = NULL,
-                     metadata = EXCLUDED.metadata,
-                     updated_at = EXCLUDED.updated_at
-       RETURNING id, app_id, scope, capabilities, subject_type, subject_id, status, granted_by_user_id, granted_at, revoked_at, metadata, created_at, updated_at`,
-      app.registration.appId,
-      payload.scope,
-      payload.capabilities,
-      subjectType,
-      subjectId,
-      payload.grantedByUserId ?? null,
-      now,
-      JSON.stringify(payload.metadata ?? {}),
-      now,
-      now,
-    );
-
-    const grant = this.mapGrantRow(rows[0]);
+    const grant = await this.upsertAppGrantRecord(app, payload, now);
     await this.recordEvent({
       actorAppId: app.registration.appId,
       event: "app.updated",
@@ -322,6 +333,220 @@ export class ProtocolService {
       },
     });
     return grant;
+  }
+
+  async createAppConsentRequest(
+    appId: string,
+    appToken: string,
+    input: ProtocolAppConsentRequestCreate,
+  ) {
+    const app = await this.requireAppAccess(appId, appToken, {
+      scopes: ["protocol.write"],
+      capabilities: ["app.write"],
+    });
+    const payload = protocolAppConsentRequestCreateSchema.parse(input);
+    const now = new Date().toISOString();
+    const subjectType = protocolGrantSubjectTypeSchema.parse(
+      payload.subjectType,
+    );
+    const subjectId =
+      subjectType === "app"
+        ? payload.subjectId?.trim() || app.registration.appId
+        : payload.subjectId?.trim();
+
+    if (!subjectId) {
+      throw new ForbiddenException(`${subjectType} subjectId is required`);
+    }
+
+    const rows = await this.prisma.$queryRawUnsafe<
+      ProtocolAppConsentRequestRow[]
+    >(
+      `INSERT INTO protocol_app_consent_requests
+       (app_id, scope, capabilities, subject_type, subject_id, status, requested_by_user_id, requested_at, metadata, created_at, updated_at)
+       VALUES ($1, $2, $3::text[], $4, $5, 'pending', $6::uuid, $7::timestamptz, $8::jsonb, $9::timestamptz, $10::timestamptz)
+       RETURNING id, app_id, scope, capabilities, subject_type, subject_id, status, requested_by_user_id, approved_by_user_id, rejected_by_user_id, approved_grant_id, requested_at, approved_at, rejected_at, cancelled_at, expired_at, metadata, created_at, updated_at`,
+      app.registration.appId,
+      payload.scope,
+      payload.capabilities,
+      subjectType,
+      subjectId,
+      payload.requestedByUserId ?? null,
+      now,
+      JSON.stringify(payload.metadata ?? {}),
+      now,
+      now,
+    );
+
+    const consentRequest = this.mapConsentRequestRow(rows[0]);
+    await this.recordEvent({
+      actorAppId: app.registration.appId,
+      event: "app.updated",
+      resource: "app_consent_request",
+      payload: {
+        appId: app.registration.appId,
+        update: "consent_request_created",
+        requestId: consentRequest.requestId,
+        scope: consentRequest.scope,
+        subjectType: consentRequest.subjectType,
+        subjectId: consentRequest.subjectId,
+      },
+    });
+    return consentRequest;
+  }
+
+  async approveAppConsentRequest(
+    appId: string,
+    requestId: string,
+    appToken: string,
+    input: ProtocolAppConsentRequestDecision,
+  ) {
+    const app = await this.requireAppAccess(appId, appToken, {
+      scopes: ["protocol.write"],
+      capabilities: ["app.write"],
+    });
+    const payload = protocolAppConsentRequestDecisionSchema.parse(input);
+    const now = new Date().toISOString();
+    const rows = await this.prisma.$queryRawUnsafe<
+      ProtocolAppConsentRequestRow[]
+    >(
+      `SELECT id, app_id, scope, capabilities, subject_type, subject_id, status, requested_by_user_id, approved_by_user_id, rejected_by_user_id, approved_grant_id, requested_at, approved_at, rejected_at, cancelled_at, expired_at, metadata, created_at, updated_at
+       FROM protocol_app_consent_requests
+       WHERE app_id = $1 AND id = $2::uuid
+       LIMIT 1`,
+      app.registration.appId,
+      requestId,
+    );
+    const requestRow = rows[0];
+    if (!requestRow) {
+      throw new NotFoundException("protocol app consent request not found");
+    }
+    if (requestRow.status !== "pending") {
+      throw new ConflictException(
+        "protocol app consent request is not pending",
+      );
+    }
+    const grantedByUserId =
+      payload.approvedByUserId ?? requestRow.requested_by_user_id ?? undefined;
+
+    const grant = await this.upsertAppGrantRecord(
+      app,
+      {
+        scope: requestRow.scope as ProtocolScopeName,
+        capabilities: (requestRow.capabilities ?? []).map((capability) =>
+          capabilityNameSchema.parse(capability),
+        ),
+        subjectType: protocolGrantSubjectTypeSchema.parse(
+          requestRow.subject_type,
+        ),
+        subjectId: requestRow.subject_id ?? requestRow.app_id,
+        ...(grantedByUserId ? { grantedByUserId } : {}),
+        metadata: {
+          ...(requestRow.metadata && typeof requestRow.metadata === "object"
+            ? (requestRow.metadata as Record<string, unknown>)
+            : {}),
+          ...(payload.metadata ?? {}),
+        },
+      },
+      now,
+    );
+
+    const updatedRows = await this.prisma.$queryRawUnsafe<
+      ProtocolAppConsentRequestRow[]
+    >(
+      `UPDATE protocol_app_consent_requests
+       SET status = 'approved',
+           approved_grant_id = $3::uuid,
+           approved_by_user_id = $4::uuid,
+           approved_at = $5::timestamptz,
+           metadata = COALESCE(metadata, '{}'::jsonb) || $6::jsonb,
+           updated_at = $5::timestamptz
+       WHERE app_id = $1 AND id = $2::uuid
+       RETURNING id, app_id, scope, capabilities, subject_type, subject_id, status, requested_by_user_id, approved_by_user_id, rejected_by_user_id, approved_grant_id, requested_at, approved_at, rejected_at, cancelled_at, expired_at, metadata, created_at, updated_at`,
+      app.registration.appId,
+      requestId,
+      grant.grantId,
+      payload.approvedByUserId ?? requestRow.requested_by_user_id ?? null,
+      now,
+      JSON.stringify(payload.metadata ?? {}),
+    );
+
+    const consentRequest = this.mapConsentRequestRow(updatedRows[0]);
+    await this.recordEvent({
+      actorAppId: app.registration.appId,
+      event: "app.updated",
+      resource: "app_consent_request",
+      payload: {
+        appId: app.registration.appId,
+        update: "consent_request_approved",
+        requestId: consentRequest.requestId,
+        grantId: consentRequest.approvedGrantId,
+      },
+    });
+    return consentRequest;
+  }
+
+  async rejectAppConsentRequest(
+    appId: string,
+    requestId: string,
+    appToken: string,
+    input: ProtocolAppConsentRequestDecision,
+  ) {
+    const app = await this.requireAppAccess(appId, appToken, {
+      scopes: ["protocol.write"],
+      capabilities: ["app.write"],
+    });
+    const payload = protocolAppConsentRequestDecisionSchema.parse(input);
+    const now = new Date().toISOString();
+    const rows = await this.prisma.$queryRawUnsafe<
+      ProtocolAppConsentRequestRow[]
+    >(
+      `SELECT id, app_id, scope, capabilities, subject_type, subject_id, status, requested_by_user_id, approved_by_user_id, rejected_by_user_id, approved_grant_id, requested_at, approved_at, rejected_at, cancelled_at, expired_at, metadata, created_at, updated_at
+       FROM protocol_app_consent_requests
+       WHERE app_id = $1 AND id = $2::uuid
+       LIMIT 1`,
+      app.registration.appId,
+      requestId,
+    );
+    const requestRow = rows[0];
+    if (!requestRow) {
+      throw new NotFoundException("protocol app consent request not found");
+    }
+    if (requestRow.status !== "pending") {
+      throw new ConflictException(
+        "protocol app consent request is not pending",
+      );
+    }
+
+    const updatedRows = await this.prisma.$queryRawUnsafe<
+      ProtocolAppConsentRequestRow[]
+    >(
+      `UPDATE protocol_app_consent_requests
+       SET status = 'rejected',
+           rejected_by_user_id = $3::uuid,
+           rejected_at = $4::timestamptz,
+           metadata = COALESCE(metadata, '{}'::jsonb) || $5::jsonb,
+           updated_at = $4::timestamptz
+       WHERE app_id = $1 AND id = $2::uuid
+       RETURNING id, app_id, scope, capabilities, subject_type, subject_id, status, requested_by_user_id, approved_by_user_id, rejected_by_user_id, approved_grant_id, requested_at, approved_at, rejected_at, cancelled_at, expired_at, metadata, created_at, updated_at`,
+      app.registration.appId,
+      requestId,
+      payload.rejectedByUserId ?? requestRow.requested_by_user_id ?? null,
+      now,
+      JSON.stringify(payload.metadata ?? {}),
+    );
+
+    const consentRequest = this.mapConsentRequestRow(updatedRows[0]);
+    await this.recordEvent({
+      actorAppId: app.registration.appId,
+      event: "app.updated",
+      resource: "app_consent_request",
+      payload: {
+        appId: app.registration.appId,
+        update: "consent_request_rejected",
+        requestId: consentRequest.requestId,
+      },
+    });
+    return consentRequest;
   }
 
   async revokeAppGrant(
@@ -372,6 +597,56 @@ export class ProtocolService {
       },
     });
     return grant;
+  }
+
+  private async upsertAppGrantRecord(
+    app: RegisteredProtocolApp,
+    input: ProtocolAppScopeGrantCreate,
+    now: string,
+  ) {
+    const payload = protocolAppScopeGrantCreateSchema.parse(input);
+    const subjectType = protocolGrantSubjectTypeSchema.parse(
+      payload.subjectType,
+    );
+    const subjectId =
+      subjectType === "app"
+        ? payload.subjectId?.trim() || app.registration.appId
+        : payload.subjectId?.trim();
+
+    if (!subjectId) {
+      throw new ForbiddenException(`${subjectType} subjectId is required`);
+    }
+
+    const rows = await this.prisma.$queryRawUnsafe<ProtocolAppScopeGrantRow[]>(
+      `INSERT INTO protocol_app_scope_grants
+       (app_id, scope, capabilities, subject_type, subject_id, status, granted_by_user_id, granted_at, metadata, created_at, updated_at)
+       VALUES ($1, $2, $3::text[], $4, $5, 'active', $6::uuid, $7::timestamptz, $8::jsonb, $9::timestamptz, $10::timestamptz)
+       ON CONFLICT (app_id, scope, subject_type, subject_id)
+       DO UPDATE SET capabilities = EXCLUDED.capabilities,
+                     status = 'active',
+                     granted_by_user_id = EXCLUDED.granted_by_user_id,
+                     granted_at = EXCLUDED.granted_at,
+                     revoked_at = NULL,
+                     metadata = EXCLUDED.metadata,
+                     updated_at = EXCLUDED.updated_at
+       RETURNING id, app_id, scope, capabilities, subject_type, subject_id, status, granted_by_user_id, granted_at, revoked_at, metadata, created_at, updated_at`,
+      app.registration.appId,
+      payload.scope,
+      payload.capabilities,
+      subjectType,
+      subjectId,
+      payload.grantedByUserId ?? null,
+      now,
+      JSON.stringify(payload.metadata ?? {}),
+      now,
+      now,
+    );
+
+    const grant = rows[0];
+    if (!grant) {
+      throw new NotFoundException("protocol app grant not found");
+    }
+    return this.mapGrantRow(grant);
   }
 
   async rotateAppToken(appId: string, appToken: string) {
@@ -1204,6 +1479,15 @@ export class ProtocolService {
        GROUP BY status`,
       app.registration.appId,
     );
+    const consentRequestRows = await this.prisma.$queryRawUnsafe<
+      Array<{ status: string; count: bigint | number | string }>
+    >(
+      `SELECT status, COUNT(*)::bigint AS count
+       FROM protocol_app_consent_requests
+       WHERE app_id = $1
+       GROUP BY status`,
+      app.registration.appId,
+    );
     const deliveryRows = await this.prisma.$queryRawUnsafe<
       Array<{ status: string; count: bigint | number | string }>
     >(
@@ -1279,6 +1563,9 @@ export class ProtocolService {
     const grantCounts = Object.fromEntries(
       grantRows.map((row) => [row.status, Number(row.count)]),
     ) as Record<string, number>;
+    const consentRequestCounts = Object.fromEntries(
+      consentRequestRows.map((row) => [row.status, Number(row.count)]),
+    ) as Record<string, number>;
     const deliveryCounts = Object.fromEntries(
       deliveryRows.map((row) => [row.status, Number(row.count)]),
     ) as Record<string, number>;
@@ -1297,6 +1584,13 @@ export class ProtocolService {
       grantCounts: {
         active: grantCounts.active ?? 0,
         revoked: grantCounts.revoked ?? 0,
+      },
+      consentRequestCounts: {
+        pending: consentRequestCounts.pending ?? 0,
+        approved: consentRequestCounts.approved ?? 0,
+        rejected: consentRequestCounts.rejected ?? 0,
+        cancelled: consentRequestCounts.cancelled ?? 0,
+        expired: consentRequestCounts.expired ?? 0,
       },
       deliveryCounts: {
         queued: deliveryCounts.queued ?? 0,
@@ -1736,6 +2030,35 @@ export class ProtocolService {
       grantedByUserId: row.granted_by_user_id,
       grantedAt: this.toIsoString(row.granted_at),
       revokedAt: this.toIsoString(row.revoked_at) ?? null,
+      metadata: row.metadata ?? {},
+      createdAt: this.toIsoString(row.created_at),
+      updatedAt: this.toIsoString(row.updated_at),
+    });
+  }
+
+  private mapConsentRequestRow(
+    row: ProtocolAppConsentRequestRow,
+  ): ProtocolAppConsentRequest {
+    return protocolAppConsentRequestSchema.parse({
+      protocolId: protocolIds.appConsentRequest,
+      requestId: row.id,
+      appId: row.app_id,
+      scope: protocolScopeNameSchema.parse(row.scope),
+      capabilities: (row.capabilities ?? []).map((capability) =>
+        capabilityNameSchema.parse(capability),
+      ),
+      subjectType: protocolGrantSubjectTypeSchema.parse(row.subject_type),
+      subjectId: row.subject_id ?? row.app_id,
+      status: protocolConsentRequestStatusSchema.parse(row.status),
+      requestedByUserId: row.requested_by_user_id,
+      approvedByUserId: row.approved_by_user_id,
+      rejectedByUserId: row.rejected_by_user_id,
+      approvedGrantId: row.approved_grant_id,
+      requestedAt: this.toIsoString(row.requested_at),
+      approvedAt: this.toIsoString(row.approved_at) ?? null,
+      rejectedAt: this.toIsoString(row.rejected_at) ?? null,
+      cancelledAt: this.toIsoString(row.cancelled_at) ?? null,
+      expiredAt: this.toIsoString(row.expired_at) ?? null,
       metadata: row.metadata ?? {},
       createdAt: this.toIsoString(row.created_at),
       updatedAt: this.toIsoString(row.updated_at),

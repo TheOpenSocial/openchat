@@ -13,6 +13,8 @@ import {
   appRegistrationRequestSchema,
   identifierSchema,
   protocolChatSendMessageActionSchema,
+  protocolAppConsentRequestCreateSchema,
+  protocolAppConsentRequestDecisionSchema,
   protocolAppScopeGrantCreateSchema,
   protocolAppScopeGrantRevokeSchema,
   protocolIntentCreateActionSchema,
@@ -117,6 +119,20 @@ export class ProtocolController {
     );
   }
 
+  @Get("apps/:appId/consent-requests")
+  async listAppConsentRequests(
+    @Param("appId") appIdParam: string,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+  ) {
+    const appId = parseRequestPayload(identifierSchema, appIdParam);
+    return ok(
+      await this.protocolService.listAppConsentRequests(
+        appId,
+        readProtocolAppToken(headers) ?? "",
+      ),
+    );
+  }
+
   @Post("apps/:appId/grants")
   async createAppGrant(
     @Param("appId") appIdParam: string,
@@ -131,6 +147,72 @@ export class ProtocolController {
     return ok(
       await this.protocolService.createAppGrant(
         appId,
+        readProtocolAppToken(headers) ?? "",
+        payload,
+      ),
+    );
+  }
+
+  @Post("apps/:appId/consent-requests")
+  async createAppConsentRequest(
+    @Param("appId") appIdParam: string,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+    @Body() body: unknown,
+  ) {
+    const appId = parseRequestPayload(identifierSchema, appIdParam);
+    const payload = parseRequestPayload(
+      protocolAppConsentRequestCreateSchema,
+      body,
+    );
+    return ok(
+      await this.protocolService.createAppConsentRequest(
+        appId,
+        readProtocolAppToken(headers) ?? "",
+        payload,
+      ),
+    );
+  }
+
+  @Post("apps/:appId/consent-requests/:requestId/approve")
+  async approveAppConsentRequest(
+    @Param("appId") appIdParam: string,
+    @Param("requestId") requestIdParam: string,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+    @Body() body: unknown,
+  ) {
+    const appId = parseRequestPayload(identifierSchema, appIdParam);
+    const requestId = parseRequestPayload(uuidSchema, requestIdParam);
+    const payload = parseRequestPayload(
+      protocolAppConsentRequestDecisionSchema,
+      body,
+    );
+    return ok(
+      await this.protocolService.approveAppConsentRequest(
+        appId,
+        requestId,
+        readProtocolAppToken(headers) ?? "",
+        payload,
+      ),
+    );
+  }
+
+  @Post("apps/:appId/consent-requests/:requestId/reject")
+  async rejectAppConsentRequest(
+    @Param("appId") appIdParam: string,
+    @Param("requestId") requestIdParam: string,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+    @Body() body: unknown,
+  ) {
+    const appId = parseRequestPayload(identifierSchema, appIdParam);
+    const requestId = parseRequestPayload(uuidSchema, requestIdParam);
+    const payload = parseRequestPayload(
+      protocolAppConsentRequestDecisionSchema,
+      body,
+    );
+    return ok(
+      await this.protocolService.rejectAppConsentRequest(
+        appId,
+        requestId,
         readProtocolAppToken(headers) ?? "",
         payload,
       ),

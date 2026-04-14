@@ -33,6 +33,14 @@ enum RequestStatus {
   cancelled
 }
 
+enum ProtocolConsentRequestStatus {
+  pending
+  approved
+  rejected
+  cancelled
+  expired
+}
+
 enum ConnectionType {
   dm
   group
@@ -633,6 +641,7 @@ model ProtocolApp {
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
   scopeGrants        ProtocolAppScopeGrant[]
+  consentRequests    ProtocolAppConsentRequest[]
 
   @@index([status, createdAt])
   @@map("protocol_apps")
@@ -657,6 +666,34 @@ model ProtocolAppScopeGrant {
   @@unique([appId, scope, subjectType, subjectId])
   @@index([appId, status, createdAt])
   @@map("protocol_app_scope_grants")
+}
+
+model ProtocolAppConsentRequest {
+  id                String                        @id @default(uuid()) @db.Uuid
+  appId             String                        @map("app_id")
+  scope             String
+  capabilities      String[]                      @default([])
+  subjectType       String                        @default("app") @map("subject_type")
+  subjectId         String?                       @map("subject_id")
+  status            ProtocolConsentRequestStatus  @default(pending)
+  requestedByUserId String?                       @map("requested_by_user_id") @db.Uuid
+  approvedByUserId  String?                       @map("approved_by_user_id") @db.Uuid
+  rejectedByUserId  String?                       @map("rejected_by_user_id") @db.Uuid
+  approvedGrantId   String?                       @map("approved_grant_id") @db.Uuid
+  requestedAt       DateTime                      @default(now()) @map("requested_at")
+  approvedAt        DateTime?                     @map("approved_at")
+  rejectedAt        DateTime?                     @map("rejected_at")
+  cancelledAt       DateTime?                     @map("cancelled_at")
+  expiredAt         DateTime?                     @map("expired_at")
+  metadata          Json?
+  createdAt         DateTime                      @default(now()) @map("created_at")
+  updatedAt         DateTime                      @updatedAt @map("updated_at")
+  app               ProtocolApp                   @relation(fields: [appId], references: [appId], onDelete: Cascade)
+  approvedGrant     ProtocolAppScopeGrant?        @relation(fields: [approvedGrantId], references: [id], onDelete: SetNull)
+
+  @@index([appId, status, createdAt])
+  @@index([approvedGrantId])
+  @@map("protocol_app_consent_requests")
 }
 
 model ProtocolWebhookSubscription {

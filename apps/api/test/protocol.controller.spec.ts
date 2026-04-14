@@ -266,12 +266,41 @@ describe("ProtocolController", () => {
       registerApp: () => ({}),
       getApp: () => ({}),
       listAppGrants: (_appId: string, token: string) => ({ token }),
+      listAppConsentRequests: (_appId: string, token: string) => ({ token }),
       createAppGrant: (
         _appId: string,
         token: string,
         payload: Record<string, unknown>,
       ) => ({
         token,
+        payload,
+      }),
+      createAppConsentRequest: (
+        _appId: string,
+        token: string,
+        payload: Record<string, unknown>,
+      ) => ({
+        token,
+        payload,
+      }),
+      approveAppConsentRequest: (
+        _appId: string,
+        requestId: string,
+        token: string,
+        payload: Record<string, unknown>,
+      ) => ({
+        token,
+        requestId,
+        payload,
+      }),
+      rejectAppConsentRequest: (
+        _appId: string,
+        requestId: string,
+        token: string,
+        payload: Record<string, unknown>,
+      ) => ({
+        token,
+        requestId,
         payload,
       }),
       revokeAppGrant: (
@@ -357,6 +386,13 @@ describe("ProtocolController", () => {
         issuedScopes: [],
         issuedCapabilities: [],
         grantCounts: { active: 0, revoked: 0 },
+        consentRequestCounts: {
+          pending: 0,
+          approved: 0,
+          rejected: 0,
+          cancelled: 0,
+          expired: 0,
+        },
         deliveryCounts: {
           queued: 0,
           retrying: 0,
@@ -497,6 +533,12 @@ describe("ProtocolController", () => {
     const grants = (await controller.listAppGrants("alpha.app", {
       "x-protocol-app-token": "secret-token",
     })) as any;
+    const consentRequests = (await controller.listAppConsentRequests(
+      "alpha.app",
+      {
+        "x-protocol-app-token": "secret-token",
+      },
+    )) as any;
     const createdGrant = (await controller.createAppGrant(
       "alpha.app",
       {
@@ -507,6 +549,39 @@ describe("ProtocolController", () => {
         capabilities: ["app.read"],
         subjectType: "user",
         subjectId: "00000000-0000-4000-8000-000000000001",
+      },
+    )) as any;
+    const createdConsentRequest = (await controller.createAppConsentRequest(
+      "alpha.app",
+      {
+        "x-protocol-app-token": "secret-token",
+      },
+      {
+        scope: "actions.invoke",
+        capabilities: ["chat.write"],
+        subjectType: "user",
+        subjectId: "00000000-0000-4000-8000-000000000010",
+        requestedByUserId: "00000000-0000-4000-8000-000000000020",
+      },
+    )) as any;
+    const approvedConsentRequest = (await controller.approveAppConsentRequest(
+      "alpha.app",
+      "00000000-0000-4000-8000-000000000421",
+      {
+        "x-protocol-app-token": "secret-token",
+      },
+      {
+        approvedByUserId: "00000000-0000-4000-8000-000000000021",
+      },
+    )) as any;
+    const rejectedConsentRequest = (await controller.rejectAppConsentRequest(
+      "alpha.app",
+      "00000000-0000-4000-8000-000000000422",
+      {
+        "x-protocol-app-token": "secret-token",
+      },
+      {
+        rejectedByUserId: "00000000-0000-4000-8000-000000000022",
       },
     )) as any;
     const revokedGrant = (await controller.revokeAppGrant(
@@ -567,8 +642,17 @@ describe("ProtocolController", () => {
     expect(replayBatch.data.token).toBe("secret-token");
     expect(replayBatch.data.payload.limit).toBe(9);
     expect(grants.data.token).toBe("secret-token");
+    expect(consentRequests.data.token).toBe("secret-token");
     expect(createdGrant.data.token).toBe("secret-token");
     expect(createdGrant.data.payload.scope).toBe("resources.read");
+    expect(createdConsentRequest.data.token).toBe("secret-token");
+    expect(createdConsentRequest.data.payload.scope).toBe("actions.invoke");
+    expect(approvedConsentRequest.data.requestId).toBe(
+      "00000000-0000-4000-8000-000000000421",
+    );
+    expect(rejectedConsentRequest.data.requestId).toBe(
+      "00000000-0000-4000-8000-000000000422",
+    );
     expect(revokedGrant.data.grantId).toBe("grant-1");
     expect(queue.data.token).toBe("secret-token");
     expect(queue.data.cursor).toBe("7");

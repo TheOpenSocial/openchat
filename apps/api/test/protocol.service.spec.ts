@@ -9,10 +9,12 @@ function createPrismaStub() {
   const deliveries = new Map<string, any[]>();
   const attempts = new Map<string, any[]>();
   const grants = new Map<string, any[]>();
+  const consentRequests = new Map<string, any[]>();
   const events: any[] = [];
   const cursors = new Map<string, any>();
   let cursorSeq = 0n;
   let grantSeq = 0;
+  let consentSeq = 0;
 
   return {
     async $queryRawUnsafe<T = unknown>(query: string, ...params: any[]) {
@@ -22,6 +24,24 @@ function createPrismaStub() {
       ) {
         const [appId] = params;
         const rows = grants.get(appId) ?? [];
+        const counts = rows.reduce(
+          (acc, row) => {
+            acc[row.status] = (acc[row.status] ?? 0n) + 1n;
+            return acc;
+          },
+          {} as Record<string, bigint>,
+        );
+        return Object.entries(counts).map(([status, count]) => ({
+          status,
+          count,
+        })) as T;
+      }
+      if (
+        query.includes("FROM protocol_app_consent_requests") &&
+        query.includes("GROUP BY status")
+      ) {
+        const [appId] = params;
+        const rows = consentRequests.get(appId) ?? [];
         const counts = rows.reduce(
           (acc, row) => {
             acc[row.status] = (acc[row.status] ?? 0n) + 1n;
@@ -107,6 +127,21 @@ function createPrismaStub() {
       if (query.includes("FROM protocol_app_scope_grants")) {
         const [appId] = params;
         return (grants.get(appId) ?? []) as T;
+      }
+      if (
+        query.includes("FROM protocol_app_consent_requests") &&
+        query.includes("id = $2::uuid")
+      ) {
+        const [appId, requestId] = params;
+        return (consentRequests.get(appId) ?? []).filter(
+          (row) => row.id === requestId,
+        ) as T;
+      }
+      if (query.includes("FROM protocol_app_consent_requests")) {
+        const [appId] = params;
+        return [...(consentRequests.get(appId) ?? [])].sort((left, right) =>
+          String(right.created_at).localeCompare(String(left.created_at)),
+        ) as T;
       }
       if (
         query.includes("FROM protocol_webhook_deliveries") &&
@@ -274,6 +309,82 @@ function createPrismaStub() {
             ? existing.map((entry) => (entry.id === duplicate.id ? row : entry))
             : [...existing, row],
         );
+        return [row] as T;
+      }
+      if (query.includes("INSERT INTO protocol_app_consent_requests")) {
+        const existing = consentRequests.get(params[0]) ?? [];
+        consentSeq += 1;
+        const row = {
+          id: `00000000-0000-4000-8000-${String(consentSeq).padStart(12, "0")}`,
+          app_id: params[0],
+          scope: params[1],
+          capabilities: params[2],
+          subject_type: params[3],
+          subject_id: params[4],
+          status: "pending",
+          requested_by_user_id: params[5],
+          approved_by_user_id: null,
+          rejected_by_user_id: null,
+          approved_grant_id: null,
+          requested_at: params[6],
+          approved_at: null,
+          rejected_at: null,
+          cancelled_at: null,
+          expired_at: null,
+          metadata: JSON.parse(params[7]),
+          created_at: params[8],
+          updated_at: params[9],
+        };
+        consentRequests.set(row.app_id, [...existing, row]);
+        return [row] as T;
+      }
+      if (
+        query.includes("UPDATE protocol_app_consent_requests") &&
+        query.includes("status = 'approved'")
+      ) {
+        const [
+          appId,
+          requestId,
+          grantId,
+          approvedByUserId,
+          approvedAt,
+          metadata,
+        ] = params;
+        const existing = consentRequests.get(appId) ?? [];
+        const row = existing.find((entry) => entry.id === requestId);
+        if (!row) {
+          return [] as T;
+        }
+        row.status = "approved";
+        row.approved_grant_id = grantId;
+        row.approved_by_user_id = approvedByUserId;
+        row.approved_at = approvedAt;
+        row.metadata = {
+          ...(row.metadata ?? {}),
+          ...JSON.parse(metadata),
+        };
+        row.updated_at = approvedAt;
+        return [row] as T;
+      }
+      if (
+        query.includes("UPDATE protocol_app_consent_requests") &&
+        query.includes("status = 'rejected'")
+      ) {
+        const [appId, requestId, rejectedByUserId, rejectedAt, metadata] =
+          params;
+        const existing = consentRequests.get(appId) ?? [];
+        const row = existing.find((entry) => entry.id === requestId);
+        if (!row) {
+          return [] as T;
+        }
+        row.status = "rejected";
+        row.rejected_by_user_id = rejectedByUserId;
+        row.rejected_at = rejectedAt;
+        row.metadata = {
+          ...(row.metadata ?? {}),
+          ...JSON.parse(metadata),
+        };
+        row.updated_at = rejectedAt;
         return [row] as T;
       }
       if (query.includes("UPDATE protocol_app_scope_grants")) {
@@ -1176,6 +1287,86 @@ describe("ProtocolService", () => {
     expect(summary.tokenAudit.appUpdatedAt).not.toBe("");
     expect(summary.grantAudit.lastGrantedAt).not.toBeNull();
     expect(summary.latestCursor).not.toBe("");
+  });
+
+  it("creates, approves, and rejects consent requests independently of grants", async () => {
+    const service = createProtocolService();
+    const registration = await service.registerApp(createRegistrationPayload());
+
+    const created = await service.createAppConsentRequest(
+      "partner.alpha",
+      registration.credentials.appToken,
+      {
+        scope: "actions.invoke",
+        capabilities: ["chat.write"],
+        subjectType: "user",
+        subjectId: "00000000-0000-4000-8000-000000000001",
+        requestedByUserId: "00000000-0000-4000-8000-000000000009",
+        metadata: { source: "test" },
+      },
+    );
+
+    expect(created.status).toBe("pending");
+    expect(created.requestedByUserId).toBe(
+      "00000000-0000-4000-8000-000000000009",
+    );
+
+    const summaryBeforeApproval = await service.getAppUsageSummary(
+      "partner.alpha",
+      registration.credentials.appToken,
+    );
+    expect(summaryBeforeApproval.consentRequestCounts.pending).toBe(1);
+
+    const approved = await service.approveAppConsentRequest(
+      "partner.alpha",
+      created.requestId,
+      registration.credentials.appToken,
+      {
+        approvedByUserId: "00000000-0000-4000-8000-000000000010",
+        metadata: { source: "approval" },
+      },
+    );
+
+    expect(approved.status).toBe("approved");
+    expect(approved.approvedGrantId).not.toBeNull();
+    expect(approved.approvedByUserId).toBe(
+      "00000000-0000-4000-8000-000000000010",
+    );
+
+    const rejectedRequest = await service.createAppConsentRequest(
+      "partner.alpha",
+      registration.credentials.appToken,
+      {
+        scope: "actions.invoke",
+        capabilities: ["notification.read"],
+        subjectType: "user",
+        subjectId: "00000000-0000-4000-8000-000000000011",
+        requestedByUserId: "00000000-0000-4000-8000-000000000012",
+        metadata: {},
+      },
+    );
+
+    const rejected = await service.rejectAppConsentRequest(
+      "partner.alpha",
+      rejectedRequest.requestId,
+      registration.credentials.appToken,
+      {
+        rejectedByUserId: "00000000-0000-4000-8000-000000000013",
+        metadata: { source: "rejection" },
+      },
+    );
+
+    expect(rejected.status).toBe("rejected");
+    expect(rejected.rejectedByUserId).toBe(
+      "00000000-0000-4000-8000-000000000013",
+    );
+
+    const summaryAfterDecision = await service.getAppUsageSummary(
+      "partner.alpha",
+      registration.credentials.appToken,
+    );
+    expect(summaryAfterDecision.consentRequestCounts.approved).toBe(1);
+    expect(summaryAfterDecision.consentRequestCounts.rejected).toBe(1);
   });
 
   it("includes runtime queue state in delivery queue inspection", async () => {

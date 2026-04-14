@@ -29,6 +29,9 @@ type ProtocolWebhookDeliveryRecord = Awaited<
 type ProtocolGrantRecord = Awaited<
   ReturnType<typeof api.listProtocolGrants>
 >[number];
+type ProtocolConsentRequestRecord = Awaited<
+  ReturnType<typeof api.listProtocolConsentRequests>
+>[number];
 type ProtocolReplayCursor = Awaited<
   ReturnType<typeof api.getProtocolReplayCursor>
 >;
@@ -59,6 +62,9 @@ export function ProtocolIntegrationsPanel() {
   const [detailsError, setDetailsError] = useState<string | null>(null);
   const [webhooks, setWebhooks] = useState<ProtocolWebhookRecord[]>([]);
   const [grants, setGrants] = useState<ProtocolGrantRecord[]>([]);
+  const [consentRequests, setConsentRequests] = useState<
+    ProtocolConsentRequestRecord[]
+  >([]);
   const [deliveries, setDeliveries] = useState<
     Record<string, ProtocolWebhookDeliveryRecord[]>
   >({});
@@ -81,6 +87,12 @@ export function ProtocolIntegrationsPanel() {
   );
   const [grantSubjectType, setGrantSubjectType] = useState("user");
   const [grantSubjectId, setGrantSubjectId] = useState("");
+  const [requestScope, setRequestScope] = useState("actions.invoke");
+  const [requestCapabilities, setRequestCapabilities] = useState(
+    "intent.write,request.write,chat.write",
+  );
+  const [requestSubjectType, setRequestSubjectType] = useState("user");
+  const [requestSubjectId, setRequestSubjectId] = useState("");
   const [rotatingToken, setRotatingToken] = useState(false);
   const [revokingToken, setRevokingToken] = useState(false);
   const [tokenNotice, setTokenNotice] = useState<string | null>(null);
@@ -93,6 +105,7 @@ export function ProtocolIntegrationsPanel() {
     setDetailsError(null);
     setWebhooks([]);
     setGrants([]);
+    setConsentRequests([]);
     setDeliveries({});
     setReplayCursor(null);
     setUsageSummary(null);
@@ -156,13 +169,19 @@ export function ProtocolIntegrationsPanel() {
     try {
       const appId = selectedAppId.trim();
       const token = appToken.trim();
-      const [appWebhooksResult, appGrantsResult, cursorResult, usageResult] =
-        await Promise.allSettled([
-          api.listProtocolWebhooks(appId, token),
-          api.listProtocolGrants(appId, token),
-          api.getProtocolReplayCursor(appId, token),
-          api.getProtocolUsageSummary(appId, token),
-        ]);
+      const [
+        appWebhooksResult,
+        appGrantsResult,
+        appConsentRequestsResult,
+        cursorResult,
+        usageResult,
+      ] = await Promise.allSettled([
+        api.listProtocolWebhooks(appId, token),
+        api.listProtocolGrants(appId, token),
+        api.listProtocolConsentRequests(appId, token),
+        api.getProtocolReplayCursor(appId, token),
+        api.getProtocolUsageSummary(appId, token),
+      ]);
       if (appWebhooksResult.status !== "fulfilled") {
         throw appWebhooksResult.reason;
       }
@@ -171,6 +190,10 @@ export function ProtocolIntegrationsPanel() {
       }
       const appWebhooks = appWebhooksResult.value;
       const appGrants = appGrantsResult.value;
+      const appConsentRequests =
+        appConsentRequestsResult.status === "fulfilled"
+          ? appConsentRequestsResult.value
+          : [];
       const deliveryEntries = await Promise.all(
         appWebhooks.map(
           async (webhook) =>
@@ -189,6 +212,7 @@ export function ProtocolIntegrationsPanel() {
 
       setWebhooks(appWebhooks);
       setGrants(appGrants);
+      setConsentRequests(appConsentRequests);
       setDeliveries(Object.fromEntries(deliveryEntries));
       setReplayCursor(
         cursorResult.status === "fulfilled" ? cursorResult.value : null,
@@ -204,10 +228,16 @@ export function ProtocolIntegrationsPanel() {
           "Some protocol usage details could not be loaded. Core app data is shown.",
         );
       }
+      if (appConsentRequestsResult.status !== "fulfilled") {
+        setDetailsError(
+          "Consent requests could not be loaded yet. Core app data is shown.",
+        );
+      }
     } catch (error) {
       setDetailsError(String(error));
       setWebhooks([]);
       setGrants([]);
+      setConsentRequests([]);
       setDeliveries({});
       setReplayCursor(null);
       setUsageSummary(null);
@@ -335,6 +365,89 @@ export function ProtocolIntegrationsPanel() {
         created,
         ...current.filter((g) => g.grantId !== created.grantId),
       ]);
+    } catch (error) {
+      setDetailsError(String(error));
+    }
+  };
+
+  const createConsentRequest = async () => {
+    if (!selectedAppId.trim() || !appToken.trim()) {
+      return;
+    }
+    setDetailsError(null);
+    try {
+      const created = await api.createProtocolConsentRequest(
+        selectedAppId.trim(),
+        appToken.trim(),
+        {
+          scope: requestScope as never,
+          capabilities: requestCapabilities
+            .split(",")
+            .map((value) => value.trim())
+            .filter(Boolean) as never,
+          subjectType: requestSubjectType as never,
+          subjectId: requestSubjectId.trim() || undefined,
+          metadata: {
+            source: "web_settings_panel",
+          },
+        },
+      );
+      setConsentRequests((current) => [
+        created,
+        ...current.filter((request) => request.requestId !== created.requestId),
+      ]);
+    } catch (error) {
+      setDetailsError(String(error));
+    }
+  };
+
+  const approveConsentRequest = async (requestId: string) => {
+    if (!selectedAppId.trim() || !appToken.trim()) {
+      return;
+    }
+    setDetailsError(null);
+    try {
+      const updated = await api.approveProtocolConsentRequest(
+        selectedAppId.trim(),
+        appToken.trim(),
+        requestId,
+        {
+          metadata: {
+            source: "web_settings_panel",
+          },
+        },
+      );
+      setConsentRequests((current) =>
+        current.map((request) =>
+          request.requestId === requestId ? updated : request,
+        ),
+      );
+    } catch (error) {
+      setDetailsError(String(error));
+    }
+  };
+
+  const rejectConsentRequest = async (requestId: string) => {
+    if (!selectedAppId.trim() || !appToken.trim()) {
+      return;
+    }
+    setDetailsError(null);
+    try {
+      const updated = await api.rejectProtocolConsentRequest(
+        selectedAppId.trim(),
+        appToken.trim(),
+        requestId,
+        {
+          metadata: {
+            source: "web_settings_panel",
+          },
+        },
+      );
+      setConsentRequests((current) =>
+        current.map((request) =>
+          request.requestId === requestId ? updated : request,
+        ),
+      );
     } catch (error) {
       setDetailsError(String(error));
     }
@@ -643,6 +756,10 @@ export function ProtocolIntegrationsPanel() {
                     Active grants: {usageSummary.grantCounts.active}
                   </Badge>
                   <Badge variant="default">
+                    Pending requests:{" "}
+                    {usageSummary.consentRequestCounts.pending}
+                  </Badge>
+                  <Badge variant="default">
                     Revoked grants: {usageSummary.grantCounts.revoked}
                   </Badge>
                   <Badge variant="default">
@@ -747,6 +864,153 @@ export function ProtocolIntegrationsPanel() {
                       ))}
                   </div>
                 ) : null}
+              </WorkspaceMutedPanel>
+            ) : null}
+
+            {selectedAppId.trim() && appToken.trim() ? (
+              <WorkspaceMutedPanel>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.2em] text-[hsl(var(--muted-foreground))]">
+                      Consent requests
+                    </p>
+                    <p className="mt-1 text-sm text-[hsl(var(--foreground))]">
+                      {consentRequests.length} request
+                      {consentRequests.length === 1 ? "" : "s"} loaded for{" "}
+                      {selectedApp?.registration.appId ?? selectedAppId}
+                    </p>
+                  </div>
+                  <Badge variant="default">Separate from grants</Badge>
+                </div>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <Label htmlFor="protocol-request-scope">
+                      Permission scope
+                    </Label>
+                    <Input
+                      id="protocol-request-scope"
+                      onChange={(event) =>
+                        setRequestScope(event.currentTarget.value)
+                      }
+                      value={requestScope}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="protocol-request-capabilities">
+                      Allowed capabilities
+                    </Label>
+                    <Input
+                      id="protocol-request-capabilities"
+                      onChange={(event) =>
+                        setRequestCapabilities(event.currentTarget.value)
+                      }
+                      value={requestCapabilities}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="protocol-request-subject-type">
+                      Subject kind
+                    </Label>
+                    <Input
+                      id="protocol-request-subject-type"
+                      onChange={(event) =>
+                        setRequestSubjectType(event.currentTarget.value)
+                      }
+                      value={requestSubjectType}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="protocol-request-subject-id">
+                      Subject id
+                    </Label>
+                    <Input
+                      id="protocol-request-subject-id"
+                      onChange={(event) =>
+                        setRequestSubjectId(event.currentTarget.value)
+                      }
+                      value={requestSubjectId}
+                    />
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    onClick={() => {
+                      void createConsentRequest();
+                    }}
+                    type="button"
+                    variant="secondary"
+                  >
+                    Request consent approval
+                  </Button>
+                </div>
+                <div className="mt-3 space-y-2">
+                  {consentRequests.length === 0 ? (
+                    <div className="rounded-2xl border border-[hsl(var(--border-soft))] bg-[hsl(var(--panel))]/60 px-3 py-3 text-sm text-[hsl(var(--muted-foreground))]">
+                      No consent requests loaded yet.
+                    </div>
+                  ) : null}
+                  {consentRequests.map((request) => (
+                    <div
+                      className="rounded-2xl border border-[hsl(var(--border-soft))] bg-[hsl(var(--panel))]/60 px-3 py-3"
+                      key={request.requestId}
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-[hsl(var(--foreground))]">
+                            {request.subjectType}: {request.subjectId}
+                          </p>
+                          <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
+                            {request.requestId}
+                          </p>
+                        </div>
+                        <Badge variant="default">{request.status}</Badge>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Badge variant="default">Scope: {request.scope}</Badge>
+                        <Badge variant="default">
+                          Capabilities: {joinNames(request.capabilities)}
+                        </Badge>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Badge variant="default">
+                          Requested: {request.requestedAt.slice(0, 10)}
+                        </Badge>
+                        {request.approvedAt ? (
+                          <Badge variant="default">
+                            Approved: {request.approvedAt.slice(0, 10)}
+                          </Badge>
+                        ) : null}
+                        {request.rejectedAt ? (
+                          <Badge variant="default">
+                            Rejected: {request.rejectedAt.slice(0, 10)}
+                          </Badge>
+                        ) : null}
+                      </div>
+                      {request.status === "pending" ? (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <Button
+                            onClick={() => {
+                              void approveConsentRequest(request.requestId);
+                            }}
+                            type="button"
+                            variant="secondary"
+                          >
+                            Approve
+                          </Button>
+                          <Button
+                            onClick={() => {
+                              void rejectConsentRequest(request.requestId);
+                            }}
+                            type="button"
+                            variant="secondary"
+                          >
+                            Reject
+                          </Button>
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
               </WorkspaceMutedPanel>
             ) : null}
 
