@@ -1392,6 +1392,7 @@ export class AgentConversationService {
             };
           }
           const result = await this.agentOutcomeToolsService.sendIntroRequest({
+            actorUserId: userId,
             intentId,
             recipientUserId,
             traceId,

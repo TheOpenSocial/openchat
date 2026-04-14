@@ -17,6 +17,7 @@ import { z } from "zod";
 import { AgentWorkflowRuntimeService } from "../database/agent-workflow-runtime.service.js";
 import { PrismaService } from "../database/prisma.service.js";
 import { NotificationsService } from "../notifications/notifications.service.js";
+import { ProtocolService } from "../protocol/protocol.service.js";
 
 type IntentDomain = z.infer<typeof intentDomainSchema>;
 type CreateIntentBody = z.infer<typeof createRuntimeIntentBodySchema>;
@@ -40,9 +41,42 @@ export class RuntimeService {
     private readonly workflowRuntimeService?: AgentWorkflowRuntimeService,
     @Optional()
     private readonly notificationsService?: NotificationsService,
+    @Optional()
+    private readonly protocolService?: ProtocolService,
   ) {}
 
   async createIntent(input: CreateIntentBody) {
+    if (this.protocolService) {
+      const result = await this.protocolService.createFirstPartyIntentAction({
+        actorUserId: input.userId,
+        rawText: input.rawText,
+        traceId: randomUUID(),
+        agentThreadId: input.agentThreadId ?? undefined,
+        metadata: {
+          source: "runtime.create_intent",
+          domain: input.domain,
+          ...(input.metadata ?? {}),
+        },
+      });
+      return {
+        intentId: result.intentId,
+        domain: input.domain,
+        status: result.status,
+        workflowRunId: `protocol:firstparty:intent:${result.intentId}`,
+        traceId: result.traceId,
+        replayability: "inspect_only" as const,
+        stage: {
+          stage: "domain_routing",
+          status: "completed",
+        },
+        sideEffectIntegrity: {
+          sideEffectCount: 0,
+          dedupedSideEffectCount: 0,
+          reusedRelations: [],
+        },
+      };
+    }
+
     const traceId = randomUUID();
     const intentId = randomUUID();
     const workflowDomain = this.mapDomainToWorkflowDomain(input.domain);

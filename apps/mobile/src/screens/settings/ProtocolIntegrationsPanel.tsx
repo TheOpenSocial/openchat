@@ -482,6 +482,33 @@ export function ProtocolIntegrationsPanel() {
               <Metric label="Latest cursor" value={usageSummary.latestCursor} />
             </View>
 
+            <View className="gap-2 rounded-2xl border border-hairline bg-surfaceMuted/70 px-3 py-3">
+              <Text className="text-[12px] font-semibold uppercase tracking-[0.16em] text-muted">
+                Token audit
+              </Text>
+              <Text className="text-[12px] text-muted">
+                Last rotated: {usageSummary.tokenAudit.lastRotatedAt ?? "Never"}
+              </Text>
+              <Text className="text-[12px] text-muted">
+                Last revoked: {usageSummary.tokenAudit.lastRevokedAt ?? "Never"}
+              </Text>
+              <Text className="text-[12px] text-muted">
+                App updated: {usageSummary.tokenAudit.appUpdatedAt}
+              </Text>
+            </View>
+
+            <View className="gap-2 rounded-2xl border border-hairline bg-surfaceMuted/70 px-3 py-3">
+              <Text className="text-[12px] font-semibold uppercase tracking-[0.16em] text-muted">
+                Grant audit
+              </Text>
+              <Text className="text-[12px] text-muted">
+                Last granted: {usageSummary.grantAudit.lastGrantedAt ?? "Never"}
+              </Text>
+              <Text className="text-[12px] text-muted">
+                Last revoked: {usageSummary.grantAudit.lastRevokedAt ?? "Never"}
+              </Text>
+            </View>
+
             <View className="space-y-2">
               <Text className="text-[12px] font-semibold uppercase tracking-[0.16em] text-muted">
                 Recent events

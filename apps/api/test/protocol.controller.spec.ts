@@ -70,8 +70,24 @@ describe("ProtocolController", () => {
           failed: 0,
           deadLettered: 0,
         },
+        tokenAudit: {
+          appUpdatedAt: "2026-04-13T00:00:00.000Z",
+          lastRotatedAt: null,
+          lastRevokedAt: null,
+        },
+        grantAudit: {
+          lastGrantedAt: null,
+          lastRevokedAt: null,
+        },
         latestCursor: "0",
         recentEvents: [],
+      }),
+      dispatchGlobalDueWebhookDeliveries: () => ({
+        queueName: "protocol-webhooks",
+        jobName: "RunProtocolWebhookDeliveries",
+        limit: 25,
+        source: "cron",
+        enqueuedAt: "2026-04-13T00:00:00.000Z",
       }),
       createIntentAction: () => ({}),
       sendRequestAction: () => ({}),
@@ -160,8 +176,24 @@ describe("ProtocolController", () => {
           failed: 0,
           deadLettered: 0,
         },
+        tokenAudit: {
+          appUpdatedAt: "2026-04-13T00:00:00.000Z",
+          lastRotatedAt: null,
+          lastRevokedAt: null,
+        },
+        grantAudit: {
+          lastGrantedAt: null,
+          lastRevokedAt: null,
+        },
         latestCursor: "0",
         recentEvents: [],
+      }),
+      dispatchGlobalDueWebhookDeliveries: () => ({
+        queueName: "protocol-webhooks",
+        jobName: "RunProtocolWebhookDeliveries",
+        limit: 25,
+        source: "cron",
+        enqueuedAt: "2026-04-13T00:00:00.000Z",
       }),
       createIntentAction: () => ({}),
       sendRequestAction: () => ({}),
@@ -272,6 +304,38 @@ describe("ProtocolController", () => {
       }),
       getAppUsageSummary: (_appId: string, token: string) => ({
         token,
+        appId: "alpha.app",
+        generatedAt: "2026-04-13T00:00:00.000Z",
+        appStatus: "active",
+        issuedScopes: [],
+        issuedCapabilities: [],
+        grantCounts: { active: 0, revoked: 0 },
+        deliveryCounts: {
+          queued: 0,
+          retrying: 0,
+          delivered: 0,
+          failed: 0,
+          deadLettered: 0,
+        },
+        tokenAudit: {
+          appUpdatedAt: "2026-04-13T00:00:00.000Z",
+          lastRotatedAt: null,
+          lastRevokedAt: null,
+        },
+        grantAudit: {
+          lastGrantedAt: null,
+          lastRevokedAt: null,
+        },
+        latestCursor: "0",
+        recentEvents: [],
+      }),
+      dispatchGlobalDueWebhookDeliveries: (payload: Record<string, unknown>) => ({
+        payload,
+        queueName: "protocol-webhooks",
+        jobName: "RunProtocolWebhookDeliveries",
+        limit: 25,
+        source: "cron",
+        enqueuedAt: "2026-04-13T00:00:00.000Z",
       }),
       createIntentAction: (
         _appId: string,
@@ -396,6 +460,10 @@ describe("ProtocolController", () => {
         limit: 9,
       },
     )) as any;
+    const globalDispatch = (await controller.dispatchGlobalDueWebhookDeliveries(
+      undefined,
+      { limit: 9 },
+    )) as any;
     const currentCursor = (await controller.getReplayCursor("alpha.app", {
       "x-protocol-app-token": "secret-token",
     })) as any;
@@ -420,6 +488,7 @@ describe("ProtocolController", () => {
     expect(usage.data.token).toBe("secret-token");
     expect(dispatch.data.token).toBe("secret-token");
     expect(dispatch.data.payload.limit).toBe(9);
+    expect(globalDispatch.data.payload.limit).toBe(9);
     expect(replay.data.cursor).toBe("12");
     expect(currentCursor.data.cursor).toBe("0");
     expect(savedCursor.data.cursor).toBe("44");
@@ -451,7 +520,40 @@ describe("ProtocolController", () => {
         token: string,
         payload: Record<string, unknown>,
       ) => ({ token, payload }),
-      getAppUsageSummary: (_appId: string, token: string) => ({ token }),
+      getAppUsageSummary: (_appId: string, token: string) => ({
+        token,
+        appId: "alpha.app",
+        generatedAt: "2026-04-13T00:00:00.000Z",
+        appStatus: "active",
+        issuedScopes: [],
+        issuedCapabilities: [],
+        grantCounts: { active: 0, revoked: 0 },
+        deliveryCounts: {
+          queued: 0,
+          retrying: 0,
+          delivered: 0,
+          failed: 0,
+          deadLettered: 0,
+        },
+        tokenAudit: {
+          appUpdatedAt: "2026-04-13T00:00:00.000Z",
+          lastRotatedAt: null,
+          lastRevokedAt: null,
+        },
+        grantAudit: {
+          lastGrantedAt: null,
+          lastRevokedAt: null,
+        },
+        latestCursor: "0",
+        recentEvents: [],
+      }),
+      dispatchGlobalDueWebhookDeliveries: () => ({
+        queueName: "protocol-webhooks",
+        jobName: "RunProtocolWebhookDeliveries",
+        limit: 25,
+        source: "cron",
+        enqueuedAt: "2026-04-13T00:00:00.000Z",
+      }),
       createIntentAction: (
         _appId: string,
         token: string,
@@ -599,8 +701,24 @@ describe("ProtocolController", () => {
           failed: 0,
           deadLettered: 0,
         },
+        tokenAudit: {
+          appUpdatedAt: "2026-04-13T00:00:00.000Z",
+          lastRotatedAt: null,
+          lastRevokedAt: null,
+        },
+        grantAudit: {
+          lastGrantedAt: null,
+          lastRevokedAt: null,
+        },
         latestCursor: "0",
         recentEvents: [],
+      }),
+      dispatchGlobalDueWebhookDeliveries: () => ({
+        queueName: "protocol-webhooks",
+        jobName: "RunProtocolWebhookDeliveries",
+        limit: 25,
+        source: "cron",
+        enqueuedAt: "2026-04-13T00:00:00.000Z",
       }),
       createIntentAction: () => ({}),
       sendRequestAction: () => ({}),

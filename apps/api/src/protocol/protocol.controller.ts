@@ -1,12 +1,14 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
   Headers,
   Param,
   Post,
   Query,
 } from "@nestjs/common";
+import { timingSafeEqual } from "node:crypto";
 import {
   appRegistrationRequestSchema,
   identifierSchema,
@@ -238,6 +240,24 @@ export class ProtocolController {
     );
   }
 
+  @Post("delivery-queue/dispatch-due")
+  async dispatchGlobalDueWebhookDeliveries(
+    @Headers("x-cron-key") cronKeyHeader?: string | string[],
+    @Body() body?: unknown,
+  ) {
+    this.assertCronAccessAllowed(cronKeyHeader);
+    const payload = parseRequestPayload(
+      protocolWebhookDeliveryRunRequestSchema,
+      body ?? {},
+    );
+    return ok(
+      await this.protocolService.dispatchGlobalDueWebhookDeliveries({
+        limit: payload.limit,
+        source: "cron",
+      }),
+    );
+  }
+
   @Post("apps/:appId/delivery-queue/run")
   async runDueWebhookDeliveries(
     @Param("appId") appIdParam: string,
@@ -276,6 +296,36 @@ export class ProtocolController {
         payload,
       ),
     );
+  }
+
+  private assertCronAccessAllowed(cronKeyHeader?: string | string[]) {
+    const requiredCronKey = process.env.PROTOCOL_DELIVERY_CRON_KEY?.trim();
+    const environment = (process.env.NODE_ENV ?? "").trim().toLowerCase();
+    if (!requiredCronKey) {
+      if (environment === "production") {
+        throw new ForbiddenException(
+          "protocol delivery dispatch endpoint is disabled without PROTOCOL_DELIVERY_CRON_KEY",
+        );
+      }
+      return;
+    }
+    const providedCronKey = Array.isArray(cronKeyHeader)
+      ? cronKeyHeader[0]
+      : cronKeyHeader;
+    if (
+      !this.constantTimeEqual(providedCronKey?.trim() ?? "", requiredCronKey)
+    ) {
+      throw new ForbiddenException("invalid cron key");
+    }
+  }
+
+  private constantTimeEqual(left: string, right: string) {
+    const leftBuffer = Buffer.from(left);
+    const rightBuffer = Buffer.from(right);
+    if (leftBuffer.length !== rightBuffer.length) {
+      return false;
+    }
+    return timingSafeEqual(leftBuffer, rightBuffer);
   }
 
   @Post("apps/:appId/actions/intents")

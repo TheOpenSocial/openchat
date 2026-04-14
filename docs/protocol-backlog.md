@@ -61,7 +61,10 @@ The protocol is no longer just a concept. The following pieces are already prese
   - delegated user grants on `actions.invoke`
 - The webhook delivery runner is now executable through the protocol API for an app-scoped direct run.
 - A queue-backed delivery path now exists through the `protocol-webhooks` worker lane.
+- A cron-safe global dispatch endpoint now exists for scheduled protocol webhook execution across apps.
 - Usage visibility is now exposed through a protocol app usage summary so first-party settings surfaces can inspect recent protocol activity without raw table access.
+- Usage summaries now include token and grant audit timestamps for first-party inspection surfaces.
+- First-party runtime and agent intent/request flows now have protocol-service call-through paths for the cleanest social actions.
 
 Use this as the baseline for all next backlog items. Do not reintroduce generic social primitives like posts or follows.
 
@@ -108,7 +111,7 @@ These packages should mirror the backend domain rather than inventing new abstra
 
 ### Next
 
-5. Build the event delivery worker for external consumers.
+5. Build the scheduled event delivery runner for external consumers.
    - Webhook subscriptions
    - Event signatures
    - Retry policy
@@ -116,6 +119,7 @@ These packages should mirror the backend domain rather than inventing new abstra
    - Delivery status tracking
    - Queue processing and backoff behavior
    - Dead-letter handling and recovery
+   - Scheduled dispatch path for due deliveries across apps
 
 6. Tighten token management and app credential lifecycle.
    - App token issuance
@@ -123,6 +127,7 @@ These packages should mirror the backend domain rather than inventing new abstra
    - Rotation and revocation
    - Expiry and refresh policy where applicable
    - Audit trail for credential use
+   - First-party visibility into token/grant audit state
 
 7. Finish consent and scope grant enforcement for third-party access.
    - Enforce `protocol_app_scope_grants` against app, user, service, and agent subjects.

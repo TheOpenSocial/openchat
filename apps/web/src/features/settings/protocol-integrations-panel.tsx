@@ -428,6 +428,33 @@ export function ProtocolIntegrationsPanel() {
                     Latest cursor: {usageSummary.latestCursor}
                   </Badge>
                 </div>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-[hsl(var(--border-soft))] bg-[hsl(var(--panel))]/60 px-3 py-3 text-sm">
+                    <p className="text-xs uppercase tracking-[0.2em] text-[hsl(var(--muted-foreground))]">
+                      Token audit
+                    </p>
+                    <p className="mt-2 text-[hsl(var(--foreground))]">
+                      Last rotated: {usageSummary.tokenAudit.lastRotatedAt ?? "Never"}
+                    </p>
+                    <p className="mt-1 text-[hsl(var(--foreground))]">
+                      Last revoked: {usageSummary.tokenAudit.lastRevokedAt ?? "Never"}
+                    </p>
+                    <p className="mt-1 text-[hsl(var(--foreground))]">
+                      App updated: {usageSummary.tokenAudit.appUpdatedAt}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-[hsl(var(--border-soft))] bg-[hsl(var(--panel))]/60 px-3 py-3 text-sm">
+                    <p className="text-xs uppercase tracking-[0.2em] text-[hsl(var(--muted-foreground))]">
+                      Grant audit
+                    </p>
+                    <p className="mt-2 text-[hsl(var(--foreground))]">
+                      Last granted: {usageSummary.grantAudit.lastGrantedAt ?? "Never"}
+                    </p>
+                    <p className="mt-1 text-[hsl(var(--foreground))]">
+                      Last revoked: {usageSummary.grantAudit.lastRevokedAt ?? "Never"}
+                    </p>
+                  </div>
+                </div>
                 {usageSummary.recentEvents.length > 0 ? (
                   <div className="mt-3 space-y-2">
                     {usageSummary.recentEvents.slice(0, 5).map((event, index) => (

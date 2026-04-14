@@ -204,6 +204,7 @@ function createPrismaStub() {
           issued_scopes: params[4],
           issued_capabilities: params[5],
           app_token_hash: params[6],
+          updated_at: new Date().toISOString(),
         });
         return 1;
       }
@@ -217,6 +218,7 @@ function createPrismaStub() {
           status: params[1],
           registration_json: JSON.parse(params[2]),
           app_token_hash: params[3],
+          updated_at: new Date().toISOString(),
         };
         apps.set(params[0], updated);
         return 1;
@@ -828,6 +830,31 @@ describe("ProtocolService", () => {
     expect(result.limit).toBe(7);
   });
 
+  it("dispatches due deliveries globally onto the protocol queue", async () => {
+    const queue = {
+      add: async (_name: string, payload: Record<string, unknown>) => payload,
+    };
+    const service = new ProtocolService(
+      createPrismaStub() as any,
+      createDeliveryWorkerStub() as any,
+      createDeliveryRunnerStub() as any,
+      queue as any,
+      createIntentsServiceStub() as any,
+      createInboxServiceStub() as any,
+      createChatsServiceStub() as any,
+    );
+
+    const result = await service.dispatchGlobalDueWebhookDeliveries({
+      limit: 11,
+      source: "manual",
+    });
+
+    expect(result.queueName).toBe("protocol-webhooks");
+    expect(result.jobName).toBe("RunProtocolWebhookDeliveries");
+    expect(result.limit).toBe(11);
+    expect(result.source).toBe("manual");
+  });
+
   it("returns a protocol usage summary for an app", async () => {
     const service = createProtocolService();
     const registration = await service.registerApp(createRegistrationPayload());
@@ -846,6 +873,27 @@ describe("ProtocolService", () => {
 
     expect(summary.appId).toBe("partner.alpha");
     expect(summary.grantCounts.active).toBe(1);
+    expect(summary.tokenAudit.appUpdatedAt).not.toBe("");
+    expect(summary.grantAudit.lastGrantedAt).not.toBeNull();
     expect(summary.latestCursor).not.toBe("");
+  });
+
+  it("supports first-party protocol action wrappers", async () => {
+    const service = createProtocolService();
+
+    const createdIntent = await service.createFirstPartyIntentAction({
+      actorUserId: "00000000-0000-4000-8000-000000000001",
+      rawText: "Find dinner this week",
+      metadata: {},
+    });
+    const sentRequest = await service.sendFirstPartyRequestAction({
+      actorUserId: "00000000-0000-4000-8000-000000000001",
+      intentId: "00000000-0000-4000-8000-000000000101",
+      recipientUserId: "00000000-0000-4000-8000-000000000002",
+      metadata: {},
+    });
+
+    expect(createdIntent.action).toBe("intent.create");
+    expect(sentRequest.action).toBe("request.send");
   });
 });

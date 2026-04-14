@@ -14,6 +14,7 @@ import { IntentsService } from "../intents/intents.service.js";
 import { MatchingService } from "../matching/matching.service.js";
 import { PersonalizationService } from "../personalization/personalization.service.js";
 import { ProfilesService } from "../profiles/profiles.service.js";
+import { ProtocolService } from "../protocol/protocol.service.js";
 import { RecurringCirclesService } from "../recurring-circles/recurring-circles.service.js";
 import { ScheduledTasksService } from "../scheduled-tasks/scheduled-tasks.service.js";
 
@@ -41,6 +42,8 @@ export class AgentOutcomeToolsService {
     private readonly personalizationService?: PersonalizationService,
     @Optional()
     private readonly profilesService?: ProfilesService,
+    @Optional()
+    private readonly protocolService?: ProtocolService,
     @Optional()
     private readonly recurringCirclesService?: RecurringCirclesService,
     @Optional()
@@ -442,22 +445,34 @@ export class AgentOutcomeToolsService {
       return { persisted: false, reason: "intents_service_unavailable" };
     }
 
-    const intent = await this.intentsService.createIntent(
-      input.userId,
-      input.text,
-      input.traceId,
-      input.threadId,
-    );
+    const intent = this.protocolService
+      ? await this.protocolService.createFirstPartyIntentAction({
+          actorUserId: input.userId,
+          rawText: input.text,
+          traceId: input.traceId,
+          agentThreadId: input.threadId,
+          metadata: {
+            source: "agent_outcome_tool.persist_intent",
+          },
+        })
+      : await this.intentsService.createIntent(
+          input.userId,
+          input.text,
+          input.traceId,
+          input.threadId,
+        );
 
     return {
       persisted: true,
-      intentId: intent.id,
+      intentId: "intentId" in intent ? intent.intentId : intent.id,
       status: intent.status,
-      safetyState: intent.safetyState,
+      safetyState:
+        "safetyState" in intent ? (intent.safetyState ?? null) : null,
     };
   }
 
   async sendIntroRequest(input: {
+    actorUserId: string;
     intentId: string;
     recipientUserId: string;
     traceId: string;
@@ -467,12 +482,23 @@ export class AgentOutcomeToolsService {
       return { sent: false, reason: "intents_service_unavailable" };
     }
 
-    const result = await this.intentsService.sendIntentRequest({
-      intentId: input.intentId,
-      recipientUserId: input.recipientUserId,
-      traceId: input.traceId,
-      agentThreadId: input.threadId,
-    });
+    const result = this.protocolService
+      ? await this.protocolService.sendFirstPartyRequestAction({
+          actorUserId: input.actorUserId,
+          intentId: input.intentId,
+          recipientUserId: input.recipientUserId,
+          traceId: input.traceId,
+          agentThreadId: input.threadId,
+          metadata: {
+            source: "agent_outcome_tool.send_intro_request",
+          },
+        })
+      : await this.intentsService.sendIntentRequest({
+          intentId: input.intentId,
+          recipientUserId: input.recipientUserId,
+          traceId: input.traceId,
+          agentThreadId: input.threadId,
+        });
 
     return {
       sent: result.status === "pending" || result.status === "accepted",
@@ -484,38 +510,45 @@ export class AgentOutcomeToolsService {
     if (!this.inboxService) {
       return { accepted: false, reason: "inbox_service_unavailable" };
     }
-    const result = await this.inboxService.updateStatus(
-      input.requestId,
-      "accepted",
-      input.actorUserId,
-    );
+    const result = this.protocolService
+      ? await this.protocolService.acceptFirstPartyRequestAction(
+          input.requestId,
+          {
+            actorUserId: input.actorUserId,
+            metadata: {
+              source: "agent_outcome_tool.accept_intro",
+            },
+          },
+        )
+      : await this.inboxService.updateStatus(
+          input.requestId,
+          "accepted",
+          input.actorUserId,
+        );
     await this.recordExecutionMemory(input.actorUserId, {
       summary:
         "Accepted a social intro request and opened the path to a real connection.",
       activities: ["accepted intro"],
       people:
-        typeof result.request.senderUserId === "string"
+        "request" in result && typeof result.request.senderUserId === "string"
           ? [result.request.senderUserId]
           : [],
       highSuccessPeople:
-        typeof result.request.senderUserId === "string"
+        "request" in result && typeof result.request.senderUserId === "string"
           ? [result.request.senderUserId]
           : [],
       context: {
         source: "agent_outcome_tool",
         outcome: "intro_accepted",
-        requestId: result.request.id,
-        status: result.request.status,
-        intentId:
-          "intentId" in result.request
-            ? (result.request.intentId ?? null)
-            : null,
+        requestId: "request" in result ? result.request.id : result.requestId,
+        status: "request" in result ? result.request.status : result.status,
+        intentId: "request" in result ? (result.request.intentId ?? null) : result.intentId,
       },
     });
     return {
       accepted: true,
-      requestId: result.request.id,
-      status: result.request.status,
+      requestId: "request" in result ? result.request.id : result.requestId,
+      status: "request" in result ? result.request.status : result.status,
       queued: Boolean("queued" in result && result.queued),
     };
   }
@@ -524,34 +557,41 @@ export class AgentOutcomeToolsService {
     if (!this.inboxService) {
       return { rejected: false, reason: "inbox_service_unavailable" };
     }
-    const result = await this.inboxService.updateStatus(
-      input.requestId,
-      "rejected",
-      input.actorUserId,
-    );
+    const result = this.protocolService
+      ? await this.protocolService.rejectFirstPartyRequestAction(
+          input.requestId,
+          {
+            actorUserId: input.actorUserId,
+            metadata: {
+              source: "agent_outcome_tool.reject_intro",
+            },
+          },
+        )
+      : await this.inboxService.updateStatus(
+          input.requestId,
+          "rejected",
+          input.actorUserId,
+        );
     await this.recordExecutionMemory(input.actorUserId, {
       summary:
         "Declined a social intro request because it was not the right fit right now.",
       activities: ["declined intro"],
       people:
-        typeof result.request.senderUserId === "string"
+        "request" in result && typeof result.request.senderUserId === "string"
           ? [result.request.senderUserId]
           : [],
       context: {
         source: "agent_outcome_tool",
         outcome: "intro_rejected",
-        requestId: result.request.id,
-        status: result.request.status,
-        intentId:
-          "intentId" in result.request
-            ? (result.request.intentId ?? null)
-            : null,
+        requestId: "request" in result ? result.request.id : result.requestId,
+        status: "request" in result ? result.request.status : result.status,
+        intentId: "request" in result ? (result.request.intentId ?? null) : result.intentId,
       },
     });
     return {
       rejected: true,
-      requestId: result.request.id,
-      status: result.request.status,
+      requestId: "request" in result ? result.request.id : result.requestId,
+      status: "request" in result ? result.request.status : result.status,
     };
   }
 

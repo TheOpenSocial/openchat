@@ -518,12 +518,38 @@ export const protocolAppUsageSummarySchema = z
         deadLettered: z.number().int().min(0),
       })
       .strict(),
+    tokenAudit: z
+      .object({
+        appUpdatedAt: isoDateTimeSchema,
+        lastRotatedAt: isoDateTimeSchema.nullable(),
+        lastRevokedAt: isoDateTimeSchema.nullable(),
+      })
+      .strict(),
+    grantAudit: z
+      .object({
+        lastGrantedAt: isoDateTimeSchema.nullable(),
+        lastRevokedAt: isoDateTimeSchema.nullable(),
+      })
+      .strict(),
     latestCursor: z.string().min(1),
     recentEvents: z.array(protocolEventEnvelopeSchema).default([]),
   })
   .strict();
 export type ProtocolAppUsageSummary = z.infer<
   typeof protocolAppUsageSummarySchema
+>;
+
+export const protocolWebhookDeliveryGlobalDispatchResultSchema = z
+  .object({
+    queueName: z.literal("protocol-webhooks"),
+    jobName: z.literal("RunProtocolWebhookDeliveries"),
+    limit: z.number().int().min(1).max(100),
+    source: z.enum(["cron", "manual"]),
+    enqueuedAt: isoDateTimeSchema,
+  })
+  .strict();
+export type ProtocolWebhookDeliveryGlobalDispatchResult = z.infer<
+  typeof protocolWebhookDeliveryGlobalDispatchResultSchema
 >;
 
 export const protocolReplayCursorSchema = z

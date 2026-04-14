@@ -26,6 +26,7 @@ import {
   eventNameSchema,
   manifestSchema,
   protocolAppUsageSummarySchema,
+  protocolWebhookDeliveryGlobalDispatchResultSchema,
   protocolChatMessageActionResultSchema,
   protocolChatSendMessageActionSchema,
   protocolAppScopeGrantCreateSchema,
@@ -86,6 +87,7 @@ type ProtocolAppRow = {
   issued_scopes: string[] | null;
   issued_capabilities: string[] | null;
   app_token_hash: string;
+  updated_at: Date | string;
 };
 
 type ProtocolWebhookSubscriptionRow = {
@@ -162,7 +164,10 @@ type RegisteredProtocolApp = {
   issuedScopes: ProtocolScopeName[];
   issuedCapabilities: CapabilityName[];
   appTokenHash: string;
+  updatedAt: string;
 };
+
+const FIRST_PARTY_PROTOCOL_ACTOR_APP_ID = "opensocial-firstparty";
 
 @Injectable()
 export class ProtocolService {
@@ -205,7 +210,7 @@ export class ProtocolService {
 
   async listApps() {
     const rows = await this.prisma.$queryRawUnsafe<ProtocolAppRow[]>(
-      `SELECT app_id, status, registration_json, manifest_json, issued_scopes, issued_capabilities, app_token_hash
+      `SELECT app_id, status, registration_json, manifest_json, issued_scopes, issued_capabilities, app_token_hash, updated_at
        FROM protocol_apps
        ORDER BY app_id ASC`,
     );
@@ -778,36 +783,9 @@ export class ProtocolService {
     if (!this.intentsService) {
       throw new NotFoundException("intent actions unavailable");
     }
-
-    const traceId = payload.traceId ?? randomUUID();
-    const intent = await this.intentsService.createIntent(
-      payload.actorUserId,
-      payload.rawText,
-      traceId,
-      payload.agentThreadId,
-    );
-
-    await this.recordEvent({
+    return this.executeIntentCreateAction(payload, {
       actorAppId: app.registration.appId,
-      event: "intent.created",
-      resource: "intent",
-      payload: {
-        intentId: intent.id,
-        actorUserId: payload.actorUserId,
-        traceId,
-        grantId: grant.grantId,
-      },
-    });
-
-    return protocolIntentActionResultSchema.parse({
-      action: "intent.create",
-      status: intent.status,
-      actorUserId: payload.actorUserId,
-      intentId: intent.id,
-      traceId,
-      safetyState:
-        typeof intent.safetyState === "string" ? intent.safetyState : null,
-      metadata: payload.metadata ?? {},
+      grantId: grant.grantId,
     });
   }
 
@@ -827,43 +805,9 @@ export class ProtocolService {
     if (!this.intentsService) {
       throw new NotFoundException("request actions unavailable");
     }
-
-    await this.intentsService.assertIntentOwnership(
-      payload.intentId,
-      payload.actorUserId,
-    );
-    const traceId = payload.traceId ?? randomUUID();
-    const request = await this.intentsService.sendIntentRequest({
-      intentId: payload.intentId,
-      recipientUserId: payload.recipientUserId,
-      traceId,
-      agentThreadId: payload.agentThreadId,
-    });
-    const requestId =
-      "requestId" in request
-        ? request.requestId
-        : (request as { id?: string }).id;
-
-    await this.recordEvent({
+    return this.executeRequestSendAction(payload, {
       actorAppId: app.registration.appId,
-      event: "request.sent",
-      resource: "intent_request",
-      payload: {
-        requestId,
-        intentId: payload.intentId,
-        actorUserId: payload.actorUserId,
-        recipientUserId: payload.recipientUserId,
-        grantId: grant.grantId,
-      },
-    });
-
-    return protocolRequestActionResultSchema.parse({
-      action: "request.send",
-      status: request.status,
-      actorUserId: payload.actorUserId,
-      requestId: requestId ?? null,
-      intentId: payload.intentId,
-      metadata: payload.metadata ?? {},
+      grantId: grant.grantId,
     });
   }
 
@@ -884,34 +828,9 @@ export class ProtocolService {
     if (!this.inboxService) {
       throw new NotFoundException("request actions unavailable");
     }
-
-    const result = await this.inboxService.updateStatus(
-      requestId,
-      "accepted",
-      payload.actorUserId,
-    );
-
-    await this.recordEvent({
+    return this.executeRequestDecisionAction("accept", requestId, payload, {
       actorAppId: app.registration.appId,
-      event: "request.accepted",
-      resource: "intent_request",
-      payload: {
-        requestId: result.request.id,
-        intentId: result.request.intentId,
-        actorUserId: payload.actorUserId,
-        grantId: grant.grantId,
-      },
-    });
-
-    return protocolRequestActionResultSchema.parse({
-      action: "request.accept",
-      status: result.request.status,
-      actorUserId: payload.actorUserId,
-      requestId: result.request.id,
-      intentId: result.request.intentId,
-      queued: "queued" in result ? Boolean(result.queued) : false,
-      unchanged: "unchanged" in result ? Boolean(result.unchanged) : false,
-      metadata: payload.metadata ?? {},
+      grantId: grant.grantId,
     });
   }
 
@@ -932,33 +851,9 @@ export class ProtocolService {
     if (!this.inboxService) {
       throw new NotFoundException("request actions unavailable");
     }
-
-    const result = await this.inboxService.updateStatus(
-      requestId,
-      "rejected",
-      payload.actorUserId,
-    );
-
-    await this.recordEvent({
+    return this.executeRequestDecisionAction("reject", requestId, payload, {
       actorAppId: app.registration.appId,
-      event: "request.rejected",
-      resource: "intent_request",
-      payload: {
-        requestId: result.request.id,
-        intentId: result.request.intentId,
-        actorUserId: payload.actorUserId,
-        grantId: grant.grantId,
-      },
-    });
-
-    return protocolRequestActionResultSchema.parse({
-      action: "request.reject",
-      status: result.request.status,
-      actorUserId: payload.actorUserId,
-      requestId: result.request.id,
-      intentId: result.request.intentId,
-      unchanged: "unchanged" in result ? Boolean(result.unchanged) : false,
-      metadata: payload.metadata ?? {},
+      grantId: grant.grantId,
     });
   }
 
@@ -979,38 +874,39 @@ export class ProtocolService {
     if (!this.chatsService) {
       throw new NotFoundException("chat actions unavailable");
     }
-
-    const message = await this.chatsService.createMessage(
-      chatId,
-      payload.actorUserId,
-      payload.body,
-      {
-        idempotencyKey: payload.clientMessageId,
-        replyToMessageId: payload.replyToMessageId,
-      },
-    );
-
-    await this.recordEvent({
+    return this.executeChatSendMessageAction(chatId, payload, {
       actorAppId: app.registration.appId,
-      event: "chat.message.sent",
-      resource: "chat_message",
-      payload: {
-        chatId,
-        messageId: message.id,
-        actorUserId: payload.actorUserId,
-        grantId: grant.grantId,
-      },
+      grantId: grant.grantId,
     });
+  }
 
-    return protocolChatMessageActionResultSchema.parse({
-      action: "chat.send_message",
-      actorUserId: payload.actorUserId,
-      chatId,
-      messageId: message.id,
-      replyToMessageId: message.replyToMessageId ?? null,
-      createdAt:
-        this.toIsoString(message.createdAt) ?? new Date().toISOString(),
-      metadata: payload.metadata ?? {},
+  async createFirstPartyIntentAction(input: ProtocolIntentCreateAction) {
+    return this.executeIntentCreateAction(input, {
+      actorAppId: FIRST_PARTY_PROTOCOL_ACTOR_APP_ID,
+    });
+  }
+
+  async sendFirstPartyRequestAction(input: ProtocolIntentRequestSendAction) {
+    return this.executeRequestSendAction(input, {
+      actorAppId: FIRST_PARTY_PROTOCOL_ACTOR_APP_ID,
+    });
+  }
+
+  async acceptFirstPartyRequestAction(
+    requestId: string,
+    input: ProtocolRequestDecisionAction,
+  ) {
+    return this.executeRequestDecisionAction("accept", requestId, input, {
+      actorAppId: FIRST_PARTY_PROTOCOL_ACTOR_APP_ID,
+    });
+  }
+
+  async rejectFirstPartyRequestAction(
+    requestId: string,
+    input: ProtocolRequestDecisionAction,
+  ) {
+    return this.executeRequestDecisionAction("reject", requestId, input, {
+      actorAppId: FIRST_PARTY_PROTOCOL_ACTOR_APP_ID,
     });
   }
 
@@ -1065,6 +961,37 @@ export class ProtocolService {
     };
   }
 
+  async dispatchGlobalDueWebhookDeliveries(input: {
+    limit?: number;
+    source?: "cron" | "manual";
+  } = {}) {
+    const limit = Math.min(Math.max(input.limit ?? 100, 1), 100);
+    const source = input.source ?? "cron";
+    const enqueuedAt = new Date().toISOString();
+    await this.protocolWebhooksQueue.add(
+      "RunProtocolWebhookDeliveries",
+      {
+        type: "RunProtocolWebhookDeliveries",
+        traceId: randomUUID(),
+        limit,
+        source,
+      },
+      {
+        removeOnComplete: 200,
+        removeOnFail: 200,
+        attempts: 3,
+        backoff: { type: "exponential", delay: 1000 },
+      },
+    );
+    return protocolWebhookDeliveryGlobalDispatchResultSchema.parse({
+      queueName: "protocol-webhooks",
+      jobName: "RunProtocolWebhookDeliveries",
+      limit,
+      source,
+      enqueuedAt,
+    });
+  }
+
   async getAppUsageSummary(
     appId: string,
     appToken: string,
@@ -1107,6 +1034,22 @@ export class ProtocolService {
         (left, right) =>
           Date.parse(right.issuedAt) - Date.parse(left.issuedAt),
       );
+    const lastRotatedAt =
+      recentEvents.find(
+        (event) => event.payload && typeof event.payload === "object" && (event.payload as Record<string, unknown>).update === "app_token_rotated",
+      )?.issuedAt ?? null;
+    const lastRevokedAt =
+      recentEvents.find(
+        (event) => event.payload && typeof event.payload === "object" && (event.payload as Record<string, unknown>).update === "app_token_revoked",
+      )?.issuedAt ?? null;
+    const lastGrantedAt =
+      recentEvents.find(
+        (event) => event.payload && typeof event.payload === "object" && (event.payload as Record<string, unknown>).update === "scope_grant_upserted",
+      )?.issuedAt ?? null;
+    const lastGrantRevokedAt =
+      recentEvents.find(
+        (event) => event.payload && typeof event.payload === "object" && (event.payload as Record<string, unknown>).update === "scope_grant_revoked",
+      )?.issuedAt ?? null;
     const latestCursor =
       recentEventRows.length > 0 ? String(recentEventRows[0].cursor) : "0";
     const grantCounts = Object.fromEntries(
@@ -1133,8 +1076,194 @@ export class ProtocolService {
         failed: deliveryCounts.failed ?? 0,
         deadLettered: deliveryCounts.dead_lettered ?? 0,
       },
+      tokenAudit: {
+        appUpdatedAt: app.updatedAt,
+        lastRotatedAt,
+        lastRevokedAt,
+      },
+      grantAudit: {
+        lastGrantedAt,
+        lastRevokedAt: lastGrantRevokedAt,
+      },
       latestCursor,
       recentEvents,
+    });
+  }
+
+  private async executeIntentCreateAction(
+    input: ProtocolIntentCreateAction,
+    context: { actorAppId: string; grantId?: string },
+  ) {
+    const payload = protocolIntentCreateActionSchema.parse(input);
+    const traceId = payload.traceId ?? randomUUID();
+    const intent = await this.intentsService!.createIntent(
+      payload.actorUserId,
+      payload.rawText,
+      traceId,
+      payload.agentThreadId,
+    );
+
+    await this.recordEvent({
+      actorAppId: context.actorAppId,
+      event: "intent.created",
+      resource: "intent",
+      payload: {
+        intentId: intent.id,
+        actorUserId: payload.actorUserId,
+        traceId,
+        grantId: context.grantId ?? null,
+        source:
+          context.actorAppId === FIRST_PARTY_PROTOCOL_ACTOR_APP_ID
+            ? "first_party"
+            : "app",
+      },
+    });
+
+    return protocolIntentActionResultSchema.parse({
+      action: "intent.create",
+      status: intent.status,
+      actorUserId: payload.actorUserId,
+      intentId: intent.id,
+      traceId,
+      safetyState:
+        typeof intent.safetyState === "string" ? intent.safetyState : null,
+      metadata: payload.metadata ?? {},
+    });
+  }
+
+  private async executeRequestSendAction(
+    input: ProtocolIntentRequestSendAction,
+    context: { actorAppId: string; grantId?: string },
+  ) {
+    const payload = protocolIntentRequestSendActionSchema.parse(input);
+    await this.intentsService!.assertIntentOwnership(
+      payload.intentId,
+      payload.actorUserId,
+    );
+    const traceId = payload.traceId ?? randomUUID();
+    const request = await this.intentsService!.sendIntentRequest({
+      intentId: payload.intentId,
+      recipientUserId: payload.recipientUserId,
+      traceId,
+      agentThreadId: payload.agentThreadId,
+    });
+    const requestId =
+      "requestId" in request
+        ? request.requestId
+        : (request as { id?: string }).id;
+
+    await this.recordEvent({
+      actorAppId: context.actorAppId,
+      event: "request.sent",
+      resource: "intent_request",
+      payload: {
+        requestId,
+        intentId: payload.intentId,
+        actorUserId: payload.actorUserId,
+        recipientUserId: payload.recipientUserId,
+        grantId: context.grantId ?? null,
+        source:
+          context.actorAppId === FIRST_PARTY_PROTOCOL_ACTOR_APP_ID
+            ? "first_party"
+            : "app",
+      },
+    });
+
+    return protocolRequestActionResultSchema.parse({
+      action: "request.send",
+      status: request.status,
+      actorUserId: payload.actorUserId,
+      requestId: requestId ?? null,
+      intentId: payload.intentId,
+      metadata: payload.metadata ?? {},
+    });
+  }
+
+  private async executeRequestDecisionAction(
+    action: "accept" | "reject",
+    requestId: string,
+    input: ProtocolRequestDecisionAction,
+    context: { actorAppId: string; grantId?: string },
+  ) {
+    const payload = protocolRequestDecisionActionSchema.parse(input);
+    const result = await this.inboxService!.updateStatus(
+      requestId,
+      action === "accept" ? "accepted" : "rejected",
+      payload.actorUserId,
+    );
+
+    await this.recordEvent({
+      actorAppId: context.actorAppId,
+      event: action === "accept" ? "request.accepted" : "request.rejected",
+      resource: "intent_request",
+      payload: {
+        requestId: result.request.id,
+        intentId: result.request.intentId,
+        actorUserId: payload.actorUserId,
+        grantId: context.grantId ?? null,
+        source:
+          context.actorAppId === FIRST_PARTY_PROTOCOL_ACTOR_APP_ID
+            ? "first_party"
+            : "app",
+      },
+    });
+
+    return protocolRequestActionResultSchema.parse({
+      action: action === "accept" ? "request.accept" : "request.reject",
+      status: result.request.status,
+      actorUserId: payload.actorUserId,
+      requestId: result.request.id,
+      intentId: result.request.intentId,
+      queued:
+        action === "accept" && "queued" in result
+          ? Boolean(result.queued)
+          : false,
+      unchanged: "unchanged" in result ? Boolean(result.unchanged) : false,
+      metadata: payload.metadata ?? {},
+    });
+  }
+
+  private async executeChatSendMessageAction(
+    chatId: string,
+    input: ProtocolChatSendMessageAction,
+    context: { actorAppId: string; grantId?: string },
+  ) {
+    const payload = protocolChatSendMessageActionSchema.parse(input);
+    const message = await this.chatsService!.createMessage(
+      chatId,
+      payload.actorUserId,
+      payload.body,
+      {
+        idempotencyKey: payload.clientMessageId,
+        replyToMessageId: payload.replyToMessageId,
+      },
+    );
+
+    await this.recordEvent({
+      actorAppId: context.actorAppId,
+      event: "chat.message.sent",
+      resource: "chat_message",
+      payload: {
+        chatId,
+        messageId: message.id,
+        actorUserId: payload.actorUserId,
+        grantId: context.grantId ?? null,
+        source:
+          context.actorAppId === FIRST_PARTY_PROTOCOL_ACTOR_APP_ID
+            ? "first_party"
+            : "app",
+      },
+    });
+
+    return protocolChatMessageActionResultSchema.parse({
+      action: "chat.send_message",
+      actorUserId: payload.actorUserId,
+      chatId,
+      messageId: message.id,
+      replyToMessageId: message.replyToMessageId ?? null,
+      createdAt:
+        this.toIsoString(message.createdAt) ?? new Date().toISOString(),
+      metadata: payload.metadata ?? {},
     });
   }
 
@@ -1265,7 +1394,7 @@ export class ProtocolService {
 
   private async findAppRow(appId: string) {
     const rows = await this.prisma.$queryRawUnsafe<ProtocolAppRow[]>(
-      `SELECT app_id, status, registration_json, manifest_json, issued_scopes, issued_capabilities, app_token_hash
+      `SELECT app_id, status, registration_json, manifest_json, issued_scopes, issued_capabilities, app_token_hash, updated_at
        FROM protocol_apps
        WHERE app_id = $1
        LIMIT 1`,
@@ -1297,6 +1426,7 @@ export class ProtocolService {
         capabilityNameSchema.parse(capability),
       ),
       appTokenHash: row.app_token_hash,
+      updatedAt: this.toIsoString(row.updated_at) ?? new Date().toISOString(),
     };
   }
 

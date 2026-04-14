@@ -232,6 +232,7 @@ describe("AgentOutcomeToolsService", () => {
     });
 
     const intro = await service.sendIntroRequest({
+      actorUserId: "user-1",
       intentId: "intent-group-1",
       recipientUserId: "candidate-1",
       traceId: "trace-1",
