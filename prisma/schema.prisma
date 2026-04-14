@@ -662,6 +662,7 @@ model ProtocolAppScopeGrant {
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
   app             ProtocolApp @relation(fields: [appId], references: [appId], onDelete: Cascade)
+  approvedConsentRequests ProtocolAppConsentRequest[] @relation("ProtocolConsentRequestApprovedGrant")
 
   @@unique([appId, scope, subjectType, subjectId])
   @@index([appId, status, createdAt])
@@ -689,7 +690,7 @@ model ProtocolAppConsentRequest {
   createdAt         DateTime                      @default(now()) @map("created_at")
   updatedAt         DateTime                      @updatedAt @map("updated_at")
   app               ProtocolApp                   @relation(fields: [appId], references: [appId], onDelete: Cascade)
-  approvedGrant     ProtocolAppScopeGrant?        @relation(fields: [approvedGrantId], references: [id], onDelete: SetNull)
+  approvedGrant     ProtocolAppScopeGrant?        @relation("ProtocolConsentRequestApprovedGrant", fields: [approvedGrantId], references: [id], onDelete: SetNull)
 
   @@index([appId, status, createdAt])
   @@index([approvedGrantId])
