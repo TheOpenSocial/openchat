@@ -77,6 +77,7 @@ The protocol is no longer just a concept. The following pieces are already prese
 - First-party runtime and agent intent/request flows now have protocol-service call-through paths for the cleanest social actions.
 - First-party agent circle creation and circle membership actions now call through the protocol service instead of bypassing it.
 - Protocol-originated circle actions now emit provenance-backed user notifications, and first-party Activity can label them as integration updates without exposing protocol internals.
+- Protocol-originated request send, request reject, accepted-request connection setup, and group backfill notifications now carry provenance through to user-facing Activity titles and notification metadata.
 
 Use this as the baseline for all next backlog items. Do not reintroduce generic social primitives like posts or follows.
 
@@ -160,6 +161,7 @@ These packages should mirror the backend domain rather than inventing new abstra
    - Keep shared protocol client package and typed wrappers as the baseline.
    - Add event stream consumption in the app shell where protocol events become user-visible.
    - Tighten first-party surfaces that reflect third-party actions and inbound events.
+   - Render protocol-originated Activity items as user-meaningful social states, not operator jargon.
    - Expose protocol state without turning the UI into a developer console.
 
 10. Add third-party agent integration support.
@@ -258,3 +260,11 @@ These packages should mirror the backend domain rather than inventing new abstra
 4. Add operator/admin visibility for protocol lag, replay pressure, and token/grant audit usage.
 5. Add the next external action APIs and agent support beyond circles.
 6. Expand user-visible protocol events in first-party activity surfaces beyond circle notifications, without exposing backend internals.
+
+## Current Direction Guardrails
+
+- Keep the protocol centered on coordination primitives: intents, requests, connections, chats, circles, notifications, and events.
+- Keep first-party UX user-facing. Surface integration state as meaningful social outcomes, not protocol jargon.
+- Prefer provenance threading through existing domain flows over adding parallel protocol-only notification systems.
+- Normalize first-party writes through protocol boundaries only when the public contract is already stable.
+- Do not introduce posts, follows, feeds, or other generic social-network primitives.

@@ -771,6 +771,109 @@ describe("ConnectionSetupService", () => {
     );
   });
 
+  it("preserves protocol provenance on group backfill notifications", async () => {
+    const createManyIntentRequests = vi.fn().mockResolvedValue({ count: 1 });
+    const notificationsService: any = {
+      createInAppNotification: vi.fn().mockResolvedValue({}),
+    };
+    const prisma: any = {
+      intentRequest: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "req-backfill-protocol",
+          status: "accepted",
+          intentId: "intent-backfill-protocol",
+          senderUserId: "user-1",
+          recipientUserId: "user-2",
+          relevanceFeatures: {
+            provenance: {
+              source: "protocol",
+              action: "request.send",
+              actorAppId: "partner.alpha",
+            },
+          },
+        }),
+        findMany: vi
+          .fn()
+          .mockResolvedValue([
+            { recipientUserId: "user-2", status: "accepted", wave: 1 },
+          ]),
+        createMany: createManyIntentRequests,
+      },
+      intent: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "intent-backfill-protocol",
+          createdAt: new Date(),
+          parsedIntent: { intentType: "group", groupSizeTarget: 4 },
+        }),
+        update: vi.fn().mockResolvedValue({}),
+      },
+      intentCandidate: {
+        findMany: vi
+          .fn()
+          .mockResolvedValue([
+            { candidateUserId: "user-3", rationale: { semantic: 0.9 } },
+          ]),
+      },
+      connection: {
+        findFirst: vi.fn().mockResolvedValue(null),
+      },
+      connectionParticipant: {
+        findMany: vi.fn().mockResolvedValue([]),
+        createMany: vi.fn().mockResolvedValue({}),
+      },
+      chat: {
+        findFirst: vi.fn().mockResolvedValue(null),
+      },
+      chatMembership: {
+        findMany: vi.fn().mockResolvedValue([]),
+        createMany: vi.fn().mockResolvedValue({}),
+      },
+      agentThread: {
+        findFirst: vi.fn().mockResolvedValue({ id: "thread-1" }),
+      },
+    };
+
+    const service = new ConnectionSetupService(
+      prisma,
+      {
+        createConnection: vi.fn().mockResolvedValue({ id: "conn-protocol" }),
+      } as any,
+      {
+        createChat: vi.fn().mockResolvedValue({ id: "chat-protocol" }),
+        createMessage: vi.fn().mockResolvedValue({}),
+        createSystemMessage: vi.fn().mockResolvedValue({}),
+      } as any,
+      notificationsService,
+      {
+        recordBehaviorSignal: vi.fn().mockResolvedValue({}),
+        storeInteractionSummary: vi.fn().mockResolvedValue({}),
+      } as any,
+      {
+        upsertConversationSummaryEmbedding: vi.fn().mockResolvedValue({}),
+      } as any,
+      { createAgentMessage: vi.fn().mockResolvedValue({}) } as any,
+      {
+        recordGroupFormationStalled: vi.fn().mockResolvedValue(undefined),
+      } as any,
+    );
+
+    await service.setupFromAcceptedRequest("req-backfill-protocol");
+
+    expect(notificationsService.createInAppNotification).toHaveBeenCalledWith(
+      "user-3",
+      NotificationType.REQUEST_RECEIVED,
+      "A group request is available now. Join if you are in.",
+      expect.objectContaining({
+        intentId: "intent-backfill-protocol",
+        provenance: expect.objectContaining({
+          source: "protocol",
+          action: "request.accept",
+          actorAppId: "partner.alpha",
+        }),
+      }),
+    );
+  });
+
   it("reuses workflow-linked group backfill notifications and sender thread updates on replay", async () => {
     const sideEffectRows: Array<{
       action: string;

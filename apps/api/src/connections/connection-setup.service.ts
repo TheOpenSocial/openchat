@@ -652,6 +652,7 @@ export class ConnectionSetupService {
         targetSize,
         workflowRunId: options.workflowRunId,
         traceId: options.traceId,
+        protocolProvenance: options.protocolProvenance,
       });
       if (backfillRequested > 0) {
         await this.notifySenderThread(
@@ -781,6 +782,7 @@ export class ConnectionSetupService {
     targetSize: number;
     workflowRunId: string;
     traceId: string;
+    protocolProvenance?: Record<string, unknown>;
   }) {
     const pendingInviteCount = input.existingRequests.filter(
       (request) => request.status === "pending",
@@ -873,6 +875,7 @@ export class ConnectionSetupService {
           notificationType: NotificationType.REQUEST_RECEIVED,
           body: "A group request is available now. Join if you are in.",
           metadata: {
+            ...(input.protocolProvenance ?? {}),
             intentId: input.request.intentId,
           },
         }),
