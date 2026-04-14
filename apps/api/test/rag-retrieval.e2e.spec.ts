@@ -163,7 +163,7 @@ function createRagPrismaMock() {
 
 describe("RAG retrieval E2E flow", () => {
   it("builds retrieval docs and returns safe ranked context for agent use", async () => {
-    const { prisma, retrievalDocuments } = createRagPrismaMock();
+    const { prisma } = createRagPrismaMock();
     const service = new PersonalizationService(prisma);
 
     const profileDoc = await service.refreshProfileSummaryDocument(USER_ID);
