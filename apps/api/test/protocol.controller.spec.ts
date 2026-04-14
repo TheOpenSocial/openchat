@@ -32,6 +32,7 @@ describe("ProtocolController", () => {
       listWebhookDeliveries: () => [],
       listWebhookDeliveryAttempts: () => [],
       replayWebhookDelivery: () => ({}),
+      replayDeadLetteredDeliveries: () => ({}),
       inspectDeliveryQueue: () => ({
         appId: "alpha.app",
         generatedAt: "2026-04-13T00:00:00.000Z",
@@ -39,6 +40,7 @@ describe("ProtocolController", () => {
         inFlightCount: 0,
         failedCount: 0,
         deadLetteredCount: 0,
+        replayableCount: 0,
         deliveries: [],
       }),
       runDueWebhookDeliveries: () => ({
@@ -71,6 +73,12 @@ describe("ProtocolController", () => {
           delivered: 0,
           failed: 0,
           deadLettered: 0,
+        },
+        queueHealth: {
+          replayableCount: 0,
+          oldestQueuedAt: null,
+          oldestRetryingAt: null,
+          lastDeadLetteredAt: null,
         },
         tokenAudit: {
           appUpdatedAt: "2026-04-13T00:00:00.000Z",
@@ -140,6 +148,7 @@ describe("ProtocolController", () => {
       listWebhookDeliveries: () => [],
       listWebhookDeliveryAttempts: () => [],
       replayWebhookDelivery: () => ({}),
+      replayDeadLetteredDeliveries: () => ({}),
       inspectDeliveryQueue: () => ({
         appId: "alpha.app",
         generatedAt: "2026-04-13T00:00:00.000Z",
@@ -147,6 +156,7 @@ describe("ProtocolController", () => {
         inFlightCount: 0,
         failedCount: 0,
         deadLetteredCount: 0,
+        replayableCount: 0,
         deliveries: [],
       }),
       runDueWebhookDeliveries: () => ({
@@ -179,6 +189,12 @@ describe("ProtocolController", () => {
           delivered: 0,
           failed: 0,
           deadLettered: 0,
+        },
+        queueHealth: {
+          replayableCount: 0,
+          oldestQueuedAt: null,
+          oldestRetryingAt: null,
+          lastDeadLetteredAt: null,
         },
         tokenAudit: {
           appUpdatedAt: "2026-04-13T00:00:00.000Z",
@@ -299,6 +315,15 @@ describe("ProtocolController", () => {
         deliveryId,
         status: "queued",
       }),
+      replayDeadLetteredDeliveries: (
+        _appId: string,
+        token: string,
+        payload: Record<string, unknown>,
+      ) => ({
+        token,
+        payload,
+        replayedCount: 2,
+      }),
       inspectDeliveryQueue: (
         _appId: string,
         token: string,
@@ -306,6 +331,7 @@ describe("ProtocolController", () => {
       ) => ({
         token,
         cursor,
+        replayableCount: 1,
       }),
       runDueWebhookDeliveries: (
         _appId: string,
@@ -337,6 +363,12 @@ describe("ProtocolController", () => {
           delivered: 0,
           failed: 0,
           deadLettered: 0,
+        },
+        queueHealth: {
+          replayableCount: 0,
+          oldestQueuedAt: null,
+          oldestRetryingAt: null,
+          lastDeadLetteredAt: null,
         },
         tokenAudit: {
           appUpdatedAt: "2026-04-13T00:00:00.000Z",
@@ -446,6 +478,15 @@ describe("ProtocolController", () => {
         "x-protocol-app-token": "secret-token",
       },
     )) as any;
+    const replayBatch = (await controller.replayDeadLetteredDeliveries(
+      "alpha.app",
+      {
+        "x-protocol-app-token": "secret-token",
+      },
+      {
+        limit: 9,
+      },
+    )) as any;
     const replay = (await controller.replayEvents(
       "alpha.app",
       {
@@ -523,6 +564,8 @@ describe("ProtocolController", () => {
       "00000000-0000-4000-8000-000000000411",
     );
     expect(replayDelivery.data.token).toBe("secret-token");
+    expect(replayBatch.data.token).toBe("secret-token");
+    expect(replayBatch.data.payload.limit).toBe(9);
     expect(grants.data.token).toBe("secret-token");
     expect(createdGrant.data.token).toBe("secret-token");
     expect(createdGrant.data.payload.scope).toBe("resources.read");
@@ -555,6 +598,7 @@ describe("ProtocolController", () => {
       listWebhookDeliveries: () => [],
       listWebhookDeliveryAttempts: () => [],
       replayWebhookDelivery: () => ({}),
+      replayDeadLetteredDeliveries: () => ({}),
       inspectDeliveryQueue: () => ({}),
       runDueWebhookDeliveries: (
         _appId: string,
@@ -580,6 +624,12 @@ describe("ProtocolController", () => {
           delivered: 0,
           failed: 0,
           deadLettered: 0,
+        },
+        queueHealth: {
+          replayableCount: 0,
+          oldestQueuedAt: null,
+          oldestRetryingAt: null,
+          lastDeadLetteredAt: null,
         },
         tokenAudit: {
           appUpdatedAt: "2026-04-13T00:00:00.000Z",
@@ -709,6 +759,7 @@ describe("ProtocolController", () => {
       listWebhookDeliveries: () => [],
       listWebhookDeliveryAttempts: () => [],
       replayWebhookDelivery: () => ({}),
+      replayDeadLetteredDeliveries: () => ({}),
       inspectDeliveryQueue: () => ({
         appId: "alpha.app",
         generatedAt: "2026-04-13T00:00:00.000Z",
@@ -716,6 +767,7 @@ describe("ProtocolController", () => {
         inFlightCount: 0,
         failedCount: 0,
         deadLetteredCount: 0,
+        replayableCount: 0,
         deliveries: [],
       }),
       runDueWebhookDeliveries: () => ({
@@ -748,6 +800,12 @@ describe("ProtocolController", () => {
           delivered: 0,
           failed: 0,
           deadLettered: 0,
+        },
+        queueHealth: {
+          replayableCount: 0,
+          oldestQueuedAt: null,
+          oldestRetryingAt: null,
+          lastDeadLetteredAt: null,
         },
         tokenAudit: {
           appUpdatedAt: "2026-04-13T00:00:00.000Z",

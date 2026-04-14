@@ -21,6 +21,7 @@ import {
   protocolReplayCursorSchema,
   protocolWebhookDeliveryDispatchResultSchema,
   protocolWebhookDeliveryAttemptSchema,
+  protocolWebhookDeliveryReplayBatchResultSchema,
   protocolWebhookDeliveryReplayResultSchema,
   protocolWebhookDeliveryRunRequestSchema,
   protocolWebhookDeliveryRunResultSchema,
@@ -49,6 +50,7 @@ import {
   type ProtocolScopeName,
   type ProtocolWebhookDeliveryDispatchResult,
   type ProtocolWebhookDeliveryAttempt,
+  type ProtocolWebhookDeliveryReplayBatchResult,
   type ProtocolWebhookDeliveryReplayResult,
   type ProtocolWebhookDeliveryRunRequest,
   type ProtocolWebhookDeliveryRunResult,
@@ -127,6 +129,11 @@ export type ProtocolClient = {
     appToken: string,
     deliveryId: string,
   ) => Promise<ProtocolWebhookDeliveryReplayResult>;
+  replayDeadLetteredDeliveries: (
+    appId: string,
+    appToken: string,
+    input?: ProtocolWebhookDeliveryRunInput,
+  ) => Promise<ProtocolWebhookDeliveryReplayBatchResult>;
   inspectDeliveryQueue: (
     appId: string,
     appToken: string,
@@ -244,6 +251,9 @@ export type ProtocolDeliveryQueueInspection = {
   failedCount: number;
   deadLetteredCount: number;
   replayableCount?: number;
+  oldestQueuedAt?: string | null;
+  oldestRetryingAt?: string | null;
+  lastDeadLetteredAt?: string | null;
   queueState?: {
     waiting: number;
     active: number;
@@ -497,6 +507,25 @@ export function createProtocolClient(
       );
       const payload = (await response.json()) as { data?: unknown } | undefined;
       return protocolWebhookDeliveryReplayResultSchema.parse(
+        payload?.data ?? payload,
+      );
+    },
+    async replayDeadLetteredDeliveries(appId, appToken, input) {
+      const response = await transport.request(
+        `/protocol/apps/${appId}/delivery-queue/replay-dead-lettered`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-protocol-app-token": appToken,
+          },
+          body: JSON.stringify(
+            protocolWebhookDeliveryRunRequestSchema.parse(input ?? {}),
+          ),
+        },
+      );
+      const payload = (await response.json()) as { data?: unknown } | undefined;
+      return protocolWebhookDeliveryReplayBatchResultSchema.parse(
         payload?.data ?? payload,
       );
     },

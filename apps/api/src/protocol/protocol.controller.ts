@@ -244,6 +244,26 @@ export class ProtocolController {
     );
   }
 
+  @Post("apps/:appId/delivery-queue/replay-dead-lettered")
+  async replayDeadLetteredDeliveries(
+    @Param("appId") appIdParam: string,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+    @Body() body: unknown,
+  ) {
+    const appId = parseRequestPayload(identifierSchema, appIdParam);
+    const payload = parseRequestPayload(
+      protocolWebhookDeliveryRunRequestSchema,
+      body ?? {},
+    );
+    return ok(
+      await this.protocolService.replayDeadLetteredDeliveries(
+        appId,
+        readProtocolAppToken(headers) ?? "",
+        payload,
+      ),
+    );
+  }
+
   @Get("apps/:appId/delivery-queue")
   async inspectDeliveryQueue(
     @Param("appId") appIdParam: string,

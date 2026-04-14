@@ -52,6 +52,33 @@ function createPrismaStub() {
           count,
         })) as T;
       }
+      if (query.includes("MIN(created_at) FILTER (WHERE status = 'queued')")) {
+        const [appId] = params;
+        const rows = deliveries.get(appId) ?? [];
+        const queued =
+          rows
+            .filter((row) => row.status === "queued")
+            .map((row) => row.created_at)
+            .sort()[0] ?? null;
+        const retrying =
+          rows
+            .filter((row) => row.status === "retrying")
+            .map((row) => row.updated_at)
+            .sort()[0] ?? null;
+        const deadLettered =
+          rows
+            .filter((row) => row.status === "dead_lettered")
+            .map((row) => row.updated_at)
+            .sort()
+            .at(-1) ?? null;
+        return [
+          {
+            oldest_queued_at: queued,
+            oldest_retrying_at: retrying,
+            last_dead_lettered_at: deadLettered,
+          },
+        ] as T;
+      }
       if (
         query.includes("FROM protocol_apps") &&
         query.includes("WHERE app_id =")
@@ -89,6 +116,18 @@ function createPrismaStub() {
         return (deliveries.get(appId) ?? []).filter(
           (row) => row.subscription_id === subscriptionId,
         ) as T;
+      }
+      if (
+        query.includes("FROM protocol_webhook_deliveries") &&
+        query.includes("status = 'dead_lettered'")
+      ) {
+        const [appId, limit] = params;
+        return (deliveries.get(appId) ?? [])
+          .filter((row) => row.status === "dead_lettered")
+          .slice(0, Number(limit))
+          .map((row) => ({
+            delivery_id: row.delivery_id,
+          })) as T;
       }
       if (query.includes("FROM protocol_webhook_deliveries")) {
         const [appId, sinceCursor] = params;
@@ -767,6 +806,7 @@ describe("ProtocolService", () => {
     );
     expect(queue.queuedCount).toBe(1);
     expect(queue.replayableCount).toBe(0);
+    expect(queue.oldestQueuedAt).not.toBeNull();
   });
 
   it("creates, lists, and revokes app scope grants", async () => {
@@ -1006,6 +1046,59 @@ describe("ProtocolService", () => {
     ).toBe("queued");
   });
 
+  it("replays dead-lettered deliveries in batch for an app", async () => {
+    const prisma = createPrismaStub() as any;
+    const queue = createProtocolQueueStub() as any;
+    const worker = new ProtocolWebhookDeliveryWorkerService(prisma as any);
+    const service = new ProtocolService(
+      prisma,
+      worker as any,
+      createDeliveryRunnerStub() as any,
+      queue,
+      createIntentsServiceStub() as any,
+      createInboxServiceStub() as any,
+      createChatsServiceStub() as any,
+    );
+    const registration = await service.registerApp(createRegistrationPayload());
+
+    for (const deliveryId of [
+      "00000000-0000-4000-8000-000000000451",
+      "00000000-0000-4000-8000-000000000452",
+    ]) {
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO protocol_webhook_deliveries
+         (delivery_id, subscription_id, app_id, event_cursor, event_name, status, attempt_count, next_attempt_at, last_attempt_at, delivered_at, response_status_code, error_message, signature, payload, metadata, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::timestamptz, $9::timestamptz, $10::timestamptz, $11, $12, $13, $14::jsonb, $15::jsonb, $16::timestamptz, $17::timestamptz)`,
+        deliveryId,
+        "subscription-1",
+        "partner.alpha",
+        7,
+        "webhook.failed",
+        "dead_lettered",
+        5,
+        null,
+        "2026-04-13T00:00:00.000Z",
+        null,
+        503,
+        "temporarily unavailable",
+        null,
+        JSON.stringify({ eventName: "webhook.failed" }),
+        JSON.stringify({ source: "test" }),
+        "2026-04-13T00:00:00.000Z",
+        "2026-04-13T00:00:00.000Z",
+      );
+    }
+
+    const replayed = await service.replayDeadLetteredDeliveries(
+      "partner.alpha",
+      registration.credentials.appToken,
+      { limit: 10 },
+    );
+
+    expect(replayed.replayedCount).toBe(2);
+    expect(replayed.deliveryIds).toHaveLength(2);
+  });
+
   it("dispatches due deliveries onto the protocol queue", async () => {
     const queue = {
       add: async (_name: string, payload: Record<string, unknown>) => payload,
@@ -1079,6 +1172,7 @@ describe("ProtocolService", () => {
 
     expect(summary.appId).toBe("partner.alpha");
     expect(summary.grantCounts.active).toBe(1);
+    expect(summary.queueHealth.replayableCount).toBe(0);
     expect(summary.tokenAudit.appUpdatedAt).not.toBe("");
     expect(summary.grantAudit.lastGrantedAt).not.toBeNull();
     expect(summary.latestCursor).not.toBe("");

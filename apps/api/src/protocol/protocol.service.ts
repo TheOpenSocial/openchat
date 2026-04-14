@@ -726,6 +726,22 @@ export class ProtocolService {
       "completed",
       "failed",
     );
+    const oldestQueuedAt =
+      deliveries
+        .filter((row) => row.status === "queued")
+        .map((row) => row.createdAt)
+        .sort()[0] ?? null;
+    const oldestRetryingAt =
+      deliveries
+        .filter((row) => row.status === "retrying")
+        .map((row) => row.updatedAt)
+        .sort()[0] ?? null;
+    const lastDeadLetteredAt =
+      deliveries
+        .filter((row) => row.status === "dead_lettered")
+        .map((row) => row.updatedAt)
+        .sort()
+        .at(-1) ?? null;
     return {
       appId: app.registration.appId,
       generatedAt: new Date().toISOString(),
@@ -739,6 +755,9 @@ export class ProtocolService {
       replayableCount: deliveries.filter(
         (row) => row.status === "dead_lettered",
       ).length,
+      oldestQueuedAt,
+      oldestRetryingAt,
+      lastDeadLetteredAt,
       queueState: {
         waiting: queueState.waiting ?? 0,
         active: queueState.active ?? 0,
@@ -795,6 +814,72 @@ export class ProtocolService {
     });
 
     return protocolWebhookDeliveryReplayResultSchema.parse(replayed);
+  }
+
+  async replayDeadLetteredDeliveries(
+    appId: string,
+    appToken: string,
+    input: { limit?: number } = {},
+  ) {
+    const app = await this.requireAppAccess(appId, appToken, {
+      scopes: ["webhooks.manage"],
+      capabilities: ["webhook.write"],
+    });
+    const limit = Math.min(Math.max(input.limit ?? 25, 1), 100);
+    const rows = await this.prisma.$queryRawUnsafe<
+      Array<{ delivery_id: string }>
+    >(
+      `SELECT delivery_id
+       FROM protocol_webhook_deliveries
+       WHERE app_id = $1
+         AND status = 'dead_lettered'
+       ORDER BY updated_at ASC
+       LIMIT $2`,
+      app.registration.appId,
+      limit,
+    );
+    const deliveryIds = rows.map((row) => row.delivery_id);
+    const replayedAt = new Date().toISOString();
+
+    for (const deliveryId of deliveryIds) {
+      const replayed = await this.deliveryWorker.replayDeadLetteredDelivery(
+        deliveryId,
+        app.registration.appId,
+        new Date(replayedAt),
+      );
+      await this.deliveryWorker.recordAttempt({
+        deliveryId: replayed.deliveryId,
+        appId: replayed.appId,
+        subscriptionId: replayed.subscriptionId,
+        attemptNumber: 1,
+        outcome: "replayed",
+        attemptedAt: new Date(replayedAt),
+        metadata: {
+          previousStatus: replayed.previousStatus,
+          nextAttemptAt: replayed.nextAttemptAt,
+          source: "batch_replay",
+        },
+      });
+      await this.recordEvent({
+        actorAppId: app.registration.appId,
+        event: "app.updated",
+        resource: "app_registration",
+        payload: {
+          appId: app.registration.appId,
+          update: "webhook_delivery_replayed",
+          deliveryId: replayed.deliveryId,
+          subscriptionId: replayed.subscriptionId,
+          source: "batch_replay",
+        },
+      });
+    }
+
+    return {
+      appId: app.registration.appId,
+      replayedCount: deliveryIds.length,
+      replayedAt,
+      deliveryIds,
+    };
   }
 
   async replayEvents(appId: string, appToken: string, cursor?: string) {
@@ -1125,7 +1210,21 @@ export class ProtocolService {
       `SELECT status, COUNT(*)::bigint AS count
        FROM protocol_webhook_deliveries
        WHERE app_id = $1
-       GROUP BY status`,
+      GROUP BY status`,
+      app.registration.appId,
+    );
+    const queueHealthRows = await this.prisma.$queryRawUnsafe<
+      Array<{
+        oldest_queued_at: Date | string | null;
+        oldest_retrying_at: Date | string | null;
+        last_dead_lettered_at: Date | string | null;
+      }>
+    >(
+      `SELECT MIN(created_at) FILTER (WHERE status = 'queued') AS oldest_queued_at,
+              MIN(updated_at) FILTER (WHERE status = 'retrying') AS oldest_retrying_at,
+              MAX(updated_at) FILTER (WHERE status = 'dead_lettered') AS last_dead_lettered_at
+       FROM protocol_webhook_deliveries
+       WHERE app_id = $1`,
       app.registration.appId,
     );
     const recentEventRows = await this.prisma.$queryRawUnsafe<
@@ -1183,6 +1282,11 @@ export class ProtocolService {
     const deliveryCounts = Object.fromEntries(
       deliveryRows.map((row) => [row.status, Number(row.count)]),
     ) as Record<string, number>;
+    const queueHealth = queueHealthRows[0] ?? {
+      oldest_queued_at: null,
+      oldest_retrying_at: null,
+      last_dead_lettered_at: null,
+    };
 
     return protocolAppUsageSummarySchema.parse({
       appId: app.registration.appId,
@@ -1200,6 +1304,18 @@ export class ProtocolService {
         delivered: deliveryCounts.delivered ?? 0,
         failed: deliveryCounts.failed ?? 0,
         deadLettered: deliveryCounts.dead_lettered ?? 0,
+      },
+      queueHealth: {
+        replayableCount: deliveryCounts.dead_lettered ?? 0,
+        oldestQueuedAt: queueHealth.oldest_queued_at
+          ? this.toIsoString(queueHealth.oldest_queued_at)
+          : null,
+        oldestRetryingAt: queueHealth.oldest_retrying_at
+          ? this.toIsoString(queueHealth.oldest_retrying_at)
+          : null,
+        lastDeadLetteredAt: queueHealth.last_dead_lettered_at
+          ? this.toIsoString(queueHealth.last_dead_lettered_at)
+          : null,
       },
       tokenAudit: {
         appUpdatedAt: app.updatedAt,

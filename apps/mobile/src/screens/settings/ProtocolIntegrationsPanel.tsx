@@ -82,6 +82,7 @@ export function ProtocolIntegrationsPanel() {
   const [replayingDeliveryId, setReplayingDeliveryId] = useState<string | null>(
     null,
   );
+  const [replayingDeadLetters, setReplayingDeadLetters] = useState(false);
   const [grantScope, setGrantScope] = useState("actions.invoke");
   const [grantCapabilities, setGrantCapabilities] = useState(
     "intent.write,request.write,chat.write",
@@ -400,6 +401,35 @@ export function ProtocolIntegrationsPanel() {
     }
   };
 
+  const replayDeadLetters = async () => {
+    if (!selectedAppId.trim() || !appToken.trim()) {
+      setUsageError(
+        "Select an app and paste its token before replaying dead letters.",
+      );
+      return;
+    }
+    setReplayingDeadLetters(true);
+    setUsageError(null);
+    setUsageNotice(null);
+    try {
+      const result = await api.replayProtocolDeadLetteredDeliveries(
+        selectedAppId.trim(),
+        appToken.trim(),
+        { limit: 25 },
+      );
+      setUsageNotice(
+        result.replayedCount === 0
+          ? "No dead-lettered deliveries were eligible for replay."
+          : `Re-queued ${result.replayedCount} dead-lettered deliveries.`,
+      );
+      await Promise.all([loadQueueInspection(), loadUsageSummary()]);
+    } catch (replayError) {
+      setUsageError(`Could not replay dead letters: ${String(replayError)}`);
+    } finally {
+      setReplayingDeadLetters(false);
+    }
+  };
+
   const revokeGrant = async (grantId: string) => {
     if (!selectedAppId.trim() || !appToken.trim()) {
       setGrantsError("Select an app and paste its token before revoking.");
@@ -696,6 +726,16 @@ export function ProtocolIntegrationsPanel() {
             }}
             variant="secondary"
           />
+          <PrimaryButton
+            label={
+              replayingDeadLetters ? "Replaying..." : "Replay dead letters"
+            }
+            loading={replayingDeadLetters}
+            onPress={() => {
+              void replayDeadLetters();
+            }}
+            variant="secondary"
+          />
         </View>
 
         {usageError ? (
@@ -731,6 +771,10 @@ export function ProtocolIntegrationsPanel() {
                 label="Queued deliveries"
                 value={usageSummary.deliveryCounts.queued}
               />
+              <Metric
+                label="Replayable"
+                value={usageSummary.queueHealth.replayableCount}
+              />
               <Metric label="Latest cursor" value={usageSummary.latestCursor} />
             </View>
 
@@ -758,6 +802,24 @@ export function ProtocolIntegrationsPanel() {
               </Text>
               <Text className="text-[12px] text-muted">
                 Last revoked: {usageSummary.grantAudit.lastRevokedAt ?? "Never"}
+              </Text>
+            </View>
+
+            <View className="gap-2 rounded-2xl border border-hairline bg-surfaceMuted/70 px-3 py-3">
+              <Text className="text-[12px] font-semibold uppercase tracking-[0.16em] text-muted">
+                Queue health
+              </Text>
+              <Text className="text-[12px] text-muted">
+                Oldest queued:{" "}
+                {usageSummary.queueHealth.oldestQueuedAt ?? "None"}
+              </Text>
+              <Text className="text-[12px] text-muted">
+                Oldest retrying:{" "}
+                {usageSummary.queueHealth.oldestRetryingAt ?? "None"}
+              </Text>
+              <Text className="text-[12px] text-muted">
+                Last dead-lettered:{" "}
+                {usageSummary.queueHealth.lastDeadLetteredAt ?? "Never"}
               </Text>
             </View>
 
@@ -819,10 +881,11 @@ export function ProtocolIntegrationsPanel() {
       <View className="space-y-3 rounded-[24px] border border-hairline bg-surface px-4 py-4">
         <View className="space-y-1">
           <Text className="text-[12px] font-semibold uppercase tracking-[0.16em] text-muted">
-            Scope grants
+            Delegated access
           </Text>
           <Text className="text-[13px] leading-6 text-muted">
-            Read, create, and revoke grants for the selected app.
+            Grant a selected app scoped permission to act on behalf of a user,
+            service, or agent.
           </Text>
         </View>
 
@@ -831,7 +894,7 @@ export function ProtocolIntegrationsPanel() {
           autoCorrect={false}
           containerClassName="gap-2"
           inputClassName="text-ink"
-          label="Grant scope"
+          label="Permission scope"
           onChangeText={setGrantScope}
           placeholder="actions.invoke"
           value={grantScope}
@@ -841,7 +904,7 @@ export function ProtocolIntegrationsPanel() {
           autoCorrect={false}
           containerClassName="gap-2"
           inputClassName="text-ink"
-          label="Capabilities"
+          label="Allowed capabilities"
           onChangeText={setGrantCapabilities}
           placeholder="intent.write,request.write,chat.write"
           value={grantCapabilities}
@@ -851,7 +914,7 @@ export function ProtocolIntegrationsPanel() {
           autoCorrect={false}
           containerClassName="gap-2"
           inputClassName="text-ink"
-          label="Subject type"
+          label="Subject kind"
           onChangeText={setGrantSubjectType}
           placeholder="user"
           value={grantSubjectType}
@@ -869,14 +932,14 @@ export function ProtocolIntegrationsPanel() {
 
         <View className="flex-row flex-wrap gap-2">
           <PrimaryButton
-            label={grantsLoading ? "Loading..." : "Load grants"}
+            label={grantsLoading ? "Loading..." : "Load delegated access"}
             loading={grantsLoading}
             onPress={() => {
               void loadGrants();
             }}
           />
           <PrimaryButton
-            label={grantsLoading ? "Saving..." : "Create grant"}
+            label={grantsLoading ? "Saving..." : "Grant access"}
             loading={grantsLoading}
             onPress={() => {
               void createGrant();
@@ -893,7 +956,7 @@ export function ProtocolIntegrationsPanel() {
 
         <View className="space-y-2">
           <Text className="text-[12px] font-semibold uppercase tracking-[0.16em] text-muted">
-            Loaded grants
+            Active access grants
           </Text>
           {grants.length === 0 ? (
             <Text className="text-[13px] text-muted">

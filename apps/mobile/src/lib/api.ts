@@ -1864,6 +1864,13 @@ export const api = {
   ) {
     return protocolClient.replayWebhookDelivery(appId, appToken, deliveryId);
   },
+  replayProtocolDeadLetteredDeliveries(
+    appId: string,
+    appToken: string,
+    input?: Parameters<typeof protocolClient.replayDeadLetteredDeliveries>[2],
+  ) {
+    return protocolClient.replayDeadLetteredDeliveries(appId, appToken, input);
+  },
   inspectProtocolDeliveryQueue(
     appId: string,
     appToken: string,

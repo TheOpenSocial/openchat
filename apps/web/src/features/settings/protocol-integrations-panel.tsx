@@ -87,6 +87,7 @@ export function ProtocolIntegrationsPanel() {
   const [replayingDeliveryId, setReplayingDeliveryId] = useState<string | null>(
     null,
   );
+  const [replayingDeadLetters, setReplayingDeadLetters] = useState(false);
 
   const resetInspectionState = (options?: { clearToken?: boolean }) => {
     setDetailsError(null);
@@ -428,6 +429,33 @@ export function ProtocolIntegrationsPanel() {
     }
   };
 
+  const replayDeadLetters = async () => {
+    if (!selectedAppId.trim() || !appToken.trim()) {
+      setDetailsError("Select an app and paste its token before replaying.");
+      return;
+    }
+    setReplayingDeadLetters(true);
+    setDetailsError(null);
+    setTokenNotice(null);
+    try {
+      const result = await api.replayProtocolDeadLetteredDeliveries(
+        selectedAppId.trim(),
+        appToken.trim(),
+        { limit: 25 },
+      );
+      setTokenNotice(
+        result.replayedCount === 0
+          ? "No dead-lettered deliveries were eligible for replay."
+          : `Re-queued ${result.replayedCount} dead-lettered deliveries.`,
+      );
+      await Promise.all([inspectApp(), inspectQueue()]);
+    } catch (replayError) {
+      setDetailsError(`Could not replay dead letters: ${String(replayError)}`);
+    } finally {
+      setReplayingDeadLetters(false);
+    }
+  };
+
   return (
     <WorkspacePanel>
       <WorkspaceHeader
@@ -621,6 +649,9 @@ export function ProtocolIntegrationsPanel() {
                     Queued deliveries: {usageSummary.deliveryCounts.queued}
                   </Badge>
                   <Badge variant="default">
+                    Replayable: {usageSummary.queueHealth.replayableCount}
+                  </Badge>
+                  <Badge variant="default">
                     Latest cursor: {usageSummary.latestCursor}
                   </Badge>
                 </div>
@@ -652,6 +683,23 @@ export function ProtocolIntegrationsPanel() {
                     <p className="mt-1 text-[hsl(var(--foreground))]">
                       Last revoked:{" "}
                       {usageSummary.grantAudit.lastRevokedAt ?? "Never"}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-[hsl(var(--border-soft))] bg-[hsl(var(--panel))]/60 px-3 py-3 text-sm">
+                    <p className="text-xs uppercase tracking-[0.2em] text-[hsl(var(--muted-foreground))]">
+                      Queue health
+                    </p>
+                    <p className="mt-2 text-[hsl(var(--foreground))]">
+                      Oldest queued:{" "}
+                      {usageSummary.queueHealth.oldestQueuedAt ?? "None"}
+                    </p>
+                    <p className="mt-1 text-[hsl(var(--foreground))]">
+                      Oldest retrying:{" "}
+                      {usageSummary.queueHealth.oldestRetryingAt ?? "None"}
+                    </p>
+                    <p className="mt-1 text-[hsl(var(--foreground))]">
+                      Last dead-lettered:{" "}
+                      {usageSummary.queueHealth.lastDeadLetteredAt ?? "Never"}
                     </p>
                   </div>
                 </div>
@@ -710,7 +758,8 @@ export function ProtocolIntegrationsPanel() {
                       Scope grants
                     </p>
                     <p className="mt-1 text-sm text-[hsl(var(--foreground))]">
-                      {grants.length} grant{grants.length === 1 ? "" : "s"} for{" "}
+                      {grants.length} access grant
+                      {grants.length === 1 ? "" : "s"} for{" "}
                       {selectedApp?.registration.appId ?? selectedAppId}
                     </p>
                   </div>
@@ -718,7 +767,9 @@ export function ProtocolIntegrationsPanel() {
                 </div>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <div>
-                    <Label htmlFor="protocol-grant-scope">Grant scope</Label>
+                    <Label htmlFor="protocol-grant-scope">
+                      Permission scope
+                    </Label>
                     <Input
                       id="protocol-grant-scope"
                       onChange={(event) =>
@@ -729,7 +780,7 @@ export function ProtocolIntegrationsPanel() {
                   </div>
                   <div>
                     <Label htmlFor="protocol-grant-capabilities">
-                      Capabilities
+                      Allowed capabilities
                     </Label>
                     <Input
                       id="protocol-grant-capabilities"
@@ -741,7 +792,7 @@ export function ProtocolIntegrationsPanel() {
                   </div>
                   <div>
                     <Label htmlFor="protocol-grant-subject-type">
-                      Subject type
+                      Subject kind
                     </Label>
                     <Input
                       id="protocol-grant-subject-type"
@@ -772,7 +823,19 @@ export function ProtocolIntegrationsPanel() {
                     type="button"
                     variant="secondary"
                   >
-                    Create grant
+                    Grant access
+                  </Button>
+                  <Button
+                    disabled={replayingDeadLetters}
+                    onClick={() => {
+                      void replayDeadLetters();
+                    }}
+                    type="button"
+                    variant="secondary"
+                  >
+                    {replayingDeadLetters
+                      ? "Replaying…"
+                      : "Replay dead letters"}
                   </Button>
                   <Button
                     disabled={rotatingToken}

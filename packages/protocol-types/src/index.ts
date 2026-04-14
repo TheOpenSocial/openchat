@@ -518,6 +518,14 @@ export const protocolAppUsageSummarySchema = z
         deadLettered: z.number().int().min(0),
       })
       .strict(),
+    queueHealth: z
+      .object({
+        replayableCount: z.number().int().min(0),
+        oldestQueuedAt: isoDateTimeSchema.nullable(),
+        oldestRetryingAt: isoDateTimeSchema.nullable(),
+        lastDeadLetteredAt: isoDateTimeSchema.nullable(),
+      })
+      .strict(),
     tokenAudit: z
       .object({
         appUpdatedAt: isoDateTimeSchema,
@@ -820,4 +828,16 @@ export const protocolWebhookDeliveryReplayResultSchema = z
   .strict();
 export type ProtocolWebhookDeliveryReplayResult = z.infer<
   typeof protocolWebhookDeliveryReplayResultSchema
+>;
+
+export const protocolWebhookDeliveryReplayBatchResultSchema = z
+  .object({
+    appId: identifierSchema,
+    replayedCount: z.number().int().min(0),
+    replayedAt: isoDateTimeSchema,
+    deliveryIds: z.array(uuidSchema).default([]),
+  })
+  .strict();
+export type ProtocolWebhookDeliveryReplayBatchResult = z.infer<
+  typeof protocolWebhookDeliveryReplayBatchResultSchema
 >;
