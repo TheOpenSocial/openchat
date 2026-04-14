@@ -4,6 +4,7 @@ import {
 } from "@opensocial/protocol-events";
 import {
   appRegistrationRequestSchema,
+  protocolAppUsageSummarySchema,
   protocolChatMessageActionResultSchema,
   protocolChatSendMessageActionSchema,
   protocolAppScopeGrantCreateSchema,
@@ -18,6 +19,7 @@ import {
   protocolRequestDecisionActionSchema,
   protocolEventEnvelopeSchema,
   protocolReplayCursorSchema,
+  protocolWebhookDeliveryDispatchResultSchema,
   protocolWebhookDeliveryRunRequestSchema,
   protocolWebhookDeliveryRunResultSchema,
   manifestSchema,
@@ -30,6 +32,7 @@ import {
   type ProtocolAppScopeGrantCreate,
   type ProtocolAppScopeGrantRevoke,
   type ProtocolAppRegistrationResult,
+  type ProtocolAppUsageSummary,
   type ProtocolChatMessageActionResult,
   type ProtocolChatSendMessageAction,
   type ProtocolDiscoveryDocument,
@@ -42,6 +45,7 @@ import {
   type ProtocolRequestDecisionAction,
   type ProtocolReplayCursor,
   type ProtocolScopeName,
+  type ProtocolWebhookDeliveryDispatchResult,
   type ProtocolWebhookDeliveryRunRequest,
   type ProtocolWebhookDeliveryRunResult,
   type WebhookSubscription,
@@ -161,6 +165,15 @@ export type ProtocolClient = {
     appToken: string,
     input?: ProtocolWebhookDeliveryRunInput,
   ) => Promise<ProtocolWebhookDeliveryRunResult>;
+  dispatchWebhookDeliveryQueue: (
+    appId: string,
+    appToken: string,
+    input?: ProtocolWebhookDeliveryRunInput,
+  ) => Promise<ProtocolWebhookDeliveryDispatchResult>;
+  getAppUsageSummary: (
+    appId: string,
+    appToken: string,
+  ) => Promise<ProtocolAppUsageSummary>;
   buildAppRegistrationRequest: (
     input: ProtocolAppRegistrationRequestInput,
   ) => AppRegistrationRequest;
@@ -611,6 +624,39 @@ export function createProtocolClient(
       return protocolWebhookDeliveryRunResultSchema.parse(
         envelope?.data ?? envelope,
       );
+    },
+    async dispatchWebhookDeliveryQueue(appId, appToken, input) {
+      const requestPayload = protocolWebhookDeliveryRunRequestSchema.parse(
+        input ?? {},
+      );
+      const response = await transport.request(
+        `/protocol/apps/${appId}/delivery-queue/dispatch`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-protocol-app-token": appToken,
+          },
+          body: JSON.stringify(requestPayload),
+        },
+      );
+      const envelope = (await response.json()) as
+        | { data?: unknown }
+        | undefined;
+      return protocolWebhookDeliveryDispatchResultSchema.parse(
+        envelope?.data ?? envelope,
+      );
+    },
+    async getAppUsageSummary(appId, appToken) {
+      const response = await transport.request(`/protocol/apps/${appId}/usage`, {
+        headers: {
+          "x-protocol-app-token": appToken,
+        },
+      });
+      const envelope = (await response.json()) as
+        | { data?: unknown }
+        | undefined;
+      return protocolAppUsageSummarySchema.parse(envelope?.data ?? envelope);
     },
     buildAppRegistrationRequest(input) {
       return buildProtocolAppRegistrationRequest(input);

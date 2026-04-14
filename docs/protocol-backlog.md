@@ -59,7 +59,9 @@ The protocol is no longer just a concept. The following pieces are already prese
 - These actions are enforced through:
   - app token scope/capability checks
   - delegated user grants on `actions.invoke`
-- The webhook delivery runner is now executable through the protocol API for an app-scoped queue run.
+- The webhook delivery runner is now executable through the protocol API for an app-scoped direct run.
+- A queue-backed delivery path now exists through the `protocol-webhooks` worker lane.
+- Usage visibility is now exposed through a protocol app usage summary so first-party settings surfaces can inspect recent protocol activity without raw table access.
 
 Use this as the baseline for all next backlog items. Do not reintroduce generic social primitives like posts or follows.
 

@@ -224,6 +224,20 @@ export class ProtocolController {
     );
   }
 
+  @Get("apps/:appId/usage")
+  async getAppUsageSummary(
+    @Param("appId") appIdParam: string,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+  ) {
+    const appId = parseRequestPayload(identifierSchema, appIdParam);
+    return ok(
+      await this.protocolService.getAppUsageSummary(
+        appId,
+        readProtocolAppToken(headers) ?? "",
+      ),
+    );
+  }
+
   @Post("apps/:appId/delivery-queue/run")
   async runDueWebhookDeliveries(
     @Param("appId") appIdParam: string,
@@ -237,6 +251,26 @@ export class ProtocolController {
     );
     return ok(
       await this.protocolService.runDueWebhookDeliveries(
+        appId,
+        readProtocolAppToken(headers) ?? "",
+        payload,
+      ),
+    );
+  }
+
+  @Post("apps/:appId/delivery-queue/dispatch")
+  async dispatchDueWebhookDeliveries(
+    @Param("appId") appIdParam: string,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+    @Body() body: unknown,
+  ) {
+    const appId = parseRequestPayload(identifierSchema, appIdParam);
+    const payload = parseRequestPayload(
+      protocolWebhookDeliveryRunRequestSchema,
+      body ?? {},
+    );
+    return ok(
+      await this.protocolService.dispatchDueWebhookDeliveries(
         appId,
         readProtocolAppToken(headers) ?? "",
         payload,

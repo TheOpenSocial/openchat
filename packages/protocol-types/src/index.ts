@@ -496,6 +496,36 @@ export const protocolEventEnvelopeSchema = protocolEnvelopeSchema.extend({
 });
 export type ProtocolEventEnvelope = z.infer<typeof protocolEventEnvelopeSchema>;
 
+export const protocolAppUsageSummarySchema = z
+  .object({
+    appId: identifierSchema,
+    generatedAt: isoDateTimeSchema,
+    appStatus: appRegistrationStatusSchema,
+    issuedScopes: z.array(protocolScopeNameSchema).default([]),
+    issuedCapabilities: z.array(capabilityNameSchema).default([]),
+    grantCounts: z
+      .object({
+        active: z.number().int().min(0),
+        revoked: z.number().int().min(0),
+      })
+      .strict(),
+    deliveryCounts: z
+      .object({
+        queued: z.number().int().min(0),
+        retrying: z.number().int().min(0),
+        delivered: z.number().int().min(0),
+        failed: z.number().int().min(0),
+        deadLettered: z.number().int().min(0),
+      })
+      .strict(),
+    latestCursor: z.string().min(1),
+    recentEvents: z.array(protocolEventEnvelopeSchema).default([]),
+  })
+  .strict();
+export type ProtocolAppUsageSummary = z.infer<
+  typeof protocolAppUsageSummarySchema
+>;
+
 export const protocolReplayCursorSchema = z
   .object({
     appId: identifierSchema,
@@ -706,4 +736,17 @@ export const protocolWebhookDeliveryRunResultSchema = z
   .strict();
 export type ProtocolWebhookDeliveryRunResult = z.infer<
   typeof protocolWebhookDeliveryRunResultSchema
+>;
+
+export const protocolWebhookDeliveryDispatchResultSchema = z
+  .object({
+    queueName: z.literal("protocol-webhooks"),
+    jobName: z.literal("RunProtocolWebhookDeliveries"),
+    appId: identifierSchema,
+    limit: z.number().int().min(1).max(100),
+    enqueuedAt: isoDateTimeSchema,
+  })
+  .strict();
+export type ProtocolWebhookDeliveryDispatchResult = z.infer<
+  typeof protocolWebhookDeliveryDispatchResultSchema
 >;

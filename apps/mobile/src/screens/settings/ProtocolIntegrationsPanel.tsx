@@ -14,6 +14,10 @@ type ProtocolWebhookSummary = Awaited<
 type ProtocolScopeGrantRecord = Awaited<
   ReturnType<typeof api.listProtocolGrants>
 >[number];
+type ProtocolUsageSummary = Awaited<
+  ReturnType<typeof api.getProtocolUsageSummary>
+>;
+type ProtocolUsageEvent = ProtocolUsageSummary["recentEvents"][number];
 
 function Metric({ label, value }: { label: string; value: string | number }) {
   return (
@@ -52,6 +56,26 @@ export function ProtocolIntegrationsPanel() {
   const [grants, setGrants] = useState<ProtocolScopeGrantRecord[]>([]);
   const [grantsLoading, setGrantsLoading] = useState(false);
   const [grantsError, setGrantsError] = useState<string | null>(null);
+  const [usageSummary, setUsageSummary] = useState<ProtocolUsageSummary | null>(
+    null,
+  );
+  const [usageLoading, setUsageLoading] = useState(false);
+  const [usageError, setUsageError] = useState<string | null>(null);
+  const [usageNotice, setUsageNotice] = useState<string | null>(null);
+  const [dispatchingQueue, setDispatchingQueue] = useState(false);
+
+  const resetInspectionState = (options?: { clearToken?: boolean }) => {
+    setWebhooks([]);
+    setWebhooksError(null);
+    setGrants([]);
+    setGrantsError(null);
+    setUsageSummary(null);
+    setUsageError(null);
+    setUsageNotice(null);
+    if (options?.clearToken) {
+      setAppToken("");
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -147,6 +171,55 @@ export function ProtocolIntegrationsPanel() {
     }
   };
 
+  const loadUsageSummary = async () => {
+    if (!selectedAppId.trim() || !appToken.trim()) {
+      setUsageError("Select an app and paste its token to inspect usage.");
+      setUsageSummary(null);
+      return;
+    }
+
+    setUsageLoading(true);
+    setUsageError(null);
+    setUsageNotice(null);
+    try {
+      const summary = await api.getProtocolUsageSummary(
+        selectedAppId.trim(),
+        appToken.trim(),
+      );
+      setUsageSummary(summary);
+    } catch (loadError) {
+      setUsageSummary(null);
+      setUsageError(`Could not load usage summary: ${String(loadError)}`);
+    } finally {
+      setUsageLoading(false);
+    }
+  };
+
+  const dispatchQueue = async () => {
+    if (!selectedAppId.trim() || !appToken.trim()) {
+      setUsageError("Select an app and paste its token before dispatching.");
+      return;
+    }
+    setDispatchingQueue(true);
+    setUsageError(null);
+    setUsageNotice(null);
+    try {
+      await api.dispatchProtocolDeliveryQueue(
+        selectedAppId.trim(),
+        appToken.trim(),
+        { limit: 25 },
+      );
+      setUsageNotice(
+        "Queue dispatch enqueued. Usage metrics update after the worker drains pending deliveries.",
+      );
+      void loadUsageSummary();
+    } catch (dispatchError) {
+      setUsageError(`Could not dispatch delivery queue: ${String(dispatchError)}`);
+    } finally {
+      setDispatchingQueue(false);
+    }
+  };
+
   const revokeGrant = async (grantId: string) => {
     if (!selectedAppId.trim() || !appToken.trim()) {
       setGrantsError("Select an app and paste its token before revoking.");
@@ -189,8 +262,8 @@ export function ProtocolIntegrationsPanel() {
           Apps, webhooks, and protocol shape
         </Text>
         <Text className="text-[13px] leading-6 text-muted">
-          Read-only inspection of the active protocol manifest, registered apps,
-          and any webhook subscriptions you can inspect with an app token.
+          Inspect the active protocol manifest, registered apps, and token-gated
+          webhook state. Delivery queue dispatch is available for operational testing.
         </Text>
       </View>
 
@@ -232,6 +305,7 @@ export function ProtocolIntegrationsPanel() {
                   key={app.registration.appId}
                   onPress={() => {
                     setSelectedAppId(app.registration.appId);
+                    resetInspectionState({ clearToken: true });
                   }}
                 >
                   <View
@@ -291,7 +365,10 @@ export function ProtocolIntegrationsPanel() {
           containerClassName="gap-2"
           inputClassName="text-ink"
           label="App ID"
-          onChangeText={setSelectedAppId}
+          onChangeText={(value) => {
+            setSelectedAppId(value);
+            resetInspectionState();
+          }}
           placeholder="select or paste an app id"
           value={selectedAppId}
         />
@@ -353,6 +430,89 @@ export function ProtocolIntegrationsPanel() {
             ))
           )}
         </View>
+      </View>
+
+      <View className="space-y-3 rounded-[24px] border border-hairline bg-surface px-4 py-4">
+        <View className="space-y-1">
+          <Text className="text-[12px] font-semibold uppercase tracking-[0.16em] text-muted">
+            Usage and activity
+          </Text>
+          <Text className="text-[13px] leading-6 text-muted">
+            Inspect recent protocol activity, grant counts, and queued webhook
+            deliveries for the selected app.
+          </Text>
+        </View>
+
+        <View className="flex-row flex-wrap gap-2">
+          <PrimaryButton
+            label={usageLoading ? "Loading..." : "Load activity"}
+            loading={usageLoading}
+            onPress={() => {
+              void loadUsageSummary();
+            }}
+          />
+          <PrimaryButton
+            label={dispatchingQueue ? "Dispatching..." : "Dispatch queue"}
+            loading={dispatchingQueue}
+            onPress={() => {
+              void dispatchQueue();
+            }}
+            variant="secondary"
+          />
+        </View>
+
+        {usageError ? (
+          <Text className="text-[13px] leading-6 text-[#fca5a5]">
+            {usageError}
+          </Text>
+        ) : null}
+
+        {usageNotice ? (
+          <Text className="text-[13px] leading-6 text-muted">
+            {usageNotice}
+          </Text>
+        ) : null}
+
+        {usageSummary ? (
+          <View className="space-y-3">
+            <View className="flex-row flex-wrap gap-3">
+              <Metric label="Active grants" value={usageSummary.grantCounts.active} />
+              <Metric label="Revoked grants" value={usageSummary.grantCounts.revoked} />
+              <Metric label="Queued deliveries" value={usageSummary.deliveryCounts.queued} />
+              <Metric label="Latest cursor" value={usageSummary.latestCursor} />
+            </View>
+
+            <View className="space-y-2">
+              <Text className="text-[12px] font-semibold uppercase tracking-[0.16em] text-muted">
+                Recent events
+              </Text>
+              {usageSummary.recentEvents.length === 0 ? (
+                <Text className="text-[13px] text-muted">
+                  No protocol activity recorded yet.
+                </Text>
+              ) : (
+                usageSummary.recentEvents
+                  .slice(0, 5)
+                  .map((event: ProtocolUsageEvent, index: number) => (
+                  <View
+                    key={`${event.event}:${event.issuedAt}:${index}`}
+                    className="gap-1 rounded-2xl border border-hairline bg-surfaceMuted/70 px-3 py-3"
+                  >
+                    <View className="flex-row items-start justify-between gap-3">
+                      <Text className="min-w-0 flex-1 text-[13px] font-medium text-ink">
+                        {event.event}
+                      </Text>
+                      <Text className="text-[11px] uppercase tracking-[0.16em] text-muted">
+                        {event.resource ?? "protocol"}
+                      </Text>
+                    </View>
+                    <Text className="text-[12px] text-muted">{event.issuedAt}</Text>
+                  </View>
+                  ))
+              )}
+            </View>
+          </View>
+        ) : null}
       </View>
 
       <View className="space-y-3 rounded-[24px] border border-hairline bg-surface px-4 py-4">

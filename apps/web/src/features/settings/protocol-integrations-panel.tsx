@@ -32,6 +32,9 @@ type ProtocolGrantRecord = Awaited<
 type ProtocolReplayCursor = Awaited<
   ReturnType<typeof api.getProtocolReplayCursor>
 >;
+type ProtocolUsageSummary = Awaited<
+  ReturnType<typeof api.getProtocolUsageSummary>
+>;
 
 function joinNames(values?: readonly string[] | null) {
   if (!values || values.length === 0) {
@@ -57,6 +60,22 @@ export function ProtocolIntegrationsPanel() {
   const [replayCursor, setReplayCursor] = useState<ProtocolReplayCursor | null>(
     null,
   );
+  const [usageSummary, setUsageSummary] = useState<ProtocolUsageSummary | null>(
+    null,
+  );
+  const [dispatchingQueue, setDispatchingQueue] = useState(false);
+
+  const resetInspectionState = (options?: { clearToken?: boolean }) => {
+    setDetailsError(null);
+    setWebhooks([]);
+    setGrants([]);
+    setDeliveries({});
+    setReplayCursor(null);
+    setUsageSummary(null);
+    if (options?.clearToken) {
+      setAppToken("");
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -108,42 +127,64 @@ export function ProtocolIntegrationsPanel() {
     setLoadingDetails(true);
     setDetailsError(null);
     try {
-      const appWebhooks = await api.listProtocolWebhooks(
-        selectedAppId.trim(),
-        appToken.trim(),
-      );
-      const appGrants = await api.listProtocolGrants(
-        selectedAppId.trim(),
-        appToken.trim(),
-      );
+      const appId = selectedAppId.trim();
+      const token = appToken.trim();
+      const [
+        appWebhooksResult,
+        appGrantsResult,
+        cursorResult,
+        usageResult,
+      ] = await Promise.allSettled([
+        api.listProtocolWebhooks(appId, token),
+        api.listProtocolGrants(appId, token),
+        api.getProtocolReplayCursor(appId, token),
+        api.getProtocolUsageSummary(appId, token),
+      ]);
+      if (appWebhooksResult.status !== "fulfilled") {
+        throw appWebhooksResult.reason;
+      }
+      if (appGrantsResult.status !== "fulfilled") {
+        throw appGrantsResult.reason;
+      }
+      const appWebhooks = appWebhooksResult.value;
+      const appGrants = appGrantsResult.value;
       const deliveryEntries = await Promise.all(
         appWebhooks.map(
           async (webhook) =>
             [
               webhook.subscriptionId,
-              await api.listProtocolWebhookDeliveries(
-                selectedAppId.trim(),
-                appToken.trim(),
-                webhook.subscriptionId,
-              ),
+              await api
+                .listProtocolWebhookDeliveries(
+                  appId,
+                  token,
+                  webhook.subscriptionId,
+                )
+                .catch(() => []),
             ] as const,
         ),
-      );
-      const cursor = await api.getProtocolReplayCursor(
-        selectedAppId.trim(),
-        appToken.trim(),
       );
 
       setWebhooks(appWebhooks);
       setGrants(appGrants);
       setDeliveries(Object.fromEntries(deliveryEntries));
-      setReplayCursor(cursor);
+      setReplayCursor(
+        cursorResult.status === "fulfilled" ? cursorResult.value : null,
+      );
+      setUsageSummary(
+        usageResult.status === "fulfilled" ? usageResult.value : null,
+      );
+      if (cursorResult.status !== "fulfilled" || usageResult.status !== "fulfilled") {
+        setDetailsError(
+          "Some protocol usage details could not be loaded. Core app data is shown.",
+        );
+      }
     } catch (error) {
       setDetailsError(String(error));
       setWebhooks([]);
       setGrants([]);
       setDeliveries({});
       setReplayCursor(null);
+      setUsageSummary(null);
     } finally {
       setLoadingDetails(false);
     }
@@ -186,6 +227,37 @@ export function ProtocolIntegrationsPanel() {
     }
   };
 
+  const dispatchQueue = async () => {
+    if (!selectedAppId.trim() || !appToken.trim()) {
+      return;
+    }
+
+    setDispatchingQueue(true);
+    setDetailsError(null);
+    try {
+      await api.dispatchProtocolDeliveryQueue(
+        selectedAppId.trim(),
+        appToken.trim(),
+        { limit: 25 },
+      );
+      try {
+        const usage = await api.getProtocolUsageSummary(
+          selectedAppId.trim(),
+          appToken.trim(),
+        );
+        setUsageSummary(usage);
+      } catch {
+        setDetailsError(
+          "Queue dispatch succeeded, but usage summary could not be refreshed yet.",
+        );
+      }
+    } catch (error) {
+      setDetailsError(String(error));
+    } finally {
+      setDispatchingQueue(false);
+    }
+  };
+
   return (
     <WorkspacePanel>
       <WorkspaceHeader
@@ -207,7 +279,10 @@ export function ProtocolIntegrationsPanel() {
             <Label htmlFor="protocol-app-id">App id</Label>
             <Input
               id="protocol-app-id"
-              onChange={(event) => setSelectedAppId(event.currentTarget.value)}
+              onChange={(event) => {
+                setSelectedAppId(event.currentTarget.value);
+                resetInspectionState();
+              }}
               placeholder="partner.alpha"
               value={selectedAppId}
             />
@@ -236,6 +311,18 @@ export function ProtocolIntegrationsPanel() {
             variant="primary"
           >
             {loadingDetails ? "Inspecting…" : "Inspect webhooks"}
+          </Button>
+          <Button
+            disabled={
+              dispatchingQueue || loadingDetails || !selectedAppId.trim() || !appToken.trim()
+            }
+            onClick={() => {
+              void dispatchQueue();
+            }}
+            type="button"
+            variant="secondary"
+          >
+            {dispatchingQueue ? "Dispatching…" : "Dispatch queue"}
           </Button>
           <Badge variant="default">
             {loadingApps ? "Loading apps…" : `${apps.length} protocol apps`}
@@ -288,7 +375,10 @@ export function ProtocolIntegrationsPanel() {
                   </p>
                 </div>
                 <Button
-                  onClick={() => setSelectedAppId(app.registration.appId)}
+                  onClick={() => {
+                    setSelectedAppId(app.registration.appId);
+                    resetInspectionState({ clearToken: true });
+                  }}
                   type="button"
                   variant="secondary"
                 >
@@ -320,8 +410,49 @@ export function ProtocolIntegrationsPanel() {
           ) : null}
         </WorkspaceList>
 
-        {grants.length > 0 || webhooks.length > 0 || replayCursor ? (
+        {grants.length > 0 || webhooks.length > 0 || replayCursor || usageSummary ? (
           <div className="space-y-3">
+            {usageSummary ? (
+              <WorkspaceMutedPanel>
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="default">
+                    Active grants: {usageSummary.grantCounts.active}
+                  </Badge>
+                  <Badge variant="default">
+                    Revoked grants: {usageSummary.grantCounts.revoked}
+                  </Badge>
+                  <Badge variant="default">
+                    Queued deliveries: {usageSummary.deliveryCounts.queued}
+                  </Badge>
+                  <Badge variant="default">
+                    Latest cursor: {usageSummary.latestCursor}
+                  </Badge>
+                </div>
+                {usageSummary.recentEvents.length > 0 ? (
+                  <div className="mt-3 space-y-2">
+                    {usageSummary.recentEvents.slice(0, 5).map((event, index) => (
+                      <div
+                        className="rounded-2xl border border-[hsl(var(--border-soft))] bg-[hsl(var(--panel))]/60 px-3 py-2 text-sm"
+                        key={`${event.event}:${event.issuedAt}:${index}`}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="truncate text-[hsl(var(--foreground))]">
+                            {event.event}
+                          </span>
+                          <Badge variant="default">
+                            {event.resource ?? "protocol"}
+                          </Badge>
+                        </div>
+                        <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
+                          {event.issuedAt}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </WorkspaceMutedPanel>
+            ) : null}
+
             {grants.length > 0 ? (
               <WorkspaceMutedPanel>
                 <div className="flex items-center justify-between gap-3">

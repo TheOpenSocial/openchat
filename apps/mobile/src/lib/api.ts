@@ -1853,6 +1853,16 @@ export const api = {
   ) {
     return protocolClient.inspectDeliveryQueue(appId, appToken, cursor);
   },
+  getProtocolUsageSummary(appId: string, appToken: string) {
+    return protocolClient.getAppUsageSummary(appId, appToken);
+  },
+  dispatchProtocolDeliveryQueue(
+    appId: string,
+    appToken: string,
+    input?: Parameters<typeof protocolClient.dispatchWebhookDeliveryQueue>[2],
+  ) {
+    return protocolClient.dispatchWebhookDeliveryQueue(appId, appToken, input);
+  },
   runProtocolDeliveryQueue(
     appId: string,
     appToken: string,

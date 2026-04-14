@@ -49,6 +49,30 @@ describe("ProtocolController", () => {
         ranAt: "2026-04-13T00:00:00.000Z",
         results: [],
       }),
+      dispatchDueWebhookDeliveries: () => ({
+        queueName: "protocol-webhooks",
+        jobName: "RunProtocolWebhookDeliveries",
+        appId: "alpha.app",
+        limit: 25,
+        enqueuedAt: "2026-04-13T00:00:00.000Z",
+      }),
+      getAppUsageSummary: () => ({
+        appId: "alpha.app",
+        generatedAt: "2026-04-13T00:00:00.000Z",
+        appStatus: "active",
+        issuedScopes: [],
+        issuedCapabilities: [],
+        grantCounts: { active: 0, revoked: 0 },
+        deliveryCounts: {
+          queued: 0,
+          retrying: 0,
+          delivered: 0,
+          failed: 0,
+          deadLettered: 0,
+        },
+        latestCursor: "0",
+        recentEvents: [],
+      }),
       createIntentAction: () => ({}),
       sendRequestAction: () => ({}),
       acceptRequestAction: () => ({}),
@@ -114,6 +138,30 @@ describe("ProtocolController", () => {
         skippedCount: 0,
         ranAt: "2026-04-13T00:00:00.000Z",
         results: [],
+      }),
+      dispatchDueWebhookDeliveries: () => ({
+        queueName: "protocol-webhooks",
+        jobName: "RunProtocolWebhookDeliveries",
+        appId: "alpha.app",
+        limit: 25,
+        enqueuedAt: "2026-04-13T00:00:00.000Z",
+      }),
+      getAppUsageSummary: () => ({
+        appId: "alpha.app",
+        generatedAt: "2026-04-13T00:00:00.000Z",
+        appStatus: "active",
+        issuedScopes: [],
+        issuedCapabilities: [],
+        grantCounts: { active: 0, revoked: 0 },
+        deliveryCounts: {
+          queued: 0,
+          retrying: 0,
+          delivered: 0,
+          failed: 0,
+          deadLettered: 0,
+        },
+        latestCursor: "0",
+        recentEvents: [],
       }),
       createIntentAction: () => ({}),
       sendRequestAction: () => ({}),
@@ -213,6 +261,17 @@ describe("ProtocolController", () => {
       ) => ({
         token,
         payload,
+      }),
+      dispatchDueWebhookDeliveries: (
+        _appId: string,
+        token: string,
+        payload: Record<string, unknown>,
+      ) => ({
+        token,
+        payload,
+      }),
+      getAppUsageSummary: (_appId: string, token: string) => ({
+        token,
       }),
       createIntentAction: (
         _appId: string,
@@ -325,6 +384,18 @@ describe("ProtocolController", () => {
       },
       "7",
     )) as any;
+    const usage = (await controller.getAppUsageSummary("alpha.app", {
+      "x-protocol-app-token": "secret-token",
+    })) as any;
+    const dispatch = (await controller.dispatchDueWebhookDeliveries(
+      "alpha.app",
+      {
+        "x-protocol-app-token": "secret-token",
+      },
+      {
+        limit: 9,
+      },
+    )) as any;
     const currentCursor = (await controller.getReplayCursor("alpha.app", {
       "x-protocol-app-token": "secret-token",
     })) as any;
@@ -346,6 +417,9 @@ describe("ProtocolController", () => {
     expect(revokedGrant.data.grantId).toBe("grant-1");
     expect(queue.data.token).toBe("secret-token");
     expect(queue.data.cursor).toBe("7");
+    expect(usage.data.token).toBe("secret-token");
+    expect(dispatch.data.token).toBe("secret-token");
+    expect(dispatch.data.payload.limit).toBe(9);
     expect(replay.data.cursor).toBe("12");
     expect(currentCursor.data.cursor).toBe("0");
     expect(savedCursor.data.cursor).toBe("44");
@@ -372,6 +446,12 @@ describe("ProtocolController", () => {
         token: string,
         payload: Record<string, unknown>,
       ) => ({ token, payload }),
+      dispatchDueWebhookDeliveries: (
+        _appId: string,
+        token: string,
+        payload: Record<string, unknown>,
+      ) => ({ token, payload }),
+      getAppUsageSummary: (_appId: string, token: string) => ({ token }),
       createIntentAction: (
         _appId: string,
         token: string,
@@ -497,6 +577,30 @@ describe("ProtocolController", () => {
         skippedCount: 0,
         ranAt: "2026-04-13T00:00:00.000Z",
         results: [],
+      }),
+      dispatchDueWebhookDeliveries: () => ({
+        queueName: "protocol-webhooks",
+        jobName: "RunProtocolWebhookDeliveries",
+        appId: "alpha.app",
+        limit: 25,
+        enqueuedAt: "2026-04-13T00:00:00.000Z",
+      }),
+      getAppUsageSummary: () => ({
+        appId: "alpha.app",
+        generatedAt: "2026-04-13T00:00:00.000Z",
+        appStatus: "active",
+        issuedScopes: [],
+        issuedCapabilities: [],
+        grantCounts: { active: 0, revoked: 0 },
+        deliveryCounts: {
+          queued: 0,
+          retrying: 0,
+          delivered: 0,
+          failed: 0,
+          deadLettered: 0,
+        },
+        latestCursor: "0",
+        recentEvents: [],
       }),
       createIntentAction: () => ({}),
       sendRequestAction: () => ({}),

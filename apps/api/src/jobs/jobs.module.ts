@@ -35,7 +35,7 @@ export const JOB_QUEUE_NAMES = [
   "digests",
   "admin-maintenance",
   "scheduled-tasks",
-  "protocol-webhook-deliveries",
+  "protocol-webhooks",
 ];
 
 @Module({

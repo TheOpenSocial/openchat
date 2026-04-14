@@ -1,3 +1,4 @@
+import { InjectQueue } from "@nestjs/bullmq";
 import {
   ConflictException,
   ForbiddenException,
@@ -6,6 +7,7 @@ import {
   Optional,
   UnauthorizedException,
 } from "@nestjs/common";
+import { Queue } from "bullmq";
 import { randomUUID } from "node:crypto";
 import { PrismaService } from "../database/prisma.service.js";
 import {
@@ -23,6 +25,7 @@ import {
   capabilityNameSchema,
   eventNameSchema,
   manifestSchema,
+  protocolAppUsageSummarySchema,
   protocolChatMessageActionResultSchema,
   protocolChatSendMessageActionSchema,
   protocolAppScopeGrantCreateSchema,
@@ -50,6 +53,7 @@ import {
   type ProtocolAppScopeGrantCreate,
   type ProtocolAppScopeGrantRevoke,
   type ProtocolAppRegistrationResult,
+  type ProtocolAppUsageSummary,
   type ProtocolDiscoveryDocument,
   type ProtocolEventEnvelope,
   type ProtocolManifest,
@@ -166,6 +170,8 @@ export class ProtocolService {
     private readonly prisma: PrismaService,
     private readonly deliveryWorker: ProtocolWebhookDeliveryWorkerService,
     private readonly deliveryRunner: ProtocolWebhookDeliveryRunnerService,
+    @InjectQueue("protocol-webhooks")
+    private readonly protocolWebhooksQueue: Queue,
     @Optional() private readonly intentsService?: IntentsService,
     @Optional() private readonly inboxService?: InboxService,
     @Optional() private readonly chatsService?: ChatsService,
@@ -1022,6 +1028,114 @@ export class ProtocolService {
       appId: app.registration.appId,
     });
     return protocolWebhookDeliveryRunResultSchema.parse(result);
+  }
+
+  async dispatchDueWebhookDeliveries(
+    appId: string,
+    appToken: string,
+    input: { limit?: number } = {},
+  ) {
+    const app = await this.requireAppAccess(appId, appToken, {
+      scopes: ["webhooks.manage"],
+      capabilities: ["webhook.write"],
+    });
+    const limit = Math.min(Math.max(input.limit ?? 25, 1), 100);
+    const enqueuedAt = new Date().toISOString();
+    await this.protocolWebhooksQueue.add(
+      "RunProtocolWebhookDeliveries",
+      {
+        type: "RunProtocolWebhookDeliveries",
+        traceId: randomUUID(),
+        appId: app.registration.appId,
+        limit,
+        enqueuedAt,
+      },
+      {
+        removeOnComplete: 500,
+        removeOnFail: 500,
+      },
+    );
+
+    return {
+      queueName: "protocol-webhooks" as const,
+      jobName: "RunProtocolWebhookDeliveries" as const,
+      appId: app.registration.appId,
+      limit,
+      enqueuedAt,
+    };
+  }
+
+  async getAppUsageSummary(
+    appId: string,
+    appToken: string,
+  ): Promise<ProtocolAppUsageSummary> {
+    const app = await this.requireAppAccess(appId, appToken, {
+      scopes: ["protocol.read"],
+      capabilities: ["app.read"],
+    });
+    const grantRows = await this.prisma.$queryRawUnsafe<
+      Array<{ status: string; count: bigint | number | string }>
+    >(
+      `SELECT status, COUNT(*)::bigint AS count
+       FROM protocol_app_scope_grants
+       WHERE app_id = $1
+       GROUP BY status`,
+      app.registration.appId,
+    );
+    const deliveryRows = await this.prisma.$queryRawUnsafe<
+      Array<{ status: string; count: bigint | number | string }>
+    >(
+      `SELECT status, COUNT(*)::bigint AS count
+       FROM protocol_webhook_deliveries
+       WHERE app_id = $1
+       GROUP BY status`,
+      app.registration.appId,
+    );
+    const recentEventRows = await this.prisma.$queryRawUnsafe<
+      ProtocolEventLogRow[]
+    >(
+      `SELECT cursor, actor_app_id, event_name, resource, payload, metadata, created_at
+       FROM protocol_event_log
+       WHERE actor_app_id = $1
+       ORDER BY cursor DESC
+       LIMIT 20`,
+      app.registration.appId,
+    );
+    const recentEvents = recentEventRows
+      .map((row) => this.mapEventRow(row))
+      .sort(
+        (left, right) =>
+          Date.parse(right.issuedAt) - Date.parse(left.issuedAt),
+      );
+    const latestCursor =
+      recentEventRows.length > 0 ? String(recentEventRows[0].cursor) : "0";
+    const grantCounts = Object.fromEntries(
+      grantRows.map((row) => [row.status, Number(row.count)]),
+    ) as Record<string, number>;
+    const deliveryCounts = Object.fromEntries(
+      deliveryRows.map((row) => [row.status, Number(row.count)]),
+    ) as Record<string, number>;
+
+    return protocolAppUsageSummarySchema.parse({
+      appId: app.registration.appId,
+      generatedAt: new Date().toISOString(),
+      appStatus: app.registration.status,
+      issuedScopes: app.issuedScopes,
+      issuedCapabilities: app.issuedCapabilities,
+      grantCounts: {
+        active: grantCounts.active ?? 0,
+        revoked: grantCounts.revoked ?? 0,
+      },
+      deliveryCounts: {
+        queued: deliveryCounts.queued ?? 0,
+        retrying: deliveryCounts.retrying ?? 0,
+        delivered: deliveryCounts.delivered ?? 0,
+        failed: deliveryCounts.failed ?? 0,
+        deadLettered: deliveryCounts.dead_lettered ?? 0,
+      },
+      latestCursor,
+      recentEvents,
+    });
   }
 
   private issueScopes(

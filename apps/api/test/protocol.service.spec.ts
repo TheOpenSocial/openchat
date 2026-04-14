@@ -15,6 +15,42 @@ function createPrismaStub() {
   return {
     async $queryRawUnsafe<T = unknown>(query: string, ...params: any[]) {
       if (
+        query.includes("FROM protocol_app_scope_grants") &&
+        query.includes("GROUP BY status")
+      ) {
+        const [appId] = params;
+        const rows = grants.get(appId) ?? [];
+        const counts = rows.reduce(
+          (acc, row) => {
+            acc[row.status] = (acc[row.status] ?? 0n) + 1n;
+            return acc;
+          },
+          {} as Record<string, bigint>,
+        );
+        return Object.entries(counts).map(([status, count]) => ({
+          status,
+          count,
+        })) as T;
+      }
+      if (
+        query.includes("FROM protocol_webhook_deliveries") &&
+        query.includes("GROUP BY status")
+      ) {
+        const [appId] = params;
+        const rows = deliveries.get(appId) ?? [];
+        const counts = rows.reduce(
+          (acc, row) => {
+            acc[row.status] = (acc[row.status] ?? 0n) + 1n;
+            return acc;
+          },
+          {} as Record<string, bigint>,
+        );
+        return Object.entries(counts).map(([status, count]) => ({
+          status,
+          count,
+        })) as T;
+      }
+      if (
         query.includes("FROM protocol_apps") &&
         query.includes("WHERE app_id =")
       ) {
@@ -59,6 +95,16 @@ function createPrismaStub() {
             row.event_cursor == null ? 0 : Number(row.event_cursor);
           return sinceCursor === 0 || eventCursor > Number(sinceCursor);
         }) as T;
+      }
+      if (
+        query.includes("FROM protocol_event_log") &&
+        query.includes("ORDER BY cursor DESC")
+      ) {
+        const [appId] = params;
+        return events
+          .filter((row) => row.actor_app_id === appId)
+          .slice()
+          .sort((left, right) => Number(right.cursor) - Number(left.cursor)) as T;
       }
       if (query.includes("FROM protocol_event_log")) {
         const [appId, sinceCursor] = params;
@@ -253,6 +299,14 @@ function createDeliveryRunnerStub() {
   };
 }
 
+function createProtocolQueueStub() {
+  return {
+    add: async () => ({
+      id: "job-1",
+    }),
+  };
+}
+
 function createIntentsServiceStub() {
   return {
     createIntent: async (
@@ -324,6 +378,7 @@ function createProtocolService() {
     createPrismaStub() as any,
     createDeliveryWorkerStub() as any,
     createDeliveryRunnerStub() as any,
+    createProtocolQueueStub() as any,
     createIntentsServiceStub() as any,
     createInboxServiceStub() as any,
     createChatsServiceStub() as any,
@@ -745,5 +800,52 @@ describe("ProtocolService", () => {
 
     expect(result.claimedCount).toBe(0);
     expect(result.ranAt).toBe("2026-04-13T00:00:00.000Z");
+  });
+
+  it("dispatches due deliveries onto the protocol queue", async () => {
+    const queue = {
+      add: async (_name: string, payload: Record<string, unknown>) => payload,
+    };
+    const service = new ProtocolService(
+      createPrismaStub() as any,
+      createDeliveryWorkerStub() as any,
+      createDeliveryRunnerStub() as any,
+      queue as any,
+      createIntentsServiceStub() as any,
+      createInboxServiceStub() as any,
+      createChatsServiceStub() as any,
+    );
+    const registration = await service.registerApp(createRegistrationPayload());
+
+    const result = await service.dispatchDueWebhookDeliveries(
+      "partner.alpha",
+      registration.credentials.appToken,
+      { limit: 7 },
+    );
+
+    expect(result.queueName).toBe("protocol-webhooks");
+    expect(result.jobName).toBe("RunProtocolWebhookDeliveries");
+    expect(result.limit).toBe(7);
+  });
+
+  it("returns a protocol usage summary for an app", async () => {
+    const service = createProtocolService();
+    const registration = await service.registerApp(createRegistrationPayload());
+    await service.createAppGrant("partner.alpha", registration.credentials.appToken, {
+      scope: "actions.invoke",
+      capabilities: ["chat.write"],
+      subjectType: "user",
+      subjectId: "00000000-0000-4000-8000-000000000001",
+      metadata: { source: "test" },
+    });
+
+    const summary = await service.getAppUsageSummary(
+      "partner.alpha",
+      registration.credentials.appToken,
+    );
+
+    expect(summary.appId).toBe("partner.alpha");
+    expect(summary.grantCounts.active).toBe(1);
+    expect(summary.latestCursor).not.toBe("");
   });
 });
