@@ -9,6 +9,7 @@ import {
   type LlmRuntimeHealthSnapshot,
   type LaunchControlsSnapshot,
   type OnboardingActivationSnapshot,
+  type ProtocolQueueHealthSnapshot,
   type SavedSearchRecord,
   type ScheduledTaskRecord,
   type ScheduledTaskRunRecord,
@@ -382,6 +383,111 @@ export function SecurityPosturePanel({
             securityPostureSnapshot.violations.map((violation) => (
               <p key={violation}>{violation}</p>
             ))
+          )}
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+export function ProtocolQueueHealthPanel({
+  adminButtonClass,
+  loadProtocolQueueHealthSnapshot,
+  protocolQueueHealthSnapshot,
+}: {
+  adminButtonClass: string;
+  loadProtocolQueueHealthSnapshot: () => Promise<unknown>;
+  protocolQueueHealthSnapshot: ProtocolQueueHealthSnapshot | null;
+}) {
+  return (
+    <Panel
+      subtitle="Aggregated protocol delivery pressure and dead-letter recovery by app."
+      title="Protocol Queue Health"
+    >
+      <div className="flex flex-wrap gap-2">
+        <button
+          className={adminButtonClass}
+          onClick={loadProtocolQueueHealthSnapshot}
+          type="button"
+        >
+          Refresh protocol queue health
+        </button>
+      </div>
+      {!protocolQueueHealthSnapshot ? (
+        <p className="mt-3 text-sm text-muted-foreground">
+          No protocol queue-health snapshot loaded yet.
+        </p>
+      ) : (
+        <div className="mt-3 space-y-4 text-xs text-muted-foreground">
+          <p>
+            apps: {protocolQueueHealthSnapshot.summary.appCount} · queued:{" "}
+            {protocolQueueHealthSnapshot.summary.queuedCount} · retrying:{" "}
+            {protocolQueueHealthSnapshot.summary.retryingCount} · dead-lettered:{" "}
+            {protocolQueueHealthSnapshot.summary.deadLetteredCount}
+            {" · "}replayable:{" "}
+            {protocolQueueHealthSnapshot.summary.replayableCount}
+          </p>
+          <div className="grid gap-2 lg:grid-cols-2">
+            {protocolQueueHealthSnapshot.apps.slice(0, 6).map((app) => (
+              <article
+                className="rounded-lg border border-border bg-muted px-3 py-3"
+                key={app.appId}
+              >
+                <p className="text-sm font-semibold text-foreground">
+                  {app.appName ?? app.appId}
+                </p>
+                <p className="mt-1 text-foreground/80">
+                  {app.appId} · {app.appStatus}
+                </p>
+                <p className="mt-1 text-foreground">
+                  queued {app.queuedCount} · retrying {app.retryingCount} ·
+                  dead-lettered {app.deadLetteredCount} · replayable{" "}
+                  {app.replayableCount}
+                </p>
+                <p className="mt-1 text-foreground/80">
+                  oldest queued: {formatDateTime(app.oldestQueuedAt)} · oldest
+                  retrying: {formatDateTime(app.oldestRetryingAt)} · last
+                  dead-lettered: {formatDateTime(app.lastDeadLetteredAt)}
+                </p>
+              </article>
+            ))}
+          </div>
+          {protocolQueueHealthSnapshot.deadLetterSample.length === 0 ? (
+            <p className="text-foreground">No dead-letter samples available.</p>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                Dead-letter sample
+              </p>
+              {protocolQueueHealthSnapshot.deadLetterSample
+                .slice(0, 5)
+                .map((delivery) => (
+                  <article
+                    className="rounded-lg border border-border bg-background px-3 py-3"
+                    key={delivery.deliveryId}
+                  >
+                    <p className="text-sm font-semibold text-foreground">
+                      {delivery.appName ?? delivery.appId} ·{" "}
+                      {delivery.eventName}
+                    </p>
+                    <p className="mt-1 text-foreground/80">
+                      delivery {delivery.deliveryId} · subscription{" "}
+                      {delivery.subscriptionId} · status {delivery.status}
+                    </p>
+                    <p className="mt-1 text-foreground">
+                      attempts {delivery.attemptCount} · response{" "}
+                      {delivery.responseStatusCode ?? "n/a"} · last attempt{" "}
+                      {formatDateTime(delivery.lastAttemptAt)} · next attempt{" "}
+                      {formatDateTime(delivery.nextAttemptAt)}
+                    </p>
+                    {delivery.errorMessage ? (
+                      <p className="mt-1 text-foreground/80">
+                        {delivery.errorMessage}
+                      </p>
+                    ) : null}
+                  </article>
+                ))}
+            </div>
           )}
         </div>
       )}

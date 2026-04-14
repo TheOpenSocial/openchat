@@ -105,6 +105,45 @@ export interface LaunchControlsSnapshot {
   generatedAt: string;
 }
 
+export interface ProtocolQueueHealthSnapshot {
+  generatedAt: string;
+  summary: {
+    appCount: number;
+    queuedCount: number;
+    retryingCount: number;
+    deadLetteredCount: number;
+    replayableCount: number;
+  };
+  apps: Array<{
+    appId: string;
+    appName: string | null;
+    appStatus: string;
+    queuedCount: number;
+    retryingCount: number;
+    deadLetteredCount: number;
+    replayableCount: number;
+    oldestQueuedAt: string | null;
+    oldestRetryingAt: string | null;
+    lastDeadLetteredAt: string | null;
+  }>;
+  deadLetterSample: Array<{
+    deliveryId: string;
+    appId: string;
+    appName: string | null;
+    subscriptionId: string;
+    eventName: string;
+    status: string;
+    attemptCount: number;
+    nextAttemptAt: string | null;
+    lastAttemptAt: string | null;
+    deliveredAt: string | null;
+    responseStatusCode: number | null;
+    errorMessage: string | null;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+}
+
 export interface SecurityPostureSnapshot {
   generatedAt: string;
   strictMode: boolean;

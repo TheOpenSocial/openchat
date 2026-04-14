@@ -68,6 +68,35 @@ type VerificationRunRecord = {
   artifact: Record<string, unknown> | null;
 };
 
+type ProtocolQueueHealthAppRow = {
+  appId: string;
+  appName: string | null;
+  appStatus: string;
+  queuedCount: number | bigint | string;
+  retryingCount: number | bigint | string;
+  deadLetteredCount: number | bigint | string;
+  oldestQueuedAt: Date | string | null;
+  oldestRetryingAt: Date | string | null;
+  lastDeadLetteredAt: Date | string | null;
+};
+
+type ProtocolQueueHealthDeliveryRow = {
+  deliveryId: string;
+  appId: string;
+  appName: string | null;
+  subscriptionId: string;
+  eventName: string;
+  status: string;
+  attemptCount: number | bigint | string;
+  nextAttemptAt: Date | string | null;
+  lastAttemptAt: Date | string | null;
+  deliveredAt: Date | string | null;
+  responseStatusCode: number | null;
+  errorMessage: string | null;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+};
+
 @PublicRoute()
 @Controller("admin")
 export class AdminController {
@@ -2446,6 +2475,32 @@ export class AdminController {
     });
   }
 
+  @Get("ops/protocol-queue-health")
+  async protocolQueueHealth(
+    @Headers("x-admin-user-id") adminUserIdHeader?: string,
+    @Headers("x-admin-role") adminRoleHeader?: string,
+  ) {
+    const admin = this.parseAdminContext(adminUserIdHeader, adminRoleHeader, [
+      "admin",
+      "support",
+    ]);
+    const snapshot = await this.readProtocolQueueHealthSnapshot();
+    await this.adminAuditService.recordAction({
+      adminUserId: admin.adminUserId,
+      role: admin.role,
+      action: "admin.ops_protocol_queue_health_view",
+      entityType: "protocol_webhook_delivery",
+      metadata: {
+        appCount: snapshot.summary.appCount,
+        queuedCount: snapshot.summary.queuedCount,
+        retryingCount: snapshot.summary.retryingCount,
+        deadLetteredCount: snapshot.summary.deadLetteredCount,
+        replayableCount: snapshot.summary.replayableCount,
+      },
+    });
+    return ok(snapshot);
+  }
+
   @Get("moderation/queue")
   async moderationQueue(
     @Headers("x-admin-user-id") adminUserIdHeader?: string,
@@ -4055,6 +4110,115 @@ export class AdminController {
       runs.slice(0, AdminController.VERIFICATION_RUN_CACHE_MAX_ITEMS),
       ttlSeconds,
     );
+  }
+
+  private async readProtocolQueueHealthSnapshot() {
+    const appRows = await this.prisma.$queryRawUnsafe<
+      ProtocolQueueHealthAppRow[]
+    >(
+      `SELECT d.app_id AS "appId",
+              MAX(COALESCE(pa.registration_json->>'name', d.app_id)) AS "appName",
+              MAX(COALESCE(pa.status, 'unknown')) AS "appStatus",
+              COUNT(*) FILTER (WHERE d.status = 'queued')::bigint AS "queuedCount",
+              COUNT(*) FILTER (WHERE d.status = 'retrying')::bigint AS "retryingCount",
+              COUNT(*) FILTER (WHERE d.status = 'dead_lettered')::bigint AS "deadLetteredCount",
+              MIN(d.created_at) FILTER (WHERE d.status = 'queued') AS "oldestQueuedAt",
+              MIN(d.updated_at) FILTER (WHERE d.status = 'retrying') AS "oldestRetryingAt",
+              MAX(d.updated_at) FILTER (WHERE d.status = 'dead_lettered') AS "lastDeadLetteredAt"
+       FROM protocol_webhook_deliveries d
+       LEFT JOIN protocol_apps pa ON pa.app_id = d.app_id
+       GROUP BY d.app_id
+       ORDER BY COUNT(*) FILTER (WHERE d.status = 'dead_lettered') DESC,
+                COUNT(*) FILTER (WHERE d.status = 'retrying') DESC,
+                COUNT(*) FILTER (WHERE d.status = 'queued') DESC,
+                d.app_id ASC`,
+    );
+    const deadLetterSampleRows = await this.prisma.$queryRawUnsafe<
+      ProtocolQueueHealthDeliveryRow[]
+    >(
+      `SELECT d.delivery_id AS "deliveryId",
+              d.app_id AS "appId",
+              COALESCE(pa.registration_json->>'name', d.app_id) AS "appName",
+              d.subscription_id AS "subscriptionId",
+              d.event_name AS "eventName",
+              d.status AS "status",
+              d.attempt_count AS "attemptCount",
+              d.next_attempt_at AS "nextAttemptAt",
+              d.last_attempt_at AS "lastAttemptAt",
+              d.delivered_at AS "deliveredAt",
+              d.response_status_code AS "responseStatusCode",
+              d.error_message AS "errorMessage",
+              d.created_at AS "createdAt",
+              d.updated_at AS "updatedAt"
+       FROM protocol_webhook_deliveries d
+       LEFT JOIN protocol_apps pa ON pa.app_id = d.app_id
+       WHERE d.status = 'dead_lettered'
+       ORDER BY d.updated_at DESC
+       LIMIT 10`,
+    );
+
+    const toIsoString = (value: Date | string | null | undefined) => {
+      if (!value) {
+        return null;
+      }
+      if (value instanceof Date) {
+        return value.toISOString();
+      }
+      return value;
+    };
+
+    const apps = appRows.map((row) => ({
+      appId: row.appId,
+      appName: row.appName,
+      appStatus: row.appStatus,
+      queuedCount: Number(row.queuedCount ?? 0),
+      retryingCount: Number(row.retryingCount ?? 0),
+      deadLetteredCount: Number(row.deadLetteredCount ?? 0),
+      replayableCount: Number(row.deadLetteredCount ?? 0),
+      oldestQueuedAt: toIsoString(row.oldestQueuedAt),
+      oldestRetryingAt: toIsoString(row.oldestRetryingAt),
+      lastDeadLetteredAt: toIsoString(row.lastDeadLetteredAt),
+    }));
+
+    const summary = apps.reduce(
+      (accumulator, row) => ({
+        appCount: accumulator.appCount + 1,
+        queuedCount: accumulator.queuedCount + row.queuedCount,
+        retryingCount: accumulator.retryingCount + row.retryingCount,
+        deadLetteredCount:
+          accumulator.deadLetteredCount + row.deadLetteredCount,
+        replayableCount: accumulator.replayableCount + row.replayableCount,
+      }),
+      {
+        appCount: 0,
+        queuedCount: 0,
+        retryingCount: 0,
+        deadLetteredCount: 0,
+        replayableCount: 0,
+      },
+    );
+
+    return {
+      generatedAt: new Date().toISOString(),
+      summary,
+      apps,
+      deadLetterSample: deadLetterSampleRows.map((row) => ({
+        deliveryId: row.deliveryId,
+        appId: row.appId,
+        appName: row.appName,
+        subscriptionId: row.subscriptionId,
+        eventName: row.eventName,
+        status: row.status,
+        attemptCount: Number(row.attemptCount ?? 0),
+        nextAttemptAt: toIsoString(row.nextAttemptAt),
+        lastAttemptAt: toIsoString(row.lastAttemptAt),
+        deliveredAt: toIsoString(row.deliveredAt),
+        responseStatusCode: row.responseStatusCode,
+        errorMessage: row.errorMessage,
+        createdAt: toIsoString(row.createdAt) ?? new Date().toISOString(),
+        updatedAt: toIsoString(row.updatedAt) ?? new Date().toISOString(),
+      })),
+    };
   }
 
   private parseAdminContext(

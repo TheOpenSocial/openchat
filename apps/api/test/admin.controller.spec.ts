@@ -101,6 +101,7 @@ function createController(overrides: Partial<Record<string, any>> = {}) {
     }),
   };
   const prisma = overrides.prisma ?? {
+    $queryRawUnsafe: vi.fn().mockResolvedValue([]),
     user: {
       update: vi.fn(),
       findMany: vi.fn().mockResolvedValue([]),
@@ -2364,6 +2365,106 @@ describe("AdminController", () => {
     expect(adminAuditService.recordAction).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "admin.queue_overview",
+      }),
+    );
+  });
+
+  it("returns protocol queue health snapshot for support role", async () => {
+    const prisma = {
+      $queryRawUnsafe: vi.fn().mockImplementation(async (query: string) => {
+        if (query.includes('subscription_id AS "subscriptionId"')) {
+          return [
+            {
+              deliveryId: "delivery-1",
+              appId: "app-a",
+              appName: "Protocol App A",
+              subscriptionId: "sub-1",
+              eventName: "webhook.failed",
+              status: "dead_lettered",
+              attemptCount: 3,
+              nextAttemptAt: null,
+              lastAttemptAt: "2026-04-14T15:00:00.000Z",
+              deliveredAt: null,
+              responseStatusCode: 500,
+              errorMessage: "timeout",
+              createdAt: "2026-04-14T14:50:00.000Z",
+              updatedAt: "2026-04-14T15:00:00.000Z",
+            },
+          ];
+        }
+        if (query.includes("FROM protocol_webhook_deliveries d")) {
+          return [
+            {
+              appId: "app-a",
+              appName: "Protocol App A",
+              appStatus: "active",
+              queuedCount: 2,
+              retryingCount: 1,
+              deadLetteredCount: 3,
+              oldestQueuedAt: "2026-04-14T14:00:00.000Z",
+              oldestRetryingAt: "2026-04-14T14:30:00.000Z",
+              lastDeadLetteredAt: "2026-04-14T15:00:00.000Z",
+            },
+            {
+              appId: "app-b",
+              appName: "Protocol App B",
+              appStatus: "active",
+              queuedCount: 0,
+              retryingCount: 2,
+              deadLetteredCount: 1,
+              oldestQueuedAt: null,
+              oldestRetryingAt: "2026-04-14T14:45:00.000Z",
+              lastDeadLetteredAt: "2026-04-14T14:59:00.000Z",
+            },
+          ];
+        }
+        return [];
+      }),
+    };
+    const { controller, adminAuditService } = createController({
+      prisma,
+    });
+
+    const result = await controller.protocolQueueHealth(
+      ADMIN_USER_ID,
+      "support",
+    );
+    const payload = result.data as {
+      summary: {
+        appCount: number;
+        queuedCount: number;
+        retryingCount: number;
+        deadLetteredCount: number;
+        replayableCount: number;
+      };
+      apps: Array<{ appId: string; replayableCount: number }>;
+      deadLetterSample: Array<{ deliveryId: string; errorMessage: string }>;
+    };
+
+    expect(prisma.$queryRawUnsafe).toHaveBeenCalledTimes(2);
+    expect(payload.summary).toEqual({
+      appCount: 2,
+      queuedCount: 2,
+      retryingCount: 3,
+      deadLetteredCount: 4,
+      replayableCount: 4,
+    });
+    expect(payload.apps[0]).toEqual(
+      expect.objectContaining({
+        appId: "app-a",
+        replayableCount: 3,
+      }),
+    );
+    expect(payload.deadLetterSample[0]).toEqual(
+      expect.objectContaining({
+        deliveryId: "delivery-1",
+        errorMessage: "timeout",
+      }),
+    );
+    expect(adminAuditService.recordAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "admin.ops_protocol_queue_health_view",
+        entityType: "protocol_webhook_delivery",
       }),
     );
   });
