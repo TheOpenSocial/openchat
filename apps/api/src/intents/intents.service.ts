@@ -238,6 +238,7 @@ export class IntentsService {
     traceId: string;
     agentThreadId?: string;
     notificationMetadata?: Record<string, unknown>;
+    requestMetadata?: Record<string, unknown>;
   }) {
     const intent = await this.prisma.intent.findUnique({
       where: { id: input.intentId },
@@ -295,6 +296,7 @@ export class IntentsService {
         relevanceFeatures: {
           source: "agent_manual_intro",
           traceId: input.traceId,
+          ...(input.requestMetadata ?? {}),
         } as Prisma.InputJsonValue,
         expiresAt: new Date(Date.now() + 20 * 60_000),
       },

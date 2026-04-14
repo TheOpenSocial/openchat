@@ -1259,6 +1259,14 @@ describe("ProtocolService", () => {
             actorAppId: "partner.alpha",
           }),
         },
+        requestMetadata: {
+          provenance: expect.objectContaining({
+            source: "protocol",
+            action: "request.send",
+            resource: "intent_request",
+            actorAppId: "partner.alpha",
+          }),
+        },
       }),
     );
     expect(inboxService.updateStatus).toHaveBeenCalledWith(

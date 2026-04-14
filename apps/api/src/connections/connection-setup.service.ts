@@ -133,6 +133,9 @@ export class ConnectionSetupService {
         ? requestedGroupSize
         : this.resolveConvertedGroupTargetSize(acceptedRecipientCount + 1);
       const runAsGroup = isGroupIntent || shouldConvertToGroup;
+      const protocolProvenance = this.buildAcceptedRequestProvenance(
+        request.relevanceFeatures,
+      );
       if (runAsGroup && this.launchControlsService) {
         try {
           await this.launchControlsService.assertActionAllowed(
@@ -183,10 +186,12 @@ export class ConnectionSetupService {
             conversionFromOneToOne: shouldConvertToGroup,
             workflowRunId,
             traceId: workflowTraceId,
+            protocolProvenance,
           })
         : await this.setupDmConnection(request, {
             workflowRunId,
             traceId: workflowTraceId,
+            protocolProvenance,
           });
       this.logger.log(
         JSON.stringify({
@@ -238,7 +243,11 @@ export class ConnectionSetupService {
       senderUserId: string;
       recipientUserId: string;
     },
-    workflow: { workflowRunId: string; traceId: string },
+    workflow: {
+      workflowRunId: string;
+      traceId: string;
+      protocolProvenance?: Record<string, unknown>;
+    },
   ) {
     let connectionWasCreated = false;
     let connection = await this.prisma.connection.findFirst({
@@ -342,6 +351,7 @@ export class ConnectionSetupService {
       recipientUserId: request.senderUserId,
       notificationType: NotificationType.REQUEST_ACCEPTED,
       body: "Someone accepted your request. Your chat is ready.",
+      metadata: workflow.protocolProvenance,
     });
 
     await this.createWorkflowNotification({
@@ -351,6 +361,7 @@ export class ConnectionSetupService {
       recipientUserId: request.recipientUserId,
       notificationType: NotificationType.AGENT_UPDATE,
       body: "You accepted the request. Say hi and get started.",
+      metadata: workflow.protocolProvenance,
     });
 
     await this.notifySenderThread(
@@ -421,6 +432,7 @@ export class ConnectionSetupService {
       conversionFromOneToOne?: boolean;
       workflowRunId: string;
       traceId: string;
+      protocolProvenance?: Record<string, unknown>;
     },
   ) {
     const targetSize = options.targetSize;
@@ -571,6 +583,7 @@ export class ConnectionSetupService {
         : NotificationType.AGENT_UPDATE,
       body: senderMessage,
       metadata: {
+        ...(options.protocolProvenance ?? {}),
         targetSize,
         participantCount,
         isReady,
@@ -594,6 +607,7 @@ export class ConnectionSetupService {
             notificationType: NotificationType.GROUP_FORMED,
             body: participantMessage,
             metadata: {
+              ...(options.protocolProvenance ?? {}),
               targetSize,
               participantCount,
               isReady,
@@ -1057,6 +1071,7 @@ export class ConnectionSetupService {
         input.recipientUserId,
         input.notificationType,
         input.body,
+        input.metadata,
       ));
     const deduped = existingNotification != null;
     await this.workflowRuntimeService?.linkSideEffect({
@@ -1230,6 +1245,22 @@ export class ConnectionSetupService {
       return {};
     }
     return value as Record<string, unknown>;
+  }
+
+  private buildAcceptedRequestProvenance(
+    value: unknown,
+  ): Record<string, unknown> | undefined {
+    const metadata = this.readMetadata(value);
+    const provenance = this.readMetadata(metadata.provenance);
+    if (this.readString(provenance.source) !== "protocol") {
+      return undefined;
+    }
+    return {
+      provenance: {
+        ...provenance,
+        action: "request.accept",
+      },
+    };
   }
 
   private readString(value: unknown) {

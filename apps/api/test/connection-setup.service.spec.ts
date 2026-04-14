@@ -122,6 +122,96 @@ describe("ConnectionSetupService", () => {
     );
   });
 
+  it("preserves protocol provenance on accepted-request notifications", async () => {
+    const prisma: any = {
+      intentRequest: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "req-protocol",
+          status: "accepted",
+          intentId: "intent-protocol",
+          senderUserId: "user-1",
+          recipientUserId: "user-2",
+          relevanceFeatures: {
+            provenance: {
+              source: "protocol",
+              action: "request.send",
+              actorAppId: "partner.alpha",
+            },
+          },
+        }),
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      intent: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "intent-protocol",
+          parsedIntent: { intentType: "chat" },
+        }),
+        update: vi.fn().mockResolvedValue({}),
+      },
+      connection: {
+        findFirst: vi.fn().mockResolvedValue(null),
+      },
+      connectionParticipant: {
+        findMany: vi.fn().mockResolvedValue([]),
+        createMany: vi.fn().mockResolvedValue({}),
+      },
+      chat: {
+        findFirst: vi.fn().mockResolvedValue(null),
+      },
+      chatMembership: {
+        findMany: vi.fn().mockResolvedValue([]),
+        createMany: vi.fn().mockResolvedValue({}),
+      },
+      agentThread: {
+        findFirst: vi.fn().mockResolvedValue({ id: "thread-1" }),
+      },
+    };
+    const notificationsService: any = {
+      createInAppNotification: vi
+        .fn()
+        .mockResolvedValue({ id: "notif-protocol" }),
+    };
+
+    const service = new ConnectionSetupService(
+      prisma,
+      {
+        createConnection: vi.fn().mockResolvedValue({ id: "conn-1" }),
+      } as any,
+      {
+        createChat: vi.fn().mockResolvedValue({ id: "chat-1" }),
+        createMessage: vi.fn().mockResolvedValue({}),
+        createSystemMessage: vi.fn().mockResolvedValue({}),
+      } as any,
+      notificationsService,
+      {
+        recordBehaviorSignal: vi.fn().mockResolvedValue({}),
+        storeInteractionSummary: vi.fn().mockResolvedValue({}),
+      } as any,
+      {
+        upsertConversationSummaryEmbedding: vi.fn().mockResolvedValue({}),
+      } as any,
+      { createAgentMessage: vi.fn().mockResolvedValue({}) } as any,
+      {
+        recordGroupFormationStalled: vi.fn().mockResolvedValue(undefined),
+      } as any,
+    );
+
+    await service.setupFromAcceptedRequest("req-protocol");
+
+    expect(notificationsService.createInAppNotification).toHaveBeenCalledWith(
+      "user-1",
+      NotificationType.REQUEST_ACCEPTED,
+      "Someone accepted your request. Your chat is ready.",
+      {
+        provenance: {
+          source: "protocol",
+          action: "request.accept",
+          actorAppId: "partner.alpha",
+        },
+      },
+    );
+  });
+
   it("converts active 1:1 intent into group flow when multiple recipients accept", async () => {
     const connectionFindFirst = vi
       .fn()
@@ -416,16 +506,31 @@ describe("ConnectionSetupService", () => {
       "user-1",
       NotificationType.GROUP_FORMED,
       expect.stringContaining("3/3"),
+      expect.objectContaining({
+        targetSize: 3,
+        participantCount: 3,
+        isReady: true,
+      }),
     );
     expect(notificationsService.createInAppNotification).toHaveBeenCalledWith(
       "user-2",
       NotificationType.GROUP_FORMED,
       expect.stringContaining("participants confirmed"),
+      expect.objectContaining({
+        targetSize: 3,
+        participantCount: 3,
+        isReady: true,
+      }),
     );
     expect(notificationsService.createInAppNotification).toHaveBeenCalledWith(
       "user-3",
       NotificationType.GROUP_FORMED,
       expect.stringContaining("participants confirmed"),
+      expect.objectContaining({
+        targetSize: 3,
+        participantCount: 3,
+        isReady: true,
+      }),
     );
     expect(personalizationService.recordBehaviorSignal).toHaveBeenCalledTimes(
       9,
@@ -533,6 +638,11 @@ describe("ConnectionSetupService", () => {
       "user-1",
       NotificationType.GROUP_FORMED,
       expect.stringContaining("fallback threshold"),
+      expect.objectContaining({
+        targetSize: 4,
+        participantCount: 3,
+        isReady: true,
+      }),
     );
     expect(agentService.createAgentMessage).toHaveBeenCalledWith(
       "thread-1",
@@ -643,11 +753,17 @@ describe("ConnectionSetupService", () => {
       "user-3",
       NotificationType.REQUEST_RECEIVED,
       expect.stringContaining("group request"),
+      expect.objectContaining({
+        intentId: "intent-5",
+      }),
     );
     expect(notificationsService.createInAppNotification).toHaveBeenCalledWith(
       "user-4",
       NotificationType.REQUEST_RECEIVED,
       expect.stringContaining("group request"),
+      expect.objectContaining({
+        intentId: "intent-5",
+      }),
     );
     expect(agentService.createAgentMessage).toHaveBeenCalledWith(
       "thread-1",

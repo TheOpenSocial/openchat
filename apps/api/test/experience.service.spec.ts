@@ -267,4 +267,46 @@ describe("ExperienceService", () => {
       }),
     );
   });
+
+  it("labels protocol accepted-request notifications with specific integration titles", async () => {
+    const { service } = createService({
+      prisma: {
+        notification: {
+          count: vi.fn().mockResolvedValue(1),
+          findMany: vi.fn().mockResolvedValue([
+            {
+              id: "notif-protocol-request-accepted-1",
+              body: "Someone accepted your request. Your chat is ready.",
+              type: "request_accepted",
+              channel: "in_app",
+              isRead: false,
+              metadata: {
+                provenance: {
+                  source: "protocol",
+                  action: "request.accept",
+                },
+              },
+              createdAt: new Date("2026-04-13T00:00:00.000Z"),
+            },
+          ]),
+        },
+        intentRequest: {
+          findFirst: vi.fn().mockResolvedValue(null),
+        },
+        chat: {
+          findFirst: vi.fn().mockResolvedValue(null),
+        },
+      },
+    });
+
+    const summary = await service.getActivitySummary(USER_ID);
+
+    expect(summary.sections.updates[0]).toEqual(
+      expect.objectContaining({
+        eyebrow: "Integration",
+        title: "Integration request accepted",
+        body: "Someone accepted your request. Your chat is ready.",
+      }),
+    );
+  });
 });

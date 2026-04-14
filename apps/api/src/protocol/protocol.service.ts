@@ -1798,6 +1798,17 @@ export class ProtocolService {
           recipientUserId: payload.recipientUserId,
         },
       },
+      requestMetadata: {
+        provenance: {
+          source: "protocol",
+          action: "request.send",
+          resource: "intent_request",
+          actorAppId: context.actorAppId,
+          intentId: payload.intentId,
+          senderUserId: payload.actorUserId,
+          recipientUserId: payload.recipientUserId,
+        },
+      },
     });
     const requestId =
       "requestId" in request
