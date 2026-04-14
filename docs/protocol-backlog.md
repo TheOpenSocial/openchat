@@ -64,6 +64,7 @@ The protocol is no longer just a concept. The following pieces are already prese
 - A cron-safe global dispatch endpoint now exists for scheduled protocol webhook execution across apps.
 - Webhook delivery attempts are now persisted per delivery with outcome, duration, status code, and error metadata.
 - Queue inspection now exposes both persisted delivery records and live queue state counts.
+- Dead-lettered deliveries can now be replayed explicitly through the protocol API and first-party settings surfaces.
 - Usage visibility is now exposed through a protocol app usage summary so first-party settings surfaces can inspect recent protocol activity without raw table access.
 - Usage summaries now include token and grant audit timestamps for first-party inspection surfaces.
 - First-party mobile and web settings surfaces now support token rotate/revoke and grant creation/revocation flows for protocol apps.

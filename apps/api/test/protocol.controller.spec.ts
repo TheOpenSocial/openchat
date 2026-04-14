@@ -31,6 +31,7 @@ describe("ProtocolController", () => {
       listWebhooks: () => [],
       listWebhookDeliveries: () => [],
       listWebhookDeliveryAttempts: () => [],
+      replayWebhookDelivery: () => ({}),
       inspectDeliveryQueue: () => ({
         appId: "alpha.app",
         generatedAt: "2026-04-13T00:00:00.000Z",
@@ -138,6 +139,7 @@ describe("ProtocolController", () => {
       listWebhooks: () => [],
       listWebhookDeliveries: () => [],
       listWebhookDeliveryAttempts: () => [],
+      replayWebhookDelivery: () => ({}),
       inspectDeliveryQueue: () => ({
         appId: "alpha.app",
         generatedAt: "2026-04-13T00:00:00.000Z",
@@ -288,6 +290,15 @@ describe("ProtocolController", () => {
         token,
         deliveryId,
       }),
+      replayWebhookDelivery: (
+        _appId: string,
+        token: string,
+        deliveryId: string,
+      ) => ({
+        token,
+        deliveryId,
+        status: "queued",
+      }),
       inspectDeliveryQueue: (
         _appId: string,
         token: string,
@@ -428,6 +439,13 @@ describe("ProtocolController", () => {
         "x-protocol-app-token": "secret-token",
       },
     )) as any;
+    const replayDelivery = (await controller.replayWebhookDelivery(
+      "alpha.app",
+      "00000000-0000-4000-8000-000000000411",
+      {
+        "x-protocol-app-token": "secret-token",
+      },
+    )) as any;
     const replay = (await controller.replayEvents(
       "alpha.app",
       {
@@ -501,6 +519,10 @@ describe("ProtocolController", () => {
     expect(attempts.data.deliveryId).toBe(
       "00000000-0000-4000-8000-000000000411",
     );
+    expect(replayDelivery.data.deliveryId).toBe(
+      "00000000-0000-4000-8000-000000000411",
+    );
+    expect(replayDelivery.data.token).toBe("secret-token");
     expect(grants.data.token).toBe("secret-token");
     expect(createdGrant.data.token).toBe("secret-token");
     expect(createdGrant.data.payload.scope).toBe("resources.read");
@@ -532,6 +554,7 @@ describe("ProtocolController", () => {
       listWebhooks: () => [],
       listWebhookDeliveries: () => [],
       listWebhookDeliveryAttempts: () => [],
+      replayWebhookDelivery: () => ({}),
       inspectDeliveryQueue: () => ({}),
       runDueWebhookDeliveries: (
         _appId: string,
@@ -685,6 +708,7 @@ describe("ProtocolController", () => {
       listWebhooks: () => [],
       listWebhookDeliveries: () => [],
       listWebhookDeliveryAttempts: () => [],
+      replayWebhookDelivery: () => ({}),
       inspectDeliveryQueue: () => ({
         appId: "alpha.app",
         generatedAt: "2026-04-13T00:00:00.000Z",

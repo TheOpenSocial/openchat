@@ -21,6 +21,7 @@ import {
   protocolReplayCursorSchema,
   protocolWebhookDeliveryDispatchResultSchema,
   protocolWebhookDeliveryAttemptSchema,
+  protocolWebhookDeliveryReplayResultSchema,
   protocolWebhookDeliveryRunRequestSchema,
   protocolWebhookDeliveryRunResultSchema,
   manifestSchema,
@@ -48,6 +49,7 @@ import {
   type ProtocolScopeName,
   type ProtocolWebhookDeliveryDispatchResult,
   type ProtocolWebhookDeliveryAttempt,
+  type ProtocolWebhookDeliveryReplayResult,
   type ProtocolWebhookDeliveryRunRequest,
   type ProtocolWebhookDeliveryRunResult,
   type WebhookSubscription,
@@ -120,6 +122,11 @@ export type ProtocolClient = {
     appToken: string,
     deliveryId: string,
   ) => Promise<ProtocolWebhookDeliveryAttempt[]>;
+  replayWebhookDelivery: (
+    appId: string,
+    appToken: string,
+    deliveryId: string,
+  ) => Promise<ProtocolWebhookDeliveryReplayResult>;
   inspectDeliveryQueue: (
     appId: string,
     appToken: string,
@@ -236,6 +243,7 @@ export type ProtocolDeliveryQueueInspection = {
   inFlightCount: number;
   failedCount: number;
   deadLetteredCount: number;
+  replayableCount?: number;
   queueState?: {
     waiting: number;
     active: number;
@@ -474,6 +482,23 @@ export function createProtocolClient(
       return protocolWebhookDeliveryAttemptSchema
         .array()
         .parse(payload?.data ?? payload);
+    },
+    async replayWebhookDelivery(appId, appToken, deliveryId) {
+      const response = await transport.request(
+        `/protocol/apps/${appId}/deliveries/${deliveryId}/replay`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-protocol-app-token": appToken,
+          },
+          body: JSON.stringify({}),
+        },
+      );
+      const payload = (await response.json()) as { data?: unknown } | undefined;
+      return protocolWebhookDeliveryReplayResultSchema.parse(
+        payload?.data ?? payload,
+      );
     },
     async inspectDeliveryQueue(appId, appToken, cursor) {
       const search = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";

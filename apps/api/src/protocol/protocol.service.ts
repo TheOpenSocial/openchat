@@ -28,6 +28,7 @@ import {
   protocolAppUsageSummarySchema,
   protocolWebhookDeliveryGlobalDispatchResultSchema,
   protocolWebhookDeliveryAttemptSchema,
+  protocolWebhookDeliveryReplayResultSchema,
   protocolChatMessageActionResultSchema,
   protocolChatSendMessageActionSchema,
   protocolAppScopeGrantCreateSchema,
@@ -735,6 +736,9 @@ export class ProtocolService {
       deadLetteredCount: deliveries.filter(
         (row) => row.status === "dead_lettered",
       ).length,
+      replayableCount: deliveries.filter(
+        (row) => row.status === "dead_lettered",
+      ).length,
       queueState: {
         waiting: queueState.waiting ?? 0,
         active: queueState.active ?? 0,
@@ -748,6 +752,49 @@ export class ProtocolService {
 
   async claimDueWebhookDeliveries(limit = 25) {
     return this.deliveryWorker.claimDueDeliveries(limit);
+  }
+
+  async replayWebhookDelivery(
+    appId: string,
+    appToken: string,
+    deliveryId: string,
+  ) {
+    const app = await this.requireAppAccess(appId, appToken, {
+      scopes: ["webhooks.manage"],
+      capabilities: ["webhook.write"],
+    });
+    const replayed = await this.deliveryWorker.replayDeadLetteredDelivery(
+      deliveryId,
+      app.registration.appId,
+      new Date(),
+    );
+
+    await this.deliveryWorker.recordAttempt({
+      deliveryId: replayed.deliveryId,
+      appId: replayed.appId,
+      subscriptionId: replayed.subscriptionId,
+      attemptNumber: 1,
+      outcome: "replayed",
+      attemptedAt: new Date(replayed.replayedAt),
+      metadata: {
+        previousStatus: replayed.previousStatus,
+        nextAttemptAt: replayed.nextAttemptAt,
+      },
+    });
+
+    await this.recordEvent({
+      actorAppId: app.registration.appId,
+      event: "app.updated",
+      resource: "app_registration",
+      payload: {
+        appId: app.registration.appId,
+        update: "webhook_delivery_replayed",
+        deliveryId: replayed.deliveryId,
+        subscriptionId: replayed.subscriptionId,
+      },
+    });
+
+    return protocolWebhookDeliveryReplayResultSchema.parse(replayed);
   }
 
   async replayEvents(appId: string, appToken: string, cursor?: string) {

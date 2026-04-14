@@ -791,6 +791,7 @@ export const protocolWebhookDeliveryAttemptSchema = z
       "dead_lettered",
       "failed",
       "skipped",
+      "replayed",
     ] as const),
     attemptedAt: isoDateTimeSchema,
     responseStatusCode: z.number().int().nullable(),
@@ -803,4 +804,20 @@ export const protocolWebhookDeliveryAttemptSchema = z
   .strict();
 export type ProtocolWebhookDeliveryAttempt = z.infer<
   typeof protocolWebhookDeliveryAttemptSchema
+>;
+
+export const protocolWebhookDeliveryReplayResultSchema = z
+  .object({
+    deliveryId: uuidSchema,
+    appId: identifierSchema,
+    subscriptionId: identifierSchema,
+    previousStatus: z.literal("dead_lettered"),
+    status: z.literal("queued"),
+    attemptCount: z.number().int().min(0),
+    replayedAt: isoDateTimeSchema,
+    nextAttemptAt: isoDateTimeSchema,
+  })
+  .strict();
+export type ProtocolWebhookDeliveryReplayResult = z.infer<
+  typeof protocolWebhookDeliveryReplayResultSchema
 >;

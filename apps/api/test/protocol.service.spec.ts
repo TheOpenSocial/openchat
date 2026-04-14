@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AppRegistrationRequest } from "@opensocial/protocol-types";
 import { ProtocolService } from "../src/protocol/protocol.service.js";
+import { ProtocolWebhookDeliveryWorkerService } from "../src/protocol/protocol-webhook-delivery-worker.service.js";
 
 function createPrismaStub() {
   const apps = new Map<string, any>();
@@ -96,6 +97,56 @@ function createPrismaStub() {
             row.event_cursor == null ? 0 : Number(row.event_cursor);
           return sinceCursor === 0 || eventCursor > Number(sinceCursor);
         }) as T;
+      }
+      if (
+        query.includes("UPDATE protocol_webhook_deliveries") &&
+        query.includes("status = 'queued'")
+      ) {
+        const [deliveryId, replayedAt] = params;
+        for (const [appId, rows] of deliveries.entries()) {
+          const row = rows.find(
+            (entry) =>
+              entry.delivery_id === deliveryId &&
+              entry.status === "dead_lettered",
+          );
+          if (!row) {
+            continue;
+          }
+          row.status = "queued";
+          row.attempt_count = 0;
+          row.next_attempt_at = replayedAt;
+          row.delivered_at = null;
+          row.failed_at = null;
+          row.response_status_code = null;
+          row.response_body = null;
+          row.error_code = null;
+          row.error_message = null;
+          row.updated_at = replayedAt;
+          row.app_id = appId;
+          return [
+            {
+              deliveryId: row.delivery_id,
+              appId: row.app_id,
+              subscriptionId: row.subscription_id,
+              eventId: null,
+              eventType: row.event_name,
+              payload: row.payload,
+              dedupeKey: null,
+              attemptCount: row.attempt_count,
+              status: row.status,
+              nextAttemptAt: row.next_attempt_at,
+              deliveredAt: row.delivered_at,
+              failedAt: row.failed_at,
+              responseStatus: row.response_status_code,
+              responseBody: row.response_body ?? null,
+              errorCode: row.error_code ?? null,
+              errorMessage: row.error_message ?? null,
+              createdAt: row.created_at,
+              updatedAt: row.updated_at,
+            },
+          ] as T;
+        }
+        return [] as T;
       }
       if (query.includes("FROM protocol_webhook_delivery_attempts")) {
         const [appId, deliveryId] = params;
@@ -310,6 +361,17 @@ function createDeliveryWorkerStub() {
       deliveries: [],
       limit,
     }),
+    replayDeadLetteredDelivery: async (deliveryId: string) => ({
+      deliveryId,
+      appId: "partner.alpha",
+      subscriptionId: "subscription-1",
+      previousStatus: "dead_lettered",
+      status: "queued",
+      attemptCount: 0,
+      replayedAt: "2026-04-13T00:00:00.000Z",
+      nextAttemptAt: "2026-04-13T00:00:00.000Z",
+    }),
+    recordAttempt: async () => undefined,
   };
 }
 
@@ -704,6 +766,7 @@ describe("ProtocolService", () => {
       subscription.subscriptionId,
     );
     expect(queue.queuedCount).toBe(1);
+    expect(queue.replayableCount).toBe(0);
   });
 
   it("creates, lists, and revokes app scope grants", async () => {
@@ -882,6 +945,65 @@ describe("ProtocolService", () => {
 
     expect(attempts).toHaveLength(1);
     expect(attempts[0]?.outcome).toBe("retrying");
+  });
+
+  it("replays a dead-lettered delivery for an app", async () => {
+    const prisma = createPrismaStub() as any;
+    const queue = createProtocolQueueStub() as any;
+    const worker = new ProtocolWebhookDeliveryWorkerService(prisma as any);
+    const service = new ProtocolService(
+      prisma,
+      worker as any,
+      createDeliveryRunnerStub() as any,
+      queue,
+      createIntentsServiceStub() as any,
+      createInboxServiceStub() as any,
+      createChatsServiceStub() as any,
+    );
+    const registration = await service.registerApp(createRegistrationPayload());
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO protocol_webhook_deliveries
+       (delivery_id, subscription_id, app_id, event_cursor, event_name, status, attempt_count, next_attempt_at, last_attempt_at, delivered_at, response_status_code, error_message, signature, payload, metadata, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::timestamptz, $9::timestamptz, $10::timestamptz, $11, $12, $13, $14::jsonb, $15::jsonb, $16::timestamptz, $17::timestamptz)`,
+      "00000000-0000-4000-8000-000000000402",
+      "subscription-1",
+      "partner.alpha",
+      7,
+      "webhook.failed",
+      "dead_lettered",
+      5,
+      null,
+      "2026-04-13T00:00:00.000Z",
+      null,
+      503,
+      "temporarily unavailable",
+      null,
+      JSON.stringify({ eventName: "webhook.failed" }),
+      JSON.stringify({ source: "test" }),
+      "2026-04-13T00:00:00.000Z",
+      "2026-04-13T00:00:00.000Z",
+    );
+
+    const replayed = await service.replayWebhookDelivery(
+      "partner.alpha",
+      registration.credentials.appToken,
+      "00000000-0000-4000-8000-000000000402",
+    );
+
+    expect(replayed.previousStatus).toBe("dead_lettered");
+    expect(replayed.status).toBe("queued");
+    expect(replayed.attemptCount).toBe(0);
+
+    const queueInspection = await service.inspectDeliveryQueue(
+      "partner.alpha",
+      registration.credentials.appToken,
+    );
+    expect(
+      queueInspection.deliveries.find(
+        (delivery) =>
+          delivery.deliveryId === "00000000-0000-4000-8000-000000000402",
+      )?.status,
+    ).toBe("queued");
   });
 
   it("dispatches due deliveries onto the protocol queue", async () => {

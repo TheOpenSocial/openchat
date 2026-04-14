@@ -84,6 +84,9 @@ export function ProtocolIntegrationsPanel() {
   const [rotatingToken, setRotatingToken] = useState(false);
   const [revokingToken, setRevokingToken] = useState(false);
   const [tokenNotice, setTokenNotice] = useState<string | null>(null);
+  const [replayingDeliveryId, setReplayingDeliveryId] = useState<string | null>(
+    null,
+  );
 
   const resetInspectionState = (options?: { clearToken?: boolean }) => {
     setDetailsError(null);
@@ -400,6 +403,31 @@ export function ProtocolIntegrationsPanel() {
     }
   };
 
+  const replayDelivery = async (deliveryId: string) => {
+    if (!selectedAppId.trim() || !appToken.trim()) {
+      setDetailsError("Select an app and paste its token before replaying.");
+      return;
+    }
+    setReplayingDeliveryId(deliveryId);
+    setDetailsError(null);
+    setTokenNotice(null);
+    try {
+      const result = await api.replayProtocolWebhookDelivery(
+        selectedAppId.trim(),
+        appToken.trim(),
+        deliveryId,
+      );
+      setTokenNotice(
+        `Re-queued delivery ${result.deliveryId.slice(0, 8)} for replay.`,
+      );
+      await Promise.all([inspectApp(), inspectQueue()]);
+    } catch (replayError) {
+      setDetailsError(`Could not replay delivery: ${String(replayError)}`);
+    } finally {
+      setReplayingDeliveryId(null);
+    }
+  };
+
   return (
     <WorkspacePanel>
       <WorkspaceHeader
@@ -640,6 +668,10 @@ export function ProtocolIntegrationsPanel() {
                     <p className="mt-1 text-[hsl(var(--foreground))]">
                       Completed {queueInspection.queueState?.completed ?? 0} ·
                       Failed {queueInspection.queueState?.failed ?? 0}
+                    </p>
+                    <p className="mt-1 text-[hsl(var(--foreground))]">
+                      Replayable dead letters{" "}
+                      {queueInspection.replayableCount ?? 0}
                     </p>
                   </div>
                 ) : null}
@@ -887,6 +919,22 @@ export function ProtocolIntegrationsPanel() {
                               >
                                 Inspect attempts
                               </Button>
+                              {delivery.status === "dead_lettered" ? (
+                                <Button
+                                  disabled={
+                                    replayingDeliveryId === delivery.deliveryId
+                                  }
+                                  onClick={() => {
+                                    void replayDelivery(delivery.deliveryId);
+                                  }}
+                                  type="button"
+                                  variant="secondary"
+                                >
+                                  {replayingDeliveryId === delivery.deliveryId
+                                    ? "Replaying…"
+                                    : "Replay delivery"}
+                                </Button>
+                              ) : null}
                               {(deliveryAttempts[delivery.deliveryId] ?? [])
                                 .slice(0, 2)
                                 .map((attempt) => (

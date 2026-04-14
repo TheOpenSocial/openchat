@@ -79,13 +79,30 @@ export type DeliveryAttemptRecordInput = {
   appId: string;
   subscriptionId: string;
   attemptNumber: number;
-  outcome: "delivered" | "retrying" | "dead_lettered" | "failed" | "skipped";
+  outcome:
+    | "delivered"
+    | "retrying"
+    | "dead_lettered"
+    | "failed"
+    | "skipped"
+    | "replayed";
   attemptedAt?: Date;
   responseStatusCode?: number | null;
   errorCode?: string | null;
   errorMessage?: string | null;
   durationMs?: number | null;
   metadata?: Record<string, unknown>;
+};
+
+export type DeliveryReplayResult = {
+  deliveryId: string;
+  appId: string;
+  subscriptionId: string;
+  previousStatus: "dead_lettered";
+  status: "queued";
+  attemptCount: number;
+  replayedAt: string;
+  nextAttemptAt: string;
 };
 
 type DeliveryAttemptStateRow = {
@@ -338,6 +355,71 @@ export class ProtocolWebhookDeliveryWorkerService {
       JSON.stringify(input.metadata ?? {}),
       attemptedAt,
     );
+  }
+
+  async replayDeadLetteredDelivery(
+    deliveryId: string,
+    appId: string,
+    now = new Date(),
+  ): Promise<DeliveryReplayResult> {
+    const replayedAt = now.toISOString();
+    const rows = await this.prisma.$queryRawUnsafe<
+      RawQueuedWebhookDeliveryRow[]
+    >(
+      `UPDATE protocol_webhook_deliveries
+       SET status = 'queued',
+           attempt_count = 0,
+           next_attempt_at = $2::timestamptz,
+           delivered_at = NULL,
+           failed_at = NULL,
+           response_status = NULL,
+           response_body = NULL,
+           error_code = NULL,
+           error_message = NULL,
+           updated_at = $2::timestamptz
+       WHERE id = $1
+         AND app_id = $3
+         AND status = 'dead_lettered'
+       RETURNING id AS "deliveryId",
+                 app_id AS "appId",
+                 subscription_id AS "subscriptionId",
+                 event_id AS "eventId",
+                 event_type AS "eventType",
+                 payload,
+                 dedupe_key AS "dedupeKey",
+                 attempt_count AS "attemptCount",
+                 status,
+                 next_attempt_at AS "nextAttemptAt",
+                 delivered_at AS "deliveredAt",
+                 failed_at AS "failedAt",
+                 response_status AS "responseStatus",
+                 response_body AS "responseBody",
+                 error_code AS "errorCode",
+                 error_message AS "errorMessage",
+                 created_at AS "createdAt",
+                 updated_at AS "updatedAt"`,
+      deliveryId,
+      replayedAt,
+      appId,
+    );
+
+    const row = rows[0];
+    if (!row) {
+      throw new Error(
+        `protocol webhook delivery ${deliveryId} not found for app ${appId} or not dead-lettered`,
+      );
+    }
+
+    return {
+      deliveryId: row.deliveryId,
+      appId: row.appId,
+      subscriptionId: row.subscriptionId,
+      previousStatus: "dead_lettered",
+      status: "queued",
+      attemptCount: row.attemptCount,
+      replayedAt,
+      nextAttemptAt: replayedAt,
+    };
   }
 
   private mapDeliveryRow(

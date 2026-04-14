@@ -79,6 +79,9 @@ export function ProtocolIntegrationsPanel() {
   const [tokenNotice, setTokenNotice] = useState<string | null>(null);
   const [rotatingToken, setRotatingToken] = useState(false);
   const [revokingToken, setRevokingToken] = useState(false);
+  const [replayingDeliveryId, setReplayingDeliveryId] = useState<string | null>(
+    null,
+  );
   const [grantScope, setGrantScope] = useState("actions.invoke");
   const [grantCapabilities, setGrantCapabilities] = useState(
     "intent.write,request.write,chat.write",
@@ -370,6 +373,33 @@ export function ProtocolIntegrationsPanel() {
     }
   };
 
+  const replayDelivery = async (deliveryId: string) => {
+    if (!selectedAppId.trim() || !appToken.trim()) {
+      setUsageError(
+        "Select an app and paste its token before replaying a delivery.",
+      );
+      return;
+    }
+    setReplayingDeliveryId(deliveryId);
+    setUsageError(null);
+    setUsageNotice(null);
+    try {
+      const result = await api.replayProtocolWebhookDelivery(
+        selectedAppId.trim(),
+        appToken.trim(),
+        deliveryId,
+      );
+      setUsageNotice(
+        `Re-queued delivery ${result.deliveryId.slice(0, 8)} for replay.`,
+      );
+      await Promise.all([loadQueueInspection(), loadUsageSummary()]);
+    } catch (replayError) {
+      setUsageError(`Could not replay delivery: ${String(replayError)}`);
+    } finally {
+      setReplayingDeliveryId(null);
+    }
+  };
+
   const revokeGrant = async (grantId: string) => {
     if (!selectedAppId.trim() || !appToken.trim()) {
       setGrantsError("Select an app and paste its token before revoking.");
@@ -600,6 +630,19 @@ export function ProtocolIntegrationsPanel() {
                           Inspect attempts
                         </Text>
                       </Pressable>
+                      {delivery.status === "dead_lettered" ? (
+                        <Pressable
+                          onPress={() => {
+                            void replayDelivery(delivery.deliveryId);
+                          }}
+                        >
+                          <Text className="text-[12px] text-muted">
+                            {replayingDeliveryId === delivery.deliveryId
+                              ? "Replaying..."
+                              : "Replay delivery"}
+                          </Text>
+                        </Pressable>
+                      ) : null}
                       {(deliveryAttempts[delivery.deliveryId] ?? [])
                         .slice(0, 2)
                         .map((attempt) => (
@@ -731,6 +774,9 @@ export function ProtocolIntegrationsPanel() {
                 <Text className="text-[12px] text-muted">
                   Completed {queueInspection.queueState?.completed ?? 0} ·
                   Failed {queueInspection.queueState?.failed ?? 0}
+                </Text>
+                <Text className="text-[12px] text-muted">
+                  Replayable dead letters {queueInspection.replayableCount ?? 0}
                 </Text>
               </View>
             ) : null}

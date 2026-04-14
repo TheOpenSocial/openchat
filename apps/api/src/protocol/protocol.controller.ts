@@ -227,6 +227,23 @@ export class ProtocolController {
     );
   }
 
+  @Post("apps/:appId/deliveries/:deliveryId/replay")
+  async replayWebhookDelivery(
+    @Param("appId") appIdParam: string,
+    @Param("deliveryId") deliveryIdParam: string,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+  ) {
+    const appId = parseRequestPayload(identifierSchema, appIdParam);
+    const deliveryId = parseRequestPayload(uuidSchema, deliveryIdParam);
+    return ok(
+      await this.protocolService.replayWebhookDelivery(
+        appId,
+        readProtocolAppToken(headers) ?? "",
+        deliveryId,
+      ),
+    );
+  }
+
   @Get("apps/:appId/delivery-queue")
   async inspectDeliveryQueue(
     @Param("appId") appIdParam: string,

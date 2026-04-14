@@ -1857,6 +1857,13 @@ export const api = {
       deliveryId,
     );
   },
+  replayProtocolWebhookDelivery(
+    appId: string,
+    appToken: string,
+    deliveryId: string,
+  ) {
+    return protocolClient.replayWebhookDelivery(appId, appToken, deliveryId);
+  },
   inspectProtocolDeliveryQueue(
     appId: string,
     appToken: string,
