@@ -20,6 +20,9 @@ describe("ProtocolController", () => {
       listApps: () => [],
       registerApp: (payload: unknown) => payload,
       getApp: () => ({ appId: "alpha" }),
+      listAppGrants: () => [],
+      createAppGrant: () => ({}),
+      revokeAppGrant: () => ({}),
       rotateAppToken: (_appId: string, token: string) => ({ token }),
       revokeAppToken: (_appId: string, token: string) => ({
         token,
@@ -68,6 +71,9 @@ describe("ProtocolController", () => {
       listApps: () => [],
       registerApp: () => ({}),
       getApp: () => ({}),
+      listAppGrants: () => [],
+      createAppGrant: () => ({}),
+      revokeAppGrant: () => ({}),
       rotateAppToken: (_appId: string, token: string) => ({ token }),
       revokeAppToken: (_appId: string, token: string) => ({
         token,
@@ -129,6 +135,25 @@ describe("ProtocolController", () => {
       listApps: () => [],
       registerApp: () => ({}),
       getApp: () => ({}),
+      listAppGrants: (_appId: string, token: string) => ({ token }),
+      createAppGrant: (
+        _appId: string,
+        token: string,
+        payload: Record<string, unknown>,
+      ) => ({
+        token,
+        payload,
+      }),
+      revokeAppGrant: (
+        _appId: string,
+        grantId: string,
+        token: string,
+        payload: Record<string, unknown>,
+      ) => ({
+        token,
+        grantId,
+        payload,
+      }),
       rotateAppToken: (_appId: string, token: string) => ({ token }),
       revokeAppToken: (_appId: string, token: string) => ({
         token,
@@ -184,6 +209,31 @@ describe("ProtocolController", () => {
       },
       "12",
     )) as any;
+    const grants = (await controller.listAppGrants("alpha.app", {
+      "x-protocol-app-token": "secret-token",
+    })) as any;
+    const createdGrant = (await controller.createAppGrant(
+      "alpha.app",
+      {
+        "x-protocol-app-token": "secret-token",
+      },
+      {
+        scope: "resources.read",
+        capabilities: ["app.read"],
+        subjectType: "user",
+        subjectId: "00000000-0000-4000-8000-000000000001",
+      },
+    )) as any;
+    const revokedGrant = (await controller.revokeAppGrant(
+      "alpha.app",
+      "grant-1",
+      {
+        "x-protocol-app-token": "secret-token",
+      },
+      {
+        metadata: { reason: "done" },
+      },
+    )) as any;
     const queue = (await controller.inspectDeliveryQueue(
       "alpha.app",
       {
@@ -206,6 +256,10 @@ describe("ProtocolController", () => {
 
     expect(deliveries.data.token).toBe("secret-token");
     expect(deliveries.data.subscriptionId).toBe("subscription-1");
+    expect(grants.data.token).toBe("secret-token");
+    expect(createdGrant.data.token).toBe("secret-token");
+    expect(createdGrant.data.payload.scope).toBe("resources.read");
+    expect(revokedGrant.data.grantId).toBe("grant-1");
     expect(queue.data.token).toBe("secret-token");
     expect(queue.data.cursor).toBe("7");
     expect(replay.data.cursor).toBe("12");
@@ -221,6 +275,9 @@ describe("ProtocolController", () => {
       listApps: () => [],
       registerApp: () => ({}),
       getApp: () => ({}),
+      listAppGrants: () => [],
+      createAppGrant: () => ({}),
+      revokeAppGrant: () => ({}),
       rotateAppToken: (_appId: string, token: string) => ({
         token,
         rotated: true,

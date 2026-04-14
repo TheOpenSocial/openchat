@@ -6,9 +6,11 @@ function createPrismaStub() {
   const apps = new Map<string, any>();
   const subscriptions = new Map<string, any[]>();
   const deliveries = new Map<string, any[]>();
+  const grants = new Map<string, any[]>();
   const events: any[] = [];
   const cursors = new Map<string, any>();
   let cursorSeq = 0n;
+  let grantSeq = 0;
 
   return {
     async $queryRawUnsafe<T = unknown>(query: string, ...params: any[]) {
@@ -36,6 +38,10 @@ function createPrismaStub() {
       if (query.includes("FROM protocol_webhook_subscriptions")) {
         const [appId] = params;
         return (subscriptions.get(appId) ?? []) as T;
+      }
+      if (query.includes("FROM protocol_app_scope_grants")) {
+        const [appId] = params;
+        return (grants.get(appId) ?? []) as T;
       }
       if (
         query.includes("FROM protocol_webhook_deliveries") &&
@@ -87,6 +93,57 @@ function createPrismaStub() {
           updated_at: params[2],
         };
         cursors.set(params[0], row);
+        return [row] as T;
+      }
+      if (query.includes("INSERT INTO protocol_app_scope_grants")) {
+        const existing = grants.get(params[0]) ?? [];
+        const duplicate = existing.find(
+          (row) =>
+            row.scope === params[1] &&
+            row.subject_type === params[3] &&
+            row.subject_id === params[4],
+        );
+        if (!duplicate) {
+          grantSeq += 1;
+        }
+        const row = {
+          id:
+            duplicate?.id ??
+            `00000000-0000-4000-8000-${String(grantSeq).padStart(12, "0")}`,
+          app_id: params[0],
+          scope: params[1],
+          capabilities: params[2],
+          subject_type: params[3],
+          subject_id: params[4],
+          status: "active",
+          granted_by_user_id: params[5],
+          granted_at: params[6],
+          revoked_at: null,
+          metadata: JSON.parse(params[7]),
+          created_at: duplicate?.created_at ?? params[8],
+          updated_at: params[9],
+        };
+        grants.set(
+          params[0],
+          duplicate
+            ? existing.map((entry) => (entry.id === duplicate.id ? row : entry))
+            : [...existing, row],
+        );
+        return [row] as T;
+      }
+      if (query.includes("UPDATE protocol_app_scope_grants")) {
+        const existing = grants.get(params[0]) ?? [];
+        const row = existing.find((entry) => entry.id === params[1]);
+        if (!row) {
+          return [] as T;
+        }
+        row.status = "revoked";
+        row.revoked_at = params[2];
+        row.metadata = {
+          ...(row.metadata ?? {}),
+          ...JSON.parse(params[3]),
+        };
+        row.updated_at = params[2];
         return [row] as T;
       }
       return [] as T;
@@ -473,5 +530,49 @@ describe("ProtocolService", () => {
       subscription.subscriptionId,
     );
     expect(queue.queuedCount).toBe(1);
+  });
+
+  it("creates, lists, and revokes app scope grants", async () => {
+    const service = new ProtocolService(
+      createPrismaStub() as any,
+      createDeliveryWorkerStub() as any,
+    );
+    const registration = await service.registerApp(createRegistrationPayload());
+
+    const created = await service.createAppGrant(
+      "partner.alpha",
+      registration.credentials.appToken,
+      {
+        scope: "resources.read",
+        capabilities: ["app.read"],
+        subjectType: "user",
+        subjectId: "00000000-0000-4000-8000-000000000001",
+        grantedByUserId: "00000000-0000-4000-8000-000000000002",
+        metadata: { source: "test" },
+      },
+    );
+    const listed = await service.listAppGrants(
+      "partner.alpha",
+      registration.credentials.appToken,
+    );
+    const revoked = await service.revokeAppGrant(
+      "partner.alpha",
+      created.grantId,
+      registration.credentials.appToken,
+      {
+        revokedByUserId: "00000000-0000-4000-8000-000000000003",
+        metadata: { reason: "done" },
+      },
+    );
+
+    expect(created.scope).toBe("resources.read");
+    expect(created.subjectType).toBe("user");
+    expect(listed).toHaveLength(1);
+    expect(revoked.status).toBe("revoked");
+    expect(revoked.metadata).toMatchObject({
+      source: "test",
+      reason: "done",
+      revokedByUserId: "00000000-0000-4000-8000-000000000003",
+    });
   });
 });

@@ -504,3 +504,63 @@ export const protocolReplayCursorSchema = z
   })
   .strict();
 export type ProtocolReplayCursor = z.infer<typeof protocolReplayCursorSchema>;
+
+export const protocolGrantSubjectTypeValues = [
+  "app",
+  "user",
+  "service",
+  "agent",
+] as const;
+export const protocolGrantSubjectTypeSchema = z.enum(
+  protocolGrantSubjectTypeValues,
+);
+export type ProtocolGrantSubjectType = z.infer<
+  typeof protocolGrantSubjectTypeSchema
+>;
+
+export const protocolGrantStatusValues = ["active", "revoked"] as const;
+export const protocolGrantStatusSchema = z.enum(protocolGrantStatusValues);
+export type ProtocolGrantStatus = z.infer<typeof protocolGrantStatusSchema>;
+
+export const protocolAppScopeGrantSchema = z
+  .object({
+    grantId: uuidSchema,
+    appId: identifierSchema,
+    scope: protocolScopeNameSchema,
+    capabilities: z.array(capabilityNameSchema).default([]),
+    subjectType: protocolGrantSubjectTypeSchema.default("app"),
+    subjectId: z.string().min(1).max(200),
+    status: protocolGrantStatusSchema.default("active"),
+    grantedByUserId: uuidSchema.optional().nullable(),
+    grantedAt: isoDateTimeSchema,
+    revokedAt: isoDateTimeSchema.optional().nullable(),
+    metadata: z.record(z.string(), z.unknown()).default({}),
+    createdAt: isoDateTimeSchema,
+    updatedAt: isoDateTimeSchema,
+  })
+  .strict();
+export type ProtocolAppScopeGrant = z.infer<typeof protocolAppScopeGrantSchema>;
+
+export const protocolAppScopeGrantCreateSchema = z
+  .object({
+    scope: protocolScopeNameSchema,
+    capabilities: z.array(capabilityNameSchema).default([]),
+    subjectType: protocolGrantSubjectTypeSchema.default("app"),
+    subjectId: z.string().min(1).max(200).optional(),
+    grantedByUserId: uuidSchema.optional(),
+    metadata: z.record(z.string(), z.unknown()).default({}),
+  })
+  .strict();
+export type ProtocolAppScopeGrantCreate = z.infer<
+  typeof protocolAppScopeGrantCreateSchema
+>;
+
+export const protocolAppScopeGrantRevokeSchema = z
+  .object({
+    revokedByUserId: uuidSchema.optional(),
+    metadata: z.record(z.string(), z.unknown()).default({}),
+  })
+  .strict();
+export type ProtocolAppScopeGrantRevoke = z.infer<
+  typeof protocolAppScopeGrantRevokeSchema
+>;

@@ -871,6 +871,24 @@ export const api = {
   ) {
     return protocolClient.createWebhook(appId, appToken, payload);
   },
+  listProtocolGrants(appId: string, appToken: string) {
+    return protocolClient.listGrants(appId, appToken);
+  },
+  createProtocolGrant(
+    appId: string,
+    appToken: string,
+    payload: Parameters<typeof protocolClient.createGrant>[2],
+  ) {
+    return protocolClient.createGrant(appId, appToken, payload);
+  },
+  revokeProtocolGrant(
+    appId: string,
+    appToken: string,
+    grantId: string,
+    input?: Parameters<typeof protocolClient.revokeGrant>[3],
+  ) {
+    return protocolClient.revokeGrant(appId, appToken, grantId, input);
+  },
   rotateProtocolAppToken(
     appId: string,
     appToken: string,

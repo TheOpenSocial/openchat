@@ -22,9 +22,13 @@ import {
   capabilityNameSchema,
   eventNameSchema,
   manifestSchema,
+  protocolAppScopeGrantCreateSchema,
+  protocolAppScopeGrantRevokeSchema,
+  protocolAppScopeGrantSchema,
   protocolEventEnvelopeSchema,
   protocolIds,
   protocolReplayCursorSchema,
+  protocolGrantSubjectTypeSchema,
   protocolScopeNameSchema,
   webhookSubscriptionCreateSchema,
   webhookSubscriptionSchema,
@@ -32,6 +36,9 @@ import {
   type AppRegistrationRequest,
   type CapabilityName,
   type EventName,
+  type ProtocolAppScopeGrant,
+  type ProtocolAppScopeGrantCreate,
+  type ProtocolAppScopeGrantRevoke,
   type ProtocolAppRegistrationResult,
   type ProtocolDiscoveryDocument,
   type ProtocolEventEnvelope,
@@ -110,6 +117,22 @@ type ProtocolWebhookDeliveryRow = {
   updated_at: Date | string;
 };
 
+type ProtocolAppScopeGrantRow = {
+  id: string;
+  app_id: string;
+  scope: string;
+  capabilities: string[] | null;
+  subject_type: string;
+  subject_id: string | null;
+  status: string;
+  granted_by_user_id: string | null;
+  granted_at: Date | string;
+  revoked_at: Date | string | null;
+  metadata: unknown;
+  created_at: Date | string;
+  updated_at: Date | string;
+};
+
 type RegisteredProtocolApp = {
   status: string;
   registration: AppRegistration;
@@ -167,6 +190,138 @@ export class ProtocolService {
       throw new NotFoundException("protocol app not found");
     }
     return this.mapAppRow(row);
+  }
+
+  async listAppGrants(appId: string, appToken: string) {
+    const app = await this.requireAppAccess(appId, appToken, {
+      scopes: ["protocol.read"],
+      capabilities: ["app.read"],
+    });
+
+    const rows = await this.prisma.$queryRawUnsafe<ProtocolAppScopeGrantRow[]>(
+      `SELECT id, app_id, scope, capabilities, subject_type, subject_id, status, granted_by_user_id, granted_at, revoked_at, metadata, created_at, updated_at
+       FROM protocol_app_scope_grants
+       WHERE app_id = $1
+       ORDER BY created_at DESC`,
+      app.registration.appId,
+    );
+
+    return rows.map((row) => this.mapGrantRow(row));
+  }
+
+  async createAppGrant(
+    appId: string,
+    appToken: string,
+    input: ProtocolAppScopeGrantCreate,
+  ) {
+    const app = await this.requireAppAccess(appId, appToken, {
+      scopes: ["protocol.write"],
+      capabilities: ["app.write"],
+    });
+    const payload = protocolAppScopeGrantCreateSchema.parse(input);
+    const now = new Date().toISOString();
+    const subjectType = protocolGrantSubjectTypeSchema.parse(
+      payload.subjectType,
+    );
+    const subjectId =
+      subjectType === "app"
+        ? payload.subjectId?.trim() || app.registration.appId
+        : payload.subjectId?.trim();
+
+    if (!subjectId) {
+      throw new ForbiddenException(`${subjectType} subjectId is required`);
+    }
+
+    const rows = await this.prisma.$queryRawUnsafe<ProtocolAppScopeGrantRow[]>(
+      `INSERT INTO protocol_app_scope_grants
+       (app_id, scope, capabilities, subject_type, subject_id, status, granted_by_user_id, granted_at, metadata, created_at, updated_at)
+       VALUES ($1, $2, $3::text[], $4, $5, 'active', $6::uuid, $7::timestamptz, $8::jsonb, $9::timestamptz, $10::timestamptz)
+       ON CONFLICT (app_id, scope, subject_type, subject_id)
+       DO UPDATE SET capabilities = EXCLUDED.capabilities,
+                     status = 'active',
+                     granted_by_user_id = EXCLUDED.granted_by_user_id,
+                     granted_at = EXCLUDED.granted_at,
+                     revoked_at = NULL,
+                     metadata = EXCLUDED.metadata,
+                     updated_at = EXCLUDED.updated_at
+       RETURNING id, app_id, scope, capabilities, subject_type, subject_id, status, granted_by_user_id, granted_at, revoked_at, metadata, created_at, updated_at`,
+      app.registration.appId,
+      payload.scope,
+      payload.capabilities,
+      subjectType,
+      subjectId,
+      payload.grantedByUserId ?? null,
+      now,
+      JSON.stringify(payload.metadata ?? {}),
+      now,
+      now,
+    );
+
+    const grant = this.mapGrantRow(rows[0]);
+    await this.recordEvent({
+      actorAppId: app.registration.appId,
+      event: "app.updated",
+      resource: "app_registration",
+      payload: {
+        appId: app.registration.appId,
+        update: "scope_grant_upserted",
+        grantId: grant.grantId,
+        scope: grant.scope,
+        subjectType: grant.subjectType,
+        subjectId: grant.subjectId,
+      },
+    });
+    return grant;
+  }
+
+  async revokeAppGrant(
+    appId: string,
+    grantId: string,
+    appToken: string,
+    input: ProtocolAppScopeGrantRevoke,
+  ) {
+    const app = await this.requireAppAccess(appId, appToken, {
+      scopes: ["protocol.write"],
+      capabilities: ["app.write"],
+    });
+    const payload = protocolAppScopeGrantRevokeSchema.parse(input);
+    const now = new Date().toISOString();
+
+    const rows = await this.prisma.$queryRawUnsafe<ProtocolAppScopeGrantRow[]>(
+      `UPDATE protocol_app_scope_grants
+       SET status = 'revoked',
+           revoked_at = $3::timestamptz,
+           metadata = COALESCE(metadata, '{}'::jsonb) || $4::jsonb,
+           updated_at = $3::timestamptz
+       WHERE app_id = $1 AND id = $2::uuid
+       RETURNING id, app_id, scope, capabilities, subject_type, subject_id, status, granted_by_user_id, granted_at, revoked_at, metadata, created_at, updated_at`,
+      app.registration.appId,
+      grantId,
+      now,
+      JSON.stringify({
+        revokedByUserId: payload.revokedByUserId ?? null,
+        ...(payload.metadata ?? {}),
+      }),
+    );
+
+    const row = rows[0];
+    if (!row) {
+      throw new NotFoundException("protocol app grant not found");
+    }
+
+    const grant = this.mapGrantRow(row);
+    await this.recordEvent({
+      actorAppId: app.registration.appId,
+      event: "app.updated",
+      resource: "app_registration",
+      payload: {
+        appId: app.registration.appId,
+        update: "scope_grant_revoked",
+        grantId: grant.grantId,
+        scope: grant.scope,
+      },
+    });
+    return grant;
   }
 
   async rotateAppToken(appId: string, appToken: string) {
@@ -738,6 +893,26 @@ export class ProtocolService {
     return protocolReplayCursorSchema.parse({
       appId: row.app_id,
       cursor: String(row.cursor),
+      updatedAt: this.toIsoString(row.updated_at),
+    });
+  }
+
+  private mapGrantRow(row: ProtocolAppScopeGrantRow): ProtocolAppScopeGrant {
+    return protocolAppScopeGrantSchema.parse({
+      grantId: row.id,
+      appId: row.app_id,
+      scope: protocolScopeNameSchema.parse(row.scope),
+      capabilities: (row.capabilities ?? []).map((capability) =>
+        capabilityNameSchema.parse(capability),
+      ),
+      subjectType: protocolGrantSubjectTypeSchema.parse(row.subject_type),
+      subjectId: row.subject_id ?? row.app_id,
+      status: row.status,
+      grantedByUserId: row.granted_by_user_id,
+      grantedAt: this.toIsoString(row.granted_at),
+      revokedAt: this.toIsoString(row.revoked_at) ?? null,
+      metadata: row.metadata ?? {},
+      createdAt: this.toIsoString(row.created_at),
       updatedAt: this.toIsoString(row.updated_at),
     });
   }

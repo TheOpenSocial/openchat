@@ -49,7 +49,7 @@ The protocol is no longer just a concept. The following pieces are already prese
 - Webhook subscriptions are persisted, signed, and recorded as deliveries.
 - The event log and replay cursor state are persisted.
 - The protocol manifest, discovery document, and event catalog are exposed from the protocol service.
-- Scoped grant storage already exists in the schema through `protocol_app_scope_grants`, but the API model still needs to be fully surfaced and enforced.
+- Scoped grant storage already exists in the schema through `protocol_app_scope_grants` with `subjectType=user|app|service|agent`; the API model still needs to be surfaced and enforced.
 
 Use this as the baseline for all next backlog items. Do not reintroduce generic social primitives like posts or follows.
 
@@ -74,13 +74,11 @@ These packages should mirror the backend domain rather than inventing new abstra
    - Explicitly exclude posts, follows, feeds, likes, and other generic social primitives.
    - Lock the namespace rules for core events versus third-party extensions.
 
-2. Define consent and scoped grants on top of persisted protocol app rows.
-   - User-delegated scopes
-   - App-scoped permissions
-   - Agent-scoped permissions
-   - Grant subject model for app, user, service, and agent
-   - Grant status lifecycle: active, revoked
-   - Audit trail for every grant and revocation
+2. Define scoped grants on top of persisted protocol app rows.
+   - Use `protocol_app_scope_grants` as the grant store.
+   - Support `subjectType=user|app|service|agent`.
+   - Keep grant status lifecycle minimal: `active`, `revoked`.
+   - Audit every grant and revocation.
 
 3. Define app registration and capability manifests as the base contract.
    - App identity and ownership
@@ -115,11 +113,11 @@ These packages should mirror the backend domain rather than inventing new abstra
    - Audit trail for credential use
 
 7. Finish consent and scope grant enforcement for third-party access.
-   - User consent for delegated actions
-   - Scope grants and revocation
-   - Capability approval for sensitive actions
-   - Agent approval flows where human review is required
-   - Deny rules for unsupported primitives like posts and follows
+   - Enforce `protocol_app_scope_grants` against app, user, service, and agent subjects.
+   - Support user consent for delegated actions.
+   - Support capability approval for sensitive actions.
+   - Support agent approval flows where human review is required.
+   - Deny unsupported primitives like posts and follows.
 
 8. Define the external action APIs that third parties can call.
    - Create/update intents
@@ -166,7 +164,7 @@ These packages should mirror the backend domain rather than inventing new abstra
 
 - Ship the event delivery worker for external consumers.
 - Wire rotate/revoke lifecycle through persisted protocol app rows and audit events.
-- Surface consent/scoped grants through the protocol API and enforce them against persisted grant rows.
+- Surface `protocol_app_scope_grants` through the protocol API and enforce them against persisted grant rows.
 - Add scope checks for every external action path.
 - Add audit logging for all third-party and agent actions.
 - Add explicit deny rules for unsupported primitives like posts and follows.
@@ -181,7 +179,7 @@ These packages should mirror the backend domain rather than inventing new abstra
 - Support user-delegated consent where a third party acts on behalf of a user.
 - Support service tokens where a third party integrates at the platform level.
 - Record granted scopes and capability manifests.
-- Make consent grants explicit and revocable.
+- Make grants explicit and revocable through `protocol_app_scope_grants`.
 - Make auth failures observable and diagnosable.
 
 ## Event and Webhook Tasks

@@ -227,6 +227,20 @@ export interface ChatMetadataRecord {
   archived: boolean;
 }
 
+export interface ProtocolScopeGrantRecord {
+  grantId: string;
+  appId: string;
+  subjectType: "user" | "app" | "service" | "agent";
+  subjectId: string;
+  scope: string;
+  capabilities: string[];
+  status: "active" | "revoked";
+  createdAt: string;
+  updatedAt: string;
+  revokedAt: string | null;
+  metadata: Record<string, unknown>;
+}
+
 export interface ChatThreadSummaryRecord {
   rootMessage: ChatMessageRecord;
   replyCount: number;
@@ -1788,6 +1802,24 @@ export const api = {
     payload: Parameters<typeof protocolClient.createWebhook>[2],
   ) {
     return protocolClient.createWebhook(appId, appToken, payload);
+  },
+  listProtocolGrants(appId: string, appToken: string) {
+    return protocolClient.listGrants(appId, appToken);
+  },
+  createProtocolGrant(
+    appId: string,
+    appToken: string,
+    payload: Parameters<typeof protocolClient.createGrant>[2],
+  ) {
+    return protocolClient.createGrant(appId, appToken, payload);
+  },
+  revokeProtocolGrant(
+    appId: string,
+    appToken: string,
+    grantId: string,
+    input?: Parameters<typeof protocolClient.revokeGrant>[3],
+  ) {
+    return protocolClient.revokeGrant(appId, appToken, grantId, input);
   },
   rotateProtocolAppToken(
     appId: string,

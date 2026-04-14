@@ -11,6 +11,9 @@ type ProtocolAppSummary = Awaited<
 type ProtocolWebhookSummary = Awaited<
   ReturnType<typeof api.listProtocolWebhooks>
 >[number];
+type ProtocolScopeGrantRecord = Awaited<
+  ReturnType<typeof api.listProtocolGrants>
+>[number];
 
 function Metric({ label, value }: { label: string; value: string | number }) {
   return (
@@ -46,6 +49,9 @@ export function ProtocolIntegrationsPanel() {
   const [webhooks, setWebhooks] = useState<ProtocolWebhookSummary[]>([]);
   const [webhooksLoading, setWebhooksLoading] = useState(false);
   const [webhooksError, setWebhooksError] = useState<string | null>(null);
+  const [grants, setGrants] = useState<ProtocolScopeGrantRecord[]>([]);
+  const [grantsLoading, setGrantsLoading] = useState(false);
+  const [grantsError, setGrantsError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -115,6 +121,61 @@ export function ProtocolIntegrationsPanel() {
       setWebhooksError(`Could not load webhooks: ${String(loadError)}`);
     } finally {
       setWebhooksLoading(false);
+    }
+  };
+
+  const loadGrants = async () => {
+    if (!selectedAppId.trim() || !appToken.trim()) {
+      setGrantsError("Select an app and paste its token to inspect grants.");
+      setGrants([]);
+      return;
+    }
+
+    setGrantsLoading(true);
+    setGrantsError(null);
+    try {
+      const nextGrants = await api.listProtocolGrants(
+        selectedAppId.trim(),
+        appToken.trim(),
+      );
+      setGrants(nextGrants);
+    } catch (loadError) {
+      setGrants([]);
+      setGrantsError(`Could not load grants: ${String(loadError)}`);
+    } finally {
+      setGrantsLoading(false);
+    }
+  };
+
+  const revokeGrant = async (grantId: string) => {
+    if (!selectedAppId.trim() || !appToken.trim()) {
+      setGrantsError("Select an app and paste its token before revoking.");
+      return;
+    }
+
+    setGrantsLoading(true);
+    setGrantsError(null);
+    try {
+      await api.revokeProtocolGrant(
+        selectedAppId.trim(),
+        appToken.trim(),
+        grantId,
+      );
+      setGrants((current) =>
+        current.map((grant) =>
+          grant.grantId === grantId
+            ? {
+                ...grant,
+                status: "revoked",
+                revokedAt: new Date().toISOString(),
+              }
+            : grant,
+        ),
+      );
+    } catch (revokeError) {
+      setGrantsError(`Could not revoke grant: ${String(revokeError)}`);
+    } finally {
+      setGrantsLoading(false);
     }
   };
 
@@ -288,6 +349,83 @@ export function ProtocolIntegrationsPanel() {
                 <Text className="text-[12px] text-muted">
                   Events: {webhook.events.join(", ")}
                 </Text>
+              </View>
+            ))
+          )}
+        </View>
+      </View>
+
+      <View className="space-y-3 rounded-[24px] border border-hairline bg-surface px-4 py-4">
+        <View className="space-y-1">
+          <Text className="text-[12px] font-semibold uppercase tracking-[0.16em] text-muted">
+            Scope grants
+          </Text>
+          <Text className="text-[13px] leading-6 text-muted">
+            Read the active grants for the selected app, and revoke one if you
+            need to test a rollback.
+          </Text>
+        </View>
+
+        <PrimaryButton
+          label={grantsLoading ? "Loading..." : "Load grants"}
+          loading={grantsLoading}
+          onPress={() => {
+            void loadGrants();
+          }}
+        />
+
+        {grantsError ? (
+          <Text className="text-[13px] leading-6 text-[#fca5a5]">
+            {grantsError}
+          </Text>
+        ) : null}
+
+        <View className="space-y-2">
+          <Text className="text-[12px] font-semibold uppercase tracking-[0.16em] text-muted">
+            Loaded grants
+          </Text>
+          {grants.length === 0 ? (
+            <Text className="text-[13px] text-muted">
+              {selectedApp
+                ? "No grants loaded yet."
+                : "Select an app above to inspect its grants."}
+            </Text>
+          ) : (
+            grants.map((grant) => (
+              <View
+                key={grant.grantId}
+                className="gap-2 rounded-2xl border border-hairline bg-surfaceMuted/70 px-3 py-3"
+              >
+                <View className="flex-row items-start justify-between gap-3">
+                  <View className="min-w-0 flex-1">
+                    <Text className="text-[13px] font-medium text-ink">
+                      {grant.scope}
+                    </Text>
+                    <Text className="text-[12px] text-muted">
+                      {grant.subjectType} · {grant.subjectId}
+                    </Text>
+                  </View>
+                  <Text className="text-[11px] uppercase tracking-[0.16em] text-muted">
+                    {grant.status}
+                  </Text>
+                </View>
+                <Text className="text-[12px] text-muted">{grant.grantId}</Text>
+                <View className="flex-row flex-wrap gap-2">
+                  <Chip label={`created ${grant.createdAt.slice(0, 10)}`} />
+                  {grant.revokedAt ? (
+                    <Chip label={`revoked ${grant.revokedAt.slice(0, 10)}`} />
+                  ) : null}
+                </View>
+                {grant.status === "active" ? (
+                  <PrimaryButton
+                    label="Revoke"
+                    loading={grantsLoading}
+                    onPress={() => {
+                      void revokeGrant(grant.grantId);
+                    }}
+                    variant="secondary"
+                  />
+                ) : null}
               </View>
             ))
           )}

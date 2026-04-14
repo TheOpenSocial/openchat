@@ -4,6 +4,9 @@ import {
 } from "@opensocial/protocol-events";
 import {
   appRegistrationRequestSchema,
+  protocolAppScopeGrantCreateSchema,
+  protocolAppScopeGrantRevokeSchema,
+  protocolAppScopeGrantSchema,
   protocolAppRegistrationResultSchema,
   protocolDiscoveryDocumentSchema,
   protocolEventEnvelopeSchema,
@@ -14,6 +17,9 @@ import {
   type AppRegistration,
   type AppRegistrationRequest,
   type CapabilityName,
+  type ProtocolAppScopeGrant,
+  type ProtocolAppScopeGrantCreate,
+  type ProtocolAppScopeGrantRevoke,
   type ProtocolAppRegistrationResult,
   type ProtocolDiscoveryDocument,
   type ProtocolEventEnvelope,
@@ -45,6 +51,21 @@ export type ProtocolClient = {
     appToken: string,
     payload: WebhookSubscriptionCreate,
   ) => Promise<WebhookSubscription>;
+  listGrants: (
+    appId: string,
+    appToken: string,
+  ) => Promise<ProtocolGrantRecord[]>;
+  createGrant: (
+    appId: string,
+    appToken: string,
+    payload: ProtocolGrantCreateInput,
+  ) => Promise<ProtocolGrantRecord>;
+  revokeGrant: (
+    appId: string,
+    appToken: string,
+    grantId: string,
+    input?: ProtocolGrantRevokeInput,
+  ) => Promise<ProtocolGrantRecord>;
   rotateAppToken: (
     appId: string,
     appToken: string,
@@ -147,6 +168,10 @@ export type ProtocolDeliveryQueueInspection = {
   deliveries: ProtocolWebhookDelivery[];
 };
 
+export type ProtocolGrantRecord = ProtocolAppScopeGrant;
+export type ProtocolGrantCreateInput = ProtocolAppScopeGrantCreate;
+export type ProtocolGrantRevokeInput = ProtocolAppScopeGrantRevoke;
+
 export function createProtocolClient(
   transport: ProtocolClientTransport,
 ): ProtocolClient {
@@ -215,6 +240,57 @@ export function createProtocolClient(
         | { data?: unknown }
         | undefined;
       return webhookSubscriptionSchema.parse(envelope?.data ?? envelope);
+    },
+    async listGrants(appId, appToken) {
+      const response = await transport.request(
+        `/protocol/apps/${appId}/grants`,
+        {
+          headers: {
+            "x-protocol-app-token": appToken,
+          },
+        },
+      );
+      const payload = (await response.json()) as { data?: unknown } | undefined;
+      return protocolAppScopeGrantSchema
+        .array()
+        .parse(payload?.data ?? payload);
+    },
+    async createGrant(appId, appToken, payload) {
+      const requestPayload = protocolAppScopeGrantCreateSchema.parse(payload);
+      const response = await transport.request(
+        `/protocol/apps/${appId}/grants`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-protocol-app-token": appToken,
+          },
+          body: JSON.stringify(requestPayload),
+        },
+      );
+      const envelope = (await response.json()) as
+        | { data?: unknown }
+        | undefined;
+      return protocolAppScopeGrantSchema.parse(envelope?.data ?? envelope);
+    },
+    async revokeGrant(appId, appToken, grantId, input) {
+      const response = await transport.request(
+        `/protocol/apps/${appId}/grants/${grantId}/revoke`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-protocol-app-token": appToken,
+          },
+          body: JSON.stringify(
+            protocolAppScopeGrantRevokeSchema.parse(input ?? {}),
+          ),
+        },
+      );
+      const envelope = (await response.json()) as
+        | { data?: unknown }
+        | undefined;
+      return protocolAppScopeGrantSchema.parse(envelope?.data ?? envelope);
     },
     async rotateAppToken(appId, appToken, input) {
       const response = await transport.request(

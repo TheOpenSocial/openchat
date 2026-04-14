@@ -10,6 +10,8 @@ import {
 import {
   appRegistrationRequestSchema,
   identifierSchema,
+  protocolAppScopeGrantCreateSchema,
+  protocolAppScopeGrantRevokeSchema,
   protocolReplayCursorSchema,
   webhookSubscriptionCreateSchema,
 } from "@opensocial/protocol-types";
@@ -91,6 +93,62 @@ export class ProtocolController {
   async getApp(@Param("appId") appIdParam: string) {
     const appId = parseRequestPayload(identifierSchema, appIdParam);
     return ok(await this.protocolService.getApp(appId));
+  }
+
+  @Get("apps/:appId/grants")
+  async listAppGrants(
+    @Param("appId") appIdParam: string,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+  ) {
+    const appId = parseRequestPayload(identifierSchema, appIdParam);
+    return ok(
+      await this.protocolService.listAppGrants(
+        appId,
+        readProtocolAppToken(headers) ?? "",
+      ),
+    );
+  }
+
+  @Post("apps/:appId/grants")
+  async createAppGrant(
+    @Param("appId") appIdParam: string,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+    @Body() body: unknown,
+  ) {
+    const appId = parseRequestPayload(identifierSchema, appIdParam);
+    const payload = parseRequestPayload(
+      protocolAppScopeGrantCreateSchema,
+      body,
+    );
+    return ok(
+      await this.protocolService.createAppGrant(
+        appId,
+        readProtocolAppToken(headers) ?? "",
+        payload,
+      ),
+    );
+  }
+
+  @Post("apps/:appId/grants/:grantId/revoke")
+  async revokeAppGrant(
+    @Param("appId") appIdParam: string,
+    @Param("grantId") grantIdParam: string,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+    @Body() body: unknown,
+  ) {
+    const appId = parseRequestPayload(identifierSchema, appIdParam);
+    const payload = parseRequestPayload(
+      protocolAppScopeGrantRevokeSchema,
+      body,
+    );
+    return ok(
+      await this.protocolService.revokeAppGrant(
+        appId,
+        parseRequestPayload(identifierSchema, grantIdParam),
+        readProtocolAppToken(headers) ?? "",
+        payload,
+      ),
+    );
   }
 
   @Get("apps/:appId/webhooks")

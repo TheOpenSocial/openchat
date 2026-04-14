@@ -26,6 +26,9 @@ type ProtocolWebhookRecord = Awaited<
 type ProtocolWebhookDeliveryRecord = Awaited<
   ReturnType<typeof api.listProtocolWebhookDeliveries>
 >[number];
+type ProtocolGrantRecord = Awaited<
+  ReturnType<typeof api.listProtocolGrants>
+>[number];
 type ProtocolReplayCursor = Awaited<
   ReturnType<typeof api.getProtocolReplayCursor>
 >;
@@ -46,9 +49,11 @@ export function ProtocolIntegrationsPanel() {
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [detailsError, setDetailsError] = useState<string | null>(null);
   const [webhooks, setWebhooks] = useState<ProtocolWebhookRecord[]>([]);
+  const [grants, setGrants] = useState<ProtocolGrantRecord[]>([]);
   const [deliveries, setDeliveries] = useState<
     Record<string, ProtocolWebhookDeliveryRecord[]>
   >({});
+  const [revokingGrantId, setRevokingGrantId] = useState<string | null>(null);
   const [replayCursor, setReplayCursor] = useState<ProtocolReplayCursor | null>(
     null,
   );
@@ -107,6 +112,10 @@ export function ProtocolIntegrationsPanel() {
         selectedAppId.trim(),
         appToken.trim(),
       );
+      const appGrants = await api.listProtocolGrants(
+        selectedAppId.trim(),
+        appToken.trim(),
+      );
       const deliveryEntries = await Promise.all(
         appWebhooks.map(
           async (webhook) =>
@@ -126,15 +135,54 @@ export function ProtocolIntegrationsPanel() {
       );
 
       setWebhooks(appWebhooks);
+      setGrants(appGrants);
       setDeliveries(Object.fromEntries(deliveryEntries));
       setReplayCursor(cursor);
     } catch (error) {
       setDetailsError(String(error));
       setWebhooks([]);
+      setGrants([]);
       setDeliveries({});
       setReplayCursor(null);
     } finally {
       setLoadingDetails(false);
+    }
+  };
+
+  const revokeGrant = async (grantId: string) => {
+    if (!selectedAppId.trim() || !appToken.trim()) {
+      return;
+    }
+
+    setRevokingGrantId(grantId);
+    setDetailsError(null);
+    try {
+      await api.revokeProtocolGrant(
+        selectedAppId.trim(),
+        appToken.trim(),
+        grantId,
+        {
+          metadata: {
+            source: "settings_screen",
+          },
+        },
+      );
+      setGrants((current) =>
+        current.map((grant) =>
+          grant.grantId === grantId
+            ? {
+                ...grant,
+                status: "revoked",
+                updatedAt: new Date().toISOString(),
+                revokedAt: new Date().toISOString(),
+              }
+            : grant,
+        ),
+      );
+    } catch (error) {
+      setDetailsError(String(error));
+    } finally {
+      setRevokingGrantId(null);
     }
   };
 
@@ -149,8 +197,8 @@ export function ProtocolIntegrationsPanel() {
         <WorkspaceMutedPanel>
           <p className="text-sm leading-6 text-[hsl(var(--muted-foreground))]">
             This surface reads protocol apps and webhook state only. To inspect
-            a specific app’s webhooks and replay cursor, paste its app token
-            below.
+            a specific app’s webhooks, scope grants, and replay cursor, paste
+            its app token below.
           </p>
         </WorkspaceMutedPanel>
 
@@ -272,8 +320,67 @@ export function ProtocolIntegrationsPanel() {
           ) : null}
         </WorkspaceList>
 
-        {webhooks.length > 0 || replayCursor ? (
+        {grants.length > 0 || webhooks.length > 0 || replayCursor ? (
           <div className="space-y-3">
+            {grants.length > 0 ? (
+              <WorkspaceMutedPanel>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.2em] text-[hsl(var(--muted-foreground))]">
+                      Scope grants
+                    </p>
+                    <p className="mt-1 text-sm text-[hsl(var(--foreground))]">
+                      {grants.length} grant{grants.length === 1 ? "" : "s"} for{" "}
+                      {selectedApp?.registration.appId ?? selectedAppId}
+                    </p>
+                  </div>
+                  <Badge variant="default">Read-first</Badge>
+                </div>
+                <div className="mt-3 space-y-2">
+                  {grants.map((grant) => (
+                    <div
+                      className="rounded-2xl border border-[hsl(var(--border-soft))] bg-[hsl(var(--panel))]/60 px-3 py-3"
+                      key={grant.grantId}
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-[hsl(var(--foreground))]">
+                            {grant.subjectType}: {grant.subjectId}
+                          </p>
+                          <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
+                            {grant.grantId}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="default">{grant.status}</Badge>
+                          {grant.status === "active" ? (
+                            <Button
+                              disabled={revokingGrantId === grant.grantId}
+                              onClick={() => {
+                                void revokeGrant(grant.grantId);
+                              }}
+                              type="button"
+                              variant="secondary"
+                            >
+                              {revokingGrantId === grant.grantId
+                                ? "Revoking…"
+                                : "Revoke"}
+                            </Button>
+                          ) : null}
+                        </div>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Badge variant="default">Scope: {grant.scope}</Badge>
+                        <Badge variant="default">
+                          Capabilities: {joinNames(grant.capabilities)}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </WorkspaceMutedPanel>
+            ) : null}
+
             {replayCursor ? (
               <WorkspaceMutedPanel>
                 <div className="flex flex-wrap items-center justify-between gap-3">
