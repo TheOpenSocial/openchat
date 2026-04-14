@@ -3,6 +3,7 @@ import { PrismaService } from "../database/prisma.service.js";
 
 type RawQueuedWebhookDeliveryRow = {
   deliveryId: string;
+  appId: string;
   subscriptionId: string;
   eventId: string | null;
   eventType: string;
@@ -23,6 +24,7 @@ type RawQueuedWebhookDeliveryRow = {
 
 export type QueuedWebhookDelivery = {
   deliveryId: string;
+  appId: string;
   subscriptionId: string;
   eventId: string | null;
   eventType: string;
@@ -70,6 +72,20 @@ export type DeliveryTransitionResult = {
   attemptCount: number;
   nextAttemptAt: string | null;
   transitionedAt: string;
+};
+
+export type DeliveryAttemptRecordInput = {
+  deliveryId: string;
+  appId: string;
+  subscriptionId: string;
+  attemptNumber: number;
+  outcome: "delivered" | "retrying" | "dead_lettered" | "failed" | "skipped";
+  attemptedAt?: Date;
+  responseStatusCode?: number | null;
+  errorCode?: string | null;
+  errorMessage?: string | null;
+  durationMs?: number | null;
+  metadata?: Record<string, unknown>;
 };
 
 type DeliveryAttemptStateRow = {
@@ -120,6 +136,7 @@ export class ProtocolWebhookDeliveryWorkerService {
        FROM candidate_ids
        WHERE deliveries.id = candidate_ids.id
        RETURNING deliveries.id AS "deliveryId",
+                 deliveries.app_id AS "appId",
                  deliveries.subscription_id AS "subscriptionId",
                  deliveries.event_id AS "eventId",
                  deliveries.event_type AS "eventType",
@@ -302,11 +319,33 @@ export class ProtocolWebhookDeliveryWorkerService {
     };
   }
 
+  async recordAttempt(input: DeliveryAttemptRecordInput) {
+    const attemptedAt = (input.attemptedAt ?? new Date()).toISOString();
+    await this.prisma.$executeRawUnsafe(
+      `INSERT INTO protocol_webhook_delivery_attempts
+       (delivery_id, app_id, subscription_id, attempt_number, outcome, attempted_at, response_status_code, error_code, error_message, duration_ms, metadata, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6::timestamptz, $7, $8, $9, $10, $11::jsonb, $12::timestamptz)`,
+      input.deliveryId,
+      input.appId,
+      input.subscriptionId,
+      input.attemptNumber,
+      input.outcome,
+      attemptedAt,
+      input.responseStatusCode ?? null,
+      input.errorCode ?? null,
+      input.errorMessage ?? null,
+      input.durationMs ?? null,
+      JSON.stringify(input.metadata ?? {}),
+      attemptedAt,
+    );
+  }
+
   private mapDeliveryRow(
     row: RawQueuedWebhookDeliveryRow,
   ): QueuedWebhookDelivery {
     return {
       deliveryId: row.deliveryId,
+      appId: row.appId,
       subscriptionId: row.subscriptionId,
       eventId: row.eventId,
       eventType: row.eventType,

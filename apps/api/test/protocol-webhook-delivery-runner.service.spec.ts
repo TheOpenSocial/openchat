@@ -22,6 +22,7 @@ function createWorkerStub(overrides?: Partial<any>) {
     claimDueDeliveries: vi.fn(),
     markDeliverySucceeded: vi.fn(),
     markDeliveryFailed: vi.fn(),
+    recordAttempt: vi.fn(),
     ...overrides,
   };
 }
@@ -36,6 +37,7 @@ describe("ProtocolWebhookDeliveryRunnerService", () => {
     const claimed: QueuedWebhookDelivery[] = [
       {
         deliveryId: "delivery-1",
+        appId: "partner.alpha",
         subscriptionId: "subscription-1",
         eventId: "event-1",
         eventType: "intent.created",
@@ -136,6 +138,7 @@ describe("ProtocolWebhookDeliveryRunnerService", () => {
     const claimed: QueuedWebhookDelivery[] = [
       {
         deliveryId: "delivery-1",
+        appId: "partner.alpha",
         subscriptionId: "subscription-1",
         eventId: "event-1",
         eventType: "intent.updated",
@@ -216,6 +219,7 @@ describe("ProtocolWebhookDeliveryRunnerService", () => {
     const claimed: QueuedWebhookDelivery[] = [
       {
         deliveryId: "delivery-1",
+        appId: "partner.alpha",
         subscriptionId: "subscription-missing",
         eventId: "event-1",
         eventType: "notification.created",

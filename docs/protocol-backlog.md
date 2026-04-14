@@ -62,8 +62,11 @@ The protocol is no longer just a concept. The following pieces are already prese
 - The webhook delivery runner is now executable through the protocol API for an app-scoped direct run.
 - A queue-backed delivery path now exists through the `protocol-webhooks` worker lane.
 - A cron-safe global dispatch endpoint now exists for scheduled protocol webhook execution across apps.
+- Webhook delivery attempts are now persisted per delivery with outcome, duration, status code, and error metadata.
+- Queue inspection now exposes both persisted delivery records and live queue state counts.
 - Usage visibility is now exposed through a protocol app usage summary so first-party settings surfaces can inspect recent protocol activity without raw table access.
 - Usage summaries now include token and grant audit timestamps for first-party inspection surfaces.
+- First-party mobile and web settings surfaces now support token rotate/revoke and grant creation/revocation flows for protocol apps.
 - First-party runtime and agent intent/request flows now have protocol-service call-through paths for the cleanest social actions.
 
 Use this as the baseline for all next backlog items. Do not reintroduce generic social primitives like posts or follows.
@@ -111,12 +114,12 @@ These packages should mirror the backend domain rather than inventing new abstra
 
 ### Next
 
-5. Build the scheduled event delivery runner for external consumers.
+5. Harden the scheduled event delivery runner for external consumers.
    - Webhook subscriptions
    - Event signatures
    - Retry policy
    - Replay from cursor
-   - Delivery status tracking
+   - Delivery attempt history and delivery status tracking
    - Queue processing and backoff behavior
    - Dead-letter handling and recovery
    - Scheduled dispatch path for due deliveries across apps
@@ -127,7 +130,7 @@ These packages should mirror the backend domain rather than inventing new abstra
    - Rotation and revocation
    - Expiry and refresh policy where applicable
    - Audit trail for credential use
-   - First-party visibility into token/grant audit state
+   - First-party write controls and visibility into token/grant audit state
 
 7. Finish consent and scope grant enforcement for third-party access.
    - Enforce `protocol_app_scope_grants` against app, user, service, and agent subjects.
@@ -186,6 +189,7 @@ These packages should mirror the backend domain rather than inventing new abstra
 - Add audit logging for all third-party and agent actions.
 - Add explicit deny rules for unsupported primitives like posts and follows.
 - Add signed webhook delivery with retry and replay support.
+- Persist delivery attempts and expose queue observability for operators and app owners.
 - Add cursor-based replay mechanics and stateful replay envelopes.
 
 ## Auth and App Registration Tasks
@@ -214,6 +218,7 @@ These packages should mirror the backend domain rather than inventing new abstra
 - Add a shared protocol client package for mobile and web.
 - Wire the frontend to protocol-backed reads instead of app-specific stitched endpoints where possible.
 - Add UI affordances for third-party app activity, consent grants, and integrations.
+- Add writable token and grant controls to first-party protocol settings surfaces.
 - Add protocol-aware surfaces for external actions, event notifications, and agent activity.
 - Keep the current product shell focused on Home, Activity, Chats, and Profile.
 - Add protocol surfaces that are visible to users without turning the app into a developer console.

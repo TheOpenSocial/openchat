@@ -20,6 +20,7 @@ import {
   protocolEventEnvelopeSchema,
   protocolReplayCursorSchema,
   protocolWebhookDeliveryDispatchResultSchema,
+  protocolWebhookDeliveryAttemptSchema,
   protocolWebhookDeliveryRunRequestSchema,
   protocolWebhookDeliveryRunResultSchema,
   manifestSchema,
@@ -46,6 +47,7 @@ import {
   type ProtocolReplayCursor,
   type ProtocolScopeName,
   type ProtocolWebhookDeliveryDispatchResult,
+  type ProtocolWebhookDeliveryAttempt,
   type ProtocolWebhookDeliveryRunRequest,
   type ProtocolWebhookDeliveryRunResult,
   type WebhookSubscription,
@@ -113,6 +115,11 @@ export type ProtocolClient = {
     appToken: string,
     subscriptionId: string,
   ) => Promise<ProtocolWebhookDelivery[]>;
+  listWebhookDeliveryAttempts: (
+    appId: string,
+    appToken: string,
+    deliveryId: string,
+  ) => Promise<ProtocolWebhookDeliveryAttempt[]>;
   inspectDeliveryQueue: (
     appId: string,
     appToken: string,
@@ -229,6 +236,13 @@ export type ProtocolDeliveryQueueInspection = {
   inFlightCount: number;
   failedCount: number;
   deadLetteredCount: number;
+  queueState?: {
+    waiting: number;
+    active: number;
+    delayed: number;
+    completed: number;
+    failed: number;
+  };
   deliveries: ProtocolWebhookDelivery[];
 };
 
@@ -447,6 +461,20 @@ export function createProtocolClient(
         .array()
         .parse(payload?.data ?? payload);
     },
+    async listWebhookDeliveryAttempts(appId, appToken, deliveryId) {
+      const response = await transport.request(
+        `/protocol/apps/${appId}/deliveries/${deliveryId}/attempts`,
+        {
+          headers: {
+            "x-protocol-app-token": appToken,
+          },
+        },
+      );
+      const payload = (await response.json()) as { data?: unknown } | undefined;
+      return protocolWebhookDeliveryAttemptSchema
+        .array()
+        .parse(payload?.data ?? payload);
+    },
     async inspectDeliveryQueue(appId, appToken, cursor) {
       const search = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
       const response = await transport.request(
@@ -648,11 +676,14 @@ export function createProtocolClient(
       );
     },
     async getAppUsageSummary(appId, appToken) {
-      const response = await transport.request(`/protocol/apps/${appId}/usage`, {
-        headers: {
-          "x-protocol-app-token": appToken,
+      const response = await transport.request(
+        `/protocol/apps/${appId}/usage`,
+        {
+          headers: {
+            "x-protocol-app-token": appToken,
+          },
         },
-      });
+      );
       const envelope = (await response.json()) as
         | { data?: unknown }
         | undefined;

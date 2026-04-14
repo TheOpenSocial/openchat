@@ -1846,6 +1846,17 @@ export const api = {
       subscriptionId,
     );
   },
+  listProtocolWebhookDeliveryAttempts(
+    appId: string,
+    appToken: string,
+    deliveryId: string,
+  ) {
+    return protocolClient.listWebhookDeliveryAttempts(
+      appId,
+      appToken,
+      deliveryId,
+    );
+  },
   inspectProtocolDeliveryQueue(
     appId: string,
     appToken: string,

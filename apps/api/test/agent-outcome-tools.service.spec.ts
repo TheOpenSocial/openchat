@@ -190,6 +190,35 @@ describe("AgentOutcomeToolsService", () => {
         role: "member",
       }),
     };
+    const protocolService: any = {
+      createFirstPartyIntentAction: vi.fn().mockResolvedValue({
+        intentId: "intent-group-1",
+        status: "parsed",
+        createdAt: new Date("2026-03-22T20:00:00.000Z").toISOString(),
+      }),
+      sendFirstPartyRequestAction: vi.fn().mockResolvedValue({
+        requestId: "request-1",
+        status: "pending",
+        existing: false,
+        senderUserId: "user-1",
+        recipientUserId: "candidate-1",
+        intentId: "intent-group-1",
+      }),
+      acceptFirstPartyRequestAction: vi.fn().mockResolvedValue({
+        requestId: "request-1",
+        status: "accepted",
+        senderUserId: "user-3",
+        recipientUserId: "user-1",
+        intentId: "intent-group-1",
+      }),
+      rejectFirstPartyRequestAction: vi.fn().mockResolvedValue({
+        requestId: "request-2",
+        status: "rejected",
+        senderUserId: "user-4",
+        recipientUserId: "user-1",
+        intentId: "intent-group-1",
+      }),
+    };
 
     const service = new AgentOutcomeToolsService(
       agentService,
@@ -199,6 +228,7 @@ describe("AgentOutcomeToolsService", () => {
       matchingService,
       personalizationService,
       profilesService,
+      protocolService,
       recurringCirclesService,
       scheduledTasksService,
     );

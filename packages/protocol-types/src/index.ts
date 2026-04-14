@@ -697,6 +697,8 @@ export const protocolRequestActionResultSchema = z
     actorUserId: uuidSchema,
     requestId: uuidSchema.nullable(),
     intentId: uuidSchema.optional(),
+    senderUserId: uuidSchema.optional(),
+    recipientUserId: uuidSchema.optional(),
     queued: z.boolean().optional(),
     unchanged: z.boolean().optional(),
     metadata: z.record(z.string(), z.unknown()).default({}),
@@ -775,4 +777,30 @@ export const protocolWebhookDeliveryDispatchResultSchema = z
   .strict();
 export type ProtocolWebhookDeliveryDispatchResult = z.infer<
   typeof protocolWebhookDeliveryDispatchResultSchema
+>;
+
+export const protocolWebhookDeliveryAttemptSchema = z
+  .object({
+    deliveryId: uuidSchema,
+    appId: identifierSchema,
+    subscriptionId: identifierSchema,
+    attemptNumber: z.number().int().min(1),
+    outcome: z.enum([
+      "delivered",
+      "retrying",
+      "dead_lettered",
+      "failed",
+      "skipped",
+    ] as const),
+    attemptedAt: isoDateTimeSchema,
+    responseStatusCode: z.number().int().nullable(),
+    errorCode: z.string().nullable(),
+    errorMessage: z.string().nullable(),
+    durationMs: z.number().int().min(0).nullable(),
+    metadata: z.record(z.string(), z.unknown()).default({}),
+    createdAt: isoDateTimeSchema,
+  })
+  .strict();
+export type ProtocolWebhookDeliveryAttempt = z.infer<
+  typeof protocolWebhookDeliveryAttemptSchema
 >;

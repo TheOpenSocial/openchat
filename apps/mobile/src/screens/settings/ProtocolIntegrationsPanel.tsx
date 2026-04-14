@@ -18,6 +18,14 @@ type ProtocolUsageSummary = Awaited<
   ReturnType<typeof api.getProtocolUsageSummary>
 >;
 type ProtocolUsageEvent = ProtocolUsageSummary["recentEvents"][number];
+type ProtocolDeliveryQueueInspection = Awaited<
+  ReturnType<typeof api.inspectProtocolDeliveryQueue>
+>;
+type ProtocolWebhookDelivery =
+  ProtocolDeliveryQueueInspection["deliveries"][number];
+type ProtocolWebhookDeliveryAttempt = Awaited<
+  ReturnType<typeof api.listProtocolWebhookDeliveryAttempts>
+>[number];
 
 function Metric({ label, value }: { label: string; value: string | number }) {
   return (
@@ -63,6 +71,20 @@ export function ProtocolIntegrationsPanel() {
   const [usageError, setUsageError] = useState<string | null>(null);
   const [usageNotice, setUsageNotice] = useState<string | null>(null);
   const [dispatchingQueue, setDispatchingQueue] = useState(false);
+  const [queueInspection, setQueueInspection] =
+    useState<ProtocolDeliveryQueueInspection | null>(null);
+  const [deliveryAttempts, setDeliveryAttempts] = useState<
+    Record<string, ProtocolWebhookDeliveryAttempt[]>
+  >({});
+  const [tokenNotice, setTokenNotice] = useState<string | null>(null);
+  const [rotatingToken, setRotatingToken] = useState(false);
+  const [revokingToken, setRevokingToken] = useState(false);
+  const [grantScope, setGrantScope] = useState("actions.invoke");
+  const [grantCapabilities, setGrantCapabilities] = useState(
+    "intent.write,request.write,chat.write",
+  );
+  const [grantSubjectType, setGrantSubjectType] = useState("user");
+  const [grantSubjectId, setGrantSubjectId] = useState("");
 
   const resetInspectionState = (options?: { clearToken?: boolean }) => {
     setWebhooks([]);
@@ -72,6 +94,9 @@ export function ProtocolIntegrationsPanel() {
     setUsageSummary(null);
     setUsageError(null);
     setUsageNotice(null);
+    setQueueInspection(null);
+    setDeliveryAttempts({});
+    setTokenNotice(null);
     if (options?.clearToken) {
       setAppToken("");
     }
@@ -195,6 +220,25 @@ export function ProtocolIntegrationsPanel() {
     }
   };
 
+  const loadQueueInspection = async () => {
+    if (!selectedAppId.trim() || !appToken.trim()) {
+      setUsageError(
+        "Select an app and paste its token to inspect queue state.",
+      );
+      return;
+    }
+    try {
+      const inspection = await api.inspectProtocolDeliveryQueue(
+        selectedAppId.trim(),
+        appToken.trim(),
+      );
+      setQueueInspection(inspection);
+    } catch (loadError) {
+      setUsageError(`Could not inspect queue: ${String(loadError)}`);
+      setQueueInspection(null);
+    }
+  };
+
   const dispatchQueue = async () => {
     if (!selectedAppId.trim() || !appToken.trim()) {
       setUsageError("Select an app and paste its token before dispatching.");
@@ -213,10 +257,116 @@ export function ProtocolIntegrationsPanel() {
         "Queue dispatch enqueued. Usage metrics update after the worker drains pending deliveries.",
       );
       void loadUsageSummary();
+      void loadQueueInspection();
     } catch (dispatchError) {
-      setUsageError(`Could not dispatch delivery queue: ${String(dispatchError)}`);
+      setUsageError(
+        `Could not dispatch delivery queue: ${String(dispatchError)}`,
+      );
     } finally {
       setDispatchingQueue(false);
+    }
+  };
+
+  const createGrant = async () => {
+    if (!selectedAppId.trim() || !appToken.trim()) {
+      setGrantsError(
+        "Select an app and paste its token before creating a grant.",
+      );
+      return;
+    }
+    setGrantsLoading(true);
+    setGrantsError(null);
+    try {
+      const created = await api.createProtocolGrant(
+        selectedAppId.trim(),
+        appToken.trim(),
+        {
+          scope: grantScope as never,
+          capabilities: grantCapabilities
+            .split(",")
+            .map((value) => value.trim())
+            .filter(Boolean) as never,
+          subjectType: grantSubjectType as never,
+          subjectId: grantSubjectId.trim() || undefined,
+          metadata: { source: "mobile_settings_panel" },
+        },
+      );
+      setGrants((current) => [
+        created,
+        ...current.filter((g) => g.grantId !== created.grantId),
+      ]);
+    } catch (createError) {
+      setGrantsError(`Could not create grant: ${String(createError)}`);
+    } finally {
+      setGrantsLoading(false);
+    }
+  };
+
+  const rotateToken = async () => {
+    if (!selectedAppId.trim() || !appToken.trim()) {
+      setUsageError("Select an app and paste its token before rotating.");
+      return;
+    }
+    setRotatingToken(true);
+    setUsageError(null);
+    setTokenNotice(null);
+    try {
+      const rotated = await api.rotateProtocolAppToken(
+        selectedAppId.trim(),
+        appToken.trim(),
+      );
+      setAppToken(rotated.credentials.appToken);
+      setTokenNotice(
+        "Token rotated. The new token is now loaded in this inspector.",
+      );
+      void loadUsageSummary();
+    } catch (rotateError) {
+      setUsageError(`Could not rotate token: ${String(rotateError)}`);
+    } finally {
+      setRotatingToken(false);
+    }
+  };
+
+  const revokeToken = async () => {
+    if (!selectedAppId.trim() || !appToken.trim()) {
+      setUsageError("Select an app and paste its token before revoking.");
+      return;
+    }
+    setRevokingToken(true);
+    setUsageError(null);
+    setTokenNotice(null);
+    try {
+      await api.revokeProtocolAppToken(selectedAppId.trim(), appToken.trim());
+      setAppToken("");
+      resetInspectionState();
+      setTokenNotice(
+        "Token revoked. Rotate or re-register the app before inspecting again.",
+      );
+    } catch (revokeError) {
+      setUsageError(`Could not revoke token: ${String(revokeError)}`);
+    } finally {
+      setRevokingToken(false);
+    }
+  };
+
+  const inspectAttempts = async (deliveryId: string) => {
+    if (!selectedAppId.trim() || !appToken.trim()) {
+      return;
+    }
+    try {
+      const attempts = await api.listProtocolWebhookDeliveryAttempts(
+        selectedAppId.trim(),
+        appToken.trim(),
+        deliveryId,
+      );
+      setDeliveryAttempts((current) => ({
+        ...current,
+        [deliveryId]: attempts,
+      }));
+    } catch (loadError) {
+      setUsageError(
+        `Could not inspect delivery attempts: ${String(loadError)}`,
+      );
     }
   };
 
@@ -263,7 +413,8 @@ export function ProtocolIntegrationsPanel() {
         </Text>
         <Text className="text-[13px] leading-6 text-muted">
           Inspect the active protocol manifest, registered apps, and token-gated
-          webhook state. Delivery queue dispatch is available for operational testing.
+          webhook state. Delivery queue dispatch is available for operational
+          testing.
         </Text>
       </View>
 
@@ -426,6 +577,42 @@ export function ProtocolIntegrationsPanel() {
                 <Text className="text-[12px] text-muted">
                   Events: {webhook.events.join(", ")}
                 </Text>
+                {queueInspection?.deliveries
+                  .filter(
+                    (delivery: ProtocolWebhookDelivery) =>
+                      delivery.subscriptionId === webhook.subscriptionId,
+                  )
+                  .slice(0, 2)
+                  .map((delivery: ProtocolWebhookDelivery) => (
+                    <View
+                      key={delivery.deliveryId}
+                      className="mt-2 gap-1 rounded-xl border border-hairline bg-surface px-3 py-2"
+                    >
+                      <Text className="text-[12px] font-medium text-ink">
+                        {delivery.eventName} · {delivery.status}
+                      </Text>
+                      <Pressable
+                        onPress={() => {
+                          void inspectAttempts(delivery.deliveryId);
+                        }}
+                      >
+                        <Text className="text-[12px] text-muted">
+                          Inspect attempts
+                        </Text>
+                      </Pressable>
+                      {(deliveryAttempts[delivery.deliveryId] ?? [])
+                        .slice(0, 2)
+                        .map((attempt) => (
+                          <Text
+                            key={`${attempt.deliveryId}:${attempt.attemptNumber}`}
+                            className="text-[11px] text-muted"
+                          >
+                            Attempt {attempt.attemptNumber} · {attempt.outcome}
+                            {attempt.errorCode ? ` · ${attempt.errorCode}` : ""}
+                          </Text>
+                        ))}
+                    </View>
+                  ))}
               </View>
             ))
           )}
@@ -459,6 +646,13 @@ export function ProtocolIntegrationsPanel() {
             }}
             variant="secondary"
           />
+          <PrimaryButton
+            label="Inspect queue"
+            onPress={() => {
+              void loadQueueInspection();
+            }}
+            variant="secondary"
+          />
         </View>
 
         {usageError ? (
@@ -473,12 +667,27 @@ export function ProtocolIntegrationsPanel() {
           </Text>
         ) : null}
 
+        {tokenNotice ? (
+          <Text className="text-[13px] leading-6 text-muted">
+            {tokenNotice}
+          </Text>
+        ) : null}
+
         {usageSummary ? (
           <View className="space-y-3">
             <View className="flex-row flex-wrap gap-3">
-              <Metric label="Active grants" value={usageSummary.grantCounts.active} />
-              <Metric label="Revoked grants" value={usageSummary.grantCounts.revoked} />
-              <Metric label="Queued deliveries" value={usageSummary.deliveryCounts.queued} />
+              <Metric
+                label="Active grants"
+                value={usageSummary.grantCounts.active}
+              />
+              <Metric
+                label="Revoked grants"
+                value={usageSummary.grantCounts.revoked}
+              />
+              <Metric
+                label="Queued deliveries"
+                value={usageSummary.deliveryCounts.queued}
+              />
               <Metric label="Latest cursor" value={usageSummary.latestCursor} />
             </View>
 
@@ -509,6 +718,23 @@ export function ProtocolIntegrationsPanel() {
               </Text>
             </View>
 
+            {queueInspection ? (
+              <View className="gap-2 rounded-2xl border border-hairline bg-surfaceMuted/70 px-3 py-3">
+                <Text className="text-[12px] font-semibold uppercase tracking-[0.16em] text-muted">
+                  Queue state
+                </Text>
+                <Text className="text-[12px] text-muted">
+                  Waiting {queueInspection.queueState?.waiting ?? 0} · Active{" "}
+                  {queueInspection.queueState?.active ?? 0} · Delayed{" "}
+                  {queueInspection.queueState?.delayed ?? 0}
+                </Text>
+                <Text className="text-[12px] text-muted">
+                  Completed {queueInspection.queueState?.completed ?? 0} ·
+                  Failed {queueInspection.queueState?.failed ?? 0}
+                </Text>
+              </View>
+            ) : null}
+
             <View className="space-y-2">
               <Text className="text-[12px] font-semibold uppercase tracking-[0.16em] text-muted">
                 Recent events
@@ -521,20 +747,22 @@ export function ProtocolIntegrationsPanel() {
                 usageSummary.recentEvents
                   .slice(0, 5)
                   .map((event: ProtocolUsageEvent, index: number) => (
-                  <View
-                    key={`${event.event}:${event.issuedAt}:${index}`}
-                    className="gap-1 rounded-2xl border border-hairline bg-surfaceMuted/70 px-3 py-3"
-                  >
-                    <View className="flex-row items-start justify-between gap-3">
-                      <Text className="min-w-0 flex-1 text-[13px] font-medium text-ink">
-                        {event.event}
-                      </Text>
-                      <Text className="text-[11px] uppercase tracking-[0.16em] text-muted">
-                        {event.resource ?? "protocol"}
+                    <View
+                      key={`${event.event}:${event.issuedAt}:${index}`}
+                      className="gap-1 rounded-2xl border border-hairline bg-surfaceMuted/70 px-3 py-3"
+                    >
+                      <View className="flex-row items-start justify-between gap-3">
+                        <Text className="min-w-0 flex-1 text-[13px] font-medium text-ink">
+                          {event.event}
+                        </Text>
+                        <Text className="text-[11px] uppercase tracking-[0.16em] text-muted">
+                          {event.resource ?? "protocol"}
+                        </Text>
+                      </View>
+                      <Text className="text-[12px] text-muted">
+                        {event.issuedAt}
                       </Text>
                     </View>
-                    <Text className="text-[12px] text-muted">{event.issuedAt}</Text>
-                  </View>
                   ))
               )}
             </View>
@@ -548,18 +776,68 @@ export function ProtocolIntegrationsPanel() {
             Scope grants
           </Text>
           <Text className="text-[13px] leading-6 text-muted">
-            Read the active grants for the selected app, and revoke one if you
-            need to test a rollback.
+            Read, create, and revoke grants for the selected app.
           </Text>
         </View>
 
-        <PrimaryButton
-          label={grantsLoading ? "Loading..." : "Load grants"}
-          loading={grantsLoading}
-          onPress={() => {
-            void loadGrants();
-          }}
+        <CalmTextField
+          autoCapitalize="none"
+          autoCorrect={false}
+          containerClassName="gap-2"
+          inputClassName="text-ink"
+          label="Grant scope"
+          onChangeText={setGrantScope}
+          placeholder="actions.invoke"
+          value={grantScope}
         />
+        <CalmTextField
+          autoCapitalize="none"
+          autoCorrect={false}
+          containerClassName="gap-2"
+          inputClassName="text-ink"
+          label="Capabilities"
+          onChangeText={setGrantCapabilities}
+          placeholder="intent.write,request.write,chat.write"
+          value={grantCapabilities}
+        />
+        <CalmTextField
+          autoCapitalize="none"
+          autoCorrect={false}
+          containerClassName="gap-2"
+          inputClassName="text-ink"
+          label="Subject type"
+          onChangeText={setGrantSubjectType}
+          placeholder="user"
+          value={grantSubjectType}
+        />
+        <CalmTextField
+          autoCapitalize="none"
+          autoCorrect={false}
+          containerClassName="gap-2"
+          inputClassName="text-ink"
+          label="Subject id"
+          onChangeText={setGrantSubjectId}
+          placeholder="user uuid"
+          value={grantSubjectId}
+        />
+
+        <View className="flex-row flex-wrap gap-2">
+          <PrimaryButton
+            label={grantsLoading ? "Loading..." : "Load grants"}
+            loading={grantsLoading}
+            onPress={() => {
+              void loadGrants();
+            }}
+          />
+          <PrimaryButton
+            label={grantsLoading ? "Saving..." : "Create grant"}
+            loading={grantsLoading}
+            onPress={() => {
+              void createGrant();
+            }}
+            variant="secondary"
+          />
+        </View>
 
         {grantsError ? (
           <Text className="text-[13px] leading-6 text-[#fca5a5]">
@@ -616,6 +894,36 @@ export function ProtocolIntegrationsPanel() {
               </View>
             ))
           )}
+        </View>
+      </View>
+
+      <View className="space-y-3 rounded-[24px] border border-hairline bg-surface px-4 py-4">
+        <View className="space-y-1">
+          <Text className="text-[12px] font-semibold uppercase tracking-[0.16em] text-muted">
+            Token controls
+          </Text>
+          <Text className="text-[13px] leading-6 text-muted">
+            Rotate or revoke the selected app token. Rotation replaces the token
+            in this inspector.
+          </Text>
+        </View>
+        <View className="flex-row flex-wrap gap-2">
+          <PrimaryButton
+            label={rotatingToken ? "Rotating..." : "Rotate token"}
+            loading={rotatingToken}
+            onPress={() => {
+              void rotateToken();
+            }}
+            variant="secondary"
+          />
+          <PrimaryButton
+            label={revokingToken ? "Revoking..." : "Revoke token"}
+            loading={revokingToken}
+            onPress={() => {
+              void revokeToken();
+            }}
+            variant="secondary"
+          />
         </View>
       </View>
     </View>

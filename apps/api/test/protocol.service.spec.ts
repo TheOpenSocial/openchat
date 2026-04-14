@@ -6,6 +6,7 @@ function createPrismaStub() {
   const apps = new Map<string, any>();
   const subscriptions = new Map<string, any[]>();
   const deliveries = new Map<string, any[]>();
+  const attempts = new Map<string, any[]>();
   const grants = new Map<string, any[]>();
   const events: any[] = [];
   const cursors = new Map<string, any>();
@@ -96,6 +97,12 @@ function createPrismaStub() {
           return sinceCursor === 0 || eventCursor > Number(sinceCursor);
         }) as T;
       }
+      if (query.includes("FROM protocol_webhook_delivery_attempts")) {
+        const [appId, deliveryId] = params;
+        return (attempts.get(appId) ?? []).filter(
+          (row) => row.delivery_id === deliveryId,
+        ) as T;
+      }
       if (
         query.includes("FROM protocol_event_log") &&
         query.includes("ORDER BY cursor DESC")
@@ -104,7 +111,9 @@ function createPrismaStub() {
         return events
           .filter((row) => row.actor_app_id === appId)
           .slice()
-          .sort((left, right) => Number(right.cursor) - Number(left.cursor)) as T;
+          .sort(
+            (left, right) => Number(right.cursor) - Number(left.cursor),
+          ) as T;
       }
       if (query.includes("FROM protocol_event_log")) {
         const [appId, sinceCursor] = params;
@@ -270,6 +279,24 @@ function createPrismaStub() {
         ]);
         return 1;
       }
+      if (query.includes("INSERT INTO protocol_webhook_delivery_attempts")) {
+        const row = {
+          delivery_id: params[0],
+          app_id: params[1],
+          subscription_id: params[2],
+          attempt_number: params[3],
+          outcome: params[4],
+          attempted_at: params[5],
+          response_status_code: params[6],
+          error_code: params[7],
+          error_message: params[8],
+          duration_ms: params[9],
+          metadata: JSON.parse(params[10]),
+          created_at: params[11],
+        };
+        attempts.set(row.app_id, [...(attempts.get(row.app_id) ?? []), row]);
+        return 1;
+      }
       return 0;
     },
   };
@@ -305,6 +332,13 @@ function createProtocolQueueStub() {
   return {
     add: async () => ({
       id: "job-1",
+    }),
+    getJobCounts: async () => ({
+      waiting: 2,
+      active: 1,
+      delayed: 3,
+      completed: 4,
+      failed: 5,
     }),
   };
 }
@@ -804,6 +838,52 @@ describe("ProtocolService", () => {
     expect(result.ranAt).toBe("2026-04-13T00:00:00.000Z");
   });
 
+  it("lists webhook delivery attempts for an app delivery", async () => {
+    const prisma = createPrismaStub() as any;
+    const queue = createProtocolQueueStub() as any;
+    const worker = createDeliveryWorkerStub() as any;
+    const seeded = new ProtocolService(
+      prisma,
+      worker,
+      createDeliveryRunnerStub() as any,
+      queue,
+      createIntentsServiceStub() as any,
+      createInboxServiceStub() as any,
+      createChatsServiceStub() as any,
+    );
+    const seededRegistration = await seeded.registerApp(
+      createRegistrationPayload(),
+    );
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO protocol_webhook_delivery_attempts
+       (delivery_id, app_id, subscription_id, attempt_number, outcome, attempted_at, response_status_code, error_code, error_message, duration_ms, metadata, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6::timestamptz, $7, $8, $9, $10, $11::jsonb, $12::timestamptz)`,
+      "00000000-0000-4000-8000-000000000401",
+      "partner.alpha",
+      "subscription-1",
+      1,
+      "retrying",
+      "2026-04-13T00:00:00.000Z",
+      503,
+      "http_503",
+      "temporarily unavailable",
+      120,
+      JSON.stringify({
+        endpointUrl: "https://alpha.example.com/hooks/opensocial",
+      }),
+      "2026-04-13T00:00:00.000Z",
+    );
+
+    const attempts = await seeded.listWebhookDeliveryAttempts(
+      "partner.alpha",
+      seededRegistration.credentials.appToken,
+      "00000000-0000-4000-8000-000000000401",
+    );
+
+    expect(attempts).toHaveLength(1);
+    expect(attempts[0]?.outcome).toBe("retrying");
+  });
+
   it("dispatches due deliveries onto the protocol queue", async () => {
     const queue = {
       add: async (_name: string, payload: Record<string, unknown>) => payload,
@@ -858,13 +938,17 @@ describe("ProtocolService", () => {
   it("returns a protocol usage summary for an app", async () => {
     const service = createProtocolService();
     const registration = await service.registerApp(createRegistrationPayload());
-    await service.createAppGrant("partner.alpha", registration.credentials.appToken, {
-      scope: "actions.invoke",
-      capabilities: ["chat.write"],
-      subjectType: "user",
-      subjectId: "00000000-0000-4000-8000-000000000001",
-      metadata: { source: "test" },
-    });
+    await service.createAppGrant(
+      "partner.alpha",
+      registration.credentials.appToken,
+      {
+        scope: "actions.invoke",
+        capabilities: ["chat.write"],
+        subjectType: "user",
+        subjectId: "00000000-0000-4000-8000-000000000001",
+        metadata: { source: "test" },
+      },
+    );
 
     const summary = await service.getAppUsageSummary(
       "partner.alpha",
@@ -876,6 +960,18 @@ describe("ProtocolService", () => {
     expect(summary.tokenAudit.appUpdatedAt).not.toBe("");
     expect(summary.grantAudit.lastGrantedAt).not.toBeNull();
     expect(summary.latestCursor).not.toBe("");
+  });
+
+  it("includes runtime queue state in delivery queue inspection", async () => {
+    const service = createProtocolService();
+    const registration = await service.registerApp(createRegistrationPayload());
+    const queue = await service.inspectDeliveryQueue(
+      "partner.alpha",
+      registration.credentials.appToken,
+    );
+
+    expect(queue.queueState?.waiting).toBe(2);
+    expect(queue.queueState?.failed).toBe(5);
   });
 
   it("supports first-party protocol action wrappers", async () => {

@@ -30,6 +30,7 @@ describe("ProtocolController", () => {
       }),
       listWebhooks: () => [],
       listWebhookDeliveries: () => [],
+      listWebhookDeliveryAttempts: () => [],
       inspectDeliveryQueue: () => ({
         appId: "alpha.app",
         generatedAt: "2026-04-13T00:00:00.000Z",
@@ -136,6 +137,7 @@ describe("ProtocolController", () => {
       }),
       listWebhooks: () => [],
       listWebhookDeliveries: () => [],
+      listWebhookDeliveryAttempts: () => [],
       inspectDeliveryQueue: () => ({
         appId: "alpha.app",
         generatedAt: "2026-04-13T00:00:00.000Z",
@@ -278,6 +280,14 @@ describe("ProtocolController", () => {
         token,
         subscriptionId,
       }),
+      listWebhookDeliveryAttempts: (
+        _appId: string,
+        token: string,
+        deliveryId: string,
+      ) => ({
+        token,
+        deliveryId,
+      }),
       inspectDeliveryQueue: (
         _appId: string,
         token: string,
@@ -329,7 +339,9 @@ describe("ProtocolController", () => {
         latestCursor: "0",
         recentEvents: [],
       }),
-      dispatchGlobalDueWebhookDeliveries: (payload: Record<string, unknown>) => ({
+      dispatchGlobalDueWebhookDeliveries: (
+        payload: Record<string, unknown>,
+      ) => ({
         payload,
         queueName: "protocol-webhooks",
         jobName: "RunProtocolWebhookDeliveries",
@@ -409,6 +421,13 @@ describe("ProtocolController", () => {
         "x-protocol-app-token": "secret-token",
       },
     )) as any;
+    const attempts = (await controller.listWebhookDeliveryAttempts(
+      "alpha.app",
+      "00000000-0000-4000-8000-000000000411",
+      {
+        "x-protocol-app-token": "secret-token",
+      },
+    )) as any;
     const replay = (await controller.replayEvents(
       "alpha.app",
       {
@@ -479,6 +498,9 @@ describe("ProtocolController", () => {
 
     expect(deliveries.data.token).toBe("secret-token");
     expect(deliveries.data.subscriptionId).toBe("subscription-1");
+    expect(attempts.data.deliveryId).toBe(
+      "00000000-0000-4000-8000-000000000411",
+    );
     expect(grants.data.token).toBe("secret-token");
     expect(createdGrant.data.token).toBe("secret-token");
     expect(createdGrant.data.payload.scope).toBe("resources.read");
@@ -509,6 +531,7 @@ describe("ProtocolController", () => {
       revokeAppToken: () => ({}),
       listWebhooks: () => [],
       listWebhookDeliveries: () => [],
+      listWebhookDeliveryAttempts: () => [],
       inspectDeliveryQueue: () => ({}),
       runDueWebhookDeliveries: (
         _appId: string,
@@ -661,6 +684,7 @@ describe("ProtocolController", () => {
       }),
       listWebhooks: () => [],
       listWebhookDeliveries: () => [],
+      listWebhookDeliveryAttempts: () => [],
       inspectDeliveryQueue: () => ({
         appId: "alpha.app",
         generatedAt: "2026-04-13T00:00:00.000Z",

@@ -71,6 +71,7 @@ export class ProtocolWebhookDeliveryRunnerService {
     const results: RunnerDeliveryResult[] = [];
     for (const delivery of claimed.deliveries) {
       const subscription = subscriptionMap.get(delivery.subscriptionId);
+      const attemptStartedAt = Date.now();
       if (!subscription || subscription.status !== "active") {
         const transition = await this.worker.markDeliveryFailed(
           delivery.deliveryId,
@@ -98,6 +99,24 @@ export class ProtocolWebhookDeliveryRunnerService {
             ? "protocol webhook subscription missing"
             : `protocol webhook subscription ${subscription.status}`,
           attemptCount: transition.attemptCount,
+        });
+        await this.worker.recordAttempt({
+          deliveryId: delivery.deliveryId,
+          appId: delivery.appId,
+          subscriptionId: delivery.subscriptionId,
+          attemptNumber: transition.attemptCount,
+          outcome: transition.status,
+          attemptedAt: now,
+          errorCode: !subscription
+            ? "subscription_not_found"
+            : "subscription_inactive",
+          errorMessage: !subscription
+            ? "protocol webhook subscription missing"
+            : `protocol webhook subscription ${subscription.status}`,
+          durationMs: Math.max(Date.now() - attemptStartedAt, 0),
+          metadata: {
+            endpointUrl: subscription?.targetUrl ?? null,
+          },
         });
         continue;
       }
@@ -156,6 +175,19 @@ export class ProtocolWebhookDeliveryRunnerService {
             errorMessage: null,
             attemptCount: transitioned.attemptCount,
           });
+          await this.worker.recordAttempt({
+            deliveryId: delivery.deliveryId,
+            appId: delivery.appId,
+            subscriptionId: delivery.subscriptionId,
+            attemptNumber: transitioned.attemptCount,
+            outcome: transitioned.status,
+            attemptedAt: now,
+            responseStatusCode: response.status,
+            durationMs: Math.max(Date.now() - attemptStartedAt, 0),
+            metadata: {
+              endpointUrl: subscription.targetUrl,
+            },
+          });
           continue;
         }
 
@@ -185,6 +217,25 @@ export class ProtocolWebhookDeliveryRunnerService {
             response.statusText || responseBody || "webhook delivery failed",
           attemptCount: transitioned.attemptCount,
         });
+        await this.worker.recordAttempt({
+          deliveryId: delivery.deliveryId,
+          appId: delivery.appId,
+          subscriptionId: delivery.subscriptionId,
+          attemptNumber: transitioned.attemptCount,
+          outcome:
+            transitioned.status === "dead_lettered"
+              ? "dead_lettered"
+              : "retrying",
+          attemptedAt: now,
+          responseStatusCode: response.status,
+          errorCode: `http_${response.status}`,
+          errorMessage:
+            response.statusText || responseBody || "webhook delivery failed",
+          durationMs: Math.max(Date.now() - attemptStartedAt, 0),
+          metadata: {
+            endpointUrl: subscription.targetUrl,
+          },
+        });
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "unknown webhook error";
@@ -208,6 +259,23 @@ export class ProtocolWebhookDeliveryRunnerService {
           errorCode: "network_error",
           errorMessage: message,
           attemptCount: transitioned.attemptCount,
+        });
+        await this.worker.recordAttempt({
+          deliveryId: delivery.deliveryId,
+          appId: delivery.appId,
+          subscriptionId: delivery.subscriptionId,
+          attemptNumber: transitioned.attemptCount,
+          outcome:
+            transitioned.status === "dead_lettered"
+              ? "dead_lettered"
+              : "retrying",
+          attemptedAt: now,
+          errorCode: "network_error",
+          errorMessage: message,
+          durationMs: Math.max(Date.now() - attemptStartedAt, 0),
+          metadata: {
+            endpointUrl: subscription.targetUrl,
+          },
         });
       }
     }

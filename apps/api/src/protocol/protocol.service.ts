@@ -27,6 +27,7 @@ import {
   manifestSchema,
   protocolAppUsageSummarySchema,
   protocolWebhookDeliveryGlobalDispatchResultSchema,
+  protocolWebhookDeliveryAttemptSchema,
   protocolChatMessageActionResultSchema,
   protocolChatSendMessageActionSchema,
   protocolAppScopeGrantCreateSchema,
@@ -139,6 +140,21 @@ type ProtocolWebhookDeliveryRow = {
   metadata: unknown;
   created_at: Date | string;
   updated_at: Date | string;
+};
+
+type ProtocolWebhookDeliveryAttemptRow = {
+  delivery_id: string;
+  app_id: string;
+  subscription_id: string;
+  attempt_number: number;
+  outcome: string;
+  attempted_at: Date | string;
+  response_status_code: number | null;
+  error_code: string | null;
+  error_message: string | null;
+  duration_ms: number | null;
+  metadata: unknown;
+  created_at: Date | string;
 };
 
 type ProtocolAppScopeGrantRow = {
@@ -656,6 +672,28 @@ export class ProtocolService {
     return rows.map((row) => this.mapDeliveryRow(row));
   }
 
+  async listWebhookDeliveryAttempts(
+    appId: string,
+    appToken: string,
+    deliveryId: string,
+  ) {
+    const app = await this.requireAppAccess(appId, appToken, {
+      scopes: ["webhooks.manage"],
+      capabilities: ["webhook.read"],
+    });
+    const rows = await this.prisma.$queryRawUnsafe<
+      ProtocolWebhookDeliveryAttemptRow[]
+    >(
+      `SELECT delivery_id, app_id, subscription_id, attempt_number, outcome, attempted_at, response_status_code, error_code, error_message, duration_ms, metadata, created_at
+       FROM protocol_webhook_delivery_attempts
+       WHERE app_id = $1 AND delivery_id = $2
+       ORDER BY attempted_at DESC`,
+      app.registration.appId,
+      deliveryId,
+    );
+    return rows.map((row) => this.mapDeliveryAttemptRow(row));
+  }
+
   async inspectDeliveryQueue(appId: string, appToken: string, cursor?: string) {
     const app = await this.requireAppAccess(appId, appToken, {
       scopes: ["webhooks.manage"],
@@ -680,6 +718,13 @@ export class ProtocolService {
     );
 
     const deliveries = rows.map((row) => this.mapDeliveryRow(row));
+    const queueState = await this.protocolWebhooksQueue.getJobCounts(
+      "waiting",
+      "active",
+      "delayed",
+      "completed",
+      "failed",
+    );
     return {
       appId: app.registration.appId,
       generatedAt: new Date().toISOString(),
@@ -690,6 +735,13 @@ export class ProtocolService {
       deadLetteredCount: deliveries.filter(
         (row) => row.status === "dead_lettered",
       ).length,
+      queueState: {
+        waiting: queueState.waiting ?? 0,
+        active: queueState.active ?? 0,
+        delayed: queueState.delayed ?? 0,
+        completed: queueState.completed ?? 0,
+        failed: queueState.failed ?? 0,
+      },
       deliveries,
     };
   }
@@ -910,6 +962,15 @@ export class ProtocolService {
     });
   }
 
+  async sendFirstPartyChatMessageAction(
+    chatId: string,
+    input: ProtocolChatSendMessageAction,
+  ) {
+    return this.executeChatSendMessageAction(chatId, input, {
+      actorAppId: FIRST_PARTY_PROTOCOL_ACTOR_APP_ID,
+    });
+  }
+
   async runDueWebhookDeliveries(
     appId: string,
     appToken: string,
@@ -961,10 +1022,12 @@ export class ProtocolService {
     };
   }
 
-  async dispatchGlobalDueWebhookDeliveries(input: {
-    limit?: number;
-    source?: "cron" | "manual";
-  } = {}) {
+  async dispatchGlobalDueWebhookDeliveries(
+    input: {
+      limit?: number;
+      source?: "cron" | "manual";
+    } = {},
+  ) {
     const limit = Math.min(Math.max(input.limit ?? 100, 1), 100);
     const source = input.source ?? "cron";
     const enqueuedAt = new Date().toISOString();
@@ -1031,24 +1094,39 @@ export class ProtocolService {
     const recentEvents = recentEventRows
       .map((row) => this.mapEventRow(row))
       .sort(
-        (left, right) =>
-          Date.parse(right.issuedAt) - Date.parse(left.issuedAt),
+        (left, right) => Date.parse(right.issuedAt) - Date.parse(left.issuedAt),
       );
     const lastRotatedAt =
       recentEvents.find(
-        (event) => event.payload && typeof event.payload === "object" && (event.payload as Record<string, unknown>).update === "app_token_rotated",
+        (event) =>
+          event.payload &&
+          typeof event.payload === "object" &&
+          (event.payload as Record<string, unknown>).update ===
+            "app_token_rotated",
       )?.issuedAt ?? null;
     const lastRevokedAt =
       recentEvents.find(
-        (event) => event.payload && typeof event.payload === "object" && (event.payload as Record<string, unknown>).update === "app_token_revoked",
+        (event) =>
+          event.payload &&
+          typeof event.payload === "object" &&
+          (event.payload as Record<string, unknown>).update ===
+            "app_token_revoked",
       )?.issuedAt ?? null;
     const lastGrantedAt =
       recentEvents.find(
-        (event) => event.payload && typeof event.payload === "object" && (event.payload as Record<string, unknown>).update === "scope_grant_upserted",
+        (event) =>
+          event.payload &&
+          typeof event.payload === "object" &&
+          (event.payload as Record<string, unknown>).update ===
+            "scope_grant_upserted",
       )?.issuedAt ?? null;
     const lastGrantRevokedAt =
       recentEvents.find(
-        (event) => event.payload && typeof event.payload === "object" && (event.payload as Record<string, unknown>).update === "scope_grant_revoked",
+        (event) =>
+          event.payload &&
+          typeof event.payload === "object" &&
+          (event.payload as Record<string, unknown>).update ===
+            "scope_grant_revoked",
       )?.issuedAt ?? null;
     const latestCursor =
       recentEventRows.length > 0 ? String(recentEventRows[0].cursor) : "0";
@@ -1175,6 +1253,8 @@ export class ProtocolService {
       actorUserId: payload.actorUserId,
       requestId: requestId ?? null,
       intentId: payload.intentId,
+      senderUserId: payload.actorUserId,
+      recipientUserId: payload.recipientUserId,
       metadata: payload.metadata ?? {},
     });
   }
@@ -1214,6 +1294,8 @@ export class ProtocolService {
       actorUserId: payload.actorUserId,
       requestId: result.request.id,
       intentId: result.request.intentId,
+      senderUserId: result.request.senderUserId,
+      recipientUserId: result.request.recipientUserId,
       queued:
         action === "accept" && "queued" in result
           ? Boolean(result.queued)
@@ -1515,6 +1597,23 @@ export class ProtocolService {
       metadata: row.metadata ?? {},
       createdAt: this.toIsoString(row.created_at),
       updatedAt: this.toIsoString(row.updated_at),
+    });
+  }
+
+  private mapDeliveryAttemptRow(row: ProtocolWebhookDeliveryAttemptRow) {
+    return protocolWebhookDeliveryAttemptSchema.parse({
+      deliveryId: row.delivery_id,
+      appId: row.app_id,
+      subscriptionId: row.subscription_id,
+      attemptNumber: row.attempt_number,
+      outcome: row.outcome,
+      attemptedAt: this.toIsoString(row.attempted_at),
+      responseStatusCode: row.response_status_code,
+      errorCode: row.error_code,
+      errorMessage: row.error_message,
+      durationMs: row.duration_ms,
+      metadata: row.metadata ?? {},
+      createdAt: this.toIsoString(row.created_at),
     });
   }
 

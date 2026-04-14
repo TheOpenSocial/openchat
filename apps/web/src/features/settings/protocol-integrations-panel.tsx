@@ -35,6 +35,12 @@ type ProtocolReplayCursor = Awaited<
 type ProtocolUsageSummary = Awaited<
   ReturnType<typeof api.getProtocolUsageSummary>
 >;
+type ProtocolDeliveryQueueInspection = Awaited<
+  ReturnType<typeof api.inspectProtocolDeliveryQueue>
+>;
+type ProtocolWebhookDeliveryAttempt = Awaited<
+  ReturnType<typeof api.listProtocolWebhookDeliveryAttempts>
+>[number];
 
 function joinNames(values?: readonly string[] | null) {
   if (!values || values.length === 0) {
@@ -64,6 +70,20 @@ export function ProtocolIntegrationsPanel() {
     null,
   );
   const [dispatchingQueue, setDispatchingQueue] = useState(false);
+  const [queueInspection, setQueueInspection] =
+    useState<ProtocolDeliveryQueueInspection | null>(null);
+  const [deliveryAttempts, setDeliveryAttempts] = useState<
+    Record<string, ProtocolWebhookDeliveryAttempt[]>
+  >({});
+  const [grantScope, setGrantScope] = useState("actions.invoke");
+  const [grantCapabilities, setGrantCapabilities] = useState(
+    "intent.write,request.write,chat.write",
+  );
+  const [grantSubjectType, setGrantSubjectType] = useState("user");
+  const [grantSubjectId, setGrantSubjectId] = useState("");
+  const [rotatingToken, setRotatingToken] = useState(false);
+  const [revokingToken, setRevokingToken] = useState(false);
+  const [tokenNotice, setTokenNotice] = useState<string | null>(null);
 
   const resetInspectionState = (options?: { clearToken?: boolean }) => {
     setDetailsError(null);
@@ -72,6 +92,9 @@ export function ProtocolIntegrationsPanel() {
     setDeliveries({});
     setReplayCursor(null);
     setUsageSummary(null);
+    setQueueInspection(null);
+    setDeliveryAttempts({});
+    setTokenNotice(null);
     if (options?.clearToken) {
       setAppToken("");
     }
@@ -129,17 +152,13 @@ export function ProtocolIntegrationsPanel() {
     try {
       const appId = selectedAppId.trim();
       const token = appToken.trim();
-      const [
-        appWebhooksResult,
-        appGrantsResult,
-        cursorResult,
-        usageResult,
-      ] = await Promise.allSettled([
-        api.listProtocolWebhooks(appId, token),
-        api.listProtocolGrants(appId, token),
-        api.getProtocolReplayCursor(appId, token),
-        api.getProtocolUsageSummary(appId, token),
-      ]);
+      const [appWebhooksResult, appGrantsResult, cursorResult, usageResult] =
+        await Promise.allSettled([
+          api.listProtocolWebhooks(appId, token),
+          api.listProtocolGrants(appId, token),
+          api.getProtocolReplayCursor(appId, token),
+          api.getProtocolUsageSummary(appId, token),
+        ]);
       if (appWebhooksResult.status !== "fulfilled") {
         throw appWebhooksResult.reason;
       }
@@ -173,7 +192,10 @@ export function ProtocolIntegrationsPanel() {
       setUsageSummary(
         usageResult.status === "fulfilled" ? usageResult.value : null,
       );
-      if (cursorResult.status !== "fulfilled" || usageResult.status !== "fulfilled") {
+      if (
+        cursorResult.status !== "fulfilled" ||
+        usageResult.status !== "fulfilled"
+      ) {
         setDetailsError(
           "Some protocol usage details could not be loaded. Core app data is shown.",
         );
@@ -251,10 +273,130 @@ export function ProtocolIntegrationsPanel() {
           "Queue dispatch succeeded, but usage summary could not be refreshed yet.",
         );
       }
+      try {
+        const inspection = await api.inspectProtocolDeliveryQueue(
+          selectedAppId.trim(),
+          appToken.trim(),
+        );
+        setQueueInspection(inspection);
+      } catch {
+        // keep queue dispatch success state without replacing the primary result
+      }
     } catch (error) {
       setDetailsError(String(error));
     } finally {
       setDispatchingQueue(false);
+    }
+  };
+
+  const inspectQueue = async () => {
+    if (!selectedAppId.trim() || !appToken.trim()) {
+      return;
+    }
+    setDetailsError(null);
+    try {
+      const inspection = await api.inspectProtocolDeliveryQueue(
+        selectedAppId.trim(),
+        appToken.trim(),
+      );
+      setQueueInspection(inspection);
+    } catch (error) {
+      setDetailsError(String(error));
+    }
+  };
+
+  const createGrant = async () => {
+    if (!selectedAppId.trim() || !appToken.trim()) {
+      return;
+    }
+    setDetailsError(null);
+    try {
+      const created = await api.createProtocolGrant(
+        selectedAppId.trim(),
+        appToken.trim(),
+        {
+          scope: grantScope as never,
+          capabilities: grantCapabilities
+            .split(",")
+            .map((value) => value.trim())
+            .filter(Boolean) as never,
+          subjectType: grantSubjectType as never,
+          subjectId: grantSubjectId.trim() || undefined,
+          metadata: {
+            source: "web_settings_panel",
+          },
+        },
+      );
+      setGrants((current) => [
+        created,
+        ...current.filter((g) => g.grantId !== created.grantId),
+      ]);
+    } catch (error) {
+      setDetailsError(String(error));
+    }
+  };
+
+  const rotateToken = async () => {
+    if (!selectedAppId.trim() || !appToken.trim()) {
+      return;
+    }
+    setRotatingToken(true);
+    setDetailsError(null);
+    setTokenNotice(null);
+    try {
+      const rotated = await api.rotateProtocolAppToken(
+        selectedAppId.trim(),
+        appToken.trim(),
+      );
+      setAppToken(rotated.credentials.appToken);
+      setTokenNotice(
+        "Token rotated. The new token is now loaded in this panel.",
+      );
+    } catch (error) {
+      setDetailsError(String(error));
+    } finally {
+      setRotatingToken(false);
+    }
+  };
+
+  const revokeToken = async () => {
+    if (!selectedAppId.trim() || !appToken.trim()) {
+      return;
+    }
+    setRevokingToken(true);
+    setDetailsError(null);
+    setTokenNotice(null);
+    try {
+      await api.revokeProtocolAppToken(selectedAppId.trim(), appToken.trim());
+      setAppToken("");
+      resetInspectionState();
+      setTokenNotice(
+        "Token revoked. Rotate or re-register the app before inspecting again.",
+      );
+    } catch (error) {
+      setDetailsError(String(error));
+    } finally {
+      setRevokingToken(false);
+    }
+  };
+
+  const inspectAttempts = async (deliveryId: string) => {
+    if (!selectedAppId.trim() || !appToken.trim()) {
+      return;
+    }
+    setDetailsError(null);
+    try {
+      const attempts = await api.listProtocolWebhookDeliveryAttempts(
+        selectedAppId.trim(),
+        appToken.trim(),
+        deliveryId,
+      );
+      setDeliveryAttempts((current) => ({
+        ...current,
+        [deliveryId]: attempts,
+      }));
+    } catch (error) {
+      setDetailsError(String(error));
     }
   };
 
@@ -314,7 +456,10 @@ export function ProtocolIntegrationsPanel() {
           </Button>
           <Button
             disabled={
-              dispatchingQueue || loadingDetails || !selectedAppId.trim() || !appToken.trim()
+              dispatchingQueue ||
+              loadingDetails ||
+              !selectedAppId.trim() ||
+              !appToken.trim()
             }
             onClick={() => {
               void dispatchQueue();
@@ -323,6 +468,18 @@ export function ProtocolIntegrationsPanel() {
             variant="secondary"
           >
             {dispatchingQueue ? "Dispatching…" : "Dispatch queue"}
+          </Button>
+          <Button
+            disabled={
+              loadingDetails || !selectedAppId.trim() || !appToken.trim()
+            }
+            onClick={() => {
+              void inspectQueue();
+            }}
+            type="button"
+            variant="secondary"
+          >
+            Inspect queue
           </Button>
           <Badge variant="default">
             {loadingApps ? "Loading apps…" : `${apps.length} protocol apps`}
@@ -347,6 +504,14 @@ export function ProtocolIntegrationsPanel() {
           <WorkspaceMutedPanel>
             <p className="text-sm leading-6 text-rose-200">
               Could not inspect protocol app: {detailsError}
+            </p>
+          </WorkspaceMutedPanel>
+        ) : null}
+
+        {tokenNotice ? (
+          <WorkspaceMutedPanel>
+            <p className="text-sm leading-6 text-[hsl(var(--muted-foreground))]">
+              {tokenNotice}
             </p>
           </WorkspaceMutedPanel>
         ) : null}
@@ -410,7 +575,10 @@ export function ProtocolIntegrationsPanel() {
           ) : null}
         </WorkspaceList>
 
-        {grants.length > 0 || webhooks.length > 0 || replayCursor || usageSummary ? (
+        {grants.length > 0 ||
+        webhooks.length > 0 ||
+        replayCursor ||
+        usageSummary ? (
           <div className="space-y-3">
             {usageSummary ? (
               <WorkspaceMutedPanel>
@@ -434,10 +602,12 @@ export function ProtocolIntegrationsPanel() {
                       Token audit
                     </p>
                     <p className="mt-2 text-[hsl(var(--foreground))]">
-                      Last rotated: {usageSummary.tokenAudit.lastRotatedAt ?? "Never"}
+                      Last rotated:{" "}
+                      {usageSummary.tokenAudit.lastRotatedAt ?? "Never"}
                     </p>
                     <p className="mt-1 text-[hsl(var(--foreground))]">
-                      Last revoked: {usageSummary.tokenAudit.lastRevokedAt ?? "Never"}
+                      Last revoked:{" "}
+                      {usageSummary.tokenAudit.lastRevokedAt ?? "Never"}
                     </p>
                     <p className="mt-1 text-[hsl(var(--foreground))]">
                       App updated: {usageSummary.tokenAudit.appUpdatedAt}
@@ -448,39 +618,59 @@ export function ProtocolIntegrationsPanel() {
                       Grant audit
                     </p>
                     <p className="mt-2 text-[hsl(var(--foreground))]">
-                      Last granted: {usageSummary.grantAudit.lastGrantedAt ?? "Never"}
+                      Last granted:{" "}
+                      {usageSummary.grantAudit.lastGrantedAt ?? "Never"}
                     </p>
                     <p className="mt-1 text-[hsl(var(--foreground))]">
-                      Last revoked: {usageSummary.grantAudit.lastRevokedAt ?? "Never"}
+                      Last revoked:{" "}
+                      {usageSummary.grantAudit.lastRevokedAt ?? "Never"}
                     </p>
                   </div>
                 </div>
+                {queueInspection ? (
+                  <div className="mt-3 rounded-2xl border border-[hsl(var(--border-soft))] bg-[hsl(var(--panel))]/60 px-3 py-3 text-sm">
+                    <p className="text-xs uppercase tracking-[0.2em] text-[hsl(var(--muted-foreground))]">
+                      Queue state
+                    </p>
+                    <p className="mt-2 text-[hsl(var(--foreground))]">
+                      Waiting {queueInspection.queueState?.waiting ?? 0} ·
+                      Active {queueInspection.queueState?.active ?? 0} · Delayed{" "}
+                      {queueInspection.queueState?.delayed ?? 0}
+                    </p>
+                    <p className="mt-1 text-[hsl(var(--foreground))]">
+                      Completed {queueInspection.queueState?.completed ?? 0} ·
+                      Failed {queueInspection.queueState?.failed ?? 0}
+                    </p>
+                  </div>
+                ) : null}
                 {usageSummary.recentEvents.length > 0 ? (
                   <div className="mt-3 space-y-2">
-                    {usageSummary.recentEvents.slice(0, 5).map((event, index) => (
-                      <div
-                        className="rounded-2xl border border-[hsl(var(--border-soft))] bg-[hsl(var(--panel))]/60 px-3 py-2 text-sm"
-                        key={`${event.event}:${event.issuedAt}:${index}`}
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="truncate text-[hsl(var(--foreground))]">
-                            {event.event}
-                          </span>
-                          <Badge variant="default">
-                            {event.resource ?? "protocol"}
-                          </Badge>
+                    {usageSummary.recentEvents
+                      .slice(0, 5)
+                      .map((event, index) => (
+                        <div
+                          className="rounded-2xl border border-[hsl(var(--border-soft))] bg-[hsl(var(--panel))]/60 px-3 py-2 text-sm"
+                          key={`${event.event}:${event.issuedAt}:${index}`}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="truncate text-[hsl(var(--foreground))]">
+                              {event.event}
+                            </span>
+                            <Badge variant="default">
+                              {event.resource ?? "protocol"}
+                            </Badge>
+                          </div>
+                          <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
+                            {event.issuedAt}
+                          </p>
                         </div>
-                        <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
-                          {event.issuedAt}
-                        </p>
-                      </div>
-                    ))}
+                      ))}
                   </div>
                 ) : null}
               </WorkspaceMutedPanel>
             ) : null}
 
-            {grants.length > 0 ? (
+            {selectedAppId.trim() && appToken.trim() ? (
               <WorkspaceMutedPanel>
                 <div className="flex items-center justify-between gap-3">
                   <div>
@@ -494,7 +684,91 @@ export function ProtocolIntegrationsPanel() {
                   </div>
                   <Badge variant="default">Read-first</Badge>
                 </div>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <Label htmlFor="protocol-grant-scope">Grant scope</Label>
+                    <Input
+                      id="protocol-grant-scope"
+                      onChange={(event) =>
+                        setGrantScope(event.currentTarget.value)
+                      }
+                      value={grantScope}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="protocol-grant-capabilities">
+                      Capabilities
+                    </Label>
+                    <Input
+                      id="protocol-grant-capabilities"
+                      onChange={(event) =>
+                        setGrantCapabilities(event.currentTarget.value)
+                      }
+                      value={grantCapabilities}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="protocol-grant-subject-type">
+                      Subject type
+                    </Label>
+                    <Input
+                      id="protocol-grant-subject-type"
+                      onChange={(event) =>
+                        setGrantSubjectType(event.currentTarget.value)
+                      }
+                      value={grantSubjectType}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="protocol-grant-subject-id">
+                      Subject id
+                    </Label>
+                    <Input
+                      id="protocol-grant-subject-id"
+                      onChange={(event) =>
+                        setGrantSubjectId(event.currentTarget.value)
+                      }
+                      value={grantSubjectId}
+                    />
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    onClick={() => {
+                      void createGrant();
+                    }}
+                    type="button"
+                    variant="secondary"
+                  >
+                    Create grant
+                  </Button>
+                  <Button
+                    disabled={rotatingToken}
+                    onClick={() => {
+                      void rotateToken();
+                    }}
+                    type="button"
+                    variant="secondary"
+                  >
+                    {rotatingToken ? "Rotating…" : "Rotate token"}
+                  </Button>
+                  <Button
+                    disabled={revokingToken}
+                    onClick={() => {
+                      void revokeToken();
+                    }}
+                    type="button"
+                    variant="secondary"
+                  >
+                    {revokingToken ? "Revoking…" : "Revoke token"}
+                  </Button>
+                </div>
                 <div className="mt-3 space-y-2">
+                  {grants.length === 0 ? (
+                    <div className="rounded-2xl border border-[hsl(var(--border-soft))] bg-[hsl(var(--panel))]/60 px-3 py-3 text-sm text-[hsl(var(--muted-foreground))]">
+                      No grants loaded yet.
+                    </div>
+                  ) : null}
                   {grants.map((grant) => (
                     <div
                       className="rounded-2xl border border-[hsl(var(--border-soft))] bg-[hsl(var(--panel))]/60 px-3 py-3"
@@ -603,6 +877,28 @@ export function ProtocolIntegrationsPanel() {
                             <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
                               Delivery {delivery.deliveryId}
                             </p>
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                              <Button
+                                onClick={() => {
+                                  void inspectAttempts(delivery.deliveryId);
+                                }}
+                                type="button"
+                                variant="secondary"
+                              >
+                                Inspect attempts
+                              </Button>
+                              {(deliveryAttempts[delivery.deliveryId] ?? [])
+                                .slice(0, 2)
+                                .map((attempt) => (
+                                  <Badge
+                                    key={`${attempt.deliveryId}:${attempt.attemptNumber}`}
+                                    variant="default"
+                                  >
+                                    Attempt {attempt.attemptNumber}:{" "}
+                                    {attempt.outcome}
+                                  </Badge>
+                                ))}
+                            </div>
                           </div>
                         ))}
                     </div>

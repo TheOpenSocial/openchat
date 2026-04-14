@@ -525,24 +525,27 @@ export class AgentOutcomeToolsService {
           "accepted",
           input.actorUserId,
         );
+    const acceptedSenderUserId =
+      "request" in result && typeof result.request.senderUserId === "string"
+        ? result.request.senderUserId
+        : "senderUserId" in result && typeof result.senderUserId === "string"
+          ? result.senderUserId
+          : null;
     await this.recordExecutionMemory(input.actorUserId, {
       summary:
         "Accepted a social intro request and opened the path to a real connection.",
       activities: ["accepted intro"],
-      people:
-        "request" in result && typeof result.request.senderUserId === "string"
-          ? [result.request.senderUserId]
-          : [],
-      highSuccessPeople:
-        "request" in result && typeof result.request.senderUserId === "string"
-          ? [result.request.senderUserId]
-          : [],
+      people: acceptedSenderUserId ? [acceptedSenderUserId] : [],
+      highSuccessPeople: acceptedSenderUserId ? [acceptedSenderUserId] : [],
       context: {
         source: "agent_outcome_tool",
         outcome: "intro_accepted",
         requestId: "request" in result ? result.request.id : result.requestId,
         status: "request" in result ? result.request.status : result.status,
-        intentId: "request" in result ? (result.request.intentId ?? null) : result.intentId,
+        intentId:
+          "request" in result
+            ? (result.request.intentId ?? null)
+            : result.intentId,
       },
     });
     return {
@@ -572,20 +575,26 @@ export class AgentOutcomeToolsService {
           "rejected",
           input.actorUserId,
         );
+    const rejectedSenderUserId =
+      "request" in result && typeof result.request.senderUserId === "string"
+        ? result.request.senderUserId
+        : "senderUserId" in result && typeof result.senderUserId === "string"
+          ? result.senderUserId
+          : null;
     await this.recordExecutionMemory(input.actorUserId, {
       summary:
         "Declined a social intro request because it was not the right fit right now.",
       activities: ["declined intro"],
-      people:
-        "request" in result && typeof result.request.senderUserId === "string"
-          ? [result.request.senderUserId]
-          : [],
+      people: rejectedSenderUserId ? [rejectedSenderUserId] : [],
       context: {
         source: "agent_outcome_tool",
         outcome: "intro_rejected",
         requestId: "request" in result ? result.request.id : result.requestId,
         status: "request" in result ? result.request.status : result.status,
-        intentId: "request" in result ? (result.request.intentId ?? null) : result.intentId,
+        intentId:
+          "request" in result
+            ? (result.request.intentId ?? null)
+            : result.intentId,
       },
     });
     return {
