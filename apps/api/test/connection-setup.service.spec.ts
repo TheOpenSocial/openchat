@@ -205,7 +205,7 @@ describe("ConnectionSetupService", () => {
       {
         provenance: {
           source: "protocol",
-          action: "request.accept",
+          action: "request.accept_chat_ready",
           actorAppId: "partner.alpha",
         },
       },
@@ -867,7 +867,7 @@ describe("ConnectionSetupService", () => {
         intentId: "intent-backfill-protocol",
         provenance: expect.objectContaining({
           source: "protocol",
-          action: "request.accept",
+          action: "request.group_backfill",
           actorAppId: "partner.alpha",
         }),
       }),

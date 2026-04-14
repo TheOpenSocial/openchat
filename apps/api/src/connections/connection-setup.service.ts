@@ -351,7 +351,10 @@ export class ConnectionSetupService {
       recipientUserId: request.senderUserId,
       notificationType: NotificationType.REQUEST_ACCEPTED,
       body: "Someone accepted your request. Your chat is ready.",
-      metadata: workflow.protocolProvenance,
+      metadata: this.overrideProtocolProvenance(
+        workflow.protocolProvenance,
+        "request.accept_chat_ready",
+      ),
     });
 
     await this.createWorkflowNotification({
@@ -361,7 +364,10 @@ export class ConnectionSetupService {
       recipientUserId: request.recipientUserId,
       notificationType: NotificationType.AGENT_UPDATE,
       body: "You accepted the request. Say hi and get started.",
-      metadata: workflow.protocolProvenance,
+      metadata: this.overrideProtocolProvenance(
+        workflow.protocolProvenance,
+        "request.accept_started",
+      ),
     });
 
     await this.notifySenderThread(
@@ -583,7 +589,10 @@ export class ConnectionSetupService {
         : NotificationType.AGENT_UPDATE,
       body: senderMessage,
       metadata: {
-        ...(options.protocolProvenance ?? {}),
+        ...(this.overrideProtocolProvenance(
+          options.protocolProvenance,
+          isReady ? "request.group_ready" : "request.group_progress",
+        ) ?? {}),
         targetSize,
         participantCount,
         isReady,
@@ -607,7 +616,10 @@ export class ConnectionSetupService {
             notificationType: NotificationType.GROUP_FORMED,
             body: participantMessage,
             metadata: {
-              ...(options.protocolProvenance ?? {}),
+              ...(this.overrideProtocolProvenance(
+                options.protocolProvenance,
+                "request.group_ready",
+              ) ?? {}),
               targetSize,
               participantCount,
               isReady,
@@ -875,7 +887,10 @@ export class ConnectionSetupService {
           notificationType: NotificationType.REQUEST_RECEIVED,
           body: "A group request is available now. Join if you are in.",
           metadata: {
-            ...(input.protocolProvenance ?? {}),
+            ...(this.overrideProtocolProvenance(
+              input.protocolProvenance,
+              "request.group_backfill",
+            ) ?? {}),
             intentId: input.request.intentId,
           },
         }),
@@ -1262,6 +1277,24 @@ export class ConnectionSetupService {
       provenance: {
         ...provenance,
         action: "request.accept",
+      },
+    };
+  }
+
+  private overrideProtocolProvenance(
+    metadata: Record<string, unknown> | undefined,
+    action: string,
+  ): Record<string, unknown> | undefined {
+    const wrapper = this.readMetadata(metadata);
+    const provenance = this.readMetadata(wrapper.provenance);
+    if (this.readString(provenance.source) !== "protocol") {
+      return metadata;
+    }
+    return {
+      ...wrapper,
+      provenance: {
+        ...provenance,
+        action,
       },
     };
   }

@@ -429,6 +429,16 @@ export class ExperienceService {
           return "Integration request";
         case "request.accept":
           return "Integration request accepted";
+        case "request.accept_chat_ready":
+          return "Integration chat ready";
+        case "request.accept_started":
+          return "Integration coordination started";
+        case "request.group_progress":
+          return "Integration group progress";
+        case "request.group_ready":
+          return "Integration group ready";
+        case "request.group_backfill":
+          return "Integration group request";
         case "request.reject":
           return "Integration request declined";
         default:

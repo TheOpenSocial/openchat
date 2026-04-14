@@ -283,7 +283,7 @@ describe("ExperienceService", () => {
               metadata: {
                 provenance: {
                   source: "protocol",
-                  action: "request.accept",
+                  action: "request.accept_chat_ready",
                 },
               },
               createdAt: new Date("2026-04-13T00:00:00.000Z"),
@@ -304,8 +304,50 @@ describe("ExperienceService", () => {
     expect(summary.sections.updates[0]).toEqual(
       expect.objectContaining({
         eyebrow: "Integration",
-        title: "Integration request accepted",
+        title: "Integration chat ready",
         body: "Someone accepted your request. Your chat is ready.",
+      }),
+    );
+  });
+
+  it("labels protocol group backfill notifications with specific integration titles", async () => {
+    const { service } = createService({
+      prisma: {
+        notification: {
+          count: vi.fn().mockResolvedValue(1),
+          findMany: vi.fn().mockResolvedValue([
+            {
+              id: "notif-protocol-group-backfill-1",
+              body: "A group request is available now. Join if you are in.",
+              type: "request_created",
+              channel: "in_app",
+              isRead: false,
+              metadata: {
+                provenance: {
+                  source: "protocol",
+                  action: "request.group_backfill",
+                },
+              },
+              createdAt: new Date("2026-04-13T00:00:00.000Z"),
+            },
+          ]),
+        },
+        intentRequest: {
+          findFirst: vi.fn().mockResolvedValue(null),
+        },
+        chat: {
+          findFirst: vi.fn().mockResolvedValue(null),
+        },
+      },
+    });
+
+    const summary = await service.getActivitySummary(USER_ID);
+
+    expect(summary.sections.updates[0]).toEqual(
+      expect.objectContaining({
+        eyebrow: "Integration",
+        title: "Integration group request",
+        body: "A group request is available now. Join if you are in.",
       }),
     );
   });
