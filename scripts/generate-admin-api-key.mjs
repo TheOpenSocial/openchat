@@ -3,7 +3,9 @@
 import { randomBytes } from "node:crypto";
 
 function normalizeString(value, fallback = "") {
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : fallback;
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : fallback;
 }
 
 function parseArgs(argv = process.argv.slice(2), env = process.env) {
@@ -20,7 +22,10 @@ function parseArgs(argv = process.argv.slice(2), env = process.env) {
       normalizeString(flags.get("bytes") ?? env.ADMIN_API_KEY_BYTES, "32"),
       10,
     ),
-    format: normalizeString(flags.get("format") ?? env.ADMIN_API_KEY_FORMAT, "shell"),
+    format: normalizeString(
+      flags.get("format") ?? env.ADMIN_API_KEY_FORMAT,
+      "shell",
+    ),
   };
 }
 
@@ -58,6 +63,8 @@ export function renderAdminApiKeyOutput(key, format = "shell") {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const config = parseArgs();
-  const key = generateAdminApiKey(Number.isFinite(config.bytes) ? config.bytes : 32);
+  const key = generateAdminApiKey(
+    Number.isFinite(config.bytes) ? config.bytes : 32,
+  );
   console.log(renderAdminApiKeyOutput(key, config.format));
 }

@@ -31,7 +31,9 @@ function run(command, args, env = process.env) {
         resolve();
         return;
       }
-      reject(new Error(`${command} ${args.join(" ")} failed with code ${code}`));
+      reject(
+        new Error(`${command} ${args.join(" ")} failed with code ${code}`),
+      );
     });
     child.on("error", reject);
   });

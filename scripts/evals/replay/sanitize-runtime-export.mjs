@@ -4,7 +4,9 @@ import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 function normalizeString(value, fallback = "") {
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : fallback;
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : fallback;
 }
 
 function parseArgs(argv = process.argv.slice(2), env = process.env) {
@@ -77,7 +79,10 @@ export function sanitizeRuntimeExportRecord(record) {
   return sanitizeValue(record);
 }
 
-export function sanitizeRuntimeExport(argv = process.argv.slice(2), env = process.env) {
+export function sanitizeRuntimeExport(
+  argv = process.argv.slice(2),
+  env = process.env,
+) {
   const config = parseArgs(argv, env);
   if (!config.inputPath) {
     throw new Error("Missing --input for runtime export sanitization.");
@@ -87,7 +92,9 @@ export function sanitizeRuntimeExport(argv = process.argv.slice(2), env = proces
   }
 
   const records = loadRuntimeExportRecords(config.inputPath);
-  const sanitized = records.map((record) => sanitizeRuntimeExportRecord(record));
+  const sanitized = records.map((record) =>
+    sanitizeRuntimeExportRecord(record),
+  );
   const content = `${sanitized.map((record) => JSON.stringify(record)).join("\n")}\n`;
   writeFileSync(config.outputPath, content, "utf8");
 

@@ -12,8 +12,12 @@ test("product critical golden runner writes a standard artifact in dry-run mode"
     ...process.env,
     EVAL_ARTIFACT_ROOT: root,
   });
-  const summary = JSON.parse(readFileSync(path.join(result.runDir, "summary.json"), "utf8"));
-  const run = JSON.parse(readFileSync(path.join(result.runDir, "run.json"), "utf8"));
+  const summary = JSON.parse(
+    readFileSync(path.join(result.runDir, "summary.json"), "utf8"),
+  );
+  const run = JSON.parse(
+    readFileSync(path.join(result.runDir, "run.json"), "utf8"),
+  );
 
   assert.equal(summary.totalCases, 1);
   assert.equal(summary.failedCases, 0);
@@ -27,9 +31,7 @@ test("product critical golden runner records suite summary from agent test artif
   writeFileSync(
     artifactPath,
     JSON.stringify({
-      cases: [
-        { id: "agentic-evals-snapshot", status: "passed" },
-      ],
+      cases: [{ id: "agentic-evals-snapshot", status: "passed" }],
       summary: {
         caseCounts: {
           total: 1,
@@ -41,7 +43,7 @@ test("product critical golden runner records suite summary from agent test artif
           total: 19,
           passed: 19,
           failed: 0,
-          skipped: 0
+          skipped: 0,
         },
         failureClasses: {},
       },
@@ -53,17 +55,29 @@ test("product critical golden runner records suite summary from agent test artif
         { scenarioId: "eval_failure_capture_v1", status: "passed" },
         { scenarioId: "eval_social_outcome_telemetry_v1", status: "passed" },
         { scenarioId: "eval_tone_agentic_async_ack_v1", status: "passed" },
-        { scenarioId: "eval_usefulness_no_match_recovery_v1", status: "passed" },
-        { scenarioId: "eval_grounding_profile_memory_consistency_v1", status: "passed" },
+        {
+          scenarioId: "eval_usefulness_no_match_recovery_v1",
+          status: "passed",
+        },
+        {
+          scenarioId: "eval_grounding_profile_memory_consistency_v1",
+          status: "passed",
+        },
         { scenarioId: "eval_negotiation_quality_v1", status: "passed" },
-        { scenarioId: "eval_workflow_runtime_traceability_v1", status: "passed" }
-      ]
+        {
+          scenarioId: "eval_workflow_runtime_traceability_v1",
+          status: "passed",
+        },
+      ],
     }),
   );
-  const result = await runProductCriticalGoldens([`--artifact-path=${artifactPath}`, "--layer=eval"], {
-    ...process.env,
-    EVAL_ARTIFACT_ROOT: root,
-  });
+  const result = await runProductCriticalGoldens(
+    [`--artifact-path=${artifactPath}`, "--layer=eval"],
+    {
+      ...process.env,
+      EVAL_ARTIFACT_ROOT: root,
+    },
+  );
 
   assert.equal(result.summary.layer, "eval");
   assert.ok(result.summary.suiteSummary);
@@ -77,9 +91,7 @@ test("product critical golden runner fails when required scenarios are missing",
   writeFileSync(
     artifactPath,
     JSON.stringify({
-      cases: [
-        { id: "agentic-evals-snapshot", status: "passed" },
-      ],
+      cases: [{ id: "agentic-evals-snapshot", status: "passed" }],
       summary: {
         caseCounts: { total: 1, passed: 1, failed: 0, skipped: 0 },
         recordCounts: { total: 19, passed: 19, failed: 0, skipped: 0 },
@@ -97,19 +109,22 @@ test("product critical golden runner fails when required scenarios are missing",
   );
 
   assert.equal(result.summary.failedCases, 1);
-  assert.equal(result.summary.primaryFailureReason, "required_scenarios_not_passing");
+  assert.equal(
+    result.summary.primaryFailureReason,
+    "required_scenarios_not_passing",
+  );
   assert.ok(result.summary.missingPassedScenarioIds.length > 0);
 });
 
 test("product critical golden runner fails when required checks are missing", async () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "product-goldens-missing-check-"));
+  const root = mkdtempSync(
+    path.join(os.tmpdir(), "product-goldens-missing-check-"),
+  );
   const artifactPath = path.join(root, "eval.json");
   writeFileSync(
     artifactPath,
     JSON.stringify({
-      cases: [
-        { id: "wrong-check", status: "passed" },
-      ],
+      cases: [{ id: "wrong-check", status: "passed" }],
       summary: {
         caseCounts: { total: 1, passed: 1, failed: 0, skipped: 0 },
         recordCounts: { total: 19, passed: 19, failed: 0, skipped: 0 },
@@ -123,10 +138,19 @@ test("product critical golden runner fails when required checks are missing", as
         { scenarioId: "eval_failure_capture_v1", status: "passed" },
         { scenarioId: "eval_social_outcome_telemetry_v1", status: "passed" },
         { scenarioId: "eval_tone_agentic_async_ack_v1", status: "passed" },
-        { scenarioId: "eval_usefulness_no_match_recovery_v1", status: "passed" },
-        { scenarioId: "eval_grounding_profile_memory_consistency_v1", status: "passed" },
+        {
+          scenarioId: "eval_usefulness_no_match_recovery_v1",
+          status: "passed",
+        },
+        {
+          scenarioId: "eval_grounding_profile_memory_consistency_v1",
+          status: "passed",
+        },
         { scenarioId: "eval_negotiation_quality_v1", status: "passed" },
-        { scenarioId: "eval_workflow_runtime_traceability_v1", status: "passed" },
+        {
+          scenarioId: "eval_workflow_runtime_traceability_v1",
+          status: "passed",
+        },
       ],
     }),
   );
@@ -145,7 +169,9 @@ test("product critical golden runner fails when required checks are missing", as
 });
 
 test("product critical golden runner fails when forbidden failure classes are present", async () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "product-goldens-failure-class-"));
+  const root = mkdtempSync(
+    path.join(os.tmpdir(), "product-goldens-failure-class-"),
+  );
   const artifactPath = path.join(root, "eval.json");
   const manifestPath = path.join(root, "manifest.json");
   writeFileSync(
@@ -168,9 +194,7 @@ test("product critical golden runner fails when forbidden failure classes are pr
   writeFileSync(
     artifactPath,
     JSON.stringify({
-      cases: [
-        { id: "agentic-evals-snapshot", status: "failed" },
-      ],
+      cases: [{ id: "agentic-evals-snapshot", status: "failed" }],
       summary: {
         caseCounts: { total: 1, passed: 0, failed: 1, skipped: 0 },
         recordCounts: { total: 1, passed: 0, failed: 1, skipped: 0 },
@@ -181,7 +205,11 @@ test("product critical golden runner fails when forbidden failure classes are pr
   );
 
   const result = await runProductCriticalGoldens(
-    [`--artifact-path=${artifactPath}`, "--layer=eval", `--manifest=${manifestPath}`],
+    [
+      `--artifact-path=${artifactPath}`,
+      "--layer=eval",
+      `--manifest=${manifestPath}`,
+    ],
     {
       ...process.env,
       EVAL_ARTIFACT_ROOT: root,
@@ -190,11 +218,15 @@ test("product critical golden runner fails when forbidden failure classes are pr
 
   assert.equal(result.summary.failedCases, 1);
   assert.equal(result.summary.primaryFailureReason, "too_many_failed_cases");
-  assert.deepEqual(result.summary.forbiddenFailureClassMatches, ["queue_or_replay"]);
+  assert.deepEqual(result.summary.forbiddenFailureClassMatches, [
+    "queue_or_replay",
+  ]);
 });
 
 test("product critical golden runner fails when required checks are present but not passing", async () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "product-goldens-nonpassing-check-"));
+  const root = mkdtempSync(
+    path.join(os.tmpdir(), "product-goldens-nonpassing-check-"),
+  );
   const artifactPath = path.join(root, "eval.json");
   const manifestPath = path.join(root, "manifest.json");
   writeFileSync(
@@ -211,7 +243,7 @@ test("product critical golden runner fails when required checks are present but 
           requiredPassedCheckIds: ["agentic-evals-snapshot"],
           forbiddenFailureClasses: [],
           requiredScenarioIds: ["eval_planning_bounds_v1"],
-          requiredPassedScenarioIds: ["eval_moderation_fallback_v1"]
+          requiredPassedScenarioIds: ["eval_moderation_fallback_v1"],
         },
       },
     }),
@@ -219,9 +251,7 @@ test("product critical golden runner fails when required checks are present but 
   writeFileSync(
     artifactPath,
     JSON.stringify({
-      cases: [
-        { id: "agentic-evals-snapshot", status: "failed" },
-      ],
+      cases: [{ id: "agentic-evals-snapshot", status: "failed" }],
       summary: {
         caseCounts: { total: 1, passed: 0, failed: 1, skipped: 0 },
         recordCounts: { total: 19, passed: 18, failed: 1, skipped: 0 },
@@ -235,16 +265,29 @@ test("product critical golden runner fails when required checks are present but 
         { scenarioId: "eval_failure_capture_v1", status: "passed" },
         { scenarioId: "eval_social_outcome_telemetry_v1", status: "passed" },
         { scenarioId: "eval_tone_agentic_async_ack_v1", status: "passed" },
-        { scenarioId: "eval_usefulness_no_match_recovery_v1", status: "passed" },
-        { scenarioId: "eval_grounding_profile_memory_consistency_v1", status: "passed" },
+        {
+          scenarioId: "eval_usefulness_no_match_recovery_v1",
+          status: "passed",
+        },
+        {
+          scenarioId: "eval_grounding_profile_memory_consistency_v1",
+          status: "passed",
+        },
         { scenarioId: "eval_negotiation_quality_v1", status: "passed" },
-        { scenarioId: "eval_workflow_runtime_traceability_v1", status: "passed" },
+        {
+          scenarioId: "eval_workflow_runtime_traceability_v1",
+          status: "passed",
+        },
       ],
     }),
   );
 
   const result = await runProductCriticalGoldens(
-    [`--artifact-path=${artifactPath}`, "--layer=eval", `--manifest=${manifestPath}`],
+    [
+      `--artifact-path=${artifactPath}`,
+      "--layer=eval",
+      `--manifest=${manifestPath}`,
+    ],
     {
       ...process.env,
       EVAL_ARTIFACT_ROOT: root,
@@ -252,12 +295,19 @@ test("product critical golden runner fails when required checks are present but 
   );
 
   assert.equal(result.summary.failedCases, 1);
-  assert.equal(result.summary.primaryFailureReason, "required_checks_not_passing");
-  assert.deepEqual(result.summary.missingPassedCheckIds, ["agentic-evals-snapshot"]);
+  assert.equal(
+    result.summary.primaryFailureReason,
+    "required_checks_not_passing",
+  );
+  assert.deepEqual(result.summary.missingPassedCheckIds, [
+    "agentic-evals-snapshot",
+  ]);
 });
 
 test("product critical golden runner fails when required scenarios are present but not passing", async () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "product-goldens-nonpassing-scenario-"));
+  const root = mkdtempSync(
+    path.join(os.tmpdir(), "product-goldens-nonpassing-scenario-"),
+  );
   const artifactPath = path.join(root, "eval.json");
   const manifestPath = path.join(root, "manifest.json");
   writeFileSync(
@@ -273,8 +323,11 @@ test("product critical golden runner fails when required scenarios are present b
           requiredCheckIds: ["agentic-evals-snapshot"],
           requiredPassedCheckIds: ["agentic-evals-snapshot"],
           forbiddenFailureClasses: [],
-          requiredScenarioIds: ["eval_planning_bounds_v1", "eval_moderation_fallback_v1"],
-          requiredPassedScenarioIds: ["eval_moderation_fallback_v1"]
+          requiredScenarioIds: [
+            "eval_planning_bounds_v1",
+            "eval_moderation_fallback_v1",
+          ],
+          requiredPassedScenarioIds: ["eval_moderation_fallback_v1"],
         },
       },
     }),
@@ -282,9 +335,7 @@ test("product critical golden runner fails when required scenarios are present b
   writeFileSync(
     artifactPath,
     JSON.stringify({
-      cases: [
-        { id: "agentic-evals-snapshot", status: "passed" },
-      ],
+      cases: [{ id: "agentic-evals-snapshot", status: "passed" }],
       summary: {
         caseCounts: { total: 1, passed: 1, failed: 0, skipped: 0 },
         recordCounts: { total: 19, passed: 18, failed: 1, skipped: 0 },
@@ -298,16 +349,29 @@ test("product critical golden runner fails when required scenarios are present b
         { scenarioId: "eval_failure_capture_v1", status: "passed" },
         { scenarioId: "eval_social_outcome_telemetry_v1", status: "passed" },
         { scenarioId: "eval_tone_agentic_async_ack_v1", status: "passed" },
-        { scenarioId: "eval_usefulness_no_match_recovery_v1", status: "passed" },
-        { scenarioId: "eval_grounding_profile_memory_consistency_v1", status: "passed" },
+        {
+          scenarioId: "eval_usefulness_no_match_recovery_v1",
+          status: "passed",
+        },
+        {
+          scenarioId: "eval_grounding_profile_memory_consistency_v1",
+          status: "passed",
+        },
         { scenarioId: "eval_negotiation_quality_v1", status: "passed" },
-        { scenarioId: "eval_workflow_runtime_traceability_v1", status: "passed" },
+        {
+          scenarioId: "eval_workflow_runtime_traceability_v1",
+          status: "passed",
+        },
       ],
     }),
   );
 
   const result = await runProductCriticalGoldens(
-    [`--artifact-path=${artifactPath}`, "--layer=eval", `--manifest=${manifestPath}`],
+    [
+      `--artifact-path=${artifactPath}`,
+      "--layer=eval",
+      `--manifest=${manifestPath}`,
+    ],
     {
       ...process.env,
       EVAL_ARTIFACT_ROOT: root,
@@ -315,13 +379,20 @@ test("product critical golden runner fails when required scenarios are present b
   );
 
   assert.equal(result.summary.failedCases, 1);
-  assert.equal(result.summary.primaryFailureReason, "required_scenarios_not_passing");
-  assert.deepEqual(result.summary.missingPassedScenarioIds, ["eval_moderation_fallback_v1"]);
+  assert.equal(
+    result.summary.primaryFailureReason,
+    "required_scenarios_not_passing",
+  );
+  assert.deepEqual(result.summary.missingPassedScenarioIds, [
+    "eval_moderation_fallback_v1",
+  ]);
 });
 
 test("product critical golden runner can validate an agentic eval snapshot artifact", async () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "product-goldens-snapshot-"));
-  const artifactPath = path.resolve("scripts/evals/online/sample-agentic-evals-snapshot.json");
+  const artifactPath = path.resolve(
+    "scripts/evals/online/sample-agentic-evals-snapshot.json",
+  );
   const manifestPath = path.join(root, "manifest.json");
   writeFileSync(
     manifestPath,

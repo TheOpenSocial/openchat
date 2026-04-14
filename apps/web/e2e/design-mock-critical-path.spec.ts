@@ -7,8 +7,9 @@ test.describe("Web design mock critical path", () => {
     await page.goto("/");
 
     await expect(
-      page.getByRole("heading", { name: "Explore the routed shell" }),
+      page.getByRole("heading", { name: "Explore the app" }),
     ).toBeVisible();
+    await page.getByTestId("web-design-welcome-continue").click();
 
     await page.getByTestId("web-design-preview-signin").click();
     await expect(
@@ -16,27 +17,16 @@ test.describe("Web design mock critical path", () => {
     ).toBeVisible();
 
     await page.getByTestId("web-onboarding-continue").click();
-    await expect(page.locator("h1", { hasText: "Home" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Home" })).toBeVisible();
 
-    await page.getByRole("link", { name: "Requests", exact: true }).click();
-    await expect(page.locator("h1", { hasText: "Requests" })).toBeVisible();
+    await page.getByTestId("web-tab-chats").click();
+    await expect(page.getByRole("heading", { name: "Chats" })).toBeVisible();
 
-    await page.getByRole("link", { name: "Chats", exact: true }).click();
-    await expect(page.locator("h1", { hasText: "Chats" })).toBeVisible();
+    await page.getByTestId("web-tab-profile").click();
+    await expect(page.getByRole("heading", { name: "Profile" })).toBeVisible();
 
-    await page.getByRole("link", { name: "Discover", exact: true }).click();
-    await expect(page.locator("h1", { hasText: "Discover" })).toBeVisible();
-
-    await page.getByRole("link", { name: "Circles", exact: true }).click();
-    await expect(page.locator("h1", { hasText: "Circles" })).toBeVisible();
-
-    await page.getByRole("link", { name: "Automations", exact: true }).click();
-    await expect(page.locator("h1", { hasText: "Automations" })).toBeVisible();
-
-    await page.getByRole("link", { name: "Profile", exact: true }).click();
-    await expect(page.locator("h1", { hasText: "Profile" })).toBeVisible();
-
-    await page.getByRole("link", { name: "Home", exact: true }).click();
+    await page.getByTestId("web-tab-home").click();
+    await expect(page.getByRole("heading", { name: "Home" })).toBeVisible();
     await page
       .getByTestId("web-agent-intent-input")
       .fill("Playwright smoke intent");

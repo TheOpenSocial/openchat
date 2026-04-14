@@ -20,11 +20,17 @@ function parseGoldenArgs(argv = process.argv.slice(2)) {
     }
   }
   return {
-    suites: suites.length > 0 ? suites : ["social-sim-benchmark", "product-critical-goldens"],
+    suites:
+      suites.length > 0
+        ? suites
+        : ["social-sim-benchmark", "product-critical-goldens"],
   };
 }
 
-export async function runGoldenEvals(argv = process.argv.slice(2), env = process.env) {
+export async function runGoldenEvals(
+  argv = process.argv.slice(2),
+  env = process.env,
+) {
   const goldenArgs = parseGoldenArgs(argv);
   const socialSimConfig = parseSocialSimArgs(argv, env);
   const envelope = createEvalRunEnvelope({

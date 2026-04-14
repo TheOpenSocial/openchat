@@ -37,7 +37,9 @@ function run(command, args, env = process.env) {
         resolve();
         return;
       }
-      reject(new Error(`${command} ${args.join(" ")} failed with code ${code}`));
+      reject(
+        new Error(`${command} ${args.join(" ")} failed with code ${code}`),
+      );
     });
     child.on("error", reject);
   });
@@ -98,7 +100,9 @@ function capture(command, args, env = process.env) {
         resolve(stdout);
         return;
       }
-      reject(new Error(`${command} ${args.join(" ")} failed with code ${code}`));
+      reject(
+        new Error(`${command} ${args.join(" ")} failed with code ${code}`),
+      );
     });
     child.on("error", reject);
   });
@@ -127,7 +131,9 @@ async function main() {
     await scenarioViaGitHubWorkflow(worldId, scenario);
   }
 
-  await run("xcrun", ["simctl", "terminate", simulatorId, appId]).catch(() => {});
+  await run("xcrun", ["simctl", "terminate", simulatorId, appId]).catch(
+    () => {},
+  );
   await delay(1000);
   await run("xcrun", ["simctl", "openurl", simulatorId, metroUrl]);
   await delay(5000);

@@ -5,7 +5,9 @@ import path from "node:path";
 import { resolveSharedAdminEnv } from "../shared/env.mjs";
 
 function normalizeString(value, fallback = "") {
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : fallback;
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : fallback;
 }
 
 function parseArgs(argv = process.argv.slice(2), env = process.env) {
@@ -30,7 +32,10 @@ function parseArgs(argv = process.argv.slice(2), env = process.env) {
         path.join(".artifacts", "eval-fetch", "workflow-replay-export.json"),
       ),
     ),
-    limit: normalizeString(flags.get("limit") ?? env.EVAL_REPLAY_EXPORT_LIMIT, "10"),
+    limit: normalizeString(
+      flags.get("limit") ?? env.EVAL_REPLAY_EXPORT_LIMIT,
+      "10",
+    ),
     fetchLimit: normalizeString(
       flags.get("fetch-limit") ?? env.EVAL_REPLAY_EXPORT_FETCH_LIMIT,
       "50",
@@ -70,7 +75,8 @@ function buildHeaders(config) {
     "x-admin-role": config.adminRole,
   };
   if (config.adminApiKey) headers["x-admin-api-key"] = config.adminApiKey;
-  if (config.accessToken) headers.Authorization = `Bearer ${config.accessToken}`;
+  if (config.accessToken)
+    headers.Authorization = `Bearer ${config.accessToken}`;
   if (config.hostHeader) headers.Host = config.hostHeader;
   return headers;
 }
@@ -85,7 +91,9 @@ async function requestJson(fetchImpl, url, headers) {
   }
   const body = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new Error(`Request failed for ${url}: ${response.status} ${JSON.stringify(body)}`);
+    throw new Error(
+      `Request failed for ${url}: ${response.status} ${JSON.stringify(body)}`,
+    );
   }
   return body?.data ?? body;
 }
@@ -106,10 +114,16 @@ function normalizeReplayCaseFromWorkflow(detail, index) {
     ),
   );
   const selectedTool = toolCalls[0] ?? "";
-  const failureTaxonomy = normalizeString(detail?.insights?.failureClass, "none");
+  const failureTaxonomy = normalizeString(
+    detail?.insights?.failureClass,
+    "none",
+  );
 
   return {
-    conversationId: normalizeString(run.workflowRunId, `workflow-replay-${index + 1}`),
+    conversationId: normalizeString(
+      run.workflowRunId,
+      `workflow-replay-${index + 1}`,
+    ),
     channel: "agent_workflow",
     provider: normalizeString(run.domain, "unknown"),
     toolFamily: failureTaxonomy === "none" ? "workflow" : failureTaxonomy,
@@ -130,7 +144,9 @@ function normalizeReplayCaseFromWorkflow(detail, index) {
       behaviors: [],
       outputText,
       latencyMs: 0,
-      sideEffects: Array.isArray(run?.sideEffects) ? run.sideEffects.length > 0 : false,
+      sideEffects: Array.isArray(run?.sideEffects)
+        ? run.sideEffects.length > 0
+        : false,
     },
     metadata: {
       workflowRunId: run.workflowRunId ?? null,
@@ -149,7 +165,9 @@ function workflowSelectionScore(run) {
   const health = normalizeString(run?.health, "unknown");
   const domain = normalizeString(run?.domain, "unknown");
   const replayability = normalizeString(run?.replayability, "unknown");
-  const sideEffects = Array.isArray(run?.sideEffects) ? run.sideEffects.length : 0;
+  const sideEffects = Array.isArray(run?.sideEffects)
+    ? run.sideEffects.length
+    : 0;
   let score = 0;
   if (replayability === "replayable") score += 4;
   if (health !== "healthy") score += 3;

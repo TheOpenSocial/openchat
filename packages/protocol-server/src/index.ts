@@ -122,7 +122,7 @@ export function buildProtocolManifest(
 
 export function buildProtocolDiscoveryDocument(
   input: ProtocolManifestBuilderInput = {},
-) : ProtocolDiscoveryDocument {
+): ProtocolDiscoveryDocument {
   const manifest = buildProtocolManifest(input);
   return protocolDiscoveryDocumentSchema.parse({
     manifest,

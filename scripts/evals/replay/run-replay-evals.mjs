@@ -14,10 +14,13 @@ import {
   normalizeHistoricalReplayRecord,
 } from "./import-historical-replay.mjs";
 
-const DEFAULT_REPLAY_CORPUS_PATH = "scripts/evals/replay/sample-replay-corpus.json";
+const DEFAULT_REPLAY_CORPUS_PATH =
+  "scripts/evals/replay/sample-replay-corpus.json";
 
 function normalizeString(value, fallback = "") {
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : fallback;
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : fallback;
 }
 
 function parseReplayArgs(argv = process.argv.slice(2), env = process.env) {
@@ -29,16 +32,32 @@ function parseReplayArgs(argv = process.argv.slice(2), env = process.env) {
     flags.set(key, rawValue ?? "true");
   }
   return {
-    source: normalizeString(flags.get("source") ?? env.EVAL_REPLAY_SOURCE, "corpus"),
+    source: normalizeString(
+      flags.get("source") ?? env.EVAL_REPLAY_SOURCE,
+      "corpus",
+    ),
     corpusPath: path.resolve(
       process.cwd(),
-      normalizeString(flags.get("corpus") ?? env.EVAL_REPLAY_CORPUS_PATH, DEFAULT_REPLAY_CORPUS_PATH),
+      normalizeString(
+        flags.get("corpus") ?? env.EVAL_REPLAY_CORPUS_PATH,
+        DEFAULT_REPLAY_CORPUS_PATH,
+      ),
     ),
-    provider: normalizeString(flags.get("provider") ?? env.SOCIAL_SIM_PROVIDER, "ollama"),
-    judgeProvider: normalizeString(flags.get("judge-provider") ?? env.SOCIAL_SIM_JUDGE_PROVIDER, "stub"),
-    deploySha: normalizeString(flags.get("deploy-sha") ?? env.GITHUB_SHA, "local"),
+    provider: normalizeString(
+      flags.get("provider") ?? env.SOCIAL_SIM_PROVIDER,
+      "ollama",
+    ),
+    judgeProvider: normalizeString(
+      flags.get("judge-provider") ?? env.SOCIAL_SIM_JUDGE_PROVIDER,
+      "stub",
+    ),
+    deploySha: normalizeString(
+      flags.get("deploy-sha") ?? env.GITHUB_SHA,
+      "local",
+    ),
     dryRun:
-      normalizeString(flags.get("dry-run") ?? env.EVAL_REPLAY_DRY_RUN, "0") === "1",
+      normalizeString(flags.get("dry-run") ?? env.EVAL_REPLAY_DRY_RUN, "0") ===
+      "1",
   };
 }
 
@@ -75,13 +94,19 @@ function executeReplayCase(entry, config) {
   if (execution.mode === "historical-export") {
     return {
       status: 0,
-      latencyMs: Number.isFinite(entry?.observed?.latencyMs) ? entry.observed.latencyMs : 0,
+      latencyMs: Number.isFinite(entry?.observed?.latencyMs)
+        ? entry.observed.latencyMs
+        : 0,
       stdout: normalizeString(entry?.observed?.outputText, ""),
       stderr: "",
       parsed: {
         tool: normalizeString(entry?.observed?.selectedTool, ""),
-        toolCalls: Array.isArray(entry?.observed?.toolCalls) ? entry.observed.toolCalls : [],
-        behaviors: Array.isArray(entry?.observed?.behaviors) ? entry.observed.behaviors : [],
+        toolCalls: Array.isArray(entry?.observed?.toolCalls)
+          ? entry.observed.toolCalls
+          : [],
+        behaviors: Array.isArray(entry?.observed?.behaviors)
+          ? entry.observed.behaviors
+          : [],
         sideEffects: entry?.observed?.sideEffects === true,
         outputText: normalizeString(entry?.observed?.outputText, ""),
       },
@@ -128,8 +153,12 @@ function executeReplayCase(entry, config) {
 
 function evaluateReplayCase(entry, config) {
   const expected = entry.expected ?? {};
-  const allowedTools = Array.isArray(expected.allowedTools) ? expected.allowedTools : [];
-  const forbiddenTools = Array.isArray(expected.forbiddenTools) ? expected.forbiddenTools : [];
+  const allowedTools = Array.isArray(expected.allowedTools)
+    ? expected.allowedTools
+    : [];
+  const forbiddenTools = Array.isArray(expected.forbiddenTools)
+    ? expected.forbiddenTools
+    : [];
   const requiredBehaviors = Array.isArray(expected.requiredBehaviors)
     ? expected.requiredBehaviors
     : [];
@@ -142,7 +171,9 @@ function evaluateReplayCase(entry, config) {
   const forbiddenToolCalls = Array.isArray(expected.forbiddenToolCalls)
     ? expected.forbiddenToolCalls.filter((value) => typeof value === "string")
     : [];
-  const maxLatencyMs = Number.isFinite(expected.maxLatencyMs) ? expected.maxLatencyMs : null;
+  const maxLatencyMs = Number.isFinite(expected.maxLatencyMs)
+    ? expected.maxLatencyMs
+    : null;
   const allowSideEffects = expected.allowSideEffects === true;
   const execution = executeReplayCase(entry, config);
   const selectedTool = normalizeString(execution.parsed?.tool, "");
@@ -181,7 +212,8 @@ function evaluateReplayCase(entry, config) {
     forbiddenToolCalls.every((tool) => !toolCalls.includes(tool));
   const latencyPass =
     maxLatencyMs === null ||
-    (Number.isFinite(execution.latencyMs) && execution.latencyMs <= maxLatencyMs);
+    (Number.isFinite(execution.latencyMs) &&
+      execution.latencyMs <= maxLatencyMs);
   const passed =
     execution.status === 0 &&
     allowedToolPass &&
@@ -217,7 +249,7 @@ function evaluateReplayCase(entry, config) {
       ? "wrong_tool_choice"
       : !forbiddenToolPass
         ? "forbidden_tool_used"
-      : !behaviorPass
+        : !behaviorPass
           ? "missing_required_behavior"
           : !sideEffectPass
             ? "unexpected_side_effect"
@@ -256,7 +288,10 @@ function evaluateReplayCase(entry, config) {
   };
 }
 
-export async function runReplayEvals(argv = process.argv.slice(2), env = process.env) {
+export async function runReplayEvals(
+  argv = process.argv.slice(2),
+  env = process.env,
+) {
   const config = parseReplayArgs(argv, env);
   const corpus = loadReplayInput(config);
   const envelope = createEvalRunEnvelope({
@@ -265,7 +300,9 @@ export async function runReplayEvals(argv = process.argv.slice(2), env = process
     artifactRoot: env.EVAL_ARTIFACT_ROOT,
   });
 
-  const caseRows = corpus.cases.map((entry) => evaluateReplayCase(entry, config));
+  const caseRows = corpus.cases.map((entry) =>
+    evaluateReplayCase(entry, config),
+  );
   const summary = {
     ...summarizeCaseRows(caseRows),
     corpusSuite: corpus.suite,

@@ -80,7 +80,8 @@ export function compareSystemBaseline(
     systemDelta: {
       currentAverageScore: current.system.averageScore ?? 0,
       baselineAverageScore: acceptedBaseline.system?.averageScore ?? 0,
-      currentGateScore: current.system.gateScore ?? current.system.averageScore ?? 0,
+      currentGateScore:
+        current.system.gateScore ?? current.system.averageScore ?? 0,
       baselineGateScore:
         acceptedBaseline.system?.gateScore ??
         acceptedBaseline.system?.averageScore ??
@@ -97,7 +98,8 @@ export function compareSystemBaseline(
       ),
     },
     gateScoreDelta: {
-      currentGateScore: current.system.gateScore ?? current.system.averageScore ?? 0,
+      currentGateScore:
+        current.system.gateScore ?? current.system.averageScore ?? 0,
       baselineGateScore:
         acceptedBaseline.system?.gateScore ??
         acceptedBaseline.system?.averageScore ??
@@ -134,7 +136,8 @@ export function compareSystemBaseline(
     liveSocialSimulationDelta: current.liveSocialSimulation
       ? {
           currentMeanScore: current.liveSocialSimulation.meanScore ?? 0,
-          baselineMeanScore: acceptedBaseline.liveSocialSimulation?.meanScore ?? 0,
+          baselineMeanScore:
+            acceptedBaseline.liveSocialSimulation?.meanScore ?? 0,
           delta: toDelta(
             current.liveSocialSimulation.meanScore,
             acceptedBaseline.liveSocialSimulation?.meanScore,
@@ -172,8 +175,13 @@ export function compareSystemBaseline(
       `social-sim deterministic mean regressed (${result.socialSimulationDelta.currentMeanScore} < ${result.socialSimulationDelta.baselineMeanScore})`,
     );
   }
-  if (acceptedBaseline.liveSocialSimulation && !result.liveSocialSimulationDelta) {
-    regressions.push("live social-sim baseline exists but current run has no live social-sim lane");
+  if (
+    acceptedBaseline.liveSocialSimulation &&
+    !result.liveSocialSimulationDelta
+  ) {
+    regressions.push(
+      "live social-sim baseline exists but current run has no live social-sim lane",
+    );
   } else if (result.liveSocialSimulationDelta?.status === "regressed") {
     regressions.push(
       `social-sim live mean regressed (${result.liveSocialSimulationDelta.currentMeanScore} < ${result.liveSocialSimulationDelta.baselineMeanScore})`,
@@ -198,6 +206,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const result = compareSystemBaseline();
   console.log(JSON.stringify(result, null, 2));
   if (result.config.failOnRegression && result.regressions.length > 0) {
-    throw new Error(`System baseline regression detected: ${result.regressions.join("; ")}`);
+    throw new Error(
+      `System baseline regression detected: ${result.regressions.join("; ")}`,
+    );
   }
 }

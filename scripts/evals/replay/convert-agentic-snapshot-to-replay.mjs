@@ -4,7 +4,9 @@ import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 function normalizeString(value, fallback = "") {
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : fallback;
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : fallback;
 }
 
 function parseArgs(argv = process.argv.slice(2), env = process.env) {
@@ -36,7 +38,10 @@ function loadSnapshot(inputPath) {
 }
 
 function scenarioToReplayRecord(scenario, snapshot) {
-  const scenarioId = normalizeString(scenario?.scenarioId, scenario?.id ?? "unknown-scenario");
+  const scenarioId = normalizeString(
+    scenario?.scenarioId,
+    scenario?.id ?? "unknown-scenario",
+  );
   const title = normalizeString(scenario?.title, scenarioId);
   const dimension = normalizeString(scenario?.dimension, "agentic-quality");
   const details = normalizeString(scenario?.details, "");
@@ -55,7 +60,8 @@ function scenarioToReplayRecord(scenario, snapshot) {
       },
       {
         role: "assistant",
-        content: details || `Scenario ${scenarioId} ${passed ? "passed" : "failed"}.`,
+        content:
+          details || `Scenario ${scenarioId} ${passed ? "passed" : "failed"}.`,
       },
     ],
     expected: {
@@ -81,7 +87,10 @@ function scenarioToReplayRecord(scenario, snapshot) {
       passed,
       score: Number.isFinite(scenario?.score) ? scenario.score : null,
       snapshotStatus: normalizeString(snapshot?.summary?.status, "unknown"),
-      traceGradeStatus: normalizeString(snapshot?.traceGrade?.status, "unknown"),
+      traceGradeStatus: normalizeString(
+        snapshot?.traceGrade?.status,
+        "unknown",
+      ),
     },
   };
 }
@@ -99,8 +108,12 @@ export function convertAgenticSnapshotToReplay(
   }
 
   const snapshot = loadSnapshot(config.inputPath);
-  const scenarios = Array.isArray(snapshot?.scenarios) ? snapshot.scenarios : [];
-  const records = scenarios.map((scenario) => scenarioToReplayRecord(scenario, snapshot));
+  const scenarios = Array.isArray(snapshot?.scenarios)
+    ? snapshot.scenarios
+    : [];
+  const records = scenarios.map((scenario) =>
+    scenarioToReplayRecord(scenario, snapshot),
+  );
   writeFileSync(
     config.outputPath,
     `${records.map((record) => JSON.stringify(record)).join("\n")}\n`,

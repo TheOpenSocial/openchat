@@ -214,7 +214,10 @@ export function buildOpsPackExplainability({
       id: "fill_env_gaps",
       label: "Fill missing environment readiness",
       reason: envReadinessFailures
-        .map((readiness) => `${readiness.stepId}: ${readiness.missingEnv.join(", ")}`)
+        .map(
+          (readiness) =>
+            `${readiness.stepId}: ${readiness.missingEnv.join(", ")}`,
+        )
         .join(" | "),
     });
   }
@@ -451,18 +454,20 @@ async function main() {
               dryRun,
               requireRunbooks,
               requireEnvReadiness,
-              shipVerdict: result.status === "passed" ? "ship_ready" : "blocked",
+              shipVerdict:
+                result.status === "passed" ? "ship_ready" : "blocked",
               blockedReasons: [
                 ...(result.status === "failed"
-                  ? [result.failureClass === "timeout"
-                      ? `step_timeout:${step.id}`
-                      : `step_failed:${step.id}`]
+                  ? [
+                      result.failureClass === "timeout"
+                        ? `step_timeout:${step.id}`
+                        : `step_failed:${step.id}`,
+                    ]
                   : []),
               ],
               steps: [result],
             },
-            lane:
-              verificationRunIngestLaneByStepId[step.id] ?? "verification",
+            lane: verificationRunIngestLaneByStepId[step.id] ?? "verification",
             layer: verificationLayerForStep(step.id),
             runId: `${runId}:${step.id}`,
             status: result.status,
@@ -470,7 +475,12 @@ async function main() {
             stepId: step.id,
             stepSummary: step.summary,
           }),
-          { dryRunMode: dryRun, runLabel: verificationRunIngestLaneByStepId[step.id] ?? "verification", stepId: step.id },
+          {
+            dryRunMode: dryRun,
+            runLabel:
+              verificationRunIngestLaneByStepId[step.id] ?? "verification",
+            stepId: step.id,
+          },
         ),
       );
       if (result.status === "failed") {
@@ -536,7 +546,8 @@ async function main() {
     }),
   };
 
-  artifact.verificationRunIngest = await ingestVerificationRunArtifact(artifact);
+  artifact.verificationRunIngest =
+    await ingestVerificationRunArtifact(artifact);
 
   mkdirSync(path.dirname(artifactPath), { recursive: true });
   writeFileSync(artifactPath, JSON.stringify(artifact, null, 2));

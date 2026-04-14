@@ -24,9 +24,15 @@ test("shared eval artifacts write standard files", () => {
     [{ caseId: "case-1", status: "passed", score: 0.7 }],
   );
 
-  const summary = JSON.parse(readFileSync(path.join(result.runDir, "summary.json"), "utf8"));
-  const run = JSON.parse(readFileSync(path.join(result.runDir, "run.json"), "utf8"));
-  const cases = readFileSync(path.join(result.runDir, "cases.jsonl"), "utf8").trim().split("\n");
+  const summary = JSON.parse(
+    readFileSync(path.join(result.runDir, "summary.json"), "utf8"),
+  );
+  const run = JSON.parse(
+    readFileSync(path.join(result.runDir, "run.json"), "utf8"),
+  );
+  const cases = readFileSync(path.join(result.runDir, "cases.jsonl"), "utf8")
+    .trim()
+    .split("\n");
 
   assert.equal(summary.averageScore, 0.7);
   assert.equal(run.evalSuite, "artifact-test");
@@ -57,7 +63,9 @@ test("golden eval runner executes social sim benchmark suite", async () => {
   assert.equal(result.summary.suites[0].suite, "social-sim-benchmark");
   assert.deepEqual(result.summary.suites[0].summary.seeds, [17031, 27031]);
   assert.ok(result.summary.suites[0].summary.familyMetrics);
-  const firstFamily = Object.values(result.summary.suites[0].summary.familyMetrics)[0];
+  const firstFamily = Object.values(
+    result.summary.suites[0].summary.familyMetrics,
+  )[0];
   assert.equal(typeof firstFamily?.meanConvergenceScore, "number");
   assert.equal(result.summary.suites[0].run.benchmarkConfig.concurrency, 1);
 });

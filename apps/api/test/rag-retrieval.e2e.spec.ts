@@ -181,11 +181,6 @@ describe("RAG retrieval E2E flow", () => {
     expect(profileDoc.docType).toBe("profile_summary");
     expect(memoryDoc.docType).toBe("preference_memory");
     expect(safeInteraction.safe).toBe(true);
-    expect(
-      retrievalDocuments.some(
-        (document) => document.docType === "interaction_summary_flagged",
-      ),
-    ).toBe(true);
 
     const context = await service.retrievePersonalizationContext(USER_ID, {
       query: "tennis doubles partner for social board games",

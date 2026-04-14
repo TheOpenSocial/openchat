@@ -152,11 +152,14 @@ async function bootstrapSmokeSession() {
     ...(applicationToken ? { "x-application-token": applicationToken } : {}),
   };
 
-  const response = await fetch(`${baseUrl}/api/admin/ops/smoke-session/exchange`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({}),
-  });
+  const response = await fetch(
+    `${baseUrl}/api/admin/ops/smoke-session/exchange`,
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify({}),
+    },
+  );
 
   let payload = null;
   try {
@@ -260,9 +263,15 @@ async function main() {
   console.log(`smoke session initialized: ${sessionReady.reason}`);
 
   const postBootstrapRequired = [
-    ["SMOKE_ACCESS_TOKEN", process.env.SMOKE_ACCESS_TOKEN?.trim() || accessToken],
+    [
+      "SMOKE_ACCESS_TOKEN",
+      process.env.SMOKE_ACCESS_TOKEN?.trim() || accessToken,
+    ],
     ["SMOKE_USER_ID", process.env.SMOKE_USER_ID?.trim() || userId],
-    ["SMOKE_AGENT_THREAD_ID", process.env.SMOKE_AGENT_THREAD_ID?.trim() || agentThreadId],
+    [
+      "SMOKE_AGENT_THREAD_ID",
+      process.env.SMOKE_AGENT_THREAD_ID?.trim() || agentThreadId,
+    ],
   ];
   const postBootstrapMissing = postBootstrapRequired
     .filter(([, value]) => !value)

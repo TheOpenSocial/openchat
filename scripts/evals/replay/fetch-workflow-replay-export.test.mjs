@@ -25,7 +25,10 @@ test("fetch workflow replay export writes replayable conversation export", async
               ok: true,
               data: {
                 runs: [
-                  { workflowRunId: "social:intent:wf-1", replayability: "replayable" },
+                  {
+                    workflowRunId: "social:intent:wf-1",
+                    replayability: "replayable",
+                  },
                 ],
               },
             };
@@ -90,11 +93,36 @@ test("fetch workflow replay export writes replayable conversation export", async
 test("selectDiverseWorkflowRuns prefers domain and health diversity before filling remainder", () => {
   const selected = selectDiverseWorkflowRuns(
     [
-      { workflowRunId: "wf-1", domain: "social", health: "healthy", replayability: "replayable" },
-      { workflowRunId: "wf-2", domain: "support", health: "warning", replayability: "replayable" },
-      { workflowRunId: "wf-3", domain: "social", health: "healthy", replayability: "replayable" },
-      { workflowRunId: "wf-4", domain: "finance", health: "healthy", replayability: "replayable" },
-      { workflowRunId: "wf-5", domain: "support", health: "critical", replayability: "replayable" },
+      {
+        workflowRunId: "wf-1",
+        domain: "social",
+        health: "healthy",
+        replayability: "replayable",
+      },
+      {
+        workflowRunId: "wf-2",
+        domain: "support",
+        health: "warning",
+        replayability: "replayable",
+      },
+      {
+        workflowRunId: "wf-3",
+        domain: "social",
+        health: "healthy",
+        replayability: "replayable",
+      },
+      {
+        workflowRunId: "wf-4",
+        domain: "finance",
+        health: "healthy",
+        replayability: "replayable",
+      },
+      {
+        workflowRunId: "wf-5",
+        domain: "support",
+        health: "critical",
+        replayability: "replayable",
+      },
     ],
     3,
   );

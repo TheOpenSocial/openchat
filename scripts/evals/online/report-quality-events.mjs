@@ -12,7 +12,9 @@ import {
 const DEFAULT_EVENTS_PATH = "scripts/evals/online/sample-quality-events.jsonl";
 
 function normalizeString(value, fallback = "") {
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : fallback;
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : fallback;
 }
 
 function parseArgs(argv = process.argv.slice(2), env = process.env) {
@@ -26,9 +28,15 @@ function parseArgs(argv = process.argv.slice(2), env = process.env) {
   return {
     eventsPath: path.resolve(
       process.cwd(),
-      normalizeString(flags.get("events") ?? env.EVAL_QUALITY_EVENTS_PATH, DEFAULT_EVENTS_PATH),
+      normalizeString(
+        flags.get("events") ?? env.EVAL_QUALITY_EVENTS_PATH,
+        DEFAULT_EVENTS_PATH,
+      ),
     ),
-    source: normalizeString(flags.get("source") ?? env.EVAL_QUALITY_SOURCE, "jsonl"),
+    source: normalizeString(
+      flags.get("source") ?? env.EVAL_QUALITY_SOURCE,
+      "jsonl",
+    ),
   };
 }
 
@@ -74,7 +82,8 @@ function parseAgentSuiteArtifact(filePath) {
   return records.map((record) => ({
     conversation_id:
       record.workflowRunId ?? record.scenarioId ?? record.checkId ?? "unknown",
-    message_id: record.traceId ?? record.scenarioId ?? record.checkId ?? "unknown",
+    message_id:
+      record.traceId ?? record.scenarioId ?? record.checkId ?? "unknown",
     channel: record.checkId?.includes("prod-smoke") ? "staging" : "agentic",
     provider: "unknown",
     deploy_sha: normalizeString(process.env.GITHUB_SHA, "local"),
@@ -89,17 +98,24 @@ function parseAgentSuiteArtifact(filePath) {
 }
 
 function parseAgenticEvalSnapshot(filePath) {
-  const snapshot = JSON.parse(readFileSync(findLatestJsonArtifact(filePath), "utf8"));
-  const scenarios = Array.isArray(snapshot?.scenarios) ? snapshot.scenarios : [];
+  const snapshot = JSON.parse(
+    readFileSync(findLatestJsonArtifact(filePath), "utf8"),
+  );
+  const scenarios = Array.isArray(snapshot?.scenarios)
+    ? snapshot.scenarios
+    : [];
   const traceGrade = snapshot?.traceGrade ?? {};
-  const regressions = Array.isArray(snapshot?.regressions) ? snapshot.regressions : [];
+  const regressions = Array.isArray(snapshot?.regressions)
+    ? snapshot.regressions
+    : [];
   const dominantRegression =
-    regressions
-      .slice()
-      .sort((left, right) => {
-        const severityRank = { critical: 2, warning: 1 };
-        return (severityRank[right?.severity] ?? 0) - (severityRank[left?.severity] ?? 0);
-      })[0] ?? null;
+    regressions.slice().sort((left, right) => {
+      const severityRank = { critical: 2, warning: 1 };
+      return (
+        (severityRank[right?.severity] ?? 0) -
+        (severityRank[left?.severity] ?? 0)
+      );
+    })[0] ?? null;
 
   return scenarios.map((scenario) => ({
     conversation_id: snapshot?.generatedAt ?? "agentic-evals-snapshot",
@@ -113,11 +129,13 @@ function parseAgenticEvalSnapshot(filePath) {
     escalated: scenario?.passed === false,
     failure_taxonomy:
       scenario?.passed === false
-        ? dominantRegression?.key ?? "eval_scenario_failed"
+        ? (dominantRegression?.key ?? "eval_scenario_failed")
         : "none",
     created_at: snapshot?.generatedAt ?? new Date().toISOString(),
     trace_grade_status: normalizeString(traceGrade?.status, "unknown"),
-    trace_grade_score: Number.isFinite(traceGrade?.score) ? traceGrade.score : null,
+    trace_grade_score: Number.isFinite(traceGrade?.score)
+      ? traceGrade.score
+      : null,
     regression_count:
       typeof snapshot?.summary?.regressionCount === "number"
         ? snapshot.summary.regressionCount
@@ -126,7 +144,9 @@ function parseAgenticEvalSnapshot(filePath) {
 }
 
 function parseRuntimeAdminExport(filePath) {
-  const payload = JSON.parse(readFileSync(findLatestJsonArtifact(filePath), "utf8"));
+  const payload = JSON.parse(
+    readFileSync(findLatestJsonArtifact(filePath), "utf8"),
+  );
   const events = Array.isArray(payload)
     ? payload
     : Array.isArray(payload?.events)
@@ -147,16 +167,13 @@ function parseRuntimeAdminExport(filePath) {
       event?.metrics?.retryCount ??
       0;
     const escalatedCandidate =
-      event?.escalated ??
-      event?.flags?.escalated ??
-      false;
-    const failureTaxonomy =
-      normalizeString(
-        event?.failure_taxonomy ??
-          event?.failureTaxonomy ??
-          event?.failure?.taxonomy,
-        "none",
-      );
+      event?.escalated ?? event?.flags?.escalated ?? false;
+    const failureTaxonomy = normalizeString(
+      event?.failure_taxonomy ??
+        event?.failureTaxonomy ??
+        event?.failure?.taxonomy,
+      "none",
+    );
 
     return {
       conversation_id: normalizeString(
@@ -169,13 +186,20 @@ function parseRuntimeAdminExport(filePath) {
       ),
       channel: normalizeString(event?.channel, "unknown"),
       provider: normalizeString(event?.provider, "unknown"),
-      deploy_sha: normalizeString(event?.deploy_sha ?? event?.deploySha, "local"),
+      deploy_sha: normalizeString(
+        event?.deploy_sha ?? event?.deploySha,
+        "local",
+      ),
       tool_family: normalizeString(
         event?.tool_family ?? event?.toolFamily,
         "unknown",
       ),
-      quality_score: Number.isFinite(qualityScoreCandidate) ? qualityScoreCandidate : 0,
-      retry_count: Number.isFinite(retryCountCandidate) ? retryCountCandidate : 0,
+      quality_score: Number.isFinite(qualityScoreCandidate)
+        ? qualityScoreCandidate
+        : 0,
+      retry_count: Number.isFinite(retryCountCandidate)
+        ? retryCountCandidate
+        : 0,
       escalated: Boolean(escalatedCandidate),
       failure_taxonomy: failureTaxonomy,
       created_at: normalizeString(
@@ -191,7 +215,9 @@ function parseRuntimeAdminExport(filePath) {
 }
 
 function parseAgentWorkflowsSnapshot(filePath) {
-  const snapshot = JSON.parse(readFileSync(findLatestJsonArtifact(filePath), "utf8"));
+  const snapshot = JSON.parse(
+    readFileSync(findLatestJsonArtifact(filePath), "utf8"),
+  );
   const runs = Array.isArray(snapshot?.runs) ? snapshot.runs : [];
 
   return runs.map((run, index) => {
@@ -214,22 +240,33 @@ function parseAgentWorkflowsSnapshot(filePath) {
       retry_count: 0,
       escalated: health === "critical",
       failure_taxonomy: failureTaxonomy,
-      created_at: normalizeString(snapshot?.generatedAt, new Date().toISOString()),
+      created_at: normalizeString(
+        snapshot?.generatedAt,
+        new Date().toISOString(),
+      ),
       trace_grade_status: health,
     };
   });
 }
 
 function reliabilityStatusScore(status) {
-  if (status === "healthy" || status === "passed" || status === "green") return 1;
-  if (status === "watch" || status === "skipped" || status === "yellow") return 0.6;
-  if (status === "critical" || status === "failed" || status === "red") return 0.2;
+  if (status === "healthy" || status === "passed" || status === "green")
+    return 1;
+  if (status === "watch" || status === "skipped" || status === "yellow")
+    return 0.6;
+  if (status === "critical" || status === "failed" || status === "red")
+    return 0.2;
   return 0.4;
 }
 
 function parseAgentReliabilitySnapshot(filePath) {
-  const snapshot = JSON.parse(readFileSync(findLatestJsonArtifact(filePath), "utf8"));
-  const generatedAt = normalizeString(snapshot?.generatedAt, new Date().toISOString());
+  const snapshot = JSON.parse(
+    readFileSync(findLatestJsonArtifact(filePath), "utf8"),
+  );
+  const generatedAt = normalizeString(
+    snapshot?.generatedAt,
+    new Date().toISOString(),
+  );
   const workflowHealth = snapshot?.workflow?.health ?? {};
   const workflowTotal =
     Number(snapshot?.workflow?.totalRuns ?? 0) ||
@@ -238,12 +275,10 @@ function parseAgentReliabilitySnapshot(filePath) {
       Number(workflowHealth.critical ?? 0);
   const workflowQuality =
     workflowTotal > 0
-      ? (
-          (Number(workflowHealth.healthy ?? 0) +
-            Number(workflowHealth.watch ?? 0) * 0.6 +
-            Number(workflowHealth.critical ?? 0) * 0.2) /
-          workflowTotal
-        )
+      ? (Number(workflowHealth.healthy ?? 0) +
+          Number(workflowHealth.watch ?? 0) * 0.6 +
+          Number(workflowHealth.critical ?? 0) * 0.2) /
+        workflowTotal
       : 0;
   const latestVerificationStatus = normalizeString(
     snapshot?.verification?.latest?.status,
@@ -262,7 +297,8 @@ function parseAgentReliabilitySnapshot(filePath) {
         normalizeString(snapshot?.canary?.verdict, "unknown"),
       ),
       retry_count: 0,
-      escalated: normalizeString(snapshot?.canary?.verdict, "unknown") === "critical",
+      escalated:
+        normalizeString(snapshot?.canary?.verdict, "unknown") === "critical",
       failure_taxonomy:
         normalizeString(snapshot?.canary?.verdict, "unknown") === "critical"
           ? "canary_critical"
@@ -298,13 +334,17 @@ function parseAgentReliabilitySnapshot(filePath) {
         normalizeString(snapshot?.eval?.status, "unknown"),
       ),
       retry_count: 0,
-      escalated: normalizeString(snapshot?.eval?.status, "unknown") === "critical",
+      escalated:
+        normalizeString(snapshot?.eval?.status, "unknown") === "critical",
       failure_taxonomy:
         normalizeString(snapshot?.eval?.status, "unknown") === "critical"
           ? "eval_status_critical"
           : "none",
       created_at: generatedAt,
-      trace_grade_status: normalizeString(snapshot?.eval?.traceGrade?.status, "unknown"),
+      trace_grade_status: normalizeString(
+        snapshot?.eval?.traceGrade?.status,
+        "unknown",
+      ),
     },
     {
       conversation_id: generatedAt,
@@ -319,7 +359,10 @@ function parseAgentReliabilitySnapshot(filePath) {
       failure_taxonomy:
         latestVerificationStatus === "failed" ? "verification_failed" : "none",
       created_at: generatedAt,
-      trace_grade_status: normalizeString(snapshot?.eval?.traceGrade?.status, "unknown"),
+      trace_grade_status: normalizeString(
+        snapshot?.eval?.traceGrade?.status,
+        "unknown",
+      ),
     },
   ];
 }
@@ -336,10 +379,15 @@ function groupCount(rows, key) {
     const value = normalizeString(row[key], "unknown");
     grouped.set(value, (grouped.get(value) ?? 0) + 1);
   }
-  return Object.fromEntries([...grouped.entries()].sort((left, right) => right[1] - left[1]));
+  return Object.fromEntries(
+    [...grouped.entries()].sort((left, right) => right[1] - left[1]),
+  );
 }
 
-export async function reportQualityEvents(argv = process.argv.slice(2), env = process.env) {
+export async function reportQualityEvents(
+  argv = process.argv.slice(2),
+  env = process.env,
+) {
   const config = parseArgs(argv, env);
   const envelope = createEvalRunEnvelope({
     evalSuite: "online-quality-report",
@@ -353,11 +401,11 @@ export async function reportQualityEvents(argv = process.argv.slice(2), env = pr
         ? parseAgenticEvalSnapshot(config.eventsPath)
         : config.source === "agent-workflows-snapshot"
           ? parseAgentWorkflowsSnapshot(config.eventsPath)
-        : config.source === "agent-reliability-snapshot"
-          ? parseAgentReliabilitySnapshot(config.eventsPath)
-        : config.source === "runtime-admin-export"
-          ? parseRuntimeAdminExport(config.eventsPath)
-        : parseJsonLines(config.eventsPath);
+          : config.source === "agent-reliability-snapshot"
+            ? parseAgentReliabilitySnapshot(config.eventsPath)
+            : config.source === "runtime-admin-export"
+              ? parseRuntimeAdminExport(config.eventsPath)
+              : parseJsonLines(config.eventsPath);
   const caseRows = rows.map((row) => ({
     caseId: `${row.conversation_id}:${row.message_id}`,
     status: row.quality_score >= 0.6 ? "passed" : "failed",

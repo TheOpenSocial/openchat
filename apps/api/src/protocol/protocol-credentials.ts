@@ -69,11 +69,16 @@ export function verifyProtocolAppToken(
 
   const salt = fromBase64Url(saltEncoded);
   const expectedDigest = fromBase64Url(digestEncoded);
-  const actualDigest = scryptSync(normalizedToken, salt, expectedDigest.length, {
-    N: Number.parseInt(n, 10),
-    r: Number.parseInt(r, 10),
-    p: Number.parseInt(p, 10),
-  });
+  const actualDigest = scryptSync(
+    normalizedToken,
+    salt,
+    expectedDigest.length,
+    {
+      N: Number.parseInt(n, 10),
+      r: Number.parseInt(r, 10),
+      p: Number.parseInt(p, 10),
+    },
+  );
 
   if (actualDigest.length !== expectedDigest.length) {
     return false;

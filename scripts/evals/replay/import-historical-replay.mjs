@@ -4,7 +4,9 @@ import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 function normalizeString(value, fallback = "") {
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : fallback;
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : fallback;
 }
 
 function parseArgs(argv = process.argv.slice(2), env = process.env) {
@@ -22,9 +24,7 @@ function parseArgs(argv = process.argv.slice(2), env = process.env) {
   );
   const outputPath = normalizeString(
     flags.get("output") ?? env.EVAL_REPLAY_IMPORT_OUTPUT,
-    inputPath
-      ? inputPath.replace(/\.(jsonl|json)$/i, ".corpus.json")
-      : "",
+    inputPath ? inputPath.replace(/\.(jsonl|json)$/i, ".corpus.json") : "",
   );
 
   return {
@@ -85,12 +85,18 @@ function normalizeExpected(record) {
   };
 
   const maxLatencyCandidate =
-    expected.maxLatencyMs ?? record.maxLatencyMs ?? record.latencyBudgetMs ?? null;
+    expected.maxLatencyMs ??
+    record.maxLatencyMs ??
+    record.latencyBudgetMs ??
+    null;
 
   return {
     allowedTools: pickArray(expected.allowedTools, record.allowedTools),
     forbiddenTools: pickArray(expected.forbiddenTools, record.forbiddenTools),
-    requiredBehaviors: pickArray(expected.requiredBehaviors, record.requiredBehaviors),
+    requiredBehaviors: pickArray(
+      expected.requiredBehaviors,
+      record.requiredBehaviors,
+    ),
     outputIncludes: pickArray(
       expected.outputIncludes,
       expected.outputSnippets,
@@ -105,7 +111,9 @@ function normalizeExpected(record) {
       expected.forbiddenToolCalls,
       record.forbiddenToolCalls,
     ),
-    maxLatencyMs: Number.isFinite(maxLatencyCandidate) ? maxLatencyCandidate : null,
+    maxLatencyMs: Number.isFinite(maxLatencyCandidate)
+      ? maxLatencyCandidate
+      : null,
     allowSideEffects:
       expected.allowSideEffects === true || record.allowSideEffects === true,
   };
@@ -123,21 +131,31 @@ function normalizeObserved(record) {
   };
 
   const selectedTool = normalizeString(
-    observed.selectedTool ?? observed.tool ?? record.selectedTool ?? record.tool,
+    observed.selectedTool ??
+      observed.tool ??
+      record.selectedTool ??
+      record.tool,
     "",
   );
   const outputText = normalizeString(
-    observed.outputText ?? observed.output ?? record.outputText ?? record.output,
+    observed.outputText ??
+      observed.output ??
+      record.outputText ??
+      record.output,
     "",
   );
   return {
     selectedTool,
-    toolCalls: pickArray(observed.toolCalls, record.toolCalls, selectedTool ? [selectedTool] : []),
+    toolCalls: pickArray(
+      observed.toolCalls,
+      record.toolCalls,
+      selectedTool ? [selectedTool] : [],
+    ),
     behaviors: pickArray(observed.behaviors, record.behaviors),
     sideEffects: observed.sideEffects === true || record.sideEffects === true,
     outputText,
     latencyMs: Number.isFinite(observed.latencyMs ?? record.latencyMs)
-      ? observed.latencyMs ?? record.latencyMs
+      ? (observed.latencyMs ?? record.latencyMs)
       : 0,
   };
 }
@@ -165,7 +183,10 @@ export function normalizeHistoricalReplayRecord(record, index) {
   };
 }
 
-export function importHistoricalReplay(argv = process.argv.slice(2), env = process.env) {
+export function importHistoricalReplay(
+  argv = process.argv.slice(2),
+  env = process.env,
+) {
   const config = parseArgs(argv, env);
   if (!config.inputPath) {
     throw new Error("Missing --input for historical replay import.");
@@ -179,7 +200,9 @@ export function importHistoricalReplay(argv = process.argv.slice(2), env = proce
     version: 1,
     suite: config.suiteName,
     importedFrom: config.inputPath,
-    cases: records.map((record, index) => normalizeHistoricalReplayRecord(record, index)),
+    cases: records.map((record, index) =>
+      normalizeHistoricalReplayRecord(record, index),
+    ),
   };
 
   writeFileSync(config.outputPath, JSON.stringify(corpus, null, 2));

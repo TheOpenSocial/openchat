@@ -87,5 +87,8 @@ test("acceptSystemBaseline appends accepted run from real summary data", () => {
 
   const updated = JSON.parse(readFileSync(historyPath, "utf8"));
   assert.equal(updated.acceptedRuns.length, 1);
-  assert.equal(updated.acceptedRuns[0].suiteScores["social-sim-live-benchmark"], 0.731);
+  assert.equal(
+    updated.acceptedRuns[0].suiteScores["social-sim-live-benchmark"],
+    0.731,
+  );
 });

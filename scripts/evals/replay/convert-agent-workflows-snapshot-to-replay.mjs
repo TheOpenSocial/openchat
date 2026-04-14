@@ -4,7 +4,9 @@ import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 function normalizeString(value, fallback = "") {
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : fallback;
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : fallback;
 }
 
 function parseArgs(argv = process.argv.slice(2), env = process.env) {
@@ -36,7 +38,10 @@ function loadSnapshot(inputPath) {
 }
 
 function workflowRunToReplayRecord(run, snapshot) {
-  const workflowRunId = normalizeString(run?.workflowRunId, run?.traceId ?? "unknown-workflow-run");
+  const workflowRunId = normalizeString(
+    run?.workflowRunId,
+    run?.traceId ?? "unknown-workflow-run",
+  );
   const traceId = normalizeString(run?.traceId, "");
   const domain = normalizeString(run?.domain, "workflow");
   const health = normalizeString(run?.health, "unknown");
@@ -71,7 +76,9 @@ function workflowRunToReplayRecord(run, snapshot) {
       toolCalls: [],
       behaviors: [
         `workflow_health_${health}`,
-        failureClass !== "none" ? `workflow_failure_${failureClass}` : "workflow_failure_none",
+        failureClass !== "none"
+          ? `workflow_failure_${failureClass}`
+          : "workflow_failure_none",
       ],
       outputText: `Workflow run ${workflowRunId} (${traceId || "no-trace"}) in ${domain} is ${health} with failure class ${failureClass}.`,
       latencyMs: 0,
@@ -95,10 +102,14 @@ export function convertAgentWorkflowsSnapshotToReplay(
 ) {
   const config = parseArgs(argv, env);
   if (!config.inputPath) {
-    throw new Error("Missing --input for agent workflows snapshot replay conversion.");
+    throw new Error(
+      "Missing --input for agent workflows snapshot replay conversion.",
+    );
   }
   if (!config.outputPath) {
-    throw new Error("Missing --output for agent workflows snapshot replay conversion.");
+    throw new Error(
+      "Missing --output for agent workflows snapshot replay conversion.",
+    );
   }
 
   const snapshot = loadSnapshot(config.inputPath);

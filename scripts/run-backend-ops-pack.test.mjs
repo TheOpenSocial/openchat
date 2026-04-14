@@ -11,7 +11,12 @@ import {
 
 test("buildStepExecutionRecord classifies timed out steps", () => {
   const record = buildStepExecutionRecord(
-    { id: "agentic_suite_verification", summary: "suite", cmd: "pnpm", args: ["test"] },
+    {
+      id: "agentic_suite_verification",
+      summary: "suite",
+      cmd: "pnpm",
+      args: ["test"],
+    },
     1000,
     45000,
     { status: null, signal: "SIGTERM" },
@@ -58,7 +63,10 @@ test("buildVerificationHistoryRecord and ingest body preserve per-step evidence"
     stepSummary: "release gate baseline",
   });
 
-  const ingestBody = buildVerificationRunIngestBody(historyRecord, baseArtifact);
+  const ingestBody = buildVerificationRunIngestBody(
+    historyRecord,
+    baseArtifact,
+  );
 
   assert.equal(ingestBody.runId, "backend-ops-pack-test:release_check_api");
   assert.equal(ingestBody.lane, "suite");

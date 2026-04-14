@@ -55,7 +55,9 @@ test("fetch agentic eval snapshot surfaces request failures clearly", async () =
 });
 
 test("fetch agentic eval snapshot reuses staging smoke env fallback keys", async () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "agentic-eval-fetch-fallback-"));
+  const root = mkdtempSync(
+    path.join(os.tmpdir(), "agentic-eval-fetch-fallback-"),
+  );
   const outputPath = path.join(root, "snapshot.json");
 
   await fetchAgenticEvalSnapshot(
@@ -68,7 +70,10 @@ test("fetch agentic eval snapshot reuses staging smoke env fallback keys", async
       STAGING_SMOKE_HOST_HEADER: "staging.example.test",
     },
     async (url, options) => {
-      assert.equal(url, "https://staging.example.test/api/admin/ops/agentic-evals");
+      assert.equal(
+        url,
+        "https://staging.example.test/api/admin/ops/agentic-evals",
+      );
       assert.equal(options.headers["x-admin-user-id"], "staging-admin-user");
       assert.equal(options.headers["x-admin-api-key"], "staging-admin-key");
       return {

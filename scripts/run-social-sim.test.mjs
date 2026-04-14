@@ -19,10 +19,7 @@ import {
   runSocialSimulation,
   selectSocialSimWorlds,
 } from "./social-sim-core.mjs";
-import {
-  getSearchSeeds,
-  parseSearchArgs,
-} from "./run-social-sim-search.mjs";
+import { getSearchSeeds, parseSearchArgs } from "./run-social-sim-search.mjs";
 
 function parseTrailingJson(stdout) {
   const trimmed = stdout.trim();
@@ -96,7 +93,10 @@ test("parseSocialSimArgs applies sane defaults", () => {
   assert.equal(config.backendTurnDelayMs, 250);
   assert.equal(config.backendRetryCount, 3);
   assert.equal(config.backendRetryBaseDelayMs, 750);
-  assert.equal(config.tuning.thresholds.lowStrength, DEFAULT_SOCIAL_SIM_TUNING.thresholds.lowStrength);
+  assert.equal(
+    config.tuning.thresholds.lowStrength,
+    DEFAULT_SOCIAL_SIM_TUNING.thresholds.lowStrength,
+  );
 });
 
 test("parseSocialSimArgs enables deterministic benchmark mode defaults", () => {
@@ -119,7 +119,9 @@ test("parseSocialSimArgs rejects benchmark mode without remote provider for non-
 
 test("parseSocialSimArgs applies tuning overrides from JSON", () => {
   const config = parseSocialSimArgs(
-    ["--tuning-json={\"probabilities\":{\"memoryConversation\":0.9},\"scoring\":{\"missingGroupPenalty\":0.2}}"],
+    [
+      '--tuning-json={"probabilities":{"memoryConversation":0.9},"scoring":{"missingGroupPenalty":0.2}}',
+    ],
     {},
   );
 
@@ -163,19 +165,25 @@ test("parseSearchArgs preserves explicit seed overrides", () => {
 });
 
 test("getSearchSeeds falls back to stable matrix when no explicit seed is set", () => {
-  const seeds = getSearchSeeds({ seed: 12345 }, {
-    hasExplicitSeed: false,
-    seeds: [],
-  });
+  const seeds = getSearchSeeds(
+    { seed: 12345 },
+    {
+      hasExplicitSeed: false,
+      seeds: [],
+    },
+  );
 
   assert.deepEqual(seeds, [17031, 27031, 37031]);
 });
 
 test("getSearchSeeds respects explicit single-seed runs", () => {
-  const seeds = getSearchSeeds({ seed: 12345 }, {
-    hasExplicitSeed: true,
-    seeds: [],
-  });
+  const seeds = getSearchSeeds(
+    { seed: 12345 },
+    {
+      hasExplicitSeed: true,
+      seeds: [],
+    },
+  );
 
   assert.deepEqual(seeds, [12345]);
 });
@@ -188,21 +196,45 @@ test("loadSocialSimWorldFixture normalizes canonical fixture worlds", () => {
 
   assert.ok(worlds.length >= 10);
   assert.ok(worlds.some((world) => world.horizon === "long"));
-  assert.ok(worlds.some((world) => world.id === "medium-dense-social-mixer-v1"));
+  assert.ok(
+    worlds.some((world) => world.id === "medium-dense-social-mixer-v1"),
+  );
   assert.ok(worlds.some((world) => world.id === "long-network-rebalancing-v1"));
-  assert.ok(worlds.some((world) => world.id === "medium-multi-cluster-bridging-v1"));
-  assert.ok(worlds.some((world) => world.id === "long-recurring-circle-fragmentation-v1"));
-  assert.ok(worlds.some((world) => world.id === "long-bad-actor-containment-v1"));
-  assert.ok(worlds.some((world) => world.id === "medium-cross-cluster-holdout-v1"));
-  assert.ok(worlds.some((world) => world.id === "long-trust-boundary-holdout-v1"));
-  const recoveryWorld = worlds.find((world) => world.id === "short-no-match-recovery-v1");
+  assert.ok(
+    worlds.some((world) => world.id === "medium-multi-cluster-bridging-v1"),
+  );
+  assert.ok(
+    worlds.some(
+      (world) => world.id === "long-recurring-circle-fragmentation-v1",
+    ),
+  );
+  assert.ok(
+    worlds.some((world) => world.id === "long-bad-actor-containment-v1"),
+  );
+  assert.ok(
+    worlds.some((world) => world.id === "medium-cross-cluster-holdout-v1"),
+  );
+  assert.ok(
+    worlds.some((world) => world.id === "long-trust-boundary-holdout-v1"),
+  );
+  const recoveryWorld = worlds.find(
+    (world) => world.id === "short-no-match-recovery-v1",
+  );
   assert.equal(recoveryWorld?.actors.length, 3);
   assert.equal(recoveryWorld?.relationships.length, 3);
   assert.equal(recoveryWorld?.benchmark?.split, "train");
-  assert.equal(recoveryWorld?.benchmark?.requiredTransitions?.[0]?.type, "recover_then_match");
+  assert.equal(
+    recoveryWorld?.benchmark?.requiredTransitions?.[0]?.type,
+    "recover_then_match",
+  );
   assert.deepEqual(recoveryWorld?.oracle.preferredOutcomeEdges, ["cora-mina"]);
-  assert.deepEqual(recoveryWorld?.oracle.forbiddenOutcomeEdges, ["cora-drew", "drew-mina"]);
-  const holdoutWorld = worlds.find((world) => world.id === "medium-cross-cluster-holdout-v1");
+  assert.deepEqual(recoveryWorld?.oracle.forbiddenOutcomeEdges, [
+    "cora-drew",
+    "drew-mina",
+  ]);
+  const holdoutWorld = worlds.find(
+    (world) => world.id === "medium-cross-cluster-holdout-v1",
+  );
   assert.equal(holdoutWorld?.worldSet, "holdout");
   assert.equal(holdoutWorld?.family, "dense-social-graph");
   assert.equal(holdoutWorld?.benchmark?.split, "holdout");
@@ -241,7 +273,9 @@ test("selectSocialSimWorlds narrows by horizon and scenario", () => {
     worldFilter: [],
     scenarioFilter: ["social_recurring_circle_join_v1"],
   });
-  assert.ok(byScenario.some((world) => world.id === "medium-recurring-circle-v1"));
+  assert.ok(
+    byScenario.some((world) => world.id === "medium-recurring-circle-v1"),
+  );
 
   const holdoutOnly = selectSocialSimWorlds(worlds, {
     horizon: "all",
@@ -249,13 +283,10 @@ test("selectSocialSimWorlds narrows by horizon and scenario", () => {
     scenarioFilter: [],
     worldSet: "holdout",
   });
-  assert.deepEqual(
-    holdoutOnly.map((world) => world.id).sort(),
-    [
-      "long-trust-boundary-holdout-v1",
-      "medium-cross-cluster-holdout-v1",
-    ],
-  );
+  assert.deepEqual(holdoutOnly.map((world) => world.id).sort(), [
+    "long-trust-boundary-holdout-v1",
+    "medium-cross-cluster-holdout-v1",
+  ]);
 });
 
 test("provider and judge factories return deterministic stub adapters", async () => {
@@ -397,7 +428,9 @@ test("remote Ollama intents can be upgraded to closure-oriented simulator intent
       path.resolve("scripts/social-sim-worlds.json"),
       path.resolve("apps/api/test/fixtures/agentic-scenarios.json"),
     );
-    const world = worlds.find((entry) => entry.id === "medium-recurring-circle-v1");
+    const world = worlds.find(
+      (entry) => entry.id === "medium-recurring-circle-v1",
+    );
     const actor = world.actors.find((entry) => entry.id === "circle-iris");
     const state = {
       stage: "conversation",
@@ -428,7 +461,8 @@ test("remote Ollama actor output tolerates fenced JSON content", async () => {
     ok: true,
     json: async () => ({
       message: {
-        content: "```json\n{\"intent\":\"affirm_and_refine_collaboration\",\"targetActorId\":\"group-seed-soren\",\"message\":\"That plan sounds good; we can coordinate the next step together.\",\"tone\":\"warm\",\"confidence\":0.79,\"rationale\":\"Coordinating a shared plan helps group progress.\",\"memoryReferences\":[]}\n```",
+        content:
+          '```json\n{"intent":"affirm_and_refine_collaboration","targetActorId":"group-seed-soren","message":"That plan sounds good; we can coordinate the next step together.","tone":"warm","confidence":0.79,"rationale":"Coordinating a shared plan helps group progress.","memoryReferences":[]}\n```',
       },
     }),
   });
@@ -444,7 +478,9 @@ test("remote Ollama actor output tolerates fenced JSON content", async () => {
       path.resolve("scripts/social-sim-worlds.json"),
       path.resolve("apps/api/test/fixtures/agentic-scenarios.json"),
     );
-    const world = worlds.find((entry) => entry.id === "medium-pair-group-discovery-v1");
+    const world = worlds.find(
+      (entry) => entry.id === "medium-pair-group-discovery-v1",
+    );
     const actor = world.actors.find((entry) => entry.id === "pair-maya-lev");
     const state = {
       stage: "conversation",
@@ -500,7 +536,9 @@ test("remote event safety language does not collapse into moderation and preserv
       path.resolve("scripts/social-sim-worlds.json"),
       path.resolve("apps/api/test/fixtures/agentic-scenarios.json"),
     );
-    const world = worlds.find((entry) => entry.id === "long-memory-drift-event-v1");
+    const world = worlds.find(
+      (entry) => entry.id === "long-memory-drift-event-v1",
+    );
     const actor = world.actors.find((entry) => entry.id === "event-jules");
     const state = {
       stage: "memory_drift",
@@ -556,7 +594,9 @@ test("remote quiet alternative proposals do not collapse into recovery", async (
       path.resolve("scripts/social-sim-worlds.json"),
       path.resolve("apps/api/test/fixtures/agentic-scenarios.json"),
     );
-    const world = worlds.find((entry) => entry.id === "short-no-match-recovery-v1");
+    const world = worlds.find(
+      (entry) => entry.id === "short-no-match-recovery-v1",
+    );
     const actor = world.actors.find((entry) => entry.id === "cora");
     const state = {
       stage: "convergence",
@@ -610,8 +650,12 @@ test("remote outputs with invalid targets are reconciled to valid planner target
       path.resolve("scripts/social-sim-worlds.json"),
       path.resolve("apps/api/test/fixtures/agentic-scenarios.json"),
     );
-    const world = worlds.find((entry) => entry.id === "long-recurring-circle-fragmentation-v1");
-    const actor = world.actors.find((entry) => entry.id === "frag-organizer-ines");
+    const world = worlds.find(
+      (entry) => entry.id === "long-recurring-circle-fragmentation-v1",
+    );
+    const actor = world.actors.find(
+      (entry) => entry.id === "frag-organizer-ines",
+    );
     const state = {
       stage: "conversation",
       turnIndex: 8,
@@ -664,7 +708,9 @@ test("remote outputs do not positively advance forbidden targets", async () => {
       path.resolve("scripts/social-sim-worlds.json"),
       path.resolve("apps/api/test/fixtures/agentic-scenarios.json"),
     );
-    const world = worlds.find((entry) => entry.id === "long-network-rebalancing-v1");
+    const world = worlds.find(
+      (entry) => entry.id === "long-network-rebalancing-v1",
+    );
     const actor = world.actors.find((entry) => entry.id === "rebalance-noah");
     const state = {
       stage: "conversation",
@@ -726,7 +772,9 @@ test("remote weak follow-up intents are upgraded to reply in direct-match conver
       stage: "conversation",
       turnIndex: 2,
       lastActionByActor: new Map([["aya", { intent: "propose_event" }]]),
-      knownTargets: new Map([["aya-ben", { action: "propose_event", turnIndex: 0 }]]),
+      knownTargets: new Map([
+        ["aya-ben", { action: "propose_event", turnIndex: 0 }],
+      ]),
     };
 
     const turn = await brain.generateActorTurn({
@@ -776,8 +824,12 @@ test("remote memory-heavy organizer turns are upgraded to invite_group in networ
       path.resolve("scripts/social-sim-worlds.json"),
       path.resolve("apps/api/test/fixtures/agentic-scenarios.json"),
     );
-    const world = worlds.find((entry) => entry.id === "long-network-rebalancing-v1");
-    const actor = world.actors.find((entry) => entry.id === "rebalance-group-seed-omar");
+    const world = worlds.find(
+      (entry) => entry.id === "long-network-rebalancing-v1",
+    );
+    const actor = world.actors.find(
+      (entry) => entry.id === "rebalance-group-seed-omar",
+    );
     const state = {
       stage: "conversation",
       turnIndex: 6,
@@ -807,14 +859,19 @@ test("recovery worlds detach from weak-fit loops after initial recovery", async 
     path.resolve("scripts/social-sim-worlds.json"),
     path.resolve("apps/api/test/fixtures/agentic-scenarios.json"),
   );
-  const world = worlds.find((entry) => entry.id === "short-no-match-recovery-v1");
+  const world = worlds.find(
+    (entry) => entry.id === "short-no-match-recovery-v1",
+  );
   const actor = world.actors.find((entry) => entry.id === "drew");
   const state = {
     stage: "matching",
     turnIndex: 3,
     lastActionByActor: new Map([["drew", { intent: "recover_no_match" }]]),
     knownTargets: new Map([
-      ["cora-drew", { action: "recover_no_match", turnIndex: 2, confidence: 0.52 }],
+      [
+        "cora-drew",
+        { action: "recover_no_match", turnIndex: 2, confidence: 0.52 },
+      ],
     ]),
   };
 
@@ -842,14 +899,19 @@ test("recovery planners close toward the preferred fallback after detaching", as
     worlds.find((entry) => entry.id === "short-no-match-recovery-v1"),
   );
   const actor = world.actors.find((entry) => entry.id === "cora");
-  const fallbackRelationship = world.relationships.find((entry) => entry.id === "cora-mina");
+  const fallbackRelationship = world.relationships.find(
+    (entry) => entry.id === "cora-mina",
+  );
   fallbackRelationship.strength = 0.62;
   const state = {
     stage: "conversation",
     turnIndex: 3,
     lastActionByActor: new Map([["cora", { intent: "recover_no_match" }]]),
     knownTargets: new Map([
-      ["cora-drew", { action: "recover_no_match", turnIndex: 2, confidence: 0.52 }],
+      [
+        "cora-drew",
+        { action: "recover_no_match", turnIndex: 2, confidence: 0.52 },
+      ],
     ]),
   };
 
@@ -873,14 +935,19 @@ test("circle organizers prioritize unfinished returning members", async () => {
     path.resolve("scripts/social-sim-worlds.json"),
     path.resolve("apps/api/test/fixtures/agentic-scenarios.json"),
   );
-  const world = worlds.find((entry) => entry.id === "medium-recurring-circle-v1");
+  const world = worlds.find(
+    (entry) => entry.id === "medium-recurring-circle-v1",
+  );
   const actor = world.actors.find((entry) => entry.id === "circle-organizer");
   const state = {
     stage: "matching",
     turnIndex: 1,
     lastActionByActor: new Map(),
     knownTargets: new Map([
-      ["circle-return-1", { action: "introduce", turnIndex: 0, confidence: 0.76 }],
+      [
+        "circle-return-1",
+        { action: "introduce", turnIndex: 0, confidence: 0.76 },
+      ],
     ]),
   };
 
@@ -904,10 +971,14 @@ test("circle participants force required recurring-edge closure during conversat
     path.resolve("apps/api/test/fixtures/agentic-scenarios.json"),
   );
   const world = structuredClone(
-    worlds.find((entry) => entry.id === "long-recurring-circle-fragmentation-v1"),
+    worlds.find(
+      (entry) => entry.id === "long-recurring-circle-fragmentation-v1",
+    ),
   );
   const actor = world.actors.find((entry) => entry.id === "frag-regular-lio");
-  const targetRelationship = world.relationships.find((entry) => entry.id === "frag-selim-lio");
+  const targetRelationship = world.relationships.find(
+    (entry) => entry.id === "frag-selim-lio",
+  );
   targetRelationship.strength = 0.65;
   const state = {
     stage: "conversation",
@@ -938,11 +1009,19 @@ test("circle planners can force required group closure even when the edge is not
     path.resolve("apps/api/test/fixtures/agentic-scenarios.json"),
   );
   const world = structuredClone(
-    worlds.find((entry) => entry.id === "long-recurring-circle-fragmentation-v1"),
+    worlds.find(
+      (entry) => entry.id === "long-recurring-circle-fragmentation-v1",
+    ),
   );
-  const actor = world.actors.find((entry) => entry.id === "frag-organizer-ines");
-  const groupClosureRelationship = world.relationships.find((entry) => entry.id === "frag-ines-mara");
-  const preferredRelationship = world.relationships.find((entry) => entry.id === "frag-ines-lio");
+  const actor = world.actors.find(
+    (entry) => entry.id === "frag-organizer-ines",
+  );
+  const groupClosureRelationship = world.relationships.find(
+    (entry) => entry.id === "frag-ines-mara",
+  );
+  const preferredRelationship = world.relationships.find(
+    (entry) => entry.id === "frag-ines-lio",
+  );
   groupClosureRelationship.strength = 0.63;
   preferredRelationship.status = "matched";
   const state = {
@@ -973,15 +1052,27 @@ test("network rebalancing organizers can reroute to a healthier target after rec
     path.resolve("scripts/social-sim-worlds.json"),
     path.resolve("apps/api/test/fixtures/agentic-scenarios.json"),
   );
-  const world = worlds.find((entry) => entry.id === "long-network-rebalancing-v1");
-  const actor = world.actors.find((entry) => entry.id === "rebalance-host-mila");
+  const world = worlds.find(
+    (entry) => entry.id === "long-network-rebalancing-v1",
+  );
+  const actor = world.actors.find(
+    (entry) => entry.id === "rebalance-host-mila",
+  );
   const state = {
     stage: "conversation",
     turnIndex: 4,
-    lastActionByActor: new Map([["rebalance-host-mila", { intent: "recover_no_match" }]]),
+    lastActionByActor: new Map([
+      ["rebalance-host-mila", { intent: "recover_no_match" }],
+    ]),
     knownTargets: new Map([
-      ["rebalance-host-noah", { action: "recover_no_match", turnIndex: 3, confidence: 0.52 }],
-      ["rebalance-host-ivy", { action: "reference_memory", turnIndex: 2, confidence: 0.76 }],
+      [
+        "rebalance-host-noah",
+        { action: "recover_no_match", turnIndex: 3, confidence: 0.52 },
+      ],
+      [
+        "rebalance-host-ivy",
+        { action: "reference_memory", turnIndex: 2, confidence: 0.76 },
+      ],
     ]),
   };
 
@@ -1011,14 +1102,19 @@ test("dense graph planners prioritize required bridge closure over generic chatt
     path.resolve("scripts/social-sim-worlds.json"),
     path.resolve("apps/api/test/fixtures/agentic-scenarios.json"),
   );
-  const world = worlds.find((entry) => entry.id === "medium-cross-cluster-holdout-v1");
+  const world = worlds.find(
+    (entry) => entry.id === "medium-cross-cluster-holdout-v1",
+  );
   const actor = world.actors.find((entry) => entry.id === "holdout-group-ara");
   const state = {
     stage: "conversation",
     turnIndex: 4,
     lastActionByActor: new Map(),
     knownTargets: new Map([
-      ["holdout-group-ara-len", { action: "reply", turnIndex: 3, confidence: 0.74 }],
+      [
+        "holdout-group-ara-len",
+        { action: "reply", turnIndex: 3, confidence: 0.74 },
+      ],
     ]),
   };
 
@@ -1045,8 +1141,12 @@ test("dense graph planners can force required bridge closure even when the edge 
     worlds.find((entry) => entry.id === "medium-multi-cluster-bridging-v1"),
   );
   const actor = world.actors.find((entry) => entry.id === "bridge-circle-yara");
-  const bridgeRelationship = world.relationships.find((entry) => entry.id === "bridge-pair-yara");
-  const preferredRelationship = world.relationships.find((entry) => entry.id === "bridge-olivia-yara");
+  const bridgeRelationship = world.relationships.find(
+    (entry) => entry.id === "bridge-pair-yara",
+  );
+  const preferredRelationship = world.relationships.find(
+    (entry) => entry.id === "bridge-olivia-yara",
+  );
   bridgeRelationship.strength = 0.61;
   preferredRelationship.status = "matched";
   const state = {
@@ -1081,14 +1181,19 @@ test("event-and-memory worlds prioritize preferred follow-up closure", async () 
     worlds.find((entry) => entry.id === "long-memory-drift-event-v1"),
   );
   const actor = world.actors.find((entry) => entry.id === "event-zoe");
-  const targetRelationship = world.relationships.find((entry) => entry.id === "event-return-1");
+  const targetRelationship = world.relationships.find(
+    (entry) => entry.id === "event-return-1",
+  );
   targetRelationship.strength = 0.58;
   const state = {
     stage: "memory_drift",
     turnIndex: 9,
     lastActionByActor: new Map(),
     knownTargets: new Map([
-      ["event-return-1", { action: "reference_memory", turnIndex: 8, confidence: 0.74 }],
+      [
+        "event-return-1",
+        { action: "reference_memory", turnIndex: 8, confidence: 0.74 },
+      ],
     ]),
   };
 
@@ -1115,7 +1220,9 @@ test("event-and-memory worlds force one memory signal before event conversion", 
     worlds.find((entry) => entry.id === "long-memory-drift-event-v1"),
   );
   const actor = world.actors.find((entry) => entry.id === "event-jules");
-  const relationship = world.relationships.find((entry) => entry.id === "event-return-2");
+  const relationship = world.relationships.find(
+    (entry) => entry.id === "event-return-2",
+  );
   relationship.strength = 0.82;
   const state = {
     stage: "conversation",
@@ -1143,7 +1250,9 @@ test("network rebalancing prefers required healthy closure edges when available"
     path.resolve("scripts/social-sim-worlds.json"),
     path.resolve("apps/api/test/fixtures/agentic-scenarios.json"),
   );
-  const world = worlds.find((entry) => entry.id === "long-bad-actor-containment-v1");
+  const world = worlds.find(
+    (entry) => entry.id === "long-bad-actor-containment-v1",
+  );
   const actor = world.actors.find((entry) => entry.id === "contain-group-suri");
   const state = {
     stage: "conversation",
@@ -1202,31 +1311,55 @@ test("runSocialSimulation writes artifacts in dry-run mode", async () => {
 
     assert.equal(result.summary.verdict, "watch");
     assert.ok(Array.isArray(result.summary.measurementWarnings));
-    assert.ok(result.summary.measurementWarnings.includes("turn_budget_override_truncated_1_worlds"));
+    assert.ok(
+      result.summary.measurementWarnings.includes(
+        "turn_budget_override_truncated_1_worlds",
+      ),
+    );
     assert.ok(result.summary.familyScores["individual-matchmaking"]);
     assert.ok(result.artifact.worlds.length >= 1);
     assert.ok(result.artifact.worlds[0].summary.scoreBreakdown);
-    assert.equal(result.artifact.worlds[0].summary.measurement.turnBudgetGap, 2);
-    assert.ok(
-      Number.isFinite(result.artifact.worlds[0].summary.strongRelationshipCoverage),
+    assert.equal(
+      result.artifact.worlds[0].summary.measurement.turnBudgetGap,
+      2,
     );
-    assert.ok(Number.isFinite(result.artifact.worlds[0].summary.meanStrengthLift));
-    assert.ok(Number.isFinite(result.artifact.worlds[0].summary.oracleScore));
-    assert.ok(Number.isFinite(result.artifact.worlds[0].summary.oracleProgressScore));
-    assert.ok(Number.isFinite(result.artifact.worlds[0].summary.closurePrecision));
-    assert.ok(Number.isFinite(result.artifact.worlds[0].summary.preferredRecall));
-    assert.ok(Number.isFinite(result.artifact.worlds[0].summary.forbiddenAvoidance));
     assert.ok(
       Number.isFinite(
-        result.summary.familyScores["individual-matchmaking"].averageStrongRelationshipCoverage,
+        result.artifact.worlds[0].summary.strongRelationshipCoverage,
       ),
     );
     assert.ok(
-      Number.isFinite(result.summary.familyScores["individual-matchmaking"].averageOracleScore),
+      Number.isFinite(result.artifact.worlds[0].summary.meanStrengthLift),
+    );
+    assert.ok(Number.isFinite(result.artifact.worlds[0].summary.oracleScore));
+    assert.ok(
+      Number.isFinite(result.artifact.worlds[0].summary.oracleProgressScore),
+    );
+    assert.ok(
+      Number.isFinite(result.artifact.worlds[0].summary.closurePrecision),
+    );
+    assert.ok(
+      Number.isFinite(result.artifact.worlds[0].summary.preferredRecall),
+    );
+    assert.ok(
+      Number.isFinite(result.artifact.worlds[0].summary.forbiddenAvoidance),
     );
     assert.ok(
       Number.isFinite(
-        result.summary.familyScores["individual-matchmaking"].averageOracleProgressScore,
+        result.summary.familyScores["individual-matchmaking"]
+          .averageStrongRelationshipCoverage,
+      ),
+    );
+    assert.ok(
+      Number.isFinite(
+        result.summary.familyScores["individual-matchmaking"]
+          .averageOracleScore,
+      ),
+    );
+    assert.ok(
+      Number.isFinite(
+        result.summary.familyScores["individual-matchmaking"]
+          .averageOracleProgressScore,
       ),
     );
     const runJson = JSON.parse(
@@ -1252,7 +1385,9 @@ test("individual matchmaking clean direct matches receive direct-closure scoring
     cleanupMode: "none",
     dryRun: true,
     nightly: false,
-    artifactRoot: mkdtempSync(path.join(os.tmpdir(), "social-sim-direct-closure-")),
+    artifactRoot: mkdtempSync(
+      path.join(os.tmpdir(), "social-sim-direct-closure-"),
+    ),
     fixturePath: path.resolve("scripts/social-sim-worlds.json"),
     scenarioFixturePath: path.resolve(
       "apps/api/test/fixtures/agentic-scenarios.json",
@@ -1272,7 +1407,9 @@ test("individual matchmaking clean direct matches receive direct-closure scoring
     backendRetryBaseDelayMs: 0,
   });
 
-  const world = result.artifact.worlds.find((entry) => entry.worldId === "short-direct-match-v1");
+  const world = result.artifact.worlds.find(
+    (entry) => entry.worldId === "short-direct-match-v1",
+  );
   assert.ok(world.summary.convergenceScore >= 0.62);
   assert.equal(world.summary.scoreBreakdown.directMatchClosureScore, 1);
 });
@@ -1396,7 +1533,9 @@ test("backend adapter retries abuse throttling before falling back offline", asy
 });
 
 test("backend bootstrap redacts secret env values in artifacts", async () => {
-  const artifactRoot = mkdtempSync(path.join(os.tmpdir(), "social-sim-redact-"));
+  const artifactRoot = mkdtempSync(
+    path.join(os.tmpdir(), "social-sim-redact-"),
+  );
   const originalFetch = globalThis.fetch;
   const remoteRunBodies = [];
   globalThis.fetch = async (input, init) => {
@@ -1486,9 +1625,18 @@ test("backend bootstrap redacts secret env values in artifacts", async () => {
     assert.equal(summary.bootstrap.env.ONBOARDING_PROBE_TOKEN, "[redacted]");
     assert.equal(summary.bootstrap.env.SMOKE_BASE_URL, "http://localhost:3000");
     assert.equal(runArtifact.bootstrap.env.SMOKE_ACCESS_TOKEN, "[redacted]");
-    assert.equal(runArtifact.bootstrap.env.SOCIAL_SIM_ADMIN_API_KEY, "[redacted]");
-    assert.equal(runArtifact.bootstrap.env.ONBOARDING_PROBE_TOKEN, "[redacted]");
-    assert.equal(runArtifact.bootstrap.env.SMOKE_BASE_URL, "http://localhost:3000");
+    assert.equal(
+      runArtifact.bootstrap.env.SOCIAL_SIM_ADMIN_API_KEY,
+      "[redacted]",
+    );
+    assert.equal(
+      runArtifact.bootstrap.env.ONBOARDING_PROBE_TOKEN,
+      "[redacted]",
+    );
+    assert.equal(
+      runArtifact.bootstrap.env.SMOKE_BASE_URL,
+      "http://localhost:3000",
+    );
     assert.equal(remoteRunBodies.length, 1);
     assert.equal("provider" in remoteRunBodies[0], false);
     assert.equal("judgeProvider" in remoteRunBodies[0], false);
@@ -1499,7 +1647,9 @@ test("backend bootstrap redacts secret env values in artifacts", async () => {
 });
 
 test("backend bootstrap persists remote run bootstrap failure details", async () => {
-  const artifactRoot = mkdtempSync(path.join(os.tmpdir(), "social-sim-bootstrap-failure-"));
+  const artifactRoot = mkdtempSync(
+    path.join(os.tmpdir(), "social-sim-bootstrap-failure-"),
+  );
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input) => {
     const url = String(input);
@@ -1597,7 +1747,9 @@ test("backend bootstrap persists remote run bootstrap failure details", async ()
 });
 
 test("backend bootstrap omits null turnBudget in remote run payload", async () => {
-  const artifactRoot = mkdtempSync(path.join(os.tmpdir(), "social-sim-bootstrap-null-budget-"));
+  const artifactRoot = mkdtempSync(
+    path.join(os.tmpdir(), "social-sim-bootstrap-null-budget-"),
+  );
   const originalFetch = globalThis.fetch;
   const remoteRunBodies = [];
   globalThis.fetch = async (input, init) => {
@@ -1683,7 +1835,9 @@ test("backend bootstrap omits null turnBudget in remote run payload", async () =
 });
 
 test("run summary prefers effective backend mode over bootstrap playground mode", async () => {
-  const artifactRoot = mkdtempSync(path.join(os.tmpdir(), "social-sim-effective-backend-"));
+  const artifactRoot = mkdtempSync(
+    path.join(os.tmpdir(), "social-sim-effective-backend-"),
+  );
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input) => {
     const url = String(input);
@@ -1886,8 +2040,12 @@ test("search runner reports holdout metrics for holdout profile", () => {
   assert.ok(summary.baseline.holdoutMetrics);
   assert.ok(summary.topCandidates[0].holdoutMetrics);
   assert.ok(Number.isFinite(summary.topCandidates[0].selectionScore));
-  assert.ok(Number.isFinite(summary.topCandidates[0].holdoutMetrics.oracleScoreMean));
-  assert.ok(Number.isFinite(summary.topCandidates[0].holdoutMetrics.oracleProgressMean));
+  assert.ok(
+    Number.isFinite(summary.topCandidates[0].holdoutMetrics.oracleScoreMean),
+  );
+  assert.ok(
+    Number.isFinite(summary.topCandidates[0].holdoutMetrics.oracleProgressMean),
+  );
 });
 
 test("search runner reports holdout metrics for guarded profiles", () => {

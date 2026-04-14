@@ -126,7 +126,15 @@ const VALID_CLEANUP_MODES = new Set(["archive", "delete", "none"]);
 const VALID_WORLD_SETS = new Set(["core", "holdout", "all"]);
 const SOCIAL_SIM_ACTOR_OUTPUT_SCHEMA = {
   type: "object",
-  required: ["intent", "targetActorId", "message", "tone", "confidence", "rationale", "memoryReferences"],
+  required: [
+    "intent",
+    "targetActorId",
+    "message",
+    "tone",
+    "confidence",
+    "rationale",
+    "memoryReferences",
+  ],
   properties: {
     intent: { type: "string" },
     targetActorId: { anyOf: [{ type: "string" }, { type: "null" }] },
@@ -303,7 +311,10 @@ function loadSocialSimTuning(flags, env) {
   );
   let overrides = null;
   if (tuningFile) {
-    overrides = safeJsonParse(readFileSync(path.resolve(process.cwd(), tuningFile), "utf8"), null);
+    overrides = safeJsonParse(
+      readFileSync(path.resolve(process.cwd(), tuningFile), "utf8"),
+      null,
+    );
   } else if (tuningJson) {
     overrides = safeJsonParse(tuningJson, null);
   }
@@ -341,7 +352,10 @@ function sanitizeBootstrapForArtifact(bootstrap) {
   return next;
 }
 
-export function parseSocialSimArgs(argv = process.argv.slice(2), env = process.env) {
+export function parseSocialSimArgs(
+  argv = process.argv.slice(2),
+  env = process.env,
+) {
   const args = Array.isArray(argv) ? argv : [];
   const flags = new Map();
 
@@ -376,10 +390,13 @@ export function parseSocialSimArgs(argv = process.argv.slice(2), env = process.e
     flags.get("benchmark-mode") ?? env.SOCIAL_SIM_BENCHMARK_MODE,
     false,
   );
-  const hasExplicitSeed = flags.has("seed") || typeof env.SOCIAL_SIM_SEED === "string";
+  const hasExplicitSeed =
+    flags.has("seed") || typeof env.SOCIAL_SIM_SEED === "string";
   const seed = toNumber(
     flags.get("seed") ?? env.SOCIAL_SIM_SEED,
-    benchmarkMode ? DEFAULT_SOCIAL_SIM_BENCHMARK_SEED : Date.now() % 2_147_483_647,
+    benchmarkMode
+      ? DEFAULT_SOCIAL_SIM_BENCHMARK_SEED
+      : Date.now() % 2_147_483_647,
   );
   const namespace = normalizeString(
     flags.get("namespace") ?? env.SOCIAL_SIM_NAMESPACE,
@@ -413,8 +430,7 @@ export function parseSocialSimArgs(argv = process.argv.slice(2), env = process.e
   const scenarioFixturePath = path.resolve(
     process.cwd(),
     normalizeString(
-      flags.get("scenario-fixture") ??
-        env.SOCIAL_SIM_SCENARIO_FIXTURE_PATH,
+      flags.get("scenario-fixture") ?? env.SOCIAL_SIM_SCENARIO_FIXTURE_PATH,
       DEFAULT_SOCIAL_SIM_SCENARIO_FIXTURE_PATH,
     ),
   );
@@ -455,8 +471,7 @@ export function parseSocialSimArgs(argv = process.argv.slice(2), env = process.e
     "",
   );
   const useRemoteProvider = boolFromEnv(
-    flags.get("use-remote-provider") ??
-      env.SOCIAL_SIM_USE_REMOTE_PROVIDER,
+    flags.get("use-remote-provider") ?? env.SOCIAL_SIM_USE_REMOTE_PROVIDER,
     false,
   );
   const useRemoteJudge = boolFromEnv(
@@ -464,7 +479,8 @@ export function parseSocialSimArgs(argv = process.argv.slice(2), env = process.e
     useRemoteProvider,
   );
   const failOnRemoteFallback = boolFromEnv(
-    flags.get("fail-on-remote-fallback") ?? env.SOCIAL_SIM_FAIL_ON_REMOTE_FALLBACK,
+    flags.get("fail-on-remote-fallback") ??
+      env.SOCIAL_SIM_FAIL_ON_REMOTE_FALLBACK,
     benchmarkMode,
   );
   const backendTurnDelayMs = clamp(
@@ -515,8 +531,14 @@ export function parseSocialSimArgs(argv = process.argv.slice(2), env = process.e
       `Invalid world set "${worldSet}". Expected core, holdout, or all.`,
     );
   }
-  if (benchmarkMode && !hasExplicitSeed && seed !== DEFAULT_SOCIAL_SIM_BENCHMARK_SEED) {
-    throw new Error("Benchmark mode must use the default deterministic benchmark seed.");
+  if (
+    benchmarkMode &&
+    !hasExplicitSeed &&
+    seed !== DEFAULT_SOCIAL_SIM_BENCHMARK_SEED
+  ) {
+    throw new Error(
+      "Benchmark mode must use the default deterministic benchmark seed.",
+    );
   }
   if (benchmarkMode && provider !== "stub" && !useRemoteProvider) {
     throw new Error(
@@ -626,9 +648,7 @@ function normalizeWorld(world, index, scenarioCorpus) {
   return {
     id,
     name,
-    horizon: ["short", "medium", "long"].includes(horizon)
-      ? horizon
-      : "short",
+    horizon: ["short", "medium", "long"].includes(horizon) ? horizon : "short",
     family,
     turnBudget,
     seedScenarioIds,
@@ -668,9 +688,10 @@ function normalizeWorldBenchmark(benchmark, relationships) {
       : [],
   );
   const source = benchmark && typeof benchmark === "object" ? benchmark : {};
-  const split = normalizeString(source.split, "train").toLowerCase() === "holdout"
-    ? "holdout"
-    : "train";
+  const split =
+    normalizeString(source.split, "train").toLowerCase() === "holdout"
+      ? "holdout"
+      : "train";
   const requiredTransitions = Array.isArray(source.requiredTransitions)
     ? source.requiredTransitions
         .map((transition, index) => {
@@ -703,12 +724,15 @@ function normalizeWorldOracle(oracle, relationships) {
   );
   const normalizeEdgeIds = (value) =>
     Array.isArray(value)
-      ? value
-          .filter((entry) => typeof entry === "string" && relationshipIds.has(entry))
+      ? value.filter(
+          (entry) => typeof entry === "string" && relationshipIds.has(entry),
+        )
       : [];
   const normalizeActorIds = (value) =>
     Array.isArray(value)
-      ? value.filter((entry) => typeof entry === "string" && entry.trim().length > 0)
+      ? value.filter(
+          (entry) => typeof entry === "string" && entry.trim().length > 0,
+        )
       : [];
   const source = oracle && typeof oracle === "object" ? oracle : {};
   return {
@@ -727,34 +751,40 @@ function normalizeActor(actor, index, worldId) {
   const persona = normalizeString(actor.persona, "curious, warm, social");
   return {
     id,
-    kind: ["individual", "pair", "group_seed", "circle_seed", "event_seed"].includes(kind)
+    kind: [
+      "individual",
+      "pair",
+      "group_seed",
+      "circle_seed",
+      "event_seed",
+    ].includes(kind)
       ? kind
       : "individual",
     persona,
     goals: Array.isArray(actor.goals)
       ? actor.goals.filter((goal) => typeof goal === "string")
       : [],
-    preferences: actor.preferences && typeof actor.preferences === "object"
-      ? actor.preferences
-      : {},
+    preferences:
+      actor.preferences && typeof actor.preferences === "object"
+        ? actor.preferences
+        : {},
     hardConstraints: Array.isArray(actor.hardConstraints)
-      ? actor.hardConstraints.filter((constraint) => typeof constraint === "string")
+      ? actor.hardConstraints.filter(
+          (constraint) => typeof constraint === "string",
+        )
       : [],
     socialStyle: normalizeString(actor.socialStyle, "warm"),
     patience: clamp(toNumber(actor.patience, 0.6), 0, 1),
     initiative: clamp(toNumber(actor.initiative, 0.6), 0, 1),
-    mismatchTolerance: clamp(
-      toNumber(actor.mismatchTolerance, 0.5),
-      0,
-      1,
-    ),
+    mismatchTolerance: clamp(toNumber(actor.mismatchTolerance, 0.5), 0, 1),
     memoryDriftProfile: normalizeString(actor.memoryDriftProfile, "stable"),
     hiddenGoals: Array.isArray(actor.hiddenGoals)
       ? actor.hiddenGoals.filter((goal) => typeof goal === "string")
       : [],
-    backendHints: actor.backendHints && typeof actor.backendHints === "object"
-      ? actor.backendHints
-      : {},
+    backendHints:
+      actor.backendHints && typeof actor.backendHints === "object"
+        ? actor.backendHints
+        : {},
   };
 }
 
@@ -797,7 +827,9 @@ export function selectSocialSimWorlds(worlds, config) {
     config.worldFilter.length > 0 || config.scenarioFilter.length > 0
       ? worlds.slice()
       : worlds.filter((world) =>
-          selectedWorldSet === "all" ? true : world.worldSet === selectedWorldSet,
+          selectedWorldSet === "all"
+            ? true
+            : world.worldSet === selectedWorldSet,
         );
   const selectedByHorizon = selectHorizonWorlds(baseWorlds, config.horizon);
   const selectedByWorld = config.worldFilter.length
@@ -1044,7 +1076,13 @@ async function runWorldSimulation({
     turns: judgeTurns,
     config,
   });
-  const worldSummary = summarizeWorld(world, transcript, metrics, finalJudge, config);
+  const worldSummary = summarizeWorld(
+    world,
+    transcript,
+    metrics,
+    finalJudge,
+    config,
+  );
   const worldArtifact = {
     worldRunId,
     worldId: world.id,
@@ -1114,7 +1152,8 @@ function applyTurnOutcome({
 
   if (targetRelationship && isPositive) {
     const nextStrength = clamp(
-      targetRelationship.strength + relationshipDeltaForAction(world, action.intent, getTuning(config)),
+      targetRelationship.strength +
+        relationshipDeltaForAction(world, action.intent, getTuning(config)),
       0,
       1,
     );
@@ -1169,7 +1208,9 @@ function applyTurnOutcome({
     },
     backend: backendResult,
     outcome: {
-      matched: Boolean(targetRelationship && targetRelationship.status === "matched"),
+      matched: Boolean(
+        targetRelationship && targetRelationship.status === "matched",
+      ),
       relationshipStrength: targetRelationship?.strength ?? null,
       stalled,
       positive: isPositive,
@@ -1178,8 +1219,20 @@ function applyTurnOutcome({
   };
 }
 
-function findBestRelationship(world, actor, explicitTargetId, state, tuning = DEFAULT_SOCIAL_SIM_TUNING) {
-  return findBestRelationshipWithState(world, actor, explicitTargetId, state ?? null, tuning);
+function findBestRelationship(
+  world,
+  actor,
+  explicitTargetId,
+  state,
+  tuning = DEFAULT_SOCIAL_SIM_TUNING,
+) {
+  return findBestRelationshipWithState(
+    world,
+    actor,
+    explicitTargetId,
+    state ?? null,
+    tuning,
+  );
 }
 
 function findBestRelationshipWithState(
@@ -1205,7 +1258,13 @@ function findBestRelationshipWithState(
   const ranked = candidates
     .map((relationship) => ({
       relationship,
-      score: relationshipPriorityScore(world, actor, relationship, state, tuning),
+      score: relationshipPriorityScore(
+        world,
+        actor,
+        relationship,
+        state,
+        tuning,
+      ),
     }))
     .sort((left, right) => right.score - left.score);
 
@@ -1220,7 +1279,12 @@ function findBestRelationshipWithState(
   return best.relationship;
 }
 
-function findWeakRelationshipWithState(world, actor, state, tuning = DEFAULT_SOCIAL_SIM_TUNING) {
+function findWeakRelationshipWithState(
+  world,
+  actor,
+  state,
+  tuning = DEFAULT_SOCIAL_SIM_TUNING,
+) {
   const candidates = world.relationships.filter(
     (relationship) =>
       relationship.members.includes(actor.id) &&
@@ -1229,12 +1293,20 @@ function findWeakRelationshipWithState(world, actor, state, tuning = DEFAULT_SOC
   );
   if (candidates.length === 0) return null;
 
-  return candidates
-    .map((relationship) => ({
-      relationship,
-      score: relationshipPriorityScore(world, actor, relationship, state, tuning),
-    }))
-    .sort((left, right) => left.score - right.score)[0]?.relationship ?? null;
+  return (
+    candidates
+      .map((relationship) => ({
+        relationship,
+        score: relationshipPriorityScore(
+          world,
+          actor,
+          relationship,
+          state,
+          tuning,
+        ),
+      }))
+      .sort((left, right) => left.score - right.score)[0]?.relationship ?? null
+  );
 }
 
 function findBestAlternativeRelationshipWithState(
@@ -1255,12 +1327,20 @@ function findBestAlternativeRelationshipWithState(
   });
   if (candidates.length === 0) return null;
 
-  return candidates
-    .map((relationship) => ({
-      relationship,
-      score: relationshipPriorityScore(world, actor, relationship, state, tuning),
-    }))
-    .sort((left, right) => right.score - left.score)[0]?.relationship ?? null;
+  return (
+    candidates
+      .map((relationship) => ({
+        relationship,
+        score: relationshipPriorityScore(
+          world,
+          actor,
+          relationship,
+          state,
+          tuning,
+        ),
+      }))
+      .sort((left, right) => right.score - left.score)[0]?.relationship ?? null
+  );
 }
 
 function resolvePostRecoveryTargetActorId({
@@ -1276,9 +1356,15 @@ function resolvePostRecoveryTargetActorId({
   if (resolvedStrategy === "drop") return null;
   if (resolvedStrategy === "current") return currentTargetActorId ?? null;
 
-  const alternative = findBestAlternativeRelationshipWithState(world, actor, state, tuning, {
-    excludedIds: excludedRelationshipIds,
-  });
+  const alternative = findBestAlternativeRelationshipWithState(
+    world,
+    actor,
+    state,
+    tuning,
+    {
+      excludedIds: excludedRelationshipIds,
+    },
+  );
   return alternative?.members.find((member) => member !== actor.id) ?? null;
 }
 
@@ -1294,13 +1380,17 @@ function findBestOracleRelationshipForActor(
   const onlyUnmatched = Boolean(options.onlyUnmatched);
   const requireGroupClosure = Boolean(options.requireGroupClosure);
   const allowAnyGroupClosure = Boolean(options.allowAnyGroupClosure);
-  const minStrength = Number.isFinite(options.minStrength) ? options.minStrength : null;
+  const minStrength = Number.isFinite(options.minStrength)
+    ? options.minStrength
+    : null;
   const candidates = world.relationships.filter((relationship) => {
     if (!relationship.members.includes(actor.id)) return false;
     if (excludedIds.has(relationship.id)) return false;
     if (onlyUnmatched && relationship.status === "matched") return false;
-    if (requireGroupClosure && !isRequiredGroupClosure(world, relationship)) return false;
-    if (minStrength !== null && (relationship.strength ?? 0) < minStrength) return false;
+    if (requireGroupClosure && !isRequiredGroupClosure(world, relationship))
+      return false;
+    if (minStrength !== null && (relationship.strength ?? 0) < minStrength)
+      return false;
     if (allowAnyGroupClosure && isRequiredGroupClosure(world, relationship)) {
       return true;
     }
@@ -1311,12 +1401,20 @@ function findBestOracleRelationshipForActor(
 
   if (candidates.length === 0) return null;
 
-  return candidates
-    .map((relationship) => ({
-      relationship,
-      score: relationshipPriorityScore(world, actor, relationship, state, tuning),
-    }))
-    .sort((left, right) => right.score - left.score)[0]?.relationship ?? null;
+  return (
+    candidates
+      .map((relationship) => ({
+        relationship,
+        score: relationshipPriorityScore(
+          world,
+          actor,
+          relationship,
+          state,
+          tuning,
+        ),
+      }))
+      .sort((left, right) => right.score - left.score)[0]?.relationship ?? null
+  );
 }
 
 function averageScore(values) {
@@ -1329,7 +1427,8 @@ function computeRecoveryResolutionScore(world, oracleMetrics, metrics) {
   if (world.family !== "recovery") return 0;
   if (oracleMetrics.preferredMatchedCount > 0) return 1;
   if (oracleMetrics.acceptableMatchedCount > 0) return 0.78;
-  if (metrics.recoverySignals > 0 && oracleMetrics.forbiddenMatchedCount === 0) return 0.34;
+  if (metrics.recoverySignals > 0 && oracleMetrics.forbiddenMatchedCount === 0)
+    return 0.34;
   return 0;
 }
 
@@ -1351,16 +1450,26 @@ function computeDenseBridgeScore(world, oracleMetrics) {
   ]);
 }
 
-export function computeDirectMatchClosureScore(world, oracleMetrics, diagnostics, metrics) {
+export function computeDirectMatchClosureScore(
+  world,
+  oracleMetrics,
+  diagnostics,
+  metrics,
+) {
   if (world.family !== "individual-matchmaking") return 0;
   if ((diagnostics.issueCount ?? 0) > 0) return 0;
   if ((oracleMetrics.preferredMatchedCount ?? 0) <= 0) return 0;
   if ((metrics.stalledTurns ?? 0) > 0) return 0;
-  if ((metrics.introductions ?? 0) <= 0 || (metrics.replies ?? 0) <= 0) return 0;
+  if ((metrics.introductions ?? 0) <= 0 || (metrics.replies ?? 0) <= 0)
+    return 0;
   return 1;
 }
 
-export function computeNetworkCoordinationScore(world, oracleMetrics, diagnostics) {
+export function computeNetworkCoordinationScore(
+  world,
+  oracleMetrics,
+  diagnostics,
+) {
   if (world.family !== "network-rebalancing") return 0;
   if ((diagnostics.issueCount ?? 0) > 0) return 0;
 
@@ -1395,9 +1504,12 @@ export function computeNetworkCoordinationScore(world, oracleMetrics, diagnostic
 function classifyOracleRelationship(world, relationship) {
   if (!relationship) return "neutral";
   const oracle = world.oracle ?? {};
-  if ((oracle.forbiddenOutcomeEdges ?? []).includes(relationship.id)) return "forbidden";
-  if ((oracle.preferredOutcomeEdges ?? []).includes(relationship.id)) return "preferred";
-  if ((oracle.acceptableFallbackEdges ?? []).includes(relationship.id)) return "acceptable";
+  if ((oracle.forbiddenOutcomeEdges ?? []).includes(relationship.id))
+    return "forbidden";
+  if ((oracle.preferredOutcomeEdges ?? []).includes(relationship.id))
+    return "preferred";
+  if ((oracle.acceptableFallbackEdges ?? []).includes(relationship.id))
+    return "acceptable";
   return "neutral";
 }
 
@@ -1406,7 +1518,9 @@ function isRequiredGroupClosure(world, relationship) {
 }
 
 function worldNeedsRecovery(world) {
-  return world.relationships.some((relationship) => relationship.strength < 0.35);
+  return world.relationships.some(
+    (relationship) => relationship.strength < 0.35,
+  );
 }
 
 function worldNeedsMemory(world) {
@@ -1427,7 +1541,11 @@ function worldNeedsGroupProgress(world) {
   );
 }
 
-function relationshipDeltaForAction(world, intent, tuning = DEFAULT_SOCIAL_SIM_TUNING) {
+function relationshipDeltaForAction(
+  world,
+  intent,
+  tuning = DEFAULT_SOCIAL_SIM_TUNING,
+) {
   if (intent === "ask_preference") return tuning.deltas.askPreference;
   if (intent === "reply") return tuning.deltas.reply;
   if (intent === "reference_memory") {
@@ -1459,13 +1577,14 @@ function relationshipPriorityScore(
   const lastAction = normalizeString(meta?.action, "");
   const lastTurnIndex = Number.isFinite(meta?.turnIndex) ? meta.turnIndex : -1;
   const turnIndex = Number.isFinite(state?.turnIndex) ? state.turnIndex : 0;
-  const ageBonus = lastTurnIndex >= 0
-    ? clamp(
-        (turnIndex - lastTurnIndex) * tuning.priority.ageBonusStep,
-        0,
-        tuning.priority.ageBonusCap,
-      )
-    : tuning.priority.defaultAgeBonus;
+  const ageBonus =
+    lastTurnIndex >= 0
+      ? clamp(
+          (turnIndex - lastTurnIndex) * tuning.priority.ageBonusStep,
+          0,
+          tuning.priority.ageBonusCap,
+        )
+      : tuning.priority.defaultAgeBonus;
   const pendingBonus =
     relationship.status === "matched"
       ? tuning.priority.matchedPenalty
@@ -1476,26 +1595,33 @@ function relationshipPriorityScore(
   if (oracleClass === "acceptable") score += 0.12;
   if (oracleClass === "forbidden") score -= 0.55;
   if (isRequiredGroupClosure(world, relationship)) score += 0.14;
-  if (relationship.status === "matched" && oracleClass === "forbidden") score -= 0.35;
+  if (relationship.status === "matched" && oracleClass === "forbidden")
+    score -= 0.35;
 
-  if (lastAction === "recover_no_match") score += tuning.priority.recoverPenalty;
-  if (lastAction === "flag_moderation") score += tuning.priority.moderationPenalty;
+  if (lastAction === "recover_no_match")
+    score += tuning.priority.recoverPenalty;
+  if (lastAction === "flag_moderation")
+    score += tuning.priority.moderationPenalty;
 
   if (world.family === "recovery") {
-    score += relationship.strength < tuning.thresholds.lowStrength
-      ? tuning.priority.recoveryWeakBonus
-      : tuning.priority.recoveryStrongPenalty;
-    if (lastAction === "recover_no_match") score += tuning.priority.recoveryRepeatPenalty;
+    score +=
+      relationship.strength < tuning.thresholds.lowStrength
+        ? tuning.priority.recoveryWeakBonus
+        : tuning.priority.recoveryStrongPenalty;
+    if (lastAction === "recover_no_match")
+      score += tuning.priority.recoveryRepeatPenalty;
   }
 
   if (world.family === "circle") {
     if (actor.kind === "circle_seed") score += tuning.priority.circleSeedBonus;
-    if (relationship.status !== "matched") score += tuning.priority.circleUnmatchedBonus;
+    if (relationship.status !== "matched")
+      score += tuning.priority.circleUnmatchedBonus;
     if (
       relationship.status !== "matched" &&
       relationship.strength >= tuning.thresholds.nearMatchMin
     ) {
-      score += tuning.priority.nearMatchBonus + tuning.priority.circleNearMatchBonus;
+      score +=
+        tuning.priority.nearMatchBonus + tuning.priority.circleNearMatchBonus;
     }
     if (
       world.horizon !== "short" &&
@@ -1514,7 +1640,8 @@ function relationshipPriorityScore(
       relationship.status !== "matched" &&
       relationship.strength >= tuning.thresholds.nearMatchMin
     ) {
-      score += tuning.priority.nearMatchBonus + tuning.priority.networkNearMatchBonus;
+      score +=
+        tuning.priority.nearMatchBonus + tuning.priority.networkNearMatchBonus;
     }
     if (
       relationship.strength >= tuning.thresholds.circleContinuityMin &&
@@ -1525,8 +1652,10 @@ function relationshipPriorityScore(
     if (["event_seed", "group_seed", "circle_seed"].includes(actor.kind)) {
       score += tuning.priority.networkOrganizerBonus;
     }
-    if (relationship.status !== "matched") score += tuning.priority.networkUnmatchedBonus;
-    if (lastAction === "recover_no_match") score += tuning.priority.networkRecoverPenalty;
+    if (relationship.status !== "matched")
+      score += tuning.priority.networkUnmatchedBonus;
+    if (lastAction === "recover_no_match")
+      score += tuning.priority.networkRecoverPenalty;
   }
 
   return score;
@@ -1559,26 +1688,22 @@ function createPlannedAction({
     detachedFromWeakFit: Boolean(detachedFromWeakFit),
     tone: actor.socialStyle,
     confidence: clamp(
-      toNumber(
-        confidence,
-        resolvedIntent === "recover_no_match" ? 0.52 : 0.76,
-      ),
+      toNumber(confidence, resolvedIntent === "recover_no_match" ? 0.52 : 0.76),
       0,
       1,
     ),
-    rationale:
-      normalizeString(
-        rationale,
-        resolvedIntent === "reference_memory"
-          ? "Using earlier conversation context to improve continuity."
-          : resolvedIntent === "invite_group"
-            ? "Trying to move the social graph toward a broader group outcome."
-            : resolvedIntent === "propose_event"
-              ? "Trying to convert a weak or partial thread into a clearer concrete plan."
-              : resolvedIntent === "recover_no_match"
-                ? "The pairing looks weak, so the actor is trying a recovery path."
-                : "Advancing the conversation in a socially plausible way.",
-      ),
+    rationale: normalizeString(
+      rationale,
+      resolvedIntent === "reference_memory"
+        ? "Using earlier conversation context to improve continuity."
+        : resolvedIntent === "invite_group"
+          ? "Trying to move the social graph toward a broader group outcome."
+          : resolvedIntent === "propose_event"
+            ? "Trying to convert a weak or partial thread into a clearer concrete plan."
+            : resolvedIntent === "recover_no_match"
+              ? "The pairing looks weak, so the actor is trying a recovery path."
+              : "Advancing the conversation in a socially plausible way.",
+    ),
     memoryReferences:
       memoryReferences ??
       (worldNeedsMemory(world)
@@ -1598,7 +1723,11 @@ function resolveActorTarget(world, actor, relationship) {
   return relationship.members.find((member) => member !== actor.id) ?? null;
 }
 
-function canUseNearMatch(world, relationship, tuning = DEFAULT_SOCIAL_SIM_TUNING) {
+function canUseNearMatch(
+  world,
+  relationship,
+  tuning = DEFAULT_SOCIAL_SIM_TUNING,
+) {
   return (
     relationship &&
     relationship.status !== "matched" &&
@@ -1618,8 +1747,19 @@ function shouldPreferMemory(world, actor, state, recentRelationshipAction) {
 function planRecoveryFamilyAction(context) {
   const { actor, state, world, rng } = context;
   const tuning = getTuning(context.config);
-  const targetRelationship = findBestRelationshipWithState(world, actor, null, state, tuning);
-  const weakRelationship = findWeakRelationshipWithState(world, actor, state, tuning);
+  const targetRelationship = findBestRelationshipWithState(
+    world,
+    actor,
+    null,
+    state,
+    tuning,
+  );
+  const weakRelationship = findWeakRelationshipWithState(
+    world,
+    actor,
+    state,
+    tuning,
+  );
   const preferredFallbackRelationship = findBestOracleRelationshipForActor(
     world,
     actor,
@@ -1640,10 +1780,12 @@ function planRecoveryFamilyAction(context) {
   const knownTargets = state.knownTargets ?? new Map();
   const lastActionByActor = state.lastActionByActor ?? new Map();
   const recentActorAction = lastActionByActor.get(actor.id)?.intent ?? "";
-  const recentRelationshipAction =
-    targetRelationship ? knownTargets.get(targetRelationship.id)?.action ?? "" : "";
-  const recentWeakRelationshipAction =
-    weakRelationship ? knownTargets.get(weakRelationship.id)?.action ?? "" : "";
+  const recentRelationshipAction = targetRelationship
+    ? (knownTargets.get(targetRelationship.id)?.action ?? "")
+    : "";
+  const recentWeakRelationshipAction = weakRelationship
+    ? (knownTargets.get(weakRelationship.id)?.action ?? "")
+    : "";
   const recoveredRelationshipIds = world.relationships
     .filter(
       (relationship) =>
@@ -1654,10 +1796,15 @@ function planRecoveryFamilyAction(context) {
   const hasRecoveredRelationship =
     recentRelationshipAction === "recover_no_match" ||
     recentActorAction === "recover_no_match";
-  const targetOracleClass = classifyOracleRelationship(world, targetRelationship);
-  const mediumStrength = (targetRelationship?.strength ?? 0) >= tuning.thresholds.lowStrength &&
+  const targetOracleClass = classifyOracleRelationship(
+    world,
+    targetRelationship,
+  );
+  const mediumStrength =
+    (targetRelationship?.strength ?? 0) >= tuning.thresholds.lowStrength &&
     (targetRelationship?.strength ?? 0) < tuning.thresholds.mediumStrength;
-  const strongStrength = (targetRelationship?.strength ?? 0) >= tuning.thresholds.mediumStrength;
+  const strongStrength =
+    (targetRelationship?.strength ?? 0) >= tuning.thresholds.mediumStrength;
   const fallbackTargetActorId =
     preferredFallbackTargetActorId ??
     resolvePostRecoveryTargetActorId({
@@ -1683,7 +1830,8 @@ function planRecoveryFamilyAction(context) {
       context,
       intent:
         fallbackTargetActorId && preferredFallbackRelationship
-          ? (preferredFallbackRelationship.strength ?? 0) >= tuning.thresholds.nearMatchMin
+          ? (preferredFallbackRelationship.strength ?? 0) >=
+            tuning.thresholds.nearMatchMin
             ? "propose_event"
             : "reply"
           : resolvePolicyAction(
@@ -1698,16 +1846,20 @@ function planRecoveryFamilyAction(context) {
   if (hasRecoveredRelationship && state.stage === "convergence") {
     return createPlannedAction({
       context,
-      intent: fallbackTargetActorId ? "propose_event" : resolvePolicyAction(
-        tuning.policy.recoveryPostRecoveryConvergenceAction,
-        "propose_event",
-      ),
+      intent: fallbackTargetActorId
+        ? "propose_event"
+        : resolvePolicyAction(
+            tuning.policy.recoveryPostRecoveryConvergenceAction,
+            "propose_event",
+          ),
       targetActorId: fallbackTargetActorId,
       detachedFromWeakFit: !fallbackTargetActorId,
     });
   }
 
-  if (weakRelationship && worldNeedsRecovery(world) &&
+  if (
+    weakRelationship &&
+    worldNeedsRecovery(world) &&
     (["group_seed", "circle_seed", "event_seed"].includes(actor.kind) ||
       actor.socialStyle === "clear")
   ) {
@@ -1732,7 +1884,8 @@ function planRecoveryFamilyAction(context) {
                   ...recoveredRelationshipIds,
                   weakRelationship?.id,
                 ].filter(Boolean),
-                strategy: tuning.policy.networkOrganizerPostRecoveryTargetStrategy,
+                strategy:
+                  tuning.policy.networkOrganizerPostRecoveryTargetStrategy,
               })
             : null,
         detachedFromWeakFit: true,
@@ -1745,7 +1898,11 @@ function planRecoveryFamilyAction(context) {
     });
   }
 
-  if (world.family === "recovery" && recentActorAction === "recover_no_match" && state.stage !== "onboarding") {
+  if (
+    world.family === "recovery" &&
+    recentActorAction === "recover_no_match" &&
+    state.stage !== "onboarding"
+  ) {
     return createPlannedAction({
       context,
       intent:
@@ -1753,7 +1910,8 @@ function planRecoveryFamilyAction(context) {
           ? "propose_event"
           : state.stage === "convergence"
             ? "propose_event"
-            : (preferredFallbackRelationship?.strength ?? 0) >= tuning.thresholds.lowStrength
+            : (preferredFallbackRelationship?.strength ?? 0) >=
+                tuning.thresholds.lowStrength
               ? "propose_event"
               : "reply",
       targetActorId: fallbackTargetActorId,
@@ -1761,13 +1919,24 @@ function planRecoveryFamilyAction(context) {
     });
   }
 
-  if (isLowStrength(targetRelationship, tuning) && state.stage !== "onboarding") {
+  if (
+    isLowStrength(targetRelationship, tuning) &&
+    state.stage !== "onboarding"
+  ) {
     return createPlannedAction({
       context,
-      intent: worldNeedsGroupProgress(world) && rng() > tuning.probabilities.lowStrengthGroupRecovery
-        ? "invite_group"
-        : "recover_no_match",
-      targetActorId: lowStrengthTargetActorId(world, actor, state, tuning, targetRelationship),
+      intent:
+        worldNeedsGroupProgress(world) &&
+        rng() > tuning.probabilities.lowStrengthGroupRecovery
+          ? "invite_group"
+          : "recover_no_match",
+      targetActorId: lowStrengthTargetActorId(
+        world,
+        actor,
+        state,
+        tuning,
+        targetRelationship,
+      ),
       detachedFromWeakFit: false,
     });
   }
@@ -1778,11 +1947,14 @@ function planRecoveryFamilyAction(context) {
       intent:
         preferredFallbackTargetActorId && weakRelationship
           ? "reply"
-          : (targetOracleClass === "preferred" || targetOracleClass === "acceptable")
+          : targetOracleClass === "preferred" ||
+              targetOracleClass === "acceptable"
             ? "reply"
-          : mediumStrength && worldNeedsGroupProgress(world) && rng() > tuning.probabilities.matchingGroupInvite
-          ? "invite_group"
-          : "ask_preference",
+            : mediumStrength &&
+                worldNeedsGroupProgress(world) &&
+                rng() > tuning.probabilities.matchingGroupInvite
+              ? "invite_group"
+              : "ask_preference",
       targetActorId: preferredFallbackTargetActorId ?? targetActorId,
     });
   }
@@ -1814,10 +1986,7 @@ function planRecoveryFamilyAction(context) {
     });
   }
 
-  if (
-    strongStrength &&
-    state.stage === "conversation"
-  ) {
+  if (strongStrength && state.stage === "conversation") {
     return createPlannedAction({
       context,
       intent: "reply",
@@ -1920,7 +2089,13 @@ function isLowStrength(relationship, tuning) {
 
 function lowStrengthTargetActorId(world, actor, state, tuning, relationship) {
   if (!relationship) {
-    const fallback = findBestRelationshipWithState(world, actor, null, state, tuning);
+    const fallback = findBestRelationshipWithState(
+      world,
+      actor,
+      null,
+      state,
+      tuning,
+    );
     return resolveActorTarget(world, actor, fallback);
   }
   return resolveActorTarget(world, actor, relationship);
@@ -1929,8 +2104,19 @@ function lowStrengthTargetActorId(world, actor, state, tuning, relationship) {
 function planCircleFamilyAction(context) {
   const { actor, state, world } = context;
   const tuning = getTuning(context.config);
-  const targetRelationship = findBestRelationshipWithState(world, actor, null, state, tuning);
-  const weakRelationship = findWeakRelationshipWithState(world, actor, state, tuning);
+  const targetRelationship = findBestRelationshipWithState(
+    world,
+    actor,
+    null,
+    state,
+    tuning,
+  );
+  const weakRelationship = findWeakRelationshipWithState(
+    world,
+    actor,
+    state,
+    tuning,
+  );
   const requiredRelationship =
     findBestOracleRelationshipForActor(world, actor, state, tuning, {
       classes: ["preferred"],
@@ -1945,9 +2131,11 @@ function planCircleFamilyAction(context) {
   const resolvedRelationship = requiredRelationship ?? targetRelationship;
   const targetActorId = resolveActorTarget(world, actor, resolvedRelationship);
   const knownTargets = state.knownTargets ?? new Map();
-  const recentRelationshipAction =
-    resolvedRelationship ? knownTargets.get(resolvedRelationship.id)?.action ?? "" : "";
-  const mediumStrength = (resolvedRelationship?.strength ?? 0) >= tuning.thresholds.lowStrength &&
+  const recentRelationshipAction = resolvedRelationship
+    ? (knownTargets.get(resolvedRelationship.id)?.action ?? "")
+    : "";
+  const mediumStrength =
+    (resolvedRelationship?.strength ?? 0) >= tuning.thresholds.lowStrength &&
     (resolvedRelationship?.strength ?? 0) < tuning.thresholds.mediumStrength;
 
   if (state.stage === "onboarding") {
@@ -1985,9 +2173,11 @@ function planCircleFamilyAction(context) {
     ) {
       return createPlannedAction({
         context,
-        intent: requiredRelationship || recentRelationshipAction === "reference_memory"
-          ? "invite_group"
-          : "reference_memory",
+        intent:
+          requiredRelationship ||
+          recentRelationshipAction === "reference_memory"
+            ? "invite_group"
+            : "reference_memory",
         targetActorId,
       });
     }
@@ -2019,7 +2209,8 @@ function planCircleFamilyAction(context) {
       context,
       intent:
         canUseNearMatch(world, resolvedRelationship, tuning) ||
-        (resolvedRelationship?.strength ?? 0) >= tuning.thresholds.circleContinuityMin
+        (resolvedRelationship?.strength ?? 0) >=
+          tuning.thresholds.circleContinuityMin
           ? "invite_group"
           : "reply",
       targetActorId,
@@ -2031,7 +2222,8 @@ function planCircleFamilyAction(context) {
       context,
       intent:
         requiredRelationship &&
-        (resolvedRelationship?.strength ?? 0) >= tuning.thresholds.circleContinuityMin
+        (resolvedRelationship?.strength ?? 0) >=
+          tuning.thresholds.circleContinuityMin
           ? "invite_group"
           : "reference_memory",
       targetActorId,
@@ -2070,14 +2262,21 @@ function planNetworkRebalancingFamilyAction(context) {
       minStrength: tuning.thresholds.lowStrength,
     });
   const targetRelationship =
-    preferredRelationship ?? findBestRelationshipWithState(world, actor, null, state, tuning);
-  const weakRelationship = findWeakRelationshipWithState(world, actor, state, tuning);
+    preferredRelationship ??
+    findBestRelationshipWithState(world, actor, null, state, tuning);
+  const weakRelationship = findWeakRelationshipWithState(
+    world,
+    actor,
+    state,
+    tuning,
+  );
   const targetActorId = resolveActorTarget(world, actor, targetRelationship);
   const targetIsForbidden =
     classifyOracleRelationship(world, targetRelationship) === "forbidden";
   const knownTargets = state.knownTargets ?? new Map();
-  const recentRelationshipAction =
-    targetRelationship ? knownTargets.get(targetRelationship.id)?.action ?? "" : "";
+  const recentRelationshipAction = targetRelationship
+    ? (knownTargets.get(targetRelationship.id)?.action ?? "")
+    : "";
   const recoveredRelationshipIds = world.relationships
     .filter(
       (relationship) =>
@@ -2087,7 +2286,8 @@ function planNetworkRebalancingFamilyAction(context) {
     .map((relationship) => relationship.id);
   const hasRecoveredRelationship =
     recentRelationshipAction === "recover_no_match" ||
-    (state.lastActionByActor.get(actor.id)?.intent ?? "") === "recover_no_match";
+    (state.lastActionByActor.get(actor.id)?.intent ?? "") ===
+      "recover_no_match";
 
   if (state.stage === "onboarding") {
     return createPlannedAction({
@@ -2107,7 +2307,10 @@ function planNetworkRebalancingFamilyAction(context) {
 
   if (["event_seed", "group_seed", "circle_seed"].includes(actor.kind)) {
     const nearMatchTarget = canUseNearMatch(world, targetRelationship, tuning);
-    if (hasRecoveredRelationship && (state.stage === "conversation" || state.stage === "memory_drift")) {
+    if (
+      hasRecoveredRelationship &&
+      (state.stage === "conversation" || state.stage === "memory_drift")
+    ) {
       return createPlannedAction({
         context,
         intent:
@@ -2156,14 +2359,20 @@ function planNetworkRebalancingFamilyAction(context) {
         targetActorId,
       });
     }
-    if (weakRelationship && weakRelationship.strength < tuning.thresholds.networkWeakPenaltyThreshold) {
+    if (
+      weakRelationship &&
+      weakRelationship.strength < tuning.thresholds.networkWeakPenaltyThreshold
+    ) {
       return createPlannedAction({
         context,
         intent: "recover_no_match",
         targetActorId: resolveActorTarget(world, actor, weakRelationship),
       });
     }
-    if (worldNeedsMemory(world) && rng() > tuning.probabilities.networkMemoryReference) {
+    if (
+      worldNeedsMemory(world) &&
+      rng() > tuning.probabilities.networkMemoryReference
+    ) {
       return createPlannedAction({
         context,
         intent: "reference_memory",
@@ -2173,7 +2382,8 @@ function planNetworkRebalancingFamilyAction(context) {
     return createPlannedAction({
       context,
       intent:
-        worldNeedsGroupProgress(world) && (targetRelationship?.strength ?? 0) >= tuning.thresholds.lowStrength
+        worldNeedsGroupProgress(world) &&
+        (targetRelationship?.strength ?? 0) >= tuning.thresholds.lowStrength
           ? "invite_group"
           : "follow_up",
       targetActorId,
@@ -2202,12 +2412,12 @@ function planEventAndMemoryFamilyAction(context) {
     findBestOracleRelationshipForActor(world, actor, state, tuning, {
       classes: ["preferred", "acceptable"],
       onlyUnmatched: true,
-    }) ??
-    findBestRelationshipWithState(world, actor, null, state, tuning);
+    }) ?? findBestRelationshipWithState(world, actor, null, state, tuning);
   const targetActorId = resolveActorTarget(world, actor, targetRelationship);
   const knownTargets = state.knownTargets ?? new Map();
-  const recentRelationshipAction =
-    targetRelationship ? knownTargets.get(targetRelationship.id)?.action ?? "" : "";
+  const recentRelationshipAction = targetRelationship
+    ? (knownTargets.get(targetRelationship.id)?.action ?? "")
+    : "";
   const oracleClass = classifyOracleRelationship(world, targetRelationship);
   const strength = targetRelationship?.strength ?? 0;
   const nearMatch = canUseNearMatch(world, targetRelationship, tuning);
@@ -2248,12 +2458,12 @@ function planEventAndMemoryFamilyAction(context) {
   if (state.stage === "conversation") {
     return createPlannedAction({
       context,
-      intent:
-        shouldForceMemoryBeforeEvent
-          ? "reference_memory"
-          : nearMatch || strength >= tuning.thresholds.mediumStrength
+      intent: shouldForceMemoryBeforeEvent
+        ? "reference_memory"
+        : nearMatch || strength >= tuning.thresholds.mediumStrength
           ? "propose_event"
-          : recentRelationshipAction === "reference_memory" || oracleClass === "preferred"
+          : recentRelationshipAction === "reference_memory" ||
+              oracleClass === "preferred"
             ? "reply"
             : "reference_memory",
       targetActorId,
@@ -2263,10 +2473,9 @@ function planEventAndMemoryFamilyAction(context) {
   if (state.stage === "memory_drift") {
     return createPlannedAction({
       context,
-      intent:
-        shouldForceMemoryBeforeEvent
-          ? "reference_memory"
-          : nearMatch || strength >= tuning.thresholds.lowStrength
+      intent: shouldForceMemoryBeforeEvent
+        ? "reference_memory"
+        : nearMatch || strength >= tuning.thresholds.lowStrength
           ? "propose_event"
           : "reference_memory",
       targetActorId,
@@ -2287,8 +2496,19 @@ function planEventAndMemoryFamilyAction(context) {
 function planDenseSocialGraphFamilyAction(context) {
   const { actor, state, world, rng } = context;
   const tuning = getTuning(context.config);
-  const targetRelationship = findBestRelationshipWithState(world, actor, null, state, tuning);
-  const weakRelationship = findWeakRelationshipWithState(world, actor, state, tuning);
+  const targetRelationship = findBestRelationshipWithState(
+    world,
+    actor,
+    null,
+    state,
+    tuning,
+  );
+  const weakRelationship = findWeakRelationshipWithState(
+    world,
+    actor,
+    state,
+    tuning,
+  );
   const requiredRelationship =
     findBestOracleRelationshipForActor(world, actor, state, tuning, {
       classes: ["preferred", "acceptable"],
@@ -2305,11 +2525,13 @@ function planDenseSocialGraphFamilyAction(context) {
   const resolvedRelationship = requiredRelationship ?? targetRelationship;
   const targetActorId = resolveActorTarget(world, actor, resolvedRelationship);
   const knownTargets = state.knownTargets ?? new Map();
-  const recentRelationshipAction =
-    resolvedRelationship ? knownTargets.get(resolvedRelationship.id)?.action ?? "" : "";
+  const recentRelationshipAction = resolvedRelationship
+    ? (knownTargets.get(resolvedRelationship.id)?.action ?? "")
+    : "";
   const hasRecoveredRelationship =
     recentRelationshipAction === "recover_no_match" ||
-    (state.lastActionByActor.get(actor.id)?.intent ?? "") === "recover_no_match";
+    (state.lastActionByActor.get(actor.id)?.intent ?? "") ===
+      "recover_no_match";
   const nearMatchTarget = canUseNearMatch(world, resolvedRelationship, tuning);
 
   if (state.stage === "onboarding") {
@@ -2323,7 +2545,10 @@ function planDenseSocialGraphFamilyAction(context) {
   if (hasRecoveredRelationship && state.stage === "conversation") {
     return createPlannedAction({
       context,
-      intent: resolvePolicyAction(tuning.policy.denseGraphRecoveredConversationAction, "reply"),
+      intent: resolvePolicyAction(
+        tuning.policy.denseGraphRecoveredConversationAction,
+        "reply",
+      ),
       targetActorId,
       detachedFromWeakFit: true,
     });
@@ -2340,7 +2565,10 @@ function planDenseSocialGraphFamilyAction(context) {
         targetActorId,
       });
     }
-    if (worldNeedsMemory(world) && rng() > tuning.probabilities.memoryConversation) {
+    if (
+      worldNeedsMemory(world) &&
+      rng() > tuning.probabilities.memoryConversation
+    ) {
       return createPlannedAction({
         context,
         intent: "reference_memory",
@@ -2367,7 +2595,11 @@ function planDenseSocialGraphFamilyAction(context) {
     });
   }
 
-  if (weakRelationship && state.stage !== "onboarding" && weakRelationship.strength < tuning.thresholds.lowStrength) {
+  if (
+    weakRelationship &&
+    state.stage !== "onboarding" &&
+    weakRelationship.strength < tuning.thresholds.lowStrength
+  ) {
     return createPlannedAction({
       context,
       intent: "recover_no_match",
@@ -2385,7 +2617,8 @@ function planDenseSocialGraphFamilyAction(context) {
 
   if (
     state.stage === "conversation" &&
-    (requiredRelationship || rng() > tuning.probabilities.denseConversationInvite)
+    (requiredRelationship ||
+      rng() > tuning.probabilities.denseConversationInvite)
   ) {
     return createPlannedAction({
       context,
@@ -2456,14 +2689,17 @@ function computeTemporalTransitionMetrics(
 
   for (const transition of transitions) {
     const targetRelationship = relationshipMap.get(transition.targetEdgeId);
-    const targetMatchedTurn = Number.isFinite(targetRelationship?.lastMatchedTurn)
+    const targetMatchedTurn = Number.isFinite(
+      targetRelationship?.lastMatchedTurn,
+    )
       ? targetRelationship.lastMatchedTurn
       : null;
 
     if (transition.type === "recover_then_match") {
-      const sourceRecoverTurn = actionHistory.find((entry) =>
-        entry.relationshipId === transition.sourceEdgeId &&
-        entry.intent === "recover_no_match"
+      const sourceRecoverTurn = actionHistory.find(
+        (entry) =>
+          entry.relationshipId === transition.sourceEdgeId &&
+          entry.intent === "recover_no_match",
       )?.turnIndex;
       const satisfiedTransition =
         Number.isFinite(sourceRecoverTurn) &&
@@ -2498,7 +2734,9 @@ function computeTemporalTransitionMetrics(
   }
 
   return {
-    transitionSuccess: Number((satisfied / Math.max(transitions.length, 1)).toFixed(3)),
+    transitionSuccess: Number(
+      (satisfied / Math.max(transitions.length, 1)).toFixed(3),
+    ),
     transitionMisses: misses,
   };
 }
@@ -2519,16 +2757,24 @@ function computeOracleMetrics(
   const matchedRelationships = Array.isArray(relationships)
     ? relationships.filter((relationship) => relationship.status === "matched")
     : [];
-  const matchedEdgeIds = new Set(matchedRelationships.map((relationship) => relationship.id));
+  const matchedEdgeIds = new Set(
+    matchedRelationships.map((relationship) => relationship.id),
+  );
   const preferredEdges = oracle.preferredOutcomeEdges ?? [];
   const acceptableEdges = oracle.acceptableFallbackEdges ?? [];
   const forbiddenEdges = oracle.forbiddenOutcomeEdges ?? [];
   const requiredGroupClosure = oracle.requiredGroupClosure ?? [];
   const requiredIsolations = oracle.requiredIsolations ?? [];
   const favorableEdgeIds = new Set([...preferredEdges, ...acceptableEdges]);
-  const preferredMatchedCount = preferredEdges.filter((edgeId) => matchedEdgeIds.has(edgeId)).length;
-  const acceptableMatchedCount = acceptableEdges.filter((edgeId) => matchedEdgeIds.has(edgeId)).length;
-  const forbiddenMatchedCount = forbiddenEdges.filter((edgeId) => matchedEdgeIds.has(edgeId)).length;
+  const preferredMatchedCount = preferredEdges.filter((edgeId) =>
+    matchedEdgeIds.has(edgeId),
+  ).length;
+  const acceptableMatchedCount = acceptableEdges.filter((edgeId) =>
+    matchedEdgeIds.has(edgeId),
+  ).length;
+  const forbiddenMatchedCount = forbiddenEdges.filter((edgeId) =>
+    matchedEdgeIds.has(edgeId),
+  ).length;
   const requiredGroupMatchedCount = requiredGroupClosure.filter((edgeId) =>
     matchedEdgeIds.has(edgeId),
   ).length;
@@ -2536,45 +2782,63 @@ function computeOracleMetrics(
     if (edgeIds.length === 0) return 0;
     const converged = edgeIds
       .map((edgeId) => relationshipMap.get(edgeId))
-      .filter((relationship) =>
-        relationship &&
-        (
-          relationship.status === "matched" ||
-          (relationship.strength ?? 0) >= tuning.thresholds.nearMatchMin
-        ),
+      .filter(
+        (relationship) =>
+          relationship &&
+          (relationship.status === "matched" ||
+            (relationship.strength ?? 0) >= tuning.thresholds.nearMatchMin),
       );
     return converged.length > 0
-      ? converged.reduce((sum, relationship) => sum + (relationship.strength ?? 0), 0) /
-          converged.length
+      ? converged.reduce(
+          (sum, relationship) => sum + (relationship.strength ?? 0),
+          0,
+        ) / converged.length
       : 0;
   };
   const isolatedActorCount = requiredIsolations.filter((actorId) =>
-    matchedRelationships.every((relationship) => !relationship.members.includes(actorId)),
+    matchedRelationships.every(
+      (relationship) => !relationship.members.includes(actorId),
+    ),
   ).length;
   const closurePrecision =
     matchedRelationships.length > 0
-      ? matchedRelationships.filter((relationship) => favorableEdgeIds.has(relationship.id)).length /
-        matchedRelationships.length
+      ? matchedRelationships.filter((relationship) =>
+          favorableEdgeIds.has(relationship.id),
+        ).length / matchedRelationships.length
       : preferredEdges.length === 0 && acceptableEdges.length === 0
         ? 1
         : 0;
   const preferredRecall =
-    preferredEdges.length > 0 ? preferredMatchedCount / preferredEdges.length : 1;
+    preferredEdges.length > 0
+      ? preferredMatchedCount / preferredEdges.length
+      : 1;
   const forbiddenAvoidance =
-    forbiddenEdges.length > 0 ? 1 - forbiddenMatchedCount / forbiddenEdges.length : 1;
+    forbiddenEdges.length > 0
+      ? 1 - forbiddenMatchedCount / forbiddenEdges.length
+      : 1;
   const groupClosureSuccess =
     requiredGroupClosure.length > 0
       ? requiredGroupMatchedCount / requiredGroupClosure.length
       : 1;
   const isolationSuccess =
-    requiredIsolations.length > 0 ? isolatedActorCount / requiredIsolations.length : 1;
+    requiredIsolations.length > 0
+      ? isolatedActorCount / requiredIsolations.length
+      : 1;
   const acceptableLift =
-    acceptableEdges.length > 0 ? acceptableMatchedCount / acceptableEdges.length : 0;
+    acceptableEdges.length > 0
+      ? acceptableMatchedCount / acceptableEdges.length
+      : 0;
   const preferredStrengthMean = averageConvergedEdgeStrength(preferredEdges);
   const acceptableStrengthMean = averageConvergedEdgeStrength(acceptableEdges);
   const forbiddenStrengthMean = averageConvergedEdgeStrength(forbiddenEdges);
-  const groupClosureStrengthMean = averageConvergedEdgeStrength(requiredGroupClosure);
-  const temporalMetrics = computeTemporalTransitionMetrics(world, relationships, transcript, tuning);
+  const groupClosureStrengthMean =
+    averageConvergedEdgeStrength(requiredGroupClosure);
+  const temporalMetrics = computeTemporalTransitionMetrics(
+    world,
+    relationships,
+    transcript,
+    tuning,
+  );
   const oracleProgressScore = clamp(
     preferredStrengthMean * 0.42 +
       acceptableStrengthMean * 0.08 +
@@ -2617,11 +2881,13 @@ function computeOracleMetrics(
     oracleScore: Number(oracleScore.toFixed(3)),
     transitionMisses: temporalMetrics.transitionMisses,
     matchedEdgeIds: Array.from(matchedEdgeIds),
-    relationshipSnapshot: Array.from(relationshipMap.values()).map((relationship) => ({
-      id: relationship.id,
-      status: relationship.status,
-      strength: Number((relationship.strength ?? 0).toFixed(3)),
-    })),
+    relationshipSnapshot: Array.from(relationshipMap.values()).map(
+      (relationship) => ({
+        id: relationship.id,
+        status: relationship.status,
+        strength: Number((relationship.strength ?? 0).toFixed(3)),
+      }),
+    ),
   };
 }
 
@@ -2629,25 +2895,30 @@ function buildWorldDiagnostics(world, relationships, oracleMetrics, tuning) {
   const relationshipMap = new Map(
     relationships.map((relationship) => [relationship.id, relationship]),
   );
-  const preferredEdgeMisses = (world.oracle?.preferredOutcomeEdges ?? []).filter(
-    (edgeId) => !oracleMetrics.matchedEdgeIds.includes(edgeId),
+  const preferredEdgeMisses = (
+    world.oracle?.preferredOutcomeEdges ?? []
+  ).filter((edgeId) => !oracleMetrics.matchedEdgeIds.includes(edgeId));
+  const forbiddenEdgeHits = (world.oracle?.forbiddenOutcomeEdges ?? []).filter(
+    (edgeId) => oracleMetrics.matchedEdgeIds.includes(edgeId),
   );
-  const forbiddenEdgeHits = (world.oracle?.forbiddenOutcomeEdges ?? []).filter((edgeId) =>
-    oracleMetrics.matchedEdgeIds.includes(edgeId),
-  );
-  const lowStrengthMatchedPreferredEdges = (world.oracle?.preferredOutcomeEdges ?? []).filter(
+  const lowStrengthMatchedPreferredEdges = (
+    world.oracle?.preferredOutcomeEdges ?? []
+  ).filter(
     (edgeId) =>
       oracleMetrics.matchedEdgeIds.includes(edgeId) &&
-      (relationshipMap.get(edgeId)?.strength ?? 0) < tuning.thresholds.nearMatchMin,
+      (relationshipMap.get(edgeId)?.strength ?? 0) <
+        tuning.thresholds.nearMatchMin,
   );
   const groupClosureMisses = (world.oracle?.requiredGroupClosure ?? []).filter(
     (edgeId) => !oracleMetrics.matchedEdgeIds.includes(edgeId),
   );
-  const isolationFailures = (world.oracle?.requiredIsolations ?? []).filter((actorId) =>
-    relationships.some(
-      (relationship) =>
-        relationship.status === "matched" && relationship.members.includes(actorId),
-    ),
+  const isolationFailures = (world.oracle?.requiredIsolations ?? []).filter(
+    (actorId) =>
+      relationships.some(
+        (relationship) =>
+          relationship.status === "matched" &&
+          relationship.members.includes(actorId),
+      ),
   );
   const transitionMisses = Array.isArray(oracleMetrics.transitionMisses)
     ? oracleMetrics.transitionMisses
@@ -2666,13 +2937,13 @@ function buildWorldDiagnostics(world, relationships, oracleMetrics, tuning) {
         ? "isolation_failure"
         : transitionMisses.length > 0
           ? "transition_miss"
-        : groupClosureMisses.length > 0
-          ? "group_closure_miss"
-          : preferredEdgeMisses.length > 0
-            ? "preferred_edge_miss"
-            : lowStrengthMatchedPreferredEdges.length > 0
-              ? "weak_preferred_closure"
-              : "none";
+          : groupClosureMisses.length > 0
+            ? "group_closure_miss"
+            : preferredEdgeMisses.length > 0
+              ? "preferred_edge_miss"
+              : lowStrengthMatchedPreferredEdges.length > 0
+                ? "weak_preferred_closure"
+                : "none";
 
   return {
     preferredEdgeMisses,
@@ -2697,7 +2968,9 @@ function summarizeWorld(world, transcript, metrics, judge, config) {
   const tuning = getTuning(config);
   const totalTurns = transcript.length || 1;
   const matchedRelationships = metrics.matchedMembers.size;
-  const relationships = Array.isArray(world.relationships) ? world.relationships : [];
+  const relationships = Array.isArray(world.relationships)
+    ? world.relationships
+    : [];
   const strongRelationshipCount = relationships.filter(
     (relationship) =>
       (relationship.initialStrength ?? relationship.strength ?? 0) >=
@@ -2724,7 +2997,10 @@ function summarizeWorld(world, transcript, metrics, judge, config) {
   const matchedRatio =
     matchedRelationships / Math.max(world.relationships.length || 1, 1);
   const progressDensity =
-    (metrics.introductions + metrics.replies + metrics.followups + metrics.invites) /
+    (metrics.introductions +
+      metrics.replies +
+      metrics.followups +
+      metrics.invites) /
     Math.max(totalTurns * tuning.scoring.progressDensityDivisor, 1);
   const recoveryNeeded = worldNeedsRecovery(world);
   const memoryNeeded = worldNeedsMemory(world);
@@ -2736,7 +3012,8 @@ function summarizeWorld(world, transcript, metrics, judge, config) {
       (groupNeeded && metrics.invites > 0 ? 1 : 0)) /
     Math.max(expectationCount, 1);
   const followupDominance =
-    metrics.followups / Math.max(metrics.introductions + metrics.replies + metrics.invites, 1);
+    metrics.followups /
+    Math.max(metrics.introductions + metrics.replies + metrics.invites, 1);
   const shallowFollowupPenalty = clamp(
     (followupDominance - tuning.scoring.shallowFollowupDominanceStart) *
       tuning.scoring.shallowFollowupPenaltySlope,
@@ -2744,18 +3021,26 @@ function summarizeWorld(world, transcript, metrics, judge, config) {
     tuning.scoring.shallowFollowupPenaltyCap,
   );
   const stalledPenalty =
-    (metrics.stalledTurns / Math.max(totalTurns, 1)) * tuning.scoring.stalledPenaltyWeight;
+    (metrics.stalledTurns / Math.max(totalTurns, 1)) *
+    tuning.scoring.stalledPenaltyWeight;
   const missingRecoveryPenalty =
-    recoveryNeeded && metrics.recoverySignals === 0 ? tuning.scoring.missingRecoveryPenalty : 0;
+    recoveryNeeded && metrics.recoverySignals === 0
+      ? tuning.scoring.missingRecoveryPenalty
+      : 0;
   const missingMemoryPenalty =
-    memoryNeeded && metrics.memorySignals === 0 ? tuning.scoring.missingMemoryPenalty : 0;
+    memoryNeeded && metrics.memorySignals === 0
+      ? tuning.scoring.missingMemoryPenalty
+      : 0;
   const missingGroupPenalty =
-    groupNeeded && metrics.invites === 0 ? tuning.scoring.missingGroupPenalty : 0;
+    groupNeeded && metrics.invites === 0
+      ? tuning.scoring.missingGroupPenalty
+      : 0;
   const noMatchRecoveryQuality = clamp(
     recoveryNeeded
       ? metrics.recoverySignals > 0
         ? tuning.scoring.recoveryBase +
-          (metrics.recoverySignals / Math.max(totalTurns * 2.5, 1)) * tuning.scoring.recoveryScale
+          (metrics.recoverySignals / Math.max(totalTurns * 2.5, 1)) *
+            tuning.scoring.recoveryScale
         : tuning.scoring.recoveryMissingScore
       : metrics.recoverySignals > 0
         ? tuning.scoring.recoveryExtraScore
@@ -2767,10 +3052,27 @@ function summarizeWorld(world, transcript, metrics, judge, config) {
     world.family === "recovery"
       ? noMatchRecoveryQuality * tuning.scoring.recoveryWorldRecoveryWeight
       : 0;
-  const oracleMetrics = computeOracleMetrics(world, relationships, transcript, tuning);
-  const diagnostics = buildWorldDiagnostics(world, relationships, oracleMetrics, tuning);
-  const recoveryResolutionScore = computeRecoveryResolutionScore(world, oracleMetrics, metrics);
-  const circleReassemblyScore = computeCircleReassemblyScore(world, oracleMetrics);
+  const oracleMetrics = computeOracleMetrics(
+    world,
+    relationships,
+    transcript,
+    tuning,
+  );
+  const diagnostics = buildWorldDiagnostics(
+    world,
+    relationships,
+    oracleMetrics,
+    tuning,
+  );
+  const recoveryResolutionScore = computeRecoveryResolutionScore(
+    world,
+    oracleMetrics,
+    metrics,
+  );
+  const circleReassemblyScore = computeCircleReassemblyScore(
+    world,
+    oracleMetrics,
+  );
   const denseBridgeScore = computeDenseBridgeScore(world, oracleMetrics);
   const directMatchClosureScore = computeDirectMatchClosureScore(
     world,
@@ -2790,8 +3092,10 @@ function summarizeWorld(world, transcript, metrics, judge, config) {
     directMatchClosureScore * tuning.scoring.directMatchClosureWeight +
     networkCoordinationScore * tuning.scoring.networkCoordinationWeight;
   const requiredEdgeMissPenalty =
-    (diagnostics.groupClosureMisses.length * tuning.scoring.requiredEdgeMissPenalty) +
-    (diagnostics.preferredEdgeMisses.length * tuning.scoring.preferredEdgeMissPenalty);
+    diagnostics.groupClosureMisses.length *
+      tuning.scoring.requiredEdgeMissPenalty +
+    diagnostics.preferredEdgeMisses.length *
+      tuning.scoring.preferredEdgeMissPenalty;
   const recoveryUnresolvedPenalty =
     world.family === "recovery" &&
     metrics.recoverySignals > 0 &&
@@ -2822,11 +3126,12 @@ function summarizeWorld(world, transcript, metrics, judge, config) {
     memoryNeeded
       ? metrics.memorySignals > 0
         ? tuning.scoring.memoryBase +
-          (metrics.memorySignals / Math.max(totalTurns * 2.5, 1)) * tuning.scoring.memoryScale
+          (metrics.memorySignals / Math.max(totalTurns * 2.5, 1)) *
+            tuning.scoring.memoryScale
         : tuning.scoring.memoryMissingScore
       : metrics.memorySignals > 0
         ? tuning.scoring.memoryExtraScore
-      : tuning.scoring.memoryDefaultScore,
+        : tuning.scoring.memoryDefaultScore,
     0,
     1,
   );
@@ -2955,19 +3260,26 @@ function summarizeRun(worldRuns, config, bootstrap) {
     };
     currentFamily.worlds += 1;
     currentFamily.convergenceScoreTotal += world.summary?.convergenceScore ?? 0;
-    currentFamily.matchedRelationships += world.summary?.matchedRelationships ?? 0;
-    currentFamily.turnBudgetGap += world.summary?.measurement?.turnBudgetGap ?? 0;
+    currentFamily.matchedRelationships +=
+      world.summary?.matchedRelationships ?? 0;
+    currentFamily.turnBudgetGap +=
+      world.summary?.measurement?.turnBudgetGap ?? 0;
     currentFamily.strongRelationshipCoverageTotal +=
       world.summary?.strongRelationshipCoverage ?? 0;
-    currentFamily.weakStartMatchCount += world.summary?.weakStartMatchCount ?? 0;
+    currentFamily.weakStartMatchCount +=
+      world.summary?.weakStartMatchCount ?? 0;
     currentFamily.meanStrengthLiftTotal += world.summary?.meanStrengthLift ?? 0;
     currentFamily.oracleScoreTotal += world.summary?.oracleScore ?? 0;
-    currentFamily.oracleProgressScoreTotal += world.summary?.oracleProgressScore ?? 0;
+    currentFamily.oracleProgressScoreTotal +=
+      world.summary?.oracleProgressScore ?? 0;
     currentFamily.closurePrecisionTotal += world.summary?.closurePrecision ?? 0;
     currentFamily.preferredRecallTotal += world.summary?.preferredRecall ?? 0;
-    currentFamily.forbiddenAvoidanceTotal += world.summary?.forbiddenAvoidance ?? 0;
-    currentFamily.diagnosticIssueCount += world.summary?.diagnostics?.issueCount ?? 0;
-    currentFamily.diagnosticSeverityTotal += world.summary?.diagnostics?.severity ?? 0;
+    currentFamily.forbiddenAvoidanceTotal +=
+      world.summary?.forbiddenAvoidance ?? 0;
+    currentFamily.diagnosticIssueCount +=
+      world.summary?.diagnostics?.issueCount ?? 0;
+    currentFamily.diagnosticSeverityTotal +=
+      world.summary?.diagnostics?.severity ?? 0;
     familyRollup.set(world.family, currentFamily);
   }
   const avgConvergence =
@@ -2978,35 +3290,49 @@ function summarizeRun(worldRuns, config, bootstrap) {
       {
         worlds: rollup.worlds,
         averageConvergenceScore: Number(
-          (rollup.convergenceScoreTotal / Math.max(rollup.worlds, 1)).toFixed(3),
+          (rollup.convergenceScoreTotal / Math.max(rollup.worlds, 1)).toFixed(
+            3,
+          ),
         ),
         matchedRelationships: rollup.matchedRelationships,
         turnBudgetGap: rollup.turnBudgetGap,
         averageStrongRelationshipCoverage: Number(
-          (rollup.strongRelationshipCoverageTotal / Math.max(rollup.worlds, 1)).toFixed(3),
+          (
+            rollup.strongRelationshipCoverageTotal / Math.max(rollup.worlds, 1)
+          ).toFixed(3),
         ),
         weakStartMatchCount: rollup.weakStartMatchCount,
         averageMeanStrengthLift: Number(
-          (rollup.meanStrengthLiftTotal / Math.max(rollup.worlds, 1)).toFixed(3),
+          (rollup.meanStrengthLiftTotal / Math.max(rollup.worlds, 1)).toFixed(
+            3,
+          ),
         ),
         averageOracleScore: Number(
           (rollup.oracleScoreTotal / Math.max(rollup.worlds, 1)).toFixed(3),
         ),
         averageOracleProgressScore: Number(
-          (rollup.oracleProgressScoreTotal / Math.max(rollup.worlds, 1)).toFixed(3),
+          (
+            rollup.oracleProgressScoreTotal / Math.max(rollup.worlds, 1)
+          ).toFixed(3),
         ),
         averageClosurePrecision: Number(
-          (rollup.closurePrecisionTotal / Math.max(rollup.worlds, 1)).toFixed(3),
+          (rollup.closurePrecisionTotal / Math.max(rollup.worlds, 1)).toFixed(
+            3,
+          ),
         ),
         averagePreferredRecall: Number(
           (rollup.preferredRecallTotal / Math.max(rollup.worlds, 1)).toFixed(3),
         ),
         averageForbiddenAvoidance: Number(
-          (rollup.forbiddenAvoidanceTotal / Math.max(rollup.worlds, 1)).toFixed(3),
+          (rollup.forbiddenAvoidanceTotal / Math.max(rollup.worlds, 1)).toFixed(
+            3,
+          ),
         ),
         diagnosticIssueCount: rollup.diagnosticIssueCount,
         averageDiagnosticSeverity: Number(
-          (rollup.diagnosticSeverityTotal / Math.max(rollup.worlds, 1)).toFixed(3),
+          (rollup.diagnosticSeverityTotal / Math.max(rollup.worlds, 1)).toFixed(
+            3,
+          ),
         ),
       },
     ]),
@@ -3037,7 +3363,7 @@ function summarizeRun(worldRuns, config, bootstrap) {
   );
   const effectiveBackendMode = observedBackendModes.has("backend")
     ? "backend"
-    : bootstrap?.backendMode ?? "offline";
+    : (bootstrap?.backendMode ?? "offline");
   const truncatedWorlds = worldRuns.filter(
     (world) => (world.summary?.measurement?.turnBudgetGap ?? 0) > 0,
   );
@@ -3046,10 +3372,7 @@ function summarizeRun(worldRuns, config, bootstrap) {
       `turn_budget_override_truncated_${truncatedWorlds.length}_worlds`,
     );
   }
-  if (
-    config.provider !== "stub" &&
-    config.provider === config.judgeProvider
-  ) {
+  if (config.provider !== "stub" && config.provider === config.judgeProvider) {
     measurementWarnings.push("actor_judge_provider_coupled");
   }
   if (config.benchmarkMode) {
@@ -3075,10 +3398,16 @@ function summarizeRun(worldRuns, config, bootstrap) {
       ...totals,
       averageConvergenceScore: Number(avgConvergence.toFixed(3)),
       averageOracleScore: Number(
-        (worldRuns.length > 0 ? totals.oracleScoreTotal / worldRuns.length : 0).toFixed(3),
+        (worldRuns.length > 0
+          ? totals.oracleScoreTotal / worldRuns.length
+          : 0
+        ).toFixed(3),
       ),
       averageOracleProgressScore: Number(
-        (worldRuns.length > 0 ? totals.oracleProgressScoreTotal / worldRuns.length : 0).toFixed(3),
+        (worldRuns.length > 0
+          ? totals.oracleProgressScoreTotal / worldRuns.length
+          : 0
+        ).toFixed(3),
       ),
     },
     verdict,
@@ -3111,16 +3440,30 @@ function planGenericBrainAction(context) {
   const tuning = getTuning(context.config);
   const knownTargets = state.knownTargets ?? new Map();
   const lastActionByActor = state.lastActionByActor ?? new Map();
-  const targetRelationship = findBestRelationshipWithState(world, actor, null, state, tuning);
-  const weakRelationship = findWeakRelationshipWithState(world, actor, state, tuning);
-  const targetActorId = targetRelationship?.members.find((member) => member !== actor.id) ?? null;
+  const targetRelationship = findBestRelationshipWithState(
+    world,
+    actor,
+    null,
+    state,
+    tuning,
+  );
+  const weakRelationship = findWeakRelationshipWithState(
+    world,
+    actor,
+    state,
+    tuning,
+  );
+  const targetActorId =
+    targetRelationship?.members.find((member) => member !== actor.id) ?? null;
   const weakTargetActorId =
     weakRelationship?.members.find((member) => member !== actor.id) ?? null;
   const recentActorAction = lastActionByActor.get(actor.id)?.intent ?? "";
-  const recentRelationshipAction =
-    targetRelationship ? knownTargets.get(targetRelationship.id)?.action ?? "" : "";
-  const recentWeakRelationshipAction =
-    weakRelationship ? knownTargets.get(weakRelationship.id)?.action ?? "" : "";
+  const recentRelationshipAction = targetRelationship
+    ? (knownTargets.get(targetRelationship.id)?.action ?? "")
+    : "";
+  const recentWeakRelationshipAction = weakRelationship
+    ? (knownTargets.get(weakRelationship.id)?.action ?? "")
+    : "";
   const recoveredRelationshipIds = world.relationships
     .filter(
       (relationship) =>
@@ -3133,11 +3476,13 @@ function planGenericBrainAction(context) {
     recentActorAction === "recover_no_match";
   const hasMemorySignal =
     world.horizon === "long" || actor.memoryDriftProfile === "fluid";
-  const lowStrength = (targetRelationship?.strength ?? 0) < tuning.thresholds.lowStrength;
+  const lowStrength =
+    (targetRelationship?.strength ?? 0) < tuning.thresholds.lowStrength;
   const mediumStrength =
     (targetRelationship?.strength ?? 0) >= tuning.thresholds.lowStrength &&
     (targetRelationship?.strength ?? 0) < tuning.thresholds.mediumStrength;
-  const strongStrength = (targetRelationship?.strength ?? 0) >= tuning.thresholds.mediumStrength;
+  const strongStrength =
+    (targetRelationship?.strength ?? 0) >= tuning.thresholds.mediumStrength;
   let intent = "follow_up";
   let resolvedTargetActorId = targetActorId;
   let detachedFromWeakFit = false;
@@ -3211,7 +3556,8 @@ function planGenericBrainAction(context) {
                 ...recoveredRelationshipIds,
                 weakRelationship?.id,
               ].filter(Boolean),
-              strategy: tuning.policy.networkOrganizerPostRecoveryTargetStrategy,
+              strategy:
+                tuning.policy.networkOrganizerPostRecoveryTargetStrategy,
             })
           : null;
       detachedFromWeakFit = true;
@@ -3274,27 +3620,27 @@ function planGenericBrainAction(context) {
       (targetRelationship?.strength ?? 0) >= tuning.thresholds.nearMatchMin &&
       state.stage === "conversation"
         ? "invite_group"
-      : (targetRelationship?.strength ?? 0) >= tuning.thresholds.nearMatchMin &&
-          state.stage === "memory_drift"
-        ? "propose_event"
-      :
-      hasRecoveredRelationship && state.stage === "conversation"
-        ? resolvePolicyAction(
-            tuning.policy.networkOrganizerPostRecoveryConversationAction,
-            "invite_group",
-          )
-        : hasRecoveredRelationship && state.stage === "memory_drift"
-          ? resolvePolicyAction(
-              tuning.policy.networkOrganizerPostRecoveryMemoryDriftAction,
-              "propose_event",
-            )
-        : state.stage === "matching"
-        ? mediumStrength
-          ? "invite_group"
-          : "ask_preference"
-        : worldNeedsMemory(world) && rng() > tuning.probabilities.networkMemoryReference
-          ? "reference_memory"
-          : "invite_group";
+        : (targetRelationship?.strength ?? 0) >=
+              tuning.thresholds.nearMatchMin && state.stage === "memory_drift"
+          ? "propose_event"
+          : hasRecoveredRelationship && state.stage === "conversation"
+            ? resolvePolicyAction(
+                tuning.policy.networkOrganizerPostRecoveryConversationAction,
+                "invite_group",
+              )
+            : hasRecoveredRelationship && state.stage === "memory_drift"
+              ? resolvePolicyAction(
+                  tuning.policy.networkOrganizerPostRecoveryMemoryDriftAction,
+                  "propose_event",
+                )
+              : state.stage === "matching"
+                ? mediumStrength
+                  ? "invite_group"
+                  : "ask_preference"
+                : worldNeedsMemory(world) &&
+                    rng() > tuning.probabilities.networkMemoryReference
+                  ? "reference_memory"
+                  : "invite_group";
     if (
       hasRecoveredRelationship &&
       (state.stage === "conversation" || state.stage === "memory_drift")
@@ -3313,28 +3659,32 @@ function planGenericBrainAction(context) {
   } else if (strongStrength && state.stage === "matching") {
     intent = "reply";
   } else if (lowStrength && state.stage !== "onboarding") {
-    intent = worldNeedsGroupProgress(world) && rng() > tuning.probabilities.lowStrengthGroupRecovery
-      ? "invite_group"
-      : "recover_no_match";
+    intent =
+      worldNeedsGroupProgress(world) &&
+      rng() > tuning.probabilities.lowStrengthGroupRecovery
+        ? "invite_group"
+        : "recover_no_match";
   } else if (state.stage === "matching") {
-    intent = mediumStrength && worldNeedsGroupProgress(world) && rng() > tuning.probabilities.matchingGroupInvite
-      ? "invite_group"
-      : "ask_preference";
+    intent =
+      mediumStrength &&
+      worldNeedsGroupProgress(world) &&
+      rng() > tuning.probabilities.matchingGroupInvite
+        ? "invite_group"
+        : "ask_preference";
   } else if (
     world.family === "dense-social-graph" &&
     ["group_seed", "event_seed"].includes(actor.kind) &&
     mediumStrength &&
     state.stage === "conversation"
   ) {
-    intent =
-      hasRecoveredRelationship
-        ? resolvePolicyAction(
-            tuning.policy.denseGraphRecoveredConversationAction,
-            "reply",
-          )
-        : recentRelationshipAction === "invite_group"
-          ? "reply"
-          : "invite_group";
+    intent = hasRecoveredRelationship
+      ? resolvePolicyAction(
+          tuning.policy.denseGraphRecoveredConversationAction,
+          "reply",
+        )
+      : recentRelationshipAction === "invite_group"
+        ? "reply"
+        : "invite_group";
   } else if (state.stage === "memory_drift") {
     intent = hasMemorySignal ? "reference_memory" : "follow_up";
   } else if (
@@ -3498,14 +3848,15 @@ class OllamaSocialSimProvider extends RemoteSocialSimProviderBase {
   constructor(config) {
     super(config);
     this.name = "ollama";
-    this.endpoint =
-      normalizeString(config.ollamaBaseUrl, "http://localhost:11434").replace(
-        /\/+$/,
-        "",
-      );
+    this.endpoint = normalizeString(
+      config.ollamaBaseUrl,
+      "http://localhost:11434",
+    ).replace(/\/+$/, "");
     this.model = normalizeString(config.ollamaModel, "llama3.1");
     this.apiKey = normalizeString(config.ollamaApiKey, "");
-    this.useRemote = config.useRemoteProvider || boolFromEnv(process.env.SOCIAL_SIM_USE_REMOTE_PROVIDER);
+    this.useRemote =
+      config.useRemoteProvider ||
+      boolFromEnv(process.env.SOCIAL_SIM_USE_REMOTE_PROVIDER);
   }
 
   async tryRemote(context) {
@@ -3554,7 +3905,8 @@ class OllamaSocialSimProvider extends RemoteSocialSimProviderBase {
       }
       return normalizeBrainOutput(parsed, "ollama", context);
     } catch (error) {
-      this.lastRemoteFailure = error instanceof Error ? error.message : String(error);
+      this.lastRemoteFailure =
+        error instanceof Error ? error.message : String(error);
       return null;
     }
   }
@@ -3574,31 +3926,34 @@ class OpenAISocialSimProvider extends RemoteSocialSimProviderBase {
   async tryRemote(context) {
     if (!this.useRemote || !this.apiKey) return null;
     try {
-      const response = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${this.apiKey}`,
+      const response = await fetch(
+        "https://api.openai.com/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${this.apiKey}`,
+          },
+          body: JSON.stringify({
+            model: this.model,
+            response_format: { type: "json_object" },
+            messages: [
+              {
+                role: "system",
+                content: [
+                  "You are a synthetic social simulation actor.",
+                  `Return JSON matching prompt version ${SOCIAL_SIM_PROMPT_VERSION}.`,
+                  "Fields: intent, targetActorId, message, tone, confidence, rationale, memoryReferences[].",
+                ].join(" "),
+              },
+              {
+                role: "user",
+                content: JSON.stringify(buildProviderContext(context), null, 2),
+              },
+            ],
+          }),
         },
-        body: JSON.stringify({
-          model: this.model,
-          response_format: { type: "json_object" },
-          messages: [
-            {
-              role: "system",
-              content: [
-                "You are a synthetic social simulation actor.",
-                `Return JSON matching prompt version ${SOCIAL_SIM_PROMPT_VERSION}.`,
-                "Fields: intent, targetActorId, message, tone, confidence, rationale, memoryReferences[].",
-              ].join(" "),
-            },
-            {
-              role: "user",
-              content: JSON.stringify(buildProviderContext(context), null, 2),
-            },
-          ],
-        }),
-      });
+      );
       const payload = await response.json().catch(() => null);
       const content = payload?.choices?.[0]?.message?.content;
       if (!response.ok) {
@@ -3616,7 +3971,8 @@ class OpenAISocialSimProvider extends RemoteSocialSimProviderBase {
       }
       return normalizeBrainOutput(parsed, "openai", context);
     } catch (error) {
-      this.lastRemoteFailure = error instanceof Error ? error.message : String(error);
+      this.lastRemoteFailure =
+        error instanceof Error ? error.message : String(error);
       return null;
     }
   }
@@ -3664,11 +4020,13 @@ function normalizeBrainOutput(output, provider, context) {
 
 function findRelationshipByActors(world, actorId, targetActorId) {
   if (!targetActorId) return null;
-  return world.relationships.find(
-    (relationship) =>
-      relationship.members.includes(actorId) &&
-      relationship.members.includes(targetActorId),
-  ) ?? null;
+  return (
+    world.relationships.find(
+      (relationship) =>
+        relationship.members.includes(actorId) &&
+        relationship.members.includes(targetActorId),
+    ) ?? null
+  );
 }
 
 function hasOutstandingRequiredGroupClosureForActor(world, actorId) {
@@ -3797,7 +4155,8 @@ function shouldPreferHeuristicIntent({
 }
 
 function reconcileRemoteActionWithPlanner(context, action) {
-  const heuristic = planSocialSimAction(context) ?? planGenericBrainAction(context);
+  const heuristic =
+    planSocialSimAction(context) ?? planGenericBrainAction(context);
   const relationship = findRelationshipByActors(
     context.world,
     context.actor.id,
@@ -3817,7 +4176,8 @@ function reconcileRemoteActionWithPlanner(context, action) {
     heuristic?.targetActorId ?? null,
   );
   const heuristicTargetsRequiredClosure = Boolean(
-    heuristicRelationship && isRequiredGroupClosure(context.world, heuristicRelationship),
+    heuristicRelationship &&
+    isRequiredGroupClosure(context.world, heuristicRelationship),
   );
   const remoteTargetsRequiredClosure = Boolean(
     relationship && isRequiredGroupClosure(context.world, relationship),
@@ -3826,7 +4186,9 @@ function reconcileRemoteActionWithPlanner(context, action) {
   if (
     hasInvalidTarget ||
     forbiddenTarget ||
-    (actorNeedsRequiredClosure && heuristicTargetsRequiredClosure && !remoteTargetsRequiredClosure)
+    (actorNeedsRequiredClosure &&
+      heuristicTargetsRequiredClosure &&
+      !remoteTargetsRequiredClosure)
   ) {
     return {
       intent: heuristic.intent,
@@ -3848,8 +4210,8 @@ function reconcileRemoteActionWithPlanner(context, action) {
       intent: heuristic.intent,
       targetActorId:
         heuristicTargetsRequiredClosure || !action.targetActorId
-          ? heuristic.targetActorId ?? null
-          : action.targetActorId ?? heuristic.targetActorId ?? null,
+          ? (heuristic.targetActorId ?? null)
+          : (action.targetActorId ?? heuristic.targetActorId ?? null),
     };
   }
 
@@ -3865,7 +4227,8 @@ function canonicalizeRemoteIntent(output, context) {
   const message = normalizeString(output.message, "").toLowerCase();
   const rationale = normalizeString(output.rationale, "").toLowerCase();
   const combined = `${normalized} ${message} ${rationale}`;
-  const hasAny = (...needles) => needles.some((needle) => combined.includes(needle));
+  const hasAny = (...needles) =>
+    needles.some((needle) => combined.includes(needle));
 
   const canonicalIntents = new Set([
     "introduce",
@@ -4016,16 +4379,7 @@ function canonicalizeRemoteIntent(output, context) {
     return "ask_preference";
   }
 
-  if (
-    hasAny(
-      "hello",
-      "hey",
-      "hi ",
-      "introduc",
-      "greet",
-      "welcome back",
-    )
-  ) {
+  if (hasAny("hello", "hey", "hi ", "introduc", "greet", "welcome back")) {
     return "introduce";
   }
 
@@ -4068,7 +4422,9 @@ class HeuristicJudgeProvider {
     const tuning = getTuning(context.config);
     const lowStrength = (turnRecord.outcome.relationshipStrength ?? 0) < 0.35;
     const progressPenalty =
-      action.intent === "follow_up" && !turnRecord.outcome.matched && lowStrength
+      action.intent === "follow_up" &&
+      !turnRecord.outcome.matched &&
+      lowStrength
         ? tuning.judge.weakFollowupPenalty
         : 0;
     const score = clamp(
@@ -4085,28 +4441,29 @@ class HeuristicJudgeProvider {
     );
     return {
       turnIndex: turnRecord.turnIndex,
-      label:
-        score >= 0.75
-          ? "healthy"
-          : score >= 0.5
-            ? "watch"
-            : "broken",
+      label: score >= 0.75 ? "healthy" : score >= 0.5 ? "watch" : "broken",
       conversation: turnRecord.outcome.stalled ? "stalled" : "alive",
-      memory: action.memoryReferences?.length ? "memory_helpful" : "memory_neutral",
+      memory: action.memoryReferences?.length
+        ? "memory_helpful"
+        : "memory_neutral",
       convergence: turnRecord.outcome.matched ? "converged" : "partial",
-      usefulness: score >= 0.6 ? "good_match" : score >= 0.45 ? "weak_match" : "bad_match",
+      usefulness:
+        score >= 0.6
+          ? "good_match"
+          : score >= 0.45
+            ? "weak_match"
+            : "bad_match",
       instability: turnRecord.outcome.stalled ? "unstable" : "healthy",
       operatorAttentionNeeded: Boolean(
         turnRecord.outcome.stalled ||
-          !["passed", "recovered"].includes(turnRecord.backend?.status ?? ""),
+        !["passed", "recovered"].includes(turnRecord.backend?.status ?? ""),
       ),
       score: Number(score.toFixed(3)),
-      rationale:
-        turnRecord.outcome.matched
-          ? "Turn advanced a relationship toward convergence."
-          : progressPenalty > 0
-            ? "Turn kept moving but did not resolve a weak-fit relationship."
-            : "Turn kept the simulation moving without a confirmed match.",
+      rationale: turnRecord.outcome.matched
+        ? "Turn advanced a relationship toward convergence."
+        : progressPenalty > 0
+          ? "Turn kept moving but did not resolve a weak-fit relationship."
+          : "Turn kept the simulation moving without a confirmed match.",
     };
   }
 
@@ -4115,33 +4472,43 @@ class HeuristicJudgeProvider {
     const matchedRatio =
       context.metrics.matchedMembers.size /
       Math.max(context.world.relationships.length || 1, 1);
-    const turnBalance = 1 - context.metrics.stalledTurns / Math.max(context.metrics.totalTurns || 1, 1);
+    const turnBalance =
+      1 -
+      context.metrics.stalledTurns /
+        Math.max(context.metrics.totalTurns || 1, 1);
     const expectationCount = worldSpecificExpectationCount(context.world);
     const expectationFulfillment =
-      ((worldNeedsRecovery(context.world) && context.metrics.recoverySignals > 0 ? 1 : 0) +
-        (worldNeedsMemory(context.world) && context.metrics.memorySignals > 0 ? 1 : 0) +
-        (worldNeedsGroupProgress(context.world) && context.metrics.invites > 0 ? 1 : 0)) /
+      ((worldNeedsRecovery(context.world) && context.metrics.recoverySignals > 0
+        ? 1
+        : 0) +
+        (worldNeedsMemory(context.world) && context.metrics.memorySignals > 0
+          ? 1
+          : 0) +
+        (worldNeedsGroupProgress(context.world) && context.metrics.invites > 0
+          ? 1
+          : 0)) /
       Math.max(expectationCount, 1);
-    const shallowFollowupPenalty =
-      clamp(
-        (context.metrics.followups /
-          Math.max(
-            context.metrics.replies +
-              context.metrics.introductions +
-              context.metrics.invites,
-            1,
-          ) -
-          1.15) *
-          tuning.judge.worldShallowPenaltySlope,
-        0,
-        tuning.judge.worldShallowPenaltyCap,
-      );
+    const shallowFollowupPenalty = clamp(
+      (context.metrics.followups /
+        Math.max(
+          context.metrics.replies +
+            context.metrics.introductions +
+            context.metrics.invites,
+          1,
+        ) -
+        1.15) *
+        tuning.judge.worldShallowPenaltySlope,
+      0,
+      tuning.judge.worldShallowPenaltyCap,
+    );
     const score = clamp(
       tuning.judge.worldBase +
         matchedRatio * tuning.judge.worldMatchedRatioWeight +
         turnBalance * tuning.judge.worldTurnBalanceWeight +
         expectationFulfillment * tuning.judge.worldExpectationWeight +
-        (context.metrics.moderationSignals > 0 ? -tuning.judge.worldModerationPenalty : 0) -
+        (context.metrics.moderationSignals > 0
+          ? -tuning.judge.worldModerationPenalty
+          : 0) -
         shallowFollowupPenalty,
       0,
       1,
@@ -4176,15 +4543,15 @@ class OllamaJudgeProvider extends RemoteJudgeProviderBase {
   constructor(config) {
     super(config);
     this.name = "ollama";
-    this.endpoint =
-      normalizeString(config.ollamaBaseUrl, "http://localhost:11434").replace(
-        /\/+$/,
-        "",
-      );
+    this.endpoint = normalizeString(
+      config.ollamaBaseUrl,
+      "http://localhost:11434",
+    ).replace(/\/+$/, "");
     this.model = normalizeString(config.ollamaModel, "llama3.1");
     this.apiKey = normalizeString(config.ollamaApiKey, "");
     this.useRemote =
-      config.useRemoteJudge || boolFromEnv(process.env.SOCIAL_SIM_USE_REMOTE_JUDGE);
+      config.useRemoteJudge ||
+      boolFromEnv(process.env.SOCIAL_SIM_USE_REMOTE_JUDGE);
   }
 
   async tryRemoteTurn(context) {
@@ -4255,7 +4622,8 @@ class OpenAIJudgeProvider extends RemoteJudgeProviderBase {
     this.model = normalizeString(config.openaiModel, "gpt-4.1-mini");
     this.apiKey = normalizeString(config.openaiApiKey, "");
     this.useRemote =
-      config.useRemoteJudge || boolFromEnv(process.env.SOCIAL_SIM_USE_REMOTE_JUDGE);
+      config.useRemoteJudge ||
+      boolFromEnv(process.env.SOCIAL_SIM_USE_REMOTE_JUDGE);
   }
 
   async tryRemoteTurn(context) {
@@ -4269,37 +4637,40 @@ class OpenAIJudgeProvider extends RemoteJudgeProviderBase {
   async tryRemote(scope, context) {
     if (!this.useRemote || !this.apiKey) return null;
     try {
-      const response = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${this.apiKey}`,
+      const response = await fetch(
+        "https://api.openai.com/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${this.apiKey}`,
+          },
+          body: JSON.stringify({
+            model: this.model,
+            response_format: { type: "json_object" },
+            messages: [
+              {
+                role: "system",
+                content: [
+                  "You are a judge for a social simulation harness.",
+                  `Return JSON matching prompt version ${SOCIAL_SIM_PROMPT_VERSION}.`,
+                ].join(" "),
+              },
+              {
+                role: "user",
+                content: JSON.stringify(
+                  {
+                    scope,
+                    ...buildJudgeContext(context),
+                  },
+                  null,
+                  2,
+                ),
+              },
+            ],
+          }),
         },
-        body: JSON.stringify({
-          model: this.model,
-          response_format: { type: "json_object" },
-          messages: [
-            {
-              role: "system",
-              content: [
-                "You are a judge for a social simulation harness.",
-                `Return JSON matching prompt version ${SOCIAL_SIM_PROMPT_VERSION}.`,
-              ].join(" "),
-            },
-            {
-              role: "user",
-              content: JSON.stringify(
-                {
-                  scope,
-                  ...buildJudgeContext(context),
-                },
-                null,
-                2,
-              ),
-            },
-          ],
-        }),
-      });
+      );
       const payload = await response.json().catch(() => null);
       const content = payload?.choices?.[0]?.message?.content;
       if (!response.ok || typeof content !== "string") return null;
@@ -4313,7 +4684,8 @@ class OpenAIJudgeProvider extends RemoteJudgeProviderBase {
 }
 
 function buildProviderContext(context) {
-  const plannerHint = planSocialSimAction(context) ?? planGenericBrainAction(context);
+  const plannerHint =
+    planSocialSimAction(context) ?? planGenericBrainAction(context);
   return {
     promptVersion: SOCIAL_SIM_PROMPT_VERSION,
     actor: context.actor,
@@ -4340,10 +4712,11 @@ function buildProviderContext(context) {
       worldNeedsRecovery: worldNeedsRecovery(context.world),
       worldNeedsMemory: worldNeedsMemory(context.world),
       worldNeedsGroupProgress: worldNeedsGroupProgress(context.world),
-      actorNeedsRequiredGroupClosure: hasOutstandingRequiredGroupClosureForActor(
-        context.world,
-        context.actor.id,
-      ),
+      actorNeedsRequiredGroupClosure:
+        hasOutstandingRequiredGroupClosureForActor(
+          context.world,
+          context.actor.id,
+        ),
     },
     transcriptPreview: context.transcript.slice(-4),
   };
@@ -4404,7 +4777,11 @@ function normalizeJudgeOutput(output, scope, context, provider) {
       ),
       usefulness: normalizeString(
         output.usefulness,
-        score >= 0.6 ? "good_match" : score >= 0.45 ? "weak_match" : "bad_match",
+        score >= 0.6
+          ? "good_match"
+          : score >= 0.45
+            ? "weak_match"
+            : "bad_match",
       ),
       instability: normalizeString(
         output.instability,
@@ -4415,7 +4792,10 @@ function normalizeJudgeOutput(output, scope, context, provider) {
           ? output.operatorAttentionNeeded
           : Boolean(context.turnRecord.outcome.stalled),
       score,
-      rationale: normalizeString(output.rationale, `${provider} remote turn judgment.`),
+      rationale: normalizeString(
+        output.rationale,
+        `${provider} remote turn judgment.`,
+      ),
     };
   }
   const score = clamp(toNumber(output.score, 0.6), 0, 1);
@@ -4431,7 +4811,10 @@ function normalizeJudgeOutput(output, scope, context, provider) {
       typeof output.operatorAttentionNeeded === "boolean"
         ? output.operatorAttentionNeeded
         : false,
-    rationale: normalizeString(output.rationale, `${provider} remote world judgment.`),
+    rationale: normalizeString(
+      output.rationale,
+      `${provider} remote world judgment.`,
+    ),
   });
 }
 
@@ -4443,13 +4826,14 @@ function buildWorldJudgeResult(world, score, metrics, overrides = {}) {
     overrides.convergence ??
     (score >= 0.75 ? "converged" : score >= 0.5 ? "partial" : "failed");
   const memory =
-    overrides.memory ?? (metrics.memorySignals > 0 ? "memory_helpful" : "memory_neutral");
+    overrides.memory ??
+    (metrics.memorySignals > 0 ? "memory_helpful" : "memory_neutral");
   const conversation =
     overrides.conversation ??
     (metrics.stalledTurns > metrics.totalTurns / 2
       ? "stalled"
       : metrics.followups >
-            metrics.replies + metrics.introductions + metrics.invites
+          metrics.replies + metrics.introductions + metrics.invites
         ? "awkward"
         : "alive");
   const usefulness =
@@ -4460,7 +4844,7 @@ function buildWorldJudgeResult(world, score, metrics, overrides = {}) {
     (metrics.moderationSignals > 0
       ? "unstable"
       : metrics.followups >
-            metrics.replies + metrics.introductions + metrics.invites
+          metrics.replies + metrics.introductions + metrics.invites
         ? "unstable"
         : "healthy");
   return {
@@ -4473,7 +4857,10 @@ function buildWorldJudgeResult(world, score, metrics, overrides = {}) {
     instability,
     operatorAttentionNeeded:
       overrides.operatorAttentionNeeded ??
-      Boolean(metrics.moderationSignals > 0 || metrics.stalledTurns > metrics.totalTurns / 2),
+      Boolean(
+        metrics.moderationSignals > 0 ||
+        metrics.stalledTurns > metrics.totalTurns / 2,
+      ),
     score: Number(score.toFixed(3)),
     rationale:
       overrides.rationale ??
@@ -4511,7 +4898,11 @@ class SocialSimBackendAdapter {
       0,
       10_000,
     );
-    this.backendRetryCount = clamp(toNumber(config.backendRetryCount, 3), 0, 10);
+    this.backendRetryCount = clamp(
+      toNumber(config.backendRetryCount, 3),
+      0,
+      10,
+    );
     this.backendRetryBaseDelayMs = clamp(
       toNumber(config.backendRetryBaseDelayMs, 750),
       0,
@@ -4530,22 +4921,29 @@ class SocialSimBackendAdapter {
         status: "stubbed",
         notes: this.enabled
           ? ["Dry-run mode prevented backend bootstrap."]
-          : ["No backend credentials configured; using offline simulation mode."],
+          : [
+              "No backend credentials configured; using offline simulation mode.",
+            ],
       };
     }
 
     try {
-      const response = await fetch(`${this.baseUrl}/api/admin/playground/bootstrap`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-admin-user-id": this.adminUserId,
-          "x-admin-role": this.adminRole,
-          "x-social-sim-namespace": namespace,
-          ...(this.adminApiKey ? { "x-admin-api-key": this.adminApiKey } : {}),
+      const response = await fetch(
+        `${this.baseUrl}/api/admin/playground/bootstrap`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-admin-user-id": this.adminUserId,
+            "x-admin-role": this.adminRole,
+            "x-social-sim-namespace": namespace,
+            ...(this.adminApiKey
+              ? { "x-admin-api-key": this.adminApiKey }
+              : {}),
+          },
+          body: JSON.stringify({}),
         },
-        body: JSON.stringify({}),
-      });
+      );
       const payload = await response.json().catch(() => null);
       if (!response.ok || !payload?.success) {
         return {
@@ -4574,41 +4972,54 @@ class SocialSimBackendAdapter {
       const remoteProvider =
         this.config.provider === "stub" ? undefined : this.config.provider;
       const remoteJudgeProvider =
-        this.config.judgeProvider === "stub" ? undefined : this.config.judgeProvider;
+        this.config.judgeProvider === "stub"
+          ? undefined
+          : this.config.judgeProvider;
       const remoteTurnBudget =
-        Number.isFinite(this.config.turnBudget) && this.config.turnBudget !== null
+        Number.isFinite(this.config.turnBudget) &&
+        this.config.turnBudget !== null
           ? this.config.turnBudget
           : undefined;
       const remoteActorCount =
-        Number.isFinite(this.config.actorCount) && this.config.actorCount !== null
+        Number.isFinite(this.config.actorCount) &&
+        this.config.actorCount !== null
           ? this.config.actorCount
           : worldCount;
-      const runResponse = await fetch(`${this.baseUrl}/api/admin/social-sim/runs`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-admin-user-id": this.adminUserId,
-          "x-admin-role": this.adminRole,
-          "x-social-sim-namespace": namespace,
-          ...(this.adminApiKey ? { "x-admin-api-key": this.adminApiKey } : {}),
+      const runResponse = await fetch(
+        `${this.baseUrl}/api/admin/social-sim/runs`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-admin-user-id": this.adminUserId,
+            "x-admin-role": this.adminRole,
+            "x-social-sim-namespace": namespace,
+            ...(this.adminApiKey
+              ? { "x-admin-api-key": this.adminApiKey }
+              : {}),
+          },
+          body: JSON.stringify({
+            scenarioFamily: "full-social-world",
+            ...(remoteProvider ? { provider: remoteProvider } : {}),
+            ...(remoteJudgeProvider
+              ? { judgeProvider: remoteJudgeProvider }
+              : {}),
+            horizon:
+              this.config.horizon === "all" ? "medium" : this.config.horizon,
+            seed: String(this.config.seed),
+            namespace,
+            ...(remoteTurnBudget !== undefined
+              ? { turnBudget: remoteTurnBudget }
+              : {}),
+            actorCount: remoteActorCount,
+            cleanupMode:
+              this.config.cleanupMode === "none"
+                ? "archive"
+                : this.config.cleanupMode,
+            notes: [`script-run:${runId}`, `worldCount:${worldCount}`],
+          }),
         },
-        body: JSON.stringify({
-          scenarioFamily: "full-social-world",
-          ...(remoteProvider ? { provider: remoteProvider } : {}),
-          ...(remoteJudgeProvider ? { judgeProvider: remoteJudgeProvider } : {}),
-          horizon: this.config.horizon === "all" ? "medium" : this.config.horizon,
-          seed: String(this.config.seed),
-          namespace,
-          ...(remoteTurnBudget !== undefined ? { turnBudget: remoteTurnBudget } : {}),
-          actorCount: remoteActorCount,
-          cleanupMode:
-            this.config.cleanupMode === "none" ? "archive" : this.config.cleanupMode,
-          notes: [
-            `script-run:${runId}`,
-            `worldCount:${worldCount}`,
-          ],
-        }),
-      });
+      );
       const runPayload = await runResponse.json().catch(() => null);
       if (runResponse.ok && runPayload?.success && runPayload?.data?.runId) {
         this.remoteRunId = runPayload.data.runId;
@@ -4644,7 +5055,8 @@ class SocialSimBackendAdapter {
     if (!this.enabled || dryRun || !this.remoteRunId) {
       return {
         mode: "offline",
-        status: this.remoteRunId || dryRun || !this.enabled ? "passed" : "skipped",
+        status:
+          this.remoteRunId || dryRun || !this.enabled ? "passed" : "skipped",
         actionType: action.intent,
         detail: this.remoteRunId
           ? "offline simulation turn"
@@ -4683,11 +5095,14 @@ class SocialSimBackendAdapter {
       }
 
       try {
-        const response = await fetch(`${this.baseUrl}/api/admin/social-sim/turn`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify(payload),
-        });
+        const response = await fetch(
+          `${this.baseUrl}/api/admin/social-sim/turn`,
+          {
+            method: "POST",
+            headers,
+            body: JSON.stringify(payload),
+          },
+        );
         const json = await response.json().catch(() => null);
         if (response.ok && json?.success) {
           this.nextAllowedTurnAtMs = Date.now() + this.backendTurnDelayMs;
@@ -4707,8 +5122,7 @@ class SocialSimBackendAdapter {
           payload: json,
         };
         const isThrottle =
-          response.status === 429 ||
-          json?.error?.code === "abuse_throttled";
+          response.status === 429 || json?.error?.code === "abuse_throttled";
         if (!isThrottle || attemptIndex >= this.backendRetryCount) {
           break;
         }
@@ -4755,7 +5169,9 @@ class SocialSimBackendAdapter {
               "x-admin-user-id": this.adminUserId,
               "x-admin-role": this.adminRole,
               "x-social-sim-namespace": namespace,
-              ...(this.adminApiKey ? { "x-admin-api-key": this.adminApiKey } : {}),
+              ...(this.adminApiKey
+                ? { "x-admin-api-key": this.adminApiKey }
+                : {}),
             },
             body: JSON.stringify({
               mode: mode === "none" ? "archive" : mode,
@@ -4817,7 +5233,10 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   return output;
 }
 
-export async function nightlyMain(argv = process.argv.slice(2), env = process.env) {
+export async function nightlyMain(
+  argv = process.argv.slice(2),
+  env = process.env,
+) {
   const config = parseSocialSimArgs(argv, env);
   const fixture = loadSocialSimWorldFixture(
     config.fixturePath,
@@ -4833,7 +5252,9 @@ export async function nightlyMain(argv = process.argv.slice(2), env = process.en
     nightly: true,
     horizon: "all",
     worldFilter: canonical.map((world) => world.id),
-    turnBudget: Number.isFinite(config.turnBudget) ? Math.min(config.turnBudget, 8) : 8,
+    turnBudget: Number.isFinite(config.turnBudget)
+      ? Math.min(config.turnBudget, 8)
+      : 8,
     cleanupMode: config.cleanupMode === "none" ? "none" : "archive",
   };
   nightlyConfig.runId = `${config.namespace}-nightly-${new Date().toISOString().replace(/[:.]/g, "-")}`;

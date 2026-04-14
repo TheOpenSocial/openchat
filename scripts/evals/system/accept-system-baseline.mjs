@@ -38,7 +38,10 @@ function parseArgs(argv = process.argv.slice(2), env = process.env) {
       ),
     ),
     summaryPath: path.resolve(process.cwd(), summaryPath),
-    runJsonPath: normalizeString(flags.get("run-json") ?? env.EVAL_SYSTEM_RUN_JSON_PATH, "")
+    runJsonPath: normalizeString(
+      flags.get("run-json") ?? env.EVAL_SYSTEM_RUN_JSON_PATH,
+      "",
+    )
       ? path.resolve(
           process.cwd(),
           normalizeString(
@@ -55,9 +58,18 @@ function parseArgs(argv = process.argv.slice(2), env = process.env) {
       flags.get("accepted-at") ?? env.EVAL_SYSTEM_ACCEPTED_AT,
       "",
     ),
-    notes: normalizeString(flags.get("notes") ?? env.EVAL_SYSTEM_ACCEPTED_NOTES, ""),
-    runUrl: normalizeString(flags.get("run-url") ?? env.EVAL_SYSTEM_RUN_URL, ""),
-    headSha: normalizeString(flags.get("head-sha") ?? env.EVAL_SYSTEM_HEAD_SHA, ""),
+    notes: normalizeString(
+      flags.get("notes") ?? env.EVAL_SYSTEM_ACCEPTED_NOTES,
+      "",
+    ),
+    runUrl: normalizeString(
+      flags.get("run-url") ?? env.EVAL_SYSTEM_RUN_URL,
+      "",
+    ),
+    headSha: normalizeString(
+      flags.get("head-sha") ?? env.EVAL_SYSTEM_HEAD_SHA,
+      "",
+    ),
   };
 }
 
@@ -70,12 +82,7 @@ function writeJson(filePath, payload) {
 }
 
 function suiteScore(summary) {
-  return (
-    summary?.meanScore ??
-    summary?.averageScore ??
-    summary?.score ??
-    0
-  );
+  return summary?.meanScore ?? summary?.averageScore ?? summary?.score ?? 0;
 }
 
 function buildAcceptedRun(config, summary, runPayload) {
@@ -91,12 +98,12 @@ function buildAcceptedRun(config, summary, runPayload) {
     id:
       config.baselineId ||
       `${summary.usedLiveSocialSim === true ? "live" : "deterministic"}-system-baseline-${
-        summary.completedAt ?? runPayload?.completedAt ?? new Date().toISOString()
+        summary.completedAt ??
+        runPayload?.completedAt ??
+        new Date().toISOString()
       }`.replace(/[:.]/g, "-"),
     acceptedAt:
-      config.acceptedAt ||
-      runPayload?.completedAt ||
-      new Date().toISOString(),
+      config.acceptedAt || runPayload?.completedAt || new Date().toISOString(),
     notes:
       config.notes ||
       (summary.usedLiveSocialSim === true

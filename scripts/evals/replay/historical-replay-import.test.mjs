@@ -21,7 +21,10 @@ test("historical replay import converts jsonl exports into replay corpus cases",
         toolFamily: "messaging",
         messages: [
           { role: "user", content: "Draft a reply to Anna." },
-          { role: "assistant", content: "I can draft that and keep it as a draft." },
+          {
+            role: "assistant",
+            content: "I can draft that and keep it as a draft.",
+          },
         ],
         expected: {
           allowedTools: ["gmail-draft"],

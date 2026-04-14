@@ -86,7 +86,10 @@ function validateScenarioPayload(scenario, payload) {
   const home = payload?.experience?.home;
   const activity = payload?.experience?.activity;
 
-  assertCondition(home && activity, "inspect payload is missing experience summaries");
+  assertCondition(
+    home && activity,
+    "inspect payload is missing experience summaries",
+  );
 
   switch (scenario) {
     case "baseline":
@@ -95,7 +98,8 @@ function validateScenarioPayload(scenario, payload) {
         `baseline expected active or waiting home tone, received ${home.status?.tone ?? "unknown"}`,
       );
       assertCondition(
-        home.spotlight?.coordination != null || home.spotlight?.topSuggestion != null,
+        home.spotlight?.coordination != null ||
+          home.spotlight?.topSuggestion != null,
         "baseline expected coordination or top suggestion spotlight",
       );
       return;

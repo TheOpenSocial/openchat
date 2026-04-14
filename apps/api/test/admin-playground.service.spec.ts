@@ -17,6 +17,7 @@ describe("AdminPlaygroundService", () => {
     const cacheStore = new Map<string, unknown>();
     const prisma = overrides.prisma ?? {
       user: {
+        findUnique: vi.fn().mockResolvedValue(null),
         upsert: vi.fn().mockResolvedValue({}),
         deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
       },
@@ -38,12 +39,20 @@ describe("AdminPlaygroundService", () => {
         createMany: vi.fn().mockResolvedValue({ count: 0 }),
       },
       agentThread: {
+        findFirst: vi
+          .fn()
+          .mockResolvedValueOnce(null)
+          .mockResolvedValue({ id: "99999999-9999-4999-8999-999999999999" }),
         findUnique: vi
           .fn()
           .mockResolvedValueOnce(null)
-          .mockResolvedValue({ id: "thread" }),
-        update: vi.fn().mockResolvedValue({ id: "thread" }),
-        create: vi.fn().mockResolvedValue({ id: "thread" }),
+          .mockResolvedValue({ id: "99999999-9999-4999-8999-999999999999" }),
+        update: vi
+          .fn()
+          .mockResolvedValue({ id: "99999999-9999-4999-8999-999999999999" }),
+        create: vi
+          .fn()
+          .mockResolvedValue({ id: "99999999-9999-4999-8999-999999999999" }),
         deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
       },
       agentMessage: {

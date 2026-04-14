@@ -48,7 +48,8 @@ export function parseSearchArgs(argv = process.argv.slice(2)) {
 
 export function getSearchSeeds(baseConfig, parsedArgs) {
   if (parsedArgs.seeds.length > 0) return parsedArgs.seeds;
-  if (parsedArgs.hasExplicitSeed && Number.isFinite(baseConfig.seed)) return [baseConfig.seed];
+  if (parsedArgs.hasExplicitSeed && Number.isFinite(baseConfig.seed))
+    return [baseConfig.seed];
   return [17031, 27031, 37031];
 }
 
@@ -379,20 +380,28 @@ export function scoreCandidate(
   const protectedWorlds = options.protectedWorlds ?? [];
   const baselineWorldScores = options.baselineWorldScores ?? new Map();
   const overall = summary.totals.averageConvergenceScore ?? 0;
-  const focusWorldRecords = worlds.filter((world) => focusWorlds.includes(world.worldId));
-  const focusScores = focusWorldRecords.map((world) => world.summary.convergenceScore);
+  const focusWorldRecords = worlds.filter((world) =>
+    focusWorlds.includes(world.worldId),
+  );
+  const focusScores = focusWorldRecords.map(
+    (world) => world.summary.convergenceScore,
+  );
   const worldScores = new Map(
     worlds.map((world) => [world.worldId, world.summary.convergenceScore]),
   );
   const worldStrongCoverage = new Map(
-    worlds.map((world) => [world.worldId, world.summary.strongRelationshipCoverage ?? 0]),
+    worlds.map((world) => [
+      world.worldId,
+      world.summary.strongRelationshipCoverage ?? 0,
+    ]),
   );
   const weakMean =
     focusScores.length > 0
       ? focusScores.reduce((sum, value) => sum + value, 0) / focusScores.length
       : overall;
   const weakMin = focusScores.length > 0 ? Math.min(...focusScores) : overall;
-  const networkFloor = worldScores.get("long-network-rebalancing-v1") ?? weakMin;
+  const networkFloor =
+    worldScores.get("long-network-rebalancing-v1") ?? weakMin;
   const strongCoverageMean =
     focusWorldRecords.length > 0
       ? focusWorldRecords.reduce(
@@ -452,13 +461,18 @@ export function scoreCandidate(
   const regressionPenalty = protectedWorlds.reduce((penalty, worldId) => {
     const baseline = baselineWorldScores.get(worldId);
     const candidate = worldScores.get(worldId);
-    const baselineCoverage = baselineWorldScores.get(`${worldId}:strongCoverage`);
+    const baselineCoverage = baselineWorldScores.get(
+      `${worldId}:strongCoverage`,
+    );
     const candidateCoverage = worldStrongCoverage.get(worldId);
     let nextPenalty = penalty;
     if (Number.isFinite(baseline) && Number.isFinite(candidate)) {
       nextPenalty += Math.max(0, baseline - candidate);
     }
-    if (Number.isFinite(baselineCoverage) && Number.isFinite(candidateCoverage)) {
+    if (
+      Number.isFinite(baselineCoverage) &&
+      Number.isFinite(candidateCoverage)
+    ) {
       nextPenalty += Math.max(0, baselineCoverage - candidateCoverage) * 0.5;
     }
     return nextPenalty;
@@ -485,53 +499,53 @@ export function scoreCandidate(
           strongCoverageMean * 0.1 +
           meanStrengthLiftMean * 0.15 -
           weakStartMatchMean * 0.05
-      : objective === "guarded-balance"
-        ? overall * 0.2 +
-          weakMean * 0.25 +
-          weakMin * 0.15 +
-          oracleScoreMean * 0.2 +
-          oracleProgressMean * 0.18 +
-          closurePrecisionMean * 0.1 +
-          forbiddenAvoidanceMean * 0.08 +
-          strongCoverageMean * 0.2 +
-          meanStrengthLiftMean * 0.15 -
-          weakStartMatchMean * 0.05 -
-          regressionPenalty * 0.5
-      : objective === "holdout-balance"
-        ? overall * 0.14 +
-          weakMean * 0.16 +
-          weakMin * 0.1 +
-          oracleScoreMean * 0.22 +
-          oracleProgressMean * 0.16 +
-          closurePrecisionMean * 0.12 +
-          preferredRecallMean * 0.12 +
-          forbiddenAvoidanceMean * 0.08 +
-          strongCoverageMean * 0.12 +
-          meanStrengthLiftMean * 0.08 -
-          weakStartMatchMean * 0.04 -
-          regressionPenalty * 0.45
-      : objective === "holdout-only"
-        ? overall * 0.2 +
-          weakMean * 0.14 +
-          weakMin * 0.12 +
-          oracleScoreMean * 0.2 +
-          oracleProgressMean * 0.16 +
-          closurePrecisionMean * 0.12 +
-          preferredRecallMean * 0.1 +
-          forbiddenAvoidanceMean * 0.06 +
-          strongCoverageMean * 0.12 +
-          meanStrengthLiftMean * 0.1 -
-          weakStartMatchMean * 0.04 -
-          regressionPenalty * 0.5
-      : overall * 0.35 +
-        weakMean * 0.2 +
-        weakMin * 0.1 +
-        oracleScoreMean * 0.2 +
-        oracleProgressMean * 0.14 +
-        closurePrecisionMean * 0.08 +
-        strongCoverageMean * 0.2 +
-        meanStrengthLiftMean * 0.2 -
-        weakStartMatchMean * 0.05;
+        : objective === "guarded-balance"
+          ? overall * 0.2 +
+            weakMean * 0.25 +
+            weakMin * 0.15 +
+            oracleScoreMean * 0.2 +
+            oracleProgressMean * 0.18 +
+            closurePrecisionMean * 0.1 +
+            forbiddenAvoidanceMean * 0.08 +
+            strongCoverageMean * 0.2 +
+            meanStrengthLiftMean * 0.15 -
+            weakStartMatchMean * 0.05 -
+            regressionPenalty * 0.5
+          : objective === "holdout-balance"
+            ? overall * 0.14 +
+              weakMean * 0.16 +
+              weakMin * 0.1 +
+              oracleScoreMean * 0.22 +
+              oracleProgressMean * 0.16 +
+              closurePrecisionMean * 0.12 +
+              preferredRecallMean * 0.12 +
+              forbiddenAvoidanceMean * 0.08 +
+              strongCoverageMean * 0.12 +
+              meanStrengthLiftMean * 0.08 -
+              weakStartMatchMean * 0.04 -
+              regressionPenalty * 0.45
+            : objective === "holdout-only"
+              ? overall * 0.2 +
+                weakMean * 0.14 +
+                weakMin * 0.12 +
+                oracleScoreMean * 0.2 +
+                oracleProgressMean * 0.16 +
+                closurePrecisionMean * 0.12 +
+                preferredRecallMean * 0.1 +
+                forbiddenAvoidanceMean * 0.06 +
+                strongCoverageMean * 0.12 +
+                meanStrengthLiftMean * 0.1 -
+                weakStartMatchMean * 0.04 -
+                regressionPenalty * 0.5
+              : overall * 0.35 +
+                weakMean * 0.2 +
+                weakMin * 0.1 +
+                oracleScoreMean * 0.2 +
+                oracleProgressMean * 0.14 +
+                closurePrecisionMean * 0.08 +
+                strongCoverageMean * 0.2 +
+                meanStrengthLiftMean * 0.2 -
+                weakStartMatchMean * 0.05;
   return {
     objective: Number(objectiveScore.toFixed(4)),
     overall: Number(overall.toFixed(4)),
@@ -558,14 +572,12 @@ function average(values) {
 
 export function findWorstWorldByDiagnostics(worldDiagnostics) {
   return (
-    worldDiagnostics
-      .slice()
-      .sort((left, right) => {
-        const severityGap =
-          (right.topReason?.severity ?? 0) - (left.topReason?.severity ?? 0);
-        if (Math.abs(severityGap) > 0.0001) return severityGap;
-        return (left.convergenceScore ?? 0) - (right.convergenceScore ?? 0);
-      })[0] ?? null
+    worldDiagnostics.slice().sort((left, right) => {
+      const severityGap =
+        (right.topReason?.severity ?? 0) - (left.topReason?.severity ?? 0);
+      if (Math.abs(severityGap) > 0.0001) return severityGap;
+      return (left.convergenceScore ?? 0) - (right.convergenceScore ?? 0);
+    })[0] ?? null
   );
 }
 
@@ -623,7 +635,8 @@ function buildWorldReasonCandidates(diagnostic) {
   ) {
     reasons.push({
       code: "weak_group_progress",
-      severity: 0.18 + Math.max(0, 0.45 - (diagnostic.oracleProgressScore ?? 0)),
+      severity:
+        0.18 + Math.max(0, 0.45 - (diagnostic.oracleProgressScore ?? 0)),
       message: `${diagnostic.worldId} is underperforming on group progress and bridge formation`,
     });
   }
@@ -651,10 +664,7 @@ function buildWorldReasonCandidates(diagnostic) {
   return reasons.sort((left, right) => right.severity - left.severity);
 }
 
-export function aggregateWorldDiagnostics(
-  seedRuns,
-  options = {},
-) {
+export function aggregateWorldDiagnostics(seedRuns, options = {}) {
   const selectedWorlds =
     Array.isArray(options.selectedWorlds) && options.selectedWorlds.length > 0
       ? new Set(options.selectedWorlds)
@@ -688,7 +698,9 @@ export function aggregateWorldDiagnostics(
       current.matchedRelationships.push(summary.matchedRelationships ?? 0);
       current.noMatchRecoveryQuality.push(summary.noMatchRecoveryQuality ?? 0);
       current.memoryConsistency.push(summary.memoryConsistency ?? 0);
-      current.strongRelationshipCoverage.push(summary.strongRelationshipCoverage ?? 0);
+      current.strongRelationshipCoverage.push(
+        summary.strongRelationshipCoverage ?? 0,
+      );
       current.weakStartMatchMean.push(summary.weakStartMatchCount ?? 0);
       current.meanStrengthLift.push(summary.meanStrengthLift ?? 0);
       current.oracleScore.push(summary.oracleScore ?? 0);
@@ -707,24 +719,40 @@ export function aggregateWorldDiagnostics(
         family: entry.family,
         horizon: entry.horizon,
         convergenceScore: Number(average(entry.convergenceScore).toFixed(4)),
-        matchedRelationships: Number(average(entry.matchedRelationships).toFixed(4)),
-        noMatchRecoveryQuality: Number(average(entry.noMatchRecoveryQuality).toFixed(4)),
+        matchedRelationships: Number(
+          average(entry.matchedRelationships).toFixed(4),
+        ),
+        noMatchRecoveryQuality: Number(
+          average(entry.noMatchRecoveryQuality).toFixed(4),
+        ),
         memoryConsistency: Number(average(entry.memoryConsistency).toFixed(4)),
-        strongRelationshipCoverage: Number(average(entry.strongRelationshipCoverage).toFixed(4)),
-        weakStartMatchMean: Number(average(entry.weakStartMatchMean).toFixed(4)),
+        strongRelationshipCoverage: Number(
+          average(entry.strongRelationshipCoverage).toFixed(4),
+        ),
+        weakStartMatchMean: Number(
+          average(entry.weakStartMatchMean).toFixed(4),
+        ),
         meanStrengthLift: Number(average(entry.meanStrengthLift).toFixed(4)),
         oracleScore: Number(average(entry.oracleScore).toFixed(4)),
-        oracleProgressScore: Number(average(entry.oracleProgressScore).toFixed(4)),
+        oracleProgressScore: Number(
+          average(entry.oracleProgressScore).toFixed(4),
+        ),
         closurePrecision: Number(average(entry.closurePrecision).toFixed(4)),
         preferredRecall: Number(average(entry.preferredRecall).toFixed(4)),
-        forbiddenAvoidance: Number(average(entry.forbiddenAvoidance).toFixed(4)),
+        forbiddenAvoidance: Number(
+          average(entry.forbiddenAvoidance).toFixed(4),
+        ),
       };
       const baselineConvergence = baselineWorldScores.get(entry.worldId);
-      const baselineCoverage = baselineWorldScores.get(`${entry.worldId}:strongCoverage`);
+      const baselineCoverage = baselineWorldScores.get(
+        `${entry.worldId}:strongCoverage`,
+      );
       diagnostic.deltaConvergence = Number(
         (
           diagnostic.convergenceScore -
-          (Number.isFinite(baselineConvergence) ? baselineConvergence : diagnostic.convergenceScore)
+          (Number.isFinite(baselineConvergence)
+            ? baselineConvergence
+            : diagnostic.convergenceScore)
         ).toFixed(4),
       );
       diagnostic.deltaStrongCoverage = Number(
@@ -802,19 +830,33 @@ export function aggregateCandidateMetrics(seedRuns) {
     weakMean: Number((totals.weakMean / divisor).toFixed(4)),
     weakMin: Number((totals.weakMin / divisor).toFixed(4)),
     networkFloor: Number((totals.networkFloor / divisor).toFixed(4)),
-    strongCoverageMean: Number((totals.strongCoverageMean / divisor).toFixed(4)),
-    weakStartMatchMean: Number((totals.weakStartMatchMean / divisor).toFixed(4)),
-    meanStrengthLiftMean: Number((totals.meanStrengthLiftMean / divisor).toFixed(4)),
+    strongCoverageMean: Number(
+      (totals.strongCoverageMean / divisor).toFixed(4),
+    ),
+    weakStartMatchMean: Number(
+      (totals.weakStartMatchMean / divisor).toFixed(4),
+    ),
+    meanStrengthLiftMean: Number(
+      (totals.meanStrengthLiftMean / divisor).toFixed(4),
+    ),
     oracleScoreMean: Number((totals.oracleScoreMean / divisor).toFixed(4)),
-    oracleProgressMean: Number((totals.oracleProgressMean / divisor).toFixed(4)),
-    closurePrecisionMean: Number((totals.closurePrecisionMean / divisor).toFixed(4)),
-    preferredRecallMean: Number((totals.preferredRecallMean / divisor).toFixed(4)),
+    oracleProgressMean: Number(
+      (totals.oracleProgressMean / divisor).toFixed(4),
+    ),
+    closurePrecisionMean: Number(
+      (totals.closurePrecisionMean / divisor).toFixed(4),
+    ),
+    preferredRecallMean: Number(
+      (totals.preferredRecallMean / divisor).toFixed(4),
+    ),
     forbiddenAvoidanceMean: Number(
       (totals.forbiddenAvoidanceMean / divisor).toFixed(4),
     ),
     objectiveStdDev: Number(Math.sqrt(objectiveVariance).toFixed(4)),
     worstSeedObjective: Number(
-      Math.min(...seedRuns.map((seedRun) => seedRun.metrics.objective)).toFixed(4),
+      Math.min(...seedRuns.map((seedRun) => seedRun.metrics.objective)).toFixed(
+        4,
+      ),
     ),
   };
 }
@@ -822,24 +864,40 @@ export function aggregateCandidateMetrics(seedRuns) {
 export function holdoutPenalty(candidateMetrics, baselineMetrics) {
   if (!baselineMetrics) return 0;
   return (
-    Math.max(0, (baselineMetrics.overall ?? 0) - (candidateMetrics.overall ?? 0)) * 0.4 +
     Math.max(
       0,
-      (baselineMetrics.strongCoverageMean ?? 0) - (candidateMetrics.strongCoverageMean ?? 0),
-    ) * 0.2 +
-    Math.max(0, (baselineMetrics.weakMin ?? 0) - (candidateMetrics.weakMin ?? 0)) * 0.2 +
+      (baselineMetrics.overall ?? 0) - (candidateMetrics.overall ?? 0),
+    ) *
+      0.4 +
     Math.max(
       0,
-      (baselineMetrics.oracleScoreMean ?? 0) - (candidateMetrics.oracleScoreMean ?? 0),
-    ) * 0.25 +
+      (baselineMetrics.strongCoverageMean ?? 0) -
+        (candidateMetrics.strongCoverageMean ?? 0),
+    ) *
+      0.2 +
     Math.max(
       0,
-      (baselineMetrics.oracleProgressMean ?? 0) - (candidateMetrics.oracleProgressMean ?? 0),
-    ) * 0.2 +
+      (baselineMetrics.weakMin ?? 0) - (candidateMetrics.weakMin ?? 0),
+    ) *
+      0.2 +
     Math.max(
       0,
-      (baselineMetrics.closurePrecisionMean ?? 0) - (candidateMetrics.closurePrecisionMean ?? 0),
-    ) * 0.15
+      (baselineMetrics.oracleScoreMean ?? 0) -
+        (candidateMetrics.oracleScoreMean ?? 0),
+    ) *
+      0.25 +
+    Math.max(
+      0,
+      (baselineMetrics.oracleProgressMean ?? 0) -
+        (candidateMetrics.oracleProgressMean ?? 0),
+    ) *
+      0.2 +
+    Math.max(
+      0,
+      (baselineMetrics.closurePrecisionMean ?? 0) -
+        (candidateMetrics.closurePrecisionMean ?? 0),
+    ) *
+      0.15
   );
 }
 
@@ -849,7 +907,9 @@ export async function main() {
   const { profile, topK, maxCandidates } = parsedArgs;
   const seeds = getSearchSeeds(baseConfig, parsedArgs);
   const grid = buildCandidateGrid(profile);
-  const combinations = cartesianProduct(grid.dimensions.map((dimension) => dimension.values));
+  const combinations = cartesianProduct(
+    grid.dimensions.map((dimension) => dimension.values),
+  );
   const limitedCombinations =
     maxCandidates > 0 ? combinations.slice(0, maxCandidates) : combinations;
   const artifactRoot = path.resolve(
@@ -872,7 +932,9 @@ export async function main() {
       artifactRoot,
       namespace: `social-sim-baseline-seed-${seed}`,
       seed,
-      tuning: normalizeSocialSimTuning(baseConfig.tuning ?? DEFAULT_SOCIAL_SIM_TUNING),
+      tuning: normalizeSocialSimTuning(
+        baseConfig.tuning ?? DEFAULT_SOCIAL_SIM_TUNING,
+      ),
     };
     const result = await runSocialSimulation(baselineConfig);
     baselineSeedRuns.push({
@@ -900,7 +962,8 @@ export async function main() {
   for (const [worldId, scores] of baselineWorldScores.entries()) {
     baselineWorldScores.set(
       worldId,
-      scores.reduce((sum, value) => sum + value, 0) / Math.max(scores.length, 1),
+      scores.reduce((sum, value) => sum + value, 0) /
+        Math.max(scores.length, 1),
     );
   }
   for (const seedRun of baselineSeedRuns) {
@@ -915,7 +978,8 @@ export async function main() {
     if (!String(worldId).endsWith(":strongCoverage")) continue;
     baselineWorldScores.set(
       worldId,
-      scores.reduce((sum, value) => sum + value, 0) / Math.max(scores.length, 1),
+      scores.reduce((sum, value) => sum + value, 0) /
+        Math.max(scores.length, 1),
     );
   }
   const baselineAggregate = aggregateCandidateMetrics(
@@ -1045,7 +1109,9 @@ export async function main() {
               ...world,
             })),
           )
-          .sort((left, right) => left.convergenceScore - right.convergenceScore)[0] ?? null,
+          .sort(
+            (left, right) => left.convergenceScore - right.convergenceScore,
+          )[0] ?? null,
       worldDiagnostics,
       holdoutDiagnostics,
       seedRuns,
@@ -1077,8 +1143,12 @@ export async function main() {
       metrics: baselineAggregate,
       holdoutMetrics: baselineHoldoutAggregate,
       topRegressionReason: findTopRegressionReason(baselineWorldDiagnostics),
-      holdoutTopRegressionReason: findTopRegressionReason(baselineHoldoutDiagnostics),
-      worstHoldoutWorld: findWorstWorldByDiagnostics(baselineHoldoutDiagnostics),
+      holdoutTopRegressionReason: findTopRegressionReason(
+        baselineHoldoutDiagnostics,
+      ),
+      worstHoldoutWorld: findWorstWorldByDiagnostics(
+        baselineHoldoutDiagnostics,
+      ),
       worstSeedWorld:
         baselineSeedRuns
           .flatMap((seedRun) =>
@@ -1088,7 +1158,9 @@ export async function main() {
               convergenceScore: world.summary?.convergenceScore ?? 0,
             })),
           )
-          .sort((left, right) => left.convergenceScore - right.convergenceScore)[0] ?? null,
+          .sort(
+            (left, right) => left.convergenceScore - right.convergenceScore,
+          )[0] ?? null,
       worldDiagnostics: baselineWorldDiagnostics,
       holdoutDiagnostics: baselineHoldoutDiagnostics,
       worldScores: Object.fromEntries(baselineWorldScores.entries()),

@@ -149,14 +149,20 @@ test("compare system baseline reports deltas against latest accepted baseline", 
 });
 
 test("compare system baseline reports live regression explicitly", () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "system-baseline-compare-regression-"));
+  const root = mkdtempSync(
+    path.join(os.tmpdir(), "system-baseline-compare-regression-"),
+  );
   const artifactRoot = path.join(root, "artifacts");
   mkdirSync(artifactRoot, { recursive: true });
 
   const baselinePath = path.join(root, "system-baseline.json");
   writeFileSync(
     baselinePath,
-    JSON.stringify({ version: 1, suiteThresholds: {}, overallThresholds: {} }, null, 2),
+    JSON.stringify(
+      { version: 1, suiteThresholds: {}, overallThresholds: {} },
+      null,
+      2,
+    ),
   );
 
   const historyPath = path.join(root, "system-baseline-history.json");
@@ -183,7 +189,10 @@ test("compare system baseline reports live regression explicitly", () => {
     ),
   );
 
-  const systemRunDir = path.join(artifactRoot, "system-evals-2026-04-09T00-00-00-000Z");
+  const systemRunDir = path.join(
+    artifactRoot,
+    "system-evals-2026-04-09T00-00-00-000Z",
+  );
   mkdirSync(systemRunDir, { recursive: true });
   writeFileSync(
     path.join(systemRunDir, "summary.json"),
@@ -244,7 +253,11 @@ test("compare system baseline reports live regression explicitly", () => {
 
   assert.equal(result.passed, false);
   assert.ok(
-    result.regressions.some((entry) => entry.includes("social-sim live mean regressed")),
+    result.regressions.some((entry) =>
+      entry.includes("social-sim live mean regressed"),
+    ),
   );
-  assert.ok(result.regressions.some((entry) => entry.includes("gateScore regressed")));
+  assert.ok(
+    result.regressions.some((entry) => entry.includes("gateScore regressed")),
+  );
 });

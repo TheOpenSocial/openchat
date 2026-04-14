@@ -7,12 +7,20 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { runLiveSanitizedWorkflowReplay } from "./run-live-sanitized-workflow-replay.mjs";
 
 test("live sanitized workflow replay fetches, sanitizes, and evaluates replay traces", async () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "live-sanitized-workflow-replay-"));
+  const root = mkdtempSync(
+    path.join(os.tmpdir(), "live-sanitized-workflow-replay-"),
+  );
   const rawExportPath = path.join(root, "workflow-replay-export.json");
-  const sanitizedExportPath = path.join(root, "workflow-replay-export.sanitized.jsonl");
+  const sanitizedExportPath = path.join(
+    root,
+    "workflow-replay-export.sanitized.jsonl",
+  );
 
   const result = await runLiveSanitizedWorkflowReplay(
-    [`--export-output=${rawExportPath}`, `--sanitized-output=${sanitizedExportPath}`],
+    [
+      `--export-output=${rawExportPath}`,
+      `--sanitized-output=${sanitizedExportPath}`,
+    ],
     {
       ...process.env,
       EVAL_ARTIFACT_ROOT: path.join(root, "artifacts"),
@@ -27,11 +35,13 @@ test("live sanitized workflow replay fetches, sanitizes, and evaluates replay tr
               suite: "workflow-replay-export",
               conversations: [
                 {
-                  conversationId: "workflow-123e4567-e89b-12d3-a456-426614174000",
+                  conversationId:
+                    "workflow-123e4567-e89b-12d3-a456-426614174000",
                   messages: [
                     {
                       role: "user",
-                      content: "Email maria@example.com before doing anything else.",
+                      content:
+                        "Email maria@example.com before doing anything else.",
                     },
                   ],
                   expected: {},

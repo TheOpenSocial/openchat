@@ -12,10 +12,13 @@ import {
   summarizeCaseRows,
 } from "../shared/artifacts.mjs";
 
-const DEFAULT_MANIFEST_PATH = "scripts/evals/golden/product-critical-manifest.json";
+const DEFAULT_MANIFEST_PATH =
+  "scripts/evals/golden/product-critical-manifest.json";
 
 function normalizeString(value, fallback = "") {
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : fallback;
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : fallback;
 }
 
 function boolFromEnv(value, fallback = false) {
@@ -35,16 +38,28 @@ function parseArgs(argv = process.argv.slice(2), env = process.env) {
     flags.set(key, rawValue ?? "true");
   }
   return {
-    dryRun: boolFromEnv(flags.get("dry-run") ?? env.GOLDEN_PRODUCT_DRY_RUN, false),
-    layer: normalizeString(flags.get("layer") ?? env.GOLDEN_PRODUCT_LAYER, "eval"),
+    dryRun: boolFromEnv(
+      flags.get("dry-run") ?? env.GOLDEN_PRODUCT_DRY_RUN,
+      false,
+    ),
+    layer: normalizeString(
+      flags.get("layer") ?? env.GOLDEN_PRODUCT_LAYER,
+      "eval",
+    ),
     source: normalizeString(
       flags.get("source") ?? env.GOLDEN_PRODUCT_SOURCE,
       "agent-suite",
     ),
-    artifactPath: normalizeString(flags.get("artifact-path") ?? env.GOLDEN_PRODUCT_ARTIFACT_PATH, ""),
+    artifactPath: normalizeString(
+      flags.get("artifact-path") ?? env.GOLDEN_PRODUCT_ARTIFACT_PATH,
+      "",
+    ),
     manifestPath: path.resolve(
       process.cwd(),
-      normalizeString(flags.get("manifest") ?? env.GOLDEN_PRODUCT_MANIFEST_PATH, DEFAULT_MANIFEST_PATH),
+      normalizeString(
+        flags.get("manifest") ?? env.GOLDEN_PRODUCT_MANIFEST_PATH,
+        DEFAULT_MANIFEST_PATH,
+      ),
     ),
   };
 }
@@ -78,8 +93,12 @@ function runProductGoldenCommand(layer, artifactDir) {
 }
 
 function normalizeSnapshotArtifact(snapshot) {
-  const scenarios = Array.isArray(snapshot?.scenarios) ? snapshot.scenarios : [];
-  const regressions = Array.isArray(snapshot?.regressions) ? snapshot.regressions : [];
+  const scenarios = Array.isArray(snapshot?.scenarios)
+    ? snapshot.scenarios
+    : [];
+  const regressions = Array.isArray(snapshot?.regressions)
+    ? snapshot.regressions
+    : [];
   const failureClasses = regressions.reduce((current, regression) => {
     const key = normalizeString(regression?.key, "");
     if (!key) return current;
@@ -92,25 +111,39 @@ function normalizeSnapshotArtifact(snapshot) {
     cases: [
       {
         id: "agentic-evals-snapshot",
-        status: normalizeString(snapshot?.summary?.status, "unknown") === "healthy" ? "passed" : "failed",
+        status:
+          normalizeString(snapshot?.summary?.status, "unknown") === "healthy"
+            ? "passed"
+            : "failed",
       },
     ],
     records: scenarios.map((scenario) => ({
       scenarioId: normalizeString(scenario?.scenarioId, scenario?.id ?? ""),
       status: scenario?.passed === true ? "passed" : "failed",
-      failureClass: scenario?.passed === true ? null : regressions[0]?.key ?? "eval_scenario_failed",
+      failureClass:
+        scenario?.passed === true
+          ? null
+          : (regressions[0]?.key ?? "eval_scenario_failed"),
     })),
     summary: {
       caseCounts: {
         total: 1,
-        passed: normalizeString(snapshot?.summary?.status, "unknown") === "healthy" ? 1 : 0,
-        failed: normalizeString(snapshot?.summary?.status, "unknown") === "healthy" ? 0 : 1,
+        passed:
+          normalizeString(snapshot?.summary?.status, "unknown") === "healthy"
+            ? 1
+            : 0,
+        failed:
+          normalizeString(snapshot?.summary?.status, "unknown") === "healthy"
+            ? 0
+            : 1,
         skipped: 0,
       },
       recordCounts: {
         total: scenarios.length,
-        passed: scenarios.filter((scenario) => scenario?.passed === true).length,
-        failed: scenarios.filter((scenario) => scenario?.passed !== true).length,
+        passed: scenarios.filter((scenario) => scenario?.passed === true)
+          .length,
+        failed: scenarios.filter((scenario) => scenario?.passed !== true)
+          .length,
         skipped: 0,
       },
       failureClasses,
@@ -190,7 +223,10 @@ export async function runProductCriticalGoldens(
     );
     if (config.source === "agentic-evals-snapshot") {
       try {
-        const outputPath = path.join(suiteArtifactDir, "agentic-evals-snapshot.json");
+        const outputPath = path.join(
+          suiteArtifactDir,
+          "agentic-evals-snapshot.json",
+        );
         await fetchAgenticEvalSnapshot([`--output=${outputPath}`], env);
         suiteArtifact = loadArtifactFromPath(config.source, outputPath);
         commandResult = {
@@ -210,9 +246,7 @@ export async function runProductCriticalGoldens(
       commandResult = runProductGoldenCommand(config.layer, suiteArtifactDir);
       try {
         const artifactPath = findLatestJsonArtifact(suiteArtifactDir);
-        suiteArtifact = JSON.parse(
-          readFileSync(artifactPath, "utf8"),
-        );
+        suiteArtifact = JSON.parse(readFileSync(artifactPath, "utf8"));
       } catch {
         suiteArtifact = null;
       }
@@ -221,8 +255,12 @@ export async function runProductCriticalGoldens(
 
   const caseCounts = suiteArtifact?.summary?.caseCounts ?? null;
   const failureClasses = suiteArtifact?.summary?.failureClasses ?? null;
-  const suiteCases = Array.isArray(suiteArtifact?.cases) ? suiteArtifact.cases : [];
-  const suiteRecords = Array.isArray(suiteArtifact?.records) ? suiteArtifact.records : [];
+  const suiteCases = Array.isArray(suiteArtifact?.cases)
+    ? suiteArtifact.cases
+    : [];
+  const suiteRecords = Array.isArray(suiteArtifact?.records)
+    ? suiteArtifact.records
+    : [];
   const caseIds = Array.from(
     new Set(
       suiteCases
@@ -236,25 +274,43 @@ export async function runProductCriticalGoldens(
     new Set(
       suiteRecords
         ? suiteRecords
-            .map((record) => (typeof record?.scenarioId === "string" ? record.scenarioId : null))
+            .map((record) =>
+              typeof record?.scenarioId === "string" ? record.scenarioId : null,
+            )
             .filter(Boolean)
         : [],
     ),
   );
   const requiredScenarioIds = Array.isArray(layerManifest.requiredScenarioIds)
-    ? layerManifest.requiredScenarioIds.filter((value) => typeof value === "string")
+    ? layerManifest.requiredScenarioIds.filter(
+        (value) => typeof value === "string",
+      )
     : [];
   const requiredCheckIds = Array.isArray(layerManifest.requiredCheckIds)
-    ? layerManifest.requiredCheckIds.filter((value) => typeof value === "string")
+    ? layerManifest.requiredCheckIds.filter(
+        (value) => typeof value === "string",
+      )
     : [];
-  const requiredPassedCheckIds = Array.isArray(layerManifest.requiredPassedCheckIds)
-    ? layerManifest.requiredPassedCheckIds.filter((value) => typeof value === "string")
+  const requiredPassedCheckIds = Array.isArray(
+    layerManifest.requiredPassedCheckIds,
+  )
+    ? layerManifest.requiredPassedCheckIds.filter(
+        (value) => typeof value === "string",
+      )
     : [];
-  const forbiddenFailureClasses = Array.isArray(layerManifest.forbiddenFailureClasses)
-    ? layerManifest.forbiddenFailureClasses.filter((value) => typeof value === "string")
+  const forbiddenFailureClasses = Array.isArray(
+    layerManifest.forbiddenFailureClasses,
+  )
+    ? layerManifest.forbiddenFailureClasses.filter(
+        (value) => typeof value === "string",
+      )
     : [];
-  const requiredPassedScenarioIds = Array.isArray(layerManifest.requiredPassedScenarioIds)
-    ? layerManifest.requiredPassedScenarioIds.filter((value) => typeof value === "string")
+  const requiredPassedScenarioIds = Array.isArray(
+    layerManifest.requiredPassedScenarioIds,
+  )
+    ? layerManifest.requiredPassedScenarioIds.filter(
+        (value) => typeof value === "string",
+      )
     : [];
   const passedCheckIds = new Set(
     suiteCases
@@ -265,13 +321,17 @@ export async function runProductCriticalGoldens(
   const passedScenarioIds = new Set(
     suiteRecords
       .filter((record) => record?.status === "passed")
-      .map((record) => (typeof record?.scenarioId === "string" ? record.scenarioId : null))
+      .map((record) =>
+        typeof record?.scenarioId === "string" ? record.scenarioId : null,
+      )
       .filter(Boolean),
   );
   const missingScenarioIds = requiredScenarioIds.filter(
     (scenarioId) => !scenarioIds.includes(scenarioId),
   );
-  const missingCheckIds = requiredCheckIds.filter((checkId) => !caseIds.includes(checkId));
+  const missingCheckIds = requiredCheckIds.filter(
+    (checkId) => !caseIds.includes(checkId),
+  );
   const missingPassedCheckIds = requiredPassedCheckIds.filter(
     (checkId) => !passedCheckIds.has(checkId),
   );
@@ -283,13 +343,15 @@ export async function runProductCriticalGoldens(
     (caseCounts?.total ?? 0) >= layerManifest.minCaseCount;
   const recordCountPass =
     !Number.isFinite(layerManifest.minRecordCount) ||
-    (suiteArtifact?.summary?.recordCounts?.total ?? 0) >= layerManifest.minRecordCount;
+    (suiteArtifact?.summary?.recordCounts?.total ?? 0) >=
+      layerManifest.minRecordCount;
   const failedCaseCountPass =
     !Number.isFinite(layerManifest.maxFailedCases) ||
     (caseCounts?.failed ?? 0) <= layerManifest.maxFailedCases;
   const failedRecordCountPass =
     !Number.isFinite(layerManifest.maxFailedRecords) ||
-    (suiteArtifact?.summary?.recordCounts?.failed ?? 0) <= layerManifest.maxFailedRecords;
+    (suiteArtifact?.summary?.recordCounts?.failed ?? 0) <=
+      layerManifest.maxFailedRecords;
   const scenarioCoveragePass = missingScenarioIds.length === 0;
   const checkCoveragePass = missingCheckIds.length === 0;
   const passedCheckCoveragePass = missingPassedCheckIds.length === 0;
@@ -300,8 +362,7 @@ export async function runProductCriticalGoldens(
   const failureClassPass = forbiddenFailureClassMatches.length === 0;
   const passed =
     config.dryRun ||
-    (
-      commandResult.status === 0 &&
+    (commandResult.status === 0 &&
       caseCountPass &&
       recordCountPass &&
       failedCaseCountPass &&
@@ -310,8 +371,7 @@ export async function runProductCriticalGoldens(
       checkCoveragePass &&
       passedCheckCoveragePass &&
       passedScenarioCoveragePass &&
-      failureClassPass
-    );
+      failureClassPass);
   const baseScore =
     typeof caseCounts?.total === "number" && caseCounts.total > 0
       ? Number((caseCounts.passed / caseCounts.total).toFixed(3))
@@ -319,10 +379,9 @@ export async function runProductCriticalGoldens(
   const normalizedScore =
     passed && config.source === "agentic-evals-snapshot"
       ? Number(
-          (
-            Number.isFinite(suiteArtifact?.snapshot?.summary?.score)
-              ? suiteArtifact.snapshot.summary.score
-              : baseScore || 1
+          (Number.isFinite(suiteArtifact?.snapshot?.summary?.score)
+            ? suiteArtifact.snapshot.summary.score
+            : baseScore || 1
           ).toFixed(3),
         )
       : passed
@@ -333,29 +392,30 @@ export async function runProductCriticalGoldens(
       caseId: `product-critical-${config.layer}`,
       status: passed ? "passed" : "failed",
       score: normalizedScore,
-      primaryFailureReason:
-        passed
-          ? "none"
-          : !caseCountPass
-            ? "case_count_below_threshold"
-            : !recordCountPass
-              ? "record_count_below_threshold"
-              : !failedCaseCountPass
-                ? "too_many_failed_cases"
-                : !failedRecordCountPass
-                  ? "too_many_failed_records"
-                  : !checkCoveragePass
-                    ? "missing_required_checks"
-                    : !passedCheckCoveragePass
-                      ? "required_checks_not_passing"
-                      : !passedScenarioCoveragePass
-                        ? "required_scenarios_not_passing"
-                    : !failureClassPass
-                      ? "forbidden_failure_class_present"
-                      : !scenarioCoveragePass
-                        ? "missing_required_scenarios"
-                        : Object.entries(failureClasses ?? {}).sort((left, right) => right[1] - left[1])[0]?.[0] ??
-                          `agent-test-suite-${config.layer}-failed`,
+      primaryFailureReason: passed
+        ? "none"
+        : !caseCountPass
+          ? "case_count_below_threshold"
+          : !recordCountPass
+            ? "record_count_below_threshold"
+            : !failedCaseCountPass
+              ? "too_many_failed_cases"
+              : !failedRecordCountPass
+                ? "too_many_failed_records"
+                : !checkCoveragePass
+                  ? "missing_required_checks"
+                  : !passedCheckCoveragePass
+                    ? "required_checks_not_passing"
+                    : !passedScenarioCoveragePass
+                      ? "required_scenarios_not_passing"
+                      : !failureClassPass
+                        ? "forbidden_failure_class_present"
+                        : !scenarioCoveragePass
+                          ? "missing_required_scenarios"
+                          : (Object.entries(failureClasses ?? {}).sort(
+                              (left, right) => right[1] - left[1],
+                            )[0]?.[0] ??
+                            `agent-test-suite-${config.layer}-failed`),
       layer: config.layer,
       source: config.source,
       command: `node scripts/run-agent-test-suite.mjs --layer=${config.layer}`,

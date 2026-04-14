@@ -275,7 +275,9 @@ describe("Agent thread async-followup to chat creation flow", () => {
     } as any);
 
     expect(state.agentMessages).toHaveLength(1);
-    expect(state.agentMessages[0]?.content).toContain("Still in motion");
+    expect(state.agentMessages[0]?.content).toMatch(
+      /pending invite|still active|widen timing|widen one constraint/i,
+    );
 
     const updateResult = await inboxService.updateStatus(
       state.request.id,

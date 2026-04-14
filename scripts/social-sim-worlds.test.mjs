@@ -10,13 +10,31 @@ const fixturePath = resolve(
 
 const expectedScenarioFamilies = {
   short: {
-    coverage: ["success", "stagnation", "mismatch", "recovery", "moderationTrust"],
+    coverage: [
+      "success",
+      "stagnation",
+      "mismatch",
+      "recovery",
+      "moderationTrust",
+    ],
   },
   medium: {
-    coverage: ["success", "stagnation", "mismatch", "recovery", "moderationTrust"],
+    coverage: [
+      "success",
+      "stagnation",
+      "mismatch",
+      "recovery",
+      "moderationTrust",
+    ],
   },
   long: {
-    coverage: ["success", "stagnation", "mismatch", "recovery", "moderationTrust"],
+    coverage: [
+      "success",
+      "stagnation",
+      "mismatch",
+      "recovery",
+      "moderationTrust",
+    ],
   },
 };
 
@@ -47,7 +65,11 @@ test("social-sim worlds fixture covers all horizons and lane paths", () => {
 
   assert.equal(summary.version, 1);
   assert.equal(summary.worldCount, 3);
-  assert.deepEqual(Array.from(summary.horizons).sort(), ["long", "medium", "short"]);
+  assert.deepEqual(Array.from(summary.horizons).sort(), [
+    "long",
+    "medium",
+    "short",
+  ]);
 
   const scenarioIds = new Set();
   const actorKinds = new Set();
@@ -69,7 +91,10 @@ test("social-sim worlds fixture covers all horizons and lane paths", () => {
 
     for (const scenario of world.scenarios) {
       assert.equal(world.coverage[scenario.pathKind], scenario.id);
-      assert.equal(scenario.id.startsWith(`social-sim-${world.horizon}-`), true);
+      assert.equal(
+        scenario.id.startsWith(`social-sim-${world.horizon}-`),
+        true,
+      );
       scenarioIds.add(scenario.id);
       pathKinds.add(scenario.pathKind);
     }
@@ -91,4 +116,3 @@ test("social-sim worlds fixture covers all horizons and lane paths", () => {
   ]);
   assert.equal(scenarioIds.size, 15);
 });
-

@@ -8,7 +8,9 @@ function nowIso() {
 }
 
 function normalizeString(value, fallback = "") {
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : fallback;
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : fallback;
 }
 
 export function ensureDir(dirPath) {
@@ -68,7 +70,9 @@ export function summarizeCaseRows(caseRows = []) {
     totalCases,
     passedCases,
     failedCases: failedCases.length,
-    averageScore: Number((totalCases > 0 ? scoreSum / totalCases : 0).toFixed(3)),
+    averageScore: Number(
+      (totalCases > 0 ? scoreSum / totalCases : 0).toFixed(3),
+    ),
     primaryFailureReason:
       failedCases[0]?.primaryFailureReason ??
       failedCases[0]?.reason ??
@@ -100,4 +104,3 @@ export function finalizeEvalRun(envelope, summary, caseRows = [], extra = {}) {
     runDir: envelope.runDir,
   };
 }
-

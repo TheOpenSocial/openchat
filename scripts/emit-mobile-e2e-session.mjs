@@ -65,22 +65,27 @@ async function maybeRefreshSession({
     return { accessToken, refreshToken, sessionId };
   }
 
-  const response = await fetch(`${baseUrl.replace(/\/+$/, "")}/api/auth/refresh`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      ...(hostHeader ? { Host: hostHeader } : {}),
+  const response = await fetch(
+    `${baseUrl.replace(/\/+$/, "")}/api/auth/refresh`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...(hostHeader ? { Host: hostHeader } : {}),
+      },
+      body: JSON.stringify({
+        refreshToken,
+        deviceId: "staging-mobile-e2e-session",
+        deviceName: "Staging Mobile E2E Session",
+      }),
     },
-    body: JSON.stringify({
-      refreshToken,
-      deviceId: "staging-mobile-e2e-session",
-      deviceName: "Staging Mobile E2E Session",
-    }),
-  });
+  );
   const payload = await response.json().catch(() => null);
   if (!response.ok || !payload?.success || !payload?.data?.accessToken) {
     const preview = JSON.stringify(payload).slice(0, 300);
-    throw new Error(`Unable to refresh mobile E2E session (${response.status}): ${preview}`);
+    throw new Error(
+      `Unable to refresh mobile E2E session (${response.status}): ${preview}`,
+    );
   }
 
   return {
@@ -129,8 +134,10 @@ async function main() {
 
   const payload = {
     userId,
-    displayName: process.env.SMOKE_DISPLAY_NAME?.trim() || "Playground Smoke User",
-    email: process.env.SMOKE_EMAIL?.trim() || "playground-smoke@opensocial.test",
+    displayName:
+      process.env.SMOKE_DISPLAY_NAME?.trim() || "Playground Smoke User",
+    email:
+      process.env.SMOKE_EMAIL?.trim() || "playground-smoke@opensocial.test",
     accessToken: refreshed.accessToken,
     refreshToken: refreshed.refreshToken,
     sessionId: refreshed.sessionId,

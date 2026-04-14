@@ -20,20 +20,26 @@ test("live agentic report composes snapshot fetch and online report", async () =
       async fetchAgenticEvalSnapshot() {
         writeFileSync(
           snapshotPath,
-          JSON.stringify({
-            generatedAt: "2026-04-05T23:00:00.000Z",
-            summary: { status: "watch", regressionCount: 1 },
-            traceGrade: { status: "watch", score: 0.74 },
-            regressions: [{ key: "trace_grade_degraded", severity: "warning" }],
-            scenarios: [
-              {
-                scenarioId: "eval_usefulness_no_match_recovery_v1",
-                dimension: "usefulness",
-                score: 0.5,
-                passed: false,
-              },
-            ],
-          }, null, 2),
+          JSON.stringify(
+            {
+              generatedAt: "2026-04-05T23:00:00.000Z",
+              summary: { status: "watch", regressionCount: 1 },
+              traceGrade: { status: "watch", score: 0.74 },
+              regressions: [
+                { key: "trace_grade_degraded", severity: "warning" },
+              ],
+              scenarios: [
+                {
+                  scenarioId: "eval_usefulness_no_match_recovery_v1",
+                  dimension: "usefulness",
+                  score: 0.5,
+                  passed: false,
+                },
+              ],
+            },
+            null,
+            2,
+          ),
         );
         return {
           outputPath: snapshotPath,

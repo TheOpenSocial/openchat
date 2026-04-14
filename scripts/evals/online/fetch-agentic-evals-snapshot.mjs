@@ -5,7 +5,9 @@ import path from "node:path";
 import { resolveSharedAdminEnv } from "../shared/env.mjs";
 
 function normalizeString(value, fallback = "") {
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : fallback;
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : fallback;
 }
 
 function parseArgs(argv = process.argv.slice(2), env = process.env) {
@@ -88,7 +90,9 @@ export async function fetchAgenticEvalSnapshot(
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Failed to fetch agentic eval snapshot from ${url}: ${message}`);
+    throw new Error(
+      `Failed to fetch agentic eval snapshot from ${url}: ${message}`,
+    );
   }
 
   const body = await response.json().catch(() => null);
@@ -99,7 +103,10 @@ export async function fetchAgenticEvalSnapshot(
   }
 
   const payload =
-    body && typeof body === "object" && body.data && typeof body.data === "object"
+    body &&
+    typeof body === "object" &&
+    body.data &&
+    typeof body.data === "object"
       ? body.data
       : body;
 
@@ -109,7 +116,9 @@ export async function fetchAgenticEvalSnapshot(
   return {
     outputPath: config.outputPath,
     baseUrl: config.baseUrl,
-    scenarioCount: Array.isArray(payload?.scenarios) ? payload.scenarios.length : 0,
+    scenarioCount: Array.isArray(payload?.scenarios)
+      ? payload.scenarios.length
+      : 0,
     status: normalizeString(payload?.summary?.status, "unknown"),
     traceGradeStatus: normalizeString(payload?.traceGrade?.status, "unknown"),
   };

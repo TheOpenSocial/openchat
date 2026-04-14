@@ -499,8 +499,10 @@ export async function runSystemEvals(
               liveWorkflowReplayResult.snapshotFetch.baseUrl ??
               null,
             sanitizedExportPath:
-              liveWorkflowReplayResult.workflowReplay.sanitizedExportPath ?? null,
-            combinedReplayPath: liveWorkflowReplayResult.combinedReplayPath ?? null,
+              liveWorkflowReplayResult.workflowReplay.sanitizedExportPath ??
+              null,
+            combinedReplayPath:
+              liveWorkflowReplayResult.combinedReplayPath ?? null,
           },
         }),
       );

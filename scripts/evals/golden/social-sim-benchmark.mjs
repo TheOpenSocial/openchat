@@ -68,11 +68,17 @@ function aggregateFamilyMetrics(seedSummaries) {
       };
       current.convergenceScores.push(metrics.averageConvergenceScore ?? 0);
       current.oracleScores.push(metrics.averageOracleScore ?? 0);
-      current.oracleProgressScores.push(metrics.averageOracleProgressScore ?? 0);
+      current.oracleProgressScores.push(
+        metrics.averageOracleProgressScore ?? 0,
+      );
       current.closurePrecisionScores.push(metrics.averageClosurePrecision ?? 0);
       current.preferredRecallScores.push(metrics.averagePreferredRecall ?? 0);
-      current.forbiddenAvoidanceScores.push(metrics.averageForbiddenAvoidance ?? 0);
-      current.diagnosticSeverityScores.push(metrics.averageDiagnosticSeverity ?? 0);
+      current.forbiddenAvoidanceScores.push(
+        metrics.averageForbiddenAvoidance ?? 0,
+      );
+      current.diagnosticSeverityScores.push(
+        metrics.averageDiagnosticSeverity ?? 0,
+      );
       familyRollup.set(family, current);
     }
   }
@@ -81,14 +87,28 @@ function aggregateFamilyMetrics(seedSummaries) {
     Array.from(familyRollup.entries()).map(([family, metrics]) => [
       family,
       {
-        meanConvergenceScore: Number(average(metrics.convergenceScores).toFixed(3)),
-        convergenceScoreStdDev: Number(stddev(metrics.convergenceScores).toFixed(3)),
+        meanConvergenceScore: Number(
+          average(metrics.convergenceScores).toFixed(3),
+        ),
+        convergenceScoreStdDev: Number(
+          stddev(metrics.convergenceScores).toFixed(3),
+        ),
         meanOracleScore: Number(average(metrics.oracleScores).toFixed(3)),
-        meanOracleProgressScore: Number(average(metrics.oracleProgressScores).toFixed(3)),
-        meanClosurePrecision: Number(average(metrics.closurePrecisionScores).toFixed(3)),
-        meanPreferredRecall: Number(average(metrics.preferredRecallScores).toFixed(3)),
-        meanForbiddenAvoidance: Number(average(metrics.forbiddenAvoidanceScores).toFixed(3)),
-        meanDiagnosticSeverity: Number(average(metrics.diagnosticSeverityScores).toFixed(3)),
+        meanOracleProgressScore: Number(
+          average(metrics.oracleProgressScores).toFixed(3),
+        ),
+        meanClosurePrecision: Number(
+          average(metrics.closurePrecisionScores).toFixed(3),
+        ),
+        meanPreferredRecall: Number(
+          average(metrics.preferredRecallScores).toFixed(3),
+        ),
+        meanForbiddenAvoidance: Number(
+          average(metrics.forbiddenAvoidanceScores).toFixed(3),
+        ),
+        meanDiagnosticSeverity: Number(
+          average(metrics.diagnosticSeverityScores).toFixed(3),
+        ),
         worstSeedConvergenceScore: Number(
           (metrics.convergenceScores.length > 0
             ? Math.min(...metrics.convergenceScores)
@@ -112,12 +132,18 @@ async function mapWithConcurrency(items, concurrency, worker) {
     }
   }
 
-  const workerCount = Math.min(Math.max(concurrency, 1), Math.max(items.length, 1));
+  const workerCount = Math.min(
+    Math.max(concurrency, 1),
+    Math.max(items.length, 1),
+  );
   await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
   return results;
 }
 
-export async function runSocialSimBenchmarkMatrix(argv = process.argv.slice(2), env = process.env) {
+export async function runSocialSimBenchmarkMatrix(
+  argv = process.argv.slice(2),
+  env = process.env,
+) {
   const matrixSeeds = parseSeedList(env.SOCIAL_SIM_BENCHMARK_SEEDS);
   const benchmarkConcurrency = parseConcurrency(
     env.SOCIAL_SIM_BENCHMARK_CONCURRENCY,
@@ -131,45 +157,53 @@ export async function runSocialSimBenchmarkMatrix(argv = process.argv.slice(2), 
   });
 
   const caseRows = [];
-  const seedResults = await mapWithConcurrency(matrixSeeds, benchmarkConcurrency, async (seed) => {
-    const result = await runSocialSimulation({
-      ...config,
-      benchmarkMode: true,
-      seed,
-      runId: `${envelope.runId}-seed-${seed}`,
-      artifactRoot: path.join(envelope.runDir, "social-sim"),
-    });
-    const score = result.summary?.totals?.averageConvergenceScore ?? 0;
-    const oracleScore = result.summary?.totals?.averageOracleScore ?? 0;
-    const oracleProgressScore = result.summary?.totals?.averageOracleProgressScore ?? 0;
-    const row = {
-      caseId: `social-sim-seed-${seed}`,
-      seed,
-      status: score >= 0.5 ? "passed" : "failed",
-      score,
-      oracleScore,
-      oracleProgressScore,
-      verdict: result.summary?.verdict ?? "unknown",
-      primaryFailureReason:
-        result.summary?.worldDiagnostics?.find(
-          (world) => (world.diagnostics?.severity ?? 0) > 0,
-        )?.diagnostics?.primaryReason ?? "none",
-      measurementWarnings: result.summary?.measurementWarnings ?? [],
-      effectiveBackendMode: result.summary?.effectiveBackendMode ?? "unknown",
-      artifactRunId: result.artifact?.runId ?? null,
-      familyScores: result.summary?.familyScores ?? {},
-    };
-    return row;
-  });
+  const seedResults = await mapWithConcurrency(
+    matrixSeeds,
+    benchmarkConcurrency,
+    async (seed) => {
+      const result = await runSocialSimulation({
+        ...config,
+        benchmarkMode: true,
+        seed,
+        runId: `${envelope.runId}-seed-${seed}`,
+        artifactRoot: path.join(envelope.runDir, "social-sim"),
+      });
+      const score = result.summary?.totals?.averageConvergenceScore ?? 0;
+      const oracleScore = result.summary?.totals?.averageOracleScore ?? 0;
+      const oracleProgressScore =
+        result.summary?.totals?.averageOracleProgressScore ?? 0;
+      const row = {
+        caseId: `social-sim-seed-${seed}`,
+        seed,
+        status: score >= 0.5 ? "passed" : "failed",
+        score,
+        oracleScore,
+        oracleProgressScore,
+        verdict: result.summary?.verdict ?? "unknown",
+        primaryFailureReason:
+          result.summary?.worldDiagnostics?.find(
+            (world) => (world.diagnostics?.severity ?? 0) > 0,
+          )?.diagnostics?.primaryReason ?? "none",
+        measurementWarnings: result.summary?.measurementWarnings ?? [],
+        effectiveBackendMode: result.summary?.effectiveBackendMode ?? "unknown",
+        artifactRunId: result.artifact?.runId ?? null,
+        familyScores: result.summary?.familyScores ?? {},
+      };
+      return row;
+    },
+  );
   caseRows.push(...seedResults);
 
   const scores = seedResults.map((entry) => entry.score);
   const oracleScores = seedResults.map((entry) => entry.oracleScore);
-  const oracleProgressScores = seedResults.map((entry) => entry.oracleProgressScore);
+  const oracleProgressScores = seedResults.map(
+    (entry) => entry.oracleProgressScore,
+  );
   const familyMetrics = aggregateFamilyMetrics(
     seedResults.map((entry) => ({ familyScores: entry.familyScores })),
   );
-  const worstSeed = [...seedResults].sort((left, right) => left.score - right.score)[0] ?? null;
+  const worstSeed =
+    [...seedResults].sort((left, right) => left.score - right.score)[0] ?? null;
   const summary = {
     ...summarizeCaseRows(caseRows),
     evalSuite: envelope.evalSuite,
@@ -182,7 +216,9 @@ export async function runSocialSimBenchmarkMatrix(argv = process.argv.slice(2), 
     meanOracleProgressScore: Number(average(oracleProgressScores).toFixed(3)),
     familyMetrics,
     effectiveBackendModes: Array.from(
-      new Set(seedResults.map((entry) => entry.effectiveBackendMode).filter(Boolean)),
+      new Set(
+        seedResults.map((entry) => entry.effectiveBackendMode).filter(Boolean),
+      ),
     ),
   };
 

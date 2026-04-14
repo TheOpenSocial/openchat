@@ -111,12 +111,16 @@ test("runLiveBroadReplay combines workflow replay, workflow snapshot replay, and
             channel: "agent_workflow_snapshot",
             provider: "agent-workflows-snapshot",
             toolFamily: "social",
-            expected: { requiredBehaviors: ["workflow_health_watch"], allowSideEffects: false },
+            expected: {
+              requiredBehaviors: ["workflow_health_watch"],
+              allowSideEffects: false,
+            },
             observed: {
               selectedTool: "",
               toolCalls: [],
               behaviors: ["workflow_health_watch"],
-              outputText: "Workflow run is watch with failure class matching_or_negotiation.",
+              outputText:
+                "Workflow run is watch with failure class matching_or_negotiation.",
               latencyMs: 0,
               sideEffects: false,
             },

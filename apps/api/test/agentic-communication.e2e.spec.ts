@@ -543,8 +543,10 @@ describe("Agentic communication E2E flow", () => {
     expect(
       agentMessages.some(
         (message) =>
-          message.content.toLowerCase().includes("still in motion") ||
-          message.content.toLowerCase().includes("quick update"),
+          message.content.toLowerCase().includes("still active") ||
+          message.content.toLowerCase().includes("pending invite") ||
+          message.content.toLowerCase().includes("widen timing") ||
+          message.content.toLowerCase().includes("widen one constraint"),
       ),
     ).toBe(true);
 

@@ -1509,7 +1509,7 @@ describe("IntentsService", () => {
   });
 
   it("forwards request notification metadata when sending an intent request", async () => {
-    const { service, prisma, notificationsService } = createIntentsService({
+    const { service, notificationsService } = createIntentsService({
       prisma: {
         intent: {
           findUnique: vi.fn().mockResolvedValue({

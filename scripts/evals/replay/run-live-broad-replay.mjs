@@ -28,11 +28,20 @@ function parseArgs(argv = process.argv.slice(2), env = process.env) {
 
   return {
     workflowExportPath: path.join(rootDir, "live-workflow-replay-export.json"),
-    workflowSanitizedPath: path.join(rootDir, "live-workflow-replay-export.sanitized.jsonl"),
+    workflowSanitizedPath: path.join(
+      rootDir,
+      "live-workflow-replay-export.sanitized.jsonl",
+    ),
     workflowSnapshotPath: path.join(rootDir, "agent-workflows-snapshot.json"),
-    workflowSnapshotReplayPath: path.join(rootDir, "agent-workflows-snapshot.replay.jsonl"),
+    workflowSnapshotReplayPath: path.join(
+      rootDir,
+      "agent-workflows-snapshot.replay.jsonl",
+    ),
     snapshotPath: path.join(rootDir, "agentic-evals-snapshot.json"),
-    snapshotReplayPath: path.join(rootDir, "agentic-evals-snapshot.replay.jsonl"),
+    snapshotReplayPath: path.join(
+      rootDir,
+      "agentic-evals-snapshot.replay.jsonl",
+    ),
     combinedReplayPath: path.join(rootDir, "live-broad-replay.jsonl"),
   };
 }
@@ -82,13 +91,14 @@ export async function runLiveBroadReplay(
     [`--output=${config.workflowSnapshotPath}`, ...passthroughArgs],
     env,
   );
-  const workflowSnapshotReplay = await deps.convertAgentWorkflowsSnapshotToReplay(
-    [
-      `--input=${config.workflowSnapshotPath}`,
-      `--output=${config.workflowSnapshotReplayPath}`,
-    ],
-    env,
-  );
+  const workflowSnapshotReplay =
+    await deps.convertAgentWorkflowsSnapshotToReplay(
+      [
+        `--input=${config.workflowSnapshotPath}`,
+        `--output=${config.workflowSnapshotReplayPath}`,
+      ],
+      env,
+    );
 
   const snapshotFetch = await deps.fetchAgenticEvalSnapshot(
     [`--output=${config.snapshotPath}`, ...passthroughArgs],
@@ -104,7 +114,11 @@ export async function runLiveBroadReplay(
     ...readJsonLines(config.workflowSnapshotReplayPath),
     ...readJsonLines(config.snapshotReplayPath),
   ];
-  writeFileSync(config.combinedReplayPath, `${combinedRows.join("\n")}\n`, "utf8");
+  writeFileSync(
+    config.combinedReplayPath,
+    `${combinedRows.join("\n")}\n`,
+    "utf8",
+  );
 
   const replay = await deps.runReplayEvals(
     ["--source=historical-export", `--corpus=${config.combinedReplayPath}`],

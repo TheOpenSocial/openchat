@@ -8,7 +8,9 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 
 test("moderation drill refreshes stale reporter token and writes an evidence artifact", async () => {
-  const artifactDir = fs.mkdtempSync(path.join(os.tmpdir(), "moderation-drill-"));
+  const artifactDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), "moderation-drill-"),
+  );
   const runId = "drill-run-1";
   const artifactPath = path.join(artifactDir, `${runId}.json`);
   let exchangeCount = 0;
@@ -28,7 +30,10 @@ test("moderation drill refreshes stale reporter token and writes an evidence art
       res.end(JSON.stringify(payload));
     };
 
-    if (req.method === "POST" && url.pathname === "/api/admin/ops/smoke-session/exchange") {
+    if (
+      req.method === "POST" &&
+      url.pathname === "/api/admin/ops/smoke-session/exchange"
+    ) {
       exchangeCount += 1;
       assert.equal(req.headers["x-application-key"], "app-key");
       assert.equal(req.headers["x-application-token"], "app-token");
@@ -67,19 +72,22 @@ test("moderation drill refreshes stale reporter token and writes an evidence art
       return;
     }
 
-    if (req.method === "GET" && url.pathname === "/api/admin/moderation/queue") {
+    if (
+      req.method === "GET" &&
+      url.pathname === "/api/admin/moderation/queue"
+    ) {
       queueHits += 1;
       json(200, {
         success: true,
-        data:
-          queueHits < 3
-            ? []
-            : [{ id: "flag-1", status: "open" }],
+        data: queueHits < 3 ? [] : [{ id: "flag-1", status: "open" }],
       });
       return;
     }
 
-    if (req.method === "POST" && url.pathname === "/api/admin/moderation/flags/flag-1/assign") {
+    if (
+      req.method === "POST" &&
+      url.pathname === "/api/admin/moderation/flags/flag-1/assign"
+    ) {
       json(200, {
         success: true,
         data: { assigneeUserId: "admin-1" },
@@ -87,7 +95,10 @@ test("moderation drill refreshes stale reporter token and writes an evidence art
       return;
     }
 
-    if (req.method === "POST" && url.pathname === "/api/admin/moderation/flags/flag-1/triage") {
+    if (
+      req.method === "POST" &&
+      url.pathname === "/api/admin/moderation/flags/flag-1/triage"
+    ) {
       json(200, {
         success: true,
         data: {
@@ -145,7 +156,10 @@ test("moderation drill refreshes stale reporter token and writes an evidence art
   assert.ok(address && typeof address === "object");
   const baseUrl = `http://127.0.0.1:${address.port}`;
 
-  const scriptPath = path.resolve(process.cwd(), "scripts/moderation-drill.mjs");
+  const scriptPath = path.resolve(
+    process.cwd(),
+    "scripts/moderation-drill.mjs",
+  );
   const child = spawn(process.execPath, [scriptPath], {
     cwd: process.cwd(),
     env: {
@@ -190,7 +204,10 @@ test("moderation drill refreshes stale reporter token and writes an evidence art
     assert.deepEqual(reportAuths, ["Bearer stale-token", "Bearer fresh-token"]);
     assert.ok(queueHits >= 3);
     assert.ok(auditHits >= 3);
-    assert.match(stdout, /Refreshed moderation drill smoke session via application credentials\./);
+    assert.match(
+      stdout,
+      /Refreshed moderation drill smoke session via application credentials\./,
+    );
     assert.match(stdout, /Moderation drill passed\./);
 
     const artifact = JSON.parse(fs.readFileSync(artifactPath, "utf8"));
@@ -220,7 +237,9 @@ test("moderation drill refreshes stale reporter token and writes an evidence art
 });
 
 test("moderation drill waits for enforcement visibility when restricting a user", async () => {
-  const artifactDir = fs.mkdtempSync(path.join(os.tmpdir(), "moderation-drill-"));
+  const artifactDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), "moderation-drill-"),
+  );
   const runId = "drill-run-2";
   const artifactPath = path.join(artifactDir, `${runId}.json`);
   let exchangeCount = 0;
@@ -238,7 +257,10 @@ test("moderation drill waits for enforcement visibility when restricting a user"
       res.end(JSON.stringify(payload));
     };
 
-    if (req.method === "POST" && url.pathname === "/api/admin/ops/smoke-session/exchange") {
+    if (
+      req.method === "POST" &&
+      url.pathname === "/api/admin/ops/smoke-session/exchange"
+    ) {
       exchangeCount += 1;
       json(200, {
         success: true,
@@ -265,7 +287,10 @@ test("moderation drill waits for enforcement visibility when restricting a user"
       return;
     }
 
-    if (req.method === "GET" && url.pathname === "/api/admin/moderation/queue") {
+    if (
+      req.method === "GET" &&
+      url.pathname === "/api/admin/moderation/queue"
+    ) {
       json(200, {
         success: true,
         data: [{ id: "flag-2", status: "open" }],
@@ -273,7 +298,10 @@ test("moderation drill waits for enforcement visibility when restricting a user"
       return;
     }
 
-    if (req.method === "POST" && url.pathname === "/api/admin/moderation/flags/flag-2/assign") {
+    if (
+      req.method === "POST" &&
+      url.pathname === "/api/admin/moderation/flags/flag-2/assign"
+    ) {
       json(200, {
         success: true,
         data: { assigneeUserId: "admin-1" },
@@ -281,7 +309,10 @@ test("moderation drill waits for enforcement visibility when restricting a user"
       return;
     }
 
-    if (req.method === "POST" && url.pathname === "/api/admin/moderation/flags/flag-2/triage") {
+    if (
+      req.method === "POST" &&
+      url.pathname === "/api/admin/moderation/flags/flag-2/triage"
+    ) {
       json(200, {
         success: true,
         data: {
@@ -346,7 +377,10 @@ test("moderation drill waits for enforcement visibility when restricting a user"
   assert.ok(address && typeof address === "object");
   const baseUrl = `http://127.0.0.1:${address.port}`;
 
-  const scriptPath = path.resolve(process.cwd(), "scripts/moderation-drill.mjs");
+  const scriptPath = path.resolve(
+    process.cwd(),
+    "scripts/moderation-drill.mjs",
+  );
   const child = spawn(process.execPath, [scriptPath], {
     cwd: process.cwd(),
     env: {
@@ -397,7 +431,11 @@ test("moderation drill waits for enforcement visibility when restricting a user"
     assert.equal(artifact.enforcementPath.outcome, "blocked_profile");
     assert.equal(artifact.evidence.enforcementVerified, "blocked_profile");
     assert.ok(
-      artifact.steps.some((step) => step.stage === "enforcement" && step.enforcement === "blocked_profile"),
+      artifact.steps.some(
+        (step) =>
+          step.stage === "enforcement" &&
+          step.enforcement === "blocked_profile",
+      ),
     );
   } finally {
     await new Promise((resolve, reject) => {

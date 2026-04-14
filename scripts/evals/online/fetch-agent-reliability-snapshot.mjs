@@ -5,7 +5,9 @@ import path from "node:path";
 import { resolveSharedAdminEnv } from "../shared/env.mjs";
 
 function normalizeString(value, fallback = "") {
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : fallback;
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : fallback;
 }
 
 function parseArgs(argv = process.argv.slice(2), env = process.env) {
@@ -29,7 +31,11 @@ function parseArgs(argv = process.argv.slice(2), env = process.env) {
       process.cwd(),
       normalizeString(
         flags.get("output") ?? env.EVAL_AGENT_RELIABILITY_OUTPUT,
-        path.join(".artifacts", "eval-fetch", "agent-reliability-snapshot.json"),
+        path.join(
+          ".artifacts",
+          "eval-fetch",
+          "agent-reliability-snapshot.json",
+        ),
       ),
     ),
     workflowLimit: normalizeString(
@@ -37,7 +43,8 @@ function parseArgs(argv = process.argv.slice(2), env = process.env) {
       "25",
     ),
     verificationLimit: normalizeString(
-      flags.get("verification-limit") ?? env.EVAL_AGENT_RELIABILITY_VERIFICATION_LIMIT,
+      flags.get("verification-limit") ??
+        env.EVAL_AGENT_RELIABILITY_VERIFICATION_LIMIT,
       "10",
     ),
     adminUserId: normalizeString(
@@ -70,7 +77,8 @@ function buildHeaders(config) {
     "x-admin-role": config.adminRole,
   };
   if (config.adminApiKey) headers["x-admin-api-key"] = config.adminApiKey;
-  if (config.accessToken) headers.Authorization = `Bearer ${config.accessToken}`;
+  if (config.accessToken)
+    headers.Authorization = `Bearer ${config.accessToken}`;
   if (config.hostHeader) headers.Host = config.hostHeader;
   return headers;
 }
@@ -95,7 +103,9 @@ export async function fetchAgentReliabilitySnapshot(
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Failed to fetch agent reliability snapshot from ${url}: ${message}`);
+    throw new Error(
+      `Failed to fetch agent reliability snapshot from ${url}: ${message}`,
+    );
   }
 
   const body = await response.json().catch(() => null);
@@ -106,7 +116,10 @@ export async function fetchAgentReliabilitySnapshot(
   }
 
   const payload =
-    body && typeof body === "object" && body.data && typeof body.data === "object"
+    body &&
+    typeof body === "object" &&
+    body.data &&
+    typeof body.data === "object"
       ? body.data
       : body;
 

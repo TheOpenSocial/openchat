@@ -54,7 +54,9 @@ test("convertAgentWorkflowsSnapshotToReplay writes replayable jsonl records from
     .map((line) => JSON.parse(line));
   assert.equal(rows[0].channel, "agent_workflow_snapshot");
   assert.equal(rows[0].provider, "agent-workflows-snapshot");
-  assert.deepEqual(rows[0].expected.requiredBehaviors, ["workflow_health_healthy"]);
+  assert.deepEqual(rows[0].expected.requiredBehaviors, [
+    "workflow_health_healthy",
+  ]);
   assert.deepEqual(rows[1].observed.behaviors, [
     "workflow_health_watch",
     "workflow_failure_matching_or_negotiation",

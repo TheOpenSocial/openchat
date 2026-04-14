@@ -12,7 +12,9 @@ test("quality event report summarizes channels, providers, and failures", async 
     ...process.env,
     EVAL_ARTIFACT_ROOT: root,
   });
-  const summary = JSON.parse(readFileSync(path.join(result.runDir, "summary.json"), "utf8"));
+  const summary = JSON.parse(
+    readFileSync(path.join(result.runDir, "summary.json"), "utf8"),
+  );
 
   assert.equal(summary.totalCases, 3);
   assert.equal(summary.failedCases, 2);
@@ -52,7 +54,9 @@ test("quality event report can summarize agent suite artifacts", async () => {
       EVAL_ARTIFACT_ROOT: root,
     },
   );
-  const summary = JSON.parse(readFileSync(path.join(result.runDir, "summary.json"), "utf8"));
+  const summary = JSON.parse(
+    readFileSync(path.join(result.runDir, "summary.json"), "utf8"),
+  );
 
   assert.equal(summary.source, "agent-suite");
   assert.equal(summary.totalCases, 2);
@@ -72,7 +76,9 @@ test("quality event report can summarize agentic eval snapshots", async () => {
       EVAL_ARTIFACT_ROOT: root,
     },
   );
-  const summary = JSON.parse(readFileSync(path.join(result.runDir, "summary.json"), "utf8"));
+  const summary = JSON.parse(
+    readFileSync(path.join(result.runDir, "summary.json"), "utf8"),
+  );
 
   assert.equal(summary.source, "agentic-evals-snapshot");
   assert.equal(summary.totalCases, 2);
@@ -81,7 +87,9 @@ test("quality event report can summarize agentic eval snapshots", async () => {
 });
 
 test("quality event report can summarize runtime admin exports", async () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "quality-report-runtime-export-"));
+  const root = mkdtempSync(
+    path.join(os.tmpdir(), "quality-report-runtime-export-"),
+  );
   const eventsPath = path.resolve(
     "scripts/evals/online/sample-runtime-admin-export.json",
   );
@@ -92,7 +100,9 @@ test("quality event report can summarize runtime admin exports", async () => {
       EVAL_ARTIFACT_ROOT: root,
     },
   );
-  const summary = JSON.parse(readFileSync(path.join(result.runDir, "summary.json"), "utf8"));
+  const summary = JSON.parse(
+    readFileSync(path.join(result.runDir, "summary.json"), "utf8"),
+  );
 
   assert.equal(summary.source, "runtime-admin-export");
   assert.equal(summary.totalCases, 2);
@@ -103,7 +113,9 @@ test("quality event report can summarize runtime admin exports", async () => {
 });
 
 test("quality event report can summarize agent workflow snapshots", async () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "quality-report-workflow-snapshot-"));
+  const root = mkdtempSync(
+    path.join(os.tmpdir(), "quality-report-workflow-snapshot-"),
+  );
   const snapshotPath = path.resolve(
     "scripts/evals/online/sample-agent-workflows-snapshot.json",
   );
@@ -114,7 +126,9 @@ test("quality event report can summarize agent workflow snapshots", async () => 
       EVAL_ARTIFACT_ROOT: root,
     },
   );
-  const summary = JSON.parse(readFileSync(path.join(result.runDir, "summary.json"), "utf8"));
+  const summary = JSON.parse(
+    readFileSync(path.join(result.runDir, "summary.json"), "utf8"),
+  );
 
   assert.equal(summary.source, "agent-workflows-snapshot");
   assert.equal(summary.totalCases, 2);

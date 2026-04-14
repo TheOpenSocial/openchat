@@ -48,7 +48,10 @@ export async function runLiveSanitizedWorkflowReplay(
     env,
   );
   const sanitizeResult = await deps.sanitizeRuntimeExport(
-    [`--input=${config.rawExportPath}`, `--output=${config.sanitizedExportPath}`],
+    [
+      `--input=${config.rawExportPath}`,
+      `--output=${config.sanitizedExportPath}`,
+    ],
     env,
   );
   const replayResult = await deps.runReplayEvals(

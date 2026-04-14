@@ -14,8 +14,12 @@ test("replay eval runner writes standard replay artifacts", async () => {
     EVAL_ARTIFACT_ROOT: root,
   });
 
-  const summary = JSON.parse(readFileSync(path.join(result.runDir, "summary.json"), "utf8"));
-  const run = JSON.parse(readFileSync(path.join(result.runDir, "run.json"), "utf8"));
+  const summary = JSON.parse(
+    readFileSync(path.join(result.runDir, "summary.json"), "utf8"),
+  );
+  const run = JSON.parse(
+    readFileSync(path.join(result.runDir, "run.json"), "utf8"),
+  );
 
   assert.equal(summary.totalCases, 4);
   assert.equal(summary.failedCases, 0);
@@ -70,7 +74,9 @@ test("replay eval runner can consume raw historical export files directly", asyn
 
 test("runtime export sanitization produces replay-safe exports that still score", async () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "replay-sanitized-runtime-"));
-  const rawPath = path.resolve("scripts/evals/replay/sample-raw-runtime-export.jsonl");
+  const rawPath = path.resolve(
+    "scripts/evals/replay/sample-raw-runtime-export.jsonl",
+  );
   const sanitizedPath = path.join(root, "sanitized-runtime-export.jsonl");
   sanitizeRuntimeExport([`--input=${rawPath}`, `--output=${sanitizedPath}`]);
 

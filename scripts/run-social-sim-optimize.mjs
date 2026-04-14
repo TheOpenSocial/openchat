@@ -62,7 +62,9 @@ async function buildBaseline(baseConfig, grid, seeds, artifactRoot) {
       artifactRoot,
       namespace: `social-sim-optimize-baseline-seed-${seed}`,
       seed,
-      tuning: normalizeSocialSimTuning(baseConfig.tuning ?? DEFAULT_SOCIAL_SIM_TUNING),
+      tuning: normalizeSocialSimTuning(
+        baseConfig.tuning ?? DEFAULT_SOCIAL_SIM_TUNING,
+      ),
     };
     const result = await runSocialSimulation(baselineConfig);
     baselineSeedRuns.push({
@@ -91,7 +93,8 @@ async function buildBaseline(baseConfig, grid, seeds, artifactRoot) {
   for (const [worldId, scores] of baselineWorldScores.entries()) {
     baselineWorldScores.set(
       worldId,
-      scores.reduce((sum, value) => sum + value, 0) / Math.max(scores.length, 1),
+      scores.reduce((sum, value) => sum + value, 0) /
+        Math.max(scores.length, 1),
     );
   }
   for (const seedRun of baselineSeedRuns) {
@@ -106,7 +109,8 @@ async function buildBaseline(baseConfig, grid, seeds, artifactRoot) {
     if (!String(worldId).endsWith(":strongCoverage")) continue;
     baselineWorldScores.set(
       worldId,
-      scores.reduce((sum, value) => sum + value, 0) / Math.max(scores.length, 1),
+      scores.reduce((sum, value) => sum + value, 0) /
+        Math.max(scores.length, 1),
     );
   }
 
@@ -182,17 +186,17 @@ async function evaluateCandidate({
       runDir: result.runDir,
       summary: result.summary,
       worlds: result.artifact.worlds,
-        metrics: scoreCandidate(
-          result.summary,
-          result.artifact.worlds,
+      metrics: scoreCandidate(
+        result.summary,
+        result.artifact.worlds,
         grid.focusWorlds,
         grid.objective,
-          {
-            protectedWorlds: grid.protectedWorlds,
-            baselineWorldScores,
-          },
-        ),
-        holdoutMetrics,
+        {
+          protectedWorlds: grid.protectedWorlds,
+          baselineWorldScores,
+        },
+      ),
+      holdoutMetrics,
       worstWorlds: result.artifact.worlds
         .map((world) => ({
           worldId: world.worldId,
@@ -236,7 +240,9 @@ async function evaluateCandidate({
             ...world,
           })),
         )
-        .sort((left, right) => left.convergenceScore - right.convergenceScore)[0] ?? null,
+        .sort(
+          (left, right) => left.convergenceScore - right.convergenceScore,
+        )[0] ?? null,
     worldDiagnostics,
     holdoutDiagnostics,
     seedRuns,
@@ -259,7 +265,9 @@ async function main() {
   mkdirSync(artifactRoot, { recursive: true });
 
   const baseline = await buildBaseline(baseConfig, grid, seeds, artifactRoot);
-  const combinations = cartesianProduct(grid.dimensions.map((dimension) => dimension.values));
+  const combinations = cartesianProduct(
+    grid.dimensions.map((dimension) => dimension.values),
+  );
   const limitedCombinations =
     maxCandidates > 0 ? combinations.slice(0, maxCandidates) : combinations;
 
@@ -363,8 +371,12 @@ async function main() {
       metrics: baseline.metrics,
       holdoutMetrics: baseline.holdoutMetrics,
       topRegressionReason: findTopRegressionReason(baseline.worldDiagnostics),
-      holdoutTopRegressionReason: findTopRegressionReason(baseline.holdoutDiagnostics),
-      worstHoldoutWorld: findWorstWorldByDiagnostics(baseline.holdoutDiagnostics),
+      holdoutTopRegressionReason: findTopRegressionReason(
+        baseline.holdoutDiagnostics,
+      ),
+      worstHoldoutWorld: findWorstWorldByDiagnostics(
+        baseline.holdoutDiagnostics,
+      ),
       worstSeedWorld:
         baseline.seedRuns
           .flatMap((seedRun) =>
@@ -374,7 +386,9 @@ async function main() {
               convergenceScore: world.summary?.convergenceScore ?? 0,
             })),
           )
-          .sort((left, right) => left.convergenceScore - right.convergenceScore)[0] ?? null,
+          .sort(
+            (left, right) => left.convergenceScore - right.convergenceScore,
+          )[0] ?? null,
       worldDiagnostics: baseline.worldDiagnostics,
       holdoutDiagnostics: baseline.holdoutDiagnostics,
       worldScores: Object.fromEntries(baseline.worldScores.entries()),

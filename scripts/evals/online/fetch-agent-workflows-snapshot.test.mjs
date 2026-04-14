@@ -43,7 +43,9 @@ test("fetch agent workflows snapshot writes normalized admin payload to disk", a
 });
 
 test("fetch agent workflows snapshot reuses staging smoke env fallback keys", async () => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "agent-workflows-fetch-fallback-"));
+  const root = mkdtempSync(
+    path.join(os.tmpdir(), "agent-workflows-fetch-fallback-"),
+  );
   const outputPath = path.join(root, "snapshot.json");
 
   await fetchAgentWorkflowsSnapshot(
@@ -67,7 +69,10 @@ test("fetch agent workflows snapshot reuses staging smoke env fallback keys", as
           return {
             ok: true,
             data: {
-              summary: { totalRuns: 0, health: { healthy: 0, watch: 0, critical: 0 } },
+              summary: {
+                totalRuns: 0,
+                health: { healthy: 0, watch: 0, critical: 0 },
+              },
               runs: [],
             },
           };

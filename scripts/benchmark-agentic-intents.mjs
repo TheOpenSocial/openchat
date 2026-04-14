@@ -228,7 +228,9 @@ async function requestJson(pathname, init = {}) {
       "content-type": "application/json",
       authorization: `Bearer ${accessToken}`,
       ...(benchHostHeader ? { Host: benchHostHeader } : {}),
-      ...(benchApplicationKey ? { "x-application-key": benchApplicationKey } : {}),
+      ...(benchApplicationKey
+        ? { "x-application-key": benchApplicationKey }
+        : {}),
       ...(benchApplicationToken
         ? { "x-application-token": benchApplicationToken }
         : {}),
