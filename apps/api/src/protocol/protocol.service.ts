@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
   UnauthorizedException,
 } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
@@ -22,19 +23,28 @@ import {
   capabilityNameSchema,
   eventNameSchema,
   manifestSchema,
+  protocolChatMessageActionResultSchema,
+  protocolChatSendMessageActionSchema,
   protocolAppScopeGrantCreateSchema,
   protocolAppScopeGrantRevokeSchema,
   protocolAppScopeGrantSchema,
   protocolEventEnvelopeSchema,
   protocolIds,
+  protocolIntentActionResultSchema,
+  protocolIntentCreateActionSchema,
+  protocolIntentRequestSendActionSchema,
+  protocolRequestActionResultSchema,
+  protocolRequestDecisionActionSchema,
   protocolReplayCursorSchema,
   protocolGrantSubjectTypeSchema,
   protocolScopeNameSchema,
+  protocolWebhookDeliveryRunResultSchema,
   webhookSubscriptionCreateSchema,
   webhookSubscriptionSchema,
   type AppRegistration,
   type AppRegistrationRequest,
   type CapabilityName,
+  type ProtocolChatSendMessageAction,
   type EventName,
   type ProtocolAppScopeGrant,
   type ProtocolAppScopeGrantCreate,
@@ -43,7 +53,11 @@ import {
   type ProtocolDiscoveryDocument,
   type ProtocolEventEnvelope,
   type ProtocolManifest,
+  type ProtocolIntentCreateAction,
+  type ProtocolIntentRequestSendAction,
+  type ProtocolRequestDecisionAction,
   type ProtocolReplayCursor,
+  type ResourceName,
   type ProtocolScopeName,
   type WebhookSubscription,
   type WebhookSubscriptionCreate,
@@ -53,6 +67,10 @@ import {
   issueProtocolAppToken,
   verifyProtocolAppToken,
 } from "./protocol-credentials.js";
+import { ChatsService } from "../chats/chats.service.js";
+import { InboxService } from "../inbox/inbox.service.js";
+import { IntentsService } from "../intents/intents.service.js";
+import { ProtocolWebhookDeliveryRunnerService } from "./protocol-webhook-delivery-runner.service.js";
 import { ProtocolWebhookDeliveryWorkerService } from "./protocol-webhook-delivery-worker.service.js";
 import { signProtocolWebhookPayload } from "./protocol-webhooks.js";
 
@@ -147,6 +165,10 @@ export class ProtocolService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly deliveryWorker: ProtocolWebhookDeliveryWorkerService,
+    private readonly deliveryRunner: ProtocolWebhookDeliveryRunnerService,
+    @Optional() private readonly intentsService?: IntentsService,
+    @Optional() private readonly inboxService?: InboxService,
+    @Optional() private readonly chatsService?: ChatsService,
   ) {}
 
   getManifest(): ProtocolManifest {
@@ -734,6 +756,274 @@ export class ProtocolService {
     return this.mapCursorRow(rows[0]);
   }
 
+  async createIntentAction(
+    appId: string,
+    appToken: string,
+    input: ProtocolIntentCreateAction,
+  ) {
+    const payload = protocolIntentCreateActionSchema.parse(input);
+    const { app, grant } = await this.requireDelegatedActionGrant(
+      appId,
+      appToken,
+      payload.actorUserId,
+      "intent.create",
+      ["intent.write"],
+    );
+    if (!this.intentsService) {
+      throw new NotFoundException("intent actions unavailable");
+    }
+
+    const traceId = payload.traceId ?? randomUUID();
+    const intent = await this.intentsService.createIntent(
+      payload.actorUserId,
+      payload.rawText,
+      traceId,
+      payload.agentThreadId,
+    );
+
+    await this.recordEvent({
+      actorAppId: app.registration.appId,
+      event: "intent.created",
+      resource: "intent",
+      payload: {
+        intentId: intent.id,
+        actorUserId: payload.actorUserId,
+        traceId,
+        grantId: grant.grantId,
+      },
+    });
+
+    return protocolIntentActionResultSchema.parse({
+      action: "intent.create",
+      status: intent.status,
+      actorUserId: payload.actorUserId,
+      intentId: intent.id,
+      traceId,
+      safetyState:
+        typeof intent.safetyState === "string" ? intent.safetyState : null,
+      metadata: payload.metadata ?? {},
+    });
+  }
+
+  async sendRequestAction(
+    appId: string,
+    appToken: string,
+    input: ProtocolIntentRequestSendAction,
+  ) {
+    const payload = protocolIntentRequestSendActionSchema.parse(input);
+    const { app, grant } = await this.requireDelegatedActionGrant(
+      appId,
+      appToken,
+      payload.actorUserId,
+      "request.send",
+      ["request.write"],
+    );
+    if (!this.intentsService) {
+      throw new NotFoundException("request actions unavailable");
+    }
+
+    await this.intentsService.assertIntentOwnership(
+      payload.intentId,
+      payload.actorUserId,
+    );
+    const traceId = payload.traceId ?? randomUUID();
+    const request = await this.intentsService.sendIntentRequest({
+      intentId: payload.intentId,
+      recipientUserId: payload.recipientUserId,
+      traceId,
+      agentThreadId: payload.agentThreadId,
+    });
+    const requestId =
+      "requestId" in request
+        ? request.requestId
+        : (request as { id?: string }).id;
+
+    await this.recordEvent({
+      actorAppId: app.registration.appId,
+      event: "request.sent",
+      resource: "intent_request",
+      payload: {
+        requestId,
+        intentId: payload.intentId,
+        actorUserId: payload.actorUserId,
+        recipientUserId: payload.recipientUserId,
+        grantId: grant.grantId,
+      },
+    });
+
+    return protocolRequestActionResultSchema.parse({
+      action: "request.send",
+      status: request.status,
+      actorUserId: payload.actorUserId,
+      requestId: requestId ?? null,
+      intentId: payload.intentId,
+      metadata: payload.metadata ?? {},
+    });
+  }
+
+  async acceptRequestAction(
+    appId: string,
+    appToken: string,
+    requestId: string,
+    input: ProtocolRequestDecisionAction,
+  ) {
+    const payload = protocolRequestDecisionActionSchema.parse(input);
+    const { app, grant } = await this.requireDelegatedActionGrant(
+      appId,
+      appToken,
+      payload.actorUserId,
+      "request.accept",
+      ["request.write"],
+    );
+    if (!this.inboxService) {
+      throw new NotFoundException("request actions unavailable");
+    }
+
+    const result = await this.inboxService.updateStatus(
+      requestId,
+      "accepted",
+      payload.actorUserId,
+    );
+
+    await this.recordEvent({
+      actorAppId: app.registration.appId,
+      event: "request.accepted",
+      resource: "intent_request",
+      payload: {
+        requestId: result.request.id,
+        intentId: result.request.intentId,
+        actorUserId: payload.actorUserId,
+        grantId: grant.grantId,
+      },
+    });
+
+    return protocolRequestActionResultSchema.parse({
+      action: "request.accept",
+      status: result.request.status,
+      actorUserId: payload.actorUserId,
+      requestId: result.request.id,
+      intentId: result.request.intentId,
+      queued: "queued" in result ? Boolean(result.queued) : false,
+      unchanged: "unchanged" in result ? Boolean(result.unchanged) : false,
+      metadata: payload.metadata ?? {},
+    });
+  }
+
+  async rejectRequestAction(
+    appId: string,
+    appToken: string,
+    requestId: string,
+    input: ProtocolRequestDecisionAction,
+  ) {
+    const payload = protocolRequestDecisionActionSchema.parse(input);
+    const { app, grant } = await this.requireDelegatedActionGrant(
+      appId,
+      appToken,
+      payload.actorUserId,
+      "request.reject",
+      ["request.write"],
+    );
+    if (!this.inboxService) {
+      throw new NotFoundException("request actions unavailable");
+    }
+
+    const result = await this.inboxService.updateStatus(
+      requestId,
+      "rejected",
+      payload.actorUserId,
+    );
+
+    await this.recordEvent({
+      actorAppId: app.registration.appId,
+      event: "request.rejected",
+      resource: "intent_request",
+      payload: {
+        requestId: result.request.id,
+        intentId: result.request.intentId,
+        actorUserId: payload.actorUserId,
+        grantId: grant.grantId,
+      },
+    });
+
+    return protocolRequestActionResultSchema.parse({
+      action: "request.reject",
+      status: result.request.status,
+      actorUserId: payload.actorUserId,
+      requestId: result.request.id,
+      intentId: result.request.intentId,
+      unchanged: "unchanged" in result ? Boolean(result.unchanged) : false,
+      metadata: payload.metadata ?? {},
+    });
+  }
+
+  async sendChatMessageAction(
+    appId: string,
+    appToken: string,
+    chatId: string,
+    input: ProtocolChatSendMessageAction,
+  ) {
+    const payload = protocolChatSendMessageActionSchema.parse(input);
+    const { app, grant } = await this.requireDelegatedActionGrant(
+      appId,
+      appToken,
+      payload.actorUserId,
+      "chat.send_message",
+      ["chat.write"],
+    );
+    if (!this.chatsService) {
+      throw new NotFoundException("chat actions unavailable");
+    }
+
+    const message = await this.chatsService.createMessage(
+      chatId,
+      payload.actorUserId,
+      payload.body,
+      {
+        idempotencyKey: payload.clientMessageId,
+        replyToMessageId: payload.replyToMessageId,
+      },
+    );
+
+    await this.recordEvent({
+      actorAppId: app.registration.appId,
+      event: "chat.message.sent",
+      resource: "chat_message",
+      payload: {
+        chatId,
+        messageId: message.id,
+        actorUserId: payload.actorUserId,
+        grantId: grant.grantId,
+      },
+    });
+
+    return protocolChatMessageActionResultSchema.parse({
+      action: "chat.send_message",
+      actorUserId: payload.actorUserId,
+      chatId,
+      messageId: message.id,
+      replyToMessageId: message.replyToMessageId ?? null,
+      createdAt:
+        this.toIsoString(message.createdAt) ?? new Date().toISOString(),
+      metadata: payload.metadata ?? {},
+    });
+  }
+
+  async runDueWebhookDeliveries(
+    appId: string,
+    appToken: string,
+    input: { limit?: number } = {},
+  ) {
+    const app = await this.requireAppAccess(appId, appToken, {
+      scopes: ["webhooks.manage"],
+      capabilities: ["webhook.write"],
+    });
+    const result = await this.deliveryRunner.runDueDeliveries({
+      limit: input.limit,
+      appId: app.registration.appId,
+    });
+    return protocolWebhookDeliveryRunResultSchema.parse(result);
+  }
+
   private issueScopes(
     requested: ProtocolScopeName[],
     registrationScopes: ProtocolScopeName[],
@@ -811,6 +1101,52 @@ export class ProtocolService {
     }
 
     return app;
+  }
+
+  private async requireDelegatedActionGrant(
+    appId: string,
+    appToken: string,
+    actorUserId: string,
+    action:
+      | "intent.create"
+      | "request.send"
+      | "request.accept"
+      | "request.reject"
+      | "chat.send_message",
+    capabilities: CapabilityName[],
+  ) {
+    const app = await this.requireAppAccess(appId, appToken, {
+      scopes: ["actions.invoke"],
+      capabilities,
+    });
+    const rows = await this.prisma.$queryRawUnsafe<ProtocolAppScopeGrantRow[]>(
+      `SELECT id, app_id, scope, capabilities, subject_type, subject_id, status, granted_by_user_id, granted_at, revoked_at, metadata, created_at, updated_at
+       FROM protocol_app_scope_grants
+       WHERE app_id = $1
+         AND subject_type = 'user'
+         AND subject_id = $2
+         AND status = 'active'
+       ORDER BY created_at DESC`,
+      app.registration.appId,
+      actorUserId,
+    );
+
+    const grants = rows.map((row) => this.mapGrantRow(row));
+    const grant = grants.find(
+      (entry) =>
+        entry.scope === "actions.invoke" &&
+        (entry.capabilities.length === 0 ||
+          capabilities.every((capability) =>
+            entry.capabilities.includes(capability),
+          )),
+    );
+    if (!grant) {
+      throw new ForbiddenException(
+        `missing active protocol grant for ${action}`,
+      );
+    }
+
+    return { app, grant };
   }
 
   private async findAppRow(appId: string) {
@@ -941,7 +1277,7 @@ export class ProtocolService {
   private async recordEvent(input: {
     actorAppId?: string;
     event: EventName;
-    resource?: "app_registration" | "webhook_subscription";
+    resource?: ResourceName;
     payload: unknown;
   }) {
     const issuedAt = new Date().toISOString();

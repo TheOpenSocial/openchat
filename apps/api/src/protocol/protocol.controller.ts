@@ -10,9 +10,15 @@ import {
 import {
   appRegistrationRequestSchema,
   identifierSchema,
+  protocolChatSendMessageActionSchema,
   protocolAppScopeGrantCreateSchema,
   protocolAppScopeGrantRevokeSchema,
+  protocolIntentCreateActionSchema,
+  protocolIntentRequestSendActionSchema,
+  protocolRequestDecisionActionSchema,
   protocolReplayCursorSchema,
+  protocolWebhookDeliveryRunRequestSchema,
+  uuidSchema,
   webhookSubscriptionCreateSchema,
 } from "@opensocial/protocol-types";
 import { PublicRoute } from "../auth/public-route.decorator.js";
@@ -214,6 +220,132 @@ export class ProtocolController {
         appId,
         readProtocolAppToken(headers) ?? "",
         cursor,
+      ),
+    );
+  }
+
+  @Post("apps/:appId/delivery-queue/run")
+  async runDueWebhookDeliveries(
+    @Param("appId") appIdParam: string,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+    @Body() body: unknown,
+  ) {
+    const appId = parseRequestPayload(identifierSchema, appIdParam);
+    const payload = parseRequestPayload(
+      protocolWebhookDeliveryRunRequestSchema,
+      body ?? {},
+    );
+    return ok(
+      await this.protocolService.runDueWebhookDeliveries(
+        appId,
+        readProtocolAppToken(headers) ?? "",
+        payload,
+      ),
+    );
+  }
+
+  @Post("apps/:appId/actions/intents")
+  async createIntentAction(
+    @Param("appId") appIdParam: string,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+    @Body() body: unknown,
+  ) {
+    const appId = parseRequestPayload(identifierSchema, appIdParam);
+    const payload = parseRequestPayload(protocolIntentCreateActionSchema, body);
+    return ok(
+      await this.protocolService.createIntentAction(
+        appId,
+        readProtocolAppToken(headers) ?? "",
+        payload,
+      ),
+    );
+  }
+
+  @Post("apps/:appId/actions/requests")
+  async sendRequestAction(
+    @Param("appId") appIdParam: string,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+    @Body() body: unknown,
+  ) {
+    const appId = parseRequestPayload(identifierSchema, appIdParam);
+    const payload = parseRequestPayload(
+      protocolIntentRequestSendActionSchema,
+      body,
+    );
+    return ok(
+      await this.protocolService.sendRequestAction(
+        appId,
+        readProtocolAppToken(headers) ?? "",
+        payload,
+      ),
+    );
+  }
+
+  @Post("apps/:appId/actions/requests/:requestId/accept")
+  async acceptRequestAction(
+    @Param("appId") appIdParam: string,
+    @Param("requestId") requestIdParam: string,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+    @Body() body: unknown,
+  ) {
+    const appId = parseRequestPayload(identifierSchema, appIdParam);
+    const requestId = parseRequestPayload(uuidSchema, requestIdParam);
+    const payload = parseRequestPayload(
+      protocolRequestDecisionActionSchema,
+      body,
+    );
+    return ok(
+      await this.protocolService.acceptRequestAction(
+        appId,
+        readProtocolAppToken(headers) ?? "",
+        requestId,
+        payload,
+      ),
+    );
+  }
+
+  @Post("apps/:appId/actions/requests/:requestId/reject")
+  async rejectRequestAction(
+    @Param("appId") appIdParam: string,
+    @Param("requestId") requestIdParam: string,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+    @Body() body: unknown,
+  ) {
+    const appId = parseRequestPayload(identifierSchema, appIdParam);
+    const requestId = parseRequestPayload(uuidSchema, requestIdParam);
+    const payload = parseRequestPayload(
+      protocolRequestDecisionActionSchema,
+      body,
+    );
+    return ok(
+      await this.protocolService.rejectRequestAction(
+        appId,
+        readProtocolAppToken(headers) ?? "",
+        requestId,
+        payload,
+      ),
+    );
+  }
+
+  @Post("apps/:appId/actions/chats/:chatId/messages")
+  async sendChatMessageAction(
+    @Param("appId") appIdParam: string,
+    @Param("chatId") chatIdParam: string,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+    @Body() body: unknown,
+  ) {
+    const appId = parseRequestPayload(identifierSchema, appIdParam);
+    const chatId = parseRequestPayload(uuidSchema, chatIdParam);
+    const payload = parseRequestPayload(
+      protocolChatSendMessageActionSchema,
+      body,
+    );
+    return ok(
+      await this.protocolService.sendChatMessageAction(
+        appId,
+        readProtocolAppToken(headers) ?? "",
+        chatId,
+        payload,
       ),
     );
   }

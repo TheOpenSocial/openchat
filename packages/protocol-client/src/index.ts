@@ -4,13 +4,22 @@ import {
 } from "@opensocial/protocol-events";
 import {
   appRegistrationRequestSchema,
+  protocolChatMessageActionResultSchema,
+  protocolChatSendMessageActionSchema,
   protocolAppScopeGrantCreateSchema,
   protocolAppScopeGrantRevokeSchema,
   protocolAppScopeGrantSchema,
   protocolAppRegistrationResultSchema,
   protocolDiscoveryDocumentSchema,
+  protocolIntentActionResultSchema,
+  protocolIntentCreateActionSchema,
+  protocolIntentRequestSendActionSchema,
+  protocolRequestActionResultSchema,
+  protocolRequestDecisionActionSchema,
   protocolEventEnvelopeSchema,
   protocolReplayCursorSchema,
+  protocolWebhookDeliveryRunRequestSchema,
+  protocolWebhookDeliveryRunResultSchema,
   manifestSchema,
   webhookSubscriptionCreateSchema,
   webhookSubscriptionSchema,
@@ -21,11 +30,20 @@ import {
   type ProtocolAppScopeGrantCreate,
   type ProtocolAppScopeGrantRevoke,
   type ProtocolAppRegistrationResult,
+  type ProtocolChatMessageActionResult,
+  type ProtocolChatSendMessageAction,
   type ProtocolDiscoveryDocument,
   type ProtocolEventEnvelope,
+  type ProtocolIntentActionResult,
+  type ProtocolIntentCreateAction,
+  type ProtocolIntentRequestSendAction,
   type ProtocolManifest,
+  type ProtocolRequestActionResult,
+  type ProtocolRequestDecisionAction,
   type ProtocolReplayCursor,
   type ProtocolScopeName,
+  type ProtocolWebhookDeliveryRunRequest,
+  type ProtocolWebhookDeliveryRunResult,
   type WebhookSubscription,
   type WebhookSubscriptionCreate,
 } from "@opensocial/protocol-types";
@@ -110,6 +128,39 @@ export type ProtocolClient = {
     appToken: string,
     cursor: string,
   ) => Promise<ProtocolReplayCursor>;
+  createIntent: (
+    appId: string,
+    appToken: string,
+    payload: ProtocolIntentCreateInput,
+  ) => Promise<ProtocolIntentActionResult>;
+  sendRequest: (
+    appId: string,
+    appToken: string,
+    payload: ProtocolRequestSendInput,
+  ) => Promise<ProtocolRequestActionResult>;
+  acceptRequest: (
+    appId: string,
+    appToken: string,
+    requestId: string,
+    payload: ProtocolRequestDecisionInput,
+  ) => Promise<ProtocolRequestActionResult>;
+  rejectRequest: (
+    appId: string,
+    appToken: string,
+    requestId: string,
+    payload: ProtocolRequestDecisionInput,
+  ) => Promise<ProtocolRequestActionResult>;
+  sendChatMessage: (
+    appId: string,
+    appToken: string,
+    chatId: string,
+    payload: ProtocolChatSendMessageInput,
+  ) => Promise<ProtocolChatMessageActionResult>;
+  runWebhookDeliveryQueue: (
+    appId: string,
+    appToken: string,
+    input?: ProtocolWebhookDeliveryRunInput,
+  ) => Promise<ProtocolWebhookDeliveryRunResult>;
   buildAppRegistrationRequest: (
     input: ProtocolAppRegistrationRequestInput,
   ) => AppRegistrationRequest;
@@ -171,6 +222,11 @@ export type ProtocolDeliveryQueueInspection = {
 export type ProtocolGrantRecord = ProtocolAppScopeGrant;
 export type ProtocolGrantCreateInput = ProtocolAppScopeGrantCreate;
 export type ProtocolGrantRevokeInput = ProtocolAppScopeGrantRevoke;
+export type ProtocolIntentCreateInput = ProtocolIntentCreateAction;
+export type ProtocolRequestSendInput = ProtocolIntentRequestSendAction;
+export type ProtocolRequestDecisionInput = ProtocolRequestDecisionAction;
+export type ProtocolChatSendMessageInput = ProtocolChatSendMessageAction;
+export type ProtocolWebhookDeliveryRunInput = ProtocolWebhookDeliveryRunRequest;
 
 export function createProtocolClient(
   transport: ProtocolClientTransport,
@@ -434,6 +490,127 @@ export function createProtocolClient(
       );
       const payload = (await response.json()) as { data?: unknown } | undefined;
       return protocolReplayCursorSchema.parse(payload?.data ?? payload);
+    },
+    async createIntent(appId, appToken, payload) {
+      const requestPayload = protocolIntentCreateActionSchema.parse(payload);
+      const response = await transport.request(
+        `/protocol/apps/${appId}/actions/intents`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-protocol-app-token": appToken,
+          },
+          body: JSON.stringify(requestPayload),
+        },
+      );
+      const envelope = (await response.json()) as
+        | { data?: unknown }
+        | undefined;
+      return protocolIntentActionResultSchema.parse(envelope?.data ?? envelope);
+    },
+    async sendRequest(appId, appToken, payload) {
+      const requestPayload =
+        protocolIntentRequestSendActionSchema.parse(payload);
+      const response = await transport.request(
+        `/protocol/apps/${appId}/actions/requests`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-protocol-app-token": appToken,
+          },
+          body: JSON.stringify(requestPayload),
+        },
+      );
+      const envelope = (await response.json()) as
+        | { data?: unknown }
+        | undefined;
+      return protocolRequestActionResultSchema.parse(
+        envelope?.data ?? envelope,
+      );
+    },
+    async acceptRequest(appId, appToken, requestId, payload) {
+      const requestPayload = protocolRequestDecisionActionSchema.parse(payload);
+      const response = await transport.request(
+        `/protocol/apps/${appId}/actions/requests/${requestId}/accept`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-protocol-app-token": appToken,
+          },
+          body: JSON.stringify(requestPayload),
+        },
+      );
+      const envelope = (await response.json()) as
+        | { data?: unknown }
+        | undefined;
+      return protocolRequestActionResultSchema.parse(
+        envelope?.data ?? envelope,
+      );
+    },
+    async rejectRequest(appId, appToken, requestId, payload) {
+      const requestPayload = protocolRequestDecisionActionSchema.parse(payload);
+      const response = await transport.request(
+        `/protocol/apps/${appId}/actions/requests/${requestId}/reject`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-protocol-app-token": appToken,
+          },
+          body: JSON.stringify(requestPayload),
+        },
+      );
+      const envelope = (await response.json()) as
+        | { data?: unknown }
+        | undefined;
+      return protocolRequestActionResultSchema.parse(
+        envelope?.data ?? envelope,
+      );
+    },
+    async sendChatMessage(appId, appToken, chatId, payload) {
+      const requestPayload = protocolChatSendMessageActionSchema.parse(payload);
+      const response = await transport.request(
+        `/protocol/apps/${appId}/actions/chats/${chatId}/messages`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-protocol-app-token": appToken,
+          },
+          body: JSON.stringify(requestPayload),
+        },
+      );
+      const envelope = (await response.json()) as
+        | { data?: unknown }
+        | undefined;
+      return protocolChatMessageActionResultSchema.parse(
+        envelope?.data ?? envelope,
+      );
+    },
+    async runWebhookDeliveryQueue(appId, appToken, input) {
+      const requestPayload = protocolWebhookDeliveryRunRequestSchema.parse(
+        input ?? {},
+      );
+      const response = await transport.request(
+        `/protocol/apps/${appId}/delivery-queue/run`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-protocol-app-token": appToken,
+          },
+          body: JSON.stringify(requestPayload),
+        },
+      );
+      const envelope = (await response.json()) as
+        | { data?: unknown }
+        | undefined;
+      return protocolWebhookDeliveryRunResultSchema.parse(
+        envelope?.data ?? envelope,
+      );
     },
     buildAppRegistrationRequest(input) {
       return buildProtocolAppRegistrationRequest(input);

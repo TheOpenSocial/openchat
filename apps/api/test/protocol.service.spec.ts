@@ -238,6 +238,98 @@ function createDeliveryWorkerStub() {
   };
 }
 
+function createDeliveryRunnerStub() {
+  return {
+    runDueDeliveries: async () => ({
+      claimedCount: 0,
+      attemptedCount: 0,
+      deliveredCount: 0,
+      retryScheduledCount: 0,
+      deadLetteredCount: 0,
+      skippedCount: 0,
+      ranAt: "2026-04-13T00:00:00.000Z",
+      results: [],
+    }),
+  };
+}
+
+function createIntentsServiceStub() {
+  return {
+    createIntent: async (
+      userId: string,
+      rawText: string,
+      traceId: string,
+      agentThreadId?: string,
+    ) => ({
+      id: "00000000-0000-4000-8000-000000000101",
+      userId,
+      rawText,
+      traceId,
+      status: "active",
+      safetyState: "clean",
+      agentThreadId: agentThreadId ?? null,
+    }),
+    assertIntentOwnership: async () => undefined,
+    sendIntentRequest: async (input: {
+      intentId: string;
+      recipientUserId: string;
+    }) => ({
+      id: "00000000-0000-4000-8000-000000000102",
+      intentId: input.intentId,
+      recipientUserId: input.recipientUserId,
+      status: "pending",
+    }),
+  };
+}
+
+function createInboxServiceStub() {
+  return {
+    updateStatus: async (
+      requestId: string,
+      status: "accepted" | "rejected",
+      actorUserId?: string,
+    ) => ({
+      request: {
+        id: requestId,
+        intentId: "00000000-0000-4000-8000-000000000103",
+        status,
+        recipientUserId: actorUserId ?? "00000000-0000-4000-8000-000000000010",
+      },
+      queued: status === "accepted",
+      unchanged: false,
+    }),
+  };
+}
+
+function createChatsServiceStub() {
+  return {
+    createMessage: async (
+      chatId: string,
+      senderUserId: string,
+      body: string,
+      options?: { replyToMessageId?: string | undefined },
+    ) => ({
+      id: "00000000-0000-4000-8000-000000000104",
+      chatId,
+      senderUserId,
+      body,
+      replyToMessageId: options?.replyToMessageId ?? null,
+      createdAt: new Date("2026-04-13T00:00:00.000Z"),
+    }),
+  };
+}
+
+function createProtocolService() {
+  return new ProtocolService(
+    createPrismaStub() as any,
+    createDeliveryWorkerStub() as any,
+    createDeliveryRunnerStub() as any,
+    createIntentsServiceStub() as any,
+    createInboxServiceStub() as any,
+    createChatsServiceStub() as any,
+  );
+}
+
 function createRegistrationPayload(): AppRegistrationRequest {
   return {
     registration: {
@@ -253,6 +345,7 @@ function createRegistrationPayload(): AppRegistrationRequest {
         scopes: [
           "protocol.read",
           "protocol.write",
+          "actions.invoke",
           "webhooks.manage",
           "events.subscribe",
         ],
@@ -267,6 +360,9 @@ function createRegistrationPayload(): AppRegistrationRequest {
         capabilities: [
           "app.read",
           "app.write",
+          "intent.write",
+          "request.write",
+          "chat.write",
           "webhook.read",
           "webhook.write",
           "event.read",
@@ -287,6 +383,7 @@ function createRegistrationPayload(): AppRegistrationRequest {
         scopes: [
           "protocol.read",
           "protocol.write",
+          "actions.invoke",
           "webhooks.manage",
           "events.subscribe",
         ],
@@ -301,6 +398,9 @@ function createRegistrationPayload(): AppRegistrationRequest {
         capabilities: [
           "app.read",
           "app.write",
+          "intent.write",
+          "request.write",
+          "chat.write",
           "webhook.read",
           "webhook.write",
           "event.read",
@@ -322,12 +422,16 @@ function createRegistrationPayload(): AppRegistrationRequest {
     requestedScopes: [
       "protocol.read",
       "protocol.write",
+      "actions.invoke",
       "webhooks.manage",
       "events.subscribe",
     ],
     requestedCapabilities: [
       "app.read",
       "app.write",
+      "intent.write",
+      "request.write",
+      "chat.write",
       "webhook.read",
       "webhook.write",
       "event.read",
@@ -337,10 +441,7 @@ function createRegistrationPayload(): AppRegistrationRequest {
 
 describe("ProtocolService", () => {
   it("registers an app and issues a token", async () => {
-    const service = new ProtocolService(
-      createPrismaStub() as any,
-      createDeliveryWorkerStub() as any,
-    );
+    const service = createProtocolService();
 
     const result = await service.registerApp(createRegistrationPayload());
 
@@ -351,10 +452,7 @@ describe("ProtocolService", () => {
   });
 
   it("creates subscriptions, deliveries, and replay events", async () => {
-    const service = new ProtocolService(
-      createPrismaStub() as any,
-      createDeliveryWorkerStub() as any,
-    );
+    const service = createProtocolService();
     const registration = await service.registerApp(createRegistrationPayload());
 
     const subscription = await service.createWebhook(
@@ -396,10 +494,7 @@ describe("ProtocolService", () => {
   });
 
   it("stores and returns replay cursors", async () => {
-    const service = new ProtocolService(
-      createPrismaStub() as any,
-      createDeliveryWorkerStub() as any,
-    );
+    const service = createProtocolService();
     const registration = await service.registerApp(createRegistrationPayload());
 
     const initial = await service.getReplayCursor(
@@ -417,10 +512,7 @@ describe("ProtocolService", () => {
   });
 
   it("rejects invalid replay cursors for replay and cursor persistence", async () => {
-    const service = new ProtocolService(
-      createPrismaStub() as any,
-      createDeliveryWorkerStub() as any,
-    );
+    const service = createProtocolService();
     const registration = await service.registerApp(createRegistrationPayload());
 
     await expect(
@@ -441,10 +533,7 @@ describe("ProtocolService", () => {
   });
 
   it("rotates app tokens and invalidates the previous token", async () => {
-    const service = new ProtocolService(
-      createPrismaStub() as any,
-      createDeliveryWorkerStub() as any,
-    );
+    const service = createProtocolService();
     const registration = await service.registerApp(createRegistrationPayload());
 
     const rotated = await service.rotateAppToken(
@@ -468,10 +557,7 @@ describe("ProtocolService", () => {
   });
 
   it("revokes app tokens and blocks subsequent access", async () => {
-    const service = new ProtocolService(
-      createPrismaStub() as any,
-      createDeliveryWorkerStub() as any,
-    );
+    const service = createProtocolService();
     const registration = await service.registerApp(createRegistrationPayload());
 
     const revoked = await service.revokeAppToken(
@@ -497,10 +583,7 @@ describe("ProtocolService", () => {
   });
 
   it("inspects the delivery queue for an app", async () => {
-    const service = new ProtocolService(
-      createPrismaStub() as any,
-      createDeliveryWorkerStub() as any,
-    );
+    const service = createProtocolService();
     const registration = await service.registerApp(createRegistrationPayload());
     const subscription = await service.createWebhook(
       "partner.alpha",
@@ -533,10 +616,7 @@ describe("ProtocolService", () => {
   });
 
   it("creates, lists, and revokes app scope grants", async () => {
-    const service = new ProtocolService(
-      createPrismaStub() as any,
-      createDeliveryWorkerStub() as any,
-    );
+    const service = createProtocolService();
     const registration = await service.registerApp(createRegistrationPayload());
 
     const created = await service.createAppGrant(
@@ -574,5 +654,96 @@ describe("ProtocolService", () => {
       reason: "done",
       revokedByUserId: "00000000-0000-4000-8000-000000000003",
     });
+  });
+
+  it("requires an active delegated grant before invoking external actions", async () => {
+    const service = createProtocolService();
+    const registration = await service.registerApp(createRegistrationPayload());
+
+    await expect(
+      service.createIntentAction(
+        "partner.alpha",
+        registration.credentials.appToken,
+        {
+          actorUserId: "00000000-0000-4000-8000-000000000001",
+          rawText: "Find a thoughtful dinner group this week",
+          metadata: {},
+        },
+      ),
+    ).rejects.toThrow("missing active protocol grant for intent.create");
+  });
+
+  it("invokes protocol actions after a delegated grant is present", async () => {
+    const service = createProtocolService();
+    const registration = await service.registerApp(createRegistrationPayload());
+    await service.createAppGrant(
+      "partner.alpha",
+      registration.credentials.appToken,
+      {
+        scope: "actions.invoke",
+        capabilities: ["intent.write", "request.write", "chat.write"],
+        subjectType: "user",
+        subjectId: "00000000-0000-4000-8000-000000000001",
+        metadata: { source: "test" },
+      },
+    );
+
+    const createdIntent = await service.createIntentAction(
+      "partner.alpha",
+      registration.credentials.appToken,
+      {
+        actorUserId: "00000000-0000-4000-8000-000000000001",
+        rawText: "Find a thoughtful dinner group this week",
+        metadata: {},
+      },
+    );
+    const sentRequest = await service.sendRequestAction(
+      "partner.alpha",
+      registration.credentials.appToken,
+      {
+        actorUserId: "00000000-0000-4000-8000-000000000001",
+        intentId: "00000000-0000-4000-8000-000000000101",
+        recipientUserId: "00000000-0000-4000-8000-000000000002",
+        metadata: {},
+      },
+    );
+    const acceptedRequest = await service.acceptRequestAction(
+      "partner.alpha",
+      registration.credentials.appToken,
+      "00000000-0000-4000-8000-000000000200",
+      {
+        actorUserId: "00000000-0000-4000-8000-000000000001",
+        metadata: {},
+      },
+    );
+    const chatMessage = await service.sendChatMessageAction(
+      "partner.alpha",
+      registration.credentials.appToken,
+      "00000000-0000-4000-8000-000000000300",
+      {
+        actorUserId: "00000000-0000-4000-8000-000000000001",
+        body: "Thursday works for me.",
+        metadata: {},
+      },
+    );
+
+    expect(createdIntent.action).toBe("intent.create");
+    expect(sentRequest.action).toBe("request.send");
+    expect(acceptedRequest.action).toBe("request.accept");
+    expect(chatMessage.action).toBe("chat.send_message");
+  });
+
+  it("runs due deliveries through the app-scoped runner endpoint", async () => {
+    const service = createProtocolService();
+    const registration = await service.registerApp(createRegistrationPayload());
+
+    const result = await service.runDueWebhookDeliveries(
+      "partner.alpha",
+      registration.credentials.appToken,
+      { limit: 5 },
+    );
+
+    expect(result.claimedCount).toBe(0);
+    expect(result.ranAt).toBe("2026-04-13T00:00:00.000Z");
   });
 });

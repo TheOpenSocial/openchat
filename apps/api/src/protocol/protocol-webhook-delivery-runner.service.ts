@@ -39,6 +39,7 @@ export type ProtocolWebhookDeliveryRunnerResult = {
 };
 
 export type RunProtocolWebhookDeliveriesInput = {
+  appId?: string;
   limit?: number;
   now?: Date;
   requestTimeoutMs?: number;
@@ -61,6 +62,7 @@ export class ProtocolWebhookDeliveryRunnerService {
     const claimed = await this.worker.claimDueDeliveries(
       input.limit ?? 25,
       now,
+      input.appId,
     );
     const subscriptionMap = await this.loadSubscriptions(
       claimed.deliveries.map((delivery) => delivery.subscriptionId),

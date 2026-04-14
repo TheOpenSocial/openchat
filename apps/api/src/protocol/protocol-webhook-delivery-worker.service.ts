@@ -86,13 +86,15 @@ export class ProtocolWebhookDeliveryWorkerService {
   async claimDueDeliveries(
     limit = 25,
     now = new Date(),
+    appId?: string,
   ): Promise<ClaimQueuedDeliveriesResult> {
-    return this.claimQueuedDeliveries(limit, now);
+    return this.claimQueuedDeliveries(limit, now, appId);
   }
 
   async claimQueuedDeliveries(
     limit = 25,
     now = new Date(),
+    appId?: string,
   ): Promise<ClaimQueuedDeliveriesResult> {
     const boundedLimit = Math.min(Math.max(limit, 1), 100);
     const claimedAt = now.toISOString();
@@ -105,6 +107,7 @@ export class ProtocolWebhookDeliveryWorkerService {
          FROM protocol_webhook_deliveries
          WHERE status IN ('queued', 'retrying')
            AND (next_attempt_at IS NULL OR next_attempt_at <= $2::timestamptz)
+           AND ($3::text IS NULL OR app_id = $3)
          ORDER BY COALESCE(next_attempt_at, created_at) ASC, created_at ASC
          FOR UPDATE SKIP LOCKED
          LIMIT $1
@@ -135,6 +138,7 @@ export class ProtocolWebhookDeliveryWorkerService {
                  deliveries.updated_at AS "updatedAt"`,
       boundedLimit,
       claimedAt,
+      appId ?? null,
     );
 
     return {

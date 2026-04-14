@@ -564,3 +564,146 @@ export const protocolAppScopeGrantRevokeSchema = z
 export type ProtocolAppScopeGrantRevoke = z.infer<
   typeof protocolAppScopeGrantRevokeSchema
 >;
+
+export const protocolIntentCreateActionSchema = z
+  .object({
+    actorUserId: uuidSchema,
+    rawText: z.string().min(1).max(4000),
+    agentThreadId: uuidSchema.optional(),
+    traceId: uuidSchema.optional(),
+    metadata: z.record(z.string(), z.unknown()).default({}),
+  })
+  .strict();
+export type ProtocolIntentCreateAction = z.infer<
+  typeof protocolIntentCreateActionSchema
+>;
+
+export const protocolIntentRequestSendActionSchema = z
+  .object({
+    actorUserId: uuidSchema,
+    intentId: uuidSchema,
+    recipientUserId: uuidSchema,
+    agentThreadId: uuidSchema.optional(),
+    traceId: uuidSchema.optional(),
+    metadata: z.record(z.string(), z.unknown()).default({}),
+  })
+  .strict();
+export type ProtocolIntentRequestSendAction = z.infer<
+  typeof protocolIntentRequestSendActionSchema
+>;
+
+export const protocolRequestDecisionActionSchema = z
+  .object({
+    actorUserId: uuidSchema,
+    metadata: z.record(z.string(), z.unknown()).default({}),
+  })
+  .strict();
+export type ProtocolRequestDecisionAction = z.infer<
+  typeof protocolRequestDecisionActionSchema
+>;
+
+export const protocolChatSendMessageActionSchema = z
+  .object({
+    actorUserId: uuidSchema,
+    body: z.string().min(1).max(4000),
+    clientMessageId: identifierSchema.optional(),
+    replyToMessageId: uuidSchema.optional(),
+    metadata: z.record(z.string(), z.unknown()).default({}),
+  })
+  .strict();
+export type ProtocolChatSendMessageAction = z.infer<
+  typeof protocolChatSendMessageActionSchema
+>;
+
+export const protocolIntentActionResultSchema = z
+  .object({
+    action: z.literal("intent.create"),
+    status: z.string().min(1),
+    actorUserId: uuidSchema,
+    intentId: uuidSchema,
+    traceId: uuidSchema,
+    safetyState: z.string().min(1).nullable().optional(),
+    metadata: z.record(z.string(), z.unknown()).default({}),
+  })
+  .strict();
+export type ProtocolIntentActionResult = z.infer<
+  typeof protocolIntentActionResultSchema
+>;
+
+export const protocolRequestActionResultSchema = z
+  .object({
+    action: z.enum([
+      "request.send",
+      "request.accept",
+      "request.reject",
+    ] as const),
+    status: z.string().min(1),
+    actorUserId: uuidSchema,
+    requestId: uuidSchema.nullable(),
+    intentId: uuidSchema.optional(),
+    queued: z.boolean().optional(),
+    unchanged: z.boolean().optional(),
+    metadata: z.record(z.string(), z.unknown()).default({}),
+  })
+  .strict();
+export type ProtocolRequestActionResult = z.infer<
+  typeof protocolRequestActionResultSchema
+>;
+
+export const protocolChatMessageActionResultSchema = z
+  .object({
+    action: z.literal("chat.send_message"),
+    actorUserId: uuidSchema,
+    chatId: uuidSchema,
+    messageId: uuidSchema,
+    replyToMessageId: uuidSchema.nullable().optional(),
+    createdAt: isoDateTimeSchema,
+    metadata: z.record(z.string(), z.unknown()).default({}),
+  })
+  .strict();
+export type ProtocolChatMessageActionResult = z.infer<
+  typeof protocolChatMessageActionResultSchema
+>;
+
+export const protocolWebhookDeliveryRunRequestSchema = z
+  .object({
+    limit: z.number().int().min(1).max(100).optional(),
+  })
+  .strict();
+export type ProtocolWebhookDeliveryRunRequest = z.infer<
+  typeof protocolWebhookDeliveryRunRequestSchema
+>;
+
+export const protocolWebhookDeliveryRunResultSchema = z
+  .object({
+    claimedCount: z.number().int().min(0),
+    attemptedCount: z.number().int().min(0),
+    deliveredCount: z.number().int().min(0),
+    retryScheduledCount: z.number().int().min(0),
+    deadLetteredCount: z.number().int().min(0),
+    skippedCount: z.number().int().min(0),
+    ranAt: isoDateTimeSchema,
+    results: z.array(
+      z
+        .object({
+          deliveryId: uuidSchema,
+          subscriptionId: identifierSchema,
+          endpointUrl: urlSchema.or(z.literal("")),
+          outcome: z.enum([
+            "delivered",
+            "retrying",
+            "dead_lettered",
+            "skipped",
+          ] as const),
+          statusCode: z.number().int().nullable(),
+          errorCode: z.string().nullable(),
+          errorMessage: z.string().nullable(),
+          attemptCount: z.number().int().min(0),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
+export type ProtocolWebhookDeliveryRunResult = z.infer<
+  typeof protocolWebhookDeliveryRunResultSchema
+>;

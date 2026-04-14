@@ -49,7 +49,17 @@ The protocol is no longer just a concept. The following pieces are already prese
 - Webhook subscriptions are persisted, signed, and recorded as deliveries.
 - The event log and replay cursor state are persisted.
 - The protocol manifest, discovery document, and event catalog are exposed from the protocol service.
-- Scoped grant storage already exists in the schema through `protocol_app_scope_grants` with `subjectType=user|app|service|agent`; the API model still needs to be surfaced and enforced.
+- Scoped grants are persisted and exposed through `protocol_app_scope_grants` with `subjectType=user|app|service|agent`.
+- The first external action surface is now live for:
+  - `intent.create`
+  - `request.send`
+  - `request.accept`
+  - `request.reject`
+  - `chat.send_message`
+- These actions are enforced through:
+  - app token scope/capability checks
+  - delegated user grants on `actions.invoke`
+- The webhook delivery runner is now executable through the protocol API for an app-scoped queue run.
 
 Use this as the baseline for all next backlog items. Do not reintroduce generic social primitives like posts or follows.
 
@@ -226,5 +236,5 @@ These packages should mirror the backend domain rather than inventing new abstra
 2. Finish consent and scoped grant enforcement on persisted app rows.
 3. Add the delivery worker with signatures, retry, and dead-letter handling.
 4. Tighten token management and the rotate/revoke lifecycle.
-5. Wire the frontend to the protocol client package and protocol surfaces.
-6. Add external action APIs and agent support.
+5. Add the next external action APIs and agent support.
+6. Wire the frontend to the protocol client package and protocol surfaces for user-visible integrations.

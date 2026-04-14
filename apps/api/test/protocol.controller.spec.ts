@@ -39,6 +39,21 @@ describe("ProtocolController", () => {
         deadLetteredCount: 0,
         deliveries: [],
       }),
+      runDueWebhookDeliveries: () => ({
+        claimedCount: 0,
+        attemptedCount: 0,
+        deliveredCount: 0,
+        retryScheduledCount: 0,
+        deadLetteredCount: 0,
+        skippedCount: 0,
+        ranAt: "2026-04-13T00:00:00.000Z",
+        results: [],
+      }),
+      createIntentAction: () => ({}),
+      sendRequestAction: () => ({}),
+      acceptRequestAction: () => ({}),
+      rejectRequestAction: () => ({}),
+      sendChatMessageAction: () => ({}),
       createWebhook: (_appId: string, token: string, payload: unknown) => ({
         token,
         payload,
@@ -90,6 +105,21 @@ describe("ProtocolController", () => {
         deadLetteredCount: 0,
         deliveries: [],
       }),
+      runDueWebhookDeliveries: () => ({
+        claimedCount: 0,
+        attemptedCount: 0,
+        deliveredCount: 0,
+        retryScheduledCount: 0,
+        deadLetteredCount: 0,
+        skippedCount: 0,
+        ranAt: "2026-04-13T00:00:00.000Z",
+        results: [],
+      }),
+      createIntentAction: () => ({}),
+      sendRequestAction: () => ({}),
+      acceptRequestAction: () => ({}),
+      rejectRequestAction: () => ({}),
+      sendChatMessageAction: () => ({}),
       createWebhook: (
         _appId: string,
         token: string,
@@ -175,6 +205,60 @@ describe("ProtocolController", () => {
       ) => ({
         token,
         cursor,
+      }),
+      runDueWebhookDeliveries: (
+        _appId: string,
+        token: string,
+        payload: Record<string, unknown>,
+      ) => ({
+        token,
+        payload,
+      }),
+      createIntentAction: (
+        _appId: string,
+        token: string,
+        payload: Record<string, unknown>,
+      ) => ({
+        token,
+        payload,
+      }),
+      sendRequestAction: (
+        _appId: string,
+        token: string,
+        payload: Record<string, unknown>,
+      ) => ({
+        token,
+        payload,
+      }),
+      acceptRequestAction: (
+        _appId: string,
+        token: string,
+        requestId: string,
+        payload: Record<string, unknown>,
+      ) => ({
+        token,
+        requestId,
+        payload,
+      }),
+      rejectRequestAction: (
+        _appId: string,
+        token: string,
+        requestId: string,
+        payload: Record<string, unknown>,
+      ) => ({
+        token,
+        requestId,
+        payload,
+      }),
+      sendChatMessageAction: (
+        _appId: string,
+        token: string,
+        chatId: string,
+        payload: Record<string, unknown>,
+      ) => ({
+        token,
+        chatId,
+        payload,
       }),
       createWebhook: () => ({}),
       replayEvents: (_appId: string, token: string, cursor?: string) => ({
@@ -267,6 +351,113 @@ describe("ProtocolController", () => {
     expect(savedCursor.data.cursor).toBe("44");
   });
 
+  it("routes protocol action endpoints through the app token", async () => {
+    const controller = new ProtocolController({
+      getManifest: () => ({}),
+      getDiscovery: () => ({}),
+      listEvents: () => [],
+      listApps: () => [],
+      registerApp: () => ({}),
+      getApp: () => ({}),
+      listAppGrants: () => [],
+      createAppGrant: () => ({}),
+      revokeAppGrant: () => ({}),
+      rotateAppToken: () => ({}),
+      revokeAppToken: () => ({}),
+      listWebhooks: () => [],
+      listWebhookDeliveries: () => [],
+      inspectDeliveryQueue: () => ({}),
+      runDueWebhookDeliveries: (
+        _appId: string,
+        token: string,
+        payload: Record<string, unknown>,
+      ) => ({ token, payload }),
+      createIntentAction: (
+        _appId: string,
+        token: string,
+        payload: Record<string, unknown>,
+      ) => ({ token, payload }),
+      sendRequestAction: (
+        _appId: string,
+        token: string,
+        payload: Record<string, unknown>,
+      ) => ({ token, payload }),
+      acceptRequestAction: (
+        _appId: string,
+        token: string,
+        requestId: string,
+        payload: Record<string, unknown>,
+      ) => ({ token, requestId, payload }),
+      rejectRequestAction: (
+        _appId: string,
+        token: string,
+        requestId: string,
+        payload: Record<string, unknown>,
+      ) => ({ token, requestId, payload }),
+      sendChatMessageAction: (
+        _appId: string,
+        token: string,
+        chatId: string,
+        payload: Record<string, unknown>,
+      ) => ({ token, chatId, payload }),
+      createWebhook: () => ({}),
+      replayEvents: () => [],
+      getReplayCursor: () => ({}),
+      saveReplayCursor: () => ({}),
+    } as any);
+
+    const intent = (await controller.createIntentAction(
+      "alpha.app",
+      { "x-protocol-app-token": "secret-token" },
+      {
+        actorUserId: "00000000-0000-4000-8000-000000000001",
+        rawText: "Find dinner",
+      },
+    )) as any;
+    const request = (await controller.sendRequestAction(
+      "alpha.app",
+      { "x-protocol-app-token": "secret-token" },
+      {
+        actorUserId: "00000000-0000-4000-8000-000000000001",
+        intentId: "00000000-0000-4000-8000-000000000002",
+        recipientUserId: "00000000-0000-4000-8000-000000000003",
+      },
+    )) as any;
+    const accept = (await controller.acceptRequestAction(
+      "alpha.app",
+      "00000000-0000-4000-8000-000000000011",
+      { "x-protocol-app-token": "secret-token" },
+      { actorUserId: "00000000-0000-4000-8000-000000000001" },
+    )) as any;
+    const reject = (await controller.rejectRequestAction(
+      "alpha.app",
+      "00000000-0000-4000-8000-000000000012",
+      { "x-protocol-app-token": "secret-token" },
+      { actorUserId: "00000000-0000-4000-8000-000000000001" },
+    )) as any;
+    const chat = (await controller.sendChatMessageAction(
+      "alpha.app",
+      "00000000-0000-4000-8000-000000000004",
+      { "x-protocol-app-token": "secret-token" },
+      {
+        actorUserId: "00000000-0000-4000-8000-000000000001",
+        body: "hello",
+      },
+    )) as any;
+    const run = (await controller.runDueWebhookDeliveries(
+      "alpha.app",
+      { "x-protocol-app-token": "secret-token" },
+      { limit: 10 },
+    )) as any;
+
+    expect(intent.data.token).toBe("secret-token");
+    expect(request.data.token).toBe("secret-token");
+    expect(accept.data.requestId).toBe("00000000-0000-4000-8000-000000000011");
+    expect(reject.data.requestId).toBe("00000000-0000-4000-8000-000000000012");
+    expect(chat.data.chatId).toBe("00000000-0000-4000-8000-000000000004");
+    expect(run.data.token).toBe("secret-token");
+  });
+
   it("routes app token rotate and revoke through the app token header", async () => {
     const controller = new ProtocolController({
       getManifest: () => ({}),
@@ -297,6 +488,21 @@ describe("ProtocolController", () => {
         deadLetteredCount: 0,
         deliveries: [],
       }),
+      runDueWebhookDeliveries: () => ({
+        claimedCount: 0,
+        attemptedCount: 0,
+        deliveredCount: 0,
+        retryScheduledCount: 0,
+        deadLetteredCount: 0,
+        skippedCount: 0,
+        ranAt: "2026-04-13T00:00:00.000Z",
+        results: [],
+      }),
+      createIntentAction: () => ({}),
+      sendRequestAction: () => ({}),
+      acceptRequestAction: () => ({}),
+      rejectRequestAction: () => ({}),
+      sendChatMessageAction: () => ({}),
       createWebhook: () => ({}),
       replayEvents: () => [],
       getReplayCursor: () => ({

@@ -100,6 +100,7 @@ describe("ProtocolWebhookDeliveryRunnerService", () => {
     expect(worker.claimDueDeliveries).toHaveBeenCalledWith(
       10,
       expect.any(Date),
+      undefined,
     );
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
