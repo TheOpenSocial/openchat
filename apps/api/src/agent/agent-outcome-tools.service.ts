@@ -684,46 +684,66 @@ export class AgentOutcomeToolsService {
       return { created: false, reason: "missing_circle_title" };
     }
     const timezone = this.normalizeTimezone(input.timezone);
-    const circle = await this.recurringCirclesService.createCircle(
-      input.userId,
-      {
-        title,
-        description: input.description?.trim() || undefined,
-        visibility: "private",
-        topicTags: (input.topicTags ?? [])
-          .map((tag) => tag.trim())
-          .filter((tag) => tag.length > 0)
-          .slice(0, 8),
-        targetSize: Math.min(Math.max(input.targetSize ?? 4, 2), 8),
-        cadence: {
-          kind: "weekly",
-          days: [this.dayKeyForDate(new Date())],
-          hour: 18,
-          minute: 0,
-          timezone,
-          intervalWeeks: 1,
-        },
-        kickoffPrompt: input.kickoffPrompt?.trim() || undefined,
-      },
-    );
+    const topicTags = (input.topicTags ?? [])
+      .map((tag) => tag.trim())
+      .filter((tag) => tag.length > 0)
+      .slice(0, 8);
+    const targetSize = Math.min(Math.max(input.targetSize ?? 4, 2), 8);
+    const cadence = {
+      kind: "weekly" as const,
+      days: [this.dayKeyForDate(new Date())],
+      hour: 18,
+      minute: 0,
+      timezone,
+      intervalWeeks: 1,
+    };
+    const circle =
+      typeof this.protocolService?.createFirstPartyCircleAction === "function"
+        ? await this.protocolService.createFirstPartyCircleAction({
+            actorUserId: input.userId,
+            title,
+            description: input.description?.trim() || undefined,
+            visibility: "private",
+            topicTags,
+            targetSize,
+            cadence,
+            kickoffPrompt: input.kickoffPrompt?.trim() || undefined,
+            metadata: {
+              source: "agent_outcome_tool",
+            },
+          })
+        : await this.recurringCirclesService.createCircle(input.userId, {
+            title,
+            description: input.description?.trim() || undefined,
+            visibility: "private",
+            topicTags,
+            targetSize,
+            cadence,
+            kickoffPrompt: input.kickoffPrompt?.trim() || undefined,
+          });
+    const circleId = "circleId" in circle ? circle.circleId : circle.id;
+    const nextSessionAt =
+      typeof circle.nextSessionAt === "string"
+        ? circle.nextSessionAt
+        : (circle.nextSessionAt?.toISOString() ?? null);
     await this.recordExecutionMemory(input.userId, {
-      summary: `Created a recurring circle "${circle.title}" to turn social intent into a repeatable group outcome.`,
+      summary: `Created a recurring circle "${title}" to turn social intent into a repeatable group outcome.`,
       topics: input.topicTags,
       activities: ["created circle"],
       context: {
         source: "agent_outcome_tool",
         outcome: "circle_created",
-        circleId: circle.id,
-        title: circle.title,
-        targetSize: Math.min(Math.max(input.targetSize ?? 4, 2), 8),
+        circleId,
+        title,
+        targetSize,
       },
     });
 
     return {
       created: true,
-      circleId: circle.id,
-      title: circle.title,
-      nextSessionAt: circle.nextSessionAt?.toISOString() ?? null,
+      circleId,
+      title,
+      nextSessionAt,
     };
   }
 
@@ -737,14 +757,31 @@ export class AgentOutcomeToolsService {
       return { joined: false, reason: "recurring_circles_service_unavailable" };
     }
 
-    const member = await this.recurringCirclesService.addMember(
-      input.circleId,
-      input.ownerUserId,
-      {
-        userId: input.userId,
-        role: input.role ?? "member",
-      },
-    );
+    const member =
+      typeof this.protocolService?.joinFirstPartyCircleAction === "function"
+        ? await this.protocolService.joinFirstPartyCircleAction(
+            input.circleId,
+            {
+              actorUserId: input.ownerUserId,
+              memberUserId: input.userId,
+              role: input.role ?? "member",
+              metadata: {
+                source: "agent_outcome_tool",
+              },
+            },
+          )
+        : await this.recurringCirclesService.addMember(
+            input.circleId,
+            input.ownerUserId,
+            {
+              userId: input.userId,
+              role: input.role ?? "member",
+            },
+          );
+    const memberUserId =
+      "userId" in member
+        ? member.userId
+        : (member.memberUserId ?? input.userId);
     await this.recordExecutionMemory(input.userId, {
       summary:
         "Joined a recurring circle to turn the current social goal into an ongoing group connection.",
@@ -754,16 +791,16 @@ export class AgentOutcomeToolsService {
         source: "agent_outcome_tool",
         outcome: "circle_joined",
         circleId: member.circleId,
-        role: member.role,
+        role: member.role ?? input.role ?? "member",
       },
     });
 
     return {
       joined: true,
       circleId: member.circleId,
-      userId: member.userId,
+      userId: memberUserId,
       status: member.status,
-      role: member.role,
+      role: member.role ?? input.role ?? "member",
     };
   }
 

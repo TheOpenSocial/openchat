@@ -57,6 +57,9 @@ The protocol is no longer just a concept. The following pieces are already prese
   - `request.accept`
   - `request.reject`
   - `chat.send_message`
+  - `circle.create`
+  - `circle.join`
+  - `circle.leave`
 - These actions are enforced through:
   - app token scope/capability checks
   - delegated user grants on `actions.invoke`
@@ -72,6 +75,7 @@ The protocol is no longer just a concept. The following pieces are already prese
 - First-party mobile and web settings surfaces now support token rotate/revoke and grant creation/revocation flows for protocol apps.
 - First-party mobile and web settings surfaces now frame grants as delegated access and expose dead-letter replay controls.
 - First-party runtime and agent intent/request flows now have protocol-service call-through paths for the cleanest social actions.
+- First-party agent circle creation and circle membership actions now call through the protocol service instead of bypassing it.
 
 Use this as the baseline for all next backlog items. Do not reintroduce generic social primitives like posts or follows.
 
@@ -249,7 +253,7 @@ These packages should mirror the backend domain rather than inventing new abstra
 
 1. Finalize protocol resources, event names, and exclusions.
 2. Expand consent-request lifecycle and approval policy on persisted app rows.
-3. Normalize protocol-backed first-party action paths beyond chat send, intent, and request actions.
+3. Normalize protocol-backed first-party action paths beyond chat send, intent, request, and recurring-circle actions.
 4. Add operator/admin visibility for protocol lag, replay pressure, and token/grant audit usage.
-5. Add the next external action APIs and agent support.
+5. Add the next external action APIs and agent support beyond circles.
 6. Wire user-visible protocol events into first-party activity surfaces without exposing backend internals.

@@ -3,6 +3,7 @@ import { Module, forwardRef } from "@nestjs/common";
 import { ChatsModule } from "../chats/chats.module.js";
 import { InboxModule } from "../inbox/inbox.module.js";
 import { IntentsModule } from "../intents/intents.module.js";
+import { RecurringCirclesModule } from "../recurring-circles/recurring-circles.module.js";
 import { ProtocolController } from "./protocol.controller.js";
 import { ProtocolService } from "./protocol.service.js";
 import { ProtocolWebhookDeliveryRunnerService } from "./protocol-webhook-delivery-runner.service.js";
@@ -14,6 +15,7 @@ import { ProtocolWebhookDeliveryWorkerService } from "./protocol-webhook-deliver
     IntentsModule,
     InboxModule,
     forwardRef(() => ChatsModule),
+    forwardRef(() => RecurringCirclesModule),
   ],
   controllers: [ProtocolController],
   providers: [

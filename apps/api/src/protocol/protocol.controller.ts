@@ -13,6 +13,9 @@ import {
   appRegistrationRequestSchema,
   identifierSchema,
   protocolChatSendMessageActionSchema,
+  protocolCircleCreateActionSchema,
+  protocolCircleJoinActionSchema,
+  protocolCircleLeaveActionSchema,
   protocolAppConsentRequestCreateSchema,
   protocolAppConsentRequestDecisionSchema,
   protocolAppScopeGrantCreateSchema,
@@ -565,6 +568,63 @@ export class ProtocolController {
         appId,
         readProtocolAppToken(headers) ?? "",
         chatId,
+        payload,
+      ),
+    );
+  }
+
+  @Post("apps/:appId/actions/circles")
+  async createCircleAction(
+    @Param("appId") appIdParam: string,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+    @Body() body: unknown,
+  ) {
+    const appId = parseRequestPayload(identifierSchema, appIdParam);
+    const payload = parseRequestPayload(protocolCircleCreateActionSchema, body);
+    return ok(
+      await this.protocolService.createCircleAction(
+        appId,
+        readProtocolAppToken(headers) ?? "",
+        payload,
+      ),
+    );
+  }
+
+  @Post("apps/:appId/actions/circles/:circleId/join")
+  async joinCircleAction(
+    @Param("appId") appIdParam: string,
+    @Param("circleId") circleIdParam: string,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+    @Body() body: unknown,
+  ) {
+    const appId = parseRequestPayload(identifierSchema, appIdParam);
+    const circleId = parseRequestPayload(uuidSchema, circleIdParam);
+    const payload = parseRequestPayload(protocolCircleJoinActionSchema, body);
+    return ok(
+      await this.protocolService.joinCircleAction(
+        appId,
+        readProtocolAppToken(headers) ?? "",
+        circleId,
+        payload,
+      ),
+    );
+  }
+
+  @Post("apps/:appId/actions/circles/:circleId/leave")
+  async leaveCircleAction(
+    @Param("appId") appIdParam: string,
+    @Param("circleId") circleIdParam: string,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+    @Body() body: unknown,
+  ) {
+    const appId = parseRequestPayload(identifierSchema, appIdParam);
+    const circleId = parseRequestPayload(uuidSchema, circleIdParam);
+    const payload = parseRequestPayload(protocolCircleLeaveActionSchema, body);
+    return ok(
+      await this.protocolService.leaveCircleAction(
+        appId,
+        readProtocolAppToken(headers) ?? "",
+        circleId,
         payload,
       ),
     );

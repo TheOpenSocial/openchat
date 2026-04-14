@@ -621,6 +621,48 @@ function createChatsServiceStub() {
   };
 }
 
+function createRecurringCirclesServiceStub() {
+  return {
+    createCircle: async (
+      ownerUserId: string,
+      body: {
+        title: string;
+        targetSize?: number;
+        cadence: { timezone: string };
+      },
+    ) => ({
+      id: "00000000-0000-4000-8000-000000000105",
+      ownerUserId,
+      title: body.title,
+      status: "active",
+      nextSessionAt: new Date("2026-04-20T21:00:00.000Z"),
+    }),
+    addMember: async (
+      circleId: string,
+      ownerUserId: string,
+      body: { userId: string; role: "member" | "admin" },
+    ) => ({
+      id: "00000000-0000-4000-8000-000000000106",
+      circleId,
+      ownerUserId,
+      userId: body.userId,
+      role: body.role,
+      status: "active",
+    }),
+    removeMember: async (
+      circleId: string,
+      ownerUserId: string,
+      memberUserId: string,
+    ) => ({
+      id: "00000000-0000-4000-8000-000000000107",
+      circleId,
+      ownerUserId,
+      userId: memberUserId,
+      status: "removed",
+    }),
+  };
+}
+
 function createProtocolService() {
   return new ProtocolService(
     createPrismaStub() as any,
@@ -630,6 +672,7 @@ function createProtocolService() {
     createIntentsServiceStub() as any,
     createInboxServiceStub() as any,
     createChatsServiceStub() as any,
+    createRecurringCirclesServiceStub() as any,
   );
 }
 
@@ -666,6 +709,7 @@ function createRegistrationPayload(): AppRegistrationRequest {
           "intent.write",
           "request.write",
           "chat.write",
+          "circle.write",
           "webhook.read",
           "webhook.write",
           "event.read",
@@ -704,6 +748,7 @@ function createRegistrationPayload(): AppRegistrationRequest {
           "intent.write",
           "request.write",
           "chat.write",
+          "circle.write",
           "webhook.read",
           "webhook.write",
           "event.read",
@@ -735,6 +780,7 @@ function createRegistrationPayload(): AppRegistrationRequest {
       "intent.write",
       "request.write",
       "chat.write",
+      "circle.write",
       "webhook.read",
       "webhook.write",
       "event.read",
@@ -986,7 +1032,12 @@ describe("ProtocolService", () => {
       registration.credentials.appToken,
       {
         scope: "actions.invoke",
-        capabilities: ["intent.write", "request.write", "chat.write"],
+        capabilities: [
+          "intent.write",
+          "request.write",
+          "chat.write",
+          "circle.write",
+        ],
         subjectType: "user",
         subjectId: "00000000-0000-4000-8000-000000000001",
         metadata: { source: "test" },
@@ -1031,11 +1082,55 @@ describe("ProtocolService", () => {
         metadata: {},
       },
     );
+    const createdCircle = await service.createCircleAction(
+      "partner.alpha",
+      registration.credentials.appToken,
+      {
+        actorUserId: "00000000-0000-4000-8000-000000000001",
+        title: "Design dinner circle",
+        visibility: "private",
+        topicTags: ["design", "dinner"],
+        targetSize: 4,
+        cadence: {
+          kind: "weekly",
+          days: ["thu"],
+          hour: 18,
+          minute: 0,
+          timezone: "America/Argentina/Buenos_Aires",
+          intervalWeeks: 1,
+        },
+        metadata: {},
+      },
+    );
+    const joinedCircle = await service.joinCircleAction(
+      "partner.alpha",
+      registration.credentials.appToken,
+      "00000000-0000-4000-8000-000000000105",
+      {
+        actorUserId: "00000000-0000-4000-8000-000000000001",
+        memberUserId: "00000000-0000-4000-8000-000000000002",
+        role: "member",
+        metadata: {},
+      },
+    );
+    const leftCircle = await service.leaveCircleAction(
+      "partner.alpha",
+      registration.credentials.appToken,
+      "00000000-0000-4000-8000-000000000105",
+      {
+        actorUserId: "00000000-0000-4000-8000-000000000001",
+        memberUserId: "00000000-0000-4000-8000-000000000002",
+        metadata: {},
+      },
+    );
 
     expect(createdIntent.action).toBe("intent.create");
     expect(sentRequest.action).toBe("request.send");
     expect(acceptedRequest.action).toBe("request.accept");
     expect(chatMessage.action).toBe("chat.send_message");
+    expect(createdCircle.action).toBe("circle.create");
+    expect(joinedCircle.action).toBe("circle.join");
+    expect(leftCircle.action).toBe("circle.leave");
   });
 
   it("runs due deliveries through the app-scoped runner endpoint", async () => {
@@ -1395,8 +1490,35 @@ describe("ProtocolService", () => {
       recipientUserId: "00000000-0000-4000-8000-000000000002",
       metadata: {},
     });
+    const createdCircle = await service.createFirstPartyCircleAction({
+      actorUserId: "00000000-0000-4000-8000-000000000001",
+      title: "Weekly design circle",
+      visibility: "private",
+      topicTags: ["design"],
+      targetSize: 4,
+      cadence: {
+        kind: "weekly",
+        days: ["wed"],
+        hour: 19,
+        minute: 0,
+        timezone: "America/Argentina/Buenos_Aires",
+        intervalWeeks: 1,
+      },
+      metadata: {},
+    });
+    const joinedCircle = await service.joinFirstPartyCircleAction(
+      "00000000-0000-4000-8000-000000000105",
+      {
+        actorUserId: "00000000-0000-4000-8000-000000000001",
+        memberUserId: "00000000-0000-4000-8000-000000000002",
+        role: "member",
+        metadata: {},
+      },
+    );
 
     expect(createdIntent.action).toBe("intent.create");
     expect(sentRequest.action).toBe("request.send");
+    expect(createdCircle.action).toBe("circle.create");
+    expect(joinedCircle.action).toBe("circle.join");
   });
 });

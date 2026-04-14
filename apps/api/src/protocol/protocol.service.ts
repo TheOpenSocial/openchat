@@ -34,6 +34,10 @@ import {
   protocolWebhookDeliveryReplayResultSchema,
   protocolChatMessageActionResultSchema,
   protocolChatSendMessageActionSchema,
+  protocolCircleActionResultSchema,
+  protocolCircleCreateActionSchema,
+  protocolCircleJoinActionSchema,
+  protocolCircleLeaveActionSchema,
   protocolAppScopeGrantCreateSchema,
   protocolAppScopeGrantRevokeSchema,
   protocolAppScopeGrantSchema,
@@ -55,6 +59,9 @@ import {
   type AppRegistrationRequest,
   type CapabilityName,
   type ProtocolChatSendMessageAction,
+  type ProtocolCircleCreateAction,
+  type ProtocolCircleJoinAction,
+  type ProtocolCircleLeaveAction,
   type EventName,
   type ProtocolAppConsentRequest,
   type ProtocolAppConsentRequestCreate,
@@ -84,6 +91,7 @@ import {
 import { ChatsService } from "../chats/chats.service.js";
 import { InboxService } from "../inbox/inbox.service.js";
 import { IntentsService } from "../intents/intents.service.js";
+import { RecurringCirclesService } from "../recurring-circles/recurring-circles.service.js";
 import { ProtocolWebhookDeliveryRunnerService } from "./protocol-webhook-delivery-runner.service.js";
 import { ProtocolWebhookDeliveryWorkerService } from "./protocol-webhook-delivery-worker.service.js";
 import { signProtocolWebhookPayload } from "./protocol-webhooks.js";
@@ -226,6 +234,8 @@ export class ProtocolService {
     @Optional() private readonly intentsService?: IntentsService,
     @Optional() private readonly inboxService?: InboxService,
     @Optional() private readonly chatsService?: ChatsService,
+    @Optional()
+    private readonly recurringCirclesService?: RecurringCirclesService,
   ) {}
 
   getManifest(): ProtocolManifest {
@@ -1339,6 +1349,74 @@ export class ProtocolService {
     });
   }
 
+  async createCircleAction(
+    appId: string,
+    appToken: string,
+    input: ProtocolCircleCreateAction,
+  ) {
+    const payload = protocolCircleCreateActionSchema.parse(input);
+    const { app, grant } = await this.requireDelegatedActionGrant(
+      appId,
+      appToken,
+      payload.actorUserId,
+      "circle.create",
+      ["circle.write"],
+    );
+    if (!this.recurringCirclesService) {
+      throw new NotFoundException("circle actions unavailable");
+    }
+    return this.executeCircleCreateAction(payload, {
+      actorAppId: app.registration.appId,
+      grantId: grant.grantId,
+    });
+  }
+
+  async joinCircleAction(
+    appId: string,
+    appToken: string,
+    circleId: string,
+    input: ProtocolCircleJoinAction,
+  ) {
+    const payload = protocolCircleJoinActionSchema.parse(input);
+    const { app, grant } = await this.requireDelegatedActionGrant(
+      appId,
+      appToken,
+      payload.actorUserId,
+      "circle.join",
+      ["circle.write"],
+    );
+    if (!this.recurringCirclesService) {
+      throw new NotFoundException("circle actions unavailable");
+    }
+    return this.executeCircleJoinAction(circleId, payload, {
+      actorAppId: app.registration.appId,
+      grantId: grant.grantId,
+    });
+  }
+
+  async leaveCircleAction(
+    appId: string,
+    appToken: string,
+    circleId: string,
+    input: ProtocolCircleLeaveAction,
+  ) {
+    const payload = protocolCircleLeaveActionSchema.parse(input);
+    const { app, grant } = await this.requireDelegatedActionGrant(
+      appId,
+      appToken,
+      payload.actorUserId,
+      "circle.leave",
+      ["circle.write"],
+    );
+    if (!this.recurringCirclesService) {
+      throw new NotFoundException("circle actions unavailable");
+    }
+    return this.executeCircleLeaveAction(circleId, payload, {
+      actorAppId: app.registration.appId,
+      grantId: grant.grantId,
+    });
+  }
+
   async createFirstPartyIntentAction(input: ProtocolIntentCreateAction) {
     return this.executeIntentCreateAction(input, {
       actorAppId: FIRST_PARTY_PROTOCOL_ACTOR_APP_ID,
@@ -1374,6 +1452,30 @@ export class ProtocolService {
     input: ProtocolChatSendMessageAction,
   ) {
     return this.executeChatSendMessageAction(chatId, input, {
+      actorAppId: FIRST_PARTY_PROTOCOL_ACTOR_APP_ID,
+    });
+  }
+
+  async createFirstPartyCircleAction(input: ProtocolCircleCreateAction) {
+    return this.executeCircleCreateAction(input, {
+      actorAppId: FIRST_PARTY_PROTOCOL_ACTOR_APP_ID,
+    });
+  }
+
+  async joinFirstPartyCircleAction(
+    circleId: string,
+    input: ProtocolCircleJoinAction,
+  ) {
+    return this.executeCircleJoinAction(circleId, input, {
+      actorAppId: FIRST_PARTY_PROTOCOL_ACTOR_APP_ID,
+    });
+  }
+
+  async leaveFirstPartyCircleAction(
+    circleId: string,
+    input: ProtocolCircleLeaveAction,
+  ) {
+    return this.executeCircleLeaveAction(circleId, input, {
       actorAppId: FIRST_PARTY_PROTOCOL_ACTOR_APP_ID,
     });
   }
@@ -1806,6 +1908,133 @@ export class ProtocolService {
     });
   }
 
+  private async executeCircleCreateAction(
+    input: ProtocolCircleCreateAction,
+    context: { actorAppId: string; grantId?: string },
+  ) {
+    const payload = protocolCircleCreateActionSchema.parse(input);
+    const circle = await this.recurringCirclesService!.createCircle(
+      payload.actorUserId,
+      {
+        title: payload.title,
+        description: payload.description,
+        visibility: payload.visibility,
+        topicTags: payload.topicTags,
+        targetSize: payload.targetSize,
+        kickoffPrompt: payload.kickoffPrompt,
+        cadence: payload.cadence,
+      },
+    );
+
+    await this.recordEvent({
+      actorAppId: context.actorAppId,
+      event: "circle.created",
+      resource: "circle",
+      payload: {
+        circleId: circle.id,
+        ownerUserId: payload.actorUserId,
+        grantId: context.grantId ?? null,
+        source:
+          context.actorAppId === FIRST_PARTY_PROTOCOL_ACTOR_APP_ID
+            ? "first_party"
+            : "app",
+      },
+    });
+
+    return protocolCircleActionResultSchema.parse({
+      action: "circle.create",
+      status: circle.status,
+      actorUserId: payload.actorUserId,
+      circleId: circle.id,
+      ownerUserId: payload.actorUserId,
+      nextSessionAt: this.toIsoString(circle.nextSessionAt) ?? null,
+      metadata: payload.metadata ?? {},
+    });
+  }
+
+  private async executeCircleJoinAction(
+    circleId: string,
+    input: ProtocolCircleJoinAction,
+    context: { actorAppId: string; grantId?: string },
+  ) {
+    const payload = protocolCircleJoinActionSchema.parse(input);
+    const member = await this.recurringCirclesService!.addMember(
+      circleId,
+      payload.actorUserId,
+      {
+        userId: payload.memberUserId,
+        role: payload.role,
+      },
+    );
+
+    await this.recordEvent({
+      actorAppId: context.actorAppId,
+      event: "circle.joined",
+      resource: "circle",
+      payload: {
+        circleId: member.circleId,
+        ownerUserId: payload.actorUserId,
+        memberUserId: payload.memberUserId,
+        role: member.role,
+        grantId: context.grantId ?? null,
+        source:
+          context.actorAppId === FIRST_PARTY_PROTOCOL_ACTOR_APP_ID
+            ? "first_party"
+            : "app",
+      },
+    });
+
+    return protocolCircleActionResultSchema.parse({
+      action: "circle.join",
+      status: member.status,
+      actorUserId: payload.actorUserId,
+      circleId: member.circleId,
+      ownerUserId: payload.actorUserId,
+      memberUserId: payload.memberUserId,
+      role: member.role === "owner" ? "admin" : member.role,
+      metadata: payload.metadata ?? {},
+    });
+  }
+
+  private async executeCircleLeaveAction(
+    circleId: string,
+    input: ProtocolCircleLeaveAction,
+    context: { actorAppId: string; grantId?: string },
+  ) {
+    const payload = protocolCircleLeaveActionSchema.parse(input);
+    const member = await this.recurringCirclesService!.removeMember(
+      circleId,
+      payload.actorUserId,
+      payload.memberUserId,
+    );
+
+    await this.recordEvent({
+      actorAppId: context.actorAppId,
+      event: "circle.left",
+      resource: "circle",
+      payload: {
+        circleId: member.circleId,
+        ownerUserId: payload.actorUserId,
+        memberUserId: payload.memberUserId,
+        grantId: context.grantId ?? null,
+        source:
+          context.actorAppId === FIRST_PARTY_PROTOCOL_ACTOR_APP_ID
+            ? "first_party"
+            : "app",
+      },
+    });
+
+    return protocolCircleActionResultSchema.parse({
+      action: "circle.leave",
+      status: member.status,
+      actorUserId: payload.actorUserId,
+      circleId: member.circleId,
+      ownerUserId: payload.actorUserId,
+      memberUserId: payload.memberUserId,
+      metadata: payload.metadata ?? {},
+    });
+  }
+
   private issueScopes(
     requested: ProtocolScopeName[],
     registrationScopes: ProtocolScopeName[],
@@ -1894,7 +2123,10 @@ export class ProtocolService {
       | "request.send"
       | "request.accept"
       | "request.reject"
-      | "chat.send_message",
+      | "chat.send_message"
+      | "circle.create"
+      | "circle.join"
+      | "circle.leave",
     capabilities: CapabilityName[],
   ) {
     const app = await this.requireAppAccess(appId, appToken, {

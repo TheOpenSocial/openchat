@@ -759,6 +759,70 @@ export type ProtocolChatSendMessageAction = z.infer<
   typeof protocolChatSendMessageActionSchema
 >;
 
+export const protocolCircleCadenceSchema = z
+  .object({
+    kind: z.literal("weekly"),
+    days: z
+      .array(z.enum(["sun", "mon", "tue", "wed", "thu", "fri", "sat"]))
+      .min(1)
+      .max(7),
+    hour: z.number().int().min(0).max(23),
+    minute: z.number().int().min(0).max(59),
+    timezone: z.string().min(1).max(128),
+    intervalWeeks: z.number().int().min(1).max(8).default(1),
+  })
+  .strict();
+export type ProtocolCircleCadence = z.infer<typeof protocolCircleCadenceSchema>;
+
+export const protocolCircleVisibilitySchema = z.enum([
+  "private",
+  "invite_only",
+  "discoverable",
+] as const);
+export type ProtocolCircleVisibility = z.infer<
+  typeof protocolCircleVisibilitySchema
+>;
+
+export const protocolCircleCreateActionSchema = z
+  .object({
+    actorUserId: uuidSchema,
+    title: z.string().min(1).max(120),
+    description: z.string().max(500).optional(),
+    visibility: protocolCircleVisibilitySchema.default("invite_only"),
+    topicTags: z.array(z.string().min(1).max(60)).max(12).default([]),
+    targetSize: z.number().int().min(2).max(12).optional(),
+    kickoffPrompt: z.string().max(500).optional(),
+    cadence: protocolCircleCadenceSchema,
+    metadata: z.record(z.string(), z.unknown()).default({}),
+  })
+  .strict();
+export type ProtocolCircleCreateAction = z.infer<
+  typeof protocolCircleCreateActionSchema
+>;
+
+export const protocolCircleJoinActionSchema = z
+  .object({
+    actorUserId: uuidSchema,
+    memberUserId: uuidSchema,
+    role: z.enum(["admin", "member"] as const).default("member"),
+    metadata: z.record(z.string(), z.unknown()).default({}),
+  })
+  .strict();
+export type ProtocolCircleJoinAction = z.infer<
+  typeof protocolCircleJoinActionSchema
+>;
+
+export const protocolCircleLeaveActionSchema = z
+  .object({
+    actorUserId: uuidSchema,
+    memberUserId: uuidSchema,
+    metadata: z.record(z.string(), z.unknown()).default({}),
+  })
+  .strict();
+export type ProtocolCircleLeaveAction = z.infer<
+  typeof protocolCircleLeaveActionSchema
+>;
+
 export const protocolIntentActionResultSchema = z
   .object({
     action: z.literal("intent.create"),
@@ -809,6 +873,23 @@ export const protocolChatMessageActionResultSchema = z
   .strict();
 export type ProtocolChatMessageActionResult = z.infer<
   typeof protocolChatMessageActionResultSchema
+>;
+
+export const protocolCircleActionResultSchema = z
+  .object({
+    action: z.enum(["circle.create", "circle.join", "circle.leave"] as const),
+    status: z.string().min(1),
+    actorUserId: uuidSchema,
+    circleId: uuidSchema,
+    ownerUserId: uuidSchema.optional(),
+    memberUserId: uuidSchema.optional(),
+    role: z.enum(["admin", "member"] as const).optional(),
+    nextSessionAt: isoDateTimeSchema.nullable().optional(),
+    metadata: z.record(z.string(), z.unknown()).default({}),
+  })
+  .strict();
+export type ProtocolCircleActionResult = z.infer<
+  typeof protocolCircleActionResultSchema
 >;
 
 export const protocolWebhookDeliveryRunRequestSchema = z

@@ -104,6 +104,9 @@ describe("ProtocolController", () => {
       acceptRequestAction: () => ({}),
       rejectRequestAction: () => ({}),
       sendChatMessageAction: () => ({}),
+      createCircleAction: () => ({}),
+      joinCircleAction: () => ({}),
+      leaveCircleAction: () => ({}),
       createWebhook: (_appId: string, token: string, payload: unknown) => ({
         token,
         payload,
@@ -220,6 +223,9 @@ describe("ProtocolController", () => {
       acceptRequestAction: () => ({}),
       rejectRequestAction: () => ({}),
       sendChatMessageAction: () => ({}),
+      createCircleAction: () => ({}),
+      joinCircleAction: () => ({}),
+      leaveCircleAction: () => ({}),
       createWebhook: (
         _appId: string,
         token: string,
@@ -762,6 +768,23 @@ describe("ProtocolController", () => {
         chatId: string,
         payload: Record<string, unknown>,
       ) => ({ token, chatId, payload }),
+      createCircleAction: (
+        _appId: string,
+        token: string,
+        payload: Record<string, unknown>,
+      ) => ({ token, payload }),
+      joinCircleAction: (
+        _appId: string,
+        token: string,
+        circleId: string,
+        payload: Record<string, unknown>,
+      ) => ({ token, circleId, payload }),
+      leaveCircleAction: (
+        _appId: string,
+        token: string,
+        circleId: string,
+        payload: Record<string, unknown>,
+      ) => ({ token, circleId, payload }),
       createWebhook: () => ({}),
       replayEvents: () => [],
       getReplayCursor: () => ({}),
@@ -806,6 +829,42 @@ describe("ProtocolController", () => {
         body: "hello",
       },
     )) as any;
+    const circle = (await controller.createCircleAction(
+      "alpha.app",
+      { "x-protocol-app-token": "secret-token" },
+      {
+        actorUserId: "00000000-0000-4000-8000-000000000001",
+        title: "Design circle",
+        visibility: "private",
+        topicTags: ["design"],
+        cadence: {
+          kind: "weekly",
+          days: ["thu"],
+          hour: 19,
+          minute: 0,
+          timezone: "America/Argentina/Buenos_Aires",
+          intervalWeeks: 1,
+        },
+      },
+    )) as any;
+    const joinCircle = (await controller.joinCircleAction(
+      "alpha.app",
+      "00000000-0000-4000-8000-000000000005",
+      { "x-protocol-app-token": "secret-token" },
+      {
+        actorUserId: "00000000-0000-4000-8000-000000000001",
+        memberUserId: "00000000-0000-4000-8000-000000000006",
+      },
+    )) as any;
+    const leaveCircle = (await controller.leaveCircleAction(
+      "alpha.app",
+      "00000000-0000-4000-8000-000000000005",
+      { "x-protocol-app-token": "secret-token" },
+      {
+        actorUserId: "00000000-0000-4000-8000-000000000001",
+        memberUserId: "00000000-0000-4000-8000-000000000006",
+      },
+    )) as any;
     const run = (await controller.runDueWebhookDeliveries(
       "alpha.app",
       { "x-protocol-app-token": "secret-token" },
@@ -817,6 +876,13 @@ describe("ProtocolController", () => {
     expect(accept.data.requestId).toBe("00000000-0000-4000-8000-000000000011");
     expect(reject.data.requestId).toBe("00000000-0000-4000-8000-000000000012");
     expect(chat.data.chatId).toBe("00000000-0000-4000-8000-000000000004");
+    expect(circle.data.token).toBe("secret-token");
+    expect(joinCircle.data.circleId).toBe(
+      "00000000-0000-4000-8000-000000000005",
+    );
+    expect(leaveCircle.data.circleId).toBe(
+      "00000000-0000-4000-8000-000000000005",
+    );
     expect(run.data.token).toBe("secret-token");
   });
 
@@ -915,6 +981,9 @@ describe("ProtocolController", () => {
       acceptRequestAction: () => ({}),
       rejectRequestAction: () => ({}),
       sendChatMessageAction: () => ({}),
+      createCircleAction: () => ({}),
+      joinCircleAction: () => ({}),
+      leaveCircleAction: () => ({}),
       createWebhook: () => ({}),
       replayEvents: () => [],
       getReplayCursor: () => ({

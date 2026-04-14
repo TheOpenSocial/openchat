@@ -7,6 +7,10 @@ import {
   protocolAppUsageSummarySchema,
   protocolChatMessageActionResultSchema,
   protocolChatSendMessageActionSchema,
+  protocolCircleActionResultSchema,
+  protocolCircleCreateActionSchema,
+  protocolCircleJoinActionSchema,
+  protocolCircleLeaveActionSchema,
   protocolAppConsentRequestCreateSchema,
   protocolAppConsentRequestDecisionSchema,
   protocolAppConsentRequestSchema,
@@ -44,6 +48,10 @@ import {
   type ProtocolAppUsageSummary,
   type ProtocolChatMessageActionResult,
   type ProtocolChatSendMessageAction,
+  type ProtocolCircleActionResult,
+  type ProtocolCircleCreateAction,
+  type ProtocolCircleJoinAction,
+  type ProtocolCircleLeaveAction,
   type ProtocolDiscoveryDocument,
   type ProtocolEventEnvelope,
   type ProtocolIntentActionResult,
@@ -208,6 +216,23 @@ export type ProtocolClient = {
     chatId: string,
     payload: ProtocolChatSendMessageInput,
   ) => Promise<ProtocolChatMessageActionResult>;
+  createCircle: (
+    appId: string,
+    appToken: string,
+    payload: ProtocolCircleCreateInput,
+  ) => Promise<ProtocolCircleActionResult>;
+  joinCircle: (
+    appId: string,
+    appToken: string,
+    circleId: string,
+    payload: ProtocolCircleJoinInput,
+  ) => Promise<ProtocolCircleActionResult>;
+  leaveCircle: (
+    appId: string,
+    appToken: string,
+    circleId: string,
+    payload: ProtocolCircleLeaveInput,
+  ) => Promise<ProtocolCircleActionResult>;
   runWebhookDeliveryQueue: (
     appId: string,
     appToken: string,
@@ -302,6 +327,9 @@ export type ProtocolIntentCreateInput = ProtocolIntentCreateAction;
 export type ProtocolRequestSendInput = ProtocolIntentRequestSendAction;
 export type ProtocolRequestDecisionInput = ProtocolRequestDecisionAction;
 export type ProtocolChatSendMessageInput = ProtocolChatSendMessageAction;
+export type ProtocolCircleCreateInput = ProtocolCircleCreateAction;
+export type ProtocolCircleJoinInput = ProtocolCircleJoinAction;
+export type ProtocolCircleLeaveInput = ProtocolCircleLeaveAction;
 export type ProtocolWebhookDeliveryRunInput = ProtocolWebhookDeliveryRunRequest;
 
 export function createProtocolClient(
@@ -786,6 +814,60 @@ export function createProtocolClient(
       return protocolChatMessageActionResultSchema.parse(
         envelope?.data ?? envelope,
       );
+    },
+    async createCircle(appId, appToken, payload) {
+      const requestPayload = protocolCircleCreateActionSchema.parse(payload);
+      const response = await transport.request(
+        `/protocol/apps/${appId}/actions/circles`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-protocol-app-token": appToken,
+          },
+          body: JSON.stringify(requestPayload),
+        },
+      );
+      const envelope = (await response.json()) as
+        | { data?: unknown }
+        | undefined;
+      return protocolCircleActionResultSchema.parse(envelope?.data ?? envelope);
+    },
+    async joinCircle(appId, appToken, circleId, payload) {
+      const requestPayload = protocolCircleJoinActionSchema.parse(payload);
+      const response = await transport.request(
+        `/protocol/apps/${appId}/actions/circles/${circleId}/join`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-protocol-app-token": appToken,
+          },
+          body: JSON.stringify(requestPayload),
+        },
+      );
+      const envelope = (await response.json()) as
+        | { data?: unknown }
+        | undefined;
+      return protocolCircleActionResultSchema.parse(envelope?.data ?? envelope);
+    },
+    async leaveCircle(appId, appToken, circleId, payload) {
+      const requestPayload = protocolCircleLeaveActionSchema.parse(payload);
+      const response = await transport.request(
+        `/protocol/apps/${appId}/actions/circles/${circleId}/leave`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-protocol-app-token": appToken,
+          },
+          body: JSON.stringify(requestPayload),
+        },
+      );
+      const envelope = (await response.json()) as
+        | { data?: unknown }
+        | undefined;
+      return protocolCircleActionResultSchema.parse(envelope?.data ?? envelope);
     },
     async runWebhookDeliveryQueue(appId, appToken, input) {
       const requestPayload = protocolWebhookDeliveryRunRequestSchema.parse(
