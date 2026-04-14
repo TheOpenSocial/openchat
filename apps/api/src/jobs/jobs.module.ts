@@ -8,6 +8,7 @@ import { IntentsModule } from "../intents/intents.module.js";
 import { ModerationModule } from "../moderation/moderation.module.js";
 import { NotificationsModule } from "../notifications/notifications.module.js";
 import { ProfilesModule } from "../profiles/profiles.module.js";
+import { ProtocolModule } from "../protocol/protocol.module.js";
 import { ScheduledTasksModule } from "../scheduled-tasks/scheduled-tasks.module.js";
 import { DeadLetterService } from "./dead-letter.service.js";
 import { OutboxRelayService } from "./outbox-relay.service.js";
@@ -18,6 +19,7 @@ import { ConnectionSetupConsumer } from "./processors/connection-setup.consumer.
 import { IntentProcessingConsumer } from "./processors/intent-processing.consumer.js";
 import { MediaProcessingConsumer } from "./processors/media-processing.consumer.js";
 import { ModerationConsumer } from "./processors/moderation.consumer.js";
+import { ProtocolWebhookDeliveryConsumer } from "./processors/protocol-webhook-delivery.consumer.js";
 import { ScheduledTasksConsumer } from "./processors/scheduled-tasks.consumer.js";
 
 export const JOB_QUEUE_NAMES = [
@@ -33,6 +35,7 @@ export const JOB_QUEUE_NAMES = [
   "digests",
   "admin-maintenance",
   "scheduled-tasks",
+  "protocol-webhook-deliveries",
 ];
 
 @Module({
@@ -46,6 +49,7 @@ export const JOB_QUEUE_NAMES = [
     AgentModule,
     ModerationModule,
     NotificationsModule,
+    ProtocolModule,
     ScheduledTasksModule,
   ],
   providers: [
@@ -58,6 +62,7 @@ export const JOB_QUEUE_NAMES = [
     MediaProcessingConsumer,
     AsyncAgentFollowupConsumer,
     AdminMaintenanceConsumer,
+    ProtocolWebhookDeliveryConsumer,
     ScheduledTasksConsumer,
   ],
   exports: [BullModule, DeadLetterService, OutboxRelayService],
