@@ -1170,6 +1170,114 @@ describe("ProtocolService", () => {
     expect(result.ranAt).toBe("2026-04-13T00:00:00.000Z");
   });
 
+  it("forwards protocol provenance metadata through request actions", async () => {
+    const intentsService = {
+      createIntent: vi.fn(),
+      assertIntentOwnership: vi.fn().mockResolvedValue(undefined),
+      sendIntentRequest: vi.fn().mockResolvedValue({
+        id: "00000000-0000-4000-8000-000000000102",
+        intentId: "00000000-0000-4000-8000-000000000101",
+        recipientUserId: "00000000-0000-4000-8000-000000000002",
+        status: "pending",
+      }),
+    };
+    const inboxService = {
+      updateStatus: vi.fn().mockResolvedValue({
+        request: {
+          id: "00000000-0000-4000-8000-000000000102",
+          intentId: "00000000-0000-4000-8000-000000000101",
+          status: "rejected",
+          senderUserId: "00000000-0000-4000-8000-000000000001",
+          recipientUserId: "00000000-0000-4000-8000-000000000002",
+        },
+        queued: false,
+        unchanged: false,
+      }),
+    };
+    const service = new ProtocolService(
+      createPrismaStub() as any,
+      createDeliveryWorkerStub() as any,
+      createDeliveryRunnerStub() as any,
+      createProtocolQueueStub() as any,
+      intentsService as any,
+      inboxService as any,
+      createChatsServiceStub() as any,
+      createRecurringCirclesServiceStub() as any,
+      createNotificationsServiceStub() as any,
+    );
+    const registration = await service.registerApp(createRegistrationPayload());
+    await service.createAppGrant(
+      "partner.alpha",
+      registration.credentials.appToken,
+      {
+        scope: "actions.invoke",
+        capabilities: ["request.write"],
+        subjectType: "user",
+        subjectId: "00000000-0000-4000-8000-000000000001",
+        metadata: { source: "test" },
+      },
+    );
+    await service.createAppGrant(
+      "partner.alpha",
+      registration.credentials.appToken,
+      {
+        scope: "actions.invoke",
+        capabilities: ["request.write"],
+        subjectType: "user",
+        subjectId: "00000000-0000-4000-8000-000000000002",
+        metadata: { source: "test" },
+      },
+    );
+
+    await service.sendRequestAction(
+      "partner.alpha",
+      registration.credentials.appToken,
+      {
+        actorUserId: "00000000-0000-4000-8000-000000000001",
+        intentId: "00000000-0000-4000-8000-000000000101",
+        recipientUserId: "00000000-0000-4000-8000-000000000002",
+        metadata: {},
+      },
+    );
+    await service.rejectRequestAction(
+      "partner.alpha",
+      registration.credentials.appToken,
+      "00000000-0000-4000-8000-000000000102",
+      {
+        actorUserId: "00000000-0000-4000-8000-000000000002",
+        metadata: {},
+      },
+    );
+
+    expect(intentsService.sendIntentRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        notificationMetadata: {
+          provenance: expect.objectContaining({
+            source: "protocol",
+            action: "request.send",
+            resource: "intent_request",
+            actorAppId: "partner.alpha",
+          }),
+        },
+      }),
+    );
+    expect(inboxService.updateStatus).toHaveBeenCalledWith(
+      "00000000-0000-4000-8000-000000000102",
+      "rejected",
+      "00000000-0000-4000-8000-000000000002",
+      {
+        notificationMetadata: {
+          provenance: expect.objectContaining({
+            source: "protocol",
+            action: "request.reject",
+            resource: "intent_request",
+            actorAppId: "partner.alpha",
+          }),
+        },
+      },
+    );
+  });
+
   it("lists webhook delivery attempts for an app delivery", async () => {
     const prisma = createPrismaStub() as any;
     const queue = createProtocolQueueStub() as any;

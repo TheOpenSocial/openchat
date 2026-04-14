@@ -193,6 +193,9 @@ export class InboxService {
     requestId: string,
     status: "accepted" | "rejected",
     actorUserId?: string,
+    options: {
+      notificationMetadata?: Record<string, unknown>;
+    } = {},
   ) {
     const request = await this.prisma.intentRequest.findUnique({
       where: { id: requestId },
@@ -285,6 +288,7 @@ export class InboxService {
       updated.senderUserId,
       NotificationType.AGENT_UPDATE,
       "One request was declined. I can keep looking for more people.",
+      options.notificationMetadata,
     );
     await this.trackAnalyticsEventSafe({
       eventType: "request_rejected",

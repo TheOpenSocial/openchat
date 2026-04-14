@@ -1,3 +1,4 @@
+import { NotificationType } from "@opensocial/types";
 import { describe, expect, it, vi } from "vitest";
 import { IntentsService } from "../src/intents/intents.service.js";
 
@@ -1505,5 +1506,54 @@ describe("IntentsService", () => {
       "shared topics",
       "style and vibe compatibility",
     ]);
+  });
+
+  it("forwards request notification metadata when sending an intent request", async () => {
+    const { service, prisma, notificationsService } = createIntentsService({
+      prisma: {
+        intent: {
+          findUnique: vi.fn().mockResolvedValue({
+            id: "intent-1",
+            userId: "sender-1",
+          }),
+          update: vi.fn().mockResolvedValue({}),
+        },
+        intentRequest: {
+          findFirst: vi.fn().mockResolvedValue(null),
+          create: vi.fn().mockResolvedValue({
+            id: "request-1",
+            status: "pending",
+          }),
+          count: vi.fn().mockResolvedValue(0),
+        },
+        auditLog: {
+          count: vi.fn().mockResolvedValue(0),
+        },
+      },
+    });
+
+    await service.sendIntentRequest({
+      intentId: "intent-1",
+      recipientUserId: "recipient-1",
+      traceId: "trace-1",
+      notificationMetadata: {
+        provenance: {
+          source: "protocol",
+          action: "request.send",
+        },
+      },
+    });
+
+    expect(notificationsService.createInAppNotification).toHaveBeenCalledWith(
+      "recipient-1",
+      NotificationType.REQUEST_RECEIVED,
+      "Someone wants to connect with you right now.",
+      {
+        provenance: {
+          source: "protocol",
+          action: "request.send",
+        },
+      },
+    );
   });
 });

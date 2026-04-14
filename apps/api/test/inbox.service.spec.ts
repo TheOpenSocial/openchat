@@ -315,4 +315,48 @@ describe("InboxService", () => {
       }),
     );
   });
+
+  it("forwards notification metadata when rejecting a request", async () => {
+    const { service, notificationsService } = createService({
+      prisma: {
+        intentRequest: {
+          findUnique: vi.fn().mockResolvedValue({
+            id: "req-1",
+            status: "pending",
+            senderUserId: "sender-1",
+            recipientUserId: "recipient-1",
+            intentId: "intent-1",
+          }),
+          update: vi.fn().mockResolvedValue({
+            id: "req-1",
+            status: "rejected",
+            senderUserId: "sender-1",
+            recipientUserId: "recipient-1",
+            intentId: "intent-1",
+          }),
+        },
+      },
+    });
+
+    await service.updateStatus("req-1", "rejected", "recipient-1", {
+      notificationMetadata: {
+        provenance: {
+          source: "protocol",
+          action: "request.reject",
+        },
+      },
+    });
+
+    expect(notificationsService.createInAppNotification).toHaveBeenCalledWith(
+      "sender-1",
+      "agent_update",
+      "One request was declined. I can keep looking for more people.",
+      {
+        provenance: {
+          source: "protocol",
+          action: "request.reject",
+        },
+      },
+    );
+  });
 });

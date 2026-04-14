@@ -237,6 +237,7 @@ export class IntentsService {
     recipientUserId: string;
     traceId: string;
     agentThreadId?: string;
+    notificationMetadata?: Record<string, unknown>;
   }) {
     const intent = await this.prisma.intent.findUnique({
       where: { id: input.intentId },
@@ -326,6 +327,7 @@ export class IntentsService {
       input.recipientUserId,
       NotificationType.REQUEST_RECEIVED,
       "Someone wants to connect with you right now.",
+      input.notificationMetadata,
     );
 
     const workflowThreadId =

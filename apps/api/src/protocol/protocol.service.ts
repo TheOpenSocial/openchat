@@ -1787,6 +1787,17 @@ export class ProtocolService {
       recipientUserId: payload.recipientUserId,
       traceId,
       agentThreadId: payload.agentThreadId,
+      notificationMetadata: {
+        provenance: {
+          source: "protocol",
+          action: "request.send",
+          resource: "intent_request",
+          actorAppId: context.actorAppId,
+          intentId: payload.intentId,
+          senderUserId: payload.actorUserId,
+          recipientUserId: payload.recipientUserId,
+        },
+      },
     });
     const requestId =
       "requestId" in request
@@ -1833,6 +1844,18 @@ export class ProtocolService {
       requestId,
       action === "accept" ? "accepted" : "rejected",
       payload.actorUserId,
+      {
+        notificationMetadata: {
+          provenance: {
+            source: "protocol",
+            action: action === "accept" ? "request.accept" : "request.reject",
+            resource: "intent_request",
+            actorAppId: context.actorAppId,
+            requestId,
+            actorUserId: payload.actorUserId,
+          },
+        },
+      },
     );
 
     await this.recordEvent({

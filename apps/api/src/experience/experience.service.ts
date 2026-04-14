@@ -425,6 +425,12 @@ export class ExperienceService {
           return "Circle updated";
         case "circle.leave":
           return "Circle membership changed";
+        case "request.send":
+          return "Integration request";
+        case "request.accept":
+          return "Integration request accepted";
+        case "request.reject":
+          return "Integration request declined";
         default:
           return "Integration update";
       }

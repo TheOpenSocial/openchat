@@ -225,4 +225,46 @@ describe("ExperienceService", () => {
       }),
     );
   });
+
+  it("labels protocol request notifications with specific integration titles", async () => {
+    const { service } = createService({
+      prisma: {
+        notification: {
+          count: vi.fn().mockResolvedValue(1),
+          findMany: vi.fn().mockResolvedValue([
+            {
+              id: "notif-protocol-request-1",
+              body: "Someone wants to connect with you right now.",
+              type: "request_created",
+              channel: "in_app",
+              isRead: false,
+              metadata: {
+                provenance: {
+                  source: "protocol",
+                  action: "request.send",
+                },
+              },
+              createdAt: new Date("2026-04-13T00:00:00.000Z"),
+            },
+          ]),
+        },
+        intentRequest: {
+          findFirst: vi.fn().mockResolvedValue(null),
+        },
+        chat: {
+          findFirst: vi.fn().mockResolvedValue(null),
+        },
+      },
+    });
+
+    const summary = await service.getActivitySummary(USER_ID);
+
+    expect(summary.sections.updates[0]).toEqual(
+      expect.objectContaining({
+        eyebrow: "Integration",
+        title: "Integration request",
+        body: "Someone wants to connect with you right now.",
+      }),
+    );
+  });
 });
