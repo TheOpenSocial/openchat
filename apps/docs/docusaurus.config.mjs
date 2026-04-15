@@ -20,6 +20,10 @@ const config = {
     defaultLocale: "en",
     locales: ["en"],
   },
+  markdown: {
+    mermaid: true,
+  },
+  themes: ["@docusaurus/theme-mermaid"],
   presets: [
     [
       "classic",
@@ -56,8 +60,18 @@ const config = {
           position: "left",
         },
         {
+          to: "/docs/examples/protocol-overview-and-exclusions",
+          label: "Concepts",
+          position: "left",
+        },
+        {
           to: "/docs/examples/protocol-partner-quickstart",
           label: "Quickstart",
+          position: "left",
+        },
+        {
+          to: "/docs/examples/protocol-external-actions-reference",
+          label: "API",
           position: "left",
         },
         {
@@ -67,29 +81,41 @@ const config = {
         },
       ],
     },
+    announcementBar: {
+      id: "sdk_scope",
+      content:
+        "Public docs cover the OpenSocial protocol SDK only: auth, connect, actions, events, webhooks, agents, and recovery.",
+      backgroundColor: "#153b31",
+      textColor: "#eef7f2",
+      isCloseable: false,
+    },
     footer: {
       style: "dark",
       links: [
         {
-          title: "SDK",
+          title: "Concepts",
           items: [
             {
               label: "Overview",
               to: "/docs",
             },
             {
-              label: "Protocol SDK",
-              to: "/docs/examples/protocol-sdk-index",
+              label: "Protocol shape",
+              to: "/docs/examples/protocol-overview-and-exclusions",
             },
             {
-              label: "Partner quickstart",
-              to: "/docs/examples/protocol-partner-quickstart",
+              label: "Manifest + discovery",
+              to: "/docs/examples/protocol-manifest-and-discovery",
             },
           ],
         },
         {
-          title: "Integrations",
+          title: "Build",
           items: [
+            {
+              label: "Quickstart",
+              to: "/docs/examples/protocol-partner-quickstart",
+            },
             {
               label: "External actions",
               to: "/docs/examples/protocol-external-actions-reference",
@@ -98,9 +124,22 @@ const config = {
               label: "Webhooks + replay",
               to: "/docs/examples/protocol-event-subscriptions-and-replay",
             },
+          ],
+        },
+        {
+          title: "Operate",
+          items: [
             {
               label: "Agent quickstart",
               to: "/docs/examples/protocol-agent-quickstart",
+            },
+            {
+              label: "Consent + auth troubleshooting",
+              to: "/docs/examples/protocol-consent-and-auth-troubleshooting",
+            },
+            {
+              label: "Operator recovery",
+              to: "/docs/examples/protocol-operator-recovery",
             },
           ],
         },
