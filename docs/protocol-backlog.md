@@ -92,6 +92,7 @@ The protocol is no longer just a concept. The following pieces are already prese
   - a thin `@opensocial/protocol-agent` wrapper now exists for actor defaults and readiness inspection without widening backend scope
   - the agent wrapper now includes readiness evaluation and fail-fast assertions for common auth/grant/queue blockers
   - the agent wrapper now exposes a generic toolset adapter so future orchestrators can consume stable protocol actions without runtime-specific SDK coupling
+  - the agent wrapper now exposes a toolkit helper so orchestrators can consume the bound client and indexed tools together
 
 Use this as the baseline for all next backlog items. Do not reintroduce generic social primitives like posts or follows.
 

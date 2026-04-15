@@ -125,6 +125,14 @@ export type ProtocolAgentToolDefinition = {
   invoke: (input: unknown) => Promise<unknown>;
 };
 
+export type ProtocolAgentToolMap = Record<string, ProtocolAgentToolDefinition>;
+
+export type ProtocolAgentToolkit = {
+  agent: ProtocolAgentClient;
+  tools: ProtocolAgentToolDefinition[];
+  toolsByName: ProtocolAgentToolMap;
+};
+
 const readinessOptionsSchema = {
   type: "object",
   additionalProperties: false,
@@ -608,4 +616,31 @@ export function createProtocolAgentToolset(
       },
     },
   ];
+}
+
+export function indexProtocolAgentToolset(
+  tools: ProtocolAgentToolDefinition[],
+): ProtocolAgentToolMap {
+  return Object.fromEntries(tools.map((tool) => [tool.name, tool]));
+}
+
+export function createProtocolAgentToolkit(
+  agent: ProtocolAgentClient,
+): ProtocolAgentToolkit {
+  const tools = createProtocolAgentToolset(agent);
+  return {
+    agent,
+    tools,
+    toolsByName: indexProtocolAgentToolset(tools),
+  };
+}
+
+export function createProtocolAgentToolkitFromBaseUrl(
+  baseUrl: string,
+  session: ProtocolAgentSession,
+  fetchImpl?: typeof fetch,
+): ProtocolAgentToolkit {
+  return createProtocolAgentToolkit(
+    createProtocolAgentClientFromBaseUrl(baseUrl, session, fetchImpl),
+  );
 }

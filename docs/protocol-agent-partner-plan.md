@@ -27,6 +27,7 @@ Partners can already integrate against the protocol layer in these ways:
 - Use readiness evaluation before scheduled or autonomous agent work so auth, grant, and queue failures are caught early.
 - Use the wrapper’s assert-ready path when the agent should hard-stop on operational blockers before acting.
 - Use the generic toolset adapter when integrating the agent wrapper into an orchestrator without coupling the SDK to one runtime.
+- Use the toolkit helper when your orchestrator wants the bound agent client and indexed tools in one object.
 
 ## What Third-Party Agents Should Assume
 

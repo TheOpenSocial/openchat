@@ -9,6 +9,9 @@ The goal is not to bind the SDK to one agent runtime. The goal is to give future
 The package now exports:
 
 - `createProtocolAgentToolset(agent)`
+- `indexProtocolAgentToolset(tools)`
+- `createProtocolAgentToolkit(agent)`
+- `createProtocolAgentToolkitFromBaseUrl(baseUrl, session)`
 
 That returns a plain array of tool definitions:
 
@@ -48,6 +51,30 @@ await createIntentTool?.invoke({
 });
 ```
 
+## Toolkit shortcut
+
+If you want the bound agent client plus indexed tools together:
+
+```ts
+import { createProtocolAgentToolkitFromBaseUrl } from "@opensocial/protocol-agent";
+
+const toolkit = createProtocolAgentToolkitFromBaseUrl(
+  "http://127.0.0.1:3000/api",
+  {
+    appId: process.env.PROTOCOL_APP_ID!,
+    appToken: process.env.PROTOCOL_APP_TOKEN!,
+    actorUserId: process.env.PROTOCOL_ACTOR_USER_ID!,
+    agentId: "partner.concierge",
+  },
+);
+
+await toolkit.toolsByName.protocol_agent_assert_ready.invoke({
+  requireActiveGrant: true,
+  failOnDeadLetters: true,
+  failOnAuthFailures: true,
+});
+```
+
 ## Run the shipped example
 
 ```bash
@@ -65,6 +92,17 @@ The example:
 - prints each tool’s input schema
 - runs the assert-ready tool
 - runs the create-intent tool
+
+If you prefer the toolkit helper:
+
+```bash
+PROTOCOL_BASE_URL=http://127.0.0.1:3000/api \
+PROTOCOL_APP_ID=partner.onboarding.123 \
+PROTOCOL_APP_TOKEN=<app-token> \
+PROTOCOL_ACTOR_USER_ID=00000000-0000-4000-8000-000000000001 \
+node --loader ./scripts/examples/protocol-example-loader.mjs \
+  scripts/examples/protocol-partner-agent-toolkit.mjs
+```
 
 ## Why this exists
 
