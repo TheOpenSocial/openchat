@@ -23,6 +23,10 @@ on:
         description: "Optional prebuilt web image reference"
         required: false
         type: string
+      docs_image:
+        description: "Optional prebuilt docs image reference"
+        required: false
+        type: string
       run_post_deploy_verification:
         description: "Run incident-readiness verification after deploy"
         required: false
@@ -55,10 +59,11 @@ jobs:
       DEPLOY_USER: ${{ secrets.STAGING_DEPLOY_USER || 'ec2-user' }}
       SSH_KEY_PATH: /tmp/staging_deploy_key
       DEPLOY_MODE: ${{ inputs.deploy_mode }}
-      DEPLOY_SERVICES: api
+      DEPLOY_SERVICES: api admin web docs
       API_IMAGE: ${{ inputs.api_image }}
       ADMIN_IMAGE: ${{ inputs.admin_image }}
       WEB_IMAGE: ${{ inputs.web_image }}
+      DOCS_IMAGE: ${{ inputs.docs_image }}
       REGISTRY_HOST: ghcr.io
       REGISTRY_USERNAME: ${{ secrets.GHCR_USERNAME }}
       REGISTRY_PASSWORD: ${{ secrets.GHCR_TOKEN }}
@@ -209,6 +214,14 @@ jobs:
           set -euo pipefail
           chmod +x scripts/deploy-production.sh
           DEPLOY_PHASE=pull-web ./scripts/deploy-production.sh
+
+      - name: Pull docs image
+        if: ${{ inputs.deploy_mode == 'images' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x scripts/deploy-production.sh
+          DEPLOY_PHASE=pull-docs ./scripts/deploy-production.sh
 
       - name: Build services
         if: ${{ inputs.deploy_mode != 'images' }}

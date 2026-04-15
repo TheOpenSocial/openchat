@@ -7,10 +7,11 @@ DEPLOY_PATH="${DEPLOY_PATH:-/opt/opensocial}"
 REMOTE_ENV_FILE="${REMOTE_ENV_FILE:-.env.production}"
 DEPLOY_MODE="${DEPLOY_MODE:-build}"
 DEPLOY_PHASE="${DEPLOY_PHASE:-all}"
-DEPLOY_SERVICES="${DEPLOY_SERVICES:-api admin web}"
+DEPLOY_SERVICES="${DEPLOY_SERVICES:-api admin web docs}"
 API_IMAGE="${API_IMAGE:-}"
 ADMIN_IMAGE="${ADMIN_IMAGE:-}"
 WEB_IMAGE="${WEB_IMAGE:-}"
+DOCS_IMAGE="${DOCS_IMAGE:-}"
 REGISTRY_HOST="${REGISTRY_HOST:-ghcr.io}"
 REGISTRY_USERNAME="${REGISTRY_USERNAME:-}"
 REGISTRY_PASSWORD="${REGISTRY_PASSWORD:-}"
@@ -134,13 +135,14 @@ sync_local_checkout() {
   sync_local_env_var "API_IMAGE" "${API_IMAGE:-}"
   sync_local_env_var "ADMIN_IMAGE" "${ADMIN_IMAGE:-}"
   sync_local_env_var "WEB_IMAGE" "${WEB_IMAGE:-}"
+  sync_local_env_var "DOCS_IMAGE" "${DOCS_IMAGE:-}"
 }
 
 run_pull_or_build() {
   # shellcheck disable=SC2206
   local services=( $DEPLOY_SERVICES )
   if [[ ${#services[@]} -eq 0 ]]; then
-    services=(api admin web)
+    services=(api admin web docs)
   fi
 
   if [[ "$DEPLOY_MODE" == "images" ]]; then
@@ -171,7 +173,7 @@ run_migrate() {
 }
 
 run_up() {
-  compose_cmd up -d nginx api admin web valkey
+  compose_cmd up -d nginx api admin web docs valkey
 }
 
 run_ps() {
@@ -197,6 +199,9 @@ run_phase() {
       ;;
     pull-web)
       run_pull_service web
+      ;;
+    pull-docs)
+      run_pull_service docs
       ;;
     migrate)
       run_migrate
@@ -275,6 +280,7 @@ sync_remote_env_var "AGENTIC_VERIFICATION_LANE_ID" "${AGENTIC_VERIFICATION_LANE_
 sync_remote_env_var "API_IMAGE" "${API_IMAGE:-}"
 sync_remote_env_var "ADMIN_IMAGE" "${ADMIN_IMAGE:-}"
 sync_remote_env_var "WEB_IMAGE" "${WEB_IMAGE:-}"
+sync_remote_env_var "DOCS_IMAGE" "${DOCS_IMAGE:-}"
 if [[ "$DEPLOY_PHASE" == "sync" || "$DEPLOY_PHASE" == "all" ]]; then
   ssh "${ssh_opts[@]}" "$REMOTE_TARGET" "mkdir -p '$DEPLOY_PATH'"
   rsync -az --delete \
@@ -300,6 +306,7 @@ ssh "${ssh_opts[@]}" "$REMOTE_TARGET" \
    API_IMAGE='$API_IMAGE' \
    ADMIN_IMAGE='$ADMIN_IMAGE' \
    WEB_IMAGE='$WEB_IMAGE' \
+   DOCS_IMAGE='$DOCS_IMAGE' \
    REGISTRY_HOST='$REGISTRY_HOST' \
    REGISTRY_USERNAME='$REGISTRY_USERNAME' \
    REGISTRY_PASSWORD='$REGISTRY_PASSWORD' \

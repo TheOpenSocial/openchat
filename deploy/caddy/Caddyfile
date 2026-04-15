@@ -9,3 +9,7 @@ admin.opensocial.so {
 app.opensocial.so {
   reverse_proxy web:3002
 }
+
+docs.opensocial.so {
+  reverse_proxy docs:3003
+}

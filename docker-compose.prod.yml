@@ -50,6 +50,17 @@ services:
     expose:
       - "3002"
 
+  docs:
+    image: ${DOCS_IMAGE:-opensocial-docs}
+    build:
+      context: .
+      dockerfile: apps/docs/Dockerfile
+    environment:
+      NODE_ENV: production
+    restart: unless-stopped
+    expose:
+      - "3003"
+
   valkey:
     image: valkey/valkey:8.1-alpine
     command: ["valkey-server", "--appendonly", "yes", "--save", "60", "1000"]
@@ -65,6 +76,7 @@ services:
       - api
       - admin
       - web
+      - docs
     restart: unless-stopped
     ports:
       - "80:80"

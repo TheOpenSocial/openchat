@@ -13,6 +13,7 @@ DEPLOY_MODE="${DEPLOY_MODE:-build}"
 API_IMAGE="${API_IMAGE:-}"
 ADMIN_IMAGE="${ADMIN_IMAGE:-}"
 WEB_IMAGE="${WEB_IMAGE:-}"
+DOCS_IMAGE="${DOCS_IMAGE:-}"
 REGISTRY_HOST="${REGISTRY_HOST:-ghcr.io}"
 REGISTRY_USERNAME="${REGISTRY_USERNAME:-}"
 REGISTRY_PASSWORD="${REGISTRY_PASSWORD:-}"
@@ -87,6 +88,7 @@ sync_remote_env_var "GOOGLE_REDIRECT_URI" "${GOOGLE_REDIRECT_URI:-}"
 sync_remote_env_var "API_IMAGE" "${API_IMAGE:-}"
 sync_remote_env_var "ADMIN_IMAGE" "${ADMIN_IMAGE:-}"
 sync_remote_env_var "WEB_IMAGE" "${WEB_IMAGE:-}"
+sync_remote_env_var "DOCS_IMAGE" "${DOCS_IMAGE:-}"
 
 ssh "${ssh_opts[@]}" \
   "$REMOTE_TARGET" \
@@ -94,12 +96,12 @@ ssh "${ssh_opts[@]}" \
     cd '$DEPLOY_PATH'; \
     if [[ '$DEPLOY_MODE' == 'images' ]]; then \
       if [[ -n '$REGISTRY_USERNAME' && -n '$REGISTRY_PASSWORD' ]]; then printf '%s' '$REGISTRY_PASSWORD' | docker login '$REGISTRY_HOST' --username '$REGISTRY_USERNAME' --password-stdin; fi; \
-      docker compose -f docker-compose.prod.yml --env-file '$REMOTE_ENV_FILE' pull api admin web; \
+      docker compose -f docker-compose.prod.yml --env-file '$REMOTE_ENV_FILE' pull api admin web docs; \
     else \
       git fetch --all --tags; \
       git checkout '$ROLLBACK_REF'; \
-      docker compose -f docker-compose.prod.yml --env-file '$REMOTE_ENV_FILE' build api admin web; \
+      docker compose -f docker-compose.prod.yml --env-file '$REMOTE_ENV_FILE' build api admin web docs; \
     fi; \
     docker compose -f docker-compose.prod.yml --env-file '$REMOTE_ENV_FILE' run --rm api pnpm --filter @opensocial/api prisma:migrate:deploy; \
-    docker compose -f docker-compose.prod.yml --env-file '$REMOTE_ENV_FILE' up -d nginx api admin web valkey; \
+    docker compose -f docker-compose.prod.yml --env-file '$REMOTE_ENV_FILE' up -d nginx api admin web docs valkey; \
     docker compose -f docker-compose.prod.yml --env-file '$REMOTE_ENV_FILE' ps"

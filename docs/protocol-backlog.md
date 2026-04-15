@@ -108,6 +108,7 @@ Use this as the baseline for all next backlog items. Do not reintroduce generic 
 - First-party HTTP call-through for the cleanest public write paths: shipped
 - Partner-facing SDK packages, examples, and docs: effectively complete for v0
 - Docusaurus docs app is now wired on top of the repo documentation set for manual browsing and publishing
+- EC2 deployment for the docs app is now wired through Docker, Caddy, image build, and deploy workflows so `docs.opensocial.so` can be served from the main production host once DNS points to the EC2 instance
 - First-party protocol settings/inspection surfaces: shipped as operational tooling, but still partial as polished product UX
 - CI and product-critical golden coverage are green on the current mainline verification pass
 - Mobile-critical backend controller coverage is verified for first-party protocol call-through on:

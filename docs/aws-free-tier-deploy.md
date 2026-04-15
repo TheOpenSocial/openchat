@@ -4,8 +4,9 @@ This runbook deploys OpenSocial on one EC2 instance for now:
 - API container
 - Admin container
 - Web container
+- Docs container
 - Valkey container
-- Nginx reverse proxy container
+- Caddy reverse proxy container
 - RDS PostgreSQL outside EC2
 
 ## 1) Recommended starter topology
@@ -85,12 +86,13 @@ cp .env.production.example .env.production
 
 ## 7) Set DNS records
 Create A records pointing to EC2 Elastic IP:
-- `api.openchat.example.com`
-- `admin.openchat.example.com`
-- `app.openchat.example.com`
+- `api.opensocial.so`
+- `admin.opensocial.so`
+- `app.opensocial.so`
+- `docs.opensocial.so`
 
 Then adjust the same hostnames in:
-- `deploy/nginx/nginx.conf`
+- `deploy/caddy/Caddyfile`
 - `.env.production` (`NEXT_PUBLIC_API_BASE_URL`, OAuth URLs)
 
 ## 8) Build and start containers
@@ -107,13 +109,15 @@ docker compose -f docker-compose.prod.yml ps
 docker compose -f docker-compose.prod.yml logs -f api
 docker compose -f docker-compose.prod.yml logs -f admin
 docker compose -f docker-compose.prod.yml logs -f web
+docker compose -f docker-compose.prod.yml logs -f docs
 docker compose -f docker-compose.prod.yml logs -f valkey
 ```
 
 Quick health checks:
-- `curl http://api.openchat.example.com/api/health`
-- open `http://admin.openchat.example.com`
-- open `http://app.openchat.example.com`
+- `curl https://api.opensocial.so/api/health`
+- open `https://admin.opensocial.so`
+- open `https://app.opensocial.so`
+- open `https://docs.opensocial.so`
 
 ## 10) Update deployment
 ```bash
@@ -132,7 +136,7 @@ docker compose -f docker-compose.prod.yml --env-file .env.production up -d
 - Move Valkey to managed service when uptime requirements increase.
 
 ## 12) Hardening next
-- Add HTTPS termination (ALB or CloudFront + ACM, or Caddy/Traefik with certificates).
+- Keep Caddy host routing aligned with `api.opensocial.so`, `admin.opensocial.so`, `app.opensocial.so`, and `docs.opensocial.so`.
 - Restrict SSH ingress to your current IP only.
 - Enable AWS backups/snapshots for RDS.
 - Add CloudWatch metrics and alarms for CPU, memory, 5xx, and container restarts.

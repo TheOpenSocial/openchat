@@ -11,8 +11,9 @@ Required GitHub environment secrets:
    - `ghcr.io/<owner>/opensocial-api:<image_tag>`
    - `ghcr.io/<owner>/opensocial-admin:<image_tag>`
    - `ghcr.io/<owner>/opensocial-web:<image_tag>`
+   - `ghcr.io/<owner>/opensocial-docs:<image_tag>`
 3. Manually trigger staging deploy from GitHub Actions using `.github/workflows/deploy-staging.yml`:
-   - `deploy_mode=images` and the three GHCR image references for the fastest path
+   - `deploy_mode=images` and the four GHCR image references for the fastest path
    - or `deploy_mode=build` to build on the target host
 4. Apply DB migrations and seed demo records in staging:
    - `pnpm db:migrate`
@@ -21,7 +22,7 @@ Required GitHub environment secrets:
 6. Execute manual QA from `docs/manual-qa-script.md`.
 7. Verify OpenAI routing/model policy changes (if any) against `docs/openai-model-policy.md` and `apps/api/test/openai-client.spec.ts`.
 8. Manually trigger production deploy from GitHub Actions using `.github/workflows/deploy-production.yml`:
-   - `deploy_mode=images` and the same three image references is the recommended path
+   - `deploy_mode=images` and the same four image references is the recommended path
    - `deploy_mode=build` remains available as a fallback
 9. Monitor dashboards and alert channels for 30 minutes.
 

@@ -27,6 +27,10 @@ on:
         description: "Prebuilt web image reference when using images mode"
         required: false
         type: string
+      docs_image:
+        description: "Prebuilt docs image reference when using images mode"
+        required: false
+        type: string
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -64,6 +68,7 @@ jobs:
           API_IMAGE: ${{ inputs.api_image }}
           ADMIN_IMAGE: ${{ inputs.admin_image }}
           WEB_IMAGE: ${{ inputs.web_image }}
+          DOCS_IMAGE: ${{ inputs.docs_image }}
           REGISTRY_HOST: ghcr.io
           REGISTRY_USERNAME: ${{ secrets.GHCR_USERNAME }}
           REGISTRY_PASSWORD: ${{ secrets.GHCR_TOKEN }}

@@ -76,7 +76,8 @@ gh workflow run "Deploy Production" --ref <branch-or-main> \
   -f deploy_mode=images \
   -f api_image=ghcr.io/theopensocial/opensocial-api:<tag> \
   -f admin_image=ghcr.io/theopensocial/opensocial-admin:<tag> \
-  -f web_image=ghcr.io/theopensocial/opensocial-web:<tag>
+  -f web_image=ghcr.io/theopensocial/opensocial-web:<tag> \
+  -f docs_image=ghcr.io/theopensocial/opensocial-docs:<tag>
 ```
 
 ## Repo-specific note for this session
