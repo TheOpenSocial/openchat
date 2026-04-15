@@ -227,6 +227,60 @@ function parseStructuredJsonContent(raw, fallback = null) {
   return fallback;
 }
 
+function extractQuotedField(raw, field) {
+  if (typeof raw !== "string") return null;
+  const match = raw.match(
+    new RegExp(`"${field}"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)"`, "s"),
+  );
+  if (!match?.[1]) return null;
+  return match[1]
+    .replace(/\\"/g, '"')
+    .replace(/\\\\/g, "\\")
+    .replace(/\\n/g, "\n");
+}
+
+function extractNumericField(raw, field) {
+  if (typeof raw !== "string") return null;
+  const match = raw.match(
+    new RegExp(`"${field}"\\s*:\\s*(-?\\d+(?:\\.\\d+)?)`, "s"),
+  );
+  if (!match?.[1]) return null;
+  const value = Number(match[1]);
+  return Number.isFinite(value) ? value : null;
+}
+
+function extractNullableTargetActorId(raw) {
+  if (typeof raw !== "string") return null;
+  const nullMatch = raw.match(/"targetActorId"\s*:\s*null/s);
+  if (nullMatch) return null;
+  return extractQuotedField(raw, "targetActorId");
+}
+
+function salvageStructuredActorJsonContent(raw) {
+  if (typeof raw !== "string") return null;
+  const candidate = raw.trim();
+  const intent = extractQuotedField(candidate, "intent");
+  const message = extractQuotedField(candidate, "message");
+  const confidence = extractNumericField(candidate, "confidence");
+  if (!intent || !message || confidence === null) {
+    return null;
+  }
+  const targetActorId = extractNullableTargetActorId(candidate);
+  const tone = extractQuotedField(candidate, "tone") ?? "neutral";
+  const rationale =
+    extractQuotedField(candidate, "rationale") ??
+    "Recovered from malformed remote actor JSON.";
+  return {
+    intent,
+    targetActorId,
+    message,
+    tone,
+    confidence,
+    rationale,
+    memoryReferences: [],
+  };
+}
+
 function deepMerge(base, overrides) {
   if (!overrides || typeof overrides !== "object") return base;
   const result = Array.isArray(base) ? base.slice() : { ...base };
@@ -3898,7 +3952,9 @@ class OllamaSocialSimProvider extends RemoteSocialSimProviderBase {
         this.lastRemoteFailure = `invalid_content_type payload=${JSON.stringify(payload)?.slice(0, 400)}`;
         return null;
       }
-      const parsed = parseStructuredJsonContent(content, null);
+      const parsed =
+        parseStructuredJsonContent(content, null) ??
+        salvageStructuredActorJsonContent(content);
       if (!parsed || typeof parsed !== "object") {
         this.lastRemoteFailure = `invalid_json content=${content.slice(0, 400)}`;
         return null;
@@ -3964,7 +4020,9 @@ class OpenAISocialSimProvider extends RemoteSocialSimProviderBase {
         this.lastRemoteFailure = `invalid_content_type payload=${JSON.stringify(payload)?.slice(0, 400)}`;
         return null;
       }
-      const parsed = parseStructuredJsonContent(content, null);
+      const parsed =
+        parseStructuredJsonContent(content, null) ??
+        salvageStructuredActorJsonContent(content);
       if (!parsed || typeof parsed !== "object") {
         this.lastRemoteFailure = `invalid_json content=${content.slice(0, 400)}`;
         return null;

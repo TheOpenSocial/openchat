@@ -505,6 +505,59 @@ test("remote Ollama actor output tolerates fenced JSON content", async () => {
   }
 });
 
+test("remote Ollama actor output salvages malformed json-like payloads", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      message: {
+        content:
+          `{"intent":"reply","targetActorId":"aya","message":"Smith Rock is solid! I've been hitting the Monkey Face route lately.","tone":"playful","confidence":0.85,"rationale":"Aya mentioned specific climbing and cafe interests that align perfectly with my goals.`,
+      },
+    }),
+  });
+  try {
+    const brain = createBrainProvider({
+      provider: "ollama",
+      useRemoteProvider: true,
+      ollamaBaseUrl: "https://ollama.example.test",
+      ollamaModel: "deepseek-v3.1:671b",
+      ollamaApiKey: "test-key",
+    });
+    const worlds = loadSocialSimWorldFixture(
+      path.resolve("scripts/social-sim-worlds.json"),
+      path.resolve("apps/api/test/fixtures/agentic-scenarios.json"),
+    );
+    const world = worlds.find((entry) => entry.id === "short-direct-match-v1");
+    const actor = world.actors.find((entry) => entry.id === "ben");
+    const state = {
+      stage: "conversation",
+      turnIndex: 2,
+      lastActionByActor: new Map(),
+      knownTargets: new Map(),
+    };
+
+    const turn = await brain.generateActorTurn({
+      world,
+      actor,
+      state,
+      transcript: [],
+      rng: () => 0.25,
+      config: {
+        failOnRemoteFallback: true,
+      },
+    });
+
+    assert.equal(turn.intent, "reply");
+    assert.equal(turn.targetActorId, "aya");
+    assert.equal(turn.provider, "ollama");
+    assert.equal(turn.confidence, 0.85);
+    assert.deepEqual(turn.memoryReferences, []);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("remote event safety language does not collapse into moderation and preserves required memory continuity", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => ({
