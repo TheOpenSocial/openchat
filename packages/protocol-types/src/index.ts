@@ -552,6 +552,38 @@ export const protocolAppUsageSummarySchema = z
         lastRevokedAt: isoDateTimeSchema.nullable(),
       })
       .strict(),
+    authFailureCounts: z
+      .object({
+        missingToken: z.number().int().min(0),
+        appNotFound: z.number().int().min(0),
+        appRevoked: z.number().int().min(0),
+        invalidToken: z.number().int().min(0),
+        missingScopes: z.number().int().min(0),
+        missingCapabilities: z.number().int().min(0),
+        missingDelegatedGrant: z.number().int().min(0),
+      })
+      .strict(),
+    recentAuthFailures: z
+      .array(
+        z
+          .object({
+            appId: identifierSchema,
+            failureType: z.enum([
+              "missing_token",
+              "app_not_found",
+              "app_revoked",
+              "invalid_token",
+              "missing_scopes",
+              "missing_capabilities",
+              "missing_delegated_grant",
+            ]),
+            action: z.string().min(1).nullable(),
+            issuedAt: isoDateTimeSchema,
+            details: z.record(z.string(), z.unknown()).default({}),
+          })
+          .strict(),
+      )
+      .default([]),
     latestCursor: z.string().min(1),
     recentEvents: z.array(protocolEventEnvelopeSchema).default([]),
   })

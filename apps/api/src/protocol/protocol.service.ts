@@ -135,6 +135,15 @@ type ProtocolEventLogRow = {
   created_at: Date | string;
 };
 
+type ProtocolAuthFailureType =
+  | "missing_token"
+  | "app_not_found"
+  | "app_revoked"
+  | "invalid_token"
+  | "missing_scopes"
+  | "missing_capabilities"
+  | "missing_delegated_grant";
+
 type ProtocolCursorRow = {
   app_id: string;
   cursor: bigint | number | string;
@@ -1669,6 +1678,32 @@ export class ProtocolService {
       .sort(
         (left, right) => Date.parse(right.issuedAt) - Date.parse(left.issuedAt),
       );
+    const authFailureRows = await this.prisma.$queryRawUnsafe<
+      Array<{
+        failure_type: ProtocolAuthFailureType;
+        count: bigint | number | string;
+      }>
+    >(
+      `SELECT payload->>'failureType' AS failure_type, COUNT(*)::bigint AS count
+       FROM protocol_event_log
+       WHERE actor_app_id = $1
+         AND event_name = 'app.updated'
+         AND payload->>'update' = 'auth_failed'
+       GROUP BY payload->>'failureType'`,
+      app.registration.appId,
+    );
+    const recentAuthFailureRows = await this.prisma.$queryRawUnsafe<
+      ProtocolEventLogRow[]
+    >(
+      `SELECT cursor, actor_app_id, event_name, resource, payload, metadata, created_at
+       FROM protocol_event_log
+       WHERE actor_app_id = $1
+         AND event_name = 'app.updated'
+         AND payload->>'update' = 'auth_failed'
+       ORDER BY cursor DESC
+       LIMIT 20`,
+      app.registration.appId,
+    );
     const lastRotatedAt =
       recentEvents.find(
         (event) =>
@@ -1712,11 +1747,40 @@ export class ProtocolService {
     const deliveryCounts = Object.fromEntries(
       deliveryRows.map((row) => [row.status, Number(row.count)]),
     ) as Record<string, number>;
+    const authFailureCounts = Object.fromEntries(
+      authFailureRows.map((row) => [row.failure_type, Number(row.count)]),
+    ) as Partial<Record<ProtocolAuthFailureType, number>>;
     const queueHealth = queueHealthRows[0] ?? {
       oldest_queued_at: null,
       oldest_retrying_at: null,
       last_dead_lettered_at: null,
     };
+    const recentAuthFailures = recentAuthFailureRows
+      .map((row) => row.payload)
+      .filter(
+        (
+          payload,
+        ): payload is {
+          appId: string;
+          failureType: ProtocolAuthFailureType;
+          action: string | null;
+          issuedAt: string;
+          details?: Record<string, unknown>;
+        } =>
+          !!payload &&
+          typeof payload === "object" &&
+          typeof (payload as Record<string, unknown>).appId === "string" &&
+          typeof (payload as Record<string, unknown>).failureType ===
+            "string" &&
+          typeof (payload as Record<string, unknown>).issuedAt === "string",
+      )
+      .map((payload) => ({
+        appId: payload.appId,
+        failureType: payload.failureType,
+        action: payload.action ?? null,
+        issuedAt: payload.issuedAt,
+        details: payload.details ?? {},
+      }));
 
     return protocolAppUsageSummarySchema.parse({
       appId: app.registration.appId,
@@ -1763,6 +1827,16 @@ export class ProtocolService {
         lastGrantedAt,
         lastRevokedAt: lastGrantRevokedAt,
       },
+      authFailureCounts: {
+        missingToken: authFailureCounts.missing_token ?? 0,
+        appNotFound: authFailureCounts.app_not_found ?? 0,
+        appRevoked: authFailureCounts.app_revoked ?? 0,
+        invalidToken: authFailureCounts.invalid_token ?? 0,
+        missingScopes: authFailureCounts.missing_scopes ?? 0,
+        missingCapabilities: authFailureCounts.missing_capabilities ?? 0,
+        missingDelegatedGrant: authFailureCounts.missing_delegated_grant ?? 0,
+      },
+      recentAuthFailures,
       latestCursor,
       recentEvents,
     });
@@ -2165,6 +2239,27 @@ export class ProtocolService {
     );
   }
 
+  private async recordAuthFailure(input: {
+    appId: string;
+    failureType: ProtocolAuthFailureType;
+    action: string;
+    details?: Record<string, unknown>;
+  }) {
+    await this.recordEvent({
+      actorAppId: input.appId,
+      event: "app.updated",
+      resource: "app_registration",
+      payload: {
+        appId: input.appId,
+        update: "auth_failed",
+        failureType: input.failureType,
+        action: input.action,
+        issuedAt: new Date().toISOString(),
+        details: input.details ?? {},
+      },
+    });
+  }
+
   private issueScopes(
     requested: ProtocolScopeName[],
     registrationScopes: ProtocolScopeName[],
@@ -2210,16 +2305,40 @@ export class ProtocolService {
   ) {
     const row = await this.findAppRow(appId);
     if (!row) {
+      await this.recordAuthFailure({
+        appId,
+        failureType: "app_not_found",
+        action: "app.access",
+        details: requirements,
+      });
       throw new NotFoundException("protocol app not found");
     }
     if (!appToken?.trim()) {
+      await this.recordAuthFailure({
+        appId,
+        failureType: "missing_token",
+        action: "app.access",
+        details: requirements,
+      });
       throw new UnauthorizedException("missing protocol app token");
     }
     const app = this.mapStoredApp(row);
     if (app.status === "revoked") {
+      await this.recordAuthFailure({
+        appId,
+        failureType: "app_revoked",
+        action: "app.access",
+        details: requirements,
+      });
       throw new ForbiddenException("protocol app is revoked");
     }
     if (!verifyProtocolAppToken(appToken, app.appTokenHash)) {
+      await this.recordAuthFailure({
+        appId,
+        failureType: "invalid_token",
+        action: "app.access",
+        details: requirements,
+      });
       throw new ForbiddenException("invalid protocol app token");
     }
 
@@ -2227,6 +2346,15 @@ export class ProtocolService {
       (scope) => !app.issuedScopes.includes(scope),
     );
     if (missingScopes.length > 0) {
+      await this.recordAuthFailure({
+        appId,
+        failureType: "missing_scopes",
+        action: "app.access",
+        details: {
+          ...requirements,
+          missingScopes,
+        },
+      });
       throw new ForbiddenException(
         `missing protocol scopes: ${missingScopes.join(", ")}`,
       );
@@ -2236,6 +2364,15 @@ export class ProtocolService {
       (capability) => !app.issuedCapabilities.includes(capability),
     );
     if (missingCapabilities.length > 0) {
+      await this.recordAuthFailure({
+        appId,
+        failureType: "missing_capabilities",
+        action: "app.access",
+        details: {
+          ...requirements,
+          missingCapabilities,
+        },
+      });
       throw new ForbiddenException(
         `missing protocol capabilities: ${missingCapabilities.join(", ")}`,
       );
@@ -2285,6 +2422,15 @@ export class ProtocolService {
           )),
     );
     if (!grant) {
+      await this.recordAuthFailure({
+        appId,
+        failureType: "missing_delegated_grant",
+        action,
+        details: {
+          actorUserId,
+          capabilities,
+        },
+      });
       throw new ForbiddenException(
         `missing active protocol grant for ${action}`,
       );

@@ -11,6 +11,8 @@ The SDK docs must stay aligned with what is already shipped:
 - Scoped grants and consent requests are separate resources.
 - External actions already exist for intents, requests, chats, and circles.
 - Unsupported primitives remain unsupported, especially posts and follows.
+- The protocol backend now explicitly advertises its unsupported-primitives policy in the manifest metadata so third parties do not infer support from omission.
+- Usage summaries now expose structured protocol auth-failure diagnostics so partners can distinguish missing tokens, missing scopes, missing capabilities, and missing delegated grants.
 
 ## Doc Set Goals
 
@@ -51,6 +53,10 @@ Content:
   - feeds
   - likes
   - generic social-network primitives
+- Explicit backend behavior:
+  - the protocol manifest metadata includes an unsupported-primitives policy
+  - the policy says posts, follows, feeds, and likes are intentionally outside the protocol surface
+  - integrations should treat attempts to model those primitives as unsupported, not missing
 
 ### 2. App Registration Guide
 
@@ -97,6 +103,7 @@ Content:
 - How consent requests resolve into grants.
 - What happens when a scope is missing or revoked.
 - How unsupported access is denied.
+- How to inspect `authFailureCounts` and `recentAuthFailures` in usage summaries.
 
 Examples to include:
 
@@ -183,6 +190,29 @@ For each action, the docs should list:
 - what the action returns
 - what events it emits
 - common failure modes
+
+### 8. Partner Quickstart
+
+Audience: partners who want the full path in one place before diving into the reference docs.
+
+Content:
+
+- A minimal end-to-end walk through the shipped surface.
+- Fetch the manifest and discovery document.
+- Register an app and persist `appId` plus `appToken`.
+- Use the token to inspect usage, grants, and consent requests.
+- Subscribe to webhook events and inspect deliveries.
+- Create a consent request and approve or reject it.
+- Replay a single failed delivery and a dead-letter batch.
+- Resume from a replay cursor after downtime.
+
+The quickstart should link directly to the example doc and stay strictly within the supported coordination primitives.
+
+Concrete links:
+
+- [`docs/examples/protocol-partner-quickstart.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-partner-quickstart.md)
+- [`scripts/examples/protocol-partner-onboarding.mjs`](/Users/cruciblelabs/Documents/openchat/scripts/examples/protocol-partner-onboarding.mjs)
+- [`scripts/examples/protocol-partner-actions.mjs`](/Users/cruciblelabs/Documents/openchat/scripts/examples/protocol-partner-actions.mjs)
 
 ## Example Matrix
 

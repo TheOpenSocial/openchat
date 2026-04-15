@@ -22,6 +22,13 @@ export type ProtocolManifestBuilderInput = {
   metadata?: Record<string, unknown>;
 };
 
+const unsupportedPrimitivesPolicy = {
+  unsupportedPrimitives: ["posts", "follows", "feeds", "likes"],
+  denial: "unsupported protocol primitive",
+  message:
+    "OpenSocial protocol intentionally excludes generic social-network primitives such as posts, follows, feeds, and likes.",
+};
+
 export function buildProtocolManifest(
   input: ProtocolManifestBuilderInput = {},
 ): ProtocolManifest {
@@ -116,7 +123,10 @@ export function buildProtocolManifest(
       modes: ["observe", "suggest"],
       requiresHumanApproval: true,
     },
-    metadata: input.metadata ?? {},
+    metadata: {
+      ...unsupportedPrimitivesPolicy,
+      ...(input.metadata ?? {}),
+    },
   });
 }
 
@@ -129,3 +139,14 @@ export function buildProtocolDiscoveryDocument(
     events: protocolEventCatalog,
   });
 }
+
+export {
+  buildProtocolWebhookSignature,
+  compareProtocolWebhookSignatureDigests,
+  parseProtocolWebhookSignature,
+  verifyProtocolWebhookSignature,
+} from "./webhook.ts";
+export type {
+  ProtocolWebhookSignatureInput,
+  ProtocolWebhookVerificationInput,
+} from "./webhook.ts";
