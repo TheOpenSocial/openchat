@@ -1,0 +1,75 @@
+# Protocol Agent Readiness
+
+This guide is the preflight companion to the thin `@opensocial/protocol-agent` wrapper.
+
+Use it when you want an agent to fail fast before acting, instead of discovering protocol problems mid-run.
+
+## What readiness checks cover
+
+The shipped readiness helpers look at:
+
+- recent auth failures
+- dead-lettered deliveries
+- in-flight or failed delivery pressure
+- queued backlog
+- whether active delegated grants exist
+- whether consent is still pending
+
+That gives an agent operator one place to decide whether it is safe to proceed.
+
+## Basic usage
+
+```ts
+import {
+  assertProtocolAgentReady,
+  createProtocolAgentClientFromBaseUrl,
+} from "@opensocial/protocol-agent";
+
+const agent = createProtocolAgentClientFromBaseUrl(
+  "http://127.0.0.1:3000/api",
+  {
+    appId: process.env.PROTOCOL_APP_ID!,
+    appToken: process.env.PROTOCOL_APP_TOKEN!,
+    actorUserId: process.env.PROTOCOL_ACTOR_USER_ID!,
+    agentId: "partner.concierge",
+  },
+);
+
+const readiness = await agent.checkReadiness({
+  requireActiveGrant: true,
+  failOnDeadLetters: true,
+  failOnAuthFailures: true,
+});
+
+assertProtocolAgentReady(readiness);
+```
+
+If readiness is not good enough, the assertion throws with a compact explanation of the blocking issues.
+
+## Typical interpretation
+
+- `auth_failures_present`
+  - app token, scopes, capabilities, or delegated grants are likely wrong
+- `dead_letters_present`
+  - downstream delivery is unhealthy; do not assume the agent is the problem
+- `retrying_deliveries_present`
+  - warning state; delivery pressure is present
+- `queued_backlog_present`
+  - optional blocking state if you decide backlog size should gate execution
+- `no_active_grants`
+  - delegated actions are likely to fail
+- `pending_consent_requests`
+  - approval may still be outstanding
+
+## When to use this
+
+Use readiness checks before:
+
+- running a scheduled partner agent
+- opening a new outbound coordination wave
+- debugging a “why are writes failing?” incident
+
+Do not use readiness checks as a replacement for queue recovery itself. For that, use:
+
+- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-operator-recovery.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-operator-recovery.md)
+- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-consent-and-auth-troubleshooting.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-consent-and-auth-troubleshooting.md)

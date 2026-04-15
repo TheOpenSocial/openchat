@@ -23,8 +23,39 @@ export type ProtocolAgentSession = ProtocolAppSession & {
   metadata?: Record<string, unknown>;
 };
 
+export type ProtocolAgentReadinessIssueCode =
+  | "auth_failures_present"
+  | "dead_letters_present"
+  | "retrying_deliveries_present"
+  | "queued_backlog_present"
+  | "no_active_grants"
+  | "pending_consent_requests";
+
+export type ProtocolAgentReadinessIssue = {
+  code: ProtocolAgentReadinessIssueCode;
+  severity: "warning" | "blocking";
+  message: string;
+};
+
+export type ProtocolAgentReadinessReport = {
+  ok: boolean;
+  issues: ProtocolAgentReadinessIssue[];
+  snapshot: ProtocolAppOperationalSnapshot;
+};
+
+export type ProtocolAgentReadinessOptions = {
+  requireActiveGrant?: boolean;
+  failOnDeadLetters?: boolean;
+  failOnAuthFailures?: boolean;
+  failOnQueuedBacklog?: boolean;
+  queuedBacklogThreshold?: number;
+};
+
 export type ProtocolAgentClient = {
   inspectReadiness: () => Promise<ProtocolAppOperationalSnapshot>;
+  checkReadiness: (
+    options?: ProtocolAgentReadinessOptions,
+  ) => Promise<ProtocolAgentReadinessReport>;
   createIntent: (
     input: Omit<ProtocolIntentCreateInput, "actorUserId" | "metadata"> & {
       metadata?: Record<string, unknown>;
@@ -95,12 +126,105 @@ function mergeMetadata(
   };
 }
 
+function formatIssues(issues: ProtocolAgentReadinessIssue[]): string {
+  return issues.map((issue) => `${issue.code}: ${issue.message}`).join("; ");
+}
+
+export function evaluateProtocolAgentReadiness(
+  snapshot: ProtocolAppOperationalSnapshot,
+  options: ProtocolAgentReadinessOptions = {},
+): ProtocolAgentReadinessReport {
+  const requireActiveGrant = options.requireActiveGrant ?? true;
+  const failOnDeadLetters = options.failOnDeadLetters ?? true;
+  const failOnAuthFailures = options.failOnAuthFailures ?? true;
+  const failOnQueuedBacklog = options.failOnQueuedBacklog ?? false;
+  const queuedBacklogThreshold = options.queuedBacklogThreshold ?? 10;
+
+  const issues: ProtocolAgentReadinessIssue[] = [];
+
+  if (failOnAuthFailures && snapshot.usage.authFailures.total > 0) {
+    issues.push({
+      code: "auth_failures_present",
+      severity: "blocking",
+      message: `Recent auth failures: ${snapshot.usage.authFailures.total}`,
+    });
+  }
+
+  if (failOnDeadLetters && snapshot.queue.deadLetteredCount > 0) {
+    issues.push({
+      code: "dead_letters_present",
+      severity: "blocking",
+      message: `Dead-lettered deliveries present: ${snapshot.queue.deadLetteredCount}`,
+    });
+  }
+
+  if (snapshot.queue.failedCount > 0 || snapshot.queue.inFlightCount > 0) {
+    issues.push({
+      code: "retrying_deliveries_present",
+      severity: "warning",
+      message: `Active or failed deliveries present: inFlight=${snapshot.queue.inFlightCount}, failed=${snapshot.queue.failedCount}`,
+    });
+  }
+
+  if (
+    failOnQueuedBacklog &&
+    snapshot.queue.queuedCount >= queuedBacklogThreshold
+  ) {
+    issues.push({
+      code: "queued_backlog_present",
+      severity: "blocking",
+      message: `Queued delivery backlog is ${snapshot.queue.queuedCount}`,
+    });
+  }
+
+  if (requireActiveGrant && snapshot.grants.length === 0) {
+    issues.push({
+      code: "no_active_grants",
+      severity: "blocking",
+      message: "No active delegated grants are present for this app.",
+    });
+  }
+
+  if (
+    snapshot.consentRequests.some((request) => request.status === "pending")
+  ) {
+    issues.push({
+      code: "pending_consent_requests",
+      severity: "warning",
+      message:
+        "Pending consent requests exist and may still block delegated actions.",
+    });
+  }
+
+  return {
+    ok: !issues.some((issue) => issue.severity === "blocking"),
+    issues,
+    snapshot,
+  };
+}
+
+export function assertProtocolAgentReady(
+  report: ProtocolAgentReadinessReport,
+): ProtocolAgentReadinessReport {
+  if (!report.ok) {
+    throw new Error(
+      `Protocol agent readiness check failed: ${formatIssues(report.issues)}`,
+    );
+  }
+  return report;
+}
+
 export function bindProtocolAgentClient(
   app: ProtocolAppClient,
   session: ProtocolAgentSession,
 ): ProtocolAgentClient {
   return {
     inspectReadiness: () => loadProtocolAppOperationalSnapshot(app),
+    checkReadiness: async (options) =>
+      evaluateProtocolAgentReadiness(
+        await loadProtocolAppOperationalSnapshot(app),
+        options,
+      ),
     createIntent: (input) =>
       app.createIntent({
         ...input,

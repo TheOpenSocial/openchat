@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 
-import { createProtocolAgentClientFromBaseUrl } from "@opensocial/protocol-agent";
+import {
+  assertProtocolAgentReady,
+  createProtocolAgentClientFromBaseUrl,
+} from "@opensocial/protocol-agent";
 
 function getArg(flag, fallback = undefined) {
   const exact = `${flag}=`;
@@ -76,18 +79,13 @@ async function main() {
     },
   });
 
-  const readiness = await agent.inspectReadiness();
-  logSection("readiness", {
-    authFailures: readiness.usage.authFailures,
-    queueHealth: readiness.usage.queueHealth,
-    queue: {
-      queuedCount: readiness.queue.queuedCount,
-      deadLetteredCount: readiness.queue.deadLetteredCount,
-      replayableCount: readiness.queue.replayableCount,
-    },
-    grantCount: readiness.grants.length,
-    consentRequestCount: readiness.consentRequests.length,
+  const readiness = await agent.checkReadiness({
+    requireActiveGrant: true,
+    failOnDeadLetters: true,
+    failOnAuthFailures: true,
   });
+  logSection("readiness", readiness);
+  assertProtocolAgentReady(readiness);
 
   const intent = await agent.createIntent({
     rawText: "Find a thoughtful design conversation this week.",

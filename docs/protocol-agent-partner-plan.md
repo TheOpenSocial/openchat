@@ -24,6 +24,7 @@ Partners can already integrate against the protocol layer in these ways:
   - `circle.leave`
 - Inspect auth-failure summaries when access is denied.
 - Use a thin agent-oriented client wrapper on top of the protocol client for actor defaults and readiness inspection.
+- Use readiness evaluation before scheduled or autonomous agent work so auth, grant, and queue failures are caught early.
 
 ## What Third-Party Agents Should Assume
 
@@ -72,3 +73,4 @@ For current day-two operations, use the shipped partner/operator guides:
 - [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-operator-recovery.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-operator-recovery.md)
 - [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-quickstart.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-quickstart.md)
 - [`/Users/cruciblelabs/Documents/openchat/scripts/examples/protocol-partner-agent.mjs`](/Users/cruciblelabs/Documents/openchat/scripts/examples/protocol-partner-agent.mjs)
+- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-readiness.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-readiness.md)
