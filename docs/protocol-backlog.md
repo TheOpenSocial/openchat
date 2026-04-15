@@ -108,13 +108,19 @@ Use this as the baseline for all next backlog items. Do not reintroduce generic 
 - First-party HTTP call-through for the cleanest public write paths: shipped
 - Partner-facing SDK packages, examples, and docs: effectively complete for v0
 - First-party protocol settings/inspection surfaces: shipped as operational tooling, but still partial as polished product UX
+- CI and product-critical golden coverage are green on the current mainline verification pass
+- Mobile-critical backend controller coverage is verified for first-party protocol call-through on:
+  - intents create, update, cancel, retry, and widen
+  - inbox accept and reject
+  - chat send
+  - recurring-circle create and add-member
 
 ## Current Verification Focus
 
 - verify the scheduled delivery runner and replay/dead-letter recovery under real failure conditions
 - verify token/grant/auth diagnostics against remaining protocol-gated paths
-- verify that the cleaned SDK contract still matches the live backend behavior end to end
 - verify that protocol-originated user-facing events remain meaningful social states rather than generic integration copy
+- verify whether the remaining first-party direct writes should become public protocol actions or remain intentionally internal
 
 ## Package Direction
 
@@ -136,6 +142,7 @@ These packages should mirror the backend domain rather than inventing new abstra
    - Confirm manifest, discovery, examples, and client helpers still align with live backend routes.
    - Keep posts, follows, feeds, likes, and other generic social primitives explicitly excluded.
    - Treat docs plus examples as the v0 contract for partner consumption.
+   - Status: verified against the current mainline CI and golden pass.
 
 2. Tighten delegated-grant enforcement beyond the core user-grant path.
    - The schema and API support `subjectType=user|app|service|agent`.
@@ -159,6 +166,11 @@ These packages should mirror the backend domain rather than inventing new abstra
      - chat send
      - recurring-circle create and add-member
    - Remaining likely candidates should be judged against real mobile/product usage, not backend neatness alone.
+   - Current review outcome:
+     - `POST /intents/:intentId/convert`: needs contract decision
+     - `POST /inbox/requests/:requestId/cancel`: needs contract decision
+     - chat edit, reaction, and read-receipt flows: stay internal for now
+     - recurring-circle update, archive, pause, resume, and remove-member flows: stay internal for now unless partner demand makes them real protocol actions
 
 ### Next
 
