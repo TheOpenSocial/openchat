@@ -15,6 +15,7 @@ The SDK docs must stay aligned with what is already shipped:
 - Usage summaries now expose structured protocol auth-failure diagnostics so partners can distinguish missing tokens, missing scopes, missing capabilities, and missing delegated grants.
 - Partner-ready guides now exist for:
   - protocol overview and exclusions
+  - app registration and token lifecycle
   - quickstart onboarding
   - webhook subscription and replay
   - consent/auth troubleshooting
@@ -90,6 +91,10 @@ Examples to include:
 - Inspect the app record.
 - Rotate a token.
 - Revoke a token.
+
+Concrete link:
+
+- [`docs/examples/protocol-app-registration-and-tokens.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-app-registration-and-tokens.md)
 
 ### 3. Auth and Scope Guide
 

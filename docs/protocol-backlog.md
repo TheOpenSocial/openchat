@@ -85,7 +85,7 @@ The protocol is no longer just a concept. The following pieces are already prese
 - Protocol-originated request send, request reject, accepted-request connection setup, and group backfill notifications now carry provenance through to user-facing Activity titles and notification metadata.
 - Partner-facing SDK readiness is stronger:
   - package READMEs now document the actual shipped helpers
-  - partner quickstart, replay, webhook-consumer, consent/auth troubleshooting, operator recovery, and agent quickstart guides are now in repo
+  - partner quickstart, registration/token lifecycle, replay, webhook-consumer, consent/auth troubleshooting, operator recovery, and agent quickstart guides are now in repo
   - partner example scripts now cover onboarding, actions, webhook consumption, operations, the thin agent wrapper, and toolset integration
   - the protocol client now supports creating a bound app client directly from a base URL and app session
   - the protocol client now supports loading an app operational snapshot for queue/auth/grant inspection
