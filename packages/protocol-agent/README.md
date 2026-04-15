@@ -44,6 +44,11 @@ const readiness = await agent.inspectReadiness();
 console.log(readiness.queue.deadLetteredCount);
 ```
 
+For a runnable example, use:
+
+- [`/Users/cruciblelabs/Documents/openchat/scripts/examples/protocol-partner-agent.mjs`](/Users/cruciblelabs/Documents/openchat/scripts/examples/protocol-partner-agent.mjs)
+- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-quickstart.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-quickstart.md)
+
 ## Exclusions
 
 This package does not provide:

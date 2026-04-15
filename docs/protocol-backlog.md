@@ -86,6 +86,7 @@ The protocol is no longer just a concept. The following pieces are already prese
 - Partner-facing SDK readiness is stronger:
   - package READMEs now document the actual shipped helpers
   - partner quickstart, replay, webhook-consumer, consent/auth troubleshooting, operator recovery, and agent quickstart guides are now in repo
+  - partner example scripts now cover onboarding, actions, webhook consumption, operations, and the thin agent wrapper
   - the protocol client now supports creating a bound app client directly from a base URL and app session
   - the protocol client now supports loading an app operational snapshot for queue/auth/grant inspection
   - a thin `@opensocial/protocol-agent` wrapper now exists for actor defaults and readiness inspection without widening backend scope

@@ -19,6 +19,7 @@ And you want:
 ## Package
 
 - [`/Users/cruciblelabs/Documents/openchat/packages/protocol-agent/README.md`](/Users/cruciblelabs/Documents/openchat/packages/protocol-agent/README.md)
+- [`/Users/cruciblelabs/Documents/openchat/scripts/examples/protocol-partner-agent.mjs`](/Users/cruciblelabs/Documents/openchat/scripts/examples/protocol-partner-agent.mjs)
 
 ## Minimal example
 
@@ -42,6 +43,25 @@ await agent.createIntent({
   rawText: "Find a design-focused coffee meetup next week",
 });
 ```
+
+## Run the shipped example
+
+```bash
+PROTOCOL_BASE_URL=http://127.0.0.1:3000/api \
+PROTOCOL_APP_ID=partner.onboarding.123 \
+PROTOCOL_APP_TOKEN=<app-token> \
+PROTOCOL_ACTOR_USER_ID=00000000-0000-4000-8000-000000000001 \
+PROTOCOL_RECIPIENT_USER_ID=00000000-0000-4000-8000-000000000002 \
+node --loader ./scripts/examples/protocol-example-loader.mjs \
+  scripts/examples/protocol-partner-agent.mjs
+```
+
+The example:
+
+- inspects readiness first
+- creates an intent
+- updates that intent
+- optionally sends a request if a recipient user id is provided
 
 ## Current scope
 
