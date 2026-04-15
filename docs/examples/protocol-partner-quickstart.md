@@ -14,6 +14,10 @@ The examples stay inside the current protocol direction:
 
 They do not use posts, follows, feeds, or other generic social primitives.
 
+For event subscriptions, delivery inspection, and replay, see:
+
+- [`docs/examples/protocol-event-subscriptions-and-replay.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-event-subscriptions-and-replay.md)
+
 ## Run Them
 
 Register a partner app and create optional consent/webhook setup:
