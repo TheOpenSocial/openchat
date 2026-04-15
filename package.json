@@ -111,7 +111,8 @@
       "lodash": "4.17.23",
       "markdown-it": "12.3.2",
       "react": "19.2.3",
-      "react-dom": "19.2.3"
+      "react-dom": "19.2.3",
+      "webpackbar": "7.0.0"
     },
     "patchedDependencies": {
       "expo-modules-core@55.0.17": "patches/expo-modules-core@55.0.17.patch",
