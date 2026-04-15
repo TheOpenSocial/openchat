@@ -25,6 +25,7 @@ Partners can already integrate against the protocol layer in these ways:
 - Inspect auth-failure summaries when access is denied.
 - Use a thin agent-oriented client wrapper on top of the protocol client for actor defaults and readiness inspection.
 - Use readiness evaluation before scheduled or autonomous agent work so auth, grant, and queue failures are caught early.
+- Use the wrapper’s assert-ready path when the agent should hard-stop on operational blockers before acting.
 
 ## What Third-Party Agents Should Assume
 

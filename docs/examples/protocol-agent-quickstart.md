@@ -40,6 +40,12 @@ const agent = createProtocolAgentClientFromBaseUrl(
   },
 );
 
+await agent.assertReady({
+  requireActiveGrant: true,
+  failOnDeadLetters: true,
+  failOnAuthFailures: true,
+});
+
 await agent.createIntent({
   rawText: "Find a design-focused coffee meetup next week",
 });

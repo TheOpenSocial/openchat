@@ -44,6 +44,16 @@ const readiness = await agent.checkReadiness({
 assertProtocolAgentReady(readiness);
 ```
 
+Or more compactly:
+
+```ts
+await agent.assertReady({
+  requireActiveGrant: true,
+  failOnDeadLetters: true,
+  failOnAuthFailures: true,
+});
+```
+
 If readiness is not good enough, the assertion throws with a compact explanation of the blocking issues.
 
 ## Typical interpretation

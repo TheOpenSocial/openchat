@@ -56,6 +56,9 @@ export type ProtocolAgentClient = {
   checkReadiness: (
     options?: ProtocolAgentReadinessOptions,
   ) => Promise<ProtocolAgentReadinessReport>;
+  assertReady: (
+    options?: ProtocolAgentReadinessOptions,
+  ) => Promise<ProtocolAgentReadinessReport>;
   createIntent: (
     input: Omit<ProtocolIntentCreateInput, "actorUserId" | "metadata"> & {
       metadata?: Record<string, unknown>;
@@ -224,6 +227,13 @@ export function bindProtocolAgentClient(
       evaluateProtocolAgentReadiness(
         await loadProtocolAppOperationalSnapshot(app),
         options,
+      ),
+    assertReady: async (options) =>
+      assertProtocolAgentReady(
+        evaluateProtocolAgentReadiness(
+          await loadProtocolAppOperationalSnapshot(app),
+          options,
+        ),
       ),
     createIntent: (input) =>
       app.createIntent({

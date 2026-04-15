@@ -32,17 +32,18 @@ const agent = createProtocolAgentClientFromBaseUrl(
   },
 );
 
+await agent.assertReady({
+  requireActiveGrant: true,
+  failOnDeadLetters: true,
+  failOnAuthFailures: true,
+});
+
 await agent.createIntent({
   rawText: "Find a thoughtful dinner in Palermo this week",
 });
 
-await agent.sendRequest({
-  intentId: "00000000-0000-4000-8000-000000000010",
-  recipientUserId: "00000000-0000-4000-8000-000000000020",
-});
-
-const readiness = await agent.inspectReadiness();
-console.log(readiness.queue.deadLetteredCount);
+const readiness = await agent.checkReadiness();
+console.log(readiness.snapshot.queue.deadLetteredCount);
 ```
 
 For a runnable example, use:
