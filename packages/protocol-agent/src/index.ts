@@ -162,6 +162,18 @@ const metadataSchema = {
   additionalProperties: true,
 } satisfies Record<string, unknown>;
 
+function readProtocolAgentToolInput<T extends Record<string, unknown>>(
+  input: unknown,
+): T {
+  if (input == null) {
+    return {} as T;
+  }
+  if (typeof input !== "object" || Array.isArray(input)) {
+    throw new Error("Protocol agent tool input must be an object.");
+  }
+  return input as T;
+}
+
 function mergeMetadata(
   session: ProtocolAgentSession,
   metadata?: Record<string, unknown>,
@@ -363,7 +375,7 @@ export function createProtocolAgentToolset(
         "Fail fast when auth, grants, consent, or delivery health block protocol agent work.",
       inputSchema: readinessOptionsSchema,
       invoke: (input) =>
-        agent.assertReady((input as ProtocolAgentReadinessOptions) ?? {}),
+        agent.assertReady(readProtocolAgentToolInput<ProtocolAgentReadinessOptions>(input)),
     },
     {
       name: "protocol_agent_create_intent",
@@ -382,7 +394,11 @@ export function createProtocolAgentToolset(
       },
       invoke: (input) =>
         agent.createIntent(
-          input as Omit<ProtocolIntentCreateInput, "actorUserId" | "metadata">,
+          readProtocolAgentToolInput<
+            Omit<ProtocolIntentCreateInput, "actorUserId" | "metadata"> & {
+              metadata?: Record<string, unknown>;
+            }
+          >(input),
         ),
     },
     {
@@ -400,11 +416,11 @@ export function createProtocolAgentToolset(
         },
       },
       invoke: (input) => {
-        const payload = input as {
+        const payload = readProtocolAgentToolInput<{
           intentId: string;
           rawText: string;
           metadata?: Record<string, unknown>;
-        };
+        }>(input);
         return agent.updateIntent(payload.intentId, {
           rawText: payload.rawText,
           metadata: payload.metadata,
@@ -426,11 +442,11 @@ export function createProtocolAgentToolset(
         },
       },
       invoke: (input) => {
-        const payload = (input ?? {}) as {
+        const payload = readProtocolAgentToolInput<{
           intentId: string;
           agentThreadId?: string;
           metadata?: Record<string, unknown>;
-        };
+        }>(input);
         return agent.cancelIntent(payload.intentId, {
           agentThreadId: payload.agentThreadId,
           metadata: payload.metadata,
@@ -455,7 +471,11 @@ export function createProtocolAgentToolset(
       },
       invoke: (input) =>
         agent.sendRequest(
-          input as Omit<ProtocolRequestSendInput, "actorUserId" | "metadata">,
+          readProtocolAgentToolInput<
+            Omit<ProtocolRequestSendInput, "actorUserId" | "metadata"> & {
+              metadata?: Record<string, unknown>;
+            }
+          >(input),
         ),
     },
     {
@@ -472,10 +492,10 @@ export function createProtocolAgentToolset(
         },
       },
       invoke: (input) => {
-        const payload = (input ?? {}) as {
+        const payload = readProtocolAgentToolInput<{
           requestId: string;
           metadata?: Record<string, unknown>;
-        };
+        }>(input);
         return agent.acceptRequest(payload.requestId, {
           metadata: payload.metadata,
         });
@@ -495,10 +515,10 @@ export function createProtocolAgentToolset(
         },
       },
       invoke: (input) => {
-        const payload = (input ?? {}) as {
+        const payload = readProtocolAgentToolInput<{
           requestId: string;
           metadata?: Record<string, unknown>;
-        };
+        }>(input);
         return agent.rejectRequest(payload.requestId, {
           metadata: payload.metadata,
         });
@@ -521,13 +541,13 @@ export function createProtocolAgentToolset(
         },
       },
       invoke: (input) => {
-        const payload = input as {
+        const payload = readProtocolAgentToolInput<{
           chatId: string;
           body: string;
           clientMessageId?: string;
           replyToMessageId?: string;
           metadata?: Record<string, unknown>;
-        };
+        }>(input);
         return agent.sendChatMessage(payload.chatId, {
           body: payload.body,
           clientMessageId: payload.clientMessageId,
@@ -569,7 +589,11 @@ export function createProtocolAgentToolset(
       },
       invoke: (input) =>
         agent.createCircle(
-          input as Omit<ProtocolCircleCreateInput, "actorUserId" | "metadata">,
+          readProtocolAgentToolInput<
+            Omit<ProtocolCircleCreateInput, "actorUserId" | "metadata"> & {
+              metadata?: Record<string, unknown>;
+            }
+          >(input),
         ),
     },
     {
@@ -588,12 +612,12 @@ export function createProtocolAgentToolset(
         },
       },
       invoke: (input) => {
-        const payload = input as {
+        const payload = readProtocolAgentToolInput<{
           circleId: string;
           memberUserId: string;
           role?: "admin" | "member";
           metadata?: Record<string, unknown>;
-        };
+        }>(input);
         return agent.joinCircle(payload.circleId, {
           memberUserId: payload.memberUserId,
           role: payload.role,
@@ -616,11 +640,11 @@ export function createProtocolAgentToolset(
         },
       },
       invoke: (input) => {
-        const payload = input as {
+        const payload = readProtocolAgentToolInput<{
           circleId: string;
           memberUserId: string;
           metadata?: Record<string, unknown>;
-        };
+        }>(input);
         return agent.leaveCircle(payload.circleId, {
           memberUserId: payload.memberUserId,
           metadata: payload.metadata,

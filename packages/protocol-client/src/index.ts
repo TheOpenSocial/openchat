@@ -35,9 +35,11 @@ import {
   manifestSchema,
   webhookSubscriptionCreateSchema,
   webhookSubscriptionSchema,
-  type AppRegistration,
-  type AppRegistrationRequest,
-  type CapabilityName,
+  type ProtocolAppRecord,
+  type ProtocolAppRegistrationRequest,
+  type ProtocolAppTokenRotateResult,
+  type ProtocolAppTokenRevokeResult,
+  type ProtocolDeliveryQueueInspection,
   type ProtocolAppScopeGrant,
   type ProtocolAppScopeGrantCreate,
   type ProtocolAppScopeGrantRevoke,
@@ -141,7 +143,17 @@ export type ProtocolClient = {
     appToken: string,
     input?: ProtocolAppTokenRotateInput,
   ) => Promise<ProtocolAppTokenRotateResult>;
+  rotateToken: (
+    appId: string,
+    appToken: string,
+    input?: ProtocolAppTokenRotateInput,
+  ) => Promise<ProtocolAppTokenRotateResult>;
   revokeAppToken: (
+    appId: string,
+    appToken: string,
+    input?: ProtocolAppTokenRevokeInput,
+  ) => Promise<ProtocolAppTokenRevokeResult>;
+  revokeToken: (
     appId: string,
     appToken: string,
     input?: ProtocolAppTokenRevokeInput,
@@ -294,7 +306,13 @@ export type ProtocolAppClient = {
   rotateAppToken: (
     input?: ProtocolAppTokenRotateInput,
   ) => Promise<ProtocolAppTokenRotateResult>;
+  rotateToken: (
+    input?: ProtocolAppTokenRotateInput,
+  ) => Promise<ProtocolAppTokenRotateResult>;
   revokeAppToken: (
+    input?: ProtocolAppTokenRevokeInput,
+  ) => Promise<ProtocolAppTokenRevokeResult>;
+  revokeToken: (
     input?: ProtocolAppTokenRevokeInput,
   ) => Promise<ProtocolAppTokenRevokeResult>;
   listWebhookDeliveries: (
@@ -369,68 +387,17 @@ export type ProtocolAppOperationalSnapshot = {
   webhooks: WebhookSubscription[];
 };
 
-export type ProtocolAppRecord = {
-  status: string;
-  registration: AppRegistration;
-  manifest: ProtocolManifest;
-  issuedScopes: ProtocolScopeName[];
-  issuedCapabilities: CapabilityName[];
-};
-
-export type ProtocolAppRegistrationRequestInput = {
-  registration: AppRegistration;
-  manifest: ProtocolManifest;
-  requestedScopes?: ProtocolScopeName[];
-  requestedCapabilities?: CapabilityName[];
-};
+export type ProtocolAppRegistrationRequestInput =
+  ProtocolAppRegistrationRequest;
 
 export type ProtocolAppTokenRotateInput = {
   reason?: string;
   metadata?: Record<string, unknown>;
 };
 
-export type ProtocolAppTokenRotateResult = {
-  registration: AppRegistration;
-  manifest: ProtocolManifest;
-  issuedScopes: ProtocolScopeName[];
-  issuedCapabilities: CapabilityName[];
-  credentials: {
-    appToken: string;
-  };
-};
-
 export type ProtocolAppTokenRevokeInput = {
   reason?: string;
   metadata?: Record<string, unknown>;
-};
-
-export type ProtocolAppTokenRevokeResult = {
-  registration: AppRegistration;
-  manifest: ProtocolManifest;
-  issuedScopes: ProtocolScopeName[];
-  issuedCapabilities: CapabilityName[];
-  revoked: boolean;
-};
-
-export type ProtocolDeliveryQueueInspection = {
-  appId: string;
-  generatedAt: string;
-  queuedCount: number;
-  inFlightCount: number;
-  failedCount: number;
-  deadLetteredCount: number;
-  replayableCount?: number;
-  oldestQueuedAt?: string | null;
-  oldestRetryingAt?: string | null;
-  lastDeadLetteredAt?: string | null;
-  queueState?: {
-    waiting: number;
-    active: number;
-    delayed: number;
-    completed: number;
-    failed: number;
-  };
-  deliveries: ProtocolWebhookDelivery[];
 };
 
 export type ProtocolGrantRecord = ProtocolAppScopeGrant;
@@ -683,7 +650,38 @@ export function createProtocolClient(
         protocolAppRegistrationResultSchema,
       );
     },
+    async rotateToken(appId, appToken, input) {
+      const response = await transport.request(
+        `/protocol/apps/${appId}/token/rotate`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-protocol-app-token": appToken,
+          },
+          body: JSON.stringify(input ?? {}),
+        },
+      );
+      return readProtocolResponseData(
+        response,
+        protocolAppRegistrationResultSchema,
+      );
+    },
     async revokeAppToken(appId, appToken, input) {
+      const response = await transport.request(
+        `/protocol/apps/${appId}/token/revoke`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-protocol-app-token": appToken,
+          },
+          body: JSON.stringify(input ?? {}),
+        },
+      );
+      return readProtocolResponseData<ProtocolAppTokenRevokeResult>(response);
+    },
+    async revokeToken(appId, appToken, input) {
       const response = await transport.request(
         `/protocol/apps/${appId}/token/revoke`,
         {
@@ -975,8 +973,12 @@ export function bindProtocolAppClient(
       client.revokeGrant(session.appId, session.appToken, grantId, input),
     rotateAppToken: (input) =>
       client.rotateAppToken(session.appId, session.appToken, input),
+    rotateToken: (input) =>
+      client.rotateToken(session.appId, session.appToken, input),
     revokeAppToken: (input) =>
       client.revokeAppToken(session.appId, session.appToken, input),
+    revokeToken: (input) =>
+      client.revokeToken(session.appId, session.appToken, input),
     listWebhookDeliveries: (subscriptionId) =>
       client.listWebhookDeliveries(
         session.appId,
@@ -1063,7 +1065,7 @@ export async function loadProtocolAppOperationalSnapshot(
 
 export function buildProtocolAppRegistrationRequest(
   input: ProtocolAppRegistrationRequestInput,
-): AppRegistrationRequest {
+): ProtocolAppRegistrationRequest {
   return appRegistrationRequestSchema.parse({
     registration: input.registration,
     manifest: input.manifest,
