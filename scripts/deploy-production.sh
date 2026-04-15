@@ -2,6 +2,8 @@
 set -euo pipefail
 
 LOCAL_DEPLOY="${LOCAL_DEPLOY:-0}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 DEPLOY_PATH="${DEPLOY_PATH:-/opt/opensocial}"
 REMOTE_ENV_FILE="${REMOTE_ENV_FILE:-.env.production}"
@@ -89,7 +91,7 @@ PY
 }
 
 compose_cmd() {
-  docker compose -f docker-compose.prod.yml --env-file "$REMOTE_ENV_FILE" "$@"
+  docker compose -f "$DEPLOY_PATH"/docker-compose.prod.yml --env-file "$DEPLOY_PATH"/"$REMOTE_ENV_FILE" "$@"
 }
 
 sync_local_checkout() {
@@ -100,19 +102,21 @@ sync_local_checkout() {
     --exclude ".env" \
     --exclude ".env.local" \
     --exclude ".env.production" \
-    ./ "$DEPLOY_PATH"/
+    "$REPO_ROOT"/ "$DEPLOY_PATH"/
   local compose_target="$DEPLOY_PATH"/docker-compose.prod.yml
   local caddy_target="$DEPLOY_PATH"/deploy/caddy/Caddyfile
+  local compose_source="$REPO_ROOT"/docker-compose.prod.yml
+  local caddy_source="$REPO_ROOT"/deploy/caddy/Caddyfile
   mkdir -p "$DEPLOY_PATH"/deploy/caddy
-  if [[ "$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' docker-compose.prod.yml)" != "$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$compose_target")" ]]; then
-    cp docker-compose.prod.yml "$compose_target"
+  if [[ "$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$compose_source")" != "$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$compose_target")" ]]; then
+    cp "$compose_source" "$compose_target"
   fi
   if [[ -e "$caddy_target" ]]; then
-    if [[ "$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' deploy/caddy/Caddyfile)" != "$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$caddy_target")" ]]; then
-      cp deploy/caddy/Caddyfile "$caddy_target"
+    if [[ "$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$caddy_source")" != "$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$caddy_target")" ]]; then
+      cp "$caddy_source" "$caddy_target"
     fi
   else
-    cp deploy/caddy/Caddyfile "$caddy_target"
+    cp "$caddy_source" "$caddy_target"
   fi
   sync_local_env_var "OPENAI_API_KEY" "${OPENAI_API_KEY:-}"
   sync_local_env_var "ONBOARDING_LLM_MODEL" "${ONBOARDING_LLM_MODEL:-}"
@@ -240,7 +244,6 @@ run_phase() {
 }
 
 if [[ "$LOCAL_DEPLOY" == "1" ]]; then
-  cd "$DEPLOY_PATH"
   run_phase
   exit 0
 fi
