@@ -100,9 +100,11 @@ jobs:
         run: |
           set -euo pipefail
           cd "$DEPLOY_PATH"
-          echo "git_head=$(git rev-parse HEAD)"
           pwd
-          rg -n "^  docs:|docs.opensocial.so" docker-compose.prod.yml deploy/caddy/Caddyfile || true
+          echo "--- docker-compose docs service ---"
+          grep -n "^  docs:" docker-compose.prod.yml || true
+          echo "--- caddy docs route ---"
+          grep -n "docs.opensocial.so" deploy/caddy/Caddyfile || true
 
       - name: Registry login
         if: ${{ inputs.deploy_mode == 'images' }}
