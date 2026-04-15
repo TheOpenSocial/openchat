@@ -118,6 +118,12 @@ export type ProtocolAgentClient = {
   ) => ReturnType<ProtocolAppClient["leaveCircle"]>;
 };
 
+export type ProtocolAgentToolDefinition = {
+  name: string;
+  description: string;
+  invoke: (input: unknown) => Promise<unknown>;
+};
+
 function mergeMetadata(
   session: ProtocolAgentSession,
   metadata?: Record<string, unknown>,
@@ -307,4 +313,159 @@ export function createProtocolAgentClientFromBaseUrl(
     createBoundProtocolAppClientFromBaseUrl(baseUrl, session, fetchImpl),
     session,
   );
+}
+
+export function createProtocolAgentToolset(
+  agent: ProtocolAgentClient,
+): ProtocolAgentToolDefinition[] {
+  return [
+    {
+      name: "protocol_agent_assert_ready",
+      description:
+        "Fail fast when auth, grants, consent, or delivery health block protocol agent work.",
+      invoke: (input) =>
+        agent.assertReady((input as ProtocolAgentReadinessOptions) ?? {}),
+    },
+    {
+      name: "protocol_agent_create_intent",
+      description:
+        "Create a new coordination intent through the OpenSocial protocol.",
+      invoke: (input) =>
+        agent.createIntent(
+          input as Omit<ProtocolIntentCreateInput, "actorUserId" | "metadata">,
+        ),
+    },
+    {
+      name: "protocol_agent_update_intent",
+      description:
+        "Update the user-owned text of an existing coordination intent.",
+      invoke: (input) => {
+        const payload = input as {
+          intentId: string;
+          rawText: string;
+          metadata?: Record<string, unknown>;
+        };
+        return agent.updateIntent(payload.intentId, {
+          rawText: payload.rawText,
+          metadata: payload.metadata,
+        });
+      },
+    },
+    {
+      name: "protocol_agent_cancel_intent",
+      description:
+        "Cancel a user-owned coordination intent and stop associated request flow.",
+      invoke: (input) => {
+        const payload = (input ?? {}) as {
+          intentId: string;
+          agentThreadId?: string;
+          metadata?: Record<string, unknown>;
+        };
+        return agent.cancelIntent(payload.intentId, {
+          agentThreadId: payload.agentThreadId,
+          metadata: payload.metadata,
+        });
+      },
+    },
+    {
+      name: "protocol_agent_send_request",
+      description:
+        "Send a coordination request from the current actor to a recipient for an intent.",
+      invoke: (input) =>
+        agent.sendRequest(
+          input as Omit<ProtocolRequestSendInput, "actorUserId" | "metadata">,
+        ),
+    },
+    {
+      name: "protocol_agent_accept_request",
+      description:
+        "Accept a received coordination request through the OpenSocial protocol.",
+      invoke: (input) => {
+        const payload = (input ?? {}) as {
+          requestId: string;
+          metadata?: Record<string, unknown>;
+        };
+        return agent.acceptRequest(payload.requestId, {
+          metadata: payload.metadata,
+        });
+      },
+    },
+    {
+      name: "protocol_agent_reject_request",
+      description:
+        "Reject a received coordination request through the OpenSocial protocol.",
+      invoke: (input) => {
+        const payload = (input ?? {}) as {
+          requestId: string;
+          metadata?: Record<string, unknown>;
+        };
+        return agent.rejectRequest(payload.requestId, {
+          metadata: payload.metadata,
+        });
+      },
+    },
+    {
+      name: "protocol_agent_send_chat_message",
+      description:
+        "Send a chat message into an existing chat through the OpenSocial protocol.",
+      invoke: (input) => {
+        const payload = input as {
+          chatId: string;
+          body: string;
+          clientMessageId?: string;
+          replyToMessageId?: string;
+          metadata?: Record<string, unknown>;
+        };
+        return agent.sendChatMessage(payload.chatId, {
+          body: payload.body,
+          clientMessageId: payload.clientMessageId,
+          replyToMessageId: payload.replyToMessageId,
+          metadata: payload.metadata,
+        });
+      },
+    },
+    {
+      name: "protocol_agent_create_circle",
+      description:
+        "Create a recurring coordination circle through the OpenSocial protocol.",
+      invoke: (input) =>
+        agent.createCircle(
+          input as Omit<ProtocolCircleCreateInput, "actorUserId" | "metadata">,
+        ),
+    },
+    {
+      name: "protocol_agent_join_circle",
+      description:
+        "Join or add a member to an existing recurring coordination circle.",
+      invoke: (input) => {
+        const payload = input as {
+          circleId: string;
+          memberUserId: string;
+          role?: "admin" | "member";
+          metadata?: Record<string, unknown>;
+        };
+        return agent.joinCircle(payload.circleId, {
+          memberUserId: payload.memberUserId,
+          role: payload.role,
+          metadata: payload.metadata,
+        });
+      },
+    },
+    {
+      name: "protocol_agent_leave_circle",
+      description:
+        "Leave or remove a member from an existing recurring coordination circle.",
+      invoke: (input) => {
+        const payload = input as {
+          circleId: string;
+          memberUserId: string;
+          metadata?: Record<string, unknown>;
+        };
+        return agent.leaveCircle(payload.circleId, {
+          memberUserId: payload.memberUserId,
+          metadata: payload.metadata,
+        });
+      },
+    },
+  ];
 }

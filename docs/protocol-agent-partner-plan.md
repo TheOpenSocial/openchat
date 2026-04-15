@@ -26,6 +26,7 @@ Partners can already integrate against the protocol layer in these ways:
 - Use a thin agent-oriented client wrapper on top of the protocol client for actor defaults and readiness inspection.
 - Use readiness evaluation before scheduled or autonomous agent work so auth, grant, and queue failures are caught early.
 - Use the wrapper’s assert-ready path when the agent should hard-stop on operational blockers before acting.
+- Use the generic toolset adapter when integrating the agent wrapper into an orchestrator without coupling the SDK to one runtime.
 
 ## What Third-Party Agents Should Assume
 
@@ -75,3 +76,4 @@ For current day-two operations, use the shipped partner/operator guides:
 - [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-quickstart.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-quickstart.md)
 - [`/Users/cruciblelabs/Documents/openchat/scripts/examples/protocol-partner-agent.mjs`](/Users/cruciblelabs/Documents/openchat/scripts/examples/protocol-partner-agent.mjs)
 - [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-readiness.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-readiness.md)
+- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-toolset.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-toolset.md)

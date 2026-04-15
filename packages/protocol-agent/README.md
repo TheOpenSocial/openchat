@@ -11,6 +11,7 @@ This package does not introduce new backend semantics. It wraps the current `@op
 - shared agent metadata injection
 - a simple readiness snapshot for queue, auth, grants, and consent state
 - readiness evaluation and fail-fast assertions for common operational blockers
+- a generic toolset adapter for orchestration runtimes
 
 Use it when you want agent code to operate through the protocol boundary without threading `actorUserId` and agent metadata through every call manually.
 
@@ -51,6 +52,7 @@ For a runnable example, use:
 - [`/Users/cruciblelabs/Documents/openchat/scripts/examples/protocol-partner-agent.mjs`](/Users/cruciblelabs/Documents/openchat/scripts/examples/protocol-partner-agent.mjs)
 - [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-quickstart.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-quickstart.md)
 - [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-readiness.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-readiness.md)
+- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-toolset.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-toolset.md)
 
 ## Exclusions
 
