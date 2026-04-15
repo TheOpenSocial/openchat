@@ -19,10 +19,11 @@ Partners can already integrate against the protocol layer in these ways:
   - `request.accept`
   - `request.reject`
   - `chat.send_message`
-  - `circle.create`
-  - `circle.join`
-  - `circle.leave`
+- `circle.create`
+- `circle.join`
+- `circle.leave`
 - Inspect auth-failure summaries when access is denied.
+- Use a thin agent-oriented client wrapper on top of the protocol client for actor defaults and readiness inspection.
 
 ## What Third-Party Agents Should Assume
 
@@ -48,7 +49,6 @@ The cleanest integration path is:
 
 The following pieces are directionally correct but should still be treated as in-progress work:
 
-- A dedicated partner-agent SDK wrapper on top of the protocol client.
 - First-class agent registration UX and policy controls.
 - Broader agent-specific action routing beyond the currently supported coordination primitives.
 - More polished consent and grant UX for partner-managed workflows.
@@ -70,3 +70,4 @@ For current day-two operations, use the shipped partner/operator guides:
 
 - [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-consent-and-auth-troubleshooting.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-consent-and-auth-troubleshooting.md)
 - [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-operator-recovery.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-operator-recovery.md)
+- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-quickstart.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-quickstart.md)

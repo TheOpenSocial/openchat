@@ -5,6 +5,7 @@ import {
   Get,
   Headers,
   Param,
+  Patch,
   Post,
   Query,
 } from "@nestjs/common";
@@ -20,7 +21,9 @@ import {
   protocolAppConsentRequestDecisionSchema,
   protocolAppScopeGrantCreateSchema,
   protocolAppScopeGrantRevokeSchema,
+  protocolIntentCancelActionSchema,
   protocolIntentCreateActionSchema,
+  protocolIntentUpdateActionSchema,
   protocolIntentRequestSendActionSchema,
   protocolRequestDecisionActionSchema,
   protocolReplayCursorSchema,
@@ -479,6 +482,46 @@ export class ProtocolController {
       await this.protocolService.createIntentAction(
         appId,
         readProtocolAppToken(headers) ?? "",
+        payload,
+      ),
+    );
+  }
+
+  @Patch("apps/:appId/actions/intents/:intentId")
+  async updateIntentAction(
+    @Param("appId") appIdParam: string,
+    @Param("intentId") intentIdParam: string,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+    @Body() body: unknown,
+  ) {
+    const appId = parseRequestPayload(identifierSchema, appIdParam);
+    const intentId = parseRequestPayload(uuidSchema, intentIdParam);
+    const payload = parseRequestPayload(protocolIntentUpdateActionSchema, body);
+    return ok(
+      await this.protocolService.updateIntentAction(
+        appId,
+        readProtocolAppToken(headers) ?? "",
+        intentId,
+        payload,
+      ),
+    );
+  }
+
+  @Post("apps/:appId/actions/intents/:intentId/cancel")
+  async cancelIntentAction(
+    @Param("appId") appIdParam: string,
+    @Param("intentId") intentIdParam: string,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+    @Body() body: unknown,
+  ) {
+    const appId = parseRequestPayload(identifierSchema, appIdParam);
+    const intentId = parseRequestPayload(uuidSchema, intentIdParam);
+    const payload = parseRequestPayload(protocolIntentCancelActionSchema, body);
+    return ok(
+      await this.protocolService.cancelIntentAction(
+        appId,
+        readProtocolAppToken(headers) ?? "",
+        intentId,
         payload,
       ),
     );

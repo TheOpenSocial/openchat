@@ -20,7 +20,9 @@ import {
   protocolAppRegistrationResultSchema,
   protocolDiscoveryDocumentSchema,
   protocolIntentActionResultSchema,
+  protocolIntentCancelActionSchema,
   protocolIntentCreateActionSchema,
+  protocolIntentUpdateActionSchema,
   protocolIntentRequestSendActionSchema,
   protocolRequestActionResultSchema,
   protocolRequestDecisionActionSchema,
@@ -55,7 +57,9 @@ import {
   type ProtocolDiscoveryDocument,
   type ProtocolEventEnvelope,
   type ProtocolIntentActionResult,
+  type ProtocolIntentCancelAction,
   type ProtocolIntentCreateAction,
+  type ProtocolIntentUpdateAction,
   type ProtocolIntentRequestSendAction,
   type ProtocolManifest,
   type ProtocolRequestActionResult,
@@ -198,6 +202,18 @@ export type ProtocolClient = {
     appToken: string,
     payload: ProtocolIntentCreateInput,
   ) => Promise<ProtocolIntentActionResult>;
+  updateIntent: (
+    appId: string,
+    appToken: string,
+    intentId: string,
+    payload: ProtocolIntentUpdateInput,
+  ) => Promise<ProtocolIntentActionResult>;
+  cancelIntent: (
+    appId: string,
+    appToken: string,
+    intentId: string,
+    payload: ProtocolIntentCancelInput,
+  ) => Promise<ProtocolIntentActionResult>;
   sendRequest: (
     appId: string,
     appToken: string,
@@ -314,6 +330,14 @@ export type ProtocolAppClient = {
   createIntent: (
     payload: ProtocolIntentCreateInput,
   ) => Promise<ProtocolIntentActionResult>;
+  updateIntent: (
+    intentId: string,
+    payload: ProtocolIntentUpdateInput,
+  ) => Promise<ProtocolIntentActionResult>;
+  cancelIntent: (
+    intentId: string,
+    payload: ProtocolIntentCancelInput,
+  ) => Promise<ProtocolIntentActionResult>;
   sendRequest: (
     payload: ProtocolRequestSendInput,
   ) => Promise<ProtocolRequestActionResult>;
@@ -429,6 +453,8 @@ export type ProtocolConsentRequestCreateInput = ProtocolAppConsentRequestCreate;
 export type ProtocolConsentRequestDecisionInput =
   ProtocolAppConsentRequestDecision;
 export type ProtocolIntentCreateInput = ProtocolIntentCreateAction;
+export type ProtocolIntentUpdateInput = ProtocolIntentUpdateAction;
+export type ProtocolIntentCancelInput = ProtocolIntentCancelAction;
 export type ProtocolRequestSendInput = ProtocolIntentRequestSendAction;
 export type ProtocolRequestDecisionInput = ProtocolRequestDecisionAction;
 export type ProtocolChatSendMessageInput = ProtocolChatSendMessageAction;
@@ -839,6 +865,42 @@ export function createProtocolClient(
         | undefined;
       return protocolIntentActionResultSchema.parse(envelope?.data ?? envelope);
     },
+    async updateIntent(appId, appToken, intentId, payload) {
+      const requestPayload = protocolIntentUpdateActionSchema.parse(payload);
+      const response = await transport.request(
+        `/protocol/apps/${appId}/actions/intents/${intentId}`,
+        {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            "x-protocol-app-token": appToken,
+          },
+          body: JSON.stringify(requestPayload),
+        },
+      );
+      const envelope = (await response.json()) as
+        | { data?: unknown }
+        | undefined;
+      return protocolIntentActionResultSchema.parse(envelope?.data ?? envelope);
+    },
+    async cancelIntent(appId, appToken, intentId, payload) {
+      const requestPayload = protocolIntentCancelActionSchema.parse(payload);
+      const response = await transport.request(
+        `/protocol/apps/${appId}/actions/intents/${intentId}/cancel`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-protocol-app-token": appToken,
+          },
+          body: JSON.stringify(requestPayload),
+        },
+      );
+      const envelope = (await response.json()) as
+        | { data?: unknown }
+        | undefined;
+      return protocolIntentActionResultSchema.parse(envelope?.data ?? envelope);
+    },
     async sendRequest(appId, appToken, payload) {
       const requestPayload =
         protocolIntentRequestSendActionSchema.parse(payload);
@@ -1135,6 +1197,10 @@ export function bindProtocolAppClient(
       client.saveReplayCursor(session.appId, session.appToken, cursor),
     createIntent: (payload) =>
       client.createIntent(session.appId, session.appToken, payload),
+    updateIntent: (intentId, payload) =>
+      client.updateIntent(session.appId, session.appToken, intentId, payload),
+    cancelIntent: (intentId, payload) =>
+      client.cancelIntent(session.appId, session.appToken, intentId, payload),
     sendRequest: (payload) =>
       client.sendRequest(session.appId, session.appToken, payload),
     acceptRequest: (requestId, payload) =>

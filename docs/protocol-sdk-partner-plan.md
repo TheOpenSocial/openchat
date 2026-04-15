@@ -254,7 +254,7 @@ The docs should not describe posts, follows, feeds, or any other generic social 
 4. Keep operator recovery and dead-letter handling docs current as queue semantics evolve.
 5. Keep the external actions reference aligned with the shipped contract.
 6. Keep package READMEs and example snippets aligned with the real helpers.
-7. Add higher-level agent wrappers only if they reduce friction without widening backend contracts.
+7. Keep the shipped `@opensocial/protocol-agent` wrapper thin and aligned to stable protocol actions instead of letting it become a second backend surface.
 
 ## Acceptance Criteria
 

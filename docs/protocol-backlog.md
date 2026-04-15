@@ -85,9 +85,10 @@ The protocol is no longer just a concept. The following pieces are already prese
 - Protocol-originated request send, request reject, accepted-request connection setup, and group backfill notifications now carry provenance through to user-facing Activity titles and notification metadata.
 - Partner-facing SDK readiness is stronger:
   - package READMEs now document the actual shipped helpers
-  - partner quickstart, replay, webhook-consumer, consent/auth troubleshooting, and operator recovery guides are now in repo
+  - partner quickstart, replay, webhook-consumer, consent/auth troubleshooting, operator recovery, and agent quickstart guides are now in repo
   - the protocol client now supports creating a bound app client directly from a base URL and app session
   - the protocol client now supports loading an app operational snapshot for queue/auth/grant inspection
+  - a thin `@opensocial/protocol-agent` wrapper now exists for actor defaults and readiness inspection without widening backend scope
 
 Use this as the baseline for all next backlog items. Do not reintroduce generic social primitives like posts or follows.
 
@@ -99,7 +100,7 @@ The initial package family should be small and explicit:
 - `@opensocial/protocol-events`
 - `@opensocial/protocol-client`
 - `@opensocial/protocol-server`
-- `@opensocial/protocol-agent` later, if needed
+- `@opensocial/protocol-agent`
 
 These packages should mirror the backend domain rather than inventing new abstractions.
 

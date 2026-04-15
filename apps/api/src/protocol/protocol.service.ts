@@ -1279,6 +1279,52 @@ export class ProtocolService {
     });
   }
 
+  async updateIntentAction(
+    appId: string,
+    appToken: string,
+    intentId: string,
+    input: ProtocolIntentUpdateAction,
+  ) {
+    const payload = protocolIntentUpdateActionSchema.parse(input);
+    const { app, grant } = await this.requireDelegatedActionGrant(
+      appId,
+      appToken,
+      payload.actorUserId,
+      "intent.update",
+      ["intent.write"],
+    );
+    if (!this.intentsService) {
+      throw new NotFoundException("intent actions unavailable");
+    }
+    return this.executeIntentUpdateAction(intentId, payload, {
+      actorAppId: app.registration.appId,
+      grantId: grant.grantId,
+    });
+  }
+
+  async cancelIntentAction(
+    appId: string,
+    appToken: string,
+    intentId: string,
+    input: ProtocolIntentCancelAction,
+  ) {
+    const payload = protocolIntentCancelActionSchema.parse(input);
+    const { app, grant } = await this.requireDelegatedActionGrant(
+      appId,
+      appToken,
+      payload.actorUserId,
+      "intent.cancel",
+      ["intent.write"],
+    );
+    if (!this.intentsService) {
+      throw new NotFoundException("intent actions unavailable");
+    }
+    return this.executeIntentCancelAction(intentId, payload, {
+      actorAppId: app.registration.appId,
+      grantId: grant.grantId,
+    });
+  }
+
   async sendRequestAction(
     appId: string,
     appToken: string,
