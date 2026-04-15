@@ -349,6 +349,14 @@ export type ProtocolAppClient = {
   getAppUsageSummary: () => Promise<ProtocolAppUsageSummary>;
 };
 
+export type ProtocolAppOperationalSnapshot = {
+  usage: ProtocolAppUsageSummary;
+  queue: ProtocolDeliveryQueueInspection;
+  grants: ProtocolGrantRecord[];
+  consentRequests: ProtocolConsentRequestRecord[];
+  webhooks: WebhookSubscription[];
+};
+
 export type ProtocolAppRecord = {
   status: string;
   registration: AppRegistration;
@@ -1151,6 +1159,29 @@ export function bindProtocolAppClient(
       ),
     getAppUsageSummary: () =>
       client.getAppUsageSummary(session.appId, session.appToken),
+  };
+}
+
+export async function loadProtocolAppOperationalSnapshot(
+  app: ProtocolAppClient,
+  options?: {
+    queueCursor?: string;
+  },
+): Promise<ProtocolAppOperationalSnapshot> {
+  const [usage, queue, grants, consentRequests, webhooks] = await Promise.all([
+    app.getAppUsageSummary(),
+    app.inspectDeliveryQueue(options?.queueCursor),
+    app.listGrants(),
+    app.listConsentRequests(),
+    app.listWebhooks(),
+  ]);
+
+  return {
+    usage,
+    queue,
+    grants,
+    consentRequests,
+    webhooks,
   };
 }
 

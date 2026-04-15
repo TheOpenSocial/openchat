@@ -101,3 +101,7 @@ This package does not provide:
 Use [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-partner-quickstart.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-partner-quickstart.md) for an end-to-end walkthrough using the shipped example scripts.
 
 It also does not expose generic feed/post/follow primitives. The protocol intentionally stays centered on coordination, messaging, and agentic actions.
+
+For queue health, auth-failure triage, and replay operations, use:
+
+- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-operator-recovery.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-operator-recovery.md)

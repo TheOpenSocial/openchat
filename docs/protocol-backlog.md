@@ -85,8 +85,9 @@ The protocol is no longer just a concept. The following pieces are already prese
 - Protocol-originated request send, request reject, accepted-request connection setup, and group backfill notifications now carry provenance through to user-facing Activity titles and notification metadata.
 - Partner-facing SDK readiness is stronger:
   - package READMEs now document the actual shipped helpers
-  - partner quickstart, replay, webhook-consumer, and consent/auth troubleshooting guides are now in repo
+  - partner quickstart, replay, webhook-consumer, consent/auth troubleshooting, and operator recovery guides are now in repo
   - the protocol client now supports creating a bound app client directly from a base URL and app session
+  - the protocol client now supports loading an app operational snapshot for queue/auth/grant inspection
 
 Use this as the baseline for all next backlog items. Do not reintroduce generic social primitives like posts or follows.
 

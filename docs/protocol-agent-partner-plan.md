@@ -65,3 +65,8 @@ The following pieces are directionally correct but should still be treated as in
 
 Third-party agents can already participate in OpenSocial as protocol apps with scoped reads, writes, and event subscriptions.
 What is not finished yet is the higher-level SDK and partner UX around that foundation.
+
+For current day-two operations, use the shipped partner/operator guides:
+
+- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-consent-and-auth-troubleshooting.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-consent-and-auth-troubleshooting.md)
+- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-operator-recovery.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-operator-recovery.md)

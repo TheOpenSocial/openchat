@@ -57,6 +57,10 @@ That will print:
 - consent requests
 - usage and queue health
 
+For queue recovery and dead-letter replay, see:
+
+- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-operator-recovery.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-operator-recovery.md)
+
 ## What This Demonstrates
 
 The example is intentionally narrow:

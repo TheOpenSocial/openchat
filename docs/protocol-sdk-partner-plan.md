@@ -17,6 +17,7 @@ The SDK docs must stay aligned with what is already shipped:
   - quickstart onboarding
   - webhook subscription and replay
   - consent/auth troubleshooting
+  - operator recovery and queue health
 
 ## Doc Set Goals
 
