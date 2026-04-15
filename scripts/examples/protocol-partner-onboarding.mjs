@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
-import { createProtocolClient } from "@opensocial/protocol-client";
+import {
+  createProtocolClientFromBaseUrl,
+} from "@opensocial/protocol-client";
 
 const DEFAULT_SCOPES = [
   "protocol.read",
@@ -81,14 +83,8 @@ function resolveWebhookUrl() {
   return getArg("--webhook-url") || process.env.PROTOCOL_WEBHOOK_URL;
 }
 
-function createTransport(baseUrl) {
-  return {
-    request: (path, init) => fetch(`${baseUrl}${path}`, init),
-  };
-}
-
 function createClient(baseUrl) {
-  return createProtocolClient(createTransport(baseUrl));
+  return createProtocolClientFromBaseUrl(baseUrl);
 }
 
 function logSection(title, value) {

@@ -142,11 +142,22 @@ export function buildProtocolDiscoveryDocument(
 
 export {
   buildProtocolWebhookSignature,
+  buildProtocolWebhookHeaders,
+  buildProtocolWebhookRequest,
+  buildProtocolWebhookSignatureHeader,
   compareProtocolWebhookSignatureDigests,
+  parseProtocolWebhookSignatureHeader,
+  PROTOCOL_WEBHOOK_SIGNATURE_HEADER,
+  readProtocolWebhookSignatureHeader,
   parseProtocolWebhookSignature,
+  verifyProtocolWebhookRequest,
   verifyProtocolWebhookSignature,
 } from "./webhook.ts";
 export type {
+  ProtocolWebhookHeaderSource,
+  ProtocolWebhookHeaderValue,
+  ProtocolWebhookRequest,
+  ProtocolWebhookRequestInput,
   ProtocolWebhookSignatureInput,
   ProtocolWebhookVerificationInput,
 } from "./webhook.ts";

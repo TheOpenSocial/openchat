@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
-import { createProtocolClient } from "@opensocial/protocol-client";
+import {
+  createProtocolClientFromBaseUrl,
+} from "@opensocial/protocol-client";
 
 function getArg(flag, fallback = undefined) {
   const exact = `${flag}=`;
@@ -71,14 +73,8 @@ function resolveCircleId() {
   return getArg("--circle-id") || process.env.PROTOCOL_CIRCLE_ID;
 }
 
-function createTransport(baseUrl) {
-  return {
-    request: (path, init) => fetch(`${baseUrl}${path}`, init),
-  };
-}
-
 function createClient(baseUrl) {
-  return createProtocolClient(createTransport(baseUrl));
+  return createProtocolClientFromBaseUrl(baseUrl);
 }
 
 function logSection(title, value) {

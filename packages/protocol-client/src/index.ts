@@ -76,6 +76,11 @@ export type ProtocolClientTransport = {
   request: (path: string, init?: RequestInit) => Promise<Response>;
 };
 
+export type ProtocolClientFetchLike = (
+  input: RequestInfo | URL,
+  init?: RequestInit,
+) => Promise<Response>;
+
 export type ProtocolClient = {
   getManifest: () => Promise<ProtocolManifest>;
   getDiscovery: () => Promise<ProtocolDiscoveryDocument>;
@@ -931,6 +936,27 @@ export function createProtocolClient(
       return buildProtocolAppRegistrationRequest(input);
     },
   };
+}
+
+export function createFetchProtocolTransport(
+  baseUrl: string,
+  fetchImpl: ProtocolClientFetchLike = fetch,
+): ProtocolClientTransport {
+  const normalizedBaseUrl = baseUrl.replace(/\/+$/, "");
+  return {
+    request(path, init) {
+      return fetchImpl(`${normalizedBaseUrl}${path}`, init);
+    },
+  };
+}
+
+export function createProtocolClientFromBaseUrl(
+  baseUrl: string,
+  fetchImpl?: ProtocolClientFetchLike,
+): ProtocolClient {
+  return createProtocolClient(
+    createFetchProtocolTransport(baseUrl, fetchImpl ?? fetch),
+  );
 }
 
 export function buildProtocolAppRegistrationRequest(

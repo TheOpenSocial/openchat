@@ -9,6 +9,29 @@ export type ProtocolWebhookVerificationInput = ProtocolWebhookSignatureInput & {
   signature: string;
 };
 
+export const PROTOCOL_WEBHOOK_SIGNATURE_HEADER =
+  "x-opensocial-protocol-signature" as const;
+
+export type ProtocolWebhookHeaderValue = string | string[] | undefined;
+
+export type ProtocolWebhookHeaderSource =
+  | Record<string, ProtocolWebhookHeaderValue>
+  | Map<string, string>
+  | Iterable<[string, string]>
+  | {
+      get?(name: string): string | null | undefined;
+      headers?: unknown;
+    };
+
+export type ProtocolWebhookRequestInput = ProtocolWebhookSignatureInput & {
+  headers?: ProtocolWebhookHeaderSource;
+};
+
+export type ProtocolWebhookRequest = ProtocolWebhookRequestInput & {
+  headers: Record<typeof PROTOCOL_WEBHOOK_SIGNATURE_HEADER, string>;
+  signature: string;
+};
+
 function normalizeBody(body: string | Uint8Array | object): string {
   if (typeof body === "string") {
     return body;
@@ -30,6 +53,134 @@ export function buildProtocolWebhookSignature(
   return createHmac("sha256", input.secret)
     .update(normalizeBody(input.body))
     .digest("hex");
+}
+
+export function buildProtocolWebhookSignatureHeader(signature: string): string {
+  return signature.trim();
+}
+
+export function buildProtocolWebhookHeaders(
+  signature: string,
+): Record<typeof PROTOCOL_WEBHOOK_SIGNATURE_HEADER, string> {
+  return {
+    [PROTOCOL_WEBHOOK_SIGNATURE_HEADER]:
+      buildProtocolWebhookSignatureHeader(signature),
+  };
+}
+
+export function buildProtocolWebhookRequest(
+  input: ProtocolWebhookSignatureInput,
+): ProtocolWebhookRequest {
+  const signature = buildProtocolWebhookSignature(input);
+  return {
+    ...input,
+    headers: buildProtocolWebhookHeaders(signature),
+    signature,
+  };
+}
+
+function isHeaderGetter(
+  source: unknown,
+): source is { get(name: string): string | null | undefined } {
+  return (
+    typeof source === "object" &&
+    source !== null &&
+    typeof (source as { get?: unknown }).get === "function"
+  );
+}
+
+function isIterableHeaders(
+  source: unknown,
+): source is Iterable<[string, string]> {
+  return (
+    typeof source === "object" &&
+    source !== null &&
+    typeof (source as { [Symbol.iterator]?: unknown })[Symbol.iterator] ===
+      "function"
+  );
+}
+
+function readHeaderValue(
+  source: ProtocolWebhookHeaderSource | null,
+  headerName: string,
+): string | null {
+  if (!source || typeof source !== "object") {
+    return null;
+  }
+
+  if (isHeaderGetter(source)) {
+    return source.get(headerName)?.trim() ?? null;
+  }
+
+  if (source instanceof Map) {
+    for (const [key, value] of source.entries()) {
+      if (key.toLowerCase() === headerName.toLowerCase()) {
+        return value.trim();
+      }
+    }
+    return null;
+  }
+
+  if (isIterableHeaders(source)) {
+    for (const [key, value] of source) {
+      if (key.toLowerCase() === headerName.toLowerCase()) {
+        return value.trim();
+      }
+    }
+    return null;
+  }
+
+  const record = source as Record<string, ProtocolWebhookHeaderValue>;
+  const direct = record[headerName] ?? record[headerName.toLowerCase()];
+  if (Array.isArray(direct)) {
+    return direct[0]?.trim() ?? null;
+  }
+  if (typeof direct === "string") {
+    return direct.trim();
+  }
+
+  return null;
+}
+
+export function readProtocolWebhookSignatureHeader(
+  source: ProtocolWebhookHeaderSource | ProtocolWebhookRequestInput | unknown,
+): string | null {
+  if (!source || typeof source !== "object") {
+    return null;
+  }
+
+  const request = source as ProtocolWebhookRequestInput;
+  const headers = "headers" in request ? request.headers : source;
+  return readHeaderValue(
+    headers as ProtocolWebhookHeaderSource | null,
+    PROTOCOL_WEBHOOK_SIGNATURE_HEADER,
+  );
+}
+
+export function parseProtocolWebhookSignatureHeader(
+  source: ProtocolWebhookHeaderSource | ProtocolWebhookRequestInput | unknown,
+): ReturnType<typeof parseProtocolWebhookSignature> {
+  const header = readProtocolWebhookSignatureHeader(source);
+  if (!header) {
+    return null;
+  }
+
+  return parseProtocolWebhookSignature(header);
+}
+
+export function verifyProtocolWebhookRequest(
+  input: ProtocolWebhookRequestInput,
+): boolean {
+  const signature = readProtocolWebhookSignatureHeader(input.headers);
+  if (!signature) {
+    return false;
+  }
+
+  return verifyProtocolWebhookSignature({
+    secret: input.secret,
+    body: input.body,
+    signature,
+  });
 }
 
 /**

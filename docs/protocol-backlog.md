@@ -267,6 +267,9 @@ These packages should mirror the backend domain rather than inventing new abstra
      - direct request accept/reject
      - recurring-circle create and add-member
    - Remaining candidates should be judged narrowly against current protocol scope instead of normalized by default.
+   - Current safest next candidates:
+     - `PATCH /intents/:intentId` as `intent.update`
+     - `POST /intents/:intentId/cancel` as `intent.cancel`
 4. Add operator/admin visibility for protocol lag, replay pressure, and token/grant audit usage.
 5. Add the next external action APIs and agent support beyond circles.
 6. Expand user-visible protocol events in first-party activity surfaces beyond circle notifications, without exposing backend internals.

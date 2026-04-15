@@ -3,9 +3,15 @@ import test from "node:test";
 
 import {
   buildProtocolWebhookSignature,
+  buildProtocolWebhookHeaders,
+  buildProtocolWebhookRequest,
   compareProtocolWebhookSignatureDigests,
+  parseProtocolWebhookSignatureHeader,
+  readProtocolWebhookSignatureHeader,
   parseProtocolWebhookSignature,
+  PROTOCOL_WEBHOOK_SIGNATURE_HEADER,
   verifyProtocolWebhookSignature,
+  verifyProtocolWebhookRequest,
 } from "../src/index.ts";
 
 test("buildProtocolWebhookSignature uses a stable canonical format", () => {
@@ -19,6 +25,60 @@ test("buildProtocolWebhookSignature uses a stable canonical format", () => {
     version: null,
     digest: signature,
   });
+});
+
+test("buildProtocolWebhookHeaders emits the backend signature header shape", () => {
+  assert.deepEqual(buildProtocolWebhookHeaders("  v1=abc123  "), {
+    [PROTOCOL_WEBHOOK_SIGNATURE_HEADER]: "v1=abc123",
+  });
+});
+
+test("readProtocolWebhookSignatureHeader accepts request-like header sources", () => {
+  const signature = buildProtocolWebhookSignature({
+    secret: "test-secret",
+    body: '{"event":"app.registered"}',
+  });
+
+  assert.equal(
+    readProtocolWebhookSignatureHeader({
+      headers: {
+        [PROTOCOL_WEBHOOK_SIGNATURE_HEADER.toUpperCase()]: signature,
+      },
+    }),
+    signature,
+  );
+});
+
+test("parseProtocolWebhookSignatureHeader accepts request-like header sources", () => {
+  const signature = buildProtocolWebhookSignature({
+    secret: "test-secret",
+    body: '{"event":"app.registered"}',
+  });
+
+  assert.deepEqual(
+    parseProtocolWebhookSignatureHeader({
+      headers: new Map([
+        [PROTOCOL_WEBHOOK_SIGNATURE_HEADER, `v1=${signature}`],
+      ]),
+    }),
+    {
+      version: "v1",
+      digest: signature,
+    },
+  );
+});
+
+test("buildProtocolWebhookRequest pairs the body with the backend header", () => {
+  const request = buildProtocolWebhookRequest({
+    secret: "test-secret",
+    body: '{"event":"app.registered"}',
+  });
+
+  assert.equal(
+    request.signature,
+    request.headers[PROTOCOL_WEBHOOK_SIGNATURE_HEADER],
+  );
+  assert.equal(request.body, '{"event":"app.registered"}');
 });
 
 test("verifyProtocolWebhookSignature accepts matching signatures", () => {
@@ -58,6 +118,22 @@ test("verifyProtocolWebhookSignature rejects mismatched payloads", () => {
       signature,
     }),
     false,
+  );
+});
+
+test("verifyProtocolWebhookRequest accepts matching request-like payloads", () => {
+  const request = buildProtocolWebhookRequest({
+    secret: "test-secret",
+    body: '{"event":"app.registered"}',
+  });
+
+  assert.equal(
+    verifyProtocolWebhookRequest({
+      secret: "test-secret",
+      body: request.body,
+      headers: request.headers,
+    }),
+    true,
   );
 });
 
