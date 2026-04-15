@@ -5,6 +5,7 @@ WORKDIR /app
 RUN corepack enable
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY patches ./patches
 COPY apps/docs/package.json apps/docs/package.json
 
 RUN pnpm install --filter @opensocial/docs... --frozen-lockfile=false

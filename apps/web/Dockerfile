@@ -10,7 +10,7 @@ FROM node:22-alpine AS build
 WORKDIR /app
 COPY --from=deps /app /app
 COPY . .
-RUN corepack enable && pnpm --filter @opensocial/types build && pnpm --filter @opensocial/web exec next build --webpack
+RUN corepack enable && pnpm --filter @opensocial/types build && pnpm --filter @opensocial/protocol-types build && pnpm --filter @opensocial/protocol-client build && pnpm --filter @opensocial/web exec next build --webpack
 
 FROM node:22-alpine AS runtime
 WORKDIR /app
