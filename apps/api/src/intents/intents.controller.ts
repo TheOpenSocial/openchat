@@ -239,12 +239,24 @@ export class IntentsController {
       intentFollowupActionBodySchema,
       body ?? {},
     );
+    if (!this.protocolService) {
+      return ok(
+        await this.intentsService.retryIntent(
+          intentId,
+          randomUUID(),
+          payload.agentThreadId,
+        ),
+      );
+    }
     return ok(
-      await this.intentsService.retryIntent(
+      await this.protocolService.retryFirstPartyIntentAction({
         intentId,
-        randomUUID(),
-        payload.agentThreadId,
-      ),
+        actorUserId,
+        agentThreadId: payload.agentThreadId,
+        metadata: {
+          source: "intents.controller.retry",
+        },
+      }),
     );
   }
 
@@ -260,12 +272,24 @@ export class IntentsController {
       intentFollowupActionBodySchema,
       body ?? {},
     );
+    if (!this.protocolService) {
+      return ok(
+        await this.intentsService.widenIntentFilters(
+          intentId,
+          randomUUID(),
+          payload.agentThreadId,
+        ),
+      );
+    }
     return ok(
-      await this.intentsService.widenIntentFilters(
+      await this.protocolService.widenFirstPartyIntentAction({
         intentId,
-        randomUUID(),
-        payload.agentThreadId,
-      ),
+        actorUserId,
+        agentThreadId: payload.agentThreadId,
+        metadata: {
+          source: "intents.controller.widen",
+        },
+      }),
     );
   }
 

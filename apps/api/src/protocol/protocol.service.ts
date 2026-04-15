@@ -1508,6 +1508,82 @@ export class ProtocolService {
     });
   }
 
+  async retryFirstPartyIntentAction(input: {
+    intentId: string;
+    actorUserId: string;
+    traceId?: string;
+    agentThreadId?: string;
+    metadata?: Record<string, unknown>;
+  }) {
+    await this.intentsService!.assertIntentOwnership(
+      input.intentId,
+      input.actorUserId,
+    );
+    const traceId = input.traceId ?? randomUUID();
+    const result = await this.intentsService!.retryIntent(
+      input.intentId,
+      traceId,
+      input.agentThreadId,
+    );
+
+    await this.recordEvent({
+      actorAppId: FIRST_PARTY_PROTOCOL_ACTOR_APP_ID,
+      event: "intent.updated",
+      resource: "intent",
+      payload: {
+        intentId: result.intentId,
+        actorUserId: input.actorUserId,
+        traceId,
+        operation: "intent.retry",
+        source: "first_party",
+      },
+    });
+
+    return {
+      ...result,
+      traceId,
+      metadata: input.metadata ?? {},
+    };
+  }
+
+  async widenFirstPartyIntentAction(input: {
+    intentId: string;
+    actorUserId: string;
+    traceId?: string;
+    agentThreadId?: string;
+    metadata?: Record<string, unknown>;
+  }) {
+    await this.intentsService!.assertIntentOwnership(
+      input.intentId,
+      input.actorUserId,
+    );
+    const traceId = input.traceId ?? randomUUID();
+    const result = await this.intentsService!.widenIntentFilters(
+      input.intentId,
+      traceId,
+      input.agentThreadId,
+    );
+
+    await this.recordEvent({
+      actorAppId: FIRST_PARTY_PROTOCOL_ACTOR_APP_ID,
+      event: "intent.updated",
+      resource: "intent",
+      payload: {
+        intentId: result.intentId,
+        actorUserId: input.actorUserId,
+        traceId,
+        operation: "intent.widen",
+        source: "first_party",
+      },
+    });
+
+    return {
+      ...result,
+      traceId,
+      metadata: input.metadata ?? {},
+    };
+  }
+
   async createFirstPartyDatingConsentAction(input: {
     id: string;
     userId: string;

@@ -78,6 +78,7 @@ The protocol is no longer just a concept. The following pieces are already prese
 - First-party runtime and agent intent/request flows now have protocol-service call-through paths for the cleanest social actions.
 - The direct `POST /intents` controller path now routes through the same first-party protocol intent action before hydrating the created intent response, so first-party HTTP intent creation shares protocol event semantics with runtime intent creation.
 - The direct `PATCH /intents/:intentId` and `POST /intents/:intentId/cancel` controller paths now route through first-party protocol intent lifecycle actions, so first-party HTTP intent edits and cancellations share protocol event semantics with the protocol/runtime path.
+- The direct `POST /intents/:intentId/retry` and `POST /intents/:intentId/widen` controller paths now route through first-party protocol wrappers, so the mobile app’s intent follow-up actions share protocol event semantics with the rest of the first-party intent lifecycle.
 - The direct inbox accept/reject controller paths now route through the same first-party protocol request-decision actions before hydrating the request response, so first-party HTTP request decisions share protocol event semantics with agent/runtime request decisions.
 - The direct recurring-circle create and add-member controller paths now route through the same first-party protocol circle actions before hydrating circle responses, so first-party HTTP circle management shares protocol event semantics with agent/runtime circle actions.
 - First-party agent circle creation and circle membership actions now call through the protocol service instead of bypassing it.
@@ -152,6 +153,12 @@ These packages should mirror the backend domain rather than inventing new abstra
    - Keep the public controller boundary protocol-owned.
    - Normalize additional internal flows only where the public protocol contract is already stable.
    - Avoid converting stable internal logic into protocol call-through just for consistency theater.
+   - Mobile-spec-aligned controller paths are now covered for:
+     - intent create, update, cancel, retry, and widen
+     - inbox accept and reject
+     - chat send
+     - recurring-circle create and add-member
+   - Remaining likely candidates should be judged against real mobile/product usage, not backend neatness alone.
 
 ### Next
 
@@ -253,6 +260,10 @@ These packages should mirror the backend domain rather than inventing new abstra
 2. Verify scheduled delivery, retry, dead-letter replay, and cursor recovery under failure.
 3. Decide whether non-user grant subjects are enforcement targets or modeled-only for now.
 4. Review remaining first-party internal write paths selectively and only normalize additional flows where the protocol contract is already stable.
+   - First review candidates:
+     - `POST /intents/:intentId/convert`
+     - runtime commerce and dating actions where the mobile product actually depends on them
+     - remaining agent/runtime helpers that still mix direct service writes with protocol call-through
 5. Tighten operator/admin visibility for protocol lag, replay pressure, and token/grant audit usage where it is still thin.
 6. Improve user-facing protocol-aware presentation in first-party surfaces without exposing backend internals.
 
