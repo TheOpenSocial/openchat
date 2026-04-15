@@ -96,6 +96,25 @@ The protocol is no longer just a concept. The following pieces are already prese
 
 Use this as the baseline for all next backlog items. Do not reintroduce generic social primitives like posts or follows.
 
+## Progress Snapshot
+
+- Protocol v0 resource shape and exclusions: shipped
+- App registration and capability manifests: shipped
+- Token issue/verify/rotate/revoke lifecycle: shipped, with remaining operational-policy hardening only
+- Scoped grants and consent requests: shipped for the core user-grant path; broader `app|service|agent` enforcement remains partial
+- Webhook subscriptions, delivery attempts, replay, dead-letter recovery, and queue inspection: shipped
+- External action APIs for intents, requests, chats, and circles: shipped
+- First-party HTTP call-through for the cleanest public write paths: shipped
+- Partner-facing SDK packages, examples, and docs: effectively complete for v0
+- First-party protocol settings/inspection surfaces: shipped as operational tooling, but still partial as polished product UX
+
+## Current Verification Focus
+
+- verify the scheduled delivery runner and replay/dead-letter recovery under real failure conditions
+- verify token/grant/auth diagnostics against remaining protocol-gated paths
+- verify that the cleaned SDK contract still matches the live backend behavior end to end
+- verify that protocol-originated user-facing events remain meaningful social states rather than generic integration copy
+
 ## Package Direction
 
 The initial package family should be small and explicit:
@@ -112,78 +131,50 @@ These packages should mirror the backend domain rather than inventing new abstra
 
 ### Now
 
-1. Define the protocol v0 contract for external apps.
-   - Confirm the core resources: identity, profile, intent, request, connection, chat, circle, notification, agent thread, and realtime event.
-   - Explicitly exclude posts, follows, feeds, likes, and other generic social primitives.
-   - Lock the namespace rules for core events versus third-party extensions.
+1. Verify the shipped protocol v0 contract against the cleaned SDK surface.
+   - Confirm manifest, discovery, examples, and client helpers still align with live backend routes.
+   - Keep posts, follows, feeds, likes, and other generic social primitives explicitly excluded.
+   - Treat docs plus examples as the v0 contract for partner consumption.
 
-2. Define scoped grants on top of persisted protocol app rows.
-   - Use `protocol_app_scope_grants` as the grant store.
-   - Support `subjectType=user|app|service|agent`.
-   - Keep grant status lifecycle minimal: `active`, `revoked`.
-   - Audit every grant and revocation.
+2. Tighten delegated-grant enforcement beyond the core user-grant path.
+   - The schema and API support `subjectType=user|app|service|agent`.
+   - Runtime enforcement is still centered on active user grants for delegated actions.
+   - Decide whether `app|service|agent` subject types should remain modeled-only or become enforced execution paths.
 
-3. Define app registration and capability manifests as the base contract.
-   - App identity and ownership
-   - Redirect URIs and callback URLs
-   - Client credentials or public keys
-   - Requested scopes and capability grants
-   - Allowed integration surfaces for read, write, and event consumption
+3. Verify scheduled delivery execution and replay behavior under real failure conditions.
+   - Signed webhook deliveries
+   - Retry policy
+   - Dead-letter replay
+   - Queue health visibility
+   - Replay cursor recovery
 
-4. Define the persistence model for protocol replay and delivery records.
-   - Durable protocol event log
-   - Replay cursors and cursor state envelopes
-   - Webhook subscription persistence
-   - Delivery record persistence
-   - Snapshotting or cache-backed state recovery where needed
+4. Review remaining first-party write-path normalization selectively.
+   - Keep the public controller boundary protocol-owned.
+   - Normalize additional internal flows only where the public protocol contract is already stable.
+   - Avoid converting stable internal logic into protocol call-through just for consistency theater.
 
 ### Next
 
-5. Harden the scheduled event delivery runner for external consumers.
-   - Webhook subscriptions
-   - Event signatures
-   - Retry policy
-   - Replay from cursor
-   - Delivery attempt history and delivery status tracking
-   - Queue processing and backoff behavior
-   - Dead-letter handling and recovery
-   - Scheduled dispatch path for due deliveries across apps
+5. Harden token and credential policy beyond the shipped lifecycle mechanics.
+   - App token issuance is already live.
+   - Hashing, verification, rotation, and revocation are already live.
+   - Remaining work is operational policy: expiry, refresh/reissue policy, and audit expectations.
 
-6. Tighten token management and app credential lifecycle.
-   - App token issuance
-   - Token hashing and verification
-   - Rotation and revocation
-   - Expiry and refresh policy where applicable
-   - Audit trail for credential use
-   - First-party write controls and visibility into token/grant audit state
+6. Keep consent-request and delegated-access UX aligned with the backend model.
+   - Consent requests and approve/reject flows are already live.
+   - Remaining work is turning first-party settings from an operator surface into a cleaner consent/grant experience.
+   - Do not broaden permission types unless a real partner flow demands it.
 
-7. Expand consent-request enforcement for third-party access.
-   - Resolve consent requests into active grants without mixing request lifecycle into grant status.
-   - Support approval and rejection flows with audit history.
-   - Surface pending consent requests in first-party settings on mobile and web.
-   - Extend request lifecycles beyond manual approve/reject only if a real partner flow needs it.
-   - Deny unsupported primitives like posts and follows.
-
-8. Define the external action APIs that third parties can call.
-   - Create/update intents
-   - Accept/reject requests
-   - Send chat messages
-   - Create or join circles
-   - Publish notifications where allowed
-   - Register agent activity where allowed
-
-9. Expand frontend wiring for protocol-aware clients.
+7. Expand user-facing protocol-aware presentation selectively.
    - Keep shared protocol client package and typed wrappers as the baseline.
-   - Add event stream consumption in the app shell where protocol events become user-visible.
-   - Tighten first-party surfaces that reflect third-party actions and inbound events.
+   - Keep first-party settings surfaces aligned with token/grant/consent/replay operations.
+   - Broader protocol-aware shell surfaces and event-driven product UX remain future work.
    - Render protocol-originated Activity items as user-meaningful social states, not operator jargon.
-   - Expose protocol state without turning the UI into a developer console.
 
-10. Add third-party agent integration support.
-   - Agent registration
-   - Event subscriptions by family
-   - Scoped action execution
-   - User-visible audit trail for agent actions
+8. Keep the thin agent wrapper aligned with stable protocol actions.
+   - The wrapper, readiness model, toolset, and toolkit are shipped.
+   - Remaining work is runtime-specific orchestration guidance, not a second backend surface.
+   - Add broader agent-specific protocol actions only if they fit the same coordination-first model.
 
 ### Later
 
@@ -208,47 +199,35 @@ These packages should mirror the backend domain rather than inventing new abstra
 
 ## Backend Tasks
 
-- Ship the event delivery worker for external consumers.
-- Wire rotate/revoke lifecycle through persisted protocol app rows and audit events.
-- Surface `protocol_app_scope_grants` through the protocol API and enforce them against persisted grant rows.
-- Add scope checks for every external action path.
-- Add audit logging for all third-party and agent actions.
-- Add explicit deny rules for unsupported primitives like posts and follows.
-- Add signed webhook delivery with retry and replay support.
-- Persist delivery attempts and expose queue observability for operators and app owners.
-- Add cursor-based replay mechanics and stateful replay envelopes.
+- Verify the event delivery worker and scheduled dispatch path under failure and recovery conditions.
+- Tighten delegated-grant enforcement if `app|service|agent` subjects are meant to be executable, not just modeled.
+- Review remaining first-party internal services and only normalize additional write paths where the public protocol contract is already stable.
+- Keep audit logging and unsupported-primitive deny rules explicit as new actions are added.
+- Keep queue observability, replay, and operator visibility aligned with the live delivery model.
 
 ## Auth and App Registration Tasks
 
-- Add an app registration flow.
-- Support scoped API tokens for apps and agents.
-- Add token hashing, verification, rotation, and revocation.
-- Support user-delegated consent where a third party acts on behalf of a user.
-- Support service tokens where a third party integrates at the platform level.
-- Record granted scopes and capability manifests.
-- Make grants explicit and revocable through `protocol_app_scope_grants`.
-- Make auth failures observable and diagnosable. This is now partially satisfied through structured auth-failure events and usage-summary diagnostics; extend it to any remaining protocol-gated paths that still fail without enough context.
+- Keep the shipped app-registration flow aligned with the SDK contract and examples.
+- Keep scoped API tokens for apps and agents aligned with the live auth checks.
+- The core token lifecycle is shipped; remaining work is operational expiry/reissue policy, if needed.
+- User-delegated consent is shipped for the core path; broader `service` and `agent` execution semantics remain a deliberate decision, not an implied future.
+- Keep granted scopes and capability manifests explicit and revocable.
+- Extend auth-failure diagnostics to any remaining protocol-gated paths that still fail without enough context.
 
 ## Event and Webhook Tasks
 
-- Define the event taxonomy for the protocol.
-- Add webhook subscriptions per event family.
-- Sign every webhook payload.
-- Add retry, backoff, and dead-letter handling in the delivery worker.
-- Add replay from cursor for missed events and expose cursor state to clients.
-- Add delivery observability so partners can see what was delivered and what failed.
-- Keep event payloads versioned and backward-compatible.
+- Keep the shipped event taxonomy stable and explicit.
+- Keep webhook subscriptions, signatures, retry, backoff, dead-letter handling, and replay aligned with the live queue path.
+- Improve delivery observability and verification rather than rebuilding the delivery model.
+- Keep event payloads versioned and backward-compatible as new event families are added.
 
 ## Frontend Wiring Tasks
 
-- Add a shared protocol client package for mobile and web.
-- Wire the frontend to protocol-backed reads instead of app-specific stitched endpoints where possible.
-- Add UI affordances for third-party app activity, consent requests, grants, and integrations.
-- Add writable token, consent, and grant controls to first-party protocol settings surfaces.
-- Add protocol-aware surfaces for external actions, event notifications, and agent activity.
+- Keep the shared protocol client package as the integration baseline.
+- Keep writable token, consent, grant, replay, and queue controls working in first-party settings surfaces.
+- Tighten user-facing protocol-aware presentation without turning the app into a developer console.
 - Keep the current product shell focused on Home, Activity, Chats, and Profile.
-- Add protocol surfaces that are visible to users without turning the app into a developer console.
-- Expose protocol state without turning the UI into a developer console.
+- Treat broader shell/event-stream integration as product-facing work, not SDK-completion work.
 
 ## Success Criteria
 
@@ -270,22 +249,12 @@ These packages should mirror the backend domain rather than inventing new abstra
 
 ## Immediate Execution Order
 
-1. Finalize protocol resources, event names, and exclusions.
-2. Expand consent-request lifecycle and approval policy on persisted app rows.
-3. Review remaining first-party write paths selectively and only normalize additional controller/service flows where the public protocol contract is already stable.
-   - The cleanest direct controller paths are now aligned for:
-     - direct intent create
-     - direct intent update/cancel
-     - direct request accept/reject
-     - recurring-circle create and add-member
-   - Remaining candidates should be judged narrowly against current protocol scope instead of normalized by default.
-   - Current safest next candidates:
-     - second-wave intent lifecycle helpers like `retry`, `widen`, and `convert` only if their public protocol contract is worth stabilizing
-     - otherwise prefer SDK/docs/observability hardening over expanding action surface prematurely
-4. Add operator/admin visibility for protocol lag, replay pressure, and token/grant audit usage.
-5. Add the next external action APIs and agent support beyond circles.
-6. Expand user-visible protocol events in first-party activity surfaces beyond circle notifications, without exposing backend internals.
-7. Publish the partner-facing SDK docs/examples plan and then turn the plan into the actual docs set once the protocol surface is stable enough to freeze.
+1. Verify the shipped SDK contract against live backend behavior.
+2. Verify scheduled delivery, retry, dead-letter replay, and cursor recovery under failure.
+3. Decide whether non-user grant subjects are enforcement targets or modeled-only for now.
+4. Review remaining first-party internal write paths selectively and only normalize additional flows where the protocol contract is already stable.
+5. Tighten operator/admin visibility for protocol lag, replay pressure, and token/grant audit usage where it is still thin.
+6. Improve user-facing protocol-aware presentation in first-party surfaces without exposing backend internals.
 
 ## Current Direction Guardrails
 
