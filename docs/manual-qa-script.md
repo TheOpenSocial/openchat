@@ -3,6 +3,9 @@
 ## Prerequisites
 - Staging deploy completed.
 - `pnpm db:migrate` and `pnpm db:seed` executed against staging DB.
+- Staging sandbox world prepared when testing daily-loop/mobile behavior:
+  - `pnpm playground:sandbox -- --action=create --world-id=design-sandbox-v1 --reset=1`
+  - `pnpm playground:sandbox -- --action=join --world-id=design-sandbox-v1 --focal-user-id=<your-staging-user-uuid>`
 - Test admin headers configured:
   - `x-admin-user-id`
   - `x-admin-role`
@@ -19,6 +22,10 @@
 Pass criteria:
 - Intent reaches `fanout`/`partial`/`connected` state.
 - Chat message is persisted and visible to both participants.
+
+Operational check:
+- Inspect `GET /api/admin/ops/request-pressure` before and after fanout-heavy tests.
+- Confirm no recipient is unintentionally saturated during repeated manual test runs.
 
 ## Scenario B: Launch control gating
 1. Disable new intents via `POST /api/admin/launch-controls`:

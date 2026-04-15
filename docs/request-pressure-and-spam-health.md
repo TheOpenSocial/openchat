@@ -245,7 +245,19 @@ This should show up in operator tooling as:
 - recipients repeatedly selected in top fanout waves
 - request pressure by geography / cohort / intent type
 
-Without this, market-health problems are easy to miss until users complain.
+This is now shipped at a first-pass level through:
+
+- `GET /api/admin/ops/request-pressure`
+
+Current snapshot includes:
+
+- pending inbound requests by recipient
+- rolling inbound window count by recipient
+- suppression state and suppression reason
+- soft load penalty before hard suppression
+- active threshold values used by matching
+
+Without this visibility, market-health problems are easy to miss until users complain.
 
 ## Recommendation for Manual Testing
 

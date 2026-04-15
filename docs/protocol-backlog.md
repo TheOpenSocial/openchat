@@ -127,6 +127,7 @@ Use this as the baseline for all next backlog items. Do not reintroduce generic 
 - verify whether the remaining first-party direct writes should become public protocol actions or remain intentionally internal
 - audit request-pressure and spam-health controls so recipient load stays bounded as the market grows
 - verify the new recipient inbound pressure guard against real matching behavior and tune its thresholds from observed data
+- use the new admin request-pressure snapshot during staging/manual QA so saturation shows up before users feel it
 
 ## Package Direction
 
@@ -209,9 +210,9 @@ These packages should mirror the backend domain rather than inventing new abstra
      - pending inbound request cap per recipient
      - rolling daily inbound request cap per recipient
      - load-aware score penalty before hard suppression
+     - admin request-pressure snapshot for operator visibility during manual testing
    - Next work:
      - tune thresholds from real market behavior
-     - surface recipient pressure in admin and ops views
      - consider diversity / distribution controls if the same cohorts remain over-targeted
 
 ### Later

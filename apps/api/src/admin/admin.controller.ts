@@ -97,6 +97,16 @@ type ProtocolQueueHealthDeliveryRow = {
   updatedAt: Date | string;
 };
 
+type RequestPressureRecipientRow = {
+  recipientUserId: string;
+  pendingInboundCount: number | bigint | string;
+  windowInboundCount: number | bigint | string;
+  lastSentAt: Date | string | null;
+};
+
+const DEFAULT_MAX_PENDING_INBOUND_REQUESTS_PER_RECIPIENT = 6;
+const DEFAULT_MAX_DAILY_INBOUND_REQUESTS_PER_RECIPIENT = 12;
+
 @PublicRoute()
 @Controller("admin")
 export class AdminController {
@@ -2498,6 +2508,40 @@ export class AdminController {
         replayableCount: snapshot.summary.replayableCount,
       },
     });
+    return ok(snapshot);
+  }
+
+  @Get("ops/request-pressure")
+  async requestPressureSnapshot(
+    @Headers("x-admin-user-id") adminUserIdHeader?: string,
+    @Headers("x-admin-role") adminRoleHeader?: string,
+    @Query("limit") limitParam?: string,
+    @Query("hours") hoursParam?: string,
+  ) {
+    const admin = this.parseAdminContext(adminUserIdHeader, adminRoleHeader, [
+      "admin",
+      "support",
+      "moderator",
+    ]);
+    const limit = this.parseLimit(limitParam);
+    const hours = this.normalizeWindowHours(hoursParam);
+    const snapshot = await this.readRequestPressureSnapshot({ limit, hours });
+
+    await this.adminAuditService.recordAction({
+      adminUserId: admin.adminUserId,
+      role: admin.role,
+      action: "admin.ops_request_pressure_view",
+      entityType: "intent_request",
+      metadata: {
+        limit,
+        hours,
+        overloadedRecipientCount: snapshot.summary.overloadedRecipientCount,
+        nearCapacityRecipientCount: snapshot.summary.nearCapacityRecipientCount,
+        totalPendingInboundCount: snapshot.summary.totalPendingInboundCount,
+        totalWindowInboundCount: snapshot.summary.totalWindowInboundCount,
+      },
+    });
+
     return ok(snapshot);
   }
 
@@ -5181,6 +5225,147 @@ export class AdminController {
       return 24;
     }
     return Math.min(Math.max(Math.floor(parsed), 1), 24 * 14);
+  }
+
+  private resolveMatchingPositiveIntegerEnv(key: string, fallback: number) {
+    const rawValue = process.env[key]?.trim();
+    if (!rawValue) {
+      return fallback;
+    }
+    const parsed = Number.parseInt(rawValue, 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return fallback;
+    }
+    return parsed;
+  }
+
+  private async readRequestPressureSnapshot(input: {
+    limit: number;
+    hours: number;
+  }) {
+    const windowStart = new Date(Date.now() - input.hours * 60 * 60_000);
+    const pendingCap = this.resolveMatchingPositiveIntegerEnv(
+      "MATCHING_MAX_PENDING_INBOUND_REQUESTS_PER_RECIPIENT",
+      DEFAULT_MAX_PENDING_INBOUND_REQUESTS_PER_RECIPIENT,
+    );
+    const dailyCap = this.resolveMatchingPositiveIntegerEnv(
+      "MATCHING_MAX_DAILY_INBOUND_REQUESTS_PER_RECIPIENT",
+      DEFAULT_MAX_DAILY_INBOUND_REQUESTS_PER_RECIPIENT,
+    );
+
+    const rows = await this.prisma.$queryRaw<RequestPressureRecipientRow[]>`
+      SELECT
+        recipient_user_id AS "recipientUserId",
+        COUNT(*) FILTER (WHERE status = 'pending') AS "pendingInboundCount",
+        COUNT(*) FILTER (WHERE sent_at >= ${windowStart}) AS "windowInboundCount",
+        MAX(sent_at) AS "lastSentAt"
+      FROM intent_requests
+      WHERE status = 'pending' OR sent_at >= ${windowStart}
+      GROUP BY recipient_user_id
+      ORDER BY
+        COUNT(*) FILTER (WHERE status = 'pending') DESC,
+        COUNT(*) FILTER (WHERE sent_at >= ${windowStart}) DESC,
+        MAX(sent_at) DESC
+      LIMIT ${input.limit}
+    `;
+
+    const recipientUserIds = rows.map((row) => row.recipientUserId);
+    const users =
+      recipientUserIds.length === 0
+        ? []
+        : await this.prisma.user.findMany({
+            where: {
+              id: {
+                in: recipientUserIds,
+              },
+            },
+            include: {
+              profile: true,
+            },
+          });
+    const usersById = new Map(users.map((user) => [user.id, user]));
+
+    const recipients = rows.map((row) => {
+      const pendingInboundCount = Number(row.pendingInboundCount ?? 0);
+      const windowInboundCount = Number(row.windowInboundCount ?? 0);
+      const suppressed =
+        pendingInboundCount >= pendingCap || windowInboundCount >= dailyCap;
+      const pendingRatio = pendingInboundCount / pendingCap;
+      const windowRatio = windowInboundCount / dailyCap;
+      const penalty = suppressed
+        ? 1
+        : Math.min(
+            1,
+            Math.max(0, pendingRatio - 0.35) * 0.35 +
+              Math.max(0, windowRatio - 0.4) * 0.25,
+          );
+      const user = usersById.get(row.recipientUserId);
+      return {
+        recipientUserId: row.recipientUserId,
+        displayName:
+          user?.profile?.displayName?.trim() ||
+          user?.name?.trim() ||
+          user?.email?.trim() ||
+          row.recipientUserId,
+        avatarUrl: user?.profile?.avatarUrl ?? null,
+        city: user?.profile?.city ?? null,
+        country: user?.profile?.country ?? null,
+        pendingInboundCount,
+        windowInboundCount,
+        pendingCapacityRatio: Math.min(1, pendingRatio),
+        windowCapacityRatio: Math.min(1, windowRatio),
+        loadPenalty: penalty,
+        suppressed,
+        suppressionReason: suppressed
+          ? pendingInboundCount >= pendingCap
+            ? "pending_inbound_cap"
+            : "window_inbound_cap"
+          : null,
+        lastSentAt:
+          row.lastSentAt instanceof Date
+            ? row.lastSentAt.toISOString()
+            : typeof row.lastSentAt === "string"
+              ? row.lastSentAt
+              : null,
+      };
+    });
+
+    const overloadedRecipientCount = recipients.filter(
+      (recipient) => recipient.suppressed,
+    ).length;
+    const nearCapacityRecipientCount = recipients.filter(
+      (recipient) =>
+        !recipient.suppressed &&
+        (recipient.pendingCapacityRatio >= 0.7 ||
+          recipient.windowCapacityRatio >= 0.7),
+    ).length;
+
+    return {
+      generatedAt: new Date().toISOString(),
+      window: {
+        hours: input.hours,
+        start: windowStart.toISOString(),
+        end: new Date().toISOString(),
+      },
+      thresholds: {
+        pendingInboundCap: pendingCap,
+        windowInboundCap: dailyCap,
+      },
+      summary: {
+        recipientCount: recipients.length,
+        overloadedRecipientCount,
+        nearCapacityRecipientCount,
+        totalPendingInboundCount: recipients.reduce(
+          (sum, recipient) => sum + recipient.pendingInboundCount,
+          0,
+        ),
+        totalWindowInboundCount: recipients.reduce(
+          (sum, recipient) => sum + recipient.windowInboundCount,
+          0,
+        ),
+      },
+      recipients,
+    };
   }
 
   private readJsonObject(
