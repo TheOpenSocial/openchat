@@ -14,9 +14,10 @@ Short answer:
 - we already have meaningful **sender-side fanout caps**
 - we already have **API abuse throttles**
 - we already have some **recipient choice controls**
-- we do **not yet have a strong recipient-load cap** in matching
+- we now have a **recipient inbound pressure guard** in matching
+- we still do **not yet have broader market-balancing and operator visibility**
 
-That means the system will not send "thousands of options" immediately, but it can still over-prefer the same high-performing recipients over time unless we add recipient-pressure controls.
+That means the system will not send "thousands of options" immediately, and it now suppresses recipients who are already carrying too much inbound request load. The remaining risk is slower market skew over time, not immediate pile-on fanout.
 
 ## Current Guardrails
 
@@ -106,34 +107,42 @@ This helps with scripted or burst abuse, especially on high-risk write routes li
 - `/api/inbox/requests`
 - `/api/chats`
 
+## Newly Added Guardrail
+
+### Recipient inbound pressure is now bounded in matching
+
+The matcher now applies recipient-side load protection before ranking can keep recycling the same overloaded people.
+
+In [/Users/cruciblelabs/Documents/openchat/apps/api/src/matching/matching.service.ts](/Users/cruciblelabs/Documents/openchat/apps/api/src/matching/matching.service.ts):
+
+- recipients are suppressed when pending inbound requests reach the configured cap
+- recipients are suppressed when rolling daily inbound requests reach the configured cap
+- recipients below those hard caps still receive a soft score penalty as they get closer to saturation
+
+Current defaults:
+
+- `MATCHING_MAX_PENDING_INBOUND_REQUESTS_PER_RECIPIENT = 6`
+- `MATCHING_MAX_DAILY_INBOUND_REQUESTS_PER_RECIPIENT = 12`
+
+This is the main direct safeguard against one highly responsive or highly visible person being hit over and over.
+
 ## What Is Still Missing
 
-### Recipient-side load protection is weak
+### Recipient-side load protection is better, but still basic
 
-This is the main gap.
-
-The matcher currently calculates recipient reliability in [/Users/cruciblelabs/Documents/openchat/apps/api/src/matching/matching.service.ts](/Users/cruciblelabs/Documents/openchat/apps/api/src/matching/matching.service.ts):
+The matcher calculates recipient reliability in [/Users/cruciblelabs/Documents/openchat/apps/api/src/matching/matching.service.ts](/Users/cruciblelabs/Documents/openchat/apps/api/src/matching/matching.service.ts):
 
 - response rate
 - acceptance rate
 - follow-through rate
 
-That helps quality, but it does **not** directly stop the system from repeatedly targeting the same highly responsive person when they already have too many pending inbound requests.
+That helps quality. Now, on top of that, the matcher also suppresses recipients with excessive inbound pressure and penalizes recipients who are approaching saturation.
 
 In practice, this means:
 
 - the system protects the sender from over-sending
-- but it does not fully protect a popular recipient from accumulating too much inbound pressure over time
-
-### There is no explicit inbound pending cap per recipient
-
-I did not find a hard rule like:
-
-- "do not rank recipients with more than N pending inbound requests"
-- "downrank recipients whose last 24h inbound volume is too high"
-- "cool down recipients immediately after multiple recent requests"
-
-That is the clearest missing anti-spam / market-health safeguard.
+- and it now protects recipients from the most obvious pile-on behavior
+- but it still does not fully optimize for global market fairness over time
 
 ### There is no explicit diversity quota in fanout
 
@@ -255,17 +264,18 @@ Current state:
 - good sender-side protection
 - good abuse throttling
 - acceptable duplicate suppression
-- weak recipient-side load protection
+- recipient-side load protection is now present
+- broader market-balancing is still limited
 
 Recommended priority:
 
-1. recipient pending cap
-2. recipient daily cap
-3. load-aware ranking penalty
-4. admin visibility on request pressure
+1. admin visibility on request pressure
+2. recipient-load analytics and alerting
+3. broader market-balancing and diversity controls
+4. tuning the inbound caps from production behavior
 
 If we do only one thing next, it should be:
 
-- **add a recipient inbound pending cap in matching**
+- **add operator visibility for recipient pressure in admin and ops surfaces**
 
-That is the highest-leverage change for keeping the system healthy under real usage.
+That is the highest-leverage next change for keeping the system healthy under real usage without flying blind.

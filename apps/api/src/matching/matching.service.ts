@@ -55,6 +55,13 @@ interface ReliabilitySnapshot {
   score: number;
 }
 
+interface RecipientLoadSnapshot {
+  pendingInboundCount: number;
+  dailyInboundCount: number;
+  penalty: number;
+  suppressed: boolean;
+}
+
 type MarketStage = "empty" | "seed" | "healthy";
 
 const EMBEDDING_DIMENSIONS = 1536;
@@ -67,6 +74,8 @@ const OPEN_REPORT_SUPPRESSION_THRESHOLD = 3;
 const TRANSLATION_OPT_IN_PREFERENCE_KEY = "global_rules_translation_opt_in";
 const DEFAULT_MARKET_STAGE: MarketStage = "healthy";
 const RELIABILITY_LOOKBACK_DAYS = 30;
+const DEFAULT_MAX_PENDING_INBOUND_REQUESTS_PER_RECIPIENT = 6;
+const DEFAULT_MAX_DAILY_INBOUND_REQUESTS_PER_RECIPIENT = 12;
 
 @Injectable()
 export class MatchingService {
@@ -74,6 +83,16 @@ export class MatchingService {
   private readonly offlineMinAccountAgeDays =
     this.resolveOfflineMinAccountAgeDays();
   private readonly configuredMarketStage = this.resolveConfiguredMarketStage();
+  private readonly maxPendingInboundRequestsPerRecipient =
+    this.resolvePositiveIntegerEnv(
+      "MATCHING_MAX_PENDING_INBOUND_REQUESTS_PER_RECIPIENT",
+      DEFAULT_MAX_PENDING_INBOUND_REQUESTS_PER_RECIPIENT,
+    );
+  private readonly maxDailyInboundRequestsPerRecipient =
+    this.resolvePositiveIntegerEnv(
+      "MATCHING_MAX_DAILY_INBOUND_REQUESTS_PER_RECIPIENT",
+      DEFAULT_MAX_DAILY_INBOUND_REQUESTS_PER_RECIPIENT,
+    );
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -307,11 +326,13 @@ export class MatchingService {
       openReportRows,
       recentInteractionCounts,
       reliabilityByUser,
+      recipientLoadByUser,
     ] = await Promise.all([
       this.loadAvailabilityWindows([senderUserId, ...eligibleUserIds]),
       this.loadOpenReports(eligibleUserIds),
       this.fetchRecentInteractionCounts(senderUserId, eligibleUserIds),
       this.fetchReliabilitySignals(eligibleUserIds),
+      this.fetchRecipientLoadSignals(eligibleUserIds),
     ]);
     const personalizationProfile =
       await this.fetchPersonalizationProfile(senderUserId);
@@ -441,13 +462,22 @@ export class MatchingService {
         candidateDisplayName: user.displayName ?? "",
         personalizationProfile,
       });
+      const recipientLoad = recipientLoadByUser.get(user.id) ?? {
+        pendingInboundCount: 0,
+        dailyInboundCount: 0,
+        penalty: 0,
+        suppressed: false,
+      };
+      if (recipientLoad.suppressed) {
+        continue;
+      }
       const translationBridge = this.isTranslationBridgeAllowed(
         user.id,
         preferencesByUser,
         sender?.id ?? null,
       );
 
-      const score = this.scoreCandidateForMarket(marketStage, {
+      const rawScore = this.scoreCandidateForMarket(marketStage, {
         semantic,
         availability,
         trust: normalizedTrust,
@@ -457,6 +487,9 @@ export class MatchingService {
         style,
         personalization,
       });
+      const score = this.clampUnitInterval(
+        rawScore * (1 - recipientLoad.penalty),
+      );
 
       scored.push({
         userId: user.id,
@@ -480,6 +513,9 @@ export class MatchingService {
           responseRate: reliability.responseRate,
           acceptanceRate: reliability.acceptanceRate,
           followThroughRate: reliability.followThroughRate,
+          recipientLoadPenalty: recipientLoad.penalty,
+          pendingInboundRequestCount: recipientLoad.pendingInboundCount,
+          dailyInboundRequestCount: recipientLoad.dailyInboundCount,
           marketStage,
           sparseFallbackEnabled,
           translationBridge,
@@ -1986,6 +2022,18 @@ export class MatchingService {
     return DEFAULT_MARKET_STAGE;
   }
 
+  private resolvePositiveIntegerEnv(name: string, fallback: number) {
+    const raw = process.env[name];
+    if (!raw) {
+      return fallback;
+    }
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed) || parsed < 1) {
+      return fallback;
+    }
+    return Math.floor(parsed);
+  }
+
   private resolveEffectiveMarketStage(eligibleUserCount: number): MarketStage {
     if (this.configuredMarketStage !== "healthy") {
       if (this.configuredMarketStage === "seed" && eligibleUserCount <= 1) {
@@ -2081,6 +2129,87 @@ export class MatchingService {
     }
 
     return reliabilityByUser;
+  }
+
+  private async fetchRecipientLoadSignals(candidateUserIds: string[]) {
+    const loadByUser = new Map<string, RecipientLoadSnapshot>();
+    if (candidateUserIds.length === 0) {
+      return loadByUser;
+    }
+
+    const dayAgo = new Date(Date.now() - 24 * 60 * 60_000);
+    const rows = await this.prisma.intentRequest.findMany({
+      where: {
+        recipientUserId: {
+          in: candidateUserIds,
+        },
+        OR: [
+          { status: "pending" },
+          {
+            sentAt: {
+              gte: dayAgo,
+            },
+          },
+        ],
+      },
+      select: {
+        recipientUserId: true,
+        status: true,
+        sentAt: true,
+      },
+    });
+
+    const countersByUser = new Map<
+      string,
+      {
+        pendingInboundCount: number;
+        dailyInboundCount: number;
+      }
+    >();
+    for (const row of rows) {
+      const counters = countersByUser.get(row.recipientUserId) ?? {
+        pendingInboundCount: 0,
+        dailyInboundCount: 0,
+      };
+      if (row.status === "pending") {
+        counters.pendingInboundCount += 1;
+      }
+      if (row.sentAt >= dayAgo) {
+        counters.dailyInboundCount += 1;
+      }
+      countersByUser.set(row.recipientUserId, counters);
+    }
+
+    for (const userId of candidateUserIds) {
+      const counters = countersByUser.get(userId) ?? {
+        pendingInboundCount: 0,
+        dailyInboundCount: 0,
+      };
+      const suppressed =
+        counters.pendingInboundCount >=
+          this.maxPendingInboundRequestsPerRecipient ||
+        counters.dailyInboundCount >=
+          this.maxDailyInboundRequestsPerRecipient;
+      const pendingRatio =
+        counters.pendingInboundCount /
+        this.maxPendingInboundRequestsPerRecipient;
+      const dailyRatio =
+        counters.dailyInboundCount / this.maxDailyInboundRequestsPerRecipient;
+      const penalty = suppressed
+        ? 1
+        : this.clampUnitInterval(
+            Math.max(0, pendingRatio - 0.35) * 0.35 +
+              Math.max(0, dailyRatio - 0.4) * 0.25,
+          );
+      loadByUser.set(userId, {
+        pendingInboundCount: counters.pendingInboundCount,
+        dailyInboundCount: counters.dailyInboundCount,
+        penalty,
+        suppressed,
+      });
+    }
+
+    return loadByUser;
   }
 
   private clampUnitInterval(value: number) {
