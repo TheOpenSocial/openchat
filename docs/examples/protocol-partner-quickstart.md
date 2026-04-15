@@ -15,6 +15,10 @@ The examples stay inside the current protocol direction:
 
 They do not use posts, follows, feeds, or other generic social primitives.
 
+Start here if you want the top-level contract and explicit exclusions first:
+
+- [`docs/examples/protocol-overview-and-exclusions.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-overview-and-exclusions.md)
+
 For event subscriptions, delivery inspection, and replay, see:
 
 - [`docs/examples/protocol-external-actions-reference.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-external-actions-reference.md)

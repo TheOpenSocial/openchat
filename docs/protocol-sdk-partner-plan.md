@@ -14,6 +14,7 @@ The SDK docs must stay aligned with what is already shipped:
 - The protocol backend now explicitly advertises its unsupported-primitives policy in the manifest metadata so third parties do not infer support from omission.
 - Usage summaries now expose structured protocol auth-failure diagnostics so partners can distinguish missing tokens, missing scopes, missing capabilities, and missing delegated grants.
 - Partner-ready guides now exist for:
+  - protocol overview and exclusions
   - quickstart onboarding
   - webhook subscription and replay
   - consent/auth troubleshooting
