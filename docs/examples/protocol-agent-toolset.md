@@ -48,6 +48,24 @@ await createIntentTool?.invoke({
 });
 ```
 
+## Run the shipped example
+
+```bash
+PROTOCOL_BASE_URL=http://127.0.0.1:3000/api \
+PROTOCOL_APP_ID=partner.onboarding.123 \
+PROTOCOL_APP_TOKEN=<app-token> \
+PROTOCOL_ACTOR_USER_ID=00000000-0000-4000-8000-000000000001 \
+node --loader ./scripts/examples/protocol-example-loader.mjs \
+  scripts/examples/protocol-partner-agent-toolset.mjs
+```
+
+The example:
+
+- prints the current tool catalog
+- prints each tool’s input schema
+- runs the assert-ready tool
+- runs the create-intent tool
+
 ## Why this exists
 
 This keeps the layering clean:
