@@ -18,6 +18,7 @@ The SDK docs must stay aligned with what is already shipped:
   - webhook subscription and replay
   - consent/auth troubleshooting
   - operator recovery and queue health
+  - external actions reference
 
 ## Doc Set Goals
 
