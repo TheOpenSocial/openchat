@@ -1,8 +1,6 @@
 import {
   protocolWebhookDeliverySchema,
   type ProtocolWebhookDelivery,
-} from "@opensocial/protocol-events";
-import {
   appRegistrationRequestSchema,
   protocolAppUsageSummarySchema,
   protocolChatMessageActionResultSchema,
@@ -143,17 +141,7 @@ export type ProtocolClient = {
     appToken: string,
     input?: ProtocolAppTokenRotateInput,
   ) => Promise<ProtocolAppTokenRotateResult>;
-  rotateToken: (
-    appId: string,
-    appToken: string,
-    input?: ProtocolAppTokenRotateInput,
-  ) => Promise<ProtocolAppTokenRotateResult>;
   revokeAppToken: (
-    appId: string,
-    appToken: string,
-    input?: ProtocolAppTokenRevokeInput,
-  ) => Promise<ProtocolAppTokenRevokeResult>;
-  revokeToken: (
     appId: string,
     appToken: string,
     input?: ProtocolAppTokenRevokeInput,
@@ -303,10 +291,10 @@ export type ProtocolAppClient = {
     grantId: string,
     input?: ProtocolGrantRevokeInput,
   ) => Promise<ProtocolGrantRecord>;
-  rotateToken: (
+  rotateAppToken: (
     input?: ProtocolAppTokenRotateInput,
   ) => Promise<ProtocolAppTokenRotateResult>;
-  revokeToken: (
+  revokeAppToken: (
     input?: ProtocolAppTokenRevokeInput,
   ) => Promise<ProtocolAppTokenRevokeResult>;
   listWebhookDeliveries: (
@@ -463,30 +451,61 @@ export type ProtocolCircleJoinInput = ProtocolCircleJoinAction;
 export type ProtocolCircleLeaveInput = ProtocolCircleLeaveAction;
 export type ProtocolWebhookDeliveryRunInput = ProtocolWebhookDeliveryRunRequest;
 
+type ProtocolResponseEnvelope = {
+  data?: unknown;
+};
+
+async function readProtocolResponseData<T>(
+  response: Response,
+  parser?: {
+    parse: (input: unknown) => T;
+  },
+): Promise<T> {
+  const payload = (await response.json()) as ProtocolResponseEnvelope | undefined;
+  const data = payload?.data ?? payload;
+  return parser ? parser.parse(data) : (data as T);
+}
+
+function buildProtocolAppTokenHeaders(appToken: string): HeadersInit {
+  return {
+    "x-protocol-app-token": appToken,
+  };
+}
+
+function buildProtocolJsonRequestInit(
+  appToken: string,
+  body: unknown,
+  method: RequestInit["method"] = "POST",
+): RequestInit {
+  return {
+    method,
+    headers: {
+      "content-type": "application/json",
+      "x-protocol-app-token": appToken,
+    },
+    body: JSON.stringify(body),
+  };
+}
+
 export function createProtocolClient(
   transport: ProtocolClientTransport,
 ): ProtocolClient {
   return {
     async getManifest() {
       const response = await transport.request("/protocol/manifest");
-      const payload = (await response.json()) as { data?: unknown } | undefined;
-      const manifest = payload?.data ?? payload;
-      return manifestSchema.parse(manifest);
+      return readProtocolResponseData(response, manifestSchema);
     },
     async getDiscovery() {
       const response = await transport.request("/protocol/discovery");
-      const payload = (await response.json()) as { data?: unknown } | undefined;
-      return protocolDiscoveryDocumentSchema.parse(payload?.data ?? payload);
+      return readProtocolResponseData(response, protocolDiscoveryDocumentSchema);
     },
     async listApps() {
       const response = await transport.request("/protocol/apps");
-      const payload = (await response.json()) as { data?: unknown } | undefined;
-      return (payload?.data ?? payload) as ProtocolAppRecord[];
+      return readProtocolResponseData<ProtocolAppRecord[]>(response);
     },
     async getApp(appId) {
       const response = await transport.request(`/protocol/apps/${appId}`);
-      const payload = (await response.json()) as { data?: unknown } | undefined;
-      return (payload?.data ?? payload) as ProtocolAppRecord;
+      return readProtocolResponseData<ProtocolAppRecord>(response);
     },
     async registerApp(input) {
       const requestPayload = buildProtocolAppRegistrationRequest(input);
@@ -497,9 +516,9 @@ export function createProtocolClient(
         },
         body: JSON.stringify(requestPayload),
       });
-      const payload = (await response.json()) as { data?: unknown } | undefined;
-      return protocolAppRegistrationResultSchema.parse(
-        payload?.data ?? payload,
+      return readProtocolResponseData(
+        response,
+        protocolAppRegistrationResultSchema,
       );
     },
     async listWebhooks(appId, appToken) {
@@ -511,8 +530,10 @@ export function createProtocolClient(
           },
         },
       );
-      const payload = (await response.json()) as { data?: unknown } | undefined;
-      return webhookSubscriptionSchema.array().parse(payload?.data ?? payload);
+      return readProtocolResponseData(
+        response,
+        webhookSubscriptionSchema.array(),
+      );
     },
     async createWebhook(appId, appToken, payload) {
       const requestPayload = webhookSubscriptionCreateSchema.parse(payload);
@@ -527,10 +548,7 @@ export function createProtocolClient(
           body: JSON.stringify(requestPayload),
         },
       );
-      const envelope = (await response.json()) as
-        | { data?: unknown }
-        | undefined;
-      return webhookSubscriptionSchema.parse(envelope?.data ?? envelope);
+      return readProtocolResponseData(response, webhookSubscriptionSchema);
     },
     async listGrants(appId, appToken) {
       const response = await transport.request(
@@ -541,10 +559,10 @@ export function createProtocolClient(
           },
         },
       );
-      const payload = (await response.json()) as { data?: unknown } | undefined;
-      return protocolAppScopeGrantSchema
-        .array()
-        .parse(payload?.data ?? payload);
+      return readProtocolResponseData(
+        response,
+        protocolAppScopeGrantSchema.array(),
+      );
     },
     async listConsentRequests(appId, appToken) {
       const response = await transport.request(
@@ -555,10 +573,10 @@ export function createProtocolClient(
           },
         },
       );
-      const payload = (await response.json()) as { data?: unknown } | undefined;
-      return protocolAppConsentRequestSchema
-        .array()
-        .parse(payload?.data ?? payload);
+      return readProtocolResponseData(
+        response,
+        protocolAppConsentRequestSchema.array(),
+      );
     },
     async createGrant(appId, appToken, payload) {
       const requestPayload = protocolAppScopeGrantCreateSchema.parse(payload);
@@ -573,10 +591,7 @@ export function createProtocolClient(
           body: JSON.stringify(requestPayload),
         },
       );
-      const envelope = (await response.json()) as
-        | { data?: unknown }
-        | undefined;
-      return protocolAppScopeGrantSchema.parse(envelope?.data ?? envelope);
+      return readProtocolResponseData(response, protocolAppScopeGrantSchema);
     },
     async revokeGrant(appId, appToken, grantId, input) {
       const response = await transport.request(
@@ -592,10 +607,7 @@ export function createProtocolClient(
           ),
         },
       );
-      const envelope = (await response.json()) as
-        | { data?: unknown }
-        | undefined;
-      return protocolAppScopeGrantSchema.parse(envelope?.data ?? envelope);
+      return readProtocolResponseData(response, protocolAppScopeGrantSchema);
     },
     async createConsentRequest(appId, appToken, payload) {
       const requestPayload =
@@ -611,10 +623,10 @@ export function createProtocolClient(
           body: JSON.stringify(requestPayload),
         },
       );
-      const envelope = (await response.json()) as
-        | { data?: unknown }
-        | undefined;
-      return protocolAppConsentRequestSchema.parse(envelope?.data ?? envelope);
+      return readProtocolResponseData(
+        response,
+        protocolAppConsentRequestSchema,
+      );
     },
     async approveConsentRequest(appId, appToken, requestId, payload) {
       const requestPayload =
@@ -630,10 +642,10 @@ export function createProtocolClient(
           body: JSON.stringify(requestPayload),
         },
       );
-      const envelope = (await response.json()) as
-        | { data?: unknown }
-        | undefined;
-      return protocolAppConsentRequestSchema.parse(envelope?.data ?? envelope);
+      return readProtocolResponseData(
+        response,
+        protocolAppConsentRequestSchema,
+      );
     },
     async rejectConsentRequest(appId, appToken, requestId, payload) {
       const requestPayload =
@@ -649,10 +661,10 @@ export function createProtocolClient(
           body: JSON.stringify(requestPayload),
         },
       );
-      const envelope = (await response.json()) as
-        | { data?: unknown }
-        | undefined;
-      return protocolAppConsentRequestSchema.parse(envelope?.data ?? envelope);
+      return readProtocolResponseData(
+        response,
+        protocolAppConsentRequestSchema,
+      );
     },
     async rotateAppToken(appId, appToken, input) {
       const response = await transport.request(
@@ -666,30 +678,9 @@ export function createProtocolClient(
           body: JSON.stringify(input ?? {}),
         },
       );
-      const envelope = (await response.json()) as
-        | { data?: unknown }
-        | undefined;
-      return protocolAppRegistrationResultSchema.parse(
-        envelope?.data ?? envelope,
-      );
-    },
-    async rotateToken(appId, appToken, input) {
-      const response = await transport.request(
-        `/protocol/apps/${appId}/token/rotate`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-protocol-app-token": appToken,
-          },
-          body: JSON.stringify(input ?? {}),
-        },
-      );
-      const envelope = (await response.json()) as
-        | { data?: unknown }
-        | undefined;
-      return protocolAppRegistrationResultSchema.parse(
-        envelope?.data ?? envelope,
+      return readProtocolResponseData(
+        response,
+        protocolAppRegistrationResultSchema,
       );
     },
     async revokeAppToken(appId, appToken, input) {
@@ -704,90 +695,53 @@ export function createProtocolClient(
           body: JSON.stringify(input ?? {}),
         },
       );
-      const envelope = (await response.json()) as
-        | { data?: unknown }
-        | undefined;
-      return (envelope?.data ?? envelope) as ProtocolAppTokenRevokeResult;
-    },
-    async revokeToken(appId, appToken, input) {
-      const response = await transport.request(
-        `/protocol/apps/${appId}/token/revoke`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-protocol-app-token": appToken,
-          },
-          body: JSON.stringify(input ?? {}),
-        },
-      );
-      const envelope = (await response.json()) as
-        | { data?: unknown }
-        | undefined;
-      return (envelope?.data ?? envelope) as ProtocolAppTokenRevokeResult;
+      return readProtocolResponseData<ProtocolAppTokenRevokeResult>(response);
     },
     async listWebhookDeliveries(appId, appToken, subscriptionId) {
       const response = await transport.request(
         `/protocol/apps/${appId}/webhooks/${subscriptionId}/deliveries`,
         {
-          headers: {
-            "x-protocol-app-token": appToken,
-          },
+          headers: buildProtocolAppTokenHeaders(appToken),
         },
       );
-      const payload = (await response.json()) as { data?: unknown } | undefined;
-      return protocolWebhookDeliverySchema
-        .array()
-        .parse(payload?.data ?? payload);
+      return readProtocolResponseData(
+        response,
+        protocolWebhookDeliverySchema.array(),
+      );
     },
     async listWebhookDeliveryAttempts(appId, appToken, deliveryId) {
       const response = await transport.request(
         `/protocol/apps/${appId}/deliveries/${deliveryId}/attempts`,
         {
-          headers: {
-            "x-protocol-app-token": appToken,
-          },
+          headers: buildProtocolAppTokenHeaders(appToken),
         },
       );
-      const payload = (await response.json()) as { data?: unknown } | undefined;
-      return protocolWebhookDeliveryAttemptSchema
-        .array()
-        .parse(payload?.data ?? payload);
+      return readProtocolResponseData(
+        response,
+        protocolWebhookDeliveryAttemptSchema.array(),
+      );
     },
     async replayWebhookDelivery(appId, appToken, deliveryId) {
       const response = await transport.request(
         `/protocol/apps/${appId}/deliveries/${deliveryId}/replay`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-protocol-app-token": appToken,
-          },
-          body: JSON.stringify({}),
-        },
+        buildProtocolJsonRequestInit(appToken, {}),
       );
-      const payload = (await response.json()) as { data?: unknown } | undefined;
-      return protocolWebhookDeliveryReplayResultSchema.parse(
-        payload?.data ?? payload,
+      return readProtocolResponseData(
+        response,
+        protocolWebhookDeliveryReplayResultSchema,
       );
     },
     async replayDeadLetteredDeliveries(appId, appToken, input) {
       const response = await transport.request(
         `/protocol/apps/${appId}/delivery-queue/replay-dead-lettered`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-protocol-app-token": appToken,
-          },
-          body: JSON.stringify(
-            protocolWebhookDeliveryRunRequestSchema.parse(input ?? {}),
-          ),
-        },
+        buildProtocolJsonRequestInit(
+          appToken,
+          protocolWebhookDeliveryRunRequestSchema.parse(input ?? {}),
+        ),
       );
-      const payload = (await response.json()) as { data?: unknown } | undefined;
-      return protocolWebhookDeliveryReplayBatchResultSchema.parse(
-        payload?.data ?? payload,
+      return readProtocolResponseData(
+        response,
+        protocolWebhookDeliveryReplayBatchResultSchema,
       );
     },
     async inspectDeliveryQueue(appId, appToken, cursor) {
@@ -795,246 +749,125 @@ export function createProtocolClient(
       const response = await transport.request(
         `/protocol/apps/${appId}/delivery-queue${search}`,
         {
-          headers: {
-            "x-protocol-app-token": appToken,
-          },
+          headers: buildProtocolAppTokenHeaders(appToken),
         },
       );
-      const envelope = (await response.json()) as
-        | { data?: unknown }
-        | undefined;
-      return (envelope?.data ?? envelope) as ProtocolDeliveryQueueInspection;
+      return readProtocolResponseData<ProtocolDeliveryQueueInspection>(
+        response,
+      );
     },
     async replayEvents(appId, appToken, cursor) {
       const search = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
       const response = await transport.request(
         `/protocol/apps/${appId}/events/replay${search}`,
         {
-          headers: {
-            "x-protocol-app-token": appToken,
-          },
+          headers: buildProtocolAppTokenHeaders(appToken),
         },
       );
-      const payload = (await response.json()) as { data?: unknown } | undefined;
-      return protocolEventEnvelopeSchema
-        .array()
-        .parse(payload?.data ?? payload);
+      return readProtocolResponseData(
+        response,
+        protocolEventEnvelopeSchema.array(),
+      );
     },
     async getReplayCursor(appId, appToken) {
       const response = await transport.request(
         `/protocol/apps/${appId}/events/cursor`,
         {
-          headers: {
-            "x-protocol-app-token": appToken,
-          },
+          headers: buildProtocolAppTokenHeaders(appToken),
         },
       );
-      const payload = (await response.json()) as { data?: unknown } | undefined;
-      return protocolReplayCursorSchema.parse(payload?.data ?? payload);
+      return readProtocolResponseData(response, protocolReplayCursorSchema);
     },
     async saveReplayCursor(appId, appToken, cursor) {
       const response = await transport.request(
         `/protocol/apps/${appId}/events/cursor`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-protocol-app-token": appToken,
-          },
-          body: JSON.stringify({ cursor }),
-        },
+        buildProtocolJsonRequestInit(appToken, { cursor }),
       );
-      const payload = (await response.json()) as { data?: unknown } | undefined;
-      return protocolReplayCursorSchema.parse(payload?.data ?? payload);
+      return readProtocolResponseData(response, protocolReplayCursorSchema);
     },
     async createIntent(appId, appToken, payload) {
       const requestPayload = protocolIntentCreateActionSchema.parse(payload);
       const response = await transport.request(
         `/protocol/apps/${appId}/actions/intents`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-protocol-app-token": appToken,
-          },
-          body: JSON.stringify(requestPayload),
-        },
+        buildProtocolJsonRequestInit(appToken, requestPayload),
       );
-      const envelope = (await response.json()) as
-        | { data?: unknown }
-        | undefined;
-      return protocolIntentActionResultSchema.parse(envelope?.data ?? envelope);
+      return readProtocolResponseData(response, protocolIntentActionResultSchema);
     },
     async updateIntent(appId, appToken, intentId, payload) {
       const requestPayload = protocolIntentUpdateActionSchema.parse(payload);
       const response = await transport.request(
         `/protocol/apps/${appId}/actions/intents/${intentId}`,
-        {
-          method: "PATCH",
-          headers: {
-            "content-type": "application/json",
-            "x-protocol-app-token": appToken,
-          },
-          body: JSON.stringify(requestPayload),
-        },
+        buildProtocolJsonRequestInit(appToken, requestPayload, "PATCH"),
       );
-      const envelope = (await response.json()) as
-        | { data?: unknown }
-        | undefined;
-      return protocolIntentActionResultSchema.parse(envelope?.data ?? envelope);
+      return readProtocolResponseData(response, protocolIntentActionResultSchema);
     },
     async cancelIntent(appId, appToken, intentId, payload) {
       const requestPayload = protocolIntentCancelActionSchema.parse(payload);
       const response = await transport.request(
         `/protocol/apps/${appId}/actions/intents/${intentId}/cancel`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-protocol-app-token": appToken,
-          },
-          body: JSON.stringify(requestPayload),
-        },
+        buildProtocolJsonRequestInit(appToken, requestPayload),
       );
-      const envelope = (await response.json()) as
-        | { data?: unknown }
-        | undefined;
-      return protocolIntentActionResultSchema.parse(envelope?.data ?? envelope);
+      return readProtocolResponseData(response, protocolIntentActionResultSchema);
     },
     async sendRequest(appId, appToken, payload) {
       const requestPayload =
         protocolIntentRequestSendActionSchema.parse(payload);
       const response = await transport.request(
         `/protocol/apps/${appId}/actions/requests`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-protocol-app-token": appToken,
-          },
-          body: JSON.stringify(requestPayload),
-        },
+        buildProtocolJsonRequestInit(appToken, requestPayload),
       );
-      const envelope = (await response.json()) as
-        | { data?: unknown }
-        | undefined;
-      return protocolRequestActionResultSchema.parse(
-        envelope?.data ?? envelope,
-      );
+      return readProtocolResponseData(response, protocolRequestActionResultSchema);
     },
     async acceptRequest(appId, appToken, requestId, payload) {
       const requestPayload = protocolRequestDecisionActionSchema.parse(payload);
       const response = await transport.request(
         `/protocol/apps/${appId}/actions/requests/${requestId}/accept`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-protocol-app-token": appToken,
-          },
-          body: JSON.stringify(requestPayload),
-        },
+        buildProtocolJsonRequestInit(appToken, requestPayload),
       );
-      const envelope = (await response.json()) as
-        | { data?: unknown }
-        | undefined;
-      return protocolRequestActionResultSchema.parse(
-        envelope?.data ?? envelope,
-      );
+      return readProtocolResponseData(response, protocolRequestActionResultSchema);
     },
     async rejectRequest(appId, appToken, requestId, payload) {
       const requestPayload = protocolRequestDecisionActionSchema.parse(payload);
       const response = await transport.request(
         `/protocol/apps/${appId}/actions/requests/${requestId}/reject`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-protocol-app-token": appToken,
-          },
-          body: JSON.stringify(requestPayload),
-        },
+        buildProtocolJsonRequestInit(appToken, requestPayload),
       );
-      const envelope = (await response.json()) as
-        | { data?: unknown }
-        | undefined;
-      return protocolRequestActionResultSchema.parse(
-        envelope?.data ?? envelope,
-      );
+      return readProtocolResponseData(response, protocolRequestActionResultSchema);
     },
     async sendChatMessage(appId, appToken, chatId, payload) {
       const requestPayload = protocolChatSendMessageActionSchema.parse(payload);
       const response = await transport.request(
         `/protocol/apps/${appId}/actions/chats/${chatId}/messages`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-protocol-app-token": appToken,
-          },
-          body: JSON.stringify(requestPayload),
-        },
+        buildProtocolJsonRequestInit(appToken, requestPayload),
       );
-      const envelope = (await response.json()) as
-        | { data?: unknown }
-        | undefined;
-      return protocolChatMessageActionResultSchema.parse(
-        envelope?.data ?? envelope,
+      return readProtocolResponseData(
+        response,
+        protocolChatMessageActionResultSchema,
       );
     },
     async createCircle(appId, appToken, payload) {
       const requestPayload = protocolCircleCreateActionSchema.parse(payload);
       const response = await transport.request(
         `/protocol/apps/${appId}/actions/circles`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-protocol-app-token": appToken,
-          },
-          body: JSON.stringify(requestPayload),
-        },
+        buildProtocolJsonRequestInit(appToken, requestPayload),
       );
-      const envelope = (await response.json()) as
-        | { data?: unknown }
-        | undefined;
-      return protocolCircleActionResultSchema.parse(envelope?.data ?? envelope);
+      return readProtocolResponseData(response, protocolCircleActionResultSchema);
     },
     async joinCircle(appId, appToken, circleId, payload) {
       const requestPayload = protocolCircleJoinActionSchema.parse(payload);
       const response = await transport.request(
         `/protocol/apps/${appId}/actions/circles/${circleId}/join`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-protocol-app-token": appToken,
-          },
-          body: JSON.stringify(requestPayload),
-        },
+        buildProtocolJsonRequestInit(appToken, requestPayload),
       );
-      const envelope = (await response.json()) as
-        | { data?: unknown }
-        | undefined;
-      return protocolCircleActionResultSchema.parse(envelope?.data ?? envelope);
+      return readProtocolResponseData(response, protocolCircleActionResultSchema);
     },
     async leaveCircle(appId, appToken, circleId, payload) {
       const requestPayload = protocolCircleLeaveActionSchema.parse(payload);
       const response = await transport.request(
         `/protocol/apps/${appId}/actions/circles/${circleId}/leave`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-protocol-app-token": appToken,
-          },
-          body: JSON.stringify(requestPayload),
-        },
+        buildProtocolJsonRequestInit(appToken, requestPayload),
       );
-      const envelope = (await response.json()) as
-        | { data?: unknown }
-        | undefined;
-      return protocolCircleActionResultSchema.parse(envelope?.data ?? envelope);
+      return readProtocolResponseData(response, protocolCircleActionResultSchema);
     },
     async runWebhookDeliveryQueue(appId, appToken, input) {
       const requestPayload = protocolWebhookDeliveryRunRequestSchema.parse(
@@ -1042,20 +875,11 @@ export function createProtocolClient(
       );
       const response = await transport.request(
         `/protocol/apps/${appId}/delivery-queue/run`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-protocol-app-token": appToken,
-          },
-          body: JSON.stringify(requestPayload),
-        },
+        buildProtocolJsonRequestInit(appToken, requestPayload),
       );
-      const envelope = (await response.json()) as
-        | { data?: unknown }
-        | undefined;
-      return protocolWebhookDeliveryRunResultSchema.parse(
-        envelope?.data ?? envelope,
+      return readProtocolResponseData(
+        response,
+        protocolWebhookDeliveryRunResultSchema,
       );
     },
     async dispatchWebhookDeliveryQueue(appId, appToken, input) {
@@ -1064,35 +888,21 @@ export function createProtocolClient(
       );
       const response = await transport.request(
         `/protocol/apps/${appId}/delivery-queue/dispatch`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-protocol-app-token": appToken,
-          },
-          body: JSON.stringify(requestPayload),
-        },
+        buildProtocolJsonRequestInit(appToken, requestPayload),
       );
-      const envelope = (await response.json()) as
-        | { data?: unknown }
-        | undefined;
-      return protocolWebhookDeliveryDispatchResultSchema.parse(
-        envelope?.data ?? envelope,
+      return readProtocolResponseData(
+        response,
+        protocolWebhookDeliveryDispatchResultSchema,
       );
     },
     async getAppUsageSummary(appId, appToken) {
       const response = await transport.request(
         `/protocol/apps/${appId}/usage`,
         {
-          headers: {
-            "x-protocol-app-token": appToken,
-          },
+          headers: buildProtocolAppTokenHeaders(appToken),
         },
       );
-      const envelope = (await response.json()) as
-        | { data?: unknown }
-        | undefined;
-      return protocolAppUsageSummarySchema.parse(envelope?.data ?? envelope);
+      return readProtocolResponseData(response, protocolAppUsageSummarySchema);
     },
     buildAppRegistrationRequest(input) {
       return buildProtocolAppRegistrationRequest(input);
@@ -1163,10 +973,10 @@ export function bindProtocolAppClient(
       ),
     revokeGrant: (grantId, input) =>
       client.revokeGrant(session.appId, session.appToken, grantId, input),
-    rotateToken: (input) =>
-      client.rotateToken(session.appId, session.appToken, input),
-    revokeToken: (input) =>
-      client.revokeToken(session.appId, session.appToken, input),
+    rotateAppToken: (input) =>
+      client.rotateAppToken(session.appId, session.appToken, input),
+    revokeAppToken: (input) =>
+      client.revokeAppToken(session.appId, session.appToken, input),
     listWebhookDeliveries: (subscriptionId) =>
       client.listWebhookDeliveries(
         session.appId,

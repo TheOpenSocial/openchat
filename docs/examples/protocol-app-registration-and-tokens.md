@@ -50,9 +50,9 @@ The simplest path is the protocol client plus the partner onboarding example.
 
 ```ts
 import { createProtocolClientFromBaseUrl } from "@opensocial/protocol-client";
-import { buildProtocolManifest } from "@opensocial/protocol-server";
 
 const client = createProtocolClientFromBaseUrl("https://api.example.com/api");
+const protocolManifest = await client.getManifest();
 
 const registration = await client.registerApp({
   registration: {
@@ -65,16 +65,18 @@ const registration = await client.registerApp({
     status: "draft",
     ownerUserId: "00000000-0000-4000-8000-000000000001",
     redirectUris: ["https://partner.example.com/callback"],
-    capabilities: ["app.read", "intent.write", "request.write"],
+    capabilities: protocolManifest.capabilities,
     metadata: {
       environment: "sandbox",
     },
   },
-  manifest: buildProtocolManifest({
+  manifest: {
+    ...protocolManifest,
     appId: "partner.example",
+    manifestId: "partner.example.manifest",
     name: "Partner Example",
     homepageUrl: "https://partner.example.com",
-  }),
+  },
   requestedScopes: ["protocol.read", "actions.invoke"],
   requestedCapabilities: ["app.read", "intent.write", "request.write"],
 });

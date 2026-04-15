@@ -1,10 +1,10 @@
 # @opensocial/protocol-client
 
-Thin typed client for the current OpenSocial protocol surface.
+Typed transport client for the OpenSocial protocol surface.
 
 ## What is shipped
 
-This package is a transport-backed wrapper around the protocol API. It currently covers:
+This package wraps the protocol API and covers:
 
 - protocol manifest and discovery reads
 - app registration
@@ -14,7 +14,7 @@ This package is a transport-backed wrapper around the protocol API. It currently
 - protocol event replay
 - core coordination actions for intent lifecycle, requests, chats, and circles
 
-It depends on `@opensocial/protocol-types` and `@opensocial/protocol-events` for schemas and shared types.
+It depends on `@opensocial/protocol-types` for shared schemas and `@opensocial/protocol-events` for the event catalog and replay helpers.
 
 ## Basic usage
 
@@ -24,12 +24,9 @@ import {
   createBoundProtocolAppClientFromBaseUrl,
   createProtocolClientFromBaseUrl,
 } from "@opensocial/protocol-client";
-import {
-  buildProtocolManifest,
-} from "@opensocial/protocol-server";
 
 const client = createProtocolClientFromBaseUrl("https://api.example.com/api");
-const manifest = await client.getManifest();
+const protocolManifest = await client.getManifest();
 const appId = "partner.example";
 const registration = await client.registerApp({
   registration: {
@@ -42,14 +39,16 @@ const registration = await client.registerApp({
     status: "draft",
     ownerUserId: "00000000-0000-4000-8000-000000000001",
     redirectUris: [],
-    capabilities: manifest.capabilities,
+    capabilities: protocolManifest.capabilities,
     metadata: {},
   },
-  manifest: buildProtocolManifest({
+  manifest: {
+    ...protocolManifest,
     appId,
+    manifestId: "partner.example.manifest",
     name: "Partner App",
     homepageUrl: "https://partner.example.com",
-  }),
+  },
   requestedScopes: ["protocol.read", "actions.invoke"],
   requestedCapabilities: ["app.read", "intent.write"],
 });
@@ -77,7 +76,7 @@ const sameApp = createBoundProtocolAppClientFromBaseUrl(
 
 ## Troubleshooting
 
-If a write action is denied, inspect the app usage summary before assuming the transport is broken:
+If a write action is denied, inspect the app usage summary first:
 
 ```ts
 const usage = await app.getAppUsageSummary();
@@ -86,7 +85,7 @@ console.log(usage.tokenAudit);
 console.log(usage.grantAudit);
 ```
 
-Use [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-consent-and-auth-troubleshooting.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-consent-and-auth-troubleshooting.md) for the current consent/grant debugging flow.
+For consent and grant debugging, see [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-consent-and-auth-troubleshooting.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-consent-and-auth-troubleshooting.md).
 
 ## Exclusions
 
@@ -98,15 +97,13 @@ This package does not provide:
 - auth/session management for end users
 - any social-network primitives outside the protocol contract
 
-Use [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-partner-quickstart.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-partner-quickstart.md) for an end-to-end walkthrough using the shipped example scripts.
+Related docs:
 
-Use [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-sdk-index.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-sdk-index.md) for the canonical SDK docs entry point.
-
-Use [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-manifest-and-discovery.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-manifest-and-discovery.md) for the safest bootstrap path before registration and writes.
-
-Use [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-app-registration-and-tokens.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-app-registration-and-tokens.md) for the dedicated app-registration, token-issuance, rotation, and revocation flow.
-
-Use [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-external-actions-reference.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-external-actions-reference.md) for the current writable action contract.
+- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-sdk-index.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-sdk-index.md)
+- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-manifest-and-discovery.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-manifest-and-discovery.md)
+- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-app-registration-and-tokens.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-app-registration-and-tokens.md)
+- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-external-actions-reference.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-external-actions-reference.md)
+- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-partner-quickstart.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-partner-quickstart.md)
 
 It also does not expose generic feed/post/follow primitives. The protocol intentionally stays centered on coordination, messaging, and agentic actions.
 
