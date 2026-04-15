@@ -20,7 +20,7 @@ import {
   buildProtocolWebhookDelivery,
   protocolEventCatalog,
   protocolWebhookDeliverySchema,
-} from "@opensocial/protocol-events";
+} from "@opensocial/protocol-types";
 import {
   appRegistrationRequestSchema,
   appRegistrationSchema,

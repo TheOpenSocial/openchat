@@ -486,9 +486,6 @@ importers:
 
   packages/protocol-client:
     dependencies:
-      '@opensocial/protocol-events':
-        specifier: workspace:*
-        version: link:../protocol-events
       '@opensocial/protocol-types':
         specifier: workspace:*
         version: link:../protocol-types

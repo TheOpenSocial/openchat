@@ -4,71 +4,20 @@ import {
   createBoundProtocolAppClientFromBaseUrl,
   loadProtocolAppOperationalSnapshot,
 } from "@opensocial/protocol-client";
-
-function getArg(flag, fallback = undefined) {
-  const exact = `${flag}=`;
-  for (const value of process.argv.slice(2)) {
-    if (value.startsWith(exact)) {
-      return value.slice(exact.length);
-    }
-  }
-  return fallback;
-}
+import {
+  logSection,
+  resolveIntegerArg,
+  resolveOptionalStringArg,
+  resolveRequiredStringArg,
+  resolveProtocolBaseUrl,
+} from "./protocol-example-args.mjs";
 
 function resolveAction() {
-  return getArg("--action", "inspect");
-}
-
-function resolveBaseUrl() {
-  const value =
-    getArg("--base-url") ||
-    process.env.PROTOCOL_BASE_URL ||
-    process.env.PLAYGROUND_BASE_URL ||
-    process.env.SMOKE_BASE_URL ||
-    process.env.STAGING_API_BASE_URL ||
-    process.env.API_BASE_URL;
-  if (!value) {
-    throw new Error(
-      "Missing base URL. Set --base-url or PROTOCOL_BASE_URL / PLAYGROUND_BASE_URL / SMOKE_BASE_URL / STAGING_API_BASE_URL / API_BASE_URL.",
-    );
-  }
-  return value.replace(/\/+$/, "");
-}
-
-function resolveAppId() {
-  const appId = getArg("--app-id") || process.env.PROTOCOL_APP_ID;
-  if (!appId) {
-    throw new Error("Missing app id. Set --app-id or PROTOCOL_APP_ID.");
-  }
-  return appId;
-}
-
-function resolveAppToken() {
-  const appToken = getArg("--app-token") || process.env.PROTOCOL_APP_TOKEN;
-  if (!appToken) {
-    throw new Error(
-      "Missing app token. Set --app-token or PROTOCOL_APP_TOKEN.",
-    );
-  }
-  return appToken;
-}
-
-function resolveDeliveryId() {
-  return getArg("--delivery-id");
-}
-
-function resolveLimit() {
-  const raw = getArg("--limit", "25");
-  const value = Number(raw);
-  if (!Number.isInteger(value) || value <= 0) {
-    throw new Error(`Invalid --limit value: ${raw}`);
-  }
-  return value;
-}
-
-function logSection(title, value) {
-  console.log(`\n[protocol-ops] ${title}`);
-  console.log(JSON.stringify(value, null, 2));
+  return resolveOptionalStringArg({
+    flag: "--action",
+    envName: "PROTOCOL_ACTION",
+    fallback: "inspect",
+  });
 }
 
 function summarizeSnapshot(snapshot) {
@@ -96,45 +45,68 @@ function summarizeSnapshot(snapshot) {
 
 async function main() {
   const action = resolveAction();
-  const app = createBoundProtocolAppClientFromBaseUrl(resolveBaseUrl(), {
-    appId: resolveAppId(),
-    appToken: resolveAppToken(),
+  const app = createBoundProtocolAppClientFromBaseUrl(resolveProtocolBaseUrl(), {
+    appId: resolveRequiredStringArg({
+      flag: "--app-id",
+      envName: "PROTOCOL_APP_ID",
+      errorMessage: "Missing app id. Set --app-id or PROTOCOL_APP_ID.",
+    }),
+    appToken: resolveRequiredStringArg({
+      flag: "--app-token",
+      envName: "PROTOCOL_APP_TOKEN",
+      errorMessage: "Missing app token. Set --app-token or PROTOCOL_APP_TOKEN.",
+    }),
   });
 
   if (action === "inspect") {
     const snapshot = await loadProtocolAppOperationalSnapshot(app);
-    logSection("operational-summary", summarizeSnapshot(snapshot));
-    logSection("webhooks", snapshot.webhooks);
-    logSection("grants", snapshot.grants);
-    logSection("consent-requests", snapshot.consentRequests);
+    logSection("protocol-ops", "operational-summary", summarizeSnapshot(snapshot));
+    logSection("protocol-ops", "webhooks", snapshot.webhooks);
+    logSection("protocol-ops", "grants", snapshot.grants);
+    logSection("protocol-ops", "consent-requests", snapshot.consentRequests);
     return;
   }
 
   if (action === "replay-delivery") {
-    const deliveryId = resolveDeliveryId();
+    const deliveryId = resolveOptionalStringArg({
+      flag: "--delivery-id",
+      envName: "PROTOCOL_DELIVERY_ID",
+    });
     if (!deliveryId) {
       throw new Error(
         "Missing delivery id. Set --delivery-id when action=replay-delivery.",
       );
     }
     const result = await app.replayWebhookDelivery(deliveryId);
-    logSection("replay-delivery-result", result);
+    logSection("protocol-ops", "replay-delivery-result", result);
     return;
   }
 
   if (action === "replay-dead-letters") {
     const result = await app.replayDeadLetteredDeliveries({
-      limit: resolveLimit(),
+      limit: resolveIntegerArg({
+        flag: "--limit",
+        envName: "PROTOCOL_LIMIT",
+        fallback: "25",
+        minimum: 1,
+        errorMessage: "Invalid --limit value.",
+      }),
     });
-    logSection("replay-dead-letters-result", result);
+    logSection("protocol-ops", "replay-dead-letters-result", result);
     return;
   }
 
   if (action === "dispatch-queue") {
     const result = await app.dispatchWebhookDeliveryQueue({
-      limit: resolveLimit(),
+      limit: resolveIntegerArg({
+        flag: "--limit",
+        envName: "PROTOCOL_LIMIT",
+        fallback: "25",
+        minimum: 1,
+        errorMessage: "Invalid --limit value.",
+      }),
     });
-    logSection("dispatch-queue-result", result);
+    logSection("protocol-ops", "dispatch-queue-result", result);
     return;
   }
 

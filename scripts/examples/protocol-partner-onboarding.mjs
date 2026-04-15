@@ -4,6 +4,11 @@ import {
   bindProtocolAppClient,
   createProtocolClientFromBaseUrl,
 } from "@opensocial/protocol-client";
+import {
+  getArg,
+  logSection,
+  resolveProtocolBaseUrl,
+} from "./protocol-example-args.mjs";
 
 const DEFAULT_SCOPES = [
   "protocol.read",
@@ -37,32 +42,6 @@ const DEFAULT_WEBHOOK_RESOURCES = [
   "manifest",
 ];
 
-function getArg(flag, fallback = undefined) {
-  const exact = `${flag}=`;
-  for (const value of process.argv.slice(2)) {
-    if (value.startsWith(exact)) {
-      return value.slice(exact.length);
-    }
-  }
-  return fallback;
-}
-
-function resolveBaseUrl() {
-  const value =
-    getArg("--base-url") ||
-    process.env.PROTOCOL_BASE_URL ||
-    process.env.PLAYGROUND_BASE_URL ||
-    process.env.SMOKE_BASE_URL ||
-    process.env.STAGING_API_BASE_URL ||
-    process.env.API_BASE_URL;
-  if (!value) {
-    throw new Error(
-      "Missing base URL. Set --base-url or PROTOCOL_BASE_URL / PLAYGROUND_BASE_URL / SMOKE_BASE_URL / STAGING_API_BASE_URL / API_BASE_URL.",
-    );
-  }
-  return value.replace(/\/+$/, "");
-}
-
 function resolveAppId() {
   const provided = getArg("--app-id") || process.env.PROTOCOL_APP_ID;
   if (provided) {
@@ -86,11 +65,6 @@ function resolveWebhookUrl() {
 
 function createClient(baseUrl) {
   return createProtocolClientFromBaseUrl(baseUrl);
-}
-
-function logSection(title, value) {
-  console.log(`\n[protocol-example] ${title}`);
-  console.log(JSON.stringify(value, null, 2));
 }
 
 function buildCapabilities() {
@@ -155,7 +129,7 @@ function buildRegistrationRequest({ appId, appName, ownerUserId, webhookUrl }) {
 }
 
 async function main() {
-  const baseUrl = resolveBaseUrl();
+  const baseUrl = resolveProtocolBaseUrl();
   const appId = resolveAppId();
   const appName = resolveAppName();
   const ownerUserId = resolveOwnerUserId();
@@ -171,12 +145,12 @@ async function main() {
     webhookUrl,
   });
 
-  logSection("manifest", manifest);
-  logSection("discovery", discovery);
-  logSection("registration-request", registrationRequest);
+  logSection("protocol-example", "manifest", manifest);
+  logSection("protocol-example", "discovery", discovery);
+  logSection("protocol-example", "registration-request", registrationRequest);
 
   const registered = await client.registerApp(registrationRequest);
-  logSection("registered-app", registered);
+  logSection("protocol-example", "registered-app", registered);
   const app = bindProtocolAppClient(client, {
     appId,
     appToken: registered.credentials.appToken,
@@ -193,7 +167,7 @@ async function main() {
         generatedBy: "scripts/examples/protocol-partner-onboarding.mjs",
       },
     });
-    logSection("webhook-subscription", webhook);
+    logSection("protocol-example", "webhook-subscription", webhook);
   }
 
   if (ownerUserId) {
@@ -208,16 +182,16 @@ async function main() {
         generatedBy: "scripts/examples/protocol-partner-onboarding.mjs",
       },
     });
-    logSection("consent-request", consentRequest);
+    logSection("protocol-example", "consent-request", consentRequest);
   }
 
   const grants = await app.listGrants();
   const consentRequests = await app.listConsentRequests();
   const usage = await app.getAppUsageSummary();
 
-  logSection("grants", grants);
-  logSection("consent-requests", consentRequests);
-  logSection("usage-summary", usage);
+  logSection("protocol-example", "grants", grants);
+  logSection("protocol-example", "consent-requests", consentRequests);
+  logSection("protocol-example", "usage-summary", usage);
 
   console.log(
     `\n[protocol-example] partner onboarding complete for appId=${appId}`,

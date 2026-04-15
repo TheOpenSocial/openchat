@@ -6,7 +6,8 @@ Shared event schemas and helpers for the OpenSocial protocol.
 
 This package currently provides:
 
-- protocol webhook delivery payload schemas
+- the shared protocol event catalog and helpers
+- compatibility re-exports for the shared webhook subscription and delivery schemas
 - event-envelope helpers used by replay and delivery flows
 - the shared event catalog consumed by the protocol client, backend, and partner examples
 

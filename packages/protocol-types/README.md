@@ -7,6 +7,8 @@ Shared schemas and types for the OpenSocial protocol surface.
 This package is the contract layer for the current protocol. It currently includes:
 
 - app registration, token, grant, and consent-request schemas
+- app token rotate/revoke and delivery-queue inspection schemas
+- app operational snapshot schema used by the client and agent wrappers
 - protocol manifest and discovery document schemas
 - event replay cursor and event envelope schemas
 - webhook subscription, delivery, and delivery-attempt schemas

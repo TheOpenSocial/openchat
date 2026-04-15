@@ -3,6 +3,7 @@ import {
   manifestSchema,
   protocolDiscoveryDocumentSchema,
   protocolIds,
+  type ProtocolJsonObject,
   type CapabilityMatrix,
   type ProtocolDiscoveryDocument,
   type ProtocolManifest,
@@ -19,7 +20,7 @@ export type ProtocolManifestBuilderInput = {
   iconUrl?: string;
   categories?: string[];
   capabilities?: Partial<CapabilityMatrix>;
-  metadata?: Record<string, unknown>;
+  metadata?: ProtocolJsonObject;
 };
 
 const unsupportedPrimitivesPolicy = {

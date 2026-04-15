@@ -1,6 +1,6 @@
 # Partner-Facing Protocol SDK Docs Plan
 
-This document defines the documentation set we should publish for the partner-facing protocol SDK. The goal is to make third-party integration straightforward without widening the protocol beyond the current product direction.
+This document defines the docs we should publish for the partner-facing protocol SDK. The goal is to make third-party integration straightforward without widening the protocol.
 
 The SDK docs must stay aligned with what is already shipped:
 
@@ -10,10 +10,10 @@ The SDK docs must stay aligned with what is already shipped:
 - Replay cursors, delivery records, and dead-letter recovery exist.
 - Scoped grants and consent requests are separate resources.
 - External actions already exist for intents, requests, chats, and circles.
-- Unsupported primitives remain unsupported, especially posts and follows.
-- The protocol backend now explicitly advertises its unsupported-primitives policy in the manifest metadata so third parties do not infer support from omission.
-- Usage summaries now expose structured protocol auth-failure diagnostics so partners can distinguish missing tokens, missing scopes, missing capabilities, and missing delegated grants.
-- Partner-ready guides now exist for:
+- Unsupported primitives remain unsupported.
+- The manifest explicitly advertises the unsupported-primitives policy.
+- Usage summaries expose auth-failure diagnostics for missing tokens, scopes, capabilities, and delegated grants.
+- Shipped guides now cover:
   - SDK docs index
   - protocol overview and exclusions
   - manifest and discovery bootstrap
@@ -249,7 +249,7 @@ Each example should be small and scenario-based.
 
 ## Source of Truth
 
-The docs should reference the shipped protocol surfaces rather than inventing new ones.
+Reference shipped protocol surfaces rather than inventing new ones.
 
 Relevant current surfaces:
 
@@ -267,15 +267,15 @@ The docs should not describe posts, follows, feeds, or any other generic social 
 1. Publish the protocol overview and exclusions.
 2. Publish app registration and auth/scope guides.
 3. Publish webhook subscription and replay/recovery guides.
-4. Keep operator recovery and dead-letter handling docs current as queue semantics evolve.
+4. Keep operator recovery and dead-letter docs current as queue semantics evolve.
 5. Keep the external actions reference aligned with the shipped contract.
-6. Keep package READMEs and example snippets aligned with the real helpers.
-7. Keep the shipped `@opensocial/protocol-agent` wrapper thin and aligned to stable protocol actions instead of letting it become a second backend surface.
+6. Keep package READMEs and examples aligned with the real helpers.
+7. Keep `@opensocial/protocol-agent` aligned to stable protocol actions.
 
 ## Acceptance Criteria
 
-- A partner can read the docs and understand how to register an app, obtain and use an app token, subscribe to events, and recover missed deliveries.
+- A partner can register an app, use an app token, subscribe to events, and recover missed deliveries.
 - A partner can understand the difference between app auth and delegated consent.
-- A partner can tell exactly which primitives are supported and which are intentionally excluded.
-- The docs stay aligned with the current protocol backend surface and do not promise unsupported features.
-- The docs remain focused on coordination and messaging, not generic social networking.
+- The docs clearly state which primitives are supported and which are excluded.
+- The docs stay aligned with the protocol backend and do not promise unsupported features.
+- The docs stay focused on coordination and messaging, not generic social networking.

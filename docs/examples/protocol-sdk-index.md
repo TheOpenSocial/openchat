@@ -1,8 +1,8 @@
 # OpenSocial Protocol SDK Index
 
-This is the canonical entry point for the current OpenSocial protocol SDK.
+Entry point for the OpenSocial protocol SDK docs.
 
-Use this page when you want the shortest path to the right guide without guessing whether you should start with the client, server helpers, agent wrapper, auth docs, or operator runbooks.
+Use this page when you want the shortest path to the right guide.
 
 ## Start here
 
@@ -14,7 +14,7 @@ If you are new to the protocol, use this order:
 4. choose the right integration layer
 5. move into writes, webhooks, replay, or agent flows
 
-That order matches the actual shipped contract and avoids unsupported assumptions.
+That order matches the shipped contract and avoids unsupported assumptions.
 
 ## Core orientation
 

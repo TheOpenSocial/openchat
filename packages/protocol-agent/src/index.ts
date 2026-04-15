@@ -13,6 +13,8 @@ import {
   type ProtocolRequestActionResult,
   type ProtocolRequestDecisionInput,
   type ProtocolRequestSendInput,
+  type ProtocolJsonObject,
+  type ProtocolJsonValue,
   createBoundProtocolAppClientFromBaseUrl,
   loadProtocolAppOperationalSnapshot,
 } from "@opensocial/protocol-client";
@@ -20,7 +22,7 @@ import {
 export type ProtocolAgentSession = ProtocolAppSession & {
   actorUserId: string;
   agentId?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: ProtocolJsonObject;
 };
 
 export type ProtocolAgentReadinessIssueCode =
@@ -61,59 +63,59 @@ export type ProtocolAgentClient = {
   ) => Promise<ProtocolAgentReadinessReport>;
   createIntent: (
     input: Omit<ProtocolIntentCreateInput, "actorUserId" | "metadata"> & {
-      metadata?: Record<string, unknown>;
+      metadata?: ProtocolJsonObject;
     },
   ) => Promise<ProtocolIntentActionResult>;
   updateIntent: (
     intentId: string,
     input: Omit<ProtocolIntentUpdateInput, "actorUserId" | "metadata"> & {
-      metadata?: Record<string, unknown>;
+      metadata?: ProtocolJsonObject;
     },
   ) => Promise<ProtocolIntentActionResult>;
   cancelIntent: (
     intentId: string,
     input?: Omit<ProtocolIntentCancelInput, "actorUserId" | "metadata"> & {
-      metadata?: Record<string, unknown>;
+      metadata?: ProtocolJsonObject;
     },
   ) => Promise<ProtocolIntentActionResult>;
   sendRequest: (
     input: Omit<ProtocolRequestSendInput, "actorUserId" | "metadata"> & {
-      metadata?: Record<string, unknown>;
+      metadata?: ProtocolJsonObject;
     },
   ) => Promise<ProtocolRequestActionResult>;
   acceptRequest: (
     requestId: string,
     input?: Omit<ProtocolRequestDecisionInput, "actorUserId" | "metadata"> & {
-      metadata?: Record<string, unknown>;
+      metadata?: ProtocolJsonObject;
     },
   ) => Promise<ProtocolRequestActionResult>;
   rejectRequest: (
     requestId: string,
     input?: Omit<ProtocolRequestDecisionInput, "actorUserId" | "metadata"> & {
-      metadata?: Record<string, unknown>;
+      metadata?: ProtocolJsonObject;
     },
   ) => Promise<ProtocolRequestActionResult>;
   sendChatMessage: (
     chatId: string,
     input: Omit<ProtocolChatSendMessageInput, "actorUserId" | "metadata"> & {
-      metadata?: Record<string, unknown>;
+      metadata?: ProtocolJsonObject;
     },
   ) => ReturnType<ProtocolAppClient["sendChatMessage"]>;
   createCircle: (
     input: Omit<ProtocolCircleCreateInput, "actorUserId" | "metadata"> & {
-      metadata?: Record<string, unknown>;
+      metadata?: ProtocolJsonObject;
     },
   ) => ReturnType<ProtocolAppClient["createCircle"]>;
   joinCircle: (
     circleId: string,
     input: Omit<ProtocolCircleJoinInput, "actorUserId" | "metadata"> & {
-      metadata?: Record<string, unknown>;
+      metadata?: ProtocolJsonObject;
     },
   ) => ReturnType<ProtocolAppClient["joinCircle"]>;
   leaveCircle: (
     circleId: string,
     input: Omit<ProtocolCircleLeaveInput, "actorUserId" | "metadata"> & {
-      metadata?: Record<string, unknown>;
+      metadata?: ProtocolJsonObject;
     },
   ) => ReturnType<ProtocolAppClient["leaveCircle"]>;
 };
@@ -121,8 +123,8 @@ export type ProtocolAgentClient = {
 export type ProtocolAgentToolDefinition = {
   name: string;
   description: string;
-  inputSchema: Record<string, unknown>;
-  invoke: (input: unknown) => Promise<unknown>;
+  inputSchema: ProtocolJsonObject;
+  invoke: (input?: ProtocolJsonObject) => Promise<ProtocolJsonValue>;
 };
 
 export type ProtocolAgentToolMap = Record<string, ProtocolAgentToolDefinition>;
@@ -155,15 +157,15 @@ const readinessOptionsSchema = {
     failOnQueuedBacklog: { type: "boolean" },
     queuedBacklogThreshold: { type: "integer", minimum: 0 },
   },
-} satisfies Record<string, unknown>;
+} satisfies ProtocolJsonObject;
 
 const metadataSchema = {
   type: "object",
   additionalProperties: true,
-} satisfies Record<string, unknown>;
+} satisfies ProtocolJsonObject;
 
-function readProtocolAgentToolInput<T extends Record<string, unknown>>(
-  input: unknown,
+function readProtocolAgentToolInput<T extends ProtocolJsonObject>(
+  input?: ProtocolJsonObject,
 ): T {
   if (input == null) {
     return {} as T;
@@ -176,8 +178,8 @@ function readProtocolAgentToolInput<T extends Record<string, unknown>>(
 
 function mergeMetadata(
   session: ProtocolAgentSession,
-  metadata?: Record<string, unknown>,
-): Record<string, unknown> {
+  metadata?: ProtocolJsonObject,
+): ProtocolJsonObject {
   return {
     ...(session.metadata ?? {}),
     ...(session.agentId ? { agentId: session.agentId } : {}),
@@ -396,7 +398,7 @@ export function createProtocolAgentToolset(
         agent.createIntent(
           readProtocolAgentToolInput<
             Omit<ProtocolIntentCreateInput, "actorUserId" | "metadata"> & {
-              metadata?: Record<string, unknown>;
+              metadata?: ProtocolJsonObject;
             }
           >(input),
         ),
@@ -419,7 +421,7 @@ export function createProtocolAgentToolset(
         const payload = readProtocolAgentToolInput<{
           intentId: string;
           rawText: string;
-          metadata?: Record<string, unknown>;
+          metadata?: ProtocolJsonObject;
         }>(input);
         return agent.updateIntent(payload.intentId, {
           rawText: payload.rawText,
@@ -445,7 +447,7 @@ export function createProtocolAgentToolset(
         const payload = readProtocolAgentToolInput<{
           intentId: string;
           agentThreadId?: string;
-          metadata?: Record<string, unknown>;
+          metadata?: ProtocolJsonObject;
         }>(input);
         return agent.cancelIntent(payload.intentId, {
           agentThreadId: payload.agentThreadId,
@@ -473,7 +475,7 @@ export function createProtocolAgentToolset(
         agent.sendRequest(
           readProtocolAgentToolInput<
             Omit<ProtocolRequestSendInput, "actorUserId" | "metadata"> & {
-              metadata?: Record<string, unknown>;
+              metadata?: ProtocolJsonObject;
             }
           >(input),
         ),
@@ -494,7 +496,7 @@ export function createProtocolAgentToolset(
       invoke: (input) => {
         const payload = readProtocolAgentToolInput<{
           requestId: string;
-          metadata?: Record<string, unknown>;
+          metadata?: ProtocolJsonObject;
         }>(input);
         return agent.acceptRequest(payload.requestId, {
           metadata: payload.metadata,
@@ -517,7 +519,7 @@ export function createProtocolAgentToolset(
       invoke: (input) => {
         const payload = readProtocolAgentToolInput<{
           requestId: string;
-          metadata?: Record<string, unknown>;
+          metadata?: ProtocolJsonObject;
         }>(input);
         return agent.rejectRequest(payload.requestId, {
           metadata: payload.metadata,
@@ -546,7 +548,7 @@ export function createProtocolAgentToolset(
           body: string;
           clientMessageId?: string;
           replyToMessageId?: string;
-          metadata?: Record<string, unknown>;
+          metadata?: ProtocolJsonObject;
         }>(input);
         return agent.sendChatMessage(payload.chatId, {
           body: payload.body,
@@ -591,7 +593,7 @@ export function createProtocolAgentToolset(
         agent.createCircle(
           readProtocolAgentToolInput<
             Omit<ProtocolCircleCreateInput, "actorUserId" | "metadata"> & {
-              metadata?: Record<string, unknown>;
+              metadata?: ProtocolJsonObject;
             }
           >(input),
         ),
@@ -616,7 +618,7 @@ export function createProtocolAgentToolset(
           circleId: string;
           memberUserId: string;
           role?: "admin" | "member";
-          metadata?: Record<string, unknown>;
+          metadata?: ProtocolJsonObject;
         }>(input);
         return agent.joinCircle(payload.circleId, {
           memberUserId: payload.memberUserId,
@@ -643,7 +645,7 @@ export function createProtocolAgentToolset(
         const payload = readProtocolAgentToolInput<{
           circleId: string;
           memberUserId: string;
-          metadata?: Record<string, unknown>;
+          metadata?: ProtocolJsonObject;
         }>(input);
         return agent.leaveCircle(payload.circleId, {
           memberUserId: payload.memberUserId,
@@ -710,8 +712,8 @@ export function getProtocolAgentTool(
 export async function invokeProtocolAgentTool(
   toolkit: ProtocolAgentToolkit,
   toolName: string,
-  input: unknown,
-): Promise<unknown> {
+  input?: ProtocolJsonObject,
+): Promise<ProtocolJsonValue> {
   return getProtocolAgentTool(toolkit, toolName).invoke(input);
 }
 

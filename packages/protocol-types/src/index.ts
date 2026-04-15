@@ -39,6 +39,33 @@ export const isoDateTimeSchema = z.string().datetime();
 export const urlSchema = z.string().url();
 export const uuidSchema = z.string().uuid();
 
+export type ProtocolJsonPrimitive = string | number | boolean | null;
+export type ProtocolJsonArray = ProtocolJsonValue[];
+export interface ProtocolJsonObject {
+  [key: string]: ProtocolJsonValue;
+}
+export type ProtocolJsonValue =
+  | ProtocolJsonPrimitive
+  | ProtocolJsonObject
+  | ProtocolJsonArray;
+
+export const protocolJsonValueSchema: z.ZodType<ProtocolJsonValue> = z.lazy(
+  () =>
+    z.union([
+      z.string(),
+      z.number(),
+      z.boolean(),
+      z.null(),
+      z.array(protocolJsonValueSchema),
+      z.record(z.string(), protocolJsonValueSchema),
+    ]),
+);
+export const protocolJsonObjectSchema: z.ZodType<ProtocolJsonObject> = z.lazy(
+  () => z.record(z.string(), protocolJsonValueSchema),
+);
+export const protocolJsonArraySchema: z.ZodType<ProtocolJsonArray> =
+  z.array(protocolJsonValueSchema);
+
 export const resourceNameValues = [
   "user",
   "profile",
@@ -223,7 +250,7 @@ export const webhookSubscriptionSchema = z
     deliveryMode: webhookDeliveryModeSchema.default("json"),
     secretRef: z.string().min(1).max(200).optional(),
     retryPolicy: webhookRetryPolicySchema,
-    metadata: z.record(z.string(), z.unknown()).default({}),
+    metadata: protocolJsonObjectSchema.default({}),
     createdAt: isoDateTimeSchema.optional(),
     updatedAt: isoDateTimeSchema.optional(),
   })
@@ -242,7 +269,7 @@ export const webhookSubscriptionCreateSchema = z
       backoffMs: 1000,
       maxBackoffMs: 60000,
     }),
-    metadata: z.record(z.string(), z.unknown()).default({}),
+    metadata: protocolJsonObjectSchema.default({}),
   })
   .strict();
 export type WebhookSubscriptionCreate = z.infer<
@@ -259,12 +286,82 @@ export const webhookSubscriptionUpdateSchema = z
     deliveryMode: webhookDeliveryModeSchema.optional(),
     secretRef: z.string().min(1).max(200).optional().nullable(),
     retryPolicy: webhookRetryPolicySchema.optional(),
-    metadata: z.record(z.string(), z.unknown()).optional(),
+    metadata: protocolJsonObjectSchema.optional(),
   })
   .strict();
 export type WebhookSubscriptionUpdate = z.infer<
   typeof webhookSubscriptionUpdateSchema
 >;
+
+export const protocolWebhookSubscriptionSchema = webhookSubscriptionSchema;
+export type ProtocolWebhookSubscription = WebhookSubscription;
+
+export function buildProtocolWebhookSubscription(
+  input: Partial<ProtocolWebhookSubscription>,
+): ProtocolWebhookSubscription {
+  return webhookSubscriptionSchema.parse({
+    protocolId: protocolIds.webhookSubscription,
+    status: "active",
+    deliveryMode: "json",
+    retryPolicy: {
+      maxAttempts: 8,
+      backoffMs: 1000,
+      maxBackoffMs: 60000,
+    },
+    metadata: {},
+    ...input,
+  });
+}
+
+export const protocolWebhookDeliveryStatusValues = [
+  "queued",
+  "retrying",
+  "delivered",
+  "failed",
+  "dead_lettered",
+] as const;
+export const protocolWebhookDeliveryStatusSchema = z.enum(
+  protocolWebhookDeliveryStatusValues,
+);
+export type ProtocolWebhookDeliveryStatus = z.infer<
+  typeof protocolWebhookDeliveryStatusSchema
+>;
+
+export const protocolWebhookDeliverySchema = z
+  .object({
+    protocolId: z.literal(protocolIds.protocol),
+    deliveryId: identifierSchema,
+    subscriptionId: identifierSchema,
+    eventName: eventNameSchema,
+    status: protocolWebhookDeliveryStatusSchema,
+    attemptCount: z.number().int().min(0),
+    nextAttemptAt: isoDateTimeSchema.nullish(),
+    lastAttemptAt: isoDateTimeSchema.nullish(),
+    deliveredAt: isoDateTimeSchema.nullish(),
+    responseStatusCode: z.number().int().min(100).max(599).nullish(),
+    errorMessage: z.string().max(2000).nullish(),
+    signature: z.string().optional().nullable(),
+    payload: protocolJsonValueSchema,
+    metadata: protocolJsonObjectSchema.default({}),
+    createdAt: isoDateTimeSchema.optional(),
+    updatedAt: isoDateTimeSchema.optional(),
+  })
+  .strict();
+export type ProtocolWebhookDelivery = z.infer<
+  typeof protocolWebhookDeliverySchema
+>;
+
+export function buildProtocolWebhookDelivery(
+  input: Partial<ProtocolWebhookDelivery>,
+): ProtocolWebhookDelivery {
+  return protocolWebhookDeliverySchema.parse({
+    protocolId: protocolIds.protocol,
+    status: "queued",
+    attemptCount: 0,
+    metadata: {},
+    ...input,
+  });
+}
 
 export const appRegistrationStatusValues = [
   "draft",
@@ -310,7 +407,7 @@ export const appRegistrationSchema = z
       canActAsAgent: false,
       canManageWebhooks: false,
     }),
-    metadata: z.record(z.string(), z.unknown()).default({}),
+    metadata: protocolJsonObjectSchema.default({}),
     createdAt: isoDateTimeSchema.optional(),
     updatedAt: isoDateTimeSchema.optional(),
   })
@@ -340,7 +437,7 @@ export const appRegistrationCreateSchema = z
       canActAsAgent: false,
       canManageWebhooks: false,
     }),
-    metadata: z.record(z.string(), z.unknown()).default({}),
+    metadata: protocolJsonObjectSchema.default({}),
   })
   .strict();
 export type AppRegistrationCreate = z.infer<typeof appRegistrationCreateSchema>;
@@ -362,10 +459,21 @@ export const appRegistrationUpdateSchema = z
     webhookUrl: urlSchema.optional().nullable(),
     webhookSecretRef: z.string().min(1).max(200).optional().nullable(),
     capabilities: capabilityMatrixSchema.optional(),
-    metadata: z.record(z.string(), z.unknown()).optional(),
+    metadata: protocolJsonObjectSchema.optional(),
   })
   .strict();
 export type AppRegistrationUpdate = z.infer<typeof appRegistrationUpdateSchema>;
+
+export const protocolAppRecordSchema = z
+  .object({
+    status: appRegistrationStatusSchema,
+    registration: appRegistrationSchema,
+    manifest: manifestSchema,
+    issuedScopes: z.array(protocolScopeNameSchema).default([]),
+    issuedCapabilities: z.array(capabilityNameSchema).default([]),
+  })
+  .strict();
+export type ProtocolAppRecord = z.infer<typeof protocolAppRecordSchema>;
 
 export const manifestAgentModeValues = ["observe", "suggest", "act"] as const;
 export const manifestAgentModeSchema = z.enum(manifestAgentModeValues);
@@ -423,7 +531,7 @@ export const manifestSchema = z
     events: z.array(eventNameSchema).default([]),
     webhooks: z.array(manifestWebhookSchema).default([]),
     agent: manifestAgentSchema,
-    metadata: z.record(z.string(), z.unknown()).default({}),
+    metadata: protocolJsonObjectSchema.default({}),
   })
   .strict();
 export type Manifest = z.infer<typeof manifestSchema>;
@@ -463,6 +571,53 @@ export type ProtocolAppRegistrationResult = z.infer<
   typeof protocolAppRegistrationResultSchema
 >;
 
+export const protocolAppRecordSchema = z
+  .object({
+    status: appRegistrationStatusSchema,
+    registration: appRegistrationSchema,
+    manifest: manifestSchema,
+    issuedScopes: z.array(protocolScopeNameSchema).default([]),
+    issuedCapabilities: z.array(capabilityNameSchema).default([]),
+  })
+  .strict();
+export type ProtocolAppRecord = z.infer<typeof protocolAppRecordSchema>;
+export const protocolAppTokenRotateResultSchema =
+  protocolAppRegistrationResultSchema;
+export type ProtocolAppTokenRotateResult = ProtocolAppRegistrationResult;
+
+export const protocolAppTokenRotateInputSchema = z
+  .object({
+    reason: z.string().min(1).max(200).optional(),
+    metadata: protocolJsonObjectSchema.default({}),
+  })
+  .strict();
+export type ProtocolAppTokenRotateInput = z.infer<
+  typeof protocolAppTokenRotateInputSchema
+>;
+
+export const protocolAppTokenRevokeResultSchema = z
+  .object({
+    registration: appRegistrationSchema,
+    manifest: manifestSchema,
+    issuedScopes: z.array(protocolScopeNameSchema).default([]),
+    issuedCapabilities: z.array(capabilityNameSchema).default([]),
+    revoked: z.boolean(),
+  })
+  .strict();
+export type ProtocolAppTokenRevokeResult = z.infer<
+  typeof protocolAppTokenRevokeResultSchema
+>;
+
+export const protocolAppTokenRevokeInputSchema = z
+  .object({
+    reason: z.string().min(1).max(200).optional(),
+    metadata: protocolJsonObjectSchema.default({}),
+  })
+  .strict();
+export type ProtocolAppTokenRevokeInput = z.infer<
+  typeof protocolAppTokenRevokeInputSchema
+>;
+
 export const protocolDiscoveryDocumentSchema = z
   .object({
     manifest: manifestSchema,
@@ -488,7 +643,7 @@ export const protocolEnvelopeSchema = z
     issuedAt: isoDateTimeSchema,
     actorAppId: identifierSchema.optional(),
     actorUserId: uuidSchema.optional(),
-    metadata: z.record(z.string(), z.unknown()).default({}),
+    metadata: protocolJsonObjectSchema.default({}),
   })
   .strict();
 export type ProtocolEnvelope = z.infer<typeof protocolEnvelopeSchema>;
@@ -496,7 +651,7 @@ export type ProtocolEnvelope = z.infer<typeof protocolEnvelopeSchema>;
 export const protocolEventEnvelopeSchema = protocolEnvelopeSchema.extend({
   event: eventNameSchema,
   resource: resourceNameSchema.optional(),
-  payload: z.unknown(),
+  payload: protocolJsonValueSchema,
 });
 export type ProtocolEventEnvelope = z.infer<typeof protocolEventEnvelopeSchema>;
 
@@ -579,7 +734,7 @@ export const protocolAppUsageSummarySchema = z
             ]),
             action: z.string().min(1).nullable(),
             issuedAt: isoDateTimeSchema,
-            details: z.record(z.string(), z.unknown()).default({}),
+            details: protocolJsonObjectSchema.default({}),
           })
           .strict(),
       )
@@ -590,6 +745,47 @@ export const protocolAppUsageSummarySchema = z
   .strict();
 export type ProtocolAppUsageSummary = z.infer<
   typeof protocolAppUsageSummarySchema
+>;
+
+export const protocolDeliveryQueueInspectionSchema = z
+  .object({
+    appId: identifierSchema,
+    generatedAt: isoDateTimeSchema,
+    queuedCount: z.number().int().min(0),
+    inFlightCount: z.number().int().min(0),
+    failedCount: z.number().int().min(0),
+    deadLetteredCount: z.number().int().min(0),
+    replayableCount: z.number().int().min(0),
+    oldestQueuedAt: isoDateTimeSchema.nullable(),
+    oldestRetryingAt: isoDateTimeSchema.nullable(),
+    lastDeadLetteredAt: isoDateTimeSchema.nullable(),
+    queueState: z
+      .object({
+        waiting: z.number().int().min(0),
+        active: z.number().int().min(0),
+        delayed: z.number().int().min(0),
+        completed: z.number().int().min(0),
+        failed: z.number().int().min(0),
+      })
+      .strict(),
+    deliveries: z.array(protocolWebhookDeliverySchema),
+  })
+  .strict();
+export type ProtocolDeliveryQueueInspection = z.infer<
+  typeof protocolDeliveryQueueInspectionSchema
+>;
+
+export const protocolAppOperationalSnapshotSchema = z
+  .object({
+    usage: protocolAppUsageSummarySchema,
+    queue: protocolDeliveryQueueInspectionSchema,
+    grants: z.array(protocolAppScopeGrantSchema),
+    consentRequests: z.array(protocolAppConsentRequestSchema),
+    webhooks: z.array(webhookSubscriptionSchema),
+  })
+  .strict();
+export type ProtocolAppOperationalSnapshot = z.infer<
+  typeof protocolAppOperationalSnapshotSchema
 >;
 
 export const protocolWebhookDeliveryGlobalDispatchResultSchema = z
@@ -657,7 +853,7 @@ export const protocolAppScopeGrantSchema = z
     grantedByUserId: uuidSchema.optional().nullable(),
     grantedAt: isoDateTimeSchema,
     revokedAt: isoDateTimeSchema.optional().nullable(),
-    metadata: z.record(z.string(), z.unknown()).default({}),
+    metadata: protocolJsonObjectSchema.default({}),
     createdAt: isoDateTimeSchema,
     updatedAt: isoDateTimeSchema,
   })
@@ -683,7 +879,7 @@ export const protocolAppConsentRequestSchema = z
     rejectedAt: isoDateTimeSchema.optional().nullable(),
     cancelledAt: isoDateTimeSchema.optional().nullable(),
     expiredAt: isoDateTimeSchema.optional().nullable(),
-    metadata: z.record(z.string(), z.unknown()).default({}),
+    metadata: protocolJsonObjectSchema.default({}),
     createdAt: isoDateTimeSchema,
     updatedAt: isoDateTimeSchema,
   })
@@ -699,7 +895,7 @@ export const protocolAppConsentRequestCreateSchema = z
     subjectType: protocolGrantSubjectTypeSchema.default("app"),
     subjectId: z.string().min(1).max(200).optional(),
     requestedByUserId: uuidSchema.optional(),
-    metadata: z.record(z.string(), z.unknown()).default({}),
+    metadata: protocolJsonObjectSchema.default({}),
   })
   .strict();
 export type ProtocolAppConsentRequestCreate = z.infer<
@@ -710,7 +906,7 @@ export const protocolAppConsentRequestDecisionSchema = z
   .object({
     approvedByUserId: uuidSchema.optional(),
     rejectedByUserId: uuidSchema.optional(),
-    metadata: z.record(z.string(), z.unknown()).default({}),
+    metadata: protocolJsonObjectSchema.default({}),
   })
   .strict();
 export type ProtocolAppConsentRequestDecision = z.infer<
@@ -724,7 +920,7 @@ export const protocolAppScopeGrantCreateSchema = z
     subjectType: protocolGrantSubjectTypeSchema.default("app"),
     subjectId: z.string().min(1).max(200).optional(),
     grantedByUserId: uuidSchema.optional(),
-    metadata: z.record(z.string(), z.unknown()).default({}),
+    metadata: protocolJsonObjectSchema.default({}),
   })
   .strict();
 export type ProtocolAppScopeGrantCreate = z.infer<
@@ -734,7 +930,7 @@ export type ProtocolAppScopeGrantCreate = z.infer<
 export const protocolAppScopeGrantRevokeSchema = z
   .object({
     revokedByUserId: uuidSchema.optional(),
-    metadata: z.record(z.string(), z.unknown()).default({}),
+    metadata: protocolJsonObjectSchema.default({}),
   })
   .strict();
 export type ProtocolAppScopeGrantRevoke = z.infer<
@@ -747,7 +943,7 @@ export const protocolIntentCreateActionSchema = z
     rawText: z.string().min(1).max(4000),
     agentThreadId: uuidSchema.optional(),
     traceId: uuidSchema.optional(),
-    metadata: z.record(z.string(), z.unknown()).default({}),
+    metadata: protocolJsonObjectSchema.default({}),
   })
   .strict();
 export type ProtocolIntentCreateAction = z.infer<
@@ -761,7 +957,7 @@ export const protocolIntentRequestSendActionSchema = z
     recipientUserId: uuidSchema,
     agentThreadId: uuidSchema.optional(),
     traceId: uuidSchema.optional(),
-    metadata: z.record(z.string(), z.unknown()).default({}),
+    metadata: protocolJsonObjectSchema.default({}),
   })
   .strict();
 export type ProtocolIntentRequestSendAction = z.infer<
@@ -772,7 +968,7 @@ export const protocolIntentUpdateActionSchema = z
   .object({
     actorUserId: uuidSchema,
     rawText: z.string().min(1).max(4000),
-    metadata: z.record(z.string(), z.unknown()).default({}),
+    metadata: protocolJsonObjectSchema.default({}),
   })
   .strict();
 export type ProtocolIntentUpdateAction = z.infer<
@@ -783,7 +979,7 @@ export const protocolIntentCancelActionSchema = z
   .object({
     actorUserId: uuidSchema,
     agentThreadId: uuidSchema.optional(),
-    metadata: z.record(z.string(), z.unknown()).default({}),
+    metadata: protocolJsonObjectSchema.default({}),
   })
   .strict();
 export type ProtocolIntentCancelAction = z.infer<
@@ -793,7 +989,7 @@ export type ProtocolIntentCancelAction = z.infer<
 export const protocolRequestDecisionActionSchema = z
   .object({
     actorUserId: uuidSchema,
-    metadata: z.record(z.string(), z.unknown()).default({}),
+    metadata: protocolJsonObjectSchema.default({}),
   })
   .strict();
 export type ProtocolRequestDecisionAction = z.infer<
@@ -806,7 +1002,7 @@ export const protocolChatSendMessageActionSchema = z
     body: z.string().min(1).max(4000),
     clientMessageId: identifierSchema.optional(),
     replyToMessageId: uuidSchema.optional(),
-    metadata: z.record(z.string(), z.unknown()).default({}),
+    metadata: protocolJsonObjectSchema.default({}),
   })
   .strict();
 export type ProtocolChatSendMessageAction = z.infer<
@@ -847,7 +1043,7 @@ export const protocolCircleCreateActionSchema = z
     targetSize: z.number().int().min(2).max(12).optional(),
     kickoffPrompt: z.string().max(500).optional(),
     cadence: protocolCircleCadenceSchema,
-    metadata: z.record(z.string(), z.unknown()).default({}),
+    metadata: protocolJsonObjectSchema.default({}),
   })
   .strict();
 export type ProtocolCircleCreateAction = z.infer<
@@ -859,7 +1055,7 @@ export const protocolCircleJoinActionSchema = z
     actorUserId: uuidSchema,
     memberUserId: uuidSchema,
     role: z.enum(["admin", "member"] as const).default("member"),
-    metadata: z.record(z.string(), z.unknown()).default({}),
+    metadata: protocolJsonObjectSchema.default({}),
   })
   .strict();
 export type ProtocolCircleJoinAction = z.infer<
@@ -870,7 +1066,7 @@ export const protocolCircleLeaveActionSchema = z
   .object({
     actorUserId: uuidSchema,
     memberUserId: uuidSchema,
-    metadata: z.record(z.string(), z.unknown()).default({}),
+    metadata: protocolJsonObjectSchema.default({}),
   })
   .strict();
 export type ProtocolCircleLeaveAction = z.infer<
@@ -891,7 +1087,7 @@ export const protocolIntentActionResultSchema = z
     safetyState: z.string().min(1).nullable().optional(),
     cancelledRequestCount: z.number().int().min(0).optional(),
     unchanged: z.boolean().optional(),
-    metadata: z.record(z.string(), z.unknown()).default({}),
+    metadata: protocolJsonObjectSchema.default({}),
   })
   .strict();
 export type ProtocolIntentActionResult = z.infer<
@@ -913,7 +1109,7 @@ export const protocolRequestActionResultSchema = z
     recipientUserId: uuidSchema.optional(),
     queued: z.boolean().optional(),
     unchanged: z.boolean().optional(),
-    metadata: z.record(z.string(), z.unknown()).default({}),
+    metadata: protocolJsonObjectSchema.default({}),
   })
   .strict();
 export type ProtocolRequestActionResult = z.infer<
@@ -928,7 +1124,7 @@ export const protocolChatMessageActionResultSchema = z
     messageId: uuidSchema,
     replyToMessageId: uuidSchema.nullable().optional(),
     createdAt: isoDateTimeSchema,
-    metadata: z.record(z.string(), z.unknown()).default({}),
+    metadata: protocolJsonObjectSchema.default({}),
   })
   .strict();
 export type ProtocolChatMessageActionResult = z.infer<
@@ -945,7 +1141,7 @@ export const protocolCircleActionResultSchema = z
     memberUserId: uuidSchema.optional(),
     role: z.enum(["admin", "member"] as const).optional(),
     nextSessionAt: isoDateTimeSchema.nullable().optional(),
-    metadata: z.record(z.string(), z.unknown()).default({}),
+    metadata: protocolJsonObjectSchema.default({}),
   })
   .strict();
 export type ProtocolCircleActionResult = z.infer<
@@ -1027,7 +1223,7 @@ export const protocolWebhookDeliveryAttemptSchema = z
     errorCode: z.string().nullable(),
     errorMessage: z.string().nullable(),
     durationMs: z.number().int().min(0).nullable(),
-    metadata: z.record(z.string(), z.unknown()).default({}),
+    metadata: protocolJsonObjectSchema.default({}),
     createdAt: isoDateTimeSchema,
   })
   .strict();

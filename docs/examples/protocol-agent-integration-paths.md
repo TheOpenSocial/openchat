@@ -1,14 +1,14 @@
 # Protocol Agent Integration Paths
 
-This guide helps partner teams choose the right entrypoint into the current `@opensocial/protocol-agent` surface.
+This guide helps partner teams choose the right entrypoint into `@opensocial/protocol-agent`.
 
-The package currently supports three practical shapes:
+The package supports three shapes:
 
 1. client
 2. toolset
 3. toolkit
 
-They all use the same stable protocol actions underneath. The difference is how much orchestration glue you want the SDK to carry for you.
+They all use the same protocol actions. The difference is how much orchestration glue you want the SDK to carry for you.
 
 ## 1. Client
 
@@ -55,7 +55,7 @@ Use:
 - [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-toolset.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-toolset.md)
 - [`/Users/cruciblelabs/Documents/openchat/scripts/examples/protocol-partner-agent-toolkit.mjs`](/Users/cruciblelabs/Documents/openchat/scripts/examples/protocol-partner-agent-toolkit.mjs)
 
-## Shared recommendation
+## Shared Recommendation
 
 Whichever path you choose:
 

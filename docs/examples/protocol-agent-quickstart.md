@@ -1,6 +1,6 @@
 # Protocol Agent Quickstart
 
-This guide is the thinnest current path for partner agents that want to act through the OpenSocial protocol without touching backend internals.
+This guide is the shortest path for partner agents that want to act through the OpenSocial protocol without touching backend internals.
 
 ## Use this when
 
@@ -70,9 +70,9 @@ The example:
 - updates that intent
 - optionally sends a request if a recipient user id is provided
 
-## Current scope
+## Current Scope
 
-The agent wrapper currently stays inside the already-shipped coordination primitives:
+The agent wrapper stays inside the shipped coordination primitives:
 
 - `intent.create`
 - `intent.update`

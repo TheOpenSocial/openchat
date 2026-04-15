@@ -2,6 +2,13 @@
 
 import http from "node:http";
 import { createProtocolClient } from "@opensocial/protocol-client";
+import {
+  getArg,
+  logSection,
+  resolveIntegerArg,
+  resolveOptionalStringArg,
+  resolveProtocolBaseUrl,
+} from "./protocol-example-args.mjs";
 
 const DEFAULT_WEBHOOK_PATH = "/webhooks/opensocial";
 const DEFAULT_EVENTS = [
@@ -33,43 +40,18 @@ const DEFAULT_CAPABILITIES = [
   "circle.write",
 ];
 
-function getArg(flag, fallback = undefined) {
-  const exact = `${flag}=`;
-  for (const value of process.argv.slice(2)) {
-    if (value.startsWith(exact)) {
-      return value.slice(exact.length);
-    }
-  }
-  return fallback;
-}
-
 function resolveAction() {
   return getArg("--action", "demo");
 }
 
-function resolveBaseUrl() {
-  const value =
-    getArg("--base-url") ||
-    process.env.PROTOCOL_BASE_URL ||
-    process.env.PLAYGROUND_BASE_URL ||
-    process.env.SMOKE_BASE_URL ||
-    process.env.STAGING_API_BASE_URL ||
-    process.env.API_BASE_URL;
-  if (!value) {
-    throw new Error(
-      "Missing base URL. Set --base-url or PROTOCOL_BASE_URL / PLAYGROUND_BASE_URL / SMOKE_BASE_URL / STAGING_API_BASE_URL.",
-    );
-  }
-  return value.replace(/\/+$/, "");
-}
-
 function resolvePort() {
-  const raw = getArg("--port", process.env.PROTOCOL_WEBHOOK_PORT || "4040");
-  const port = Number(raw);
-  if (!Number.isInteger(port) || port <= 0) {
-    throw new Error(`Invalid port: ${raw}`);
-  }
-  return port;
+  return resolveIntegerArg({
+    flag: "--port",
+    envName: "PROTOCOL_WEBHOOK_PORT",
+    fallback: "4040",
+    minimum: 1,
+    errorMessage: "Invalid port.",
+  });
 }
 
 function resolveWebhookPath() {
@@ -77,20 +59,28 @@ function resolveWebhookPath() {
 }
 
 function resolveAppId() {
-  const provided = getArg("--app-id") || process.env.PROTOCOL_APP_ID;
-  if (provided) {
-    return provided;
-  }
+  const provided = resolveOptionalStringArg({
+    flag: "--app-id",
+    envName: "PROTOCOL_APP_ID",
+  });
+  if (provided) return provided;
   const stamp = new Date().toISOString().replace(/[-:TZ.]/g, "");
   return `example.webhook.consumer.${stamp}`;
 }
 
 function resolveAppName() {
-  return getArg("--app-name", "Example Webhook Consumer");
+  return resolveOptionalStringArg({
+    flag: "--app-name",
+    envName: "PROTOCOL_APP_NAME",
+    fallback: "Example Webhook Consumer",
+  });
 }
 
 function resolveTargetUrl() {
-  return getArg("--webhook-url") || process.env.PROTOCOL_WEBHOOK_URL;
+  return resolveOptionalStringArg({
+    flag: "--webhook-url",
+    envName: "PROTOCOL_WEBHOOK_URL",
+  });
 }
 
 function createTransport(baseUrl) {
@@ -175,15 +165,6 @@ function buildRegistrationPayload({ appId, appName, webhookUrl }) {
     requestedScopes: DEFAULT_SCOPES,
     requestedCapabilities: DEFAULT_CAPABILITIES,
   };
-}
-
-function logSection(title, value) {
-  console.log(`\n[protocol-example] ${title}`);
-  if (typeof value === "string") {
-    console.log(value);
-    return;
-  }
-  console.log(JSON.stringify(value, null, 2));
 }
 
 function collectRequestBody(req) {
@@ -273,7 +254,7 @@ async function runServe() {
 }
 
 async function runRegister() {
-  const baseUrl = resolveBaseUrl();
+  const baseUrl = resolveProtocolBaseUrl();
   const webhookUrl = resolveTargetUrl();
   if (!webhookUrl) {
     throw new Error(
@@ -344,7 +325,7 @@ async function runRegister() {
 async function runDemo() {
   const port = resolvePort();
   const webhookPath = resolveWebhookPath();
-  const baseUrl = resolveBaseUrl();
+  const baseUrl = resolveProtocolBaseUrl();
   const client = createClient(baseUrl);
   const appId = resolveAppId();
   const appName = resolveAppName();
@@ -440,7 +421,7 @@ Environment:
 }
 
 async function runInspect() {
-  const baseUrl = resolveBaseUrl();
+  const baseUrl = resolveProtocolBaseUrl();
   const appId = resolveAppId();
   const appToken = getArg("--app-token") || process.env.PROTOCOL_APP_TOKEN;
   if (!appToken) {

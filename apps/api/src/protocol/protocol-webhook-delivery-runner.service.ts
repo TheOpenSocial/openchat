@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { protocolWebhookDeliverySchema } from "@opensocial/protocol-events";
+import { protocolWebhookDeliverySchema } from "@opensocial/protocol-types";
 import { protocolIds } from "@opensocial/protocol-types";
 import { signProtocolWebhookPayload } from "./protocol-webhooks.js";
 import { PrismaService } from "../database/prisma.service.js";

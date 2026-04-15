@@ -1,6 +1,6 @@
 # Protocol Webhook Consumer Example
 
-This example shows how to integrate with the current `@opensocial/protocol-client` surface without touching backend runtime code.
+This example shows how to integrate with `@opensocial/protocol-client` without touching backend runtime code.
 
 It does three things:
 
@@ -39,7 +39,7 @@ The demo:
 
 ## Inspect An Existing App
 
-If you already have an `appId` and `appToken`, inspect the current protocol state:
+If you already have an `appId` and `appToken`, inspect the protocol state:
 
 ```bash
 PROTOCOL_BASE_URL=http://127.0.0.1:3000/api \
@@ -63,7 +63,7 @@ For queue recovery and dead-letter replay, see:
 
 ## What This Demonstrates
 
-The example is intentionally narrow:
+The example is narrow:
 
 - protocol app registration
 - webhook creation
@@ -71,6 +71,6 @@ The example is intentionally narrow:
 - grants and consent inspection
 - queue health visibility
 
-It does not add any new runtime behavior. It is a concrete integration example for third-party consumers of the current protocol surface.
+It does not add new runtime behavior. It is a concrete integration example for third-party consumers of the protocol surface.
 
 If your workspace already links the `@opensocial/*` packages into Node resolution, the loader is optional. In this checkout, the loader keeps the example runnable without modifying workspace runtime code.

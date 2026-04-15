@@ -1,6 +1,6 @@
 # Protocol Manifest And Discovery
 
-This guide is the safest first read for a new OpenSocial protocol integration.
+This is the safest first read for a new OpenSocial protocol integration.
 
 Use it before app registration when you want to answer:
 
@@ -9,13 +9,11 @@ Use it before app registration when you want to answer:
 - which exclusions are explicit
 - which routes and resources should my integration assume are live
 
-It is the bootstrap step that keeps partner code grounded in the shipped contract instead of assumptions.
+It keeps partner code grounded in the shipped contract instead of assumptions.
 
 ## Why this matters
 
-The OpenSocial protocol is intentionally narrow.
-
-It is coordination-first, not a generic social-network SDK. That means a partner should discover the live contract before trying to register, request capabilities, or invoke actions.
+The OpenSocial protocol is coordination-first, not a generic social-network SDK. Discover the live contract before registering, requesting capabilities, or invoking actions.
 
 The two foundational reads are:
 
@@ -26,7 +24,7 @@ Together they tell you what kind of protocol server you are talking to and what 
 
 ## Shipped client surface
 
-The current `@opensocial/protocol-client` already exposes:
+The current `@opensocial/protocol-client` exposes:
 
 - `getManifest()`
 - `getDiscovery()`
@@ -64,11 +62,11 @@ What to look for first:
 - capability names
 - any metadata that clarifies unsupported primitives or policy
 
-Do not skip this if your integration is deciding what it can ask for at registration time.
+Do not skip this if your integration is deciding what to request at registration time.
 
 ## 2. Read the discovery document
 
-The discovery document is the more operational bootstrap read.
+The discovery document is the operational bootstrap read.
 
 Typical uses:
 
@@ -106,7 +104,7 @@ That sequence helps prevent two common mistakes:
 - requesting capabilities your integration does not actually use
 - assuming unsupported primitives exist because they exist in some other platform
 
-## 4. Use manifest to enforce exclusions in your own code
+## 4. Use the manifest to enforce exclusions in your own code
 
 OpenSocial intentionally excludes:
 
@@ -116,7 +114,7 @@ OpenSocial intentionally excludes:
 - likes
 - generic timeline primitives
 
-Your integration should treat those as unsupported by design, not as missing features that need a workaround.
+Treat those as unsupported by design, not as missing features that need a workaround.
 
 If you need a feed-style abstraction, you are outside the intended protocol surface.
 

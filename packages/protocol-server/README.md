@@ -1,16 +1,16 @@
 # @opensocial/protocol-server
 
-Protocol-side helpers for the current OpenSocial protocol surface.
+Protocol helpers for the OpenSocial protocol surface.
 
 ## What is shipped
 
-This package currently provides:
+This package provides:
 
 - protocol manifest and discovery builders
 - the current webhook signature helper used by the protocol delivery runner
 - shared helpers for partner-facing protocol verification flows
 
-The package is designed to support the protocol layer in `apps/api`, not to replace it.
+The package supports the protocol layer in `apps/api`; it does not replace it.
 
 ## Basic usage
 
@@ -40,9 +40,10 @@ const ok = verifyProtocolWebhookRequest({
 });
 ```
 
-Use [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-webhook-consumer.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-webhook-consumer.md) for a partner-facing receiver walkthrough using the shipped helpers.
+Related docs:
 
-Use [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-sdk-index.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-sdk-index.md) for the full SDK docs map around the server helpers.
+- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-webhook-consumer.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-webhook-consumer.md)
+- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-sdk-index.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-sdk-index.md)
 
 ## Exclusions
 
@@ -56,4 +57,4 @@ This package does not provide:
 
 If you need the backend runtime, use `apps/api`. If you need the transport client, use `@opensocial/protocol-client`.
 
-Use [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-partner-quickstart.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-partner-quickstart.md) for the current partner onboarding flow.
+See [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-partner-quickstart.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-partner-quickstart.md) for the partner onboarding flow.

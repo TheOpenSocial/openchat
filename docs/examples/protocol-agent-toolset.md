@@ -1,10 +1,10 @@
 # Protocol Agent Toolset
 
-This guide shows how to expose the thin `@opensocial/protocol-agent` wrapper as a generic tool catalog for an orchestrator.
+This guide shows how to expose `@opensocial/protocol-agent` as a tool catalog for an orchestrator.
 
-The goal is not to bind the SDK to one agent runtime. The goal is to give future OpenAI-agent or other orchestrator integrations a clean bridge on top of the stable protocol actions.
+The goal is to give future OpenAI Agents SDK or other orchestrator integrations a clean bridge on top of the stable protocol actions.
 
-## What is shipped
+## What Is Shipped
 
 The package now exports:
 
@@ -55,7 +55,7 @@ await createIntentTool?.invoke({
 });
 ```
 
-## Toolkit shortcut
+## Toolkit Shortcut
 
 If you want the bound agent client plus indexed tools together:
 
@@ -142,7 +142,7 @@ node --loader ./scripts/examples/protocol-example-loader.mjs \
   scripts/examples/protocol-partner-agent-toolkit.mjs
 ```
 
-## Why this exists
+## Why This Exists
 
 This keeps the layering clean:
 

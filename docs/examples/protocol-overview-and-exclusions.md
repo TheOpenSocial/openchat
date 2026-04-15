@@ -1,14 +1,14 @@
 # OpenSocial Protocol Overview And Exclusions
 
-This is the high-level orientation doc for the current OpenSocial protocol surface.
+High-level orientation for the OpenSocial protocol surface.
 
-Use it before diving into the action reference or partner examples.
+Use it before the action reference or partner examples.
 
 ## What OpenSocial protocol is
 
 OpenSocial protocol is a coordination-first integration surface extracted from the product we already run.
 
-It is built around the real OpenSocial domain:
+It is built around the OpenSocial domain:
 
 - identity
 - profiles
@@ -21,13 +21,13 @@ It is built around the real OpenSocial domain:
 - agent threads
 - realtime and replayable events
 
-The protocol is meant to let:
+The protocol lets:
 
 - first-party clients
 - third-party apps
 - partner agents
 
-read state, write approved actions, and subscribe to relevant events without depending on private backend internals.
+read state, write approved actions, and subscribe to relevant events without private backend internals.
 
 ## What it is not
 
@@ -41,13 +41,13 @@ It is not designed around:
 - likes
 - generic timeline primitives
 
-Those are intentionally outside the supported contract.
+Those are outside the supported contract.
 
 If a partner tries to model OpenSocial as a feed or follow graph, they are pointing at the wrong abstraction layer.
 
 ## Core integration modes
 
-The current protocol surface supports three integration modes:
+The protocol surface supports three integration modes:
 
 1. read state
 2. write actions
@@ -55,7 +55,7 @@ The current protocol surface supports three integration modes:
 
 That is the stable mental model for the whole SDK family.
 
-## Current resource shape
+## Resource Shape
 
 The core resource model is:
 
@@ -73,9 +73,9 @@ The core resource model is:
 
 These are the primitives the backend and SDK are converging around.
 
-## Current write surface
+## Write Surface
 
-The current writable action surface is intentionally narrow:
+The writable action surface is narrow:
 
 - intent lifecycle
 - request lifecycle
@@ -86,9 +86,9 @@ Use the detailed reference for those:
 
 - [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-external-actions-reference.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-external-actions-reference.md)
 
-## Current event surface
+## Event Surface
 
-The current event model is also coordination-first.
+The event model is also coordination-first.
 
 Examples include:
 
@@ -102,14 +102,14 @@ Use the event and replay guide for the operational view:
 
 - [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-event-subscriptions-and-replay.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-event-subscriptions-and-replay.md)
 
-## Auth and delegated access
+## Auth and Delegated Access
 
-There are two important gates in the current protocol:
+There are two important gates in the protocol:
 
 1. app-level auth
 2. delegated grants for user-scoped actions
 
-This is why partner integrations need to think about both:
+Partner integrations need to account for both:
 
 - app tokens
 - scopes and capabilities
@@ -121,9 +121,9 @@ Use these guides for the details:
 - [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-consent-and-auth-troubleshooting.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-consent-and-auth-troubleshooting.md)
 - [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-operator-recovery.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-operator-recovery.md)
 
-## SDK family
+## SDK Family
 
-The current package family is:
+The package family is:
 
 - `@opensocial/protocol-types`
 - `@opensocial/protocol-events`

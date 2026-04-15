@@ -2,7 +2,7 @@
 
 Use this checklist before calling an OpenSocial protocol integration production-ready.
 
-It is intentionally practical. The goal is to make sure the integration is truly operable, not just that the happy path demo worked once.
+The goal is simple: make sure the integration is operable, not just that the happy path demo worked once.
 
 ## 1. Contract bootstrap
 
@@ -71,7 +71,7 @@ Guides:
 - the partner agent uses readiness checks before autonomous work
 - grant and auth blockers are surfaced early
 - queue health is inspected before blaming model behavior
-- the agent uses the thin SDK wrapper rather than hidden private calls
+- the agent uses the SDK wrapper rather than hidden private calls
 
 Guides:
 

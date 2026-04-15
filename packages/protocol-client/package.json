@@ -13,16 +13,15 @@
     }
   },
   "scripts": {
-    "prebuild": "pnpm --filter @opensocial/protocol-types build && pnpm --filter @opensocial/protocol-events build",
+    "prebuild": "pnpm --filter @opensocial/protocol-types build",
     "build": "tsc -p tsconfig.json",
-    "pretypecheck": "pnpm --filter @opensocial/protocol-types build && pnpm --filter @opensocial/protocol-events build",
+    "pretypecheck": "pnpm --filter @opensocial/protocol-types build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint \"src/**/*.ts\" --max-warnings=0",
     "pretest": "pnpm build",
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
-    "@opensocial/protocol-events": "workspace:*",
     "@opensocial/protocol-types": "workspace:*"
   }
 }

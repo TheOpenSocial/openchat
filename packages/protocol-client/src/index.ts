@@ -3,6 +3,10 @@ import {
   type ProtocolWebhookDelivery,
   appRegistrationRequestSchema,
   protocolAppUsageSummarySchema,
+  protocolAppTokenRotateInputSchema,
+  protocolAppTokenRotateResultSchema,
+  protocolAppTokenRevokeInputSchema,
+  protocolAppTokenRevokeResultSchema,
   protocolChatMessageActionResultSchema,
   protocolChatSendMessageActionSchema,
   protocolCircleActionResultSchema,
@@ -32,14 +36,18 @@ import {
   protocolWebhookDeliveryReplayResultSchema,
   protocolWebhookDeliveryRunRequestSchema,
   protocolWebhookDeliveryRunResultSchema,
+  protocolDeliveryQueueInspectionSchema,
   manifestSchema,
   webhookSubscriptionCreateSchema,
   webhookSubscriptionSchema,
-  type ProtocolAppRecord,
-  type ProtocolAppRegistrationRequest,
-  type ProtocolAppTokenRotateResult,
-  type ProtocolAppTokenRevokeResult,
-  type ProtocolDeliveryQueueInspection,
+  type ProtocolAppRecord as ProtocolAppRecordShape,
+  type ProtocolAppOperationalSnapshot as ProtocolAppOperationalSnapshotShape,
+  type ProtocolAppRegistrationRequest as ProtocolAppRegistrationRequestShape,
+  type ProtocolAppTokenRotateInput as ProtocolAppTokenRotateInputShape,
+  type ProtocolAppTokenRotateResult as ProtocolAppTokenRotateResultShape,
+  type ProtocolAppTokenRevokeInput as ProtocolAppTokenRevokeInputShape,
+  type ProtocolAppTokenRevokeResult as ProtocolAppTokenRevokeResultShape,
+  type ProtocolDeliveryQueueInspection as ProtocolDeliveryQueueInspectionShape,
   type ProtocolAppScopeGrant,
   type ProtocolAppScopeGrantCreate,
   type ProtocolAppScopeGrantRevoke,
@@ -74,6 +82,9 @@ import {
   type ProtocolWebhookDeliveryRunResult,
   type WebhookSubscription,
   type WebhookSubscriptionCreate,
+} from "@opensocial/protocol-types";
+export type {
+  ProtocolJsonObject,
 } from "@opensocial/protocol-types";
 
 export type ProtocolClientTransport = {
@@ -379,26 +390,17 @@ export type ProtocolAppClient = {
   getAppUsageSummary: () => Promise<ProtocolAppUsageSummary>;
 };
 
-export type ProtocolAppOperationalSnapshot = {
-  usage: ProtocolAppUsageSummary;
-  queue: ProtocolDeliveryQueueInspection;
-  grants: ProtocolGrantRecord[];
-  consentRequests: ProtocolConsentRequestRecord[];
-  webhooks: WebhookSubscription[];
-};
-
+export type ProtocolAppRecord = ProtocolAppRecordShape;
+export type ProtocolAppOperationalSnapshot =
+  ProtocolAppOperationalSnapshotShape;
 export type ProtocolAppRegistrationRequestInput =
-  ProtocolAppRegistrationRequest;
-
-export type ProtocolAppTokenRotateInput = {
-  reason?: string;
-  metadata?: Record<string, unknown>;
-};
-
-export type ProtocolAppTokenRevokeInput = {
-  reason?: string;
-  metadata?: Record<string, unknown>;
-};
+  ProtocolAppRegistrationRequestShape;
+export type ProtocolAppTokenRotateInput = ProtocolAppTokenRotateInputShape;
+export type ProtocolAppTokenRotateResult = ProtocolAppTokenRotateResultShape;
+export type ProtocolAppTokenRevokeInput = ProtocolAppTokenRevokeInputShape;
+export type ProtocolAppTokenRevokeResult = ProtocolAppTokenRevokeResultShape;
+export type ProtocolDeliveryQueueInspection =
+  ProtocolDeliveryQueueInspectionShape;
 
 export type ProtocolGrantRecord = ProtocolAppScopeGrant;
 export type ProtocolGrantCreateInput = ProtocolAppScopeGrantCreate;
@@ -419,18 +421,30 @@ export type ProtocolCircleLeaveInput = ProtocolCircleLeaveAction;
 export type ProtocolWebhookDeliveryRunInput = ProtocolWebhookDeliveryRunRequest;
 
 type ProtocolResponseEnvelope = {
-  data?: unknown;
+  data?: ProtocolJsonValue;
 };
+
+function isProtocolResponseEnvelope(
+  value: ProtocolResponseEnvelope | ProtocolJsonValue | undefined,
+): value is ProtocolResponseEnvelope {
+  return typeof value === "object" && value !== null && "data" in value;
+}
 
 async function readProtocolResponseData<T>(
   response: Response,
   parser?: {
-    parse: (input: unknown) => T;
+    parse: (input: ProtocolJsonValue | undefined) => T;
   },
 ): Promise<T> {
-  const payload = (await response.json()) as ProtocolResponseEnvelope | undefined;
-  const data = payload?.data ?? payload;
-  return parser ? parser.parse(data) : (data as T);
+  const payload = (await response.json()) as
+    | ProtocolResponseEnvelope
+    | ProtocolJsonValue
+    | undefined;
+  const data = isProtocolResponseEnvelope(payload) ? payload.data : payload;
+  if (!parser) {
+    throw new Error("A response parser is required for protocol responses.");
+  }
+  return parser.parse(data);
 }
 
 function buildProtocolAppTokenHeaders(appToken: string): HeadersInit {
@@ -441,7 +455,7 @@ function buildProtocolAppTokenHeaders(appToken: string): HeadersInit {
 
 function buildProtocolJsonRequestInit(
   appToken: string,
-  body: unknown,
+  body: ProtocolJsonValue,
   method: RequestInit["method"] = "POST",
 ): RequestInit {
   return {
@@ -492,9 +506,7 @@ export function createProtocolClient(
       const response = await transport.request(
         `/protocol/apps/${appId}/webhooks`,
         {
-          headers: {
-            "x-protocol-app-token": appToken,
-          },
+          headers: buildProtocolAppTokenHeaders(appToken),
         },
       );
       return readProtocolResponseData(
@@ -506,14 +518,7 @@ export function createProtocolClient(
       const requestPayload = webhookSubscriptionCreateSchema.parse(payload);
       const response = await transport.request(
         `/protocol/apps/${appId}/webhooks`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-protocol-app-token": appToken,
-          },
-          body: JSON.stringify(requestPayload),
-        },
+        buildProtocolJsonRequestInit(appToken, requestPayload),
       );
       return readProtocolResponseData(response, webhookSubscriptionSchema);
     },
@@ -521,9 +526,7 @@ export function createProtocolClient(
       const response = await transport.request(
         `/protocol/apps/${appId}/grants`,
         {
-          headers: {
-            "x-protocol-app-token": appToken,
-          },
+          headers: buildProtocolAppTokenHeaders(appToken),
         },
       );
       return readProtocolResponseData(
@@ -535,9 +538,7 @@ export function createProtocolClient(
       const response = await transport.request(
         `/protocol/apps/${appId}/consent-requests`,
         {
-          headers: {
-            "x-protocol-app-token": appToken,
-          },
+          headers: buildProtocolAppTokenHeaders(appToken),
         },
       );
       return readProtocolResponseData(
@@ -549,30 +550,17 @@ export function createProtocolClient(
       const requestPayload = protocolAppScopeGrantCreateSchema.parse(payload);
       const response = await transport.request(
         `/protocol/apps/${appId}/grants`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-protocol-app-token": appToken,
-          },
-          body: JSON.stringify(requestPayload),
-        },
+        buildProtocolJsonRequestInit(appToken, requestPayload),
       );
       return readProtocolResponseData(response, protocolAppScopeGrantSchema);
     },
     async revokeGrant(appId, appToken, grantId, input) {
       const response = await transport.request(
         `/protocol/apps/${appId}/grants/${grantId}/revoke`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-protocol-app-token": appToken,
-          },
-          body: JSON.stringify(
-            protocolAppScopeGrantRevokeSchema.parse(input ?? {}),
-          ),
-        },
+        buildProtocolJsonRequestInit(
+          appToken,
+          protocolAppScopeGrantRevokeSchema.parse(input ?? {}),
+        ),
       );
       return readProtocolResponseData(response, protocolAppScopeGrantSchema);
     },
@@ -581,14 +569,7 @@ export function createProtocolClient(
         protocolAppConsentRequestCreateSchema.parse(payload);
       const response = await transport.request(
         `/protocol/apps/${appId}/consent-requests`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-protocol-app-token": appToken,
-          },
-          body: JSON.stringify(requestPayload),
-        },
+        buildProtocolJsonRequestInit(appToken, requestPayload),
       );
       return readProtocolResponseData(
         response,
@@ -600,14 +581,7 @@ export function createProtocolClient(
         protocolAppConsentRequestDecisionSchema.parse(payload);
       const response = await transport.request(
         `/protocol/apps/${appId}/consent-requests/${requestId}/approve`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-protocol-app-token": appToken,
-          },
-          body: JSON.stringify(requestPayload),
-        },
+        buildProtocolJsonRequestInit(appToken, requestPayload),
       );
       return readProtocolResponseData(
         response,
@@ -619,14 +593,7 @@ export function createProtocolClient(
         protocolAppConsentRequestDecisionSchema.parse(payload);
       const response = await transport.request(
         `/protocol/apps/${appId}/consent-requests/${requestId}/reject`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-protocol-app-token": appToken,
-          },
-          body: JSON.stringify(requestPayload),
-        },
+        buildProtocolJsonRequestInit(appToken, requestPayload),
       );
       return readProtocolResponseData(
         response,
@@ -636,64 +603,42 @@ export function createProtocolClient(
     async rotateAppToken(appId, appToken, input) {
       const response = await transport.request(
         `/protocol/apps/${appId}/token/rotate`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-protocol-app-token": appToken,
-          },
-          body: JSON.stringify(input ?? {}),
-        },
+        buildProtocolJsonRequestInit(
+          appToken,
+          protocolAppTokenRotateInputSchema.parse(input ?? {}),
+        ),
       );
-      return readProtocolResponseData(
-        response,
-        protocolAppRegistrationResultSchema,
-      );
+      return readProtocolResponseData(response, protocolAppTokenRotateResultSchema);
     },
     async rotateToken(appId, appToken, input) {
       const response = await transport.request(
         `/protocol/apps/${appId}/token/rotate`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-protocol-app-token": appToken,
-          },
-          body: JSON.stringify(input ?? {}),
-        },
+        buildProtocolJsonRequestInit(
+          appToken,
+          protocolAppTokenRotateInputSchema.parse(input ?? {}),
+        ),
       );
-      return readProtocolResponseData(
-        response,
-        protocolAppRegistrationResultSchema,
-      );
+      return readProtocolResponseData(response, protocolAppTokenRotateResultSchema);
     },
     async revokeAppToken(appId, appToken, input) {
       const response = await transport.request(
         `/protocol/apps/${appId}/token/revoke`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-protocol-app-token": appToken,
-          },
-          body: JSON.stringify(input ?? {}),
-        },
+        buildProtocolJsonRequestInit(
+          appToken,
+          protocolAppTokenRevokeInputSchema.parse(input ?? {}),
+        ),
       );
-      return readProtocolResponseData<ProtocolAppTokenRevokeResult>(response);
+      return readProtocolResponseData(response, protocolAppTokenRevokeResultSchema);
     },
     async revokeToken(appId, appToken, input) {
       const response = await transport.request(
         `/protocol/apps/${appId}/token/revoke`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-protocol-app-token": appToken,
-          },
-          body: JSON.stringify(input ?? {}),
-        },
+        buildProtocolJsonRequestInit(
+          appToken,
+          protocolAppTokenRevokeInputSchema.parse(input ?? {}),
+        ),
       );
-      return readProtocolResponseData<ProtocolAppTokenRevokeResult>(response);
+      return readProtocolResponseData(response, protocolAppTokenRevokeResultSchema);
     },
     async listWebhookDeliveries(appId, appToken, subscriptionId) {
       const response = await transport.request(
@@ -750,8 +695,9 @@ export function createProtocolClient(
           headers: buildProtocolAppTokenHeaders(appToken),
         },
       );
-      return readProtocolResponseData<ProtocolDeliveryQueueInspection>(
+      return readProtocolResponseData(
         response,
+        protocolDeliveryQueueInspectionSchema,
       );
     },
     async replayEvents(appId, appToken, cursor) {
@@ -1065,7 +1011,7 @@ export async function loadProtocolAppOperationalSnapshot(
 
 export function buildProtocolAppRegistrationRequest(
   input: ProtocolAppRegistrationRequestInput,
-): ProtocolAppRegistrationRequest {
+): ProtocolAppRegistrationRequestShape {
   return appRegistrationRequestSchema.parse({
     registration: input.registration,
     manifest: input.manifest,

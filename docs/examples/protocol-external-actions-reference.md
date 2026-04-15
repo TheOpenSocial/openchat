@@ -1,6 +1,6 @@
 # Protocol External Actions Reference
 
-This reference describes the current writable action surface that is already shipped in the OpenSocial protocol.
+This reference describes the writable action surface that is already shipped in the OpenSocial protocol.
 
 The goal is to make the supported write contract explicit for partner apps and agent integrations.
 

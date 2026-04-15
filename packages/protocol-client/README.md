@@ -14,7 +14,7 @@ This package wraps the protocol API and covers:
 - protocol event replay
 - core coordination actions for intent lifecycle, requests, chats, and circles
 
-It depends on `@opensocial/protocol-types` for shared schemas and `@opensocial/protocol-events` for the event catalog and replay helpers.
+It depends on `@opensocial/protocol-types` for the shared schemas.
 
 ## Basic usage
 
@@ -64,14 +64,6 @@ const webhook = await app.createWebhook({
   resources: ["intent"],
   deliveryMode: "json",
 });
-
-const sameApp = createBoundProtocolAppClientFromBaseUrl(
-  "https://api.example.com/api",
-  {
-    appId: registration.registration.appId,
-    appToken: registration.credentials.appToken,
-  },
-);
 ```
 
 ## Troubleshooting
