@@ -14,6 +14,7 @@ That returns a plain array of tool definitions:
 
 - `name`
 - `description`
+- `inputSchema`
 - `invoke(input)`
 
 ## Example
@@ -39,6 +40,8 @@ const tools = createProtocolAgentToolset(agent);
 const createIntentTool = tools.find(
   (tool) => tool.name === "protocol_agent_create_intent",
 );
+
+console.log(createIntentTool?.inputSchema);
 
 await createIntentTool?.invoke({
   rawText: "Find a thoughtful dinner in Palermo this week",
@@ -67,6 +70,8 @@ This keeps the layering clean:
 - `protocol_agent_create_circle`
 - `protocol_agent_join_circle`
 - `protocol_agent_leave_circle`
+
+Each tool now carries a lightweight JSON-schema-style `inputSchema` so an orchestrator can render forms, validate input, or map the tool into another runtime without guessing the payload shape.
 
 ## Guardrails
 

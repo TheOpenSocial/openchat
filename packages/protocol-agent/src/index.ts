@@ -121,8 +121,26 @@ export type ProtocolAgentClient = {
 export type ProtocolAgentToolDefinition = {
   name: string;
   description: string;
+  inputSchema: Record<string, unknown>;
   invoke: (input: unknown) => Promise<unknown>;
 };
+
+const readinessOptionsSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    requireActiveGrant: { type: "boolean" },
+    failOnDeadLetters: { type: "boolean" },
+    failOnAuthFailures: { type: "boolean" },
+    failOnQueuedBacklog: { type: "boolean" },
+    queuedBacklogThreshold: { type: "integer", minimum: 0 },
+  },
+} satisfies Record<string, unknown>;
+
+const metadataSchema = {
+  type: "object",
+  additionalProperties: true,
+} satisfies Record<string, unknown>;
 
 function mergeMetadata(
   session: ProtocolAgentSession,
@@ -323,6 +341,7 @@ export function createProtocolAgentToolset(
       name: "protocol_agent_assert_ready",
       description:
         "Fail fast when auth, grants, consent, or delivery health block protocol agent work.",
+      inputSchema: readinessOptionsSchema,
       invoke: (input) =>
         agent.assertReady((input as ProtocolAgentReadinessOptions) ?? {}),
     },
@@ -330,6 +349,17 @@ export function createProtocolAgentToolset(
       name: "protocol_agent_create_intent",
       description:
         "Create a new coordination intent through the OpenSocial protocol.",
+      inputSchema: {
+        type: "object",
+        required: ["rawText"],
+        additionalProperties: false,
+        properties: {
+          rawText: { type: "string", minLength: 1 },
+          agentThreadId: { type: "string" },
+          traceId: { type: "string" },
+          metadata: metadataSchema,
+        },
+      },
       invoke: (input) =>
         agent.createIntent(
           input as Omit<ProtocolIntentCreateInput, "actorUserId" | "metadata">,
@@ -339,6 +369,16 @@ export function createProtocolAgentToolset(
       name: "protocol_agent_update_intent",
       description:
         "Update the user-owned text of an existing coordination intent.",
+      inputSchema: {
+        type: "object",
+        required: ["intentId", "rawText"],
+        additionalProperties: false,
+        properties: {
+          intentId: { type: "string" },
+          rawText: { type: "string", minLength: 1 },
+          metadata: metadataSchema,
+        },
+      },
       invoke: (input) => {
         const payload = input as {
           intentId: string;
@@ -355,6 +395,16 @@ export function createProtocolAgentToolset(
       name: "protocol_agent_cancel_intent",
       description:
         "Cancel a user-owned coordination intent and stop associated request flow.",
+      inputSchema: {
+        type: "object",
+        required: ["intentId"],
+        additionalProperties: false,
+        properties: {
+          intentId: { type: "string" },
+          agentThreadId: { type: "string" },
+          metadata: metadataSchema,
+        },
+      },
       invoke: (input) => {
         const payload = (input ?? {}) as {
           intentId: string;
@@ -371,6 +421,18 @@ export function createProtocolAgentToolset(
       name: "protocol_agent_send_request",
       description:
         "Send a coordination request from the current actor to a recipient for an intent.",
+      inputSchema: {
+        type: "object",
+        required: ["intentId", "recipientUserId"],
+        additionalProperties: false,
+        properties: {
+          intentId: { type: "string" },
+          recipientUserId: { type: "string" },
+          agentThreadId: { type: "string" },
+          traceId: { type: "string" },
+          metadata: metadataSchema,
+        },
+      },
       invoke: (input) =>
         agent.sendRequest(
           input as Omit<ProtocolRequestSendInput, "actorUserId" | "metadata">,
@@ -380,6 +442,15 @@ export function createProtocolAgentToolset(
       name: "protocol_agent_accept_request",
       description:
         "Accept a received coordination request through the OpenSocial protocol.",
+      inputSchema: {
+        type: "object",
+        required: ["requestId"],
+        additionalProperties: false,
+        properties: {
+          requestId: { type: "string" },
+          metadata: metadataSchema,
+        },
+      },
       invoke: (input) => {
         const payload = (input ?? {}) as {
           requestId: string;
@@ -394,6 +465,15 @@ export function createProtocolAgentToolset(
       name: "protocol_agent_reject_request",
       description:
         "Reject a received coordination request through the OpenSocial protocol.",
+      inputSchema: {
+        type: "object",
+        required: ["requestId"],
+        additionalProperties: false,
+        properties: {
+          requestId: { type: "string" },
+          metadata: metadataSchema,
+        },
+      },
       invoke: (input) => {
         const payload = (input ?? {}) as {
           requestId: string;
@@ -408,6 +488,18 @@ export function createProtocolAgentToolset(
       name: "protocol_agent_send_chat_message",
       description:
         "Send a chat message into an existing chat through the OpenSocial protocol.",
+      inputSchema: {
+        type: "object",
+        required: ["chatId", "body"],
+        additionalProperties: false,
+        properties: {
+          chatId: { type: "string" },
+          body: { type: "string", minLength: 1 },
+          clientMessageId: { type: "string" },
+          replyToMessageId: { type: "string" },
+          metadata: metadataSchema,
+        },
+      },
       invoke: (input) => {
         const payload = input as {
           chatId: string;
@@ -428,6 +520,33 @@ export function createProtocolAgentToolset(
       name: "protocol_agent_create_circle",
       description:
         "Create a recurring coordination circle through the OpenSocial protocol.",
+      inputSchema: {
+        type: "object",
+        required: ["title", "cadence"],
+        additionalProperties: false,
+        properties: {
+          title: { type: "string", minLength: 1 },
+          description: { type: "string" },
+          visibility: { type: "string" },
+          topicTags: { type: "array", items: { type: "string" } },
+          targetSize: { type: "integer", minimum: 2 },
+          kickoffPrompt: { type: "string" },
+          cadence: {
+            type: "object",
+            additionalProperties: false,
+            required: ["kind", "days", "hour", "minute", "timezone"],
+            properties: {
+              kind: { type: "string" },
+              days: { type: "array", items: { type: "string" } },
+              hour: { type: "integer", minimum: 0, maximum: 23 },
+              minute: { type: "integer", minimum: 0, maximum: 59 },
+              timezone: { type: "string" },
+              intervalWeeks: { type: "integer", minimum: 1 },
+            },
+          },
+          metadata: metadataSchema,
+        },
+      },
       invoke: (input) =>
         agent.createCircle(
           input as Omit<ProtocolCircleCreateInput, "actorUserId" | "metadata">,
@@ -437,6 +556,17 @@ export function createProtocolAgentToolset(
       name: "protocol_agent_join_circle",
       description:
         "Join or add a member to an existing recurring coordination circle.",
+      inputSchema: {
+        type: "object",
+        required: ["circleId", "memberUserId"],
+        additionalProperties: false,
+        properties: {
+          circleId: { type: "string" },
+          memberUserId: { type: "string" },
+          role: { type: "string", enum: ["admin", "member"] },
+          metadata: metadataSchema,
+        },
+      },
       invoke: (input) => {
         const payload = input as {
           circleId: string;
@@ -455,6 +585,16 @@ export function createProtocolAgentToolset(
       name: "protocol_agent_leave_circle",
       description:
         "Leave or remove a member from an existing recurring coordination circle.",
+      inputSchema: {
+        type: "object",
+        required: ["circleId", "memberUserId"],
+        additionalProperties: false,
+        properties: {
+          circleId: { type: "string" },
+          memberUserId: { type: "string" },
+          metadata: metadataSchema,
+        },
+      },
       invoke: (input) => {
         const payload = input as {
           circleId: string;
