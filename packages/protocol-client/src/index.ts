@@ -1051,6 +1051,17 @@ export function createProtocolClientFromBaseUrl(
   );
 }
 
+export function createBoundProtocolAppClientFromBaseUrl(
+  baseUrl: string,
+  session: ProtocolAppSession,
+  fetchImpl?: ProtocolClientFetchLike,
+): ProtocolAppClient {
+  return bindProtocolAppClient(
+    createProtocolClientFromBaseUrl(baseUrl, fetchImpl),
+    session,
+  );
+}
+
 export function bindProtocolAppClient(
   client: ProtocolClient,
   session: ProtocolAppSession,

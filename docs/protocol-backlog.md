@@ -83,6 +83,10 @@ The protocol is no longer just a concept. The following pieces are already prese
 - First-party agent circle creation and circle membership actions now call through the protocol service instead of bypassing it.
 - Protocol-originated circle actions now emit provenance-backed user notifications, and first-party Activity can label them as integration updates without exposing protocol internals.
 - Protocol-originated request send, request reject, accepted-request connection setup, and group backfill notifications now carry provenance through to user-facing Activity titles and notification metadata.
+- Partner-facing SDK readiness is stronger:
+  - package READMEs now document the actual shipped helpers
+  - partner quickstart, replay, webhook-consumer, and consent/auth troubleshooting guides are now in repo
+  - the protocol client now supports creating a bound app client directly from a base URL and app session
 
 Use this as the baseline for all next backlog items. Do not reintroduce generic social primitives like posts or follows.
 

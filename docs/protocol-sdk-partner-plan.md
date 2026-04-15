@@ -13,6 +13,10 @@ The SDK docs must stay aligned with what is already shipped:
 - Unsupported primitives remain unsupported, especially posts and follows.
 - The protocol backend now explicitly advertises its unsupported-primitives policy in the manifest metadata so third parties do not infer support from omission.
 - Usage summaries now expose structured protocol auth-failure diagnostics so partners can distinguish missing tokens, missing scopes, missing capabilities, and missing delegated grants.
+- Partner-ready guides now exist for:
+  - quickstart onboarding
+  - webhook subscription and replay
+  - consent/auth troubleshooting
 
 ## Doc Set Goals
 
@@ -246,10 +250,10 @@ The docs should not describe posts, follows, feeds, or any other generic social 
 1. Publish the protocol overview and exclusions.
 2. Publish app registration and auth/scope guides.
 3. Publish webhook subscription and replay/recovery guides.
-4. Publish consent and grants guidance.
-5. Publish the external actions reference.
-6. Add example snippets for each of the above.
-7. Add one partner quickstart that walks through the whole path end to end.
+4. Keep operator recovery and dead-letter handling docs current as queue semantics evolve.
+5. Keep the external actions reference aligned with the shipped contract.
+6. Keep package READMEs and example snippets aligned with the real helpers.
+7. Add higher-level agent wrappers only if they reduce friction without widening backend contracts.
 
 ## Acceptance Criteria
 

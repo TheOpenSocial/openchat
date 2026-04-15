@@ -21,6 +21,7 @@ It depends on `@opensocial/protocol-types` and `@opensocial/protocol-events` for
 ```ts
 import {
   bindProtocolAppClient,
+  createBoundProtocolAppClientFromBaseUrl,
   createProtocolClientFromBaseUrl,
 } from "@opensocial/protocol-client";
 import {
@@ -64,7 +65,28 @@ const webhook = await app.createWebhook({
   resources: ["intent"],
   deliveryMode: "json",
 });
+
+const sameApp = createBoundProtocolAppClientFromBaseUrl(
+  "https://api.example.com/api",
+  {
+    appId: registration.registration.appId,
+    appToken: registration.credentials.appToken,
+  },
+);
 ```
+
+## Troubleshooting
+
+If a write action is denied, inspect the app usage summary before assuming the transport is broken:
+
+```ts
+const usage = await app.getAppUsageSummary();
+console.log(usage.authFailures);
+console.log(usage.tokenAudit);
+console.log(usage.grantAudit);
+```
+
+Use [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-consent-and-auth-troubleshooting.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-consent-and-auth-troubleshooting.md) for the current consent/grant debugging flow.
 
 ## Exclusions
 
