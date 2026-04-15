@@ -17,6 +17,12 @@ function createPrismaStub() {
   let consentSeq = 0;
 
   return {
+    datingConsentArtifact: {
+      create: vi.fn().mockResolvedValue({}),
+    },
+    userPreference: {
+      create: vi.fn().mockResolvedValue({}),
+    },
     async $queryRawUnsafe<T = unknown>(query: string, ...params: any[]) {
       if (
         query.includes("FROM protocol_app_scope_grants") &&
@@ -1153,6 +1159,43 @@ describe("ProtocolService", () => {
     expect(leftCircle.action).toBe("circle.leave");
     expect(notificationsService.createInAppNotification).toHaveBeenCalledTimes(
       3,
+    );
+  });
+
+  it("normalizes first-party dating consent persistence through the protocol service", async () => {
+    const notificationsService = createNotificationsServiceStub();
+    const service = new ProtocolService(
+      createPrismaStub() as any,
+      createDeliveryWorkerStub() as any,
+      createDeliveryRunnerStub() as any,
+      createProtocolQueueStub() as any,
+      createIntentsServiceStub() as any,
+      createInboxServiceStub() as any,
+      createChatsServiceStub() as any,
+      createRecurringCirclesServiceStub() as any,
+      notificationsService as any,
+    );
+
+    const persisted = await service.createFirstPartyDatingConsentAction({
+      id: "00000000-0000-4000-8000-000000000200",
+      userId: "00000000-0000-4000-8000-000000000001",
+      targetUserId: "00000000-0000-4000-8000-000000000002",
+      scope: "dm_intro",
+      consentStatus: "granted",
+      verificationStatus: "verified",
+      reason: null,
+      expiresAt: null,
+    });
+
+    expect(persisted).toBe(true);
+    expect(notificationsService.createInAppNotification).toHaveBeenCalledWith(
+      "00000000-0000-4000-8000-000000000002",
+      expect.anything(),
+      expect.stringContaining("dating-intro consent request"),
+      expect.objectContaining({
+        source: "protocol",
+        operation: "dating_consent",
+      }),
     );
   });
 

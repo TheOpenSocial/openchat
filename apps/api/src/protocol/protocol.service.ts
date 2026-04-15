@@ -3,6 +3,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
   Optional,
   UnauthorizedException,
@@ -227,6 +228,8 @@ const FIRST_PARTY_PROTOCOL_ACTOR_APP_ID = "opensocial-firstparty";
 
 @Injectable()
 export class ProtocolService {
+  private readonly logger = new Logger(ProtocolService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly deliveryWorker: ProtocolWebhookDeliveryWorkerService,
@@ -1427,6 +1430,40 @@ export class ProtocolService {
     });
   }
 
+  async createFirstPartyDatingConsentAction(input: {
+    id: string;
+    userId: string;
+    targetUserId: string;
+    scope: string;
+    consentStatus: "pending" | "granted" | "revoked";
+    verificationStatus: "unverified" | "verified" | "rejected";
+    reason: string | null;
+    expiresAt: Date | null;
+  }) {
+    const persistedPrimary = await this.persistDatingConsent({
+      ...input,
+      workflowRunId: `protocol:firstparty:dating_consent:${input.id}`,
+      traceId: input.id,
+    });
+
+    if (input.consentStatus === "granted") {
+      await this.notificationsService?.createInAppNotification(
+        input.targetUserId,
+        NotificationType.AGENT_UPDATE,
+        "You received a dating-intro consent request. Review and respond when ready.",
+        {
+          source: "protocol",
+          operation: "dating_consent",
+          consentId: input.id,
+          scope: input.scope,
+          targetUserId: input.targetUserId,
+        },
+      );
+    }
+
+    return persistedPrimary;
+  }
+
   async sendFirstPartyRequestAction(input: ProtocolIntentRequestSendAction) {
     return this.executeRequestSendAction(input, {
       actorAppId: FIRST_PARTY_PROTOCOL_ACTOR_APP_ID,
@@ -2426,6 +2463,58 @@ export class ProtocolService {
       metadata: row.metadata ?? {},
       createdAt: this.toIsoString(row.created_at),
     });
+  }
+
+  private async persistDatingConsent(input: {
+    id: string;
+    userId: string;
+    targetUserId: string;
+    scope: string;
+    consentStatus: "pending" | "granted" | "revoked";
+    verificationStatus: "unverified" | "verified" | "rejected";
+    reason: string | null;
+    expiresAt: Date | null;
+    workflowRunId: string;
+    traceId: string;
+  }) {
+    try {
+      await this.prisma.datingConsentArtifact.create({
+        data: {
+          id: input.id,
+          userId: input.userId,
+          targetUserId: input.targetUserId,
+          scope: input.scope,
+          consentStatus: input.consentStatus,
+          verificationStatus: input.verificationStatus,
+          reason: input.reason,
+          expiresAt: input.expiresAt,
+          workflowRunId: input.workflowRunId,
+          traceId: input.traceId,
+        },
+      });
+      return true;
+    } catch (error) {
+      this.logger.warn(
+        `dating consent persistence failed, falling back: ${String(error)}`,
+      );
+      await this.prisma.userPreference.create({
+        data: {
+          userId: input.userId,
+          key: `protocol.dating_consent.${input.id}`,
+          value: {
+            targetUserId: input.targetUserId,
+            scope: input.scope,
+            consentStatus: input.consentStatus,
+            verificationStatus: input.verificationStatus,
+            reason: input.reason,
+            expiresAt: input.expiresAt?.toISOString() ?? null,
+            workflowRunId: input.workflowRunId,
+            traceId: input.traceId,
+          },
+        },
+      });
+      return false;
+    }
   }
 
   private async recordEvent(input: {

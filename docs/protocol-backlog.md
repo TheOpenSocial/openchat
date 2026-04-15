@@ -189,6 +189,7 @@ These packages should mirror the backend domain rather than inventing new abstra
    - Sample agent flow
    - Event subscription example
    - Auth and scope example
+   - Partner-facing SDK docs plan for app registration, auth token use, webhook subscriptions, replay, and consent/grants
 
 ## Backend Tasks
 
@@ -260,6 +261,7 @@ These packages should mirror the backend domain rather than inventing new abstra
 4. Add operator/admin visibility for protocol lag, replay pressure, and token/grant audit usage.
 5. Add the next external action APIs and agent support beyond circles.
 6. Expand user-visible protocol events in first-party activity surfaces beyond circle notifications, without exposing backend internals.
+7. Publish the partner-facing SDK docs/examples plan and then turn the plan into the actual docs set once the protocol surface is stable enough to freeze.
 
 ## Current Direction Guardrails
 

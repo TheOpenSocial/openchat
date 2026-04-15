@@ -4,6 +4,7 @@ import { RuntimeService } from "../src/runtime/runtime.service.js";
 function createHarness(input?: {
   trustScore?: number;
   workflowDomainIntentFails?: boolean;
+  protocolService?: any;
 }) {
   const prisma: any = {
     workflowDomainIntent: {
@@ -72,6 +73,7 @@ function createHarness(input?: {
       prisma,
       workflowRuntimeService,
       notificationsService,
+      input?.protocolService,
     ),
   };
 }
@@ -118,6 +120,29 @@ describe("RuntimeService", () => {
 
     expect(response.consentState).toBe("pending");
     expect(response.replayability).toBe("inspect_only");
+  });
+
+  it("delegates dating consent persistence to the protocol service when available", async () => {
+    const protocolService = {
+      createFirstPartyDatingConsentAction: vi.fn().mockResolvedValue(true),
+    };
+    const { service, workflowRuntimeService, notificationsService } =
+      createHarness({ protocolService });
+
+    const response = await service.createDatingConsent({
+      userId: "11111111-1111-4111-8111-111111111111",
+      targetUserId: "22222222-2222-4222-8222-222222222222",
+      scope: "dm_intro",
+      consentState: "granted",
+      verificationState: "verified",
+    });
+
+    expect(
+      protocolService.createFirstPartyDatingConsentAction,
+    ).toHaveBeenCalledTimes(1);
+    expect(notificationsService.createInAppNotification).not.toHaveBeenCalled();
+    expect(response.replayability).toBe("replayable");
+    expect(workflowRuntimeService.checkpoint).toHaveBeenCalled();
   });
 
   it("transitions accepted commerce offers into escrow pending funding", async () => {

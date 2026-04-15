@@ -216,18 +216,37 @@ export class RuntimeService {
       };
     }
 
-    const persistedPrimary = await this.persistDatingConsent({
-      id: consentId,
-      userId: input.userId,
-      targetUserId: input.targetUserId,
-      scope: input.scope,
-      consentStatus: input.consentState,
-      verificationStatus: input.verificationState,
-      reason: input.reason ?? null,
-      expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
-      workflowRunId,
-      traceId,
-    });
+    const persistedPrimary = this.protocolService
+      ? await this.protocolService.createFirstPartyDatingConsentAction({
+          id: consentId,
+          userId: input.userId,
+          targetUserId: input.targetUserId,
+          scope: input.scope,
+          consentStatus: input.consentState,
+          verificationStatus: input.verificationState,
+          reason: input.reason ?? null,
+          expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
+        })
+      : await this.persistDatingConsent({
+          id: consentId,
+          userId: input.userId,
+          targetUserId: input.targetUserId,
+          scope: input.scope,
+          consentStatus: input.consentState,
+          verificationStatus: input.verificationState,
+          reason: input.reason ?? null,
+          expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
+          workflowRunId,
+          traceId,
+        });
+
+    if (!this.protocolService && input.consentState === "granted") {
+      await this.notificationsService?.createInAppNotification(
+        input.targetUserId,
+        NotificationType.AGENT_UPDATE,
+        "You received a dating-intro consent request. Review and respond when ready.",
+      );
+    }
 
     await this.workflowRuntimeService?.checkpoint({
       workflowRunId,
@@ -244,11 +263,6 @@ export class RuntimeService {
     });
 
     if (input.consentState === "granted") {
-      await this.notificationsService?.createInAppNotification(
-        input.targetUserId,
-        NotificationType.AGENT_UPDATE,
-        "You received a dating-intro consent request. Review and respond when ready.",
-      );
       await this.workflowRuntimeService?.linkSideEffect({
         workflowRunId,
         traceId,

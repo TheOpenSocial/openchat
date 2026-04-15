@@ -16,7 +16,8 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint \"src/**/*.ts\" --max-warnings=0",
-    "test": "echo 'no tests yet for protocol-types package'"
+    "pretest": "pnpm build",
+    "test": "node --test test/catalog.test.mjs"
   },
   "dependencies": {
     "zod": "^4.3.6"

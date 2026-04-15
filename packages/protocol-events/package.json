@@ -18,8 +18,8 @@
     "pretypecheck": "pnpm --filter @opensocial/protocol-types build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint \"src/**/*.ts\" --max-warnings=0",
-    "pretest": "pnpm --filter @opensocial/protocol-types build",
-    "test": "echo 'no tests yet for protocol-events package'"
+    "pretest": "pnpm --filter @opensocial/protocol-types build && pnpm build",
+    "test": "node --test test/catalog.test.mjs"
   },
   "dependencies": {
     "zod": "^4.3.6",
