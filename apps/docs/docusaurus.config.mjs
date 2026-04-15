@@ -8,7 +8,7 @@ const __dirname = path.dirname(__filename);
 /** @type {import('@docusaurus/types').Config} */
 const config = {
   title: "OpenSocial Docs",
-  tagline: "Protocol, backend, mobile, and ops documentation",
+  tagline: "Protocol SDK and third-party integration documentation",
   url: "https://docs.opensocial.so",
   baseUrl: "/",
   organizationName: "TheOpenSocial",
@@ -28,6 +28,7 @@ const config = {
           path: path.resolve(__dirname, "../../docs"),
           routeBasePath: "docs",
           sidebarPath: path.resolve(__dirname, "./sidebars.mjs"),
+          include: ["index.md", "examples/protocol-*.md"],
           editUrl:
             "https://github.com/TheOpenSocial/openchat/tree/main/",
           showLastUpdateTime: true,
@@ -47,7 +48,7 @@ const config = {
           type: "docSidebar",
           sidebarId: "docsSidebar",
           position: "left",
-          label: "Docs",
+          label: "SDK Docs",
         },
         {
           to: "/docs/examples/protocol-sdk-index",
@@ -55,8 +56,8 @@ const config = {
           position: "left",
         },
         {
-          to: "/docs/protocol-backlog",
-          label: "Backlog",
+          to: "/docs/examples/protocol-partner-quickstart",
+          label: "Quickstart",
           position: "left",
         },
         {
@@ -70,7 +71,7 @@ const config = {
       style: "dark",
       links: [
         {
-          title: "Docs",
+          title: "SDK",
           items: [
             {
               label: "Overview",
@@ -81,25 +82,25 @@ const config = {
               to: "/docs/examples/protocol-sdk-index",
             },
             {
-              label: "Manual QA",
-              to: "/docs/manual-qa-script",
+              label: "Partner quickstart",
+              to: "/docs/examples/protocol-partner-quickstart",
             },
           ],
         },
         {
-          title: "Operations",
+          title: "Integrations",
           items: [
             {
-              label: "Sandbox World",
-              to: "/docs/staging-sandbox-world",
+              label: "External actions",
+              to: "/docs/examples/protocol-external-actions-reference",
             },
             {
-              label: "Queue Replay Runbook",
-              to: "/docs/queue-replay-runbook",
+              label: "Webhooks + replay",
+              to: "/docs/examples/protocol-event-subscriptions-and-replay",
             },
             {
-              label: "Backend Launch Ops",
-              to: "/docs/backend-launch-ops-pack",
+              label: "Agent quickstart",
+              to: "/docs/examples/protocol-agent-quickstart",
             },
           ],
         },

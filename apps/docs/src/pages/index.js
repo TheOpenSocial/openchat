@@ -4,9 +4,9 @@ import useDocusaurusContext from "@docusaurus/useDocusaurusContext";
 
 const sections = [
   {
-    title: "Protocol SDK",
+    title: "Start Here",
     description:
-      "Start with the partner-facing SDK entrypoint, onboarding, and external action references.",
+      "The shortest path for a third-party system that wants to understand the protocol, bootstrap correctly, and make its first integration call.",
     links: [
       {
         label: "SDK index",
@@ -17,46 +17,46 @@ const sections = [
         to: "/docs/examples/protocol-partner-quickstart",
       },
       {
+        label: "Manifest + discovery",
+        to: "/docs/examples/protocol-manifest-and-discovery",
+      },
+    ],
+  },
+  {
+    title: "Core Integration",
+    description:
+      "Everything a partner app or service needs to authenticate, call stable actions, and subscribe to protocol events.",
+    links: [
+      {
         label: "External actions",
         to: "/docs/examples/protocol-external-actions-reference",
       },
-    ],
-  },
-  {
-    title: "Product + Backend",
-    description:
-      "Use the backlog, architecture notes, and backend launch docs to stay aligned with the shipped contract.",
-    links: [
       {
-        label: "Protocol backlog",
-        to: "/docs/protocol-backlog",
+        label: "Webhooks + replay",
+        to: "/docs/examples/protocol-event-subscriptions-and-replay",
       },
       {
-        label: "System architecture",
-        to: "/docs/05_system_architecture",
-      },
-      {
-        label: "Backend launch ops pack",
-        to: "/docs/backend-launch-ops-pack",
+        label: "App registration + tokens",
+        to: "/docs/examples/protocol-app-registration-and-tokens",
       },
     ],
   },
   {
-    title: "Manual QA + Staging",
+    title: "Agent Integrations",
     description:
-      "Manual testing, staging sandbox validation, and operational recovery all live here.",
+      "Use the thin agent layer, readiness checks, and toolset helpers when you want agents to act through the protocol safely.",
     links: [
       {
-        label: "Manual QA script",
-        to: "/docs/manual-qa-script",
+        label: "Agent integration paths",
+        to: "/docs/examples/protocol-agent-integration-paths",
       },
       {
-        label: "Staging sandbox world",
-        to: "/docs/staging-sandbox-world",
+        label: "Agent quickstart",
+        to: "/docs/examples/protocol-agent-quickstart",
       },
       {
-        label: "Operator recovery",
-        to: "/docs/examples/protocol-operator-recovery",
+        label: "Agent toolset",
+        to: "/docs/examples/protocol-agent-toolset",
       },
     ],
   },
@@ -84,7 +84,7 @@ export default function Home() {
   return (
     <Layout
       title={siteConfig.title}
-      description="OpenSocial protocol, product, and operations documentation"
+      description="OpenSocial protocol SDK and third-party integration documentation"
     >
       <main className="os-home">
         <header className="os-hero">
@@ -93,7 +93,7 @@ export default function Home() {
           <p>{siteConfig.tagline}</p>
           <div className="os-links">
             <Link className="button button--primary button--lg" to="/docs">
-              Open docs
+              Open SDK docs
             </Link>
             <Link
               className="button button--secondary button--lg"
