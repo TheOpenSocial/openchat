@@ -88,33 +88,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Inspect checked out source
-        shell: bash
-        run: |
-          set -euo pipefail
-          pwd
-          echo "--- checkout docker-compose docs service ---"
-          grep -n "^  docs:" docker-compose.prod.yml || true
-          echo "--- checkout caddy docs route ---"
-          grep -n "docs.opensocial.so" deploy/caddy/Caddyfile || true
-
       - name: Sync deploy workspace
         shell: bash
         run: |
           set -euo pipefail
           chmod +x scripts/deploy-production.sh
           DEPLOY_PHASE=sync ./scripts/deploy-production.sh
-
-      - name: Inspect synced deploy config
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd "$DEPLOY_PATH"
-          pwd
-          echo "--- docker-compose docs service ---"
-          grep -n "^  docs:" docker-compose.prod.yml || true
-          echo "--- caddy docs route ---"
-          grep -n "docs.opensocial.so" deploy/caddy/Caddyfile || true
 
       - name: Registry login
         if: ${{ inputs.deploy_mode == 'images' }}
