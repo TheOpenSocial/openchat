@@ -107,6 +107,7 @@ Use this as the baseline for all next backlog items. Do not reintroduce generic 
 - External action APIs for intents, requests, chats, and circles: shipped
 - First-party HTTP call-through for the cleanest public write paths: shipped
 - Partner-facing SDK packages, examples, and docs: effectively complete for v0
+- First-party mobile and web clients now consume the protocol SDK through the same base-url and bound-app helper flow we recommend to partners, rather than hand-wiring protocol transport details at each call site.
 - Docusaurus docs app is now wired on top of the repo documentation set for manual browsing and publishing
 - EC2 deployment for the docs app is now live through Docker, Caddy, image build, and deploy workflows at `https://docs.opensocial.so`
 - First-party protocol settings/inspection surfaces: shipped as operational tooling, but still partial as polished product UX
@@ -165,6 +166,7 @@ These packages should mirror the backend domain rather than inventing new abstra
 
 4. Review remaining first-party write-path normalization selectively.
    - Keep the public controller boundary protocol-owned.
+   - Keep first-party mobile and web clients consuming the shared protocol SDK helpers instead of maintaining parallel protocol transport glue.
    - Normalize additional internal flows only where the public protocol contract is already stable.
    - Avoid converting stable internal logic into protocol call-through just for consistency theater.
    - Mobile-spec-aligned controller paths are now covered for:

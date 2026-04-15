@@ -6,7 +6,8 @@ import {
 import { webEnv } from "./env";
 import {
   buildProtocolAppRegistrationRequest,
-  createProtocolClient,
+  bindProtocolAppClient,
+  createProtocolClientFromBaseUrl,
   type ProtocolAppRegistrationRequestInput,
 } from "@opensocial/protocol-client";
 
@@ -368,9 +369,14 @@ type RequestOptions = {
 
 export const API_BASE_URL = webEnv.apiBaseUrl;
 
-const protocolClient = createProtocolClient({
-  request: (path, init) => fetch(`${API_BASE_URL}${path}`, init),
-});
+const protocolClient = createProtocolClientFromBaseUrl(API_BASE_URL);
+
+function getProtocolAppClient(appId: string, appToken: string) {
+  return bindProtocolAppClient(protocolClient, {
+    appId,
+    appToken,
+  });
+}
 
 let refreshInFlight: Promise<SessionTokens> | null = null;
 let authLifecycleHandlers: AuthLifecycleHandlers = {};
@@ -862,34 +868,34 @@ export const api = {
     return protocolClient.registerApp(input);
   },
   listProtocolWebhooks(appId: string, appToken: string) {
-    return protocolClient.listWebhooks(appId, appToken);
+    return getProtocolAppClient(appId, appToken).listWebhooks();
   },
   createProtocolWebhook(
     appId: string,
     appToken: string,
     payload: Parameters<typeof protocolClient.createWebhook>[2],
   ) {
-    return protocolClient.createWebhook(appId, appToken, payload);
+    return getProtocolAppClient(appId, appToken).createWebhook(payload);
   },
   listProtocolGrants(appId: string, appToken: string) {
-    return protocolClient.listGrants(appId, appToken);
+    return getProtocolAppClient(appId, appToken).listGrants();
   },
   listProtocolConsentRequests(appId: string, appToken: string) {
-    return protocolClient.listConsentRequests(appId, appToken);
+    return getProtocolAppClient(appId, appToken).listConsentRequests();
   },
   createProtocolGrant(
     appId: string,
     appToken: string,
     payload: Parameters<typeof protocolClient.createGrant>[2],
   ) {
-    return protocolClient.createGrant(appId, appToken, payload);
+    return getProtocolAppClient(appId, appToken).createGrant(payload);
   },
   createProtocolConsentRequest(
     appId: string,
     appToken: string,
     payload: Parameters<typeof protocolClient.createConsentRequest>[2],
   ) {
-    return protocolClient.createConsentRequest(appId, appToken, payload);
+    return getProtocolAppClient(appId, appToken).createConsentRequest(payload);
   },
   approveProtocolConsentRequest(
     appId: string,
@@ -897,9 +903,7 @@ export const api = {
     requestId: string,
     payload: Parameters<typeof protocolClient.approveConsentRequest>[3],
   ) {
-    return protocolClient.approveConsentRequest(
-      appId,
-      appToken,
+    return getProtocolAppClient(appId, appToken).approveConsentRequest(
       requestId,
       payload,
     );
@@ -910,9 +914,7 @@ export const api = {
     requestId: string,
     payload: Parameters<typeof protocolClient.rejectConsentRequest>[3],
   ) {
-    return protocolClient.rejectConsentRequest(
-      appId,
-      appToken,
+    return getProtocolAppClient(appId, appToken).rejectConsentRequest(
       requestId,
       payload,
     );
@@ -923,30 +925,28 @@ export const api = {
     grantId: string,
     input?: Parameters<typeof protocolClient.revokeGrant>[3],
   ) {
-    return protocolClient.revokeGrant(appId, appToken, grantId, input);
+    return getProtocolAppClient(appId, appToken).revokeGrant(grantId, input);
   },
   rotateProtocolAppToken(
     appId: string,
     appToken: string,
     input?: Parameters<typeof protocolClient.rotateAppToken>[2],
   ) {
-    return protocolClient.rotateAppToken(appId, appToken, input);
+    return getProtocolAppClient(appId, appToken).rotateAppToken(input);
   },
   revokeProtocolAppToken(
     appId: string,
     appToken: string,
     input?: Parameters<typeof protocolClient.revokeAppToken>[2],
   ) {
-    return protocolClient.revokeAppToken(appId, appToken, input);
+    return getProtocolAppClient(appId, appToken).revokeAppToken(input);
   },
   listProtocolWebhookDeliveries(
     appId: string,
     appToken: string,
     subscriptionId: string,
   ) {
-    return protocolClient.listWebhookDeliveries(
-      appId,
-      appToken,
+    return getProtocolAppClient(appId, appToken).listWebhookDeliveries(
       subscriptionId,
     );
   },
@@ -955,9 +955,7 @@ export const api = {
     appToken: string,
     deliveryId: string,
   ) {
-    return protocolClient.listWebhookDeliveryAttempts(
-      appId,
-      appToken,
+    return getProtocolAppClient(appId, appToken).listWebhookDeliveryAttempts(
       deliveryId,
     );
   },
@@ -966,61 +964,69 @@ export const api = {
     appToken: string,
     deliveryId: string,
   ) {
-    return protocolClient.replayWebhookDelivery(appId, appToken, deliveryId);
+    return getProtocolAppClient(appId, appToken).replayWebhookDelivery(
+      deliveryId,
+    );
   },
   replayProtocolDeadLetteredDeliveries(
     appId: string,
     appToken: string,
     input?: Parameters<typeof protocolClient.replayDeadLetteredDeliveries>[2],
   ) {
-    return protocolClient.replayDeadLetteredDeliveries(appId, appToken, input);
+    return getProtocolAppClient(appId, appToken).replayDeadLetteredDeliveries(
+      input,
+    );
   },
   inspectProtocolDeliveryQueue(
     appId: string,
     appToken: string,
     cursor?: string,
   ) {
-    return protocolClient.inspectDeliveryQueue(appId, appToken, cursor);
+    return getProtocolAppClient(appId, appToken).inspectDeliveryQueue(cursor);
   },
   getProtocolUsageSummary(appId: string, appToken: string) {
-    return protocolClient.getAppUsageSummary(appId, appToken);
+    return getProtocolAppClient(appId, appToken).getAppUsageSummary();
   },
   dispatchProtocolDeliveryQueue(
     appId: string,
     appToken: string,
     input?: Parameters<typeof protocolClient.dispatchWebhookDeliveryQueue>[2],
   ) {
-    return protocolClient.dispatchWebhookDeliveryQueue(appId, appToken, input);
+    return getProtocolAppClient(appId, appToken).dispatchWebhookDeliveryQueue(
+      input,
+    );
   },
   runProtocolDeliveryQueue(
     appId: string,
     appToken: string,
     input?: Parameters<typeof protocolClient.runWebhookDeliveryQueue>[2],
   ) {
-    return protocolClient.runWebhookDeliveryQueue(appId, appToken, input);
+    return getProtocolAppClient(appId, appToken).runWebhookDeliveryQueue(
+      input,
+    );
   },
   replayProtocolEvents(appId: string, appToken: string, cursor?: string) {
-    return protocolClient.replayEvents(appId, appToken, cursor);
+    return getProtocolAppClient(appId, appToken).replayEvents(cursor);
   },
   getProtocolReplayCursor(appId: string, appToken: string) {
-    return protocolClient.getReplayCursor(appId, appToken);
+    return getProtocolAppClient(appId, appToken).getReplayCursor();
   },
   saveProtocolReplayCursor(appId: string, appToken: string, cursor: string) {
-    return protocolClient.saveReplayCursor(appId, appToken, cursor);
+    return getProtocolAppClient(appId, appToken).saveReplayCursor(cursor);
   },
   createProtocolIntent(
     appId: string,
     appToken: string,
     payload: Parameters<typeof protocolClient.createIntent>[2],
   ) {
-    return protocolClient.createIntent(appId, appToken, payload);
+    return getProtocolAppClient(appId, appToken).createIntent(payload);
   },
   sendProtocolRequest(
     appId: string,
     appToken: string,
     payload: Parameters<typeof protocolClient.sendRequest>[2],
   ) {
-    return protocolClient.sendRequest(appId, appToken, payload);
+    return getProtocolAppClient(appId, appToken).sendRequest(payload);
   },
   acceptProtocolRequest(
     appId: string,
@@ -1028,7 +1034,10 @@ export const api = {
     requestId: string,
     payload: Parameters<typeof protocolClient.acceptRequest>[3],
   ) {
-    return protocolClient.acceptRequest(appId, appToken, requestId, payload);
+    return getProtocolAppClient(appId, appToken).acceptRequest(
+      requestId,
+      payload,
+    );
   },
   rejectProtocolRequest(
     appId: string,
@@ -1036,7 +1045,10 @@ export const api = {
     requestId: string,
     payload: Parameters<typeof protocolClient.rejectRequest>[3],
   ) {
-    return protocolClient.rejectRequest(appId, appToken, requestId, payload);
+    return getProtocolAppClient(appId, appToken).rejectRequest(
+      requestId,
+      payload,
+    );
   },
   sendProtocolChatMessage(
     appId: string,
@@ -1044,7 +1056,10 @@ export const api = {
     chatId: string,
     payload: Parameters<typeof protocolClient.sendChatMessage>[3],
   ) {
-    return protocolClient.sendChatMessage(appId, appToken, chatId, payload);
+    return getProtocolAppClient(appId, appToken).sendChatMessage(
+      chatId,
+      payload,
+    );
   },
   buildProtocolAppRegistrationRequest(
     input: ProtocolAppRegistrationRequestInput,
