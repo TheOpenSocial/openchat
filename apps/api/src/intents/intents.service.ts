@@ -171,6 +171,19 @@ export class IntentsService {
     });
   }
 
+  async getOwnedIntent(intentId: string, userId: string) {
+    const intent = await this.prisma.intent.findUnique({
+      where: { id: intentId },
+    });
+    if (!intent) {
+      throw new NotFoundException("intent not found");
+    }
+    if (intent.userId !== userId) {
+      throw new ForbiddenException("intent not owned by user");
+    }
+    return intent;
+  }
+
   private async parseIntentWithBudget(
     rawText: string,
     traceId: string,

@@ -1,9 +1,10 @@
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { BullModule } from "@nestjs/bullmq";
 import { AnalyticsModule } from "../analytics/analytics.module.js";
 import { ExecutionReconciliationModule } from "../execution-reconciliation/execution-reconciliation.module.js";
 import { NotificationsModule } from "../notifications/notifications.module.js";
 import { PersonalizationModule } from "../personalization/personalization.module.js";
+import { ProtocolModule } from "../protocol/protocol.module.js";
 import { RealtimeModule } from "../realtime/realtime.module.js";
 import { InboxController } from "./inbox.controller.js";
 import { InboxService } from "./inbox.service.js";
@@ -16,6 +17,7 @@ import { InboxService } from "./inbox.service.js";
     PersonalizationModule,
     ExecutionReconciliationModule,
     AnalyticsModule,
+    forwardRef(() => ProtocolModule),
     RealtimeModule,
   ],
   providers: [InboxService],

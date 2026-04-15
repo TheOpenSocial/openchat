@@ -76,6 +76,9 @@ The protocol is no longer just a concept. The following pieces are already prese
 - First-party mobile and web settings surfaces now support token rotate/revoke and grant creation/revocation flows for protocol apps.
 - First-party mobile and web settings surfaces now frame grants as delegated access and expose dead-letter replay controls.
 - First-party runtime and agent intent/request flows now have protocol-service call-through paths for the cleanest social actions.
+- The direct `POST /intents` controller path now routes through the same first-party protocol intent action before hydrating the created intent response, so first-party HTTP intent creation shares protocol event semantics with runtime intent creation.
+- The direct inbox accept/reject controller paths now route through the same first-party protocol request-decision actions before hydrating the request response, so first-party HTTP request decisions share protocol event semantics with agent/runtime request decisions.
+- The direct recurring-circle create and add-member controller paths now route through the same first-party protocol circle actions before hydrating circle responses, so first-party HTTP circle management shares protocol event semantics with agent/runtime circle actions.
 - First-party agent circle creation and circle membership actions now call through the protocol service instead of bypassing it.
 - Protocol-originated circle actions now emit provenance-backed user notifications, and first-party Activity can label them as integration updates without exposing protocol internals.
 - Protocol-originated request send, request reject, accepted-request connection setup, and group backfill notifications now carry provenance through to user-facing Activity titles and notification metadata.
@@ -258,11 +261,12 @@ These packages should mirror the backend domain rather than inventing new abstra
 
 1. Finalize protocol resources, event names, and exclusions.
 2. Expand consent-request lifecycle and approval policy on persisted app rows.
-3. Normalize protocol-backed first-party action paths beyond chat send, intent, request, and recurring-circle actions.
-   - Recommended normalization order from current backend shape:
-     - align direct `IntentsController` create flows with the existing first-party protocol intent path
-     - align `InboxController` request accept/reject flows with the existing first-party protocol decision paths
-     - align `RecurringCirclesController` create/join flows with the existing first-party protocol circle paths
+3. Review remaining first-party write paths selectively and only normalize additional controller/service flows where the public protocol contract is already stable.
+   - The cleanest direct controller paths are now aligned for:
+     - direct intent create
+     - direct request accept/reject
+     - recurring-circle create and add-member
+   - Remaining candidates should be judged narrowly against current protocol scope instead of normalized by default.
 4. Add operator/admin visibility for protocol lag, replay pressure, and token/grant audit usage.
 5. Add the next external action APIs and agent support beyond circles.
 6. Expand user-visible protocol events in first-party activity surfaces beyond circle notifications, without exposing backend internals.

@@ -26,6 +26,7 @@ import { LaunchControlsService } from "../launch-controls/launch-controls.servic
 import { readIdempotencyKeyHeader } from "../common/idempotency.js";
 import { parseRequestPayload } from "../common/validation.js";
 import { ClientMutationService } from "../database/client-mutation.service.js";
+import { ProtocolService } from "../protocol/protocol.service.js";
 import { IntentsService } from "./intents.service.js";
 
 @Controller("intents")
@@ -33,6 +34,8 @@ export class IntentsController {
   constructor(
     private readonly intentsService: IntentsService,
     private readonly clientMutationService: ClientMutationService,
+    @Optional()
+    private readonly protocolService?: ProtocolService,
     @Optional()
     private readonly launchControlsService?: LaunchControlsService,
   ) {}
@@ -55,18 +58,38 @@ export class IntentsController {
         payload.userId,
       );
     }
+    const traceId = randomUUID();
     return ok(
       await this.clientMutationService.run({
         userId: payload.userId,
         scope: "intent.create",
         idempotencyKey: readIdempotencyKeyHeader(idempotencyKeyHeader),
-        handler: () =>
-          this.intentsService.createIntent(
+        handler: async () => {
+          if (!this.protocolService) {
+            return this.intentsService.createIntent(
+              payload.userId,
+              payload.rawText,
+              traceId,
+              payload.agentThreadId,
+            );
+          }
+
+          const result =
+            await this.protocolService.createFirstPartyIntentAction({
+              actorUserId: payload.userId,
+              rawText: payload.rawText,
+              traceId,
+              agentThreadId: payload.agentThreadId,
+              metadata: {
+                source: "intents.controller.create",
+              },
+            });
+
+          return this.intentsService.getOwnedIntent(
+            result.intentId,
             payload.userId,
-            payload.rawText,
-            randomUUID(),
-            payload.agentThreadId,
-          ),
+          );
+        },
       }),
     );
   }

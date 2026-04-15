@@ -189,6 +189,19 @@ export class InboxService {
     });
   }
 
+  async getOwnedRequest(requestId: string, recipientUserId: string) {
+    const request = await this.prisma.intentRequest.findUnique({
+      where: { id: requestId },
+    });
+    if (!request) {
+      throw new NotFoundException("request not found");
+    }
+    if (request.recipientUserId !== recipientUserId) {
+      throw new ForbiddenException("request not owned by recipient");
+    }
+    return request;
+  }
+
   async updateStatus(
     requestId: string,
     status: "accepted" | "rejected",

@@ -190,6 +190,30 @@ export class RecurringCirclesService {
     });
   }
 
+  async getOwnedCircle(circleId: string, ownerUserId: string) {
+    return this.requireCircleOwnership(circleId, ownerUserId);
+  }
+
+  async getCircleMember(
+    circleId: string,
+    ownerUserId: string,
+    memberUserId: string,
+  ) {
+    await this.requireCircleOwnership(circleId, ownerUserId);
+    const member = await this.prisma.recurringCircleMember.findUnique({
+      where: {
+        circleId_userId: {
+          circleId,
+          userId: memberUserId,
+        },
+      },
+    });
+    if (!member) {
+      throw new NotFoundException("circle member not found");
+    }
+    return member;
+  }
+
   async addMember(
     circleId: string,
     ownerUserId: string,

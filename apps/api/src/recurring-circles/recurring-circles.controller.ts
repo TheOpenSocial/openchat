@@ -20,12 +20,14 @@ import { ok } from "../common/api-response.js";
 import { ActorUserId } from "../common/actor-user-id.decorator.js";
 import { assertActorOwnsUser } from "../common/auth-context.js";
 import { parseRequestPayload } from "../common/validation.js";
+import { ProtocolService } from "../protocol/protocol.service.js";
 import { RecurringCirclesService } from "./recurring-circles.service.js";
 
 @Controller()
 export class RecurringCirclesController {
   constructor(
     private readonly recurringCirclesService: RecurringCirclesService,
+    private readonly protocolService?: ProtocolService,
   ) {}
 
   @Get("recurring-circles/:userId")
@@ -62,7 +64,31 @@ export class RecurringCirclesController {
       "recurring circles target does not match authenticated user",
     );
     const payload = parseRequestPayload(recurringCircleCreateBodySchema, body);
-    return ok(await this.recurringCirclesService.createCircle(userId, payload));
+    if (!this.protocolService) {
+      return ok(
+        await this.recurringCirclesService.createCircle(userId, payload),
+      );
+    }
+
+    const result = await this.protocolService.createFirstPartyCircleAction({
+      actorUserId: userId,
+      title: payload.title,
+      description: payload.description,
+      visibility: payload.visibility,
+      topicTags: payload.topicTags,
+      targetSize: payload.targetSize,
+      kickoffPrompt: payload.kickoffPrompt,
+      cadence: payload.cadence,
+      metadata: {
+        source: "recurring-circles.controller.create",
+      },
+    });
+    return ok(
+      await this.recurringCirclesService.getOwnedCircle(
+        result.circleId,
+        userId,
+      ),
+    );
   }
 
   @Put("recurring-circles/:circleId")
@@ -137,11 +163,29 @@ export class RecurringCirclesController {
       recurringCircleAddMemberBodySchema,
       body,
     );
+    if (!this.protocolService) {
+      return ok(
+        await this.recurringCirclesService.addMember(
+          circleId,
+          actorUserId,
+          payload,
+        ),
+      );
+    }
+
+    await this.protocolService.joinFirstPartyCircleAction(circleId, {
+      actorUserId,
+      memberUserId: payload.userId,
+      role: payload.role,
+      metadata: {
+        source: "recurring-circles.controller.add_member",
+      },
+    });
     return ok(
-      await this.recurringCirclesService.addMember(
+      await this.recurringCirclesService.getCircleMember(
         circleId,
         actorUserId,
-        payload,
+        payload.userId,
       ),
     );
   }

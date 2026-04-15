@@ -20,12 +20,15 @@ import { ok } from "../common/api-response.js";
 import { ActorUserId } from "../common/actor-user-id.decorator.js";
 import { assertActorOwnsUser } from "../common/auth-context.js";
 import { parseRequestPayload } from "../common/validation.js";
+import { ProtocolService } from "../protocol/protocol.service.js";
 import { InboxService } from "./inbox.service.js";
 
 @Controller("inbox/requests")
 export class InboxController {
   constructor(
     private readonly inboxService: InboxService,
+    @Optional()
+    private readonly protocolService?: ProtocolService,
     @Optional()
     @InjectQueue("cleanup")
     private readonly cleanupQueue?: Queue,
@@ -51,9 +54,30 @@ export class InboxController {
     @ActorUserId() actorUserId: string,
   ) {
     const requestId = parseRequestPayload(uuidSchema, requestIdParam);
-    return ok(
-      await this.inboxService.updateStatus(requestId, "accepted", actorUserId),
+    if (!this.protocolService) {
+      return ok(
+        await this.inboxService.updateStatus(
+          requestId,
+          "accepted",
+          actorUserId,
+        ),
+      );
+    }
+
+    const result = await this.protocolService.acceptFirstPartyRequestAction(
+      requestId,
+      {
+        actorUserId,
+        metadata: {
+          source: "inbox.controller.accept",
+        },
+      },
     );
+    return ok({
+      request: await this.inboxService.getOwnedRequest(requestId, actorUserId),
+      ...(result.queued ? { queued: true } : {}),
+      ...(result.unchanged ? { unchanged: true } : {}),
+    });
   }
 
   @Post(":requestId/reject")
@@ -62,9 +86,29 @@ export class InboxController {
     @ActorUserId() actorUserId: string,
   ) {
     const requestId = parseRequestPayload(uuidSchema, requestIdParam);
-    return ok(
-      await this.inboxService.updateStatus(requestId, "rejected", actorUserId),
+    if (!this.protocolService) {
+      return ok(
+        await this.inboxService.updateStatus(
+          requestId,
+          "rejected",
+          actorUserId,
+        ),
+      );
+    }
+
+    const result = await this.protocolService.rejectFirstPartyRequestAction(
+      requestId,
+      {
+        actorUserId,
+        metadata: {
+          source: "inbox.controller.reject",
+        },
+      },
     );
+    return ok({
+      request: await this.inboxService.getOwnedRequest(requestId, actorUserId),
+      ...(result.unchanged ? { unchanged: true } : {}),
+    });
   }
 
   @Post(":requestId/cancel")

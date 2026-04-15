@@ -5,6 +5,7 @@ import { AgentModule } from "../agent/agent.module.js";
 import { MatchingModule } from "../matching/matching.module.js";
 import { NotificationsModule } from "../notifications/notifications.module.js";
 import { PersonalizationModule } from "../personalization/personalization.module.js";
+import { ProtocolModule } from "../protocol/protocol.module.js";
 import { RealtimeModule } from "../realtime/realtime.module.js";
 import { IntentsController } from "./intents.controller.js";
 import { IntentsService } from "./intents.service.js";
@@ -19,6 +20,7 @@ import { IntentsService } from "./intents.service.js";
     NotificationsModule,
     PersonalizationModule,
     forwardRef(() => AgentModule),
+    forwardRef(() => ProtocolModule),
     AnalyticsModule,
     RealtimeModule,
   ],
