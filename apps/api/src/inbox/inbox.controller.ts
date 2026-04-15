@@ -124,6 +124,19 @@ export class InboxController {
       payload.originatorUserId,
       "request originator does not match authenticated user",
     );
+    if (this.protocolService) {
+      const result = await this.protocolService.cancelFirstPartyRequestAction({
+        requestId,
+        actorUserId,
+        metadata: {
+          source: "inbox.controller.cancel",
+        },
+      });
+      return ok({
+        request: await this.inboxService.getOwnedRequest(requestId, actorUserId),
+        ...(result.unchanged ? { unchanged: true } : {}),
+      });
+    }
     return ok(
       await this.inboxService.cancelByOriginator(requestId, actorUserId),
     );

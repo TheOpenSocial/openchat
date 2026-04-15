@@ -1585,6 +1585,51 @@ export class ProtocolService {
     };
   }
 
+  async convertFirstPartyIntentAction(input: {
+    intentId: string;
+    actorUserId: string;
+    mode: "one_to_one" | "group";
+    groupSizeTarget?: number;
+    metadata?: Record<string, unknown>;
+  }) {
+    await this.intentsService!.assertIntentOwnership(
+      input.intentId,
+      input.actorUserId,
+    );
+    const result = await this.intentsService!.convertIntentMode(
+      input.intentId,
+      input.mode,
+      {
+        groupSizeTarget: input.groupSizeTarget,
+      },
+    );
+
+    await this.recordEvent({
+      actorAppId: FIRST_PARTY_PROTOCOL_ACTOR_APP_ID,
+      event: "intent.updated",
+      resource: "intent",
+      payload: {
+        intentId: result.id,
+        actorUserId: input.actorUserId,
+        operation: "intent.convert",
+        mode: input.mode,
+        groupSizeTarget:
+          input.mode === "group"
+            ? Math.min(Math.max(input.groupSizeTarget ?? 3, 2), 4)
+            : undefined,
+        source: "first_party",
+      },
+    });
+
+    return protocolIntentActionResultSchema.parse({
+      action: "intent.update",
+      status: result.status,
+      actorUserId: input.actorUserId,
+      intentId: result.id,
+      metadata: input.metadata ?? {},
+    });
+  }
+
   async createFirstPartyDatingConsentAction(input: {
     id: string;
     userId: string;
@@ -1641,6 +1686,46 @@ export class ProtocolService {
     return this.executeRequestDecisionAction("reject", requestId, input, {
       actorAppId: FIRST_PARTY_PROTOCOL_ACTOR_APP_ID,
     });
+  }
+
+  async cancelFirstPartyRequestAction(input: {
+    requestId: string;
+    actorUserId: string;
+    metadata?: Record<string, unknown>;
+  }) {
+    const result = await this.inboxService!.cancelByOriginator(
+      input.requestId,
+      input.actorUserId,
+    );
+
+    if (!result.unchanged) {
+      await this.recordEvent({
+        actorAppId: FIRST_PARTY_PROTOCOL_ACTOR_APP_ID,
+        event: "request.cancelled",
+        resource: "intent_request",
+        payload: {
+          requestId: result.request.id,
+          intentId: result.request.intentId,
+          actorUserId: input.actorUserId,
+          senderUserId: result.request.senderUserId,
+          recipientUserId: result.request.recipientUserId,
+          operation: "request.cancel",
+          source: "first_party",
+        },
+      });
+    }
+
+    return {
+      action: "request.cancel",
+      status: result.request.status,
+      actorUserId: input.actorUserId,
+      requestId: result.request.id,
+      intentId: result.request.intentId,
+      senderUserId: result.request.senderUserId,
+      recipientUserId: result.request.recipientUserId,
+      ...(result.unchanged ? { unchanged: true } : {}),
+      metadata: input.metadata ?? {},
+    };
   }
 
   async sendFirstPartyChatMessageAction(

@@ -62,6 +62,11 @@ export const protocolEventCatalog = [
     summary: "An intent request was rejected.",
   },
   {
+    name: "request.cancelled",
+    resource: "intent_request",
+    summary: "An intent request was cancelled by its sender.",
+  },
+  {
     name: "request.expired",
     resource: "intent_request",
     summary: "An intent request expired.",

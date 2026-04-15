@@ -325,6 +325,18 @@ export class IntentsController {
     const intentId = parseRequestPayload(uuidSchema, intentIdParam);
     await this.intentsService.assertIntentOwnership(intentId, actorUserId);
     const payload = parseRequestPayload(convertIntentModeBodySchema, body);
+    if (this.protocolService) {
+      await this.protocolService.convertFirstPartyIntentAction({
+        intentId,
+        actorUserId,
+        mode: payload.mode,
+        groupSizeTarget: payload.groupSizeTarget,
+        metadata: {
+          source: "intents.controller.convert",
+        },
+      });
+      return ok(await this.intentsService.getOwnedIntent(intentId, actorUserId));
+    }
     return ok(
       await this.intentsService.convertIntentMode(intentId, payload.mode, {
         groupSizeTarget: payload.groupSizeTarget,

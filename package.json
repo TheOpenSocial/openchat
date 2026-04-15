@@ -9,6 +9,9 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev --parallel",
+    "docs:dev": "pnpm --filter @opensocial/docs dev",
+    "docs:build": "pnpm --filter @opensocial/docs build",
+    "docs:start": "pnpm --filter @opensocial/docs start",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",

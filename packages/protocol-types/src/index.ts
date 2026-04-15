@@ -131,6 +131,7 @@ export const eventNameValues = [
   "request.sent",
   "request.accepted",
   "request.rejected",
+  "request.cancelled",
   "request.expired",
   "connection.created",
   "chat.created",

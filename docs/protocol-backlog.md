@@ -107,11 +107,14 @@ Use this as the baseline for all next backlog items. Do not reintroduce generic 
 - External action APIs for intents, requests, chats, and circles: shipped
 - First-party HTTP call-through for the cleanest public write paths: shipped
 - Partner-facing SDK packages, examples, and docs: effectively complete for v0
+- Docusaurus docs app is now wired on top of the repo documentation set for manual browsing and publishing
 - First-party protocol settings/inspection surfaces: shipped as operational tooling, but still partial as polished product UX
 - CI and product-critical golden coverage are green on the current mainline verification pass
 - Mobile-critical backend controller coverage is verified for first-party protocol call-through on:
   - intents create, update, cancel, retry, and widen
+  - intent convert
   - inbox accept and reject
+  - sender-side request cancel
   - chat send
   - recurring-circle create and add-member
 
@@ -162,13 +165,13 @@ These packages should mirror the backend domain rather than inventing new abstra
    - Avoid converting stable internal logic into protocol call-through just for consistency theater.
    - Mobile-spec-aligned controller paths are now covered for:
      - intent create, update, cancel, retry, and widen
+     - intent convert
      - inbox accept and reject
+     - sender-side request cancel
      - chat send
      - recurring-circle create and add-member
    - Remaining likely candidates should be judged against real mobile/product usage, not backend neatness alone.
    - Current review outcome:
-     - `POST /intents/:intentId/convert`: needs contract decision
-     - `POST /inbox/requests/:requestId/cancel`: needs contract decision
      - chat edit, reaction, and read-receipt flows: stay internal for now
      - recurring-circle update, archive, pause, resume, and remove-member flows: stay internal for now unless partner demand makes them real protocol actions
 
