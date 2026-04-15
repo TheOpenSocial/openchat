@@ -101,6 +101,9 @@ sync_local_checkout() {
     --exclude ".env.local" \
     --exclude ".env.production" \
     ./ "$DEPLOY_PATH"/
+  cp docker-compose.prod.yml "$DEPLOY_PATH"/docker-compose.prod.yml
+  mkdir -p "$DEPLOY_PATH"/deploy/caddy
+  cp deploy/caddy/Caddyfile "$DEPLOY_PATH"/deploy/caddy/Caddyfile
   sync_local_env_var "OPENAI_API_KEY" "${OPENAI_API_KEY:-}"
   sync_local_env_var "ONBOARDING_LLM_MODEL" "${ONBOARDING_LLM_MODEL:-}"
   sync_local_env_var "ONBOARDING_LLM_FAST_MODEL" "${ONBOARDING_LLM_FAST_MODEL:-}"
