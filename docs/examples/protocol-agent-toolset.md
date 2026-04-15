@@ -12,6 +12,8 @@ The package now exports:
 - `indexProtocolAgentToolset(tools)`
 - `createProtocolAgentToolkit(agent)`
 - `createProtocolAgentToolkitFromBaseUrl(baseUrl, session)`
+- `listProtocolAgentTools(toolkit)`
+- `invokeProtocolAgentTool(toolkit, toolName, input)`
 
 That returns a plain array of tool definitions:
 
@@ -69,6 +71,34 @@ const toolkit = createProtocolAgentToolkitFromBaseUrl(
 );
 
 await toolkit.toolsByName.protocol_agent_assert_ready.invoke({
+  requireActiveGrant: true,
+  failOnDeadLetters: true,
+  failOnAuthFailures: true,
+});
+```
+
+Or, if you want safer runtime lookup by name:
+
+```ts
+import {
+  createProtocolAgentToolkitFromBaseUrl,
+  invokeProtocolAgentTool,
+  listProtocolAgentTools,
+} from "@opensocial/protocol-agent";
+
+const toolkit = createProtocolAgentToolkitFromBaseUrl(
+  "http://127.0.0.1:3000/api",
+  {
+    appId: process.env.PROTOCOL_APP_ID!,
+    appToken: process.env.PROTOCOL_APP_TOKEN!,
+    actorUserId: process.env.PROTOCOL_ACTOR_USER_ID!,
+    agentId: "partner.concierge",
+  },
+);
+
+console.log(listProtocolAgentTools(toolkit));
+
+await invokeProtocolAgentTool(toolkit, "protocol_agent_assert_ready", {
   requireActiveGrant: true,
   failOnDeadLetters: true,
   failOnAuthFailures: true,

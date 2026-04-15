@@ -13,6 +13,7 @@ This package does not introduce new backend semantics. It wraps the current `@op
 - readiness evaluation and fail-fast assertions for common operational blockers
 - a generic toolset adapter for orchestration runtimes
 - a toolkit helper that bundles the agent client plus indexed tools
+- runtime-safe helpers for listing tools and invoking them by name
 
 Use it when you want agent code to operate through the protocol boundary without threading `actorUserId` and agent metadata through every call manually.
 

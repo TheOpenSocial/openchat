@@ -133,6 +133,11 @@ export type ProtocolAgentToolkit = {
   toolsByName: ProtocolAgentToolMap;
 };
 
+export type ProtocolAgentToolSummary = Pick<
+  ProtocolAgentToolDefinition,
+  "name" | "description" | "inputSchema"
+>;
+
 const readinessOptionsSchema = {
   type: "object",
   additionalProperties: false,
@@ -633,6 +638,31 @@ export function createProtocolAgentToolkit(
     tools,
     toolsByName: indexProtocolAgentToolset(tools),
   };
+}
+
+export function listProtocolAgentTools(
+  toolkit: ProtocolAgentToolkit,
+): ProtocolAgentToolSummary[] {
+  return toolkit.tools.map((tool) => ({
+    name: tool.name,
+    description: tool.description,
+    inputSchema: tool.inputSchema,
+  }));
+}
+
+export async function invokeProtocolAgentTool(
+  toolkit: ProtocolAgentToolkit,
+  toolName: string,
+  input: unknown,
+): Promise<unknown> {
+  const tool = toolkit.toolsByName[toolName];
+  if (!tool) {
+    const available = Object.keys(toolkit.toolsByName).sort().join(", ");
+    throw new Error(
+      `Unknown protocol agent tool "${toolName}". Available tools: ${available}`,
+    );
+  }
+  return tool.invoke(input);
 }
 
 export function createProtocolAgentToolkitFromBaseUrl(

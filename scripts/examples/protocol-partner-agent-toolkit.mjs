@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 
-import { createProtocolAgentToolkitFromBaseUrl } from "@opensocial/protocol-agent";
+import {
+  createProtocolAgentToolkitFromBaseUrl,
+  invokeProtocolAgentTool,
+  listProtocolAgentTools,
+} from "@opensocial/protocol-agent";
 
 function getArg(flag, fallback = undefined) {
   const exact = `${flag}=`;
@@ -58,12 +62,11 @@ async function main() {
     },
   });
 
-  logSection(
-    "tool-names",
-    Object.keys(toolkit.toolsByName).sort(),
-  );
+  logSection("tool-catalog", listProtocolAgentTools(toolkit));
 
-  const readiness = await toolkit.toolsByName.protocol_agent_assert_ready.invoke(
+  const readiness = await invokeProtocolAgentTool(
+    toolkit,
+    "protocol_agent_assert_ready",
     {
       requireActiveGrant: true,
       failOnDeadLetters: true,
@@ -72,9 +75,13 @@ async function main() {
   );
   logSection("assert-ready-result", readiness);
 
-  const intent = await toolkit.toolsByName.protocol_agent_create_intent.invoke({
-    rawText: "Find a thoughtful design conversation this week.",
-  });
+  const intent = await invokeProtocolAgentTool(
+    toolkit,
+    "protocol_agent_create_intent",
+    {
+      rawText: "Find a thoughtful design conversation this week.",
+    },
+  );
   logSection("create-intent-result", intent);
 }
 
