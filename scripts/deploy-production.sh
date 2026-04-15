@@ -101,9 +101,19 @@ sync_local_checkout() {
     --exclude ".env.local" \
     --exclude ".env.production" \
     ./ "$DEPLOY_PATH"/
-  cp docker-compose.prod.yml "$DEPLOY_PATH"/docker-compose.prod.yml
+  local compose_target="$DEPLOY_PATH"/docker-compose.prod.yml
+  local caddy_target="$DEPLOY_PATH"/deploy/caddy/Caddyfile
   mkdir -p "$DEPLOY_PATH"/deploy/caddy
-  cp deploy/caddy/Caddyfile "$DEPLOY_PATH"/deploy/caddy/Caddyfile
+  if [[ "$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' docker-compose.prod.yml)" != "$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$compose_target")" ]]; then
+    cp docker-compose.prod.yml "$compose_target"
+  fi
+  if [[ -e "$caddy_target" ]]; then
+    if [[ "$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' deploy/caddy/Caddyfile)" != "$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$caddy_target")" ]]; then
+      cp deploy/caddy/Caddyfile "$caddy_target"
+    fi
+  else
+    cp deploy/caddy/Caddyfile "$caddy_target"
+  fi
   sync_local_env_var "OPENAI_API_KEY" "${OPENAI_API_KEY:-}"
   sync_local_env_var "ONBOARDING_LLM_MODEL" "${ONBOARDING_LLM_MODEL:-}"
   sync_local_env_var "ONBOARDING_LLM_FAST_MODEL" "${ONBOARDING_LLM_FAST_MODEL:-}"
