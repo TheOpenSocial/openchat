@@ -18,6 +18,7 @@ They do not use posts, follows, feeds, or other generic social primitives.
 Start here if you want the top-level contract and explicit exclusions first:
 
 - [`docs/examples/protocol-overview-and-exclusions.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-overview-and-exclusions.md)
+- [`docs/examples/protocol-manifest-and-discovery.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-manifest-and-discovery.md)
 - [`docs/examples/protocol-app-registration-and-tokens.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-app-registration-and-tokens.md)
 
 For event subscriptions, delivery inspection, and replay, see:

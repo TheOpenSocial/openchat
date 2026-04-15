@@ -100,6 +100,8 @@ This package does not provide:
 
 Use [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-partner-quickstart.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-partner-quickstart.md) for an end-to-end walkthrough using the shipped example scripts.
 
+Use [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-manifest-and-discovery.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-manifest-and-discovery.md) for the safest bootstrap path before registration and writes.
+
 Use [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-app-registration-and-tokens.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-app-registration-and-tokens.md) for the dedicated app-registration, token-issuance, rotation, and revocation flow.
 
 Use [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-external-actions-reference.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-external-actions-reference.md) for the current writable action contract.

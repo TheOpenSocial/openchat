@@ -15,6 +15,7 @@ The SDK docs must stay aligned with what is already shipped:
 - Usage summaries now expose structured protocol auth-failure diagnostics so partners can distinguish missing tokens, missing scopes, missing capabilities, and missing delegated grants.
 - Partner-ready guides now exist for:
   - protocol overview and exclusions
+  - manifest and discovery bootstrap
   - app registration and token lifecycle
   - quickstart onboarding
   - webhook subscription and replay
@@ -65,6 +66,11 @@ Content:
   - the protocol manifest metadata includes an unsupported-primitives policy
   - the policy says posts, follows, feeds, and likes are intentionally outside the protocol surface
   - integrations should treat attempts to model those primitives as unsupported, not missing
+
+Concrete links:
+
+- [`docs/examples/protocol-overview-and-exclusions.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-overview-and-exclusions.md)
+- [`docs/examples/protocol-manifest-and-discovery.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-manifest-and-discovery.md)
 
 ### 2. App Registration Guide
 

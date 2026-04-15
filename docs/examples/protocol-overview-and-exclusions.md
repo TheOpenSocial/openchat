@@ -143,6 +143,8 @@ Each package stays narrow:
 
 After this overview, the usual next step is:
 
+- manifest and discovery bootstrap:
+  - [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-manifest-and-discovery.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-manifest-and-discovery.md)
 - onboarding flow:
   - [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-partner-quickstart.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-partner-quickstart.md)
 - writable contract:
