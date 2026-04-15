@@ -18,5 +18,6 @@ Recommended starting points:
 
 - [Protocol SDK index](./examples/protocol-sdk-index)
 - [Protocol backlog](./protocol-backlog)
+- [Request pressure and spam health](./request-pressure-and-spam-health)
 - [Manual QA script](./manual-qa-script)
 - [Staging sandbox world](./staging-sandbox-world)

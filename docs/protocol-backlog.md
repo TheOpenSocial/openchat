@@ -124,6 +124,7 @@ Use this as the baseline for all next backlog items. Do not reintroduce generic 
 - verify token/grant/auth diagnostics against remaining protocol-gated paths
 - verify that protocol-originated user-facing events remain meaningful social states rather than generic integration copy
 - verify whether the remaining first-party direct writes should become public protocol actions or remain intentionally internal
+- audit request-pressure and spam-health controls so recipient load stays bounded as the market grows
 
 ## Package Direction
 
@@ -194,9 +195,18 @@ These packages should mirror the backend domain rather than inventing new abstra
    - Render protocol-originated Activity items as user-meaningful social states, not operator jargon.
 
 8. Keep the thin agent wrapper aligned with stable protocol actions.
-   - The wrapper, readiness model, toolset, and toolkit are shipped.
-   - Remaining work is runtime-specific orchestration guidance, not a second backend surface.
-   - Add broader agent-specific protocol actions only if they fit the same coordination-first model.
+  - The wrapper, readiness model, toolset, and toolkit are shipped.
+  - Remaining work is runtime-specific orchestration guidance, not a second backend surface.
+  - Add broader agent-specific protocol actions only if they fit the same coordination-first model.
+
+9. Add recipient-side request-pressure controls to matching.
+   - Sender-side caps are already shipped.
+   - Abuse throttling is already shipped.
+   - Recipient-side load shaping is still the clearest missing market-health control.
+   - Start with:
+     - pending inbound request cap per recipient
+     - rolling daily inbound cap per recipient
+     - load-aware score penalty before hard suppression
 
 ### Later
 
