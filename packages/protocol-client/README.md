@@ -12,7 +12,7 @@ This package is a transport-backed wrapper around the protocol API. It currently
 - webhooks, grants, and consent requests
 - delivery queue inspection and replay
 - protocol event replay
-- core coordination actions for intents, requests, chats, and circles
+- core coordination actions for intent lifecycle, requests, chats, and circles
 
 It depends on `@opensocial/protocol-types` and `@opensocial/protocol-events` for schemas and shared types.
 

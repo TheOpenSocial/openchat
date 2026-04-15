@@ -9,7 +9,7 @@ The examples stay inside the current protocol direction:
 
 - app registration
 - delegated consent and webhook setup
-- core actions for intents, requests, chats, and circles
+- core actions for intent lifecycle, requests, chats, and circles
 - usage, grants, consent, and queue inspection
 - auth and consent troubleshooting
 
@@ -48,6 +48,18 @@ node --loader ./scripts/examples/protocol-example-loader.mjs \
   scripts/examples/protocol-partner-actions.mjs
 ```
 
+If you want the example to exercise intent cancellation too:
+
+```bash
+PROTOCOL_BASE_URL=http://127.0.0.1:3000/api \
+PROTOCOL_APP_ID=partner.onboarding.123 \
+PROTOCOL_APP_TOKEN=<app-token> \
+PROTOCOL_ACTOR_USER_ID=00000000-0000-4000-8000-000000000001 \
+PROTOCOL_CANCEL_INTENT=1 \
+node --loader ./scripts/examples/protocol-example-loader.mjs \
+  scripts/examples/protocol-partner-actions.mjs
+```
+
 ## What This Demonstrates
 
 - app registration and token issuance
@@ -55,6 +67,8 @@ node --loader ./scripts/examples/protocol-example-loader.mjs \
 - consent request creation
 - webhook subscription creation
 - intent creation
+- intent update
+- optional intent cancellation
 - request sending
 - chat message sending
 - circle creation and membership actions

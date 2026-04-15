@@ -74,6 +74,12 @@ function resolveCircleId() {
   return getArg("--circle-id") || process.env.PROTOCOL_CIRCLE_ID;
 }
 
+function resolveCancelIntent() {
+  const value =
+    getArg("--cancel-intent") || process.env.PROTOCOL_CANCEL_INTENT || "0";
+  return ["1", "true", "yes"].includes(String(value).toLowerCase());
+}
+
 function createClient(baseUrl) {
   return createProtocolClientFromBaseUrl(baseUrl);
 }
@@ -92,6 +98,7 @@ async function main() {
   const chatId = resolveChatId();
   const circleTitle = resolveCircleTitle();
   const circleId = resolveCircleId();
+  const cancelIntent = resolveCancelIntent();
   const client = createClient(baseUrl);
   const app = bindProtocolAppClient(client, {
     appId,
@@ -107,6 +114,17 @@ async function main() {
     },
   });
   logSection("intent-created", intent);
+
+  const updatedIntent = await app.updateIntent(intent.intentId, {
+    actorUserId,
+    rawText:
+      "Meet thoughtful product, design, and engineering people this week.",
+    metadata: {
+      example: true,
+      generatedBy: "scripts/examples/protocol-partner-actions.mjs",
+    },
+  });
+  logSection("intent-updated", updatedIntent);
 
   if (recipientUserId) {
     const request = await app.sendRequest({
@@ -168,6 +186,17 @@ async function main() {
       },
     });
     logSection("circle-left", left);
+  }
+
+  if (cancelIntent) {
+    const cancelledIntent = await app.cancelIntent(intent.intentId, {
+      actorUserId,
+      metadata: {
+        example: true,
+        generatedBy: "scripts/examples/protocol-partner-actions.mjs",
+      },
+    });
+    logSection("intent-cancelled", cancelledIntent);
   }
 
   const usage = await app.getAppUsageSummary();
