@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import {
+  bindProtocolAppClient,
   createProtocolClientFromBaseUrl,
 } from "@opensocial/protocol-client";
 
@@ -176,53 +177,43 @@ async function main() {
 
   const registered = await client.registerApp(registrationRequest);
   logSection("registered-app", registered);
+  const app = bindProtocolAppClient(client, {
+    appId,
+    appToken: registered.credentials.appToken,
+  });
 
   if (webhookUrl) {
-    const webhook = await client.createWebhook(
-      appId,
-      registered.credentials.appToken,
-      {
-        targetUrl: webhookUrl,
-        events: DEFAULT_WEBHOOK_EVENTS,
-        resources: DEFAULT_WEBHOOK_RESOURCES,
-        deliveryMode: "json",
-        metadata: {
-          example: true,
-          generatedBy: "scripts/examples/protocol-partner-onboarding.mjs",
-        },
+    const webhook = await app.createWebhook({
+      targetUrl: webhookUrl,
+      events: DEFAULT_WEBHOOK_EVENTS,
+      resources: DEFAULT_WEBHOOK_RESOURCES,
+      deliveryMode: "json",
+      metadata: {
+        example: true,
+        generatedBy: "scripts/examples/protocol-partner-onboarding.mjs",
       },
-    );
+    });
     logSection("webhook-subscription", webhook);
   }
 
   if (ownerUserId) {
-    const consentRequest = await client.createConsentRequest(
-      appId,
-      registered.credentials.appToken,
-      {
-        scope: "actions.invoke",
-        capabilities: ["app.write", "webhook.write"],
-        subjectType: "user",
-        subjectId: ownerUserId,
-        requestedByUserId: ownerUserId,
-        metadata: {
-          example: true,
-          generatedBy: "scripts/examples/protocol-partner-onboarding.mjs",
-        },
+    const consentRequest = await app.createConsentRequest({
+      scope: "actions.invoke",
+      capabilities: ["app.write", "webhook.write"],
+      subjectType: "user",
+      subjectId: ownerUserId,
+      requestedByUserId: ownerUserId,
+      metadata: {
+        example: true,
+        generatedBy: "scripts/examples/protocol-partner-onboarding.mjs",
       },
-    );
+    });
     logSection("consent-request", consentRequest);
   }
 
-  const grants = await client.listGrants(appId, registered.credentials.appToken);
-  const consentRequests = await client.listConsentRequests(
-    appId,
-    registered.credentials.appToken,
-  );
-  const usage = await client.getAppUsageSummary(
-    appId,
-    registered.credentials.appToken,
-  );
+  const grants = await app.listGrants();
+  const consentRequests = await app.listConsentRequests();
+  const usage = await app.getAppUsageSummary();
 
   logSection("grants", grants);
   logSection("consent-requests", consentRequests);

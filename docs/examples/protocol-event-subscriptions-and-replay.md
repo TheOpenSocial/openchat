@@ -42,30 +42,34 @@ The server-side webhook helpers live in `@opensocial/protocol-server` and provid
 Start by registering a partner app, then create a webhook subscription for the event families you care about.
 
 ```ts
-import { createProtocolClientFromBaseUrl } from "@opensocial/protocol-client";
+import {
+  bindProtocolAppClient,
+  createProtocolClientFromBaseUrl,
+} from "@opensocial/protocol-client";
 
 const client = createProtocolClientFromBaseUrl("http://127.0.0.1:3000/api");
+const app = bindProtocolAppClient(client, {
+  appId: "partner.example",
+  appToken: "<app-token>",
+});
 
-const subscription = await client.createWebhook(
-  "partner.example",
-  "<app-token>",
-  {
-    targetUrl: "https://partner.example.com/webhooks/protocol",
-    events: [
-      "intent.created",
-      "intent.updated",
-      "request.sent",
-      "request.accepted",
-      "request.rejected",
-      "chat.message.created",
-      "circle.created",
-      "circle.member.joined",
-      "circle.member.left",
-    ],
-    resources: ["intent", "request", "chat", "circle"],
-    deliveryMode: "json",
-  },
-);
+const subscription = await app.createWebhook({
+  targetUrl: "https://partner.example.com/webhooks/protocol",
+  events: [
+    "intent.created",
+    "intent.updated",
+    "intent.cancelled",
+    "request.sent",
+    "request.accepted",
+    "request.rejected",
+    "chat.message.sent",
+    "circle.created",
+    "circle.joined",
+    "circle.left",
+  ],
+  resources: ["intent", "intent_request", "chat_message", "circle"],
+  deliveryMode: "json",
+});
 ```
 
 Keep the subscription narrow. The protocol is coordination-first, so subscribe only to the event families your integration actually handles.
@@ -75,17 +79,9 @@ Keep the subscription narrow. The protocol is coordination-first, so subscribe o
 If a webhook does not arrive, inspect the subscription deliveries first.
 
 ```ts
-const deliveries = await client.listWebhookDeliveries(
-  "partner.example",
-  "<app-token>",
-  subscription.webhookId,
-);
+const deliveries = await app.listWebhookDeliveries(subscription.subscriptionId);
 
-const attempts = await client.listWebhookDeliveryAttempts(
-  "partner.example",
-  "<app-token>",
-  deliveries[0].deliveryId,
-);
+const attempts = await app.listWebhookDeliveryAttempts(deliveries[0].deliveryId);
 ```
 
 What to look for:
@@ -99,11 +95,7 @@ What to look for:
 Use single-delivery replay when the receiver is fixed and you want to resend one known failed item.
 
 ```ts
-await client.replayWebhookDelivery(
-  "partner.example",
-  "<app-token>",
-  "<delivery-id>",
-);
+await app.replayWebhookDelivery("<delivery-id>");
 ```
 
 This is the narrowest recovery path and is the safest first choice for one failed message.
@@ -113,7 +105,7 @@ This is the narrowest recovery path and is the safest first choice for one faile
 If you have a backlog of dead-lettered deliveries, replay them in batches.
 
 ```ts
-await client.replayDeadLetteredDeliveries("partner.example", "<app-token>", {
+await app.replayDeadLetteredDeliveries({
   limit: 25,
 });
 ```
@@ -129,19 +121,11 @@ Use batch replay when:
 If your integration stores a replay cursor, save it after processing and restore from it later.
 
 ```ts
-const cursor = await client.getReplayCursor("partner.example", "<app-token>");
+const cursor = await app.getReplayCursor();
 
-const events = await client.replayEvents(
-  "partner.example",
-  "<app-token>",
-  cursor.cursor,
-);
+const events = await app.replayEvents(cursor.cursor);
 
-await client.saveReplayCursor(
-  "partner.example",
-  "<app-token>",
-  events.at(-1)?.cursor ?? cursor.cursor,
-);
+await app.saveReplayCursor(events.at(-1)?.cursor ?? cursor.cursor);
 ```
 
 This is useful for:
@@ -187,4 +171,3 @@ Do not model:
 - broadcast-only social primitives
 
 The current protocol is centered on coordination, messaging, circles, and recoverable delivery.
-

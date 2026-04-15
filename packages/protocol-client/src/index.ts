@@ -257,6 +257,98 @@ export type ProtocolClient = {
   ) => AppRegistrationRequest;
 };
 
+export type ProtocolAppSession = {
+  appId: string;
+  appToken: string;
+};
+
+export type ProtocolAppClient = {
+  listWebhooks: () => Promise<WebhookSubscription[]>;
+  createWebhook: (
+    payload: WebhookSubscriptionCreate,
+  ) => Promise<WebhookSubscription>;
+  listGrants: () => Promise<ProtocolGrantRecord[]>;
+  listConsentRequests: () => Promise<ProtocolConsentRequestRecord[]>;
+  createGrant: (
+    payload: ProtocolGrantCreateInput,
+  ) => Promise<ProtocolGrantRecord>;
+  createConsentRequest: (
+    payload: ProtocolConsentRequestCreateInput,
+  ) => Promise<ProtocolConsentRequestRecord>;
+  approveConsentRequest: (
+    requestId: string,
+    payload: ProtocolConsentRequestDecisionInput,
+  ) => Promise<ProtocolConsentRequestRecord>;
+  rejectConsentRequest: (
+    requestId: string,
+    payload: ProtocolConsentRequestDecisionInput,
+  ) => Promise<ProtocolConsentRequestRecord>;
+  revokeGrant: (
+    grantId: string,
+    input?: ProtocolGrantRevokeInput,
+  ) => Promise<ProtocolGrantRecord>;
+  rotateToken: (
+    input?: ProtocolAppTokenRotateInput,
+  ) => Promise<ProtocolAppTokenRotateResult>;
+  revokeToken: (
+    input?: ProtocolAppTokenRevokeInput,
+  ) => Promise<ProtocolAppTokenRevokeResult>;
+  listWebhookDeliveries: (
+    subscriptionId: string,
+  ) => Promise<ProtocolWebhookDelivery[]>;
+  listWebhookDeliveryAttempts: (
+    deliveryId: string,
+  ) => Promise<ProtocolWebhookDeliveryAttempt[]>;
+  replayWebhookDelivery: (
+    deliveryId: string,
+  ) => Promise<ProtocolWebhookDeliveryReplayResult>;
+  replayDeadLetteredDeliveries: (
+    input?: ProtocolWebhookDeliveryRunInput,
+  ) => Promise<ProtocolWebhookDeliveryReplayBatchResult>;
+  inspectDeliveryQueue: (
+    cursor?: string,
+  ) => Promise<ProtocolDeliveryQueueInspection>;
+  replayEvents: (cursor?: string) => Promise<ProtocolEventEnvelope[]>;
+  getReplayCursor: () => Promise<ProtocolReplayCursor>;
+  saveReplayCursor: (cursor: string) => Promise<ProtocolReplayCursor>;
+  createIntent: (
+    payload: ProtocolIntentCreateInput,
+  ) => Promise<ProtocolIntentActionResult>;
+  sendRequest: (
+    payload: ProtocolRequestSendInput,
+  ) => Promise<ProtocolRequestActionResult>;
+  acceptRequest: (
+    requestId: string,
+    payload: ProtocolRequestDecisionInput,
+  ) => Promise<ProtocolRequestActionResult>;
+  rejectRequest: (
+    requestId: string,
+    payload: ProtocolRequestDecisionInput,
+  ) => Promise<ProtocolRequestActionResult>;
+  sendChatMessage: (
+    chatId: string,
+    payload: ProtocolChatSendMessageInput,
+  ) => Promise<ProtocolChatMessageActionResult>;
+  createCircle: (
+    payload: ProtocolCircleCreateInput,
+  ) => Promise<ProtocolCircleActionResult>;
+  joinCircle: (
+    circleId: string,
+    payload: ProtocolCircleJoinInput,
+  ) => Promise<ProtocolCircleActionResult>;
+  leaveCircle: (
+    circleId: string,
+    payload: ProtocolCircleLeaveInput,
+  ) => Promise<ProtocolCircleActionResult>;
+  runWebhookDeliveryQueue: (
+    input?: ProtocolWebhookDeliveryRunInput,
+  ) => Promise<ProtocolWebhookDeliveryRunResult>;
+  dispatchWebhookDeliveryQueue: (
+    input?: ProtocolWebhookDeliveryRunInput,
+  ) => Promise<ProtocolWebhookDeliveryDispatchResult>;
+  getAppUsageSummary: () => Promise<ProtocolAppUsageSummary>;
+};
+
 export type ProtocolAppRecord = {
   status: string;
   registration: AppRegistration;
@@ -957,6 +1049,98 @@ export function createProtocolClientFromBaseUrl(
   return createProtocolClient(
     createFetchProtocolTransport(baseUrl, fetchImpl ?? fetch),
   );
+}
+
+export function bindProtocolAppClient(
+  client: ProtocolClient,
+  session: ProtocolAppSession,
+): ProtocolAppClient {
+  return {
+    listWebhooks: () => client.listWebhooks(session.appId, session.appToken),
+    createWebhook: (payload) =>
+      client.createWebhook(session.appId, session.appToken, payload),
+    listGrants: () => client.listGrants(session.appId, session.appToken),
+    listConsentRequests: () =>
+      client.listConsentRequests(session.appId, session.appToken),
+    createGrant: (payload) =>
+      client.createGrant(session.appId, session.appToken, payload),
+    createConsentRequest: (payload) =>
+      client.createConsentRequest(session.appId, session.appToken, payload),
+    approveConsentRequest: (requestId, payload) =>
+      client.approveConsentRequest(
+        session.appId,
+        session.appToken,
+        requestId,
+        payload,
+      ),
+    rejectConsentRequest: (requestId, payload) =>
+      client.rejectConsentRequest(
+        session.appId,
+        session.appToken,
+        requestId,
+        payload,
+      ),
+    revokeGrant: (grantId, input) =>
+      client.revokeGrant(session.appId, session.appToken, grantId, input),
+    rotateToken: (input) =>
+      client.rotateToken(session.appId, session.appToken, input),
+    revokeToken: (input) =>
+      client.revokeToken(session.appId, session.appToken, input),
+    listWebhookDeliveries: (subscriptionId) =>
+      client.listWebhookDeliveries(
+        session.appId,
+        session.appToken,
+        subscriptionId,
+      ),
+    listWebhookDeliveryAttempts: (deliveryId) =>
+      client.listWebhookDeliveryAttempts(
+        session.appId,
+        session.appToken,
+        deliveryId,
+      ),
+    replayWebhookDelivery: (deliveryId) =>
+      client.replayWebhookDelivery(session.appId, session.appToken, deliveryId),
+    replayDeadLetteredDeliveries: (input) =>
+      client.replayDeadLetteredDeliveries(
+        session.appId,
+        session.appToken,
+        input,
+      ),
+    inspectDeliveryQueue: (cursor) =>
+      client.inspectDeliveryQueue(session.appId, session.appToken, cursor),
+    replayEvents: (cursor) =>
+      client.replayEvents(session.appId, session.appToken, cursor),
+    getReplayCursor: () =>
+      client.getReplayCursor(session.appId, session.appToken),
+    saveReplayCursor: (cursor) =>
+      client.saveReplayCursor(session.appId, session.appToken, cursor),
+    createIntent: (payload) =>
+      client.createIntent(session.appId, session.appToken, payload),
+    sendRequest: (payload) =>
+      client.sendRequest(session.appId, session.appToken, payload),
+    acceptRequest: (requestId, payload) =>
+      client.acceptRequest(session.appId, session.appToken, requestId, payload),
+    rejectRequest: (requestId, payload) =>
+      client.rejectRequest(session.appId, session.appToken, requestId, payload),
+    sendChatMessage: (chatId, payload) =>
+      client.sendChatMessage(session.appId, session.appToken, chatId, payload),
+    createCircle: (payload) =>
+      client.createCircle(session.appId, session.appToken, payload),
+    joinCircle: (circleId, payload) =>
+      client.joinCircle(session.appId, session.appToken, circleId, payload),
+    leaveCircle: (circleId, payload) =>
+      client.leaveCircle(session.appId, session.appToken, circleId, payload),
+    runWebhookDeliveryQueue: (input) =>
+      client.runWebhookDeliveryQueue(session.appId, session.appToken, input),
+    dispatchWebhookDeliveryQueue: (input) =>
+      client.dispatchWebhookDeliveryQueue(
+        session.appId,
+        session.appToken,
+        input,
+      ),
+    getAppUsageSummary: () =>
+      client.getAppUsageSummary(session.appId, session.appToken),
+  };
 }
 
 export function buildProtocolAppRegistrationRequest(

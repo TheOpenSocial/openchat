@@ -20,6 +20,7 @@ It depends on `@opensocial/protocol-types` and `@opensocial/protocol-events` for
 
 ```ts
 import {
+  bindProtocolAppClient,
   createProtocolClientFromBaseUrl,
 } from "@opensocial/protocol-client";
 import {
@@ -27,9 +28,7 @@ import {
 } from "@opensocial/protocol-server";
 
 const client = createProtocolClientFromBaseUrl("https://api.example.com/api");
-
 const manifest = await client.getManifest();
-
 const appId = "partner.example";
 const registration = await client.registerApp({
   registration: {
@@ -54,16 +53,17 @@ const registration = await client.registerApp({
   requestedCapabilities: ["app.read", "intent.write"],
 });
 
-const webhook = await client.createWebhook(
-  registration.registration.appId,
-  registration.credentials.appToken,
-  {
-    targetUrl: "https://partner.example.com/webhooks/protocol",
-    events: ["intent.created"],
-    resources: ["intent"],
-    deliveryMode: "json",
-  },
-);
+const app = bindProtocolAppClient(client, {
+  appId: registration.registration.appId,
+  appToken: registration.credentials.appToken,
+});
+
+const webhook = await app.createWebhook({
+  targetUrl: "https://partner.example.com/webhooks/protocol",
+  events: ["intent.created"],
+  resources: ["intent"],
+  deliveryMode: "json",
+});
 ```
 
 ## Exclusions

@@ -45,6 +45,7 @@ node --loader ./scripts/examples/protocol-example-loader.mjs \
 ## What This Demonstrates
 
 - app registration and token issuance
+- bound app-scoped client usage via `bindProtocolAppClient(...)`
 - consent request creation
 - webhook subscription creation
 - intent creation

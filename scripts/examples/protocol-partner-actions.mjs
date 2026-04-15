@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import {
+  bindProtocolAppClient,
   createProtocolClientFromBaseUrl,
 } from "@opensocial/protocol-client";
 
@@ -92,12 +93,14 @@ async function main() {
   const circleTitle = resolveCircleTitle();
   const circleId = resolveCircleId();
   const client = createClient(baseUrl);
+  const app = bindProtocolAppClient(client, {
+    appId,
+    appToken,
+  });
 
-  const intent = await client.createIntent(appId, appToken, {
+  const intent = await app.createIntent({
     actorUserId,
-    title: "Partner onboarding intent",
-    summary:
-      "Demonstrates the shipped protocol-client surface for creating a core coordination intent.",
+    rawText: "Meet thoughtful product and design people this week.",
     metadata: {
       example: true,
       generatedBy: "scripts/examples/protocol-partner-actions.mjs",
@@ -106,7 +109,7 @@ async function main() {
   logSection("intent-created", intent);
 
   if (recipientUserId) {
-    const request = await client.sendRequest(appId, appToken, {
+    const request = await app.sendRequest({
       actorUserId,
       intentId: intent.intentId,
       recipientUserId,
@@ -119,24 +122,19 @@ async function main() {
   }
 
   if (chatId) {
-    const chatMessage = await client.sendChatMessage(
-      appId,
-      appToken,
-      chatId,
-      {
-        actorUserId,
-        body: "Partner onboarding example message from the protocol client.",
-        metadata: {
-          example: true,
-          generatedBy: "scripts/examples/protocol-partner-actions.mjs",
-        },
+    const chatMessage = await app.sendChatMessage(chatId, {
+      actorUserId,
+      body: "Partner onboarding example message from the protocol client.",
+      metadata: {
+        example: true,
+        generatedBy: "scripts/examples/protocol-partner-actions.mjs",
       },
-    );
+    });
     logSection("chat-message", chatMessage);
   }
 
   if (circleTitle) {
-    const circle = await client.createCircle(appId, appToken, {
+    const circle = await app.createCircle({
       actorUserId,
       title: circleTitle,
       description:
@@ -148,7 +146,7 @@ async function main() {
     });
     logSection("circle-created", circle);
 
-    const joined = await client.joinCircle(appId, appToken, circle.circleId, {
+    const joined = await app.joinCircle(circle.circleId, {
       actorUserId,
       memberUserId: actorUserId,
       role: "member",
@@ -161,7 +159,7 @@ async function main() {
   }
 
   if (circleId) {
-    const left = await client.leaveCircle(appId, appToken, circleId, {
+    const left = await app.leaveCircle(circleId, {
       actorUserId,
       memberUserId: actorUserId,
       metadata: {
@@ -172,7 +170,7 @@ async function main() {
     logSection("circle-left", left);
   }
 
-  const usage = await client.getAppUsageSummary(appId, appToken);
+  const usage = await app.getAppUsageSummary();
   logSection("usage-summary", usage);
 
   console.log(`\n[protocol-example] partner actions complete for appId=${appId}`);
