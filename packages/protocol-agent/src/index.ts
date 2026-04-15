@@ -128,6 +128,7 @@ export type ProtocolAgentToolDefinition = {
 export type ProtocolAgentToolMap = Record<string, ProtocolAgentToolDefinition>;
 
 export type ProtocolAgentToolkit = {
+  session: ProtocolAgentSession;
   agent: ProtocolAgentClient;
   tools: ProtocolAgentToolDefinition[];
   toolsByName: ProtocolAgentToolMap;
@@ -137,6 +138,12 @@ export type ProtocolAgentToolSummary = Pick<
   ProtocolAgentToolDefinition,
   "name" | "description" | "inputSchema"
 >;
+
+export type ProtocolAgentToolkitSummary = {
+  session: ProtocolAgentSession;
+  toolCount: number;
+  tools: ProtocolAgentToolSummary[];
+};
 
 const readinessOptionsSchema = {
   type: "object",
@@ -631,9 +638,11 @@ export function indexProtocolAgentToolset(
 
 export function createProtocolAgentToolkit(
   agent: ProtocolAgentClient,
+  session: ProtocolAgentSession,
 ): ProtocolAgentToolkit {
   const tools = createProtocolAgentToolset(agent);
   return {
+    session,
     agent,
     tools,
     toolsByName: indexProtocolAgentToolset(tools),
@@ -650,11 +659,20 @@ export function listProtocolAgentTools(
   }));
 }
 
-export async function invokeProtocolAgentTool(
+export function describeProtocolAgentToolkit(
+  toolkit: ProtocolAgentToolkit,
+): ProtocolAgentToolkitSummary {
+  return {
+    session: toolkit.session,
+    toolCount: toolkit.tools.length,
+    tools: listProtocolAgentTools(toolkit),
+  };
+}
+
+export function getProtocolAgentTool(
   toolkit: ProtocolAgentToolkit,
   toolName: string,
-  input: unknown,
-): Promise<unknown> {
+): ProtocolAgentToolDefinition {
   const tool = toolkit.toolsByName[toolName];
   if (!tool) {
     const available = Object.keys(toolkit.toolsByName).sort().join(", ");
@@ -662,7 +680,15 @@ export async function invokeProtocolAgentTool(
       `Unknown protocol agent tool "${toolName}". Available tools: ${available}`,
     );
   }
-  return tool.invoke(input);
+  return tool;
+}
+
+export async function invokeProtocolAgentTool(
+  toolkit: ProtocolAgentToolkit,
+  toolName: string,
+  input: unknown,
+): Promise<unknown> {
+  return getProtocolAgentTool(toolkit, toolName).invoke(input);
 }
 
 export function createProtocolAgentToolkitFromBaseUrl(
@@ -672,5 +698,6 @@ export function createProtocolAgentToolkitFromBaseUrl(
 ): ProtocolAgentToolkit {
   return createProtocolAgentToolkit(
     createProtocolAgentClientFromBaseUrl(baseUrl, session, fetchImpl),
+    session,
   );
 }

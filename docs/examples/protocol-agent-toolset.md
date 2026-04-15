@@ -12,6 +12,8 @@ The package now exports:
 - `indexProtocolAgentToolset(tools)`
 - `createProtocolAgentToolkit(agent)`
 - `createProtocolAgentToolkitFromBaseUrl(baseUrl, session)`
+- `describeProtocolAgentToolkit(toolkit)`
+- `getProtocolAgentTool(toolkit, toolName)`
 - `listProtocolAgentTools(toolkit)`
 - `invokeProtocolAgentTool(toolkit, toolName, input)`
 
@@ -82,8 +84,9 @@ Or, if you want safer runtime lookup by name:
 ```ts
 import {
   createProtocolAgentToolkitFromBaseUrl,
+  describeProtocolAgentToolkit,
+  getProtocolAgentTool,
   invokeProtocolAgentTool,
-  listProtocolAgentTools,
 } from "@opensocial/protocol-agent";
 
 const toolkit = createProtocolAgentToolkitFromBaseUrl(
@@ -96,9 +99,14 @@ const toolkit = createProtocolAgentToolkitFromBaseUrl(
   },
 );
 
-console.log(listProtocolAgentTools(toolkit));
+console.log(describeProtocolAgentToolkit(toolkit));
 
-await invokeProtocolAgentTool(toolkit, "protocol_agent_assert_ready", {
+const assertReadyTool = getProtocolAgentTool(
+  toolkit,
+  "protocol_agent_assert_ready",
+);
+
+await assertReadyTool.invoke({
   requireActiveGrant: true,
   failOnDeadLetters: true,
   failOnAuthFailures: true,
@@ -118,7 +126,7 @@ node --loader ./scripts/examples/protocol-example-loader.mjs \
 
 The example:
 
-- prints the current tool catalog
+- prints the current toolkit summary
 - prints each tool’s input schema
 - runs the assert-ready tool
 - runs the create-intent tool

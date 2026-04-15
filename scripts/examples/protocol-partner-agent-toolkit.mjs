@@ -2,8 +2,8 @@
 
 import {
   createProtocolAgentToolkitFromBaseUrl,
+  describeProtocolAgentToolkit,
   invokeProtocolAgentTool,
-  listProtocolAgentTools,
 } from "@opensocial/protocol-agent";
 
 function getArg(flag, fallback = undefined) {
@@ -62,7 +62,7 @@ async function main() {
     },
   });
 
-  logSection("tool-catalog", listProtocolAgentTools(toolkit));
+  logSection("toolkit-summary", describeProtocolAgentToolkit(toolkit));
 
   const readiness = await invokeProtocolAgentTool(
     toolkit,

@@ -14,6 +14,7 @@ This package does not introduce new backend semantics. It wraps the current `@op
 - a generic toolset adapter for orchestration runtimes
 - a toolkit helper that bundles the agent client plus indexed tools
 - runtime-safe helpers for listing tools and invoking them by name
+- self-describing toolkit helpers for inspection and discovery
 
 Use it when you want agent code to operate through the protocol boundary without threading `actorUserId` and agent metadata through every call manually.
 
