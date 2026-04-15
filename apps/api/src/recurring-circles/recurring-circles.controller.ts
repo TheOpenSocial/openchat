@@ -176,7 +176,7 @@ export class RecurringCirclesController {
     await this.protocolService.joinFirstPartyCircleAction(circleId, {
       actorUserId,
       memberUserId: payload.userId,
-      role: payload.role,
+      role: payload.role === "owner" ? "admin" : payload.role,
       metadata: {
         source: "recurring-circles.controller.add_member",
       },

@@ -511,8 +511,7 @@ test("remote Ollama actor output salvages malformed json-like payloads", async (
     ok: true,
     json: async () => ({
       message: {
-        content:
-          `{"intent":"reply","targetActorId":"aya","message":"Smith Rock is solid! I've been hitting the Monkey Face route lately.","tone":"playful","confidence":0.85,"rationale":"Aya mentioned specific climbing and cafe interests that align perfectly with my goals.`,
+        content: `{"intent":"reply","targetActorId":"aya","message":"Smith Rock is solid! I've been hitting the Monkey Face route lately.","tone":"playful","confidence":0.85,"rationale":"Aya mentioned specific climbing and cafe interests that align perfectly with my goals.`,
       },
     }),
   });

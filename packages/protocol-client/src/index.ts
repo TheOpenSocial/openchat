@@ -40,6 +40,7 @@ import {
   manifestSchema,
   webhookSubscriptionCreateSchema,
   webhookSubscriptionSchema,
+  type ProtocolJsonValue,
   type ProtocolAppRecord as ProtocolAppRecordShape,
   type ProtocolAppOperationalSnapshot as ProtocolAppOperationalSnapshotShape,
   type ProtocolAppRegistrationRequest as ProtocolAppRegistrationRequestShape,
@@ -73,7 +74,6 @@ import {
   type ProtocolRequestActionResult,
   type ProtocolRequestDecisionAction,
   type ProtocolReplayCursor,
-  type ProtocolScopeName,
   type ProtocolWebhookDeliveryDispatchResult,
   type ProtocolWebhookDeliveryAttempt,
   type ProtocolWebhookDeliveryReplayBatchResult,
@@ -83,16 +83,14 @@ import {
   type WebhookSubscription,
   type WebhookSubscriptionCreate,
 } from "@opensocial/protocol-types";
-export type {
-  ProtocolJsonObject,
-} from "@opensocial/protocol-types";
+export type { ProtocolJsonObject } from "@opensocial/protocol-types";
 
 export type ProtocolClientTransport = {
   request: (path: string, init?: RequestInit) => Promise<Response>;
 };
 
 export type ProtocolClientFetchLike = (
-  input: RequestInfo | URL,
+  input: string | URL,
   init?: RequestInit,
 ) => Promise<Response>;
 
@@ -281,7 +279,7 @@ export type ProtocolClient = {
   ) => Promise<ProtocolAppUsageSummary>;
   buildAppRegistrationRequest: (
     input: ProtocolAppRegistrationRequestInput,
-  ) => AppRegistrationRequest;
+  ) => ProtocolAppRegistrationRequestShape;
 };
 
 export type ProtocolAppSession = {
@@ -447,7 +445,9 @@ async function readProtocolResponseData<T>(
   return parser.parse(data);
 }
 
-function buildProtocolAppTokenHeaders(appToken: string): HeadersInit {
+function buildProtocolAppTokenHeaders(
+  appToken: string,
+): Record<string, string> {
   return {
     "x-protocol-app-token": appToken,
   };
@@ -478,7 +478,10 @@ export function createProtocolClient(
     },
     async getDiscovery() {
       const response = await transport.request("/protocol/discovery");
-      return readProtocolResponseData(response, protocolDiscoveryDocumentSchema);
+      return readProtocolResponseData(
+        response,
+        protocolDiscoveryDocumentSchema,
+      );
     },
     async listApps() {
       const response = await transport.request("/protocol/apps");
@@ -608,7 +611,10 @@ export function createProtocolClient(
           protocolAppTokenRotateInputSchema.parse(input ?? {}),
         ),
       );
-      return readProtocolResponseData(response, protocolAppTokenRotateResultSchema);
+      return readProtocolResponseData(
+        response,
+        protocolAppTokenRotateResultSchema,
+      );
     },
     async rotateToken(appId, appToken, input) {
       const response = await transport.request(
@@ -618,7 +624,10 @@ export function createProtocolClient(
           protocolAppTokenRotateInputSchema.parse(input ?? {}),
         ),
       );
-      return readProtocolResponseData(response, protocolAppTokenRotateResultSchema);
+      return readProtocolResponseData(
+        response,
+        protocolAppTokenRotateResultSchema,
+      );
     },
     async revokeAppToken(appId, appToken, input) {
       const response = await transport.request(
@@ -628,7 +637,10 @@ export function createProtocolClient(
           protocolAppTokenRevokeInputSchema.parse(input ?? {}),
         ),
       );
-      return readProtocolResponseData(response, protocolAppTokenRevokeResultSchema);
+      return readProtocolResponseData(
+        response,
+        protocolAppTokenRevokeResultSchema,
+      );
     },
     async revokeToken(appId, appToken, input) {
       const response = await transport.request(
@@ -638,7 +650,10 @@ export function createProtocolClient(
           protocolAppTokenRevokeInputSchema.parse(input ?? {}),
         ),
       );
-      return readProtocolResponseData(response, protocolAppTokenRevokeResultSchema);
+      return readProtocolResponseData(
+        response,
+        protocolAppTokenRevokeResultSchema,
+      );
     },
     async listWebhookDeliveries(appId, appToken, subscriptionId) {
       const response = await transport.request(
@@ -735,7 +750,10 @@ export function createProtocolClient(
         `/protocol/apps/${appId}/actions/intents`,
         buildProtocolJsonRequestInit(appToken, requestPayload),
       );
-      return readProtocolResponseData(response, protocolIntentActionResultSchema);
+      return readProtocolResponseData(
+        response,
+        protocolIntentActionResultSchema,
+      );
     },
     async updateIntent(appId, appToken, intentId, payload) {
       const requestPayload = protocolIntentUpdateActionSchema.parse(payload);
@@ -743,7 +761,10 @@ export function createProtocolClient(
         `/protocol/apps/${appId}/actions/intents/${intentId}`,
         buildProtocolJsonRequestInit(appToken, requestPayload, "PATCH"),
       );
-      return readProtocolResponseData(response, protocolIntentActionResultSchema);
+      return readProtocolResponseData(
+        response,
+        protocolIntentActionResultSchema,
+      );
     },
     async cancelIntent(appId, appToken, intentId, payload) {
       const requestPayload = protocolIntentCancelActionSchema.parse(payload);
@@ -751,7 +772,10 @@ export function createProtocolClient(
         `/protocol/apps/${appId}/actions/intents/${intentId}/cancel`,
         buildProtocolJsonRequestInit(appToken, requestPayload),
       );
-      return readProtocolResponseData(response, protocolIntentActionResultSchema);
+      return readProtocolResponseData(
+        response,
+        protocolIntentActionResultSchema,
+      );
     },
     async sendRequest(appId, appToken, payload) {
       const requestPayload =
@@ -760,7 +784,10 @@ export function createProtocolClient(
         `/protocol/apps/${appId}/actions/requests`,
         buildProtocolJsonRequestInit(appToken, requestPayload),
       );
-      return readProtocolResponseData(response, protocolRequestActionResultSchema);
+      return readProtocolResponseData(
+        response,
+        protocolRequestActionResultSchema,
+      );
     },
     async acceptRequest(appId, appToken, requestId, payload) {
       const requestPayload = protocolRequestDecisionActionSchema.parse(payload);
@@ -768,7 +795,10 @@ export function createProtocolClient(
         `/protocol/apps/${appId}/actions/requests/${requestId}/accept`,
         buildProtocolJsonRequestInit(appToken, requestPayload),
       );
-      return readProtocolResponseData(response, protocolRequestActionResultSchema);
+      return readProtocolResponseData(
+        response,
+        protocolRequestActionResultSchema,
+      );
     },
     async rejectRequest(appId, appToken, requestId, payload) {
       const requestPayload = protocolRequestDecisionActionSchema.parse(payload);
@@ -776,7 +806,10 @@ export function createProtocolClient(
         `/protocol/apps/${appId}/actions/requests/${requestId}/reject`,
         buildProtocolJsonRequestInit(appToken, requestPayload),
       );
-      return readProtocolResponseData(response, protocolRequestActionResultSchema);
+      return readProtocolResponseData(
+        response,
+        protocolRequestActionResultSchema,
+      );
     },
     async sendChatMessage(appId, appToken, chatId, payload) {
       const requestPayload = protocolChatSendMessageActionSchema.parse(payload);
@@ -795,7 +828,10 @@ export function createProtocolClient(
         `/protocol/apps/${appId}/actions/circles`,
         buildProtocolJsonRequestInit(appToken, requestPayload),
       );
-      return readProtocolResponseData(response, protocolCircleActionResultSchema);
+      return readProtocolResponseData(
+        response,
+        protocolCircleActionResultSchema,
+      );
     },
     async joinCircle(appId, appToken, circleId, payload) {
       const requestPayload = protocolCircleJoinActionSchema.parse(payload);
@@ -803,7 +839,10 @@ export function createProtocolClient(
         `/protocol/apps/${appId}/actions/circles/${circleId}/join`,
         buildProtocolJsonRequestInit(appToken, requestPayload),
       );
-      return readProtocolResponseData(response, protocolCircleActionResultSchema);
+      return readProtocolResponseData(
+        response,
+        protocolCircleActionResultSchema,
+      );
     },
     async leaveCircle(appId, appToken, circleId, payload) {
       const requestPayload = protocolCircleLeaveActionSchema.parse(payload);
@@ -811,7 +850,10 @@ export function createProtocolClient(
         `/protocol/apps/${appId}/actions/circles/${circleId}/leave`,
         buildProtocolJsonRequestInit(appToken, requestPayload),
       );
-      return readProtocolResponseData(response, protocolCircleActionResultSchema);
+      return readProtocolResponseData(
+        response,
+        protocolCircleActionResultSchema,
+      );
     },
     async runWebhookDeliveryQueue(appId, appToken, input) {
       const requestPayload = protocolWebhookDeliveryRunRequestSchema.parse(

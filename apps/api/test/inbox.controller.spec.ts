@@ -93,6 +93,7 @@ describe("InboxController", () => {
       };
       const controller = new InboxController(
         inboxService as any,
+        undefined,
         cleanupQueue as any,
       );
 

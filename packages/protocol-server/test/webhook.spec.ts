@@ -12,7 +12,7 @@ import {
   PROTOCOL_WEBHOOK_SIGNATURE_HEADER,
   verifyProtocolWebhookSignature,
   verifyProtocolWebhookRequest,
-} from "../src/index.ts";
+} from "../dist/index.js";
 
 test("buildProtocolWebhookSignature uses a stable canonical format", () => {
   const signature = buildProtocolWebhookSignature({

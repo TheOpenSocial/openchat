@@ -24,11 +24,7 @@ export function resolveProtocolBaseUrl() {
   return value.replace(/\/+$/, "");
 }
 
-export function resolveRequiredStringArg({
-  flag,
-  envName,
-  errorMessage,
-}) {
+export function resolveRequiredStringArg({ flag, envName, errorMessage }) {
   const provided = getArg(flag) || process.env[envName];
   if (!provided) {
     throw new Error(errorMessage);

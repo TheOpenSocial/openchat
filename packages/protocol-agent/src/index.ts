@@ -1,23 +1,25 @@
 import {
   type ProtocolAppClient,
-  type ProtocolAppOperationalSnapshot,
   type ProtocolAppSession,
-  type ProtocolChatSendMessageInput,
-  type ProtocolCircleCreateInput,
-  type ProtocolCircleJoinInput,
-  type ProtocolCircleLeaveInput,
-  type ProtocolIntentActionResult,
-  type ProtocolIntentCancelInput,
-  type ProtocolIntentCreateInput,
-  type ProtocolIntentUpdateInput,
-  type ProtocolRequestActionResult,
-  type ProtocolRequestDecisionInput,
-  type ProtocolRequestSendInput,
-  type ProtocolJsonObject,
-  type ProtocolJsonValue,
   createBoundProtocolAppClientFromBaseUrl,
   loadProtocolAppOperationalSnapshot,
 } from "@opensocial/protocol-client";
+import type {
+  ProtocolAppOperationalSnapshot,
+  ProtocolChatSendMessageAction as ProtocolChatSendMessageInput,
+  ProtocolCircleCreateAction as ProtocolCircleCreateInput,
+  ProtocolCircleJoinAction as ProtocolCircleJoinInput,
+  ProtocolCircleLeaveAction as ProtocolCircleLeaveInput,
+  ProtocolIntentActionResult,
+  ProtocolIntentCancelAction as ProtocolIntentCancelInput,
+  ProtocolIntentCreateAction as ProtocolIntentCreateInput,
+  ProtocolIntentUpdateAction as ProtocolIntentUpdateInput,
+  ProtocolJsonObject,
+  ProtocolJsonValue,
+  ProtocolRequestActionResult,
+  ProtocolRequestDecisionAction as ProtocolRequestDecisionInput,
+  ProtocolIntentRequestSendAction as ProtocolRequestSendInput,
+} from "@opensocial/protocol-types";
 
 export type ProtocolAgentSession = ProtocolAppSession & {
   actorUserId: string;
@@ -191,6 +193,13 @@ function formatIssues(issues: ProtocolAgentReadinessIssue[]): string {
   return issues.map((issue) => `${issue.code}: ${issue.message}`).join("; ");
 }
 
+function countAuthFailures(snapshot: ProtocolAppOperationalSnapshot): number {
+  return Object.values(snapshot.usage.authFailureCounts).reduce(
+    (total, count) => total + count,
+    0,
+  );
+}
+
 export function evaluateProtocolAgentReadiness(
   snapshot: ProtocolAppOperationalSnapshot,
   options: ProtocolAgentReadinessOptions = {},
@@ -203,11 +212,13 @@ export function evaluateProtocolAgentReadiness(
 
   const issues: ProtocolAgentReadinessIssue[] = [];
 
-  if (failOnAuthFailures && snapshot.usage.authFailures.total > 0) {
+  const authFailureCount = countAuthFailures(snapshot);
+
+  if (failOnAuthFailures && authFailureCount > 0) {
     issues.push({
       code: "auth_failures_present",
       severity: "blocking",
-      message: `Recent auth failures: ${snapshot.usage.authFailures.total}`,
+      message: `Recent auth failures: ${authFailureCount}`,
     });
   }
 
@@ -377,7 +388,9 @@ export function createProtocolAgentToolset(
         "Fail fast when auth, grants, consent, or delivery health block protocol agent work.",
       inputSchema: readinessOptionsSchema,
       invoke: (input) =>
-        agent.assertReady(readProtocolAgentToolInput<ProtocolAgentReadinessOptions>(input)),
+        agent.assertReady(
+          readProtocolAgentToolInput<ProtocolAgentReadinessOptions>(input),
+        ),
     },
     {
       name: "protocol_agent_create_intent",
@@ -622,7 +635,7 @@ export function createProtocolAgentToolset(
         }>(input);
         return agent.joinCircle(payload.circleId, {
           memberUserId: payload.memberUserId,
-          role: payload.role,
+          role: payload.role ?? "member",
           metadata: payload.metadata,
         });
       },

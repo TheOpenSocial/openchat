@@ -142,7 +142,9 @@ async function main() {
   const usage = await app.getAppUsageSummary();
   logSection("protocol-example", "usage-summary", usage);
 
-  console.log(`\n[protocol-example] partner actions complete for appId=${appId}`);
+  console.log(
+    `\n[protocol-example] partner actions complete for appId=${appId}`,
+  );
 }
 
 main().catch((error) => {

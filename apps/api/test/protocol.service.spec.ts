@@ -248,10 +248,11 @@ function createPrismaStub() {
       }
       if (query.includes("FROM protocol_event_log")) {
         const [appId, sinceCursor] = params;
+        const lowerBound = sinceCursor == null ? 0n : BigInt(sinceCursor);
         return events.filter(
           (row) =>
             (row.actor_app_id === appId || row.actor_app_id == null) &&
-            BigInt(row.cursor) > BigInt(sinceCursor),
+            BigInt(row.cursor) > lowerBound,
         ) as T;
       }
       if (query.includes("FROM protocol_event_cursors")) {

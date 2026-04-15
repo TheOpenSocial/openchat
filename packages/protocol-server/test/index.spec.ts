@@ -7,7 +7,7 @@ import { protocolIds } from "@opensocial/protocol-types";
 import {
   buildProtocolDiscoveryDocument,
   buildProtocolManifest,
-} from "../src/index.ts";
+} from "../dist/index.js";
 
 test("buildProtocolManifest applies the OpenSocial defaults", () => {
   const manifest = buildProtocolManifest();
@@ -92,7 +92,12 @@ test("buildProtocolManifest applies the OpenSocial defaults", () => {
   assert.equal(manifest.capabilities.canActAsAgent, false);
   assert.equal(manifest.capabilities.canManageWebhooks, true);
   assert.deepEqual(manifest.webhooks, []);
-  assert.deepEqual(manifest.metadata, {});
+  assert.deepEqual(manifest.metadata, {
+    unsupportedPrimitives: ["posts", "follows", "feeds", "likes"],
+    denial: "unsupported protocol primitive",
+    message:
+      "OpenSocial protocol intentionally excludes generic social-network primitives such as posts, follows, feeds, and likes.",
+  });
   assert.equal(manifest.agent.enabled, true);
   assert.deepEqual(manifest.agent.modes, ["observe", "suggest"]);
   assert.equal(manifest.agent.requiresHumanApproval, true);
@@ -128,7 +133,13 @@ test("buildProtocolManifest merges custom overrides without losing defaults", ()
   assert.equal(manifest.homepageUrl, "https://partner.example.com");
   assert.equal(manifest.iconUrl, "https://partner.example.com/icon.png");
   assert.deepEqual(manifest.categories, ["integration"]);
-  assert.deepEqual(manifest.metadata, { source: "partner" });
+  assert.deepEqual(manifest.metadata, {
+    unsupportedPrimitives: ["posts", "follows", "feeds", "likes"],
+    denial: "unsupported protocol primitive",
+    message:
+      "OpenSocial protocol intentionally excludes generic social-network primitives such as posts, follows, feeds, and likes.",
+    source: "partner",
+  });
   assert.deepEqual(manifest.capabilities.scopes, ["protocol.read"]);
   assert.deepEqual(manifest.capabilities.resources, ["chat"]);
   assert.deepEqual(manifest.capabilities.actions, ["chat.read"]);

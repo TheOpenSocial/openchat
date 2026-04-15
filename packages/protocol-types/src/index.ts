@@ -63,8 +63,9 @@ export const protocolJsonValueSchema: z.ZodType<ProtocolJsonValue> = z.lazy(
 export const protocolJsonObjectSchema: z.ZodType<ProtocolJsonObject> = z.lazy(
   () => z.record(z.string(), protocolJsonValueSchema),
 );
-export const protocolJsonArraySchema: z.ZodType<ProtocolJsonArray> =
-  z.array(protocolJsonValueSchema);
+export const protocolJsonArraySchema: z.ZodType<ProtocolJsonArray> = z.array(
+  protocolJsonValueSchema,
+);
 
 export const resourceNameValues = [
   "user",
@@ -464,17 +465,6 @@ export const appRegistrationUpdateSchema = z
   .strict();
 export type AppRegistrationUpdate = z.infer<typeof appRegistrationUpdateSchema>;
 
-export const protocolAppRecordSchema = z
-  .object({
-    status: appRegistrationStatusSchema,
-    registration: appRegistrationSchema,
-    manifest: manifestSchema,
-    issuedScopes: z.array(protocolScopeNameSchema).default([]),
-    issuedCapabilities: z.array(capabilityNameSchema).default([]),
-  })
-  .strict();
-export type ProtocolAppRecord = z.infer<typeof protocolAppRecordSchema>;
-
 export const manifestAgentModeValues = ["observe", "suggest", "act"] as const;
 export const manifestAgentModeSchema = z.enum(manifestAgentModeValues);
 export type ManifestAgentMode = z.infer<typeof manifestAgentModeSchema>;
@@ -775,19 +765,6 @@ export type ProtocolDeliveryQueueInspection = z.infer<
   typeof protocolDeliveryQueueInspectionSchema
 >;
 
-export const protocolAppOperationalSnapshotSchema = z
-  .object({
-    usage: protocolAppUsageSummarySchema,
-    queue: protocolDeliveryQueueInspectionSchema,
-    grants: z.array(protocolAppScopeGrantSchema),
-    consentRequests: z.array(protocolAppConsentRequestSchema),
-    webhooks: z.array(webhookSubscriptionSchema),
-  })
-  .strict();
-export type ProtocolAppOperationalSnapshot = z.infer<
-  typeof protocolAppOperationalSnapshotSchema
->;
-
 export const protocolWebhookDeliveryGlobalDispatchResultSchema = z
   .object({
     queueName: z.literal("protocol-webhooks"),
@@ -886,6 +863,19 @@ export const protocolAppConsentRequestSchema = z
   .strict();
 export type ProtocolAppConsentRequest = z.infer<
   typeof protocolAppConsentRequestSchema
+>;
+
+export const protocolAppOperationalSnapshotSchema = z
+  .object({
+    usage: protocolAppUsageSummarySchema,
+    queue: protocolDeliveryQueueInspectionSchema,
+    grants: z.array(protocolAppScopeGrantSchema),
+    consentRequests: z.array(protocolAppConsentRequestSchema),
+    webhooks: z.array(webhookSubscriptionSchema),
+  })
+  .strict();
+export type ProtocolAppOperationalSnapshot = z.infer<
+  typeof protocolAppOperationalSnapshotSchema
 >;
 
 export const protocolAppConsentRequestCreateSchema = z

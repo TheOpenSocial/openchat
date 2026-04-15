@@ -13,33 +13,37 @@ import {
 } from "./protocol-example-args.mjs";
 
 async function main() {
-  const toolkit = createProtocolAgentToolkitFromBaseUrl(resolveProtocolBaseUrl(), {
-    appId: resolveRequiredStringArg({
-      flag: "--app-id",
-      envName: "PROTOCOL_APP_ID",
-      errorMessage: "Missing app id. Set --app-id or PROTOCOL_APP_ID.",
-    }),
-    appToken: resolveRequiredStringArg({
-      flag: "--app-token",
-      envName: "PROTOCOL_APP_TOKEN",
-      errorMessage: "Missing app token. Set --app-token or PROTOCOL_APP_TOKEN.",
-    }),
-    actorUserId: resolveRequiredStringArg({
-      flag: "--actor-user-id",
-      envName: "PROTOCOL_ACTOR_USER_ID",
-      errorMessage:
-        "Missing actor user id. Set --actor-user-id or PROTOCOL_ACTOR_USER_ID.",
-    }),
-    agentId: resolveOptionalStringArg({
-      flag: "--agent-id",
-      envName: "PROTOCOL_AGENT_ID",
-      fallback: "partner.concierge",
-    }),
-    metadata: {
-      example: true,
-      generatedBy: "scripts/examples/protocol-partner-agent-toolkit.mjs",
+  const toolkit = createProtocolAgentToolkitFromBaseUrl(
+    resolveProtocolBaseUrl(),
+    {
+      appId: resolveRequiredStringArg({
+        flag: "--app-id",
+        envName: "PROTOCOL_APP_ID",
+        errorMessage: "Missing app id. Set --app-id or PROTOCOL_APP_ID.",
+      }),
+      appToken: resolveRequiredStringArg({
+        flag: "--app-token",
+        envName: "PROTOCOL_APP_TOKEN",
+        errorMessage:
+          "Missing app token. Set --app-token or PROTOCOL_APP_TOKEN.",
+      }),
+      actorUserId: resolveRequiredStringArg({
+        flag: "--actor-user-id",
+        envName: "PROTOCOL_ACTOR_USER_ID",
+        errorMessage:
+          "Missing actor user id. Set --actor-user-id or PROTOCOL_ACTOR_USER_ID.",
+      }),
+      agentId: resolveOptionalStringArg({
+        flag: "--agent-id",
+        envName: "PROTOCOL_AGENT_ID",
+        fallback: "partner.concierge",
+      }),
+      metadata: {
+        example: true,
+        generatedBy: "scripts/examples/protocol-partner-agent-toolkit.mjs",
+      },
     },
-  });
+  );
 
   logSection(
     "protocol-agent-toolkit",

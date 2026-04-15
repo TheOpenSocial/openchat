@@ -153,7 +153,7 @@ export {
   parseProtocolWebhookSignature,
   verifyProtocolWebhookRequest,
   verifyProtocolWebhookSignature,
-} from "./webhook.ts";
+} from "./webhook.js";
 export type {
   ProtocolWebhookHeaderSource,
   ProtocolWebhookHeaderValue,
@@ -161,4 +161,4 @@ export type {
   ProtocolWebhookRequestInput,
   ProtocolWebhookSignatureInput,
   ProtocolWebhookVerificationInput,
-} from "./webhook.ts";
+} from "./webhook.js";

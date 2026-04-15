@@ -18,7 +18,7 @@
     "pretypecheck": "pnpm --filter @opensocial/protocol-types build && pnpm --filter @opensocial/protocol-events build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint \"src/**/*.ts\" --max-warnings=0",
-    "pretest": "pnpm --filter @opensocial/protocol-types build && pnpm --filter @opensocial/protocol-events build",
+    "pretest": "pnpm --filter @opensocial/protocol-types build && pnpm --filter @opensocial/protocol-events build && pnpm build",
     "test": "node --test --experimental-strip-types test/**/*.spec.ts"
   },
   "dependencies": {

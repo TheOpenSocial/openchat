@@ -45,22 +45,30 @@ function summarizeSnapshot(snapshot) {
 
 async function main() {
   const action = resolveAction();
-  const app = createBoundProtocolAppClientFromBaseUrl(resolveProtocolBaseUrl(), {
-    appId: resolveRequiredStringArg({
-      flag: "--app-id",
-      envName: "PROTOCOL_APP_ID",
-      errorMessage: "Missing app id. Set --app-id or PROTOCOL_APP_ID.",
-    }),
-    appToken: resolveRequiredStringArg({
-      flag: "--app-token",
-      envName: "PROTOCOL_APP_TOKEN",
-      errorMessage: "Missing app token. Set --app-token or PROTOCOL_APP_TOKEN.",
-    }),
-  });
+  const app = createBoundProtocolAppClientFromBaseUrl(
+    resolveProtocolBaseUrl(),
+    {
+      appId: resolveRequiredStringArg({
+        flag: "--app-id",
+        envName: "PROTOCOL_APP_ID",
+        errorMessage: "Missing app id. Set --app-id or PROTOCOL_APP_ID.",
+      }),
+      appToken: resolveRequiredStringArg({
+        flag: "--app-token",
+        envName: "PROTOCOL_APP_TOKEN",
+        errorMessage:
+          "Missing app token. Set --app-token or PROTOCOL_APP_TOKEN.",
+      }),
+    },
+  );
 
   if (action === "inspect") {
     const snapshot = await loadProtocolAppOperationalSnapshot(app);
-    logSection("protocol-ops", "operational-summary", summarizeSnapshot(snapshot));
+    logSection(
+      "protocol-ops",
+      "operational-summary",
+      summarizeSnapshot(snapshot),
+    );
     logSection("protocol-ops", "webhooks", snapshot.webhooks);
     logSection("protocol-ops", "grants", snapshot.grants);
     logSection("protocol-ops", "consent-requests", snapshot.consentRequests);

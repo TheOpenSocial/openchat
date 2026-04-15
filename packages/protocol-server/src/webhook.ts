@@ -139,6 +139,18 @@ function readHeaderValue(
     return direct.trim();
   }
 
+  for (const [key, value] of Object.entries(record)) {
+    if (key.toLowerCase() !== headerName.toLowerCase()) {
+      continue;
+    }
+    if (Array.isArray(value)) {
+      return value[0]?.trim() ?? null;
+    }
+    if (typeof value === "string") {
+      return value.trim();
+    }
+  }
+
   return null;
 }
 

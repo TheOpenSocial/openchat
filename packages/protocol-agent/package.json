@@ -21,6 +21,7 @@
     "test": "echo 'no tests yet for protocol-agent'"
   },
   "dependencies": {
-    "@opensocial/protocol-client": "workspace:*"
+    "@opensocial/protocol-client": "workspace:*",
+    "@opensocial/protocol-types": "workspace:*"
   }
 }

@@ -21,6 +21,13 @@ function normalizeString(value, fallback = "") {
     : fallback;
 }
 
+function normalizeProductGoldenCheckId(checkId) {
+  if (checkId === "agentic-eval-scorecards") {
+    return "agentic-evals-snapshot";
+  }
+  return checkId;
+}
+
 function boolFromEnv(value, fallback = false) {
   if (typeof value !== "string") return fallback;
   const normalized = value.trim().toLowerCase();
@@ -265,7 +272,11 @@ export async function runProductCriticalGoldens(
     new Set(
       suiteCases
         ? suiteCases
-            .map((entry) => (typeof entry?.id === "string" ? entry.id : null))
+            .map((entry) =>
+              typeof entry?.id === "string"
+                ? normalizeProductGoldenCheckId(entry.id)
+                : null,
+            )
             .filter(Boolean)
         : [],
     ),
@@ -315,7 +326,11 @@ export async function runProductCriticalGoldens(
   const passedCheckIds = new Set(
     suiteCases
       .filter((entry) => entry?.status === "passed")
-      .map((entry) => (typeof entry?.id === "string" ? entry.id : null))
+      .map((entry) =>
+        typeof entry?.id === "string"
+          ? normalizeProductGoldenCheckId(entry.id)
+          : null,
+      )
       .filter(Boolean),
   );
   const passedScenarioIds = new Set(

@@ -16,9 +16,9 @@ import {
   buildProtocolManifest,
 } from "@opensocial/protocol-server";
 import { NotificationType } from "@opensocial/types";
+import { protocolEventCatalog } from "@opensocial/protocol-events";
 import {
   buildProtocolWebhookDelivery,
-  protocolEventCatalog,
   protocolWebhookDeliverySchema,
 } from "@opensocial/protocol-types";
 import {
@@ -77,6 +77,7 @@ import {
   type ProtocolAppUsageSummary,
   type ProtocolDiscoveryDocument,
   type ProtocolEventEnvelope,
+  type ProtocolJsonObject,
   type ProtocolManifest,
   type ProtocolIntentActionResult,
   type ProtocolIntentCancelAction,
@@ -472,9 +473,9 @@ export class ProtocolService {
         subjectId: requestRow.subject_id ?? requestRow.app_id,
         ...(grantedByUserId ? { grantedByUserId } : {}),
         metadata: {
-          ...(requestRow.metadata && typeof requestRow.metadata === "object"
-            ? (requestRow.metadata as Record<string, unknown>)
-            : {}),
+          ...((requestRow.metadata && typeof requestRow.metadata === "object"
+            ? requestRow.metadata
+            : {}) as ProtocolJsonObject),
           ...(payload.metadata ?? {}),
         },
       },
@@ -2615,6 +2616,8 @@ export class ProtocolService {
     actorUserId: string,
     action:
       | "intent.create"
+      | "intent.update"
+      | "intent.cancel"
       | "request.send"
       | "request.accept"
       | "request.reject"
