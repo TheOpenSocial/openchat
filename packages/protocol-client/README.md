@@ -100,6 +100,8 @@ This package does not provide:
 
 Use [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-partner-quickstart.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-partner-quickstart.md) for an end-to-end walkthrough using the shipped example scripts.
 
+Use [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-sdk-index.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-sdk-index.md) for the canonical SDK docs entry point.
+
 Use [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-manifest-and-discovery.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-manifest-and-discovery.md) for the safest bootstrap path before registration and writes.
 
 Use [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-app-registration-and-tokens.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-app-registration-and-tokens.md) for the dedicated app-registration, token-issuance, rotation, and revocation flow.
@@ -111,3 +113,4 @@ It also does not expose generic feed/post/follow primitives. The protocol intent
 For queue health, auth-failure triage, and replay operations, use:
 
 - [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-operator-recovery.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-operator-recovery.md)
+- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-production-readiness-checklist.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-production-readiness-checklist.md)

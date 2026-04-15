@@ -14,6 +14,7 @@ The SDK docs must stay aligned with what is already shipped:
 - The protocol backend now explicitly advertises its unsupported-primitives policy in the manifest metadata so third parties do not infer support from omission.
 - Usage summaries now expose structured protocol auth-failure diagnostics so partners can distinguish missing tokens, missing scopes, missing capabilities, and missing delegated grants.
 - Partner-ready guides now exist for:
+  - SDK docs index
   - protocol overview and exclusions
   - manifest and discovery bootstrap
   - app registration and token lifecycle
@@ -22,6 +23,8 @@ The SDK docs must stay aligned with what is already shipped:
   - consent/auth troubleshooting
   - operator recovery and queue health
   - external actions reference
+  - versioning and compatibility guidance
+  - production readiness checklist
 
 ## Doc Set Goals
 

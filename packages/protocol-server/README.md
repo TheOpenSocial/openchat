@@ -42,6 +42,8 @@ const ok = verifyProtocolWebhookRequest({
 
 Use [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-webhook-consumer.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-webhook-consumer.md) for a partner-facing receiver walkthrough using the shipped helpers.
 
+Use [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-sdk-index.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-sdk-index.md) for the full SDK docs map around the server helpers.
+
 ## Exclusions
 
 This package does not provide:

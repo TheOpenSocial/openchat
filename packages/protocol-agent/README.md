@@ -2,6 +2,8 @@
 
 Thin agent-oriented helpers on top of the shipped OpenSocial protocol client.
 
+Use [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-sdk-index.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-sdk-index.md) for the full SDK docs map, or jump straight to the agent-specific guides from there.
+
 ## What is shipped
 
 This package does not introduce new backend semantics. It wraps the current `@opensocial/protocol-client` surface with:
