@@ -143,8 +143,24 @@ export class IntentsController {
     const intentId = parseRequestPayload(uuidSchema, intentIdParam);
     await this.intentsService.assertIntentOwnership(intentId, actorUserId);
     const payload = parseRequestPayload(updateIntentBodySchema, body);
+    if (!this.protocolService) {
+      return ok(
+        await this.intentsService.updateIntent(intentId, payload.rawText),
+      );
+    }
     return ok(
-      await this.intentsService.updateIntent(intentId, payload.rawText),
+      await this.intentsService.getOwnedIntent(
+        (
+          await this.protocolService.updateFirstPartyIntentAction(intentId, {
+            actorUserId,
+            rawText: payload.rawText,
+            metadata: {
+              source: "intents.controller.update",
+            },
+          })
+        ).intentId,
+        actorUserId,
+      ),
     );
   }
 
@@ -186,12 +202,29 @@ export class IntentsController {
         "intent user does not match authenticated user",
       );
     }
-    return ok(
-      await this.intentsService.cancelIntent(intentId, {
-        userId: actorUserId,
+    if (!this.protocolService) {
+      return ok(
+        await this.intentsService.cancelIntent(intentId, {
+          userId: actorUserId,
+          agentThreadId: payload.agentThreadId,
+        }),
+      );
+    }
+    const result = await this.protocolService.cancelFirstPartyIntentAction(
+      intentId,
+      {
+        actorUserId,
         agentThreadId: payload.agentThreadId,
-      }),
+        metadata: {
+          source: "intents.controller.cancel",
+        },
+      },
     );
+    return ok({
+      intent: await this.intentsService.getOwnedIntent(intentId, actorUserId),
+      cancelledRequestCount: result.cancelledRequestCount ?? 0,
+      ...(result.unchanged ? { unchanged: true } : {}),
+    });
   }
 
   @Post(":intentId/retry")

@@ -47,7 +47,9 @@ import {
   protocolEventEnvelopeSchema,
   protocolIds,
   protocolIntentActionResultSchema,
+  protocolIntentCancelActionSchema,
   protocolIntentCreateActionSchema,
+  protocolIntentUpdateActionSchema,
   protocolIntentRequestSendActionSchema,
   protocolRequestActionResultSchema,
   protocolRequestDecisionActionSchema,
@@ -76,7 +78,10 @@ import {
   type ProtocolDiscoveryDocument,
   type ProtocolEventEnvelope,
   type ProtocolManifest,
+  type ProtocolIntentActionResult,
+  type ProtocolIntentCancelAction,
   type ProtocolIntentCreateAction,
+  type ProtocolIntentUpdateAction,
   type ProtocolIntentRequestSendAction,
   type ProtocolRequestDecisionAction,
   type ProtocolReplayCursor,
@@ -1439,6 +1444,24 @@ export class ProtocolService {
     });
   }
 
+  async updateFirstPartyIntentAction(
+    intentId: string,
+    input: ProtocolIntentUpdateAction,
+  ) {
+    return this.executeIntentUpdateAction(intentId, input, {
+      actorAppId: FIRST_PARTY_PROTOCOL_ACTOR_APP_ID,
+    });
+  }
+
+  async cancelFirstPartyIntentAction(
+    intentId: string,
+    input: ProtocolIntentCancelAction,
+  ) {
+    return this.executeIntentCancelAction(intentId, input, {
+      actorAppId: FIRST_PARTY_PROTOCOL_ACTOR_APP_ID,
+    });
+  }
+
   async createFirstPartyDatingConsentAction(input: {
     id: string;
     userId: string;
@@ -1879,6 +1902,89 @@ export class ProtocolService {
       traceId,
       safetyState:
         typeof intent.safetyState === "string" ? intent.safetyState : null,
+      metadata: payload.metadata ?? {},
+    });
+  }
+
+  private async executeIntentUpdateAction(
+    intentId: string,
+    input: ProtocolIntentUpdateAction,
+    context: { actorAppId: string; grantId?: string },
+  ): Promise<ProtocolIntentActionResult> {
+    const payload = protocolIntentUpdateActionSchema.parse(input);
+    await this.intentsService!.assertIntentOwnership(
+      intentId,
+      payload.actorUserId,
+    );
+    const intent = await this.intentsService!.updateIntent(
+      intentId,
+      payload.rawText,
+    );
+
+    await this.recordEvent({
+      actorAppId: context.actorAppId,
+      event: "intent.updated",
+      resource: "intent",
+      payload: {
+        intentId: intent.id,
+        actorUserId: payload.actorUserId,
+        grantId: context.grantId ?? null,
+        source:
+          context.actorAppId === FIRST_PARTY_PROTOCOL_ACTOR_APP_ID
+            ? "first_party"
+            : "app",
+      },
+    });
+
+    return protocolIntentActionResultSchema.parse({
+      action: "intent.update",
+      status: intent.status,
+      actorUserId: payload.actorUserId,
+      intentId: intent.id,
+      safetyState:
+        typeof intent.safetyState === "string" ? intent.safetyState : null,
+      metadata: payload.metadata ?? {},
+    });
+  }
+
+  private async executeIntentCancelAction(
+    intentId: string,
+    input: ProtocolIntentCancelAction,
+    context: { actorAppId: string; grantId?: string },
+  ): Promise<ProtocolIntentActionResult> {
+    const payload = protocolIntentCancelActionSchema.parse(input);
+    const result = await this.intentsService!.cancelIntent(intentId, {
+      userId: payload.actorUserId,
+      agentThreadId: payload.agentThreadId,
+    });
+
+    await this.recordEvent({
+      actorAppId: context.actorAppId,
+      event: "intent.cancelled",
+      resource: "intent",
+      payload: {
+        intentId: result.intent.id,
+        actorUserId: payload.actorUserId,
+        cancelledRequestCount: result.cancelledRequestCount,
+        grantId: context.grantId ?? null,
+        source:
+          context.actorAppId === FIRST_PARTY_PROTOCOL_ACTOR_APP_ID
+            ? "first_party"
+            : "app",
+      },
+    });
+
+    return protocolIntentActionResultSchema.parse({
+      action: "intent.cancel",
+      status: result.intent.status,
+      actorUserId: payload.actorUserId,
+      intentId: result.intent.id,
+      safetyState:
+        typeof result.intent.safetyState === "string"
+          ? result.intent.safetyState
+          : null,
+      cancelledRequestCount: result.cancelledRequestCount,
+      unchanged: "unchanged" in result ? Boolean(result.unchanged) : false,
       metadata: payload.metadata ?? {},
     });
   }

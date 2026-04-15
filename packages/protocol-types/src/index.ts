@@ -768,6 +768,28 @@ export type ProtocolIntentRequestSendAction = z.infer<
   typeof protocolIntentRequestSendActionSchema
 >;
 
+export const protocolIntentUpdateActionSchema = z
+  .object({
+    actorUserId: uuidSchema,
+    rawText: z.string().min(1).max(4000),
+    metadata: z.record(z.string(), z.unknown()).default({}),
+  })
+  .strict();
+export type ProtocolIntentUpdateAction = z.infer<
+  typeof protocolIntentUpdateActionSchema
+>;
+
+export const protocolIntentCancelActionSchema = z
+  .object({
+    actorUserId: uuidSchema,
+    agentThreadId: uuidSchema.optional(),
+    metadata: z.record(z.string(), z.unknown()).default({}),
+  })
+  .strict();
+export type ProtocolIntentCancelAction = z.infer<
+  typeof protocolIntentCancelActionSchema
+>;
+
 export const protocolRequestDecisionActionSchema = z
   .object({
     actorUserId: uuidSchema,
@@ -857,12 +879,18 @@ export type ProtocolCircleLeaveAction = z.infer<
 
 export const protocolIntentActionResultSchema = z
   .object({
-    action: z.literal("intent.create"),
+    action: z.enum([
+      "intent.create",
+      "intent.update",
+      "intent.cancel",
+    ] as const),
     status: z.string().min(1),
     actorUserId: uuidSchema,
     intentId: uuidSchema,
-    traceId: uuidSchema,
+    traceId: uuidSchema.optional(),
     safetyState: z.string().min(1).nullable().optional(),
+    cancelledRequestCount: z.number().int().min(0).optional(),
+    unchanged: z.boolean().optional(),
     metadata: z.record(z.string(), z.unknown()).default({}),
   })
   .strict();

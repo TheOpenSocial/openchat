@@ -77,6 +77,7 @@ The protocol is no longer just a concept. The following pieces are already prese
 - First-party mobile and web settings surfaces now frame grants as delegated access and expose dead-letter replay controls.
 - First-party runtime and agent intent/request flows now have protocol-service call-through paths for the cleanest social actions.
 - The direct `POST /intents` controller path now routes through the same first-party protocol intent action before hydrating the created intent response, so first-party HTTP intent creation shares protocol event semantics with runtime intent creation.
+- The direct `PATCH /intents/:intentId` and `POST /intents/:intentId/cancel` controller paths now route through first-party protocol intent lifecycle actions, so first-party HTTP intent edits and cancellations share protocol event semantics with the protocol/runtime path.
 - The direct inbox accept/reject controller paths now route through the same first-party protocol request-decision actions before hydrating the request response, so first-party HTTP request decisions share protocol event semantics with agent/runtime request decisions.
 - The direct recurring-circle create and add-member controller paths now route through the same first-party protocol circle actions before hydrating circle responses, so first-party HTTP circle management shares protocol event semantics with agent/runtime circle actions.
 - First-party agent circle creation and circle membership actions now call through the protocol service instead of bypassing it.
@@ -264,12 +265,13 @@ These packages should mirror the backend domain rather than inventing new abstra
 3. Review remaining first-party write paths selectively and only normalize additional controller/service flows where the public protocol contract is already stable.
    - The cleanest direct controller paths are now aligned for:
      - direct intent create
+     - direct intent update/cancel
      - direct request accept/reject
      - recurring-circle create and add-member
    - Remaining candidates should be judged narrowly against current protocol scope instead of normalized by default.
    - Current safest next candidates:
-     - `PATCH /intents/:intentId` as `intent.update`
-     - `POST /intents/:intentId/cancel` as `intent.cancel`
+     - second-wave intent lifecycle helpers like `retry`, `widen`, and `convert` only if their public protocol contract is worth stabilizing
+     - otherwise prefer SDK/docs/observability hardening over expanding action surface prematurely
 4. Add operator/admin visibility for protocol lag, replay pressure, and token/grant audit usage.
 5. Add the next external action APIs and agent support beyond circles.
 6. Expand user-visible protocol events in first-party activity surfaces beyond circle notifications, without exposing backend internals.
