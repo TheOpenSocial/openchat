@@ -14,7 +14,7 @@ import { ProtocolWebhookDeliveryWorkerService } from "./protocol-webhook-deliver
   imports: [
     BullModule.registerQueue({ name: "protocol-webhooks" }),
     IntentsModule,
-    InboxModule,
+    forwardRef(() => InboxModule),
     NotificationsModule,
     forwardRef(() => ChatsModule),
     forwardRef(() => RecurringCirclesModule),
