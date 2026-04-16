@@ -1,180 +1,89 @@
-# Protocol Consent And Auth Troubleshooting
+# Consent And Auth Troubleshooting
 
-This guide is for partner developers integrating with the current OpenSocial protocol surface.
+Use this guide when a protocol request fails and you need to know whether the problem is:
 
-Use it when a protocol action fails and you need to tell whether the problem is:
-
-- missing or invalid app auth
+- app authentication
 - missing scopes or capabilities
-- missing delegated consent
-- revoked access
+- missing delegated access
+- revoked or stale credentials
 
-## Mental model
+## The key distinction
 
-There are two different gates in the current protocol:
+There are two separate gates in OpenSocial:
 
-1. App-level auth
-   - your app token proves which protocol app is calling
-   - your app registration determines which scopes and capabilities were issued
+1. app identity
+2. delegated authority
 
-2. Delegated user access
-   - some actions also require an active grant for a specific user
-   - consent requests are not grants yet
-   - an approved consent request is what becomes an active grant
+Your app can authenticate correctly and still be blocked from acting on behalf of a user.
 
-If app auth is valid but delegated access is missing, writes can still fail.
+## The diagnostic order
 
-## Fastest diagnostic flow
-
-Start with the app-scoped client:
-
-```ts
-import {
-  createBoundProtocolAppClientFromBaseUrl,
-} from "@opensocial/protocol-client";
-
-const app = createBoundProtocolAppClientFromBaseUrl(
-  "https://api.example.com/api",
-  {
-    appId: process.env.OPENSOCIAL_APP_ID!,
-    appToken: process.env.OPENSOCIAL_APP_TOKEN!,
-  },
-);
-
-const usage = await app.getAppUsageSummary();
-console.log(JSON.stringify(usage.authFailures, null, 2));
-console.log(JSON.stringify(usage.tokenAudit, null, 2));
-console.log(JSON.stringify(usage.grantAudit, null, 2));
+```mermaid
+flowchart TD
+    A["Request failed"] --> B["Check app token and scopes"]
+    B --> C["Check active grant state"]
+    C --> D["Check consent request status"]
+    D --> E["Check delivery state only if write succeeded"]
 ```
+
+## First check: app identity
+
+Inspect the app usage summary first.
 
 Look at:
 
-- `authFailures.total`
-- `authFailures.recent`
-- `tokenAudit.lastRotatedAt`
-- `tokenAudit.lastRevokedAt`
-- `grantAudit.lastGrantedAt`
-- `grantAudit.lastRevokedAt`
-
-## Common failure patterns
-
-### Missing token
-
-Typical symptom:
-
-- request is denied before any delegated grant check matters
-
-What to inspect:
-
-- confirm `x-protocol-app-token` is present
-- confirm you are using the current token after rotation
-- inspect `usage.authFailures.recent`
-
-Likely fix:
-
-- update your integration to use the latest issued token
-
-### Revoked or stale token
-
-Typical symptom:
-
-- requests that used to work start failing consistently
-
-What to inspect:
-
-- `tokenAudit.lastRevokedAt`
-- `tokenAudit.lastRotatedAt`
-- any recent auth-failure entries
-
-Likely fix:
-
-- rotate the token intentionally
-- store the new token safely
-- stop using the old one
-
-### Missing scope or capability
-
-Typical symptom:
-
-- app can read protocol state but cannot invoke a write action
-
-What to inspect:
-
-- the app registration’s `issuedScopes`
-- the app registration’s `issuedCapabilities`
-- recent auth-failure diagnostics in usage summary
-
-Likely fix:
-
-- request the right capability during app registration
-- do not assume `protocol.read` is enough for `actions.invoke`
-
-### Missing delegated consent
-
-Typical symptom:
-
-- app auth succeeds, but a user-scoped action is denied
-
-What to inspect:
-
-- `listConsentRequests()`
-- `listGrants()`
-- whether the consent request is still `pending`
-
-Likely fix:
-
-- create a consent request
-- approve it through the first-party settings/admin flow
-- verify that an active grant now exists
-
-## Consent lifecycle example
-
-```ts
-const consent = await app.createConsentRequest({
-  subjectType: "user",
-  subjectId: "00000000-0000-4000-8000-000000000001",
-  scopes: ["actions.invoke"],
-  capabilities: ["request.write"],
-  reason: "Send introductions on behalf of the user",
-});
-
-const approved = await app.approveConsentRequest(consent.id, {
-  actorUserId: "00000000-0000-4000-8000-000000000999",
-  note: "Approved for partner coordination trial",
-});
-
-const grants = await app.listGrants();
-console.log(approved.status, grants.map((grant) => grant.id));
-```
-
-Important:
-
-- a pending consent request is not active access
-- approval is what resolves it into an active grant
-- revoking the grant removes access even if the old consent request remains in history
-
-## When to replay or inspect delivery state
-
-If a partner action succeeded but the downstream webhook consumer looks out of sync:
-
-- inspect queue health with `getAppUsageSummary()`
-- inspect the delivery queue with `inspectDeliveryQueue()`
-- inspect delivery attempts with `listWebhookDeliveryAttempts(deliveryId)`
-- replay a dead-lettered delivery if needed
-
-This is a delivery problem, not an auth problem.
-
-## Recommended operational checklist
-
-For every partner environment, keep these visible:
-
-- current app id
-- current app token issue time
-- issued scopes
-- issued capabilities
 - recent auth failures
-- pending consent requests
-- active grants
-- queue health summary
+- last token rotation
+- last token revocation
+- recent grant activity
 
-That is the minimum set that keeps protocol integration debugging grounded in the actual shipped model.
+If the app identity is wrong, nothing else matters yet.
+
+## Second check: delegated access
+
+If authentication succeeds but writes still fail, inspect delegated access.
+
+Typical causes:
+
+- no active grant
+- consent request still pending
+- revoked grant
+- missing capability for the requested action
+
+Important rule:
+
+> A consent request is not an active grant.
+
+Approval is what turns a pending request into executable delegated access.
+
+## Third check: scopes and capabilities
+
+An app may have a valid token but still lack permission for a specific action.
+
+Common examples:
+
+- read-only token trying to dispatch actions
+- app with `actions.invoke` but without `intent.write`
+- app with request capability but no delegated authority for the acting user
+
+## Do not confuse auth failures with delivery failures
+
+If the write never succeeded, this is not a replay problem.
+
+Only move into queue or replay debugging after:
+
+- the request is authenticated
+- delegated access is valid
+- the write succeeded at the protocol layer
+
+## Recovery references
+
+For delivery and replay issues, use:
+
+- [Event subscriptions and replay](./protocol-event-subscriptions-and-replay)
+- [Operator recovery](./protocol-operator-recovery)
+
+For first-time setup, use:
+
+- [App registration and tokens](./protocol-app-registration-and-tokens)
+- [Partner quickstart](./protocol-partner-quickstart)

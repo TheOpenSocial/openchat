@@ -1,148 +1,97 @@
 # Protocol Core Concepts
 
-This page explains the protocol in the language you need before writing integration code.
+This guide explains the protocol in product terms instead of endpoint terms.
 
-If you skip this page, the rest of the SDK can feel like a list of endpoints. The point here is to make the shape obvious.
+If you only read one conceptual page before integrating, make it this one.
 
-## The protocol has four layers
+## Concept 1: intent-first coordination
 
-1. identity and discovery
-2. auth and delegated access
-3. actions and events
-4. operations and recovery
+The center of OpenSocial is the intent.
 
-```mermaid
-flowchart TD
-    A["Identity + discovery"] --> B["Auth + delegated access"]
-    B --> C["Actions + events"]
-    C --> D["Operations + recovery"]
-```
+An intent is a user’s coordination goal, such as:
 
-## 1. Identity and discovery
+- meeting someone relevant
+- organizing a plan
+- starting a conversation
+- creating a recurring circle
 
-Every integration should start by learning what server it is talking to.
+Requests, chats, circles, and agent flows all exist to help that intent move forward.
 
-That happens through:
+## Concept 2: app identity is not delegated authority
 
-- manifest
-- discovery
+A registered app can authenticate successfully and still be unable to act for a user.
 
-Manifest tells you what kind of protocol server this is.
-
-Discovery tells you what resources, actions, and operational routes the server is exposing.
-
-This is why read-first bootstrap matters so much.
-
-## 2. Auth and delegated access
-
-There are two different ideas here:
+That is because the protocol separates:
 
 - app identity
 - delegated authority
 
-Your app can be registered and authenticated without automatically being allowed to act for a user.
-
-For user-scoped actions, you also need delegated access.
-
 ```mermaid
 sequenceDiagram
-    participant P as Partner
-    participant S as OpenSocial server
+    participant P as Partner app
+    participant O as OpenSocial
     participant U as User
 
-    P->>S: Register app
-    S-->>P: App id + token
-    P->>S: Request delegated access
-    S-->>U: Consent request
-    U-->>S: Approve grant
-    S-->>P: Executable delegated access
+    P->>O: Register app
+    O-->>P: App id + token
+    P->>O: Request delegated access
+    U->>O: Approve consent
+    O-->>P: Active grant
 ```
 
-## 3. Actions and events
+## Concept 3: actions are stable, not unlimited
 
-The protocol does not expose arbitrary mutation.
+The protocol exposes a small set of supported actions because those actions can be:
 
-It exposes narrow coordination actions.
+- documented clearly
+- enforced consistently
+- observed in events
+- replayed or recovered operationally
 
-Today that surface is centered on:
+That is better than exposing a wide, weak contract.
 
-- intent lifecycle
-- request lifecycle
-- chat send
-- circle create or membership actions
+## Concept 4: events are first-class
 
-Every useful write should produce a stable event trail.
-
-That lets integrations operate through:
-
-- direct responses
-- webhook delivery
-- replay
-
-## 4. Operations and recovery
-
-A protocol is not finished when the happy path works.
+A protocol is not complete when an HTTP write succeeds.
 
 It also needs:
 
-- delivery visibility
-- replay cursors
-- dead-letter recovery
-- queue health
-
-That is why operations are part of the public docs rather than an internal-only topic.
-
-## Core resources
-
-These are the main nouns in the protocol:
-
-| Resource | Meaning |
-| --- | --- |
-| `app` | A registered third-party integration identity |
-| `grant` | Delegated authority tied to scopes and consent |
-| `intent` | A coordination objective initiated in the network |
-| `request` | A specific invitation or proposal tied to an intent |
-| `chat` | A live conversation surface |
-| `circle` | A recurring or group coordination container |
-| `event` | A replayable protocol fact |
-| `webhook delivery` | A concrete outbound delivery attempt |
-
-## Core verbs
-
-The protocol is also easier to understand if you think in verbs:
-
-- discover
-- register
-- authorize
-- read
-- dispatch
-- subscribe
+- delivery state
+- retries
+- dead letters
 - replay
-- recover
+- cursors
 
-If a proposed integration pattern does not fit those verbs, it is probably leaning on the wrong abstraction.
+This is why operations are part of the public docs.
 
-## What the protocol deliberately excludes
+## Concept 5: agents consume the same protocol
 
-OpenSocial does not expose a public contract for:
+The agent layer is not a separate backend.
 
-- feed generation
-- posts
-- follow graphs
-- likes
-- timeline ranking
+Agents use the same protocol surface as other integrations, with convenience wrappers for:
 
-Those may exist in some product systems someday, but they are outside the current protocol purpose.
+- actor identity
+- readiness checks
+- tool catalogs
+- toolkit helpers
 
-## The shortest mental model
+That keeps the architecture consistent and easier to trust.
 
-If you only remember one thing, use this:
+## The whole model in one diagram
 
-> OpenSocial protocol is a coordination layer with explicit auth, narrow writes, replayable events, and operational recovery.
+```mermaid
+flowchart LR
+    A["Intent"] --> B["Request"]
+    B --> C["Chat or circle outcome"]
+    C --> D["Events"]
+    D --> E["Webhook delivery"]
+    D --> F["Replay and recovery"]
+    G["Agent"] --> A
+    H["Partner app"] --> A
+```
 
-## Continue in this order
+## Continue with
 
-1. [Protocol overview and exclusions](./protocol-overview-and-exclusions)
-2. [Manifest and discovery](./protocol-manifest-and-discovery)
-3. [App registration and tokens](./protocol-app-registration-and-tokens)
-4. [External actions reference](./protocol-external-actions-reference)
+- [Read, connect, dispatch, and operate](./protocol-read-connect-dispatch-operate)
+- [Manifest and discovery](./protocol-manifest-and-discovery)
+- [External actions reference](./protocol-external-actions-reference)

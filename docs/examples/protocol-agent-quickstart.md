@@ -16,11 +16,11 @@ And you want:
 - default actor identity
 - shared agent metadata on every protocol action
 
-## Package
+## Package resources
 
-- [`/Users/cruciblelabs/Documents/openchat/packages/protocol-agent/README.md`](/Users/cruciblelabs/Documents/openchat/packages/protocol-agent/README.md)
-- [`/Users/cruciblelabs/Documents/openchat/scripts/examples/protocol-partner-agent.mjs`](/Users/cruciblelabs/Documents/openchat/scripts/examples/protocol-partner-agent.mjs)
-- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-readiness.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-readiness.md)
+- `packages/protocol-agent/README.md`
+- `scripts/examples/protocol-partner-agent.mjs`
+- [Agent readiness](./protocol-agent-readiness)
 
 ## Minimal example
 

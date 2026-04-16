@@ -22,8 +22,8 @@ Best for:
 
 Use:
 
-- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-quickstart.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-quickstart.md)
-- [`/Users/cruciblelabs/Documents/openchat/scripts/examples/protocol-partner-agent.mjs`](/Users/cruciblelabs/Documents/openchat/scripts/examples/protocol-partner-agent.mjs)
+- [Agent quickstart](./protocol-agent-quickstart)
+- `scripts/examples/protocol-partner-agent.mjs`
 
 ## 2. Toolset
 
@@ -37,8 +37,8 @@ Best for:
 
 Use:
 
-- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-toolset.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-toolset.md)
-- [`/Users/cruciblelabs/Documents/openchat/scripts/examples/protocol-partner-agent-toolset.mjs`](/Users/cruciblelabs/Documents/openchat/scripts/examples/protocol-partner-agent-toolset.mjs)
+- [Agent toolset](./protocol-agent-toolset)
+- `scripts/examples/protocol-partner-agent-toolset.mjs`
 
 ## 3. Toolkit
 
@@ -52,8 +52,8 @@ Best for:
 
 Use:
 
-- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-toolset.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-toolset.md)
-- [`/Users/cruciblelabs/Documents/openchat/scripts/examples/protocol-partner-agent-toolkit.mjs`](/Users/cruciblelabs/Documents/openchat/scripts/examples/protocol-partner-agent-toolkit.mjs)
+- [Agent toolset](./protocol-agent-toolset)
+- `scripts/examples/protocol-partner-agent-toolkit.mjs`
 
 ## Shared Recommendation
 
@@ -65,9 +65,9 @@ Whichever path you choose:
 
 For readiness and operational preflight:
 
-- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-readiness.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-readiness.md)
-- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-operator-recovery.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-operator-recovery.md)
-- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-consent-and-auth-troubleshooting.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-consent-and-auth-troubleshooting.md)
+- [Agent readiness](./protocol-agent-readiness)
+- [Operator recovery](./protocol-operator-recovery)
+- [Consent and auth troubleshooting](./protocol-consent-and-auth-troubleshooting)
 
 ## Guardrails
 

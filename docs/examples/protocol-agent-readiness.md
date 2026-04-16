@@ -81,5 +81,5 @@ Use readiness checks before:
 
 Do not use readiness checks as a replacement for queue recovery itself. For that, use:
 
-- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-operator-recovery.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-operator-recovery.md)
-- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-consent-and-auth-troubleshooting.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-consent-and-auth-troubleshooting.md)
+- [Operator recovery](./protocol-operator-recovery)
+- [Consent and auth troubleshooting](./protocol-consent-and-auth-troubleshooting)

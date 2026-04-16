@@ -1,193 +1,110 @@
-# OpenSocial Protocol Overview And Exclusions
+# Protocol Overview And Exclusions
 
-High-level orientation for the OpenSocial protocol surface.
+This page explains the public contract at a high level.
 
-Use it before the action reference or partner examples.
+Use it before reading the action reference or implementing a client.
 
-## One-sentence summary
+## The public shape
 
-OpenSocial is a coordination-first protocol for apps and agents that need to read state, dispatch stable actions, and operate integrations without private backend access.
+OpenSocial exposes a coordination-first protocol for apps and agents.
 
-## What OpenSocial protocol is
-
-OpenSocial protocol is a coordination-first integration surface extracted from the product we already run.
-
-It is built around the OpenSocial domain:
-
-- identity
-- profiles
-- intents
-- requests
-- connections
-- chats
-- circles
-- notifications
-- agent threads
-- realtime and replayable events
-
-The protocol lets:
-
-- first-party clients
-- third-party apps
-- partner agents
-
-read state, write approved actions, and subscribe to relevant events without private backend internals.
-
-```mermaid
-flowchart LR
-    A["Apps and agents"] --> B["Protocol SDK"]
-    B --> C["Read live contract"]
-    B --> D["Dispatch stable actions"]
-    B --> E["Consume events and replay"]
-```
-
-## What it is not
-
-It is not a generic social-network SDK.
-
-It is not designed around:
-
-- posts
-- follows
-- feeds
-- likes
-- generic timeline primitives
-
-Those are outside the supported contract.
-
-If a partner tries to model OpenSocial as a feed or follow graph, they are pointing at the wrong abstraction layer.
-
-## Core integration modes
-
-The protocol surface supports three integration modes:
+The stable model is:
 
 1. read state
-2. write actions
-3. subscribe to events
+2. connect with app identity and delegated access
+3. dispatch stable actions
+4. consume events and recover delivery state
 
-That is the stable mental model for the whole SDK family.
+```mermaid
+flowchart TD
+    A["Read"] --> B["Connect"]
+    B --> C["Dispatch"]
+    C --> D["Operate"]
+```
 
-## Why the exclusions matter
+## Core domain objects
 
-The exclusions are not temporary omissions.
+The protocol is built around the actual OpenSocial domain:
 
-They are how the protocol stays:
-
-- narrow
-- teachable
-- stable
-- recoverable
-
-If the public contract tried to expose every product behavior, it would become much harder to operate and much harder for third parties to trust.
-
-## Resource Shape
-
-The core resource model is:
-
-- `user`
-- `profile`
+- `app`
+- `grant`
 - `intent`
-- `intent_request`
-- `connection`
+- `request`
 - `chat`
 - `chat_message`
 - `circle`
 - `notification`
 - `agent_thread`
-- protocol app registration and webhook resources
+- `event`
 
-These are the primitives the backend and SDK are converging around.
+These are the nouns that matter because they map to how the product works for users.
 
-## Resource relationship
+## Core actions
 
-```mermaid
-flowchart TD
-    U["User / profile"] --> I["Intent"]
-    I --> R["Intent request"]
-    R --> C["Connection or chat"]
-    C --> M["Chat message"]
-    I --> G["Circle"]
-    I --> N["Notification"]
-    I --> T["Agent thread"]
-```
-
-## Write Surface
-
-The writable action surface is narrow:
+The current public write surface is intentionally narrow:
 
 - intent lifecycle
 - request lifecycle
 - chat send
-- circle create/join/leave
+- circle lifecycle and membership actions
 
-Use the detailed reference for those:
+That surface is documented in the [external actions reference](./protocol-external-actions-reference).
 
-- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-external-actions-reference.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-external-actions-reference.md)
+## Why the protocol is intentionally narrow
 
-## Event Surface
+Public protocols become fragile when they mirror every internal service.
 
-The event model is also coordination-first.
+OpenSocial stays narrow so it can remain:
 
-Examples include:
+- teachable
+- typed
+- reliable
+- recoverable
 
-- intent lifecycle events
-- request lifecycle events
-- chat message events
-- circle lifecycle events
-- webhook delivery and failure events
+That is why the public contract is smaller than the full application.
 
-Use the event and replay guide for the operational view:
+## Explicit exclusions
 
-- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-event-subscriptions-and-replay.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-event-subscriptions-and-replay.md)
+These are not part of the current protocol contract:
 
-## Auth and Delegated Access
+- posts
+- follows
+- likes
+- feeds
+- timelines
+- generic social graph primitives
 
-There are two important gates in the protocol:
+These are not “missing for now.” They are outside the intended scope of the protocol.
 
-1. app-level auth
-2. delegated grants for user-scoped actions
+## Relationship model
 
-Partner integrations need to account for both:
+```mermaid
+flowchart TD
+    U["User"] --> I["Intent"]
+    I --> R["Request"]
+    R --> C["Chat"]
+    I --> G["Circle"]
+    C --> M["Chat message"]
+    I --> E["Events"]
+```
 
-- app tokens
-- scopes and capabilities
-- consent requests
-- active grants
+## What a partner should assume
 
-Use these guides for the details:
+You should assume:
 
-- [Consent and auth troubleshooting](./protocol-consent-and-auth-troubleshooting)
-- [Operator recovery](./protocol-operator-recovery)
+- manifest and discovery are the source of live contract truth
+- auth and delegated access are separate concerns
+- actions are intentionally limited
+- replay and recovery are part of the production contract
 
-## SDK Family
+You should not assume:
 
-The package family is:
+- undocumented fields are stable
+- internal services are part of the public surface
+- excluded social primitives will quietly appear later
 
-- `@opensocial/protocol-types`
-- `@opensocial/protocol-events`
-- `@opensocial/protocol-client`
-- `@opensocial/protocol-server`
-- `@opensocial/protocol-agent`
+## Continue with
 
-Each package stays narrow:
-
-- `protocol-types`: schemas and shared types
-- `protocol-events`: event payloads and event vocabulary
-- `protocol-client`: transport-backed protocol calls
-- `protocol-server`: helper utilities like webhook verification
-- `protocol-agent`: thin agent-oriented wrappers on top of the client
-
-## Choosing the next doc
-
-After this overview, the usual next step is:
-
-- manifest and discovery bootstrap:
-  - [Manifest and discovery](./protocol-manifest-and-discovery)
-- onboarding flow:
-  - [Partner quickstart](./protocol-partner-quickstart)
-- writable contract:
-  - [External actions reference](./protocol-external-actions-reference)
-- operational recovery:
-  - [Operator recovery](./protocol-operator-recovery)
-- agent integrations:
-  - [Agent integration paths](./protocol-agent-integration-paths)
+- [Protocol core concepts](./protocol-core-concepts)
+- [Manifest and discovery](./protocol-manifest-and-discovery)
+- [App registration and tokens](./protocol-app-registration-and-tokens)

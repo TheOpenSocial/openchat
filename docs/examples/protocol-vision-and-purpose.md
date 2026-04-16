@@ -1,117 +1,95 @@
-# OpenSocial Protocol Vision And Purpose
+# OpenSocial Protocol: Vision And Purpose
 
-OpenSocial protocol exists to let third-party systems participate in coordination without needing private product internals.
+OpenSocial is an intent-first social coordination network.
 
-That sounds simple, but it matters a lot.
+The product helps people express what they want to do, who they want to do it with, and how those introductions, conversations, and recurring circles should be managed over time.
 
-Most social or communication products expose integrations too late. They first ship a full app, then later bolt on a partial API that leaks product assumptions, weak abstractions, or unstable internals.
+The protocol exists so third-party systems can participate in that network without depending on private backend internals.
 
-OpenSocial is taking the opposite path.
+## What OpenSocial is
 
-## The purpose
+OpenSocial is not a generic social graph.
 
-The protocol is meant to let outside systems:
+It is a coordination system built around:
 
-- understand live protocol capabilities
-- register narrowly-scoped applications
-- read state safely
-- dispatch a small set of stable actions
-- subscribe to replayable events
-- operate integrations and agents with recovery paths
+- intent
+- request
+- chat
+- circle
+- notification
+- agent-assisted workflow
 
-The protocol is not trying to reproduce every internal service or every possible user action.
+In practice, that means the protocol is designed for partners that want to:
 
-It is trying to expose the stable coordination layer.
+- read the live contract
+- register an app
+- authenticate safely
+- act on behalf of a user with explicit delegated access
+- dispatch coordination actions
+- consume events and recover delivery state
 
-## The vision
+## Why the protocol exists
 
-The long-term vision is an ecosystem where:
+Most products add integrations late. They expose a partial API after the application already depends on private assumptions, internal naming, and unstable service boundaries.
 
-- first-party clients and third-party clients speak the same core action vocabulary
-- partner backends can integrate without private database or service access
-- agents can operate on top of stable protocol tools instead of bespoke backend hooks
-- operational recovery is part of the contract, not an afterthought
+OpenSocial is taking the opposite approach.
 
-That is why the protocol is organized around:
+The protocol is meant to be the stable layer where:
 
-- manifest
-- discovery
-- auth
-- consent
-- actions
-- events
-- replay
-- recovery
+- first-party clients
+- third-party systems
+- partner agents
 
-## Why this protocol is different
+all speak the same core action vocabulary.
 
-OpenSocial is not a feed protocol.
+## The product promise
 
-It is not optimized around:
+The OpenSocial protocol should let a partner system answer four questions clearly:
+
+1. What can this server do?
+2. How do I authenticate and request delegated access?
+3. Which actions are stable and supported?
+4. How do I operate and recover an integration in production?
+
+```mermaid
+flowchart LR
+    A["Manifest + discovery"] --> B["App registration"]
+    B --> C["Auth + delegated access"]
+    C --> D["Stable actions"]
+    D --> E["Events, replay, and recovery"]
+```
+
+## The model we are committing to
+
+OpenSocial is:
+
+- intent-first
+- coordination-first
+- agent-compatible
+- narrow at the core
+- explicit about exclusions
+
+That means the protocol surface should feel smaller and more opinionated than the full product.
+
+That is a feature, not a limitation.
+
+## What the protocol does not try to be
+
+OpenSocial is not designed as a public contract for:
 
 - posts
 - follows
 - likes
-- timelines
-- generic content graphs
+- feed ranking
+- timeline publishing
 
-It is optimized around coordination:
+Those abstractions lead partners toward the wrong model of the system.
 
-- intents
-- requests
-- chats
-- circles
-- notifications
-- agent threads
-
-That is the most important mental model in the whole docs set.
-
-## The model in one diagram
-
-```mermaid
-flowchart LR
-    A["Partner app or agent"] --> B["Manifest + discovery"]
-    B --> C["App registration"]
-    C --> D["Token + scopes"]
-    D --> E["Consent / delegated grant"]
-    E --> F["Protocol actions"]
-    F --> G["Events + webhooks"]
-    G --> H["Replay + recovery"]
-```
-
-## The design principle
-
-OpenSocial wants the public integration surface to be:
-
-- narrow
-- typed
-- recoverable
-- coordination-first
-
-That means the protocol should feel smaller than the whole product.
-
-That is intentional.
-
-## What partners should expect
-
-Partners should expect:
-
-- clear exclusions
-- typed SDKs
-- a stable write surface
-- webhook and replay support
-- agent-friendly wrappers
-
-Partners should not expect:
-
-- direct access to product internals
-- generic social-network primitives
-- unsupported side channels
-- hidden private endpoints
+If your integration is trying to reconstruct a feed product on top of OpenSocial, you are aiming at the wrong layer.
 
 ## The right next reads
 
-After this page, the best next docs are:
+Continue in this order:
 
 1. [Protocol overview and exclusions](./protocol-overview-and-exclusions)
 2. [Protocol core concepts](./protocol-core-concepts)

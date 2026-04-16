@@ -1,127 +1,79 @@
-# Protocol Operator Recovery And Queue Health
+# Operator Recovery
 
-This guide is the day-two companion to the partner quickstart.
+This guide is for the people responsible for keeping a live integration healthy.
 
-Use it when a protocol integration is already running and you need to answer questions like:
+It explains how to reason about queue state, dead letters, and replay without turning recovery into guesswork.
 
-- is this an auth problem or a delivery problem?
-- are dead letters accumulating?
-- should I replay one delivery or a batch?
-- is the queue draining or stuck?
+## What this page is for
 
-## Files
+Use this page when you need to answer questions like:
 
-- [`/Users/cruciblelabs/Documents/openchat/scripts/examples/protocol-partner-operations.mjs`](/Users/cruciblelabs/Documents/openchat/scripts/examples/protocol-partner-operations.mjs)
-- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-consent-and-auth-troubleshooting.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-consent-and-auth-troubleshooting.md)
-- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-event-subscriptions-and-replay.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-event-subscriptions-and-replay.md)
+- Is this an authentication problem or a delivery problem?
+- Are deliveries stuck, retrying, or dead-lettered?
+- Should I replay one item or recover a larger batch?
+- Is the queue draining normally?
 
-## 1. Inspect The App Operational Snapshot
+## Start with diagnosis, not replay
 
-The fastest first check is the app-level operational snapshot:
+The first step is always to inspect the app’s operational state.
 
-```bash
-PROTOCOL_BASE_URL=http://127.0.0.1:3000/api \
-PROTOCOL_APP_ID=partner.onboarding.123 \
-PROTOCOL_APP_TOKEN=<app-token> \
-node --loader ./scripts/examples/protocol-example-loader.mjs \
-  scripts/examples/protocol-partner-operations.mjs --action=inspect
-```
+That inspection should tell you whether the primary problem is:
 
-This prints:
-
-- auth-failure summary
-- token and grant audit timestamps
-- queue-health summary
-- current queue counts
-- current webhooks
-- current grants
-- current consent requests
-
-Use this first because it tells you whether the problem is:
-
-- auth
-- delegated access
+- invalid app auth
+- missing delegated authority
 - delivery backlog
 - dead-letter accumulation
 
-## 2. Replay One Known Failed Delivery
-
-If one delivery is dead-lettered and the consumer is fixed:
-
-```bash
-PROTOCOL_BASE_URL=http://127.0.0.1:3000/api \
-PROTOCOL_APP_ID=partner.onboarding.123 \
-PROTOCOL_APP_TOKEN=<app-token> \
-node --loader ./scripts/examples/protocol-example-loader.mjs \
-  scripts/examples/protocol-partner-operations.mjs \
-  --action=replay-delivery \
-  --delivery-id=<delivery-id>
+```mermaid
+flowchart TD
+    A["Integration issue"] --> B["Inspect operational snapshot"]
+    B --> C["Auth or grant problem"]
+    B --> D["Delivery problem"]
+    C --> E["Fix auth before replay"]
+    D --> F["Choose replay strategy"]
 ```
 
-Use this when the issue was isolated and you want the narrowest possible recovery.
+## When to replay a single delivery
 
-## 3. Replay Dead Letters In Batches
+Replay one delivery when:
 
-If the receiver was down or a parsing/signature bug affected many deliveries:
+- the underlying bug is fixed
+- the failure was isolated
+- you know exactly which delivery should be retried
 
-```bash
-PROTOCOL_BASE_URL=http://127.0.0.1:3000/api \
-PROTOCOL_APP_ID=partner.onboarding.123 \
-PROTOCOL_APP_TOKEN=<app-token> \
-node --loader ./scripts/examples/protocol-example-loader.mjs \
-  scripts/examples/protocol-partner-operations.mjs \
-  --action=replay-dead-letters \
-  --limit=25
-```
+This is the safest recovery path because it limits duplicate downstream work.
 
-Use batch replay only after the underlying issue is fixed.
+## When to replay dead letters in batch
 
-## 4. Dispatch Due Queue Work
+Replay a batch only when the failure was systemic, for example:
 
-If you want to trigger queue work for the app directly:
+- the receiver was down
+- signature validation was broken
+- a parser bug affected many deliveries
 
-```bash
-PROTOCOL_BASE_URL=http://127.0.0.1:3000/api \
-PROTOCOL_APP_ID=partner.onboarding.123 \
-PROTOCOL_APP_TOKEN=<app-token> \
-node --loader ./scripts/examples/protocol-example-loader.mjs \
-  scripts/examples/protocol-partner-operations.mjs \
-  --action=dispatch-queue \
-  --limit=25
-```
+Batch replay is a recovery tool, not a first diagnostic step.
 
-This is useful for controlled recovery, but it is not a substitute for fixing auth or delivery bugs.
+## When to inspect queue health
 
-## Recovery Order
+Queue health matters when you see:
 
-Use this sequence:
+- growing retry counts
+- a rising dead-letter count
+- queued deliveries aging instead of draining
+- inconsistent downstream state after valid writes
 
-1. inspect the operational snapshot
-2. decide whether the problem is auth or delivery
-3. fix the underlying cause
-4. replay one delivery if the failure was isolated
-5. replay dead letters in batches if the failure was systemic
+Those are operational signals, not product-state signals.
 
-That keeps recovery narrow and avoids turning the queue into a guessing game.
+## Practical recovery order
 
-## Signs It Is An Auth Problem
+1. Inspect the operational snapshot.
+2. Decide whether the issue is auth, grants, or delivery.
+3. Fix the underlying cause.
+4. Replay one delivery if the failure was isolated.
+5. Replay dead letters in batch only when the failure was systemic.
 
-Check:
+## Related guides
 
-- `authFailures.total`
-- recent auth-failure entries
-- token audit timestamps
-- grant audit timestamps
-
-If those look wrong, use the consent/auth troubleshooting guide first instead of replaying deliveries blindly.
-
-## Signs It Is A Delivery Problem
-
-Check:
-
-- dead-letter count rising
-- retrying count not draining
-- oldest queued timestamp getting older
-- last dead-letter timestamp moving forward
-
-Those are queue and delivery symptoms, not consent problems.
+- [Consent and auth troubleshooting](./protocol-consent-and-auth-troubleshooting)
+- [Event subscriptions and replay](./protocol-event-subscriptions-and-replay)
+- [Webhook consumer](./protocol-webhook-consumer)

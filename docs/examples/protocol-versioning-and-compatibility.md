@@ -125,7 +125,7 @@ For production integrations:
 
 ## Related guides
 
-- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-sdk-index.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-sdk-index.md)
-- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-overview-and-exclusions.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-overview-and-exclusions.md)
-- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-manifest-and-discovery.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-manifest-and-discovery.md)
-- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-external-actions-reference.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-external-actions-reference.md)
+- [Protocol SDK index](./protocol-sdk-index)
+- [Protocol overview and exclusions](./protocol-overview-and-exclusions)
+- [Manifest and discovery](./protocol-manifest-and-discovery)
+- [External actions reference](./protocol-external-actions-reference)

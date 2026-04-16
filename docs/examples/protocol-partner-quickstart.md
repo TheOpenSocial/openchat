@@ -1,111 +1,108 @@
-# Protocol Partner Quickstart
+# Partner Quickstart
 
-This quickstart points at the two concrete example scripts that exercise the current shipped `@opensocial/protocol-client` surface:
+This quickstart is the fastest path to a working OpenSocial integration.
 
-1. [`scripts/examples/protocol-partner-onboarding.mjs`](/Users/cruciblelabs/Documents/openchat/scripts/examples/protocol-partner-onboarding.mjs)
-2. [`scripts/examples/protocol-partner-actions.mjs`](/Users/cruciblelabs/Documents/openchat/scripts/examples/protocol-partner-actions.mjs)
+It assumes you are building a third-party app, service, or agent that wants to participate in the network through the public protocol.
 
-The examples stay inside the current protocol direction:
+## What you will accomplish
 
-- app registration
-- delegated consent and webhook setup
-- core actions for intent lifecycle, requests, chats, and circles
-- usage, grants, consent, and queue inspection
-- auth and consent troubleshooting
+By the end of this path, you should be able to:
 
-They do not use posts, follows, feeds, or other generic social primitives.
+1. inspect the live protocol
+2. register an app
+3. authenticate with an issued token
+4. request delegated access when needed
+5. dispatch supported actions
+6. receive and recover events
 
-Start here if you want the top-level contract and explicit exclusions first:
+## The integration path
 
-- [`docs/examples/protocol-sdk-index.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-sdk-index.md)
-- [`docs/examples/protocol-overview-and-exclusions.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-overview-and-exclusions.md)
-- [`docs/examples/protocol-manifest-and-discovery.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-manifest-and-discovery.md)
-- [`docs/examples/protocol-app-registration-and-tokens.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-app-registration-and-tokens.md)
-
-For event subscriptions, delivery inspection, and replay, see:
-
-- [`docs/examples/protocol-external-actions-reference.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-external-actions-reference.md)
-- [`docs/examples/protocol-event-subscriptions-and-replay.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-event-subscriptions-and-replay.md)
-- [`docs/examples/protocol-consent-and-auth-troubleshooting.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-consent-and-auth-troubleshooting.md)
-- [`docs/examples/protocol-operator-recovery.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-operator-recovery.md)
-- [`docs/examples/protocol-production-readiness-checklist.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-production-readiness-checklist.md)
-- [`docs/examples/protocol-versioning-and-compatibility.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-versioning-and-compatibility.md)
-- [`docs/examples/protocol-agent-integration-paths.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-integration-paths.md)
-- [`docs/examples/protocol-agent-quickstart.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-quickstart.md)
-- [`docs/examples/protocol-agent-readiness.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-readiness.md)
-
-## Run Them
-
-Register a partner app and create optional consent/webhook setup:
-
-```bash
-PROTOCOL_BASE_URL=http://127.0.0.1:3000/api \
-PROTOCOL_WEBHOOK_URL=http://127.0.0.1:4040/webhooks/opensocial \
-PROTOCOL_OWNER_USER_ID=00000000-0000-4000-8000-000000000001 \
-node --loader ./scripts/examples/protocol-example-loader.mjs \
-  scripts/examples/protocol-partner-onboarding.mjs
+```mermaid
+flowchart LR
+    A["Read manifest and discovery"] --> B["Register app"]
+    B --> C["Store token"]
+    C --> D["Request delegated access"]
+    D --> E["Dispatch actions"]
+    E --> F["Consume webhooks"]
+    F --> G["Replay or recover if needed"]
 ```
 
-Use the returned app token to run the core action example:
+## Step 1: understand the protocol
 
-```bash
-PROTOCOL_BASE_URL=http://127.0.0.1:3000/api \
-PROTOCOL_APP_ID=partner.onboarding.123 \
-PROTOCOL_APP_TOKEN=<app-token> \
-PROTOCOL_ACTOR_USER_ID=00000000-0000-4000-8000-000000000001 \
-PROTOCOL_RECIPIENT_USER_ID=00000000-0000-4000-8000-000000000002 \
-node --loader ./scripts/examples/protocol-example-loader.mjs \
-  scripts/examples/protocol-partner-actions.mjs
-```
+Read these first:
 
-If you want the example to exercise intent cancellation too:
+- [Protocol SDK index](./protocol-sdk-index)
+- [Vision and purpose](./protocol-vision-and-purpose)
+- [Protocol overview and exclusions](./protocol-overview-and-exclusions)
+- [Manifest and discovery](./protocol-manifest-and-discovery)
 
-```bash
-PROTOCOL_BASE_URL=http://127.0.0.1:3000/api \
-PROTOCOL_APP_ID=partner.onboarding.123 \
-PROTOCOL_APP_TOKEN=<app-token> \
-PROTOCOL_ACTOR_USER_ID=00000000-0000-4000-8000-000000000001 \
-PROTOCOL_CANCEL_INTENT=1 \
-node --loader ./scripts/examples/protocol-example-loader.mjs \
-  scripts/examples/protocol-partner-actions.mjs
-```
+## Step 2: register an app
 
-## What This Demonstrates
+Next, register your integration and securely store the issued token.
 
-- app registration and token issuance
-- bound app-scoped client usage via `bindProtocolAppClient(...)`
-- consent request creation
-- webhook subscription creation
-- intent creation
-- intent update
-- optional intent cancellation
-- request sending
-- chat message sending
-- circle creation and membership actions
-- grant, consent, usage, and delivery inspection
-- auth failure diagnostics through usage summaries
+Primary guide:
 
-The examples are intentionally narrow and remain coordination-first:
+- [App registration and tokens](./protocol-app-registration-and-tokens)
 
-- circles and memberships
-- notifications
-- agent threads
-- protocol events and delivery recovery
+Repository example:
 
-Do not model these as protocol primitives:
+- `scripts/examples/protocol-partner-onboarding.mjs`
+
+## Step 3: run the core actions flow
+
+Once you have an app id and token, exercise the shipped write surface.
+
+Primary guide:
+
+- [External actions reference](./protocol-external-actions-reference)
+
+Repository example:
+
+- `scripts/examples/protocol-partner-actions.mjs`
+
+## Step 4: add operational safety
+
+Before you consider an integration production-ready, add:
+
+- webhook verification
+- delivery inspection
+- replay
+- recovery
+
+Use:
+
+- [Event subscriptions and replay](./protocol-event-subscriptions-and-replay)
+- [Webhook consumer](./protocol-webhook-consumer)
+- [Operator recovery](./protocol-operator-recovery)
+
+## Step 5: add agents only if you need them
+
+If your integration includes an autonomous or semi-autonomous actor, use the agent layer on top of the same protocol boundary.
+
+Use:
+
+- [Agent integration paths](./protocol-agent-integration-paths)
+- [Agent quickstart](./protocol-agent-quickstart)
+- [Agent readiness](./protocol-agent-readiness)
+
+## What success looks like
+
+You are using the protocol as intended when:
+
+- your integration starts from manifest and discovery
+- your app token lifecycle is controlled
+- delegated access is explicit
+- your writes map to documented actions
+- webhook replay and recovery are operational
+
+## What not to do
+
+Do not use the quickstart as an excuse to invent unsupported abstractions.
+
+Specifically, do not model:
 
 - posts
 - follows
-- feeds
 - likes
-- generic social-network timelines
-
-## 9. Suggested first production check
-
-Before going live, verify these three things:
-
-1. Your app token works on a read endpoint.
-2. Your webhook receiver validates signed deliveries.
-3. You can replay a dead-lettered delivery without manual database access.
-
-If all three are true, you are using the protocol surface as intended.
+- feeds
+- generic social timelines

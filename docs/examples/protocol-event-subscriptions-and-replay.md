@@ -1,173 +1,81 @@
-# Protocol Event Subscriptions and Replay
+# Event Subscriptions And Replay
 
-This guide focuses on the shipped event surfaces in the current OpenSocial protocol layer:
+This guide covers the operational side of the protocol event model:
 
-- app registration
-- webhook subscription creation
-- webhook delivery inspection
-- single-delivery replay
-- dead-letter batch replay
-- event-stream replay from a saved cursor
+- subscribing to events
+- receiving webhook deliveries
+- inspecting delivery state
+- replaying failed work
+- resuming from a cursor
 
-It complements the partner quickstart and stays inside the current coordination-first protocol direction. It does not introduce posts, follows, feeds, or other social-network primitives.
+## Why this matters
 
-## When To Use This
+The protocol is not only an HTTP write surface.
 
-Use this guide when your integration needs to:
+It is also a recoverable event surface.
 
-1. receive protocol events as they happen
-2. inspect webhook deliveries after a failure
-3. replay one failed delivery or a batch of dead letters
-4. resume an event feed from a saved cursor
+That matters because production integrations need a way to:
 
-## Shipped Client Surfaces
+- catch up after downtime
+- recover from transient delivery failures
+- inspect dead letters
+- rebuild downstream state safely
 
-The current `@opensocial/protocol-client` surface includes these methods:
+## The delivery model
 
-- `createWebhook(appId, appToken, payload)`
-- `listWebhooks(appId, appToken)`
-- `listWebhookDeliveries(appId, appToken, subscriptionId)`
-- `listWebhookDeliveryAttempts(appId, appToken, deliveryId)`
-- `replayWebhookDelivery(appId, appToken, deliveryId)`
-- `replayDeadLetteredDeliveries(appId, appToken, input)`
-- `inspectDeliveryQueue(appId, appToken, cursor)`
-- `replayEvents(appId, appToken, cursor)`
-- `getReplayCursor(appId, appToken)`
-- `saveReplayCursor(appId, appToken, cursor)`
-
-The server-side webhook helpers live in `@opensocial/protocol-server` and provide signature helpers for webhook receivers.
-
-## 1. Subscribe To Events
-
-Start by registering a partner app, then create a webhook subscription for the event families you care about.
-
-```ts
-import {
-  bindProtocolAppClient,
-  createProtocolClientFromBaseUrl,
-} from "@opensocial/protocol-client";
-
-const client = createProtocolClientFromBaseUrl("http://127.0.0.1:3000/api");
-const app = bindProtocolAppClient(client, {
-  appId: "partner.example",
-  appToken: "<app-token>",
-});
-
-const subscription = await app.createWebhook({
-  targetUrl: "https://partner.example.com/webhooks/protocol",
-  events: [
-    "intent.created",
-    "intent.updated",
-    "intent.cancelled",
-    "request.sent",
-    "request.accepted",
-    "request.rejected",
-    "chat.message.sent",
-    "circle.created",
-    "circle.joined",
-    "circle.left",
-  ],
-  resources: ["intent", "intent_request", "chat_message", "circle"],
-  deliveryMode: "json",
-});
+```mermaid
+flowchart LR
+    A["Protocol action"] --> B["Event log"]
+    B --> C["Webhook delivery"]
+    C --> D["Consumer success"]
+    C --> E["Retry"]
+    E --> F["Dead letter"]
+    B --> G["Replay from cursor"]
 ```
 
-Keep the subscription narrow. The protocol is coordination-first, so subscribe only to the event families your integration actually handles.
+## Subscribe to events
 
-## 2. Inspect Deliveries
+Create webhook subscriptions only for the event families your integration actually handles.
 
-If a webhook does not arrive, inspect the subscription deliveries first.
+That keeps your consumer smaller, safer, and easier to recover.
 
-```ts
-const deliveries = await app.listWebhookDeliveries(subscription.subscriptionId);
+Typical families include:
 
-const attempts = await app.listWebhookDeliveryAttempts(deliveries[0].deliveryId);
-```
+- intent events
+- request events
+- chat message events
+- circle events
 
-What to look for:
+## Inspect delivery state
 
-- `queued` deliveries that never moved
-- `retrying` deliveries that need another attempt
-- `dead_lettered` deliveries that should be replayed manually
+When a webhook does not arrive or downstream state looks stale, inspect delivery state before replaying anything.
 
-## 3. Replay A Single Delivery
+The key questions are:
 
-Use single-delivery replay when the receiver is fixed and you want to resend one known failed item.
+- is the delivery queued?
+- is it retrying?
+- is it dead-lettered?
+- is the queue draining?
 
-```ts
-await app.replayWebhookDelivery("<delivery-id>");
-```
+## Replay options
 
-This is the narrowest recovery path and is the safest first choice for one failed message.
+OpenSocial supports three different recovery shapes:
 
-## 4. Replay Dead Letters In Batches
+1. replay one delivery
+2. replay dead letters in batch
+3. replay event history from a stored cursor
 
-If you have a backlog of dead-lettered deliveries, replay them in batches.
+Use the narrowest option that solves the problem.
 
-```ts
-await app.replayDeadLetteredDeliveries({
-  limit: 25,
-});
-```
+## Recommended recovery order
 
-Use batch replay when:
-
-- the consumer was down for a while
-- you fixed a systematic signature or parsing issue
-- you want to recover without manually selecting individual delivery ids
-
-## 5. Resume Event Streams
-
-If your integration stores a replay cursor, save it after processing and restore from it later.
-
-```ts
-const cursor = await app.getReplayCursor();
-
-const events = await app.replayEvents(cursor.cursor);
-
-await app.saveReplayCursor(events.at(-1)?.cursor ?? cursor.cursor);
-```
-
-This is useful for:
-
-- cold starts
-- backfills
-- rebuilding an integration after downtime
-
-## 6. Verify Your Receiver
-
-The shipped protocol-server helper verifies the signature on webhook deliveries.
-
-At a high level:
-
-1. read the raw request body
-2. read the protocol signature header
-3. verify the signature with your shared secret
-4. reject unsigned or mismatched requests before processing
-
-The helper package is intentionally small so you can use it in your own service without importing backend runtime code.
-
-## Safe Recovery Order
-
-When something fails, use this order:
-
-1. inspect the delivery
+1. inspect a delivery
 2. replay a single delivery if the issue was isolated
-3. replay dead letters in batches if the issue was systemic
-4. replay events from a cursor only if you need to rebuild downstream state
+3. replay dead letters in batch if the issue was systemic
+4. replay from a cursor if you need to reconstruct downstream state
 
-That sequence keeps recovery narrow and avoids unnecessary duplicate processing.
+## Verification resources
 
-## What Not To Build
-
-Do not treat the protocol as a generic social feed API.
-
-Do not model:
-
-- posts
-- follows
-- likes
-- global timelines
-- broadcast-only social primitives
-
-The current protocol is centered on coordination, messaging, circles, and recoverable delivery.
+- [Webhook consumer](./protocol-webhook-consumer)
+- [Operator recovery](./protocol-operator-recovery)
+- [Production readiness checklist](./protocol-production-readiness-checklist)

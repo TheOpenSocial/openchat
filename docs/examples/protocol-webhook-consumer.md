@@ -8,9 +8,9 @@ It does three things:
 2. Registers an example protocol app.
 3. Starts a local webhook consumer and subscribes it to protocol delivery events.
 
-## Files
+## Repository example
 
-- [`scripts/examples/protocol-webhook-consumer.mjs`](/Users/cruciblelabs/Documents/openchat/scripts/examples/protocol-webhook-consumer.mjs)
+- `scripts/examples/protocol-webhook-consumer.mjs`
 
 ## Run It
 
@@ -59,7 +59,7 @@ That will print:
 
 For queue recovery and dead-letter replay, see:
 
-- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-operator-recovery.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-operator-recovery.md)
+- [Operator recovery](./protocol-operator-recovery)
 
 ## What This Demonstrates
 

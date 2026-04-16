@@ -95,9 +95,9 @@ node --loader ./scripts/examples/protocol-example-loader.mjs \
   scripts/examples/protocol-partner-onboarding.mjs
 ```
 
-See:
+Repository example:
 
-- [`/Users/cruciblelabs/Documents/openchat/scripts/examples/protocol-partner-onboarding.mjs`](/Users/cruciblelabs/Documents/openchat/scripts/examples/protocol-partner-onboarding.mjs)
+- `scripts/examples/protocol-partner-onboarding.mjs`
 
 ## What happens at registration time
 
@@ -230,7 +230,7 @@ Fix:
 
 For that flow, use:
 
-- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-consent-and-auth-troubleshooting.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-consent-and-auth-troubleshooting.md)
+- [Consent and auth troubleshooting](./protocol-consent-and-auth-troubleshooting)
 
 ## Recommended production checklist
 
@@ -244,7 +244,7 @@ Before enabling writes from a new partner app:
 
 ## Related guides
 
-- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-partner-quickstart.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-partner-quickstart.md)
-- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-consent-and-auth-troubleshooting.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-consent-and-auth-troubleshooting.md)
-- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-external-actions-reference.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-external-actions-reference.md)
-- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-operator-recovery.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-operator-recovery.md)
+- [Partner quickstart](./protocol-partner-quickstart)
+- [Consent and auth troubleshooting](./protocol-consent-and-auth-troubleshooting)
+- [External actions reference](./protocol-external-actions-reference)
+- [Operator recovery](./protocol-operator-recovery)

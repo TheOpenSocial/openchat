@@ -13,8 +13,8 @@ The goal is simple: make sure the integration is operable, not just that the hap
 
 Guides:
 
-- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-manifest-and-discovery.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-manifest-and-discovery.md)
-- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-overview-and-exclusions.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-overview-and-exclusions.md)
+- [Manifest and discovery](./protocol-manifest-and-discovery)
+- [Protocol overview and exclusions](./protocol-overview-and-exclusions)
 
 ## 2. App identity and tokens
 
@@ -27,7 +27,7 @@ Guides:
 
 Guide:
 
-- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-app-registration-and-tokens.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-app-registration-and-tokens.md)
+- [App registration and tokens](./protocol-app-registration-and-tokens)
 
 ## 3. Consent and grants
 
@@ -39,7 +39,7 @@ Guide:
 
 Guide:
 
-- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-consent-and-auth-troubleshooting.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-consent-and-auth-troubleshooting.md)
+- [Consent and auth troubleshooting](./protocol-consent-and-auth-troubleshooting)
 
 ## 4. Action surface discipline
 
@@ -50,7 +50,7 @@ Guide:
 
 Guide:
 
-- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-external-actions-reference.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-external-actions-reference.md)
+- [External actions reference](./protocol-external-actions-reference)
 
 ## 5. Webhooks and replay
 
@@ -62,9 +62,9 @@ Guide:
 
 Guides:
 
-- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-webhook-consumer.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-webhook-consumer.md)
-- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-event-subscriptions-and-replay.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-event-subscriptions-and-replay.md)
-- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-operator-recovery.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-operator-recovery.md)
+- [Webhook consumer](./protocol-webhook-consumer)
+- [Event subscriptions and replay](./protocol-event-subscriptions-and-replay)
+- [Operator recovery](./protocol-operator-recovery)
 
 ## 6. Agent readiness, if applicable
 
@@ -75,9 +75,9 @@ Guides:
 
 Guides:
 
-- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-quickstart.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-quickstart.md)
-- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-readiness.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-readiness.md)
-- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-toolset.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-toolset.md)
+- [Agent quickstart](./protocol-agent-quickstart)
+- [Agent readiness](./protocol-agent-readiness)
+- [Agent toolset](./protocol-agent-toolset)
 
 ## 7. Operational visibility
 
