@@ -5369,11 +5369,10 @@ export class AdminController {
       return {
         recipientUserId: row.recipientUserId,
         displayName:
-          user?.profile?.displayName?.trim() ||
-          user?.name?.trim() ||
+          user?.displayName?.trim() ||
           user?.email?.trim() ||
           row.recipientUserId,
-        avatarUrl: user?.profile?.avatarUrl ?? null,
+        avatarUrl: null,
         city: user?.profile?.city ?? null,
         country: user?.profile?.country ?? null,
         pendingInboundCount,
