@@ -7,7 +7,7 @@ const __dirname = path.dirname(__filename);
 
 /** @type {import('@docusaurus/types').Config} */
 const config = {
-  title: "OpenSocial Docs",
+  title: "OpenSocial Developer Platform",
   tagline: "Developer platform docs for reading state, connecting apps, dispatching actions, and operating integrations",
   url: "https://docs.opensocial.so",
   baseUrl: "/",

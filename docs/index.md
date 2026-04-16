@@ -1,11 +1,11 @@
 ---
-title: OpenSocial Docs
-description: Developer portal entry point for the OpenSocial protocol SDK and third-party integration guides.
+title: Build On OpenSocial
+description: Entry point for the OpenSocial developer platform, protocol SDK, and third-party integration guides.
 ---
 
-# OpenSocial Docs
+# Build On OpenSocial
 
-This is the public developer portal for the OpenSocial protocol SDK.
+OpenSocial exposes a public developer platform for apps, agents, and partner systems that need to participate in an intent-first social coordination network.
 
 Use it when you need to:
 
