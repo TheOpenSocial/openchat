@@ -17,7 +17,6 @@ import { AnalyticsService } from "../analytics/analytics.service.js";
 import { PrismaService } from "../database/prisma.service.js";
 import { LaunchControlsService } from "../launch-controls/launch-controls.service.js";
 import { PersonalizationService } from "../personalization/personalization.service.js";
-import { RealtimeEventsService } from "../realtime/realtime-events.service.js";
 import { PresenceService } from "../realtime/presence.service.js";
 
 const MESSAGE_IDEMPOTENCY_TTL_MS = 60 * 60 * 1000;
@@ -88,8 +87,6 @@ export class ChatsService {
     private readonly launchControlsService?: LaunchControlsService,
     @Optional()
     private readonly personalizationService?: PersonalizationService,
-    @Optional()
-    private readonly realtimeEventsService?: RealtimeEventsService,
     @Optional()
     private readonly presenceService?: PresenceService,
   ) {
@@ -1850,20 +1847,6 @@ export class ChatsService {
             : hydratedMessage.editedAt,
       },
     );
-
-    const realtimeMessage = {
-      ...hydratedMessage,
-      createdAt: hydratedMessage.createdAt.toISOString(),
-      editedAt: hydratedMessage.editedAt?.toISOString() ?? null,
-      reactions: hydratedMessage.reactions.map((reaction) => ({
-        ...reaction,
-        createdAt: reaction.createdAt.toISOString(),
-      })),
-    };
-    this.realtimeEventsService?.emitChatMessageUpdated(chatId, {
-      roomId: chatId,
-      message: realtimeMessage,
-    });
 
     return hydratedMessage;
   }
