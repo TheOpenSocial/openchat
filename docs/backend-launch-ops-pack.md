@@ -73,6 +73,7 @@ STAGING_EQUALS_PROD=true BACKEND_OPS_TARGET=staging pnpm test:backend:ops-pack
 - `release:check:api` passes.
 - `test:agentic:suite:verification` passes with required benchmark + prod-smoke gates.
 - moderation drill passes with report -> flag -> assign -> triage -> audit verification.
+- smoke verification includes the combined admin manual-verification snapshot so request pressure, protocol queue health, and protocol auth health are readable from one place.
 - ops-pack artifact status is `passed`.
 - ops-pack artifact `shipVerdict` is `ship_ready`.
 

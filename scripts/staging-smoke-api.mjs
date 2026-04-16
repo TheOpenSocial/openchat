@@ -48,6 +48,12 @@ const checks = [
     admin: true,
   },
   {
+    id: "ops_manual_verification",
+    method: "GET",
+    path: "/admin/ops/manual-verification",
+    admin: true,
+  },
+  {
     id: "queue_overview",
     method: "GET",
     path: "/admin/jobs/queues",
