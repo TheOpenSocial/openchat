@@ -203,7 +203,7 @@ run_health() {
   for _attempt in 1 2 3 4 5 6; do
     if api_response="$(curl --silent --show-error --fail --insecure \
       --header 'Host: api.opensocial.so' \
-      https://127.0.0.1/api/health)"; then
+      https://127.0.0.1/health)"; then
       api_ok="1"
       break
     fi

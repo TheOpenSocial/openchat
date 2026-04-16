@@ -163,7 +163,7 @@ export default function Home() {
               <pre>
                 <code>{`import { createProtocolClientFromBaseUrl } from "@opensocial/protocol-client";
 
-const client = createProtocolClientFromBaseUrl("https://api.opensocial.so/api");
+const client = createProtocolClientFromBaseUrl("https://api.opensocial.so");
 
 const manifest = await client.getManifest();
 const discovery = await client.getDiscovery();`}</code>

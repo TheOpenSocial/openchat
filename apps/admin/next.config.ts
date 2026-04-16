@@ -4,7 +4,7 @@ import path from "node:path";
 
 function normalizePath(input: string | undefined) {
   if (!input || input === "/") {
-    return "/api";
+    return "";
   }
   return input.startsWith("/") ? input.replace(/\/+$/, "") : `/${input}`;
 }
@@ -45,7 +45,7 @@ function resolveApiBaseUrlFromSettings() {
   const envConfig = settings.environments?.[envName];
   const origin = normalizeOrigin(envConfig?.domains?.apiOrigin);
   if (!origin) {
-    return "http://localhost:3000/api";
+    return "http://localhost:3000";
   }
   const apiBasePath = normalizePath(envConfig?.apiBasePath);
   return `${origin}${apiBasePath}`;

@@ -7,14 +7,14 @@ function readBoolean(value: string | undefined) {
   return TRUE_VALUES.has(value.trim().toLowerCase());
 }
 
-const REMOTE_API_BASE_URL = "https://api.opensocial.so/api";
+const REMOTE_API_BASE_URL = "https://api.opensocial.so";
 
 export const webEnv = {
   apiBaseUrl:
     process.env.NEXT_PUBLIC_API_BASE_URL ??
     (process.env.NODE_ENV === "production"
       ? REMOTE_API_BASE_URL
-      : "http://localhost:3000/api"),
+      : "http://localhost:3000"),
   designMock: readBoolean(process.env.NEXT_PUBLIC_DESIGN_MOCK),
   allowWebDemoAuth:
     process.env.NODE_ENV === "development" ||

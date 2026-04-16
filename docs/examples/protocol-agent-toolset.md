@@ -33,7 +33,7 @@ import {
 } from "@opensocial/protocol-agent";
 
 const agent = createProtocolAgentClientFromBaseUrl(
-  "http://127.0.0.1:3000/api",
+  "http://127.0.0.1:3000",
   {
     appId: process.env.PROTOCOL_APP_ID!,
     appToken: process.env.PROTOCOL_APP_TOKEN!,
@@ -63,7 +63,7 @@ If you want the bound agent client plus indexed tools together:
 import { createProtocolAgentToolkitFromBaseUrl } from "@opensocial/protocol-agent";
 
 const toolkit = createProtocolAgentToolkitFromBaseUrl(
-  "http://127.0.0.1:3000/api",
+  "http://127.0.0.1:3000",
   {
     appId: process.env.PROTOCOL_APP_ID!,
     appToken: process.env.PROTOCOL_APP_TOKEN!,
@@ -90,7 +90,7 @@ import {
 } from "@opensocial/protocol-agent";
 
 const toolkit = createProtocolAgentToolkitFromBaseUrl(
-  "http://127.0.0.1:3000/api",
+  "http://127.0.0.1:3000",
   {
     appId: process.env.PROTOCOL_APP_ID!,
     appToken: process.env.PROTOCOL_APP_TOKEN!,
@@ -116,7 +116,7 @@ await assertReadyTool.invoke({
 ## Run the shipped example
 
 ```bash
-PROTOCOL_BASE_URL=http://127.0.0.1:3000/api \
+PROTOCOL_BASE_URL=http://127.0.0.1:3000 \
 PROTOCOL_APP_ID=partner.onboarding.123 \
 PROTOCOL_APP_TOKEN=<app-token> \
 PROTOCOL_ACTOR_USER_ID=00000000-0000-4000-8000-000000000001 \
@@ -134,7 +134,7 @@ The example:
 If you prefer the toolkit helper:
 
 ```bash
-PROTOCOL_BASE_URL=http://127.0.0.1:3000/api \
+PROTOCOL_BASE_URL=http://127.0.0.1:3000 \
 PROTOCOL_APP_ID=partner.onboarding.123 \
 PROTOCOL_APP_TOKEN=<app-token> \
 PROTOCOL_ACTOR_USER_ID=00000000-0000-4000-8000-000000000001 \

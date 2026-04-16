@@ -27,13 +27,13 @@ interface AuthLifecycleHandlers {
   onAuthFailure?: () => void;
 }
 
-const REMOTE_API_BASE_URL = "https://api.opensocial.so/api";
+const REMOTE_API_BASE_URL = "https://api.opensocial.so";
 
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ??
   (process.env.NODE_ENV === "production"
     ? REMOTE_API_BASE_URL
-    : "http://localhost:3000/api");
+    : "http://localhost:3000");
 
 let refreshInFlight: Promise<SessionTokens> | null = null;
 let authLifecycleHandlers: AuthLifecycleHandlers = {};

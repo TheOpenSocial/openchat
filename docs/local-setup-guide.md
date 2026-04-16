@@ -73,22 +73,22 @@ pnpm --filter @opensocial/web test:e2e
 See `docs/frontend-critical-path.md` for Maestro + Playwright details.
 
 ## URLs
-- API health: `http://localhost:3000/api/health`
-- Shared production API (default for shipped web + mobile clients): `https://api.opensocial.so/api`
+- API health: `http://localhost:3000/health`
+- Shared production API (default for shipped web + mobile clients): `https://api.opensocial.so`
 - Admin app: default Next.js dev port for `apps/admin`
 - Mobile: run with `pnpm --filter @opensocial/mobile dev`
 - Web: `pnpm --filter @opensocial/web dev` (port `3002` by default)
 
 ### Web Google sign-in (local)
-- In [Google Cloud Console](https://console.cloud.google.com/), OAuth **Authorized redirect URI** must include your API callback, e.g. `http://localhost:3000/api/auth/google/callback` (`GOOGLE_REDIRECT_URI`).
+- In [Google Cloud Console](https://console.cloud.google.com/), OAuth **Authorized redirect URI** must include your API callback, e.g. `http://localhost:3000/auth/google/callback` (`GOOGLE_REDIRECT_URI`).
 - The web app starts OAuth with `webRedirectUri` pointing at `http://localhost:3002/auth/callback` (or your dev origin); the API validates that path and redirects back with `?code=…`.
 - Staging/production: set **`WEB_APP_REDIRECT_URIS`** to the full web callback URL(s), comma-separated (same pattern as `ADMIN_DASHBOARD_REDIRECT_URIS`).
 
 ### Mobile + Google (production API)
 
 - OAuth is **browser → API → deep link back to app**; see **`docs/mobile-google-signin.md`**.
-- **Google Cloud:** one **Web** OAuth client; redirect URI = **`{API origin}/api/auth/google/callback`** only.
-- **App → API:** defaults target **`https://api.opensocial.so/api`**; for a **local** API use `EXPO_PUBLIC_API_BASE_URL` or `EXPO_PUBLIC_USE_LOCAL_API=1` (see root `.env.example`).
+- **Google Cloud:** one **Web** OAuth client; redirect URI = **`{API origin}/auth/google/callback`** only.
+- **App → API:** defaults target **`https://api.opensocial.so`**; for a **local** API use `EXPO_PUBLIC_API_BASE_URL` or `EXPO_PUBLIC_USE_LOCAL_API=1` (see root `.env.example`).
 
 ## iOS real device (mobile)
 - This repo uses Expo managed workflow, so `apps/mobile/ios` is generated only when needed.

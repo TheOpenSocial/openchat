@@ -26,7 +26,7 @@ import {
 } from "@opensocial/protocol-agent";
 
 const agent = createProtocolAgentClientFromBaseUrl(
-  "http://127.0.0.1:3000/api",
+  "http://127.0.0.1:3000",
   {
     appId: process.env.PROTOCOL_APP_ID!,
     appToken: process.env.PROTOCOL_APP_TOKEN!,

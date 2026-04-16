@@ -1,6 +1,7 @@
 import "reflect-metadata";
 import { Logger, ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
+import type { NextFunction, Request, Response } from "express";
 import { adminSecurityMiddleware } from "./admin/admin-security.middleware.js";
 import { AppModule } from "./app.module.js";
 import {
@@ -47,7 +48,12 @@ async function bootstrap() {
     allowedHeaders: ["content-type", "authorization", "idempotency-key"],
   });
 
-  app.setGlobalPrefix("api");
+  app.use((request: Request, _response: Response, next: NextFunction) => {
+    if (request.url === "/api" || request.url.startsWith("/api/")) {
+      request.url = request.url.slice(4) || "/";
+    }
+    next();
+  });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
 
   app.enableShutdownHooks();

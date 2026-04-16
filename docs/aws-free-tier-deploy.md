@@ -114,7 +114,7 @@ docker compose -f docker-compose.prod.yml logs -f valkey
 ```
 
 Quick health checks:
-- `curl https://api.opensocial.so/api/health`
+- `curl https://api.opensocial.so/health`
 - open `https://admin.opensocial.so`
 - open `https://app.opensocial.so`
 - open `https://docs.opensocial.so`

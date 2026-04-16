@@ -88,7 +88,7 @@ console.log(registration.credentials.appToken);
 ### Example using the shipped script
 
 ```bash
-PROTOCOL_BASE_URL=http://127.0.0.1:3000/api \
+PROTOCOL_BASE_URL=http://127.0.0.1:3000 \
 PROTOCOL_WEBHOOK_URL=http://127.0.0.1:4040/webhooks/opensocial \
 PROTOCOL_OWNER_USER_ID=00000000-0000-4000-8000-000000000001 \
 node --loader ./scripts/examples/protocol-example-loader.mjs \

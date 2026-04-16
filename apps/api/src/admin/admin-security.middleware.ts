@@ -15,6 +15,10 @@ function isApplicationExchangePath(path: string) {
   return path.includes("/admin/ops/smoke-session/exchange");
 }
 
+function isAdminPath(path: string) {
+  return path.startsWith("/admin") || path.startsWith("/api/admin");
+}
+
 function parseAllowedAdminUsers() {
   const raw = process.env.ADMIN_ALLOWED_USER_IDS?.trim();
   if (!raw) {
@@ -86,7 +90,7 @@ export function adminSecurityMiddleware(
   }
 
   const path = (request.path || request.originalUrl || "").toLowerCase();
-  if (!path.startsWith("/api/admin")) {
+  if (!isAdminPath(path)) {
     next();
     return;
   }

@@ -25,7 +25,7 @@ npx pnpm --filter @opensocial/protocol-client build
 Start the demo:
 
 ```bash
-PROTOCOL_BASE_URL=http://127.0.0.1:3000/api \
+PROTOCOL_BASE_URL=http://127.0.0.1:3000 \
 node --loader ./scripts/examples/protocol-example-loader.mjs \
   scripts/examples/protocol-webhook-consumer.mjs --action=demo
 ```
@@ -42,7 +42,7 @@ The demo:
 If you already have an `appId` and `appToken`, inspect the protocol state:
 
 ```bash
-PROTOCOL_BASE_URL=http://127.0.0.1:3000/api \
+PROTOCOL_BASE_URL=http://127.0.0.1:3000 \
 PROTOCOL_APP_ID=example.webhook.consumer.123 \
 PROTOCOL_APP_TOKEN=<app-token> \
 node --loader ./scripts/examples/protocol-example-loader.mjs \

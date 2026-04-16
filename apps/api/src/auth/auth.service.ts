@@ -669,7 +669,7 @@ export class AuthService {
   private getGoogleRedirectUri() {
     return (
       process.env.GOOGLE_REDIRECT_URI ??
-      "http://localhost:3000/api/auth/google/callback"
+      "http://localhost:3000/auth/google/callback"
     );
   }
 

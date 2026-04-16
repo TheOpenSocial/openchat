@@ -665,11 +665,10 @@ export interface DiscoveryAgentRecommendationsResponse {
   discovery: PassiveDiscoveryResponse;
 }
 
-const REMOTE_API_BASE_URL = "https://api.opensocial.so/api";
+const REMOTE_API_BASE_URL = "https://api.opensocial.so";
 
 /**
- * Accepts `api.opensocial.so`, `https://api.opensocial.so`, or full `https://…/api`.
- * Paths default to `/api` when omitted so `fetch(\`\${base}/auth/…\`)` stays correct.
+ * Accepts `api.opensocial.so`, `https://api.opensocial.so`, or full `https://…`.
  */
 function normalizeExpoPublicApiBaseUrl(
   raw: string | undefined,
@@ -694,15 +693,13 @@ function normalizeExpoPublicApiBaseUrl(
     return trimmed;
   }
 
-  const path = parsed.pathname.replace(/\/+$/, "") || "";
-  const suffix = path === "" || path === "/" ? "/api" : path;
-
-  return `${parsed.origin}${suffix}`.replace(/\/+$/, "");
+  const path = parsed.pathname.replace(/\/+$/, "");
+  return `${parsed.origin}${path}`.replace(/\/+$/, "");
 }
 
 const LOCAL_API_BASE = Platform.select({
-  android: "http://10.0.2.2:3000/api",
-  default: "http://localhost:3000/api",
+  android: "http://10.0.2.2:3000",
+  default: "http://localhost:3000",
 });
 
 const maybeConfig = Constants as unknown as {
@@ -712,7 +709,7 @@ const maybeConfig = Constants as unknown as {
 const expoHostUri =
   maybeConfig.expoConfig?.hostUri ?? maybeConfig.expoGoConfig?.debuggerHost;
 const expoLanBase = expoHostUri
-  ? `http://${expoHostUri.split(":")[0]}:3000/api`
+  ? `http://${expoHostUri.split(":")[0]}:3000`
   : null;
 
 const devApiBase = expoLanBase ?? LOCAL_API_BASE;
@@ -722,10 +719,10 @@ const useLocalApiInDev =
   process.env.EXPO_PUBLIC_USE_LOCAL_API === "true";
 
 /**
- * Default: production API (`https://api.opensocial.so/api`) so dev builds and
+ * Default: production API (`https://api.opensocial.so`) so dev builds and
  * store builds behave the same unless you override.
- * - Production host only: `EXPO_PUBLIC_API_BASE_URL=api.opensocial.so` (https + `/api` added).
- * - Local API: `EXPO_PUBLIC_API_BASE_URL=http://<host>:3000/api` or
+ * - Production host only: `EXPO_PUBLIC_API_BASE_URL=api.opensocial.so`.
+ * - Local API: `EXPO_PUBLIC_API_BASE_URL=http://<host>:3000` or
  *   `EXPO_PUBLIC_USE_LOCAL_API=1` (LAN / emulator defaults).
  */
 export const API_BASE_URL =

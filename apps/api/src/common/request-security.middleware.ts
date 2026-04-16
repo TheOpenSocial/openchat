@@ -155,54 +155,78 @@ function isWriteMethod(method: string) {
 }
 
 function isAuthPath(path: string) {
-  return path.startsWith("/api/auth/");
+  return path.startsWith("/auth/") || path.startsWith("/api/auth/");
 }
 
 function isHighRiskPath(path: string) {
   return (
+    path.startsWith("/intents") ||
     path.startsWith("/api/intents") ||
+    path.startsWith("/chats/") ||
     path.startsWith("/api/chats/") ||
+    path.startsWith("/moderation/") ||
     path.startsWith("/api/moderation/") ||
+    path.startsWith("/inbox/requests/") ||
     path.startsWith("/api/inbox/requests/") ||
+    path.startsWith("/admin/") ||
     path.startsWith("/api/admin/")
   );
 }
 
 function isPlaygroundPath(path: string) {
-  return path.startsWith("/api/admin/playground/");
+  return (
+    path.startsWith("/admin/playground/") ||
+    path.startsWith("/api/admin/playground/")
+  );
 }
 
 function isVerificationBypassPath(path: string) {
   return (
+    path.startsWith("/intents") ||
     path.startsWith("/api/intents") ||
+    path.startsWith("/agent/threads/") ||
     path.startsWith("/api/agent/threads/") ||
+    path.startsWith("/admin/ops/agent-workflows") ||
     path.startsWith("/api/admin/ops/agent-workflows")
   );
 }
 
 function isSelfServiceOnboardingPath(path: string) {
   return (
+    path === "/onboarding/infer" ||
     path === "/api/onboarding/infer" ||
+    path === "/onboarding/infer-fast" ||
     path === "/api/onboarding/infer-fast" ||
+    path === "/onboarding/activation-plan" ||
     path === "/api/onboarding/activation-plan" ||
+    path === "/onboarding/activation-bootstrap" ||
     path === "/api/onboarding/activation-bootstrap" ||
+    path === "/onboarding/activation-execute" ||
     path === "/api/onboarding/activation-execute"
   );
 }
 
 function isSelfServiceAgentThreadPath(path: string) {
   return (
+    path === "/agent/threads/me/summary" ||
     path === "/api/agent/threads/me/summary" ||
+    /^\/agent\/threads\/[0-9a-f-]+\/messages\/?$/i.test(path) ||
     /^\/api\/agent\/threads\/[0-9a-f-]+\/messages\/?$/i.test(path) ||
+    /^\/agent\/threads\/[0-9a-f-]+\/respond(\/stream)?\/?$/i.test(path) ||
     /^\/api\/agent\/threads\/[0-9a-f-]+\/respond(\/stream)?\/?$/i.test(path)
   );
 }
 
 function isSelfServiceExperiencePath(path: string) {
   return (
+    /^\/experience\/[0-9a-f-]+\/(home-summary|activity-summary|bootstrap)\/?$/i.test(
+      path,
+    ) ||
     /^\/api\/experience\/[0-9a-f-]+\/(home-summary|activity-summary|bootstrap)\/?$/i.test(
       path,
-    ) || /^\/api\/profiles\/[0-9a-f-]+\/completion\/?$/i.test(path)
+    ) ||
+    /^\/profiles\/[0-9a-f-]+\/completion\/?$/i.test(path) ||
+    /^\/api\/profiles\/[0-9a-f-]+\/completion\/?$/i.test(path)
   );
 }
 
@@ -247,7 +271,7 @@ function getSingleHeader(
 }
 
 function isTrustedAdminRequest(request: Request, path: string) {
-  if (!path.startsWith("/api/admin/")) {
+  if (!(path.startsWith("/admin/") || path.startsWith("/api/admin/"))) {
     return false;
   }
 
@@ -308,7 +332,12 @@ function isVerificationBypassRequest(request: Request, path: string) {
 }
 
 function isTrustedSocialSimBypassRequest(request: Request, path: string) {
-  if (!path.startsWith("/api/admin/social-sim/")) {
+  if (
+    !(
+      path.startsWith("/admin/social-sim/") ||
+      path.startsWith("/api/admin/social-sim/")
+    )
+  ) {
     return false;
   }
   if (!isTrustedAdminRequest(request, path)) {
