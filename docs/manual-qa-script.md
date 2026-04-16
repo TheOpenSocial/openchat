@@ -40,6 +40,7 @@ Protocol auth check:
   - executable delegation is concentrated in `user` subjects, not accidentally drifting into modeled-only subject types
   - pending consent backlog matches the scenarios you intentionally created
   - recent auth failures are understandable and bounded rather than climbing silently
+  - recent auth-failure samples clearly show whether the issue is missing token, missing scopes, missing capabilities, or modeled-only non-user grants
 
 ## Scenario B: Launch control gating
 1. Disable new intents via `POST /api/admin/launch-controls`:

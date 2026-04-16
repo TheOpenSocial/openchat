@@ -313,7 +313,8 @@ These packages should mirror the backend domain rather than inventing new abstra
 5. Tighten operator/admin visibility for protocol lag, replay pressure, and token/grant audit usage where it is still thin.
    - Request-pressure visibility is shipped.
    - Queue-health visibility is shipped.
-   - Protocol auth-health visibility is now shipped for grants, consent backlog, executable-vs-modeled delegation, and recent auth failures.
+- Protocol auth-health visibility is now shipped for grants, consent backlog, executable-vs-modeled delegation, and recent auth failures.
+   - Recent auth-failure samples are now included alongside aggregate counts so manual QA can diagnose the exact failing action and failure type faster.
 6. Improve user-facing protocol-aware presentation in first-party surfaces without exposing backend internals.
 
 ## Current Direction Guardrails

@@ -136,6 +136,13 @@ type ProtocolAuthHealthFailureSummaryRow = {
   count: number | bigint | string;
 };
 
+type ProtocolAuthHealthRecentFailureRow = {
+  appId: string | null;
+  appName: string | null;
+  createdAt: Date | string;
+  payload: unknown;
+};
+
 type RequestPressureRecipientRow = {
   recipientUserId: string;
   pendingInboundCount: number | bigint | string;
@@ -4435,6 +4442,19 @@ export class AdminController {
        GROUP BY payload->>'failureType'
        ORDER BY COUNT(*) DESC, payload->>'failureType' ASC`,
     );
+    const recentAuthFailureRows = await this.prisma.$queryRawUnsafe<
+      ProtocolAuthHealthRecentFailureRow[]
+    >(
+      `SELECT pel.actor_app_id AS "appId",
+              COALESCE(pa.registration_json->>'name', pel.actor_app_id) AS "appName",
+              pel.created_at AS "createdAt",
+              pel.payload AS payload
+       FROM protocol_event_log pel
+       LEFT JOIN protocol_apps pa ON pa.app_id = pel.actor_app_id
+       WHERE pel.event_name = 'protocol.auth.failure'
+       ORDER BY pel.created_at DESC
+       LIMIT 20`,
+    );
 
     const apps = appRows.map((row) => ({
       appId: row.appId,
@@ -4489,6 +4509,39 @@ export class AdminController {
         failureType: row.failureType,
         count: Number(row.count ?? 0),
       })),
+      recentAuthFailures: recentAuthFailureRows
+        .map((row) => {
+          if (!row.payload || typeof row.payload !== "object") {
+            return null;
+          }
+          const payload = row.payload as Record<string, unknown>;
+          return {
+            appId:
+              typeof payload.appId === "string"
+                ? payload.appId
+                : (row.appId ?? "unknown"),
+            appName: row.appName ?? row.appId ?? "unknown",
+            failureType:
+              typeof payload.failureType === "string"
+                ? payload.failureType
+                : "unknown",
+            action:
+              typeof payload.action === "string" ? payload.action : null,
+            issuedAt:
+              typeof payload.issuedAt === "string"
+                ? payload.issuedAt
+                : row.createdAt instanceof Date
+                  ? row.createdAt.toISOString()
+                  : String(row.createdAt),
+            details:
+              payload.details &&
+              typeof payload.details === "object" &&
+              !Array.isArray(payload.details)
+                ? payload.details
+                : {},
+          };
+        })
+        .filter((entry): entry is NonNullable<typeof entry> => entry !== null),
       apps,
     };
   }
