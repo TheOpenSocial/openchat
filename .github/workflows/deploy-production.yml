@@ -157,6 +157,21 @@ jobs:
           chmod +x scripts/deploy-production.sh
           DEPLOY_PHASE=up ./scripts/deploy-production.sh
 
+      - name: Verify production health
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x scripts/deploy-production.sh
+          DEPLOY_PHASE=health ./scripts/deploy-production.sh
+
+      - name: Show service logs on failure
+        if: ${{ failure() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x scripts/deploy-production.sh
+          DEPLOY_PHASE=logs ./scripts/deploy-production.sh
+
       - name: Show service status
         shell: bash
         run: |

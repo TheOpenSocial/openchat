@@ -80,6 +80,13 @@ gh workflow run "Deploy Production" --ref <branch-or-main> \
   -f docs_image=ghcr.io/theopensocial/opensocial-docs:<tag>
 ```
 
+The production deploy now also:
+
+- verifies local ingress for `api.opensocial.so` and `docs.opensocial.so`
+- fails the rollout if the API health route is unavailable
+- fails the rollout if docs redirects leak `http://` or the internal `:3003` port
+- emits API/docs/nginx logs automatically when that verification fails
+
 ## Repo-specific note for this session
 
 The onboarding inference/backend/mobile changes discussed in this thread have been implemented locally, but they are not deployable through GitHub Actions until they are committed and pushed to a remote ref.

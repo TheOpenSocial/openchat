@@ -197,6 +197,38 @@ run_ps() {
   compose_cmd ps
 }
 
+run_health() {
+  local api_response
+  api_response="$(curl --silent --show-error --fail --insecure \
+    --header 'Host: api.opensocial.so' \
+    https://127.0.0.1/api/health)"
+  echo "$api_response"
+
+  local docs_headers
+  docs_headers="$(curl --silent --show-error --insecure --head \
+    --header 'Host: docs.opensocial.so' \
+    https://127.0.0.1/docs)"
+  echo "$docs_headers"
+
+  if grep -Eiq '^location: https?://[^[:space:]]+:3003/' <<<"$docs_headers"; then
+    echo "Docs redirect leaked internal port 3003." >&2
+    return 1
+  fi
+
+  if grep -Eiq '^location: http://' <<<"$docs_headers"; then
+    echo "Docs redirect downgraded to http." >&2
+    return 1
+  fi
+
+  curl --silent --show-error --fail --insecure \
+    --header 'Host: docs.opensocial.so' \
+    https://127.0.0.1/docs/ >/dev/null
+}
+
+run_logs() {
+  compose_cmd logs --tail 200 api docs nginx
+}
+
 run_phase() {
   case "$DEPLOY_PHASE" in
     sync)
@@ -229,11 +261,18 @@ run_phase() {
     ps)
       run_ps
       ;;
+    health)
+      run_health
+      ;;
+    logs)
+      run_logs
+      ;;
     all)
       sync_local_checkout
       run_pull_or_build
       run_migrate
       run_up
+      run_health
       run_ps
       ;;
     *)
