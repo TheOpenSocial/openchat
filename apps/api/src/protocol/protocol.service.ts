@@ -2742,17 +2742,16 @@ export class ProtocolService {
       `SELECT id, app_id, scope, capabilities, subject_type, subject_id, status, granted_by_user_id, granted_at, revoked_at, metadata, created_at, updated_at
        FROM protocol_app_scope_grants
        WHERE app_id = $1
-         AND subject_type = 'user'
-         AND subject_id = $2
          AND status = 'active'
        ORDER BY created_at DESC`,
       app.registration.appId,
-      actorUserId,
     );
 
     const grants = rows.map((row) => this.mapGrantRow(row));
     const grant = grants.find(
       (entry) =>
+        entry.subjectType === "user" &&
+        entry.subjectId === actorUserId &&
         entry.scope === "actions.invoke" &&
         (entry.capabilities.length === 0 ||
           capabilities.every((capability) =>
@@ -2760,6 +2759,15 @@ export class ProtocolService {
           )),
     );
     if (!grant) {
+      const modeledOnlyGrants = grants.filter(
+        (entry) =>
+          entry.subjectType !== "user" &&
+          entry.scope === "actions.invoke" &&
+          (entry.capabilities.length === 0 ||
+            capabilities.every((capability) =>
+              entry.capabilities.includes(capability),
+            )),
+      );
       await this.recordAuthFailure({
         appId,
         failureType: "missing_delegated_grant",
@@ -2767,10 +2775,14 @@ export class ProtocolService {
         details: {
           actorUserId,
           capabilities,
+          modeledOnlySubjectTypes: [...new Set(modeledOnlyGrants.map((entry) => entry.subjectType))],
+          hasModeledOnlyGrant: modeledOnlyGrants.length > 0,
         },
       });
       throw new ForbiddenException(
-        `missing active protocol grant for ${action}`,
+        modeledOnlyGrants.length > 0
+          ? `missing executable user grant for ${action}; modeled grants exist but cannot execute delegated actions`
+          : `missing active protocol grant for ${action}`,
       );
     }
 

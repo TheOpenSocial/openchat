@@ -75,6 +75,7 @@ The protocol is no longer just a concept. The following pieces are already prese
 - Usage summaries now include token and grant audit timestamps for first-party inspection surfaces.
 - Usage summaries now also include structured auth-failure counts and recent auth-failure entries so developers can diagnose missing-token, invalid-token, revoked-app, and grant-scope issues without raw event-log queries.
 - Usage summaries now also make delegated-grant partiality explicit by surfacing grant subject counts plus the currently executable delegated subject types versus modeled-only subject types.
+- Delegated action failures now distinguish between "no delegated grant exists" and "only modeled non-user grants exist", so manual debugging no longer collapses those into the same auth error.
 - First-party mobile and web settings surfaces now support token rotate/revoke and grant creation/revocation flows for protocol apps.
 - First-party mobile and web settings surfaces now frame grants as delegated access and expose dead-letter replay controls.
 - First-party runtime and agent intent/request flows now have protocol-service call-through paths for the cleanest social actions.
@@ -134,6 +135,7 @@ Use this as the baseline for all next backlog items. Do not reintroduce generic 
 - verify the new recipient inbound pressure guard against real matching behavior and tune its thresholds from observed data
 - use the new admin request-pressure snapshot during staging/manual QA so saturation shows up before users feel it
 - use the new admin protocol-auth snapshot during staging/manual QA so grant subject mix, consent backlog, and auth-failure pressure are visible without raw DB access
+- use the improved delegated-auth failure details during staging/manual QA to tell missing-user-grant problems apart from modeled-only grant configuration
 
 ## Package Direction
 
