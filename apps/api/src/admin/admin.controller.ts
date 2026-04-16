@@ -150,6 +150,23 @@ type RequestPressureRecipientRow = {
   lastSentAt: Date | string | null;
 };
 
+type OpsRiskLevel = "healthy" | "watch" | "critical";
+
+type ManualVerificationFinding = {
+  id: string;
+  level: OpsRiskLevel;
+  area: "request_pressure" | "protocol_queue" | "protocol_auth";
+  summary: string;
+  detail: string;
+};
+
+type ManualVerificationNextAction = {
+  id: string;
+  label: string;
+  endpoint: string;
+  reason: string;
+};
+
 const DEFAULT_MAX_PENDING_INBOUND_REQUESTS_PER_RECIPIENT = 6;
 const DEFAULT_MAX_DAILY_INBOUND_REQUESTS_PER_RECIPIENT = 12;
 
@@ -2657,8 +2674,17 @@ export class AdminController {
       },
     });
 
+    const assessment = this.buildManualVerificationAssessment({
+      limit,
+      hours,
+      requestPressure,
+      protocolQueueHealth,
+      protocolAuthHealth,
+    });
+
     return ok({
       generatedAt: new Date().toISOString(),
+      assessment,
       requestPressure,
       protocolQueueHealth,
       protocolAuthHealth,
@@ -5693,6 +5719,144 @@ export class AdminController {
       },
       recipients,
     };
+  }
+
+  private buildManualVerificationAssessment(input: {
+    limit: number;
+    hours: number;
+    requestPressure: Awaited<ReturnType<AdminController["readRequestPressureSnapshot"]>>;
+    protocolQueueHealth: Awaited<
+      ReturnType<AdminController["readProtocolQueueHealthSnapshot"]>
+    >;
+    protocolAuthHealth: Awaited<
+      ReturnType<AdminController["readProtocolAuthHealthSnapshot"]>
+    >;
+  }) {
+    const findings: ManualVerificationFinding[] = [];
+    const nextActions: ManualVerificationNextAction[] = [];
+
+    const topOverloadedRecipient = input.requestPressure.recipients.find(
+      (recipient) => recipient.suppressed,
+    );
+    if (topOverloadedRecipient) {
+      findings.push({
+        id: "request_pressure_overloaded",
+        level: "critical",
+        area: "request_pressure",
+        summary: "One or more recipients are currently suppressed by load.",
+        detail: `${topOverloadedRecipient.displayName} is at ${topOverloadedRecipient.pendingInboundCount}/${input.requestPressure.thresholds.pendingInboundCap} pending inbound requests and ${topOverloadedRecipient.windowInboundCount}/${input.requestPressure.thresholds.windowInboundCap} rolling-window requests.`,
+      });
+      nextActions.push({
+        id: "inspect_request_pressure",
+        label: "Inspect overloaded recipients",
+        endpoint: `/admin/ops/request-pressure?limit=${input.limit}&hours=${input.hours}`,
+        reason:
+          "Use recipient-level pressure detail to confirm whether matching is over-targeting a cohort and whether caps need tuning.",
+      });
+    } else if (input.requestPressure.summary.nearCapacityRecipientCount > 0) {
+      findings.push({
+        id: "request_pressure_near_capacity",
+        level: "watch",
+        area: "request_pressure",
+        summary: "Some recipients are nearing the inbound request caps.",
+        detail: `${input.requestPressure.summary.nearCapacityRecipientCount} recipients are above the near-capacity threshold without being hard-suppressed yet.`,
+      });
+    }
+
+    const latestDeadLetter = input.protocolQueueHealth.deadLetterSample[0];
+    if (input.protocolQueueHealth.summary.deadLetteredCount > 0) {
+      findings.push({
+        id: "protocol_queue_dead_letters",
+        level: "critical",
+        area: "protocol_queue",
+        summary: "Protocol webhook deliveries are currently dead-lettered.",
+        detail: latestDeadLetter
+          ? `The newest dead-lettered delivery is ${latestDeadLetter.deliveryId} for ${latestDeadLetter.appName ?? latestDeadLetter.appId} on ${latestDeadLetter.eventName}.`
+          : `${input.protocolQueueHealth.summary.deadLetteredCount} deliveries are dead-lettered and replayable.`,
+      });
+      nextActions.push({
+        id: "inspect_protocol_queue_health",
+        label: "Inspect queue and replay state",
+        endpoint: "/admin/ops/protocol-queue-health",
+        reason:
+          "Review recent attempts, dead-letter samples, and outcome buckets before replaying anything.",
+      });
+    } else if (input.protocolQueueHealth.summary.retryingCount > 0) {
+      findings.push({
+        id: "protocol_queue_retrying",
+        level: "watch",
+        area: "protocol_queue",
+        summary: "Protocol deliveries are retrying but have not dead-lettered.",
+        detail: `${input.protocolQueueHealth.summary.retryingCount} deliveries are currently retrying, so downstream failures may still be resolving without manual replay.`,
+      });
+    }
+
+    const latestAuthFailure = input.protocolAuthHealth.recentAuthFailures[0];
+    if (input.protocolAuthHealth.summary.recentAuthFailureCount > 0) {
+      findings.push({
+        id: "protocol_auth_failures",
+        level: latestAuthFailure?.failureType === "missing_delegated_grant"
+          ? "watch"
+          : "critical",
+        area: "protocol_auth",
+        summary: "Recent protocol auth failures were recorded.",
+        detail: latestAuthFailure
+          ? `${latestAuthFailure.appName} most recently failed with ${latestAuthFailure.failureType}${latestAuthFailure.action ? ` on ${latestAuthFailure.action}` : ""}.`
+          : `${input.protocolAuthHealth.summary.recentAuthFailureCount} auth failures were recorded in the last 24 hours.`,
+      });
+      nextActions.push({
+        id: "inspect_protocol_auth_health",
+        label: "Inspect auth and grant diagnostics",
+        endpoint: "/admin/ops/protocol-auth-health",
+        reason:
+          "Use auth-failure samples and grant subject mix to separate missing delegated grants from broader app-token or consent problems.",
+      });
+    } else if (input.protocolAuthHealth.summary.pendingConsentCount > 0) {
+      findings.push({
+        id: "protocol_auth_pending_consent",
+        level: "watch",
+        area: "protocol_auth",
+        summary: "Consent requests are pending without active auth failures.",
+        detail: `${input.protocolAuthHealth.summary.pendingConsentCount} consent requests are still pending, so delegated actions may remain blocked until they are approved or rejected.`,
+      });
+    }
+
+    if (findings.length === 0) {
+      findings.push({
+        id: "manual_verification_healthy",
+        level: "healthy",
+        area: "protocol_queue",
+        summary: "No immediate request pressure, queue, or auth blockers were found.",
+        detail:
+          "Manual verification can proceed to product behavior checks without an obvious operator-side blocker in the current snapshots.",
+      });
+    }
+
+    if (nextActions.length === 0) {
+      nextActions.push({
+        id: "recheck_manual_verification",
+        label: "Refresh the combined manual verification snapshot",
+        endpoint: `/admin/ops/manual-verification?limit=${input.limit}&hours=${input.hours}`,
+        reason:
+          "No immediate blocker is visible right now, so use the combined snapshot again after the next manual app scenario to catch new drift quickly.",
+      });
+    }
+
+    return {
+      overallStatus: this.resolveOverallOpsRisk(findings),
+      findings,
+      nextActions,
+    };
+  }
+
+  private resolveOverallOpsRisk(findings: ManualVerificationFinding[]): OpsRiskLevel {
+    if (findings.some((finding) => finding.level === "critical")) {
+      return "critical";
+    }
+    if (findings.some((finding) => finding.level === "watch")) {
+      return "watch";
+    }
+    return "healthy";
   }
 
   private readJsonObject(
