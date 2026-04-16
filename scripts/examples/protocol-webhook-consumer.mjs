@@ -406,10 +406,10 @@ async function runDemo() {
 
 function printUsage() {
   console.log(`Usage:
-  node scripts/examples/protocol-webhook-consumer.mjs --action=demo [--base-url=http://127.0.0.1:3000/api] [--port=4040]
+  node scripts/examples/protocol-webhook-consumer.mjs --action=demo [--base-url=http://127.0.0.1:3000] [--port=4040]
   node scripts/examples/protocol-webhook-consumer.mjs --action=serve [--port=4040]
-  node scripts/examples/protocol-webhook-consumer.mjs --action=register --base-url=http://127.0.0.1:3000/api --webhook-url=http://127.0.0.1:4040/webhooks/opensocial
-  node scripts/examples/protocol-webhook-consumer.mjs --action=inspect --base-url=http://127.0.0.1:3000/api --app-id=example.webhook.consumer.123 --app-token=<token>
+  node scripts/examples/protocol-webhook-consumer.mjs --action=register --base-url=http://127.0.0.1:3000 --webhook-url=http://127.0.0.1:4040/webhooks/opensocial
+  node scripts/examples/protocol-webhook-consumer.mjs --action=inspect --base-url=http://127.0.0.1:3000 --app-id=example.webhook.consumer.123 --app-token=<token>
 
 Environment:
   PROTOCOL_BASE_URL / PLAYGROUND_BASE_URL / SMOKE_BASE_URL / STAGING_API_BASE_URL / API_BASE_URL
