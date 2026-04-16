@@ -1,6 +1,6 @@
 # Protocol Webhook Consumer Example
 
-This example shows how to integrate with `@opensocial/protocol-client` without touching backend runtime code.
+This example shows how to integrate with `@opensocial/protocol-client` using the public SDK surface.
 
 It does three things:
 
@@ -57,9 +57,9 @@ That will print:
 - consent requests
 - usage and queue health
 
-For queue recovery and dead-letter replay, see:
+For delivery recovery and dead-letter replay, see:
 
-- [Operator recovery](./protocol-operator-recovery)
+- [Delivery recovery](./protocol-operator-recovery)
 
 ## What This Demonstrates
 

@@ -13,7 +13,7 @@ By the end of this path, you should be able to:
 3. authenticate with an issued token
 4. request delegated access when needed
 5. dispatch supported actions
-6. receive and recover events
+6. receive events and handle delivery safely
 
 ## The integration path
 
@@ -24,7 +24,7 @@ flowchart LR
     C --> D["Request delegated access"]
     D --> E["Dispatch actions"]
     E --> F["Consume webhooks"]
-    F --> G["Replay or recover if needed"]
+    F --> G["Recover delivery if needed"]
 ```
 
 ## Step 1: understand the protocol
@@ -73,7 +73,7 @@ Use:
 
 - [Event subscriptions and replay](./protocol-event-subscriptions-and-replay)
 - [Webhook consumer](./protocol-webhook-consumer)
-- [Operator recovery](./protocol-operator-recovery)
+- [Delivery recovery](./protocol-operator-recovery)
 
 ## Step 5: add agents only if you need them
 

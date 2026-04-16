@@ -77,5 +77,5 @@ Use the narrowest option that solves the problem.
 ## Verification resources
 
 - [Webhook consumer](./protocol-webhook-consumer)
-- [Operator recovery](./protocol-operator-recovery)
+- [Delivery recovery](./protocol-operator-recovery)
 - [Production readiness checklist](./protocol-production-readiness-checklist)

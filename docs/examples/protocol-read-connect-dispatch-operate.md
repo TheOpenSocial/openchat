@@ -48,7 +48,7 @@ Why:
 
 - keep auth explicit
 - limit capability scope
-- avoid private backend assumptions
+- avoid private implementation assumptions
 
 Primary guides:
 
@@ -85,7 +85,7 @@ Use:
 - webhook delivery
 - replay
 - dead-letter recovery
-- operator inspection
+- delivery inspection
 
 Why:
 
@@ -97,7 +97,7 @@ Primary guides:
 
 - [Event subscriptions and replay](./protocol-event-subscriptions-and-replay)
 - [Webhook consumer](./protocol-webhook-consumer)
-- [Operator recovery](./protocol-operator-recovery)
+- [Delivery recovery](./protocol-operator-recovery)
 
 ## Typical partner path
 

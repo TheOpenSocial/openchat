@@ -81,7 +81,7 @@ Only move into queue or replay debugging after:
 For delivery and replay issues, use:
 
 - [Event subscriptions and replay](./protocol-event-subscriptions-and-replay)
-- [Operator recovery](./protocol-operator-recovery)
+- [Delivery recovery](./protocol-operator-recovery)
 
 For first-time setup, use:
 

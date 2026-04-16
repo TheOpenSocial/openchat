@@ -66,7 +66,7 @@ This is why operations are part of the public docs.
 
 ## Concept 5: agents consume the same protocol
 
-The agent layer is not a separate backend.
+The agent layer is not a separate protocol.
 
 Agents use the same protocol surface as other integrations, with convenience wrappers for:
 

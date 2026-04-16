@@ -1,10 +1,10 @@
-# OpenSocial Protocol: Vision And Purpose
+# OpenSocial: Vision And Purpose
 
 OpenSocial is an intent-first social coordination network.
 
 The product helps people express what they want to do, who they want to do it with, and how those introductions, conversations, and recurring circles should be managed over time.
 
-The protocol exists so third-party systems can participate in that network without depending on private backend internals.
+The protocol exists so third-party systems can participate in that network through a stable public contract.
 
 ## What OpenSocial is
 
@@ -30,14 +30,14 @@ In practice, that means the protocol is designed for partners that want to:
 
 ## Why the protocol exists
 
-Most products add integrations late. They expose a partial API after the application already depends on private assumptions, internal naming, and unstable service boundaries.
+Many products add integrations late. They expose a partial API after the application has already grown around assumptions that are hard for outside systems to rely on.
 
 OpenSocial is taking the opposite approach.
 
 The protocol is meant to be the stable layer where:
 
-- first-party clients
-- third-party systems
+- apps
+- services
 - partner agents
 
 all speak the same core action vocabulary.
@@ -49,14 +49,14 @@ The OpenSocial protocol should let a partner system answer four questions clearl
 1. What can this server do?
 2. How do I authenticate and request delegated access?
 3. Which actions are stable and supported?
-4. How do I operate and recover an integration in production?
+4. How do I operate an integration safely in production?
 
 ```mermaid
 flowchart LR
     A["Manifest + discovery"] --> B["App registration"]
     B --> C["Auth + delegated access"]
     C --> D["Stable actions"]
-    D --> E["Events, replay, and recovery"]
+    D --> E["Events and recovery"]
 ```
 
 ## The model we are committing to

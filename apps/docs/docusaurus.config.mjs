@@ -7,9 +7,9 @@ const __dirname = path.dirname(__filename);
 
 /** @type {import('@docusaurus/types').Config} */
 const config = {
-  title: "OpenSocial Developers",
+  title: "OpenSocial",
   tagline:
-    "Build on OpenSocial through stable concepts, auth, actions, webhooks, and agent tooling",
+    "SDK docs for apps, agents, authentication, actions, and events",
   url: "https://docs.opensocial.so",
   baseUrl: "/",
   organizationName: "TheOpenSocial",
@@ -47,7 +47,7 @@ const config = {
   ],
   themeConfig: {
     navbar: {
-      title: "OpenSocial Developers",
+      title: "OpenSocial",
       items: [
         {
           to: "/",
@@ -58,16 +58,21 @@ const config = {
           type: "docSidebar",
           sidebarId: "docsSidebar",
           position: "left",
-          label: "Protocol",
+          label: "Docs",
+        },
+        {
+          to: "/docs/examples/protocol-partner-quickstart",
+          label: "Quickstart",
+          position: "left",
+        },
+        {
+          to: "/docs/examples/protocol-external-actions-reference",
+          label: "Reference",
+          position: "left",
         },
         {
           to: "/docs/examples/protocol-agent-integration-paths",
           label: "Agents",
-          position: "left",
-        },
-        {
-          to: "/docs/examples/protocol-sdk-index",
-          label: "Resources",
           position: "left",
         },
         {
@@ -123,7 +128,7 @@ const config = {
           ],
         },
         {
-          title: "Operate",
+          title: "Production",
           items: [
             {
               label: "Agent quickstart",
@@ -134,7 +139,7 @@ const config = {
               to: "/docs/examples/protocol-consent-and-auth-troubleshooting",
             },
             {
-              label: "Operator recovery",
+              label: "Delivery recovery",
               to: "/docs/examples/protocol-operator-recovery",
             },
           ],

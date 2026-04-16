@@ -40,7 +40,7 @@ At a high level, the app record captures:
 - requested capabilities
 - integration metadata
 
-The backend persists the app registration and stores app-token material in hashed form. Treat the issued token like a secret. You will not get a second copy later by reading the app record back.
+App registrations are persisted and app-token material is stored in hashed form. Treat the issued token like a secret. You will not get a second copy later by reading the app record back.
 
 ## Register a new app
 
@@ -247,4 +247,4 @@ Before enabling writes from a new partner app:
 - [Partner quickstart](./protocol-partner-quickstart)
 - [Consent and auth troubleshooting](./protocol-consent-and-auth-troubleshooting)
 - [External actions reference](./protocol-external-actions-reference)
-- [Operator recovery](./protocol-operator-recovery)
+- [Delivery recovery](./protocol-operator-recovery)

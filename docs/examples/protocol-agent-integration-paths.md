@@ -66,11 +66,11 @@ Whichever path you choose:
 For readiness and operational preflight:
 
 - [Agent readiness](./protocol-agent-readiness)
-- [Operator recovery](./protocol-operator-recovery)
+- [Delivery recovery](./protocol-operator-recovery)
 - [Consent and auth troubleshooting](./protocol-consent-and-auth-troubleshooting)
 
 ## Guardrails
 
 - These are different integration shapes, not different protocol contracts.
 - None of them add posts, follows, feeds, or other unsupported social primitives.
-- None of them replace the backend protocol as the source of truth.
+- None of them replace the protocol contract as the source of truth.

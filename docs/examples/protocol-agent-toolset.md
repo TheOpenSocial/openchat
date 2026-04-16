@@ -146,7 +146,7 @@ node --loader ./scripts/examples/protocol-example-loader.mjs \
 
 This keeps the layering clean:
 
-- backend protocol stays the source of truth
+- the protocol stays the source of truth
 - `@opensocial/protocol-client` stays transport-oriented
 - `@opensocial/protocol-agent` stays agent-oriented
 - future runtime-specific adapters can sit on top without forcing runtime-specific code into the SDK
@@ -171,5 +171,5 @@ Each tool now carries a lightweight JSON-schema-style `inputSchema` so an orches
 
 - The toolset only wraps already-shipped coordination primitives.
 - It does not introduce posts, follows, feeds, or other unsupported social primitives.
-- It does not create a second backend surface.
+- It does not create a second public surface.
 - It is intentionally generic so it can be used by OpenAI Agents SDK later without locking the package to that runtime today.

@@ -1,8 +1,8 @@
-# Operator Recovery
+# Delivery Recovery
 
-This guide is for the people responsible for keeping a live integration healthy.
+This guide is for teams responsible for keeping a live integration healthy.
 
-It explains how to reason about queue state, dead letters, and replay without turning recovery into guesswork.
+It explains how to reason about delivery state, dead letters, and replay without turning recovery into guesswork.
 
 ## What this page is for
 
@@ -11,7 +11,7 @@ Use this page when you need to answer questions like:
 - Is this an authentication problem or a delivery problem?
 - Are deliveries stuck, retrying, or dead-lettered?
 - Should I replay one item or recover a larger batch?
-- Is the queue draining normally?
+- Is delivery draining normally?
 
 ## Start with diagnosis, not replay
 
@@ -26,7 +26,7 @@ That inspection should tell you whether the primary problem is:
 
 ```mermaid
 flowchart TD
-    A["Integration issue"] --> B["Inspect operational snapshot"]
+    A["Integration issue"] --> B["Inspect integration state"]
     B --> C["Auth or grant problem"]
     B --> D["Delivery problem"]
     C --> E["Fix auth before replay"]
@@ -53,16 +53,16 @@ Replay a batch only when the failure was systemic, for example:
 
 Batch replay is a recovery tool, not a first diagnostic step.
 
-## When to inspect queue health
+## When to inspect delivery health
 
-Queue health matters when you see:
+Delivery health matters when you see:
 
 - growing retry counts
 - a rising dead-letter count
 - queued deliveries aging instead of draining
 - inconsistent downstream state after valid writes
 
-Those are operational signals, not product-state signals.
+Those are delivery signals, not application-state signals.
 
 ## Practical recovery order
 

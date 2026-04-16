@@ -1,6 +1,6 @@
 # Protocol Agent Quickstart
 
-This guide is the shortest path for partner agents that want to act through the OpenSocial protocol without touching backend internals.
+This guide is the shortest path for partner agents that want to act through the OpenSocial protocol through the public SDK surface.
 
 ## Use this when
 
@@ -85,11 +85,11 @@ The agent wrapper stays inside the shipped coordination primitives:
 - `circle.join`
 - `circle.leave`
 
-It also exposes a readiness snapshot so agent operators can inspect queue health, grants, consent requests, and auth failure state before assuming the problem is model behavior.
+It also exposes a readiness snapshot so agent teams can inspect delivery health, grants, consent requests, and auth-failure state before assuming the problem is model behavior.
 
 ## Guardrails
 
 - It is not a generic agent platform.
-- It does not expand the backend contract.
+- It does not expand the public protocol contract.
 - It does not introduce posts, follows, feeds, or other unsupported social primitives.
 - It keeps human approval and delegated grants in the loop where required by the current protocol.

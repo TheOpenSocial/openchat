@@ -52,7 +52,7 @@ That surface is documented in the [external actions reference](./protocol-extern
 
 ## Why the protocol is intentionally narrow
 
-Public protocols become fragile when they mirror every internal service.
+Public protocols become fragile when they mirror every implementation detail.
 
 OpenSocial stays narrow so it can remain:
 
@@ -100,7 +100,7 @@ You should assume:
 You should not assume:
 
 - undocumented fields are stable
-- internal services are part of the public surface
+- implementation details are part of the public surface
 - excluded social primitives will quietly appear later
 
 ## Continue with

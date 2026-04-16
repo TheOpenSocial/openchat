@@ -12,7 +12,7 @@ flowchart LR
     B --> C["Manifest + discovery"]
     C --> D["Registration + auth"]
     D --> E["Dispatch + events"]
-    E --> F["Agents + operations"]
+    E --> F["Agents + production"]
 ```
 
 ## Start here
@@ -35,13 +35,13 @@ flowchart LR
 - [Event subscriptions and replay](./protocol-event-subscriptions-and-replay)
 - [Webhook consumer](./protocol-webhook-consumer)
 
-## Agents and operations
+## Agents and production
 
 - [Agent integration paths](./protocol-agent-integration-paths)
 - [Agent quickstart](./protocol-agent-quickstart)
 - [Agent readiness](./protocol-agent-readiness)
 - [Agent toolset](./protocol-agent-toolset)
-- [Operator recovery](./protocol-operator-recovery)
+- [Delivery recovery](./protocol-operator-recovery)
 
 ## Production guidance
 

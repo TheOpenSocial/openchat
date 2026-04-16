@@ -35,7 +35,7 @@ Guide:
 - consent request flow is exercised
 - approval path is exercised
 - revocation path is understood
-- denied-access troubleshooting is documented internally
+- denied-access troubleshooting is documented clearly
 
 Guide:
 
@@ -45,7 +45,7 @@ Guide:
 
 - the integration uses documented actions only
 - request, intent, chat, and circle writes map to shipped protocol actions
-- partner code does not depend on internal backend modules
+- partner code does not depend on private modules
 - no feed, follow, or post abstractions are being layered on top
 
 Guide:
@@ -64,7 +64,7 @@ Guides:
 
 - [Webhook consumer](./protocol-webhook-consumer)
 - [Event subscriptions and replay](./protocol-event-subscriptions-and-replay)
-- [Operator recovery](./protocol-operator-recovery)
+- [Delivery recovery](./protocol-operator-recovery)
 
 ## 6. Agent readiness, if applicable
 
@@ -89,7 +89,7 @@ Guides:
 
 ## 8. Documentation hygiene
 
-- the partner team has a single internal entry doc linking to the relevant OpenSocial guides
+- the partner team has a single entry doc linking to the relevant OpenSocial guides
 - runbooks reference the exact SDK layer in use
 - environment-specific assumptions are documented separately from protocol contract assumptions
 

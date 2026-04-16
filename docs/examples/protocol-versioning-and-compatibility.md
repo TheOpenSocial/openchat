@@ -25,7 +25,7 @@ Partners should rely on:
 
 Partners should not rely on:
 
-- private backend internals
+- private implementation details
 - undocumented fields
 - inferred support for generic social primitives
 
@@ -68,8 +68,8 @@ Do not assume:
 
 - the protocol will broaden into posts or follows later
 - an undocumented field is safe to depend on
-- a helper existing in one package means the backend contract widened
-- agent helper APIs are a separate backend surface
+- a helper existing in one package means the public contract widened
+- agent helper APIs are a separate protocol surface
 
 The SDK packages are there to make the shipped protocol easier to consume, not to imply new domain scope.
 
@@ -112,7 +112,7 @@ Current package expectations:
 - `@opensocial/protocol-agent`
   - thin agent-oriented wrappers on top of the client
 
-If a future helper appears in one of these packages, prefer it over inventing your own wrapper, but still check whether the underlying backend route is part of the documented contract.
+If a future helper appears in one of these packages, prefer it over inventing your own wrapper, but still check whether the underlying route is part of the documented contract.
 
 ## Recommended partner policy
 
@@ -121,7 +121,7 @@ For production integrations:
 1. pin your SDK package versions deliberately
 2. review manifest and discovery on environment changes
 3. adopt new actions only after the reference docs and examples mention them
-4. treat docs plus examples as the compatibility contract, not internal repo structure
+4. treat docs plus examples as the compatibility contract, not repository layout
 
 ## Related guides
 

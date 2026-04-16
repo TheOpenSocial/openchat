@@ -15,7 +15,7 @@ The shipped readiness helpers look at:
 - whether active delegated grants exist
 - whether consent is still pending
 
-That gives an agent operator one place to decide whether it is safe to proceed.
+That gives an agent team one place to decide whether it is safe to proceed.
 
 ## Basic usage
 
@@ -81,5 +81,5 @@ Use readiness checks before:
 
 Do not use readiness checks as a replacement for queue recovery itself. For that, use:
 
-- [Operator recovery](./protocol-operator-recovery)
+- [Delivery recovery](./protocol-operator-recovery)
 - [Consent and auth troubleshooting](./protocol-consent-and-auth-troubleshooting)
