@@ -86,6 +86,7 @@ The production deploy now also:
 - fails the rollout if the API health route is unavailable
 - fails the rollout if docs redirects leak `http://` or the internal `:3003` port
 - emits API/docs/nginx logs automatically when that verification fails
+- routes public hosts through explicit Compose network aliases so reverse proxies do not depend on ambiguous short service names
 
 ## Repo-specific note for this session
 

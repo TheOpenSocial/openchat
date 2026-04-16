@@ -17,6 +17,10 @@ services:
     restart: unless-stopped
     expose:
       - "3000"
+    networks:
+      default:
+        aliases:
+          - opensocial-api
 
   admin:
     image: ${ADMIN_IMAGE:-opensocial-admin}
@@ -33,6 +37,10 @@ services:
     restart: unless-stopped
     expose:
       - "3001"
+    networks:
+      default:
+        aliases:
+          - opensocial-admin
 
   web:
     image: ${WEB_IMAGE:-opensocial-web}
@@ -49,6 +57,10 @@ services:
     restart: unless-stopped
     expose:
       - "3002"
+    networks:
+      default:
+        aliases:
+          - opensocial-web
 
   docs:
     image: ${DOCS_IMAGE:-opensocial-docs}
@@ -60,6 +72,10 @@ services:
     restart: unless-stopped
     expose:
       - "3003"
+    networks:
+      default:
+        aliases:
+          - opensocial-docs
 
   valkey:
     image: valkey/valkey:8.1-alpine
@@ -69,6 +85,10 @@ services:
       - "6379"
     volumes:
       - valkey_data:/data
+    networks:
+      default:
+        aliases:
+          - opensocial-valkey
 
   nginx:
     image: caddy:2.10-alpine
@@ -87,6 +107,10 @@ services:
       - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+    networks:
+      default:
+        aliases:
+          - opensocial-edge
 
 volumes:
   valkey_data:

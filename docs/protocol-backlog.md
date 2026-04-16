@@ -115,6 +115,7 @@ Use this as the baseline for all next backlog items. Do not reintroduce generic 
 - Docusaurus docs app is now wired on top of the repo documentation set for manual browsing and publishing
 - EC2 deployment for the docs app is now live through Docker, Caddy, image build, and deploy workflows at `https://docs.opensocial.so`
 - Production deploy health now verifies local ingress for the public API and docs routes so upstream `502`s and bad docs redirects fail the rollout instead of appearing green
+- Production Compose/Caddy routing now uses explicit network aliases for public upstreams so deploys do not depend on ambiguous short service-name resolution
 - The public docs portal now has SDK-only information architecture, concept-first developer onboarding, protocol vision and core-concepts pages, and Mermaid flow diagrams for the main integration lifecycle.
 - The public docs homepage and navigation now follow a cleaner developer-portal layout, closer to the Vercel/OpenAI style the protocol docs need for partner onboarding.
 - First-party protocol settings/inspection surfaces: shipped as operational tooling, but still partial as polished product UX
