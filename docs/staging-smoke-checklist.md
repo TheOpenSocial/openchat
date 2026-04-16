@@ -84,7 +84,7 @@ Optional automation (moderation drill):
 
 ## 2) Auth and Session
 - [ ] Google OAuth start endpoint resolves (`GET /api/auth/google`).
-- [ ] Callback path resolves (`GET /api/auth/google/callback` with valid state/code).
+- [ ] Callback path resolves (`GET /auth/google/callback` with valid state/code).
 - [ ] Refresh token rotation succeeds (`POST /api/auth/refresh`).
 
 ## 3) Intent -> Matching -> Inbox
