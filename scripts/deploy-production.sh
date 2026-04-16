@@ -198,10 +198,22 @@ run_ps() {
 }
 
 run_health() {
-  local api_response
-  api_response="$(curl --silent --show-error --fail --insecure \
-    --header 'Host: api.opensocial.so' \
-    https://127.0.0.1/api/health)"
+  local api_response=""
+  local api_ok="0"
+  for _attempt in 1 2 3 4 5 6; do
+    if api_response="$(curl --silent --show-error --fail --insecure \
+      --header 'Host: api.opensocial.so' \
+      https://127.0.0.1/api/health)"; then
+      api_ok="1"
+      break
+    fi
+    sleep 5
+  done
+
+  if [[ "$api_ok" != "1" ]]; then
+    return 1
+  fi
+
   echo "$api_response"
 
   local docs_headers
@@ -226,6 +238,9 @@ run_health() {
 }
 
 run_logs() {
+  compose_cmd ps --all || true
+  docker inspect opensocial-api-1 --format '{{json .State}}' || true
+  docker logs --tail 200 opensocial-api-1 || true
   compose_cmd logs --tail 200 api docs nginx
 }
 
