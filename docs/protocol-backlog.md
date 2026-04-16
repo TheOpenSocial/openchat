@@ -71,6 +71,7 @@ The protocol is no longer just a concept. The following pieces are already prese
 - Admin queue-health inspection now exposes recent delivery attempts and recent attempt outcome/error buckets, so failure-mode verification no longer depends on raw queue tables.
 - A combined admin manual-verification snapshot now exposes request pressure, protocol queue health, and protocol auth health together so app/manual validation can start from one operator view before drilling into narrower endpoints.
 - The public API host shape is now being normalized so `api.opensocial.so/*` is canonical while `/api/*` remains a compatibility path during migration.
+- Production deploy verification now retries across the local TLS warm-up window so a healthy post-restart API does not get marked red by a transient handshake.
 - Dead-lettered deliveries can now be replayed explicitly through the protocol API and first-party settings surfaces.
 - Dead-lettered deliveries can now be replayed in batch for an app, and usage summaries expose queue-health timestamps for queued, retrying, and dead-lettered work.
 - Usage visibility is now exposed through a protocol app usage summary so first-party settings surfaces can inspect recent protocol activity without raw table access.

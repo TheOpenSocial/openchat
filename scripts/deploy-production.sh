@@ -197,29 +197,34 @@ run_ps() {
   compose_cmd ps
 }
 
+curl_local_https() {
+  local host="$1"
+  local path="$2"
+  shift 2
+
+  curl \
+    --silent \
+    --show-error \
+    --fail \
+    --insecure \
+    --retry 12 \
+    --retry-delay 5 \
+    --retry-all-errors \
+    --connect-timeout 5 \
+    --max-time 15 \
+    "$@" \
+    --header "Host: $host" \
+    "https://127.0.0.1$path"
+}
+
 run_health() {
   local api_response=""
-  local api_ok="0"
-  for _attempt in 1 2 3 4 5 6; do
-    if api_response="$(curl --silent --show-error --fail --insecure \
-      --header 'Host: api.opensocial.so' \
-      https://127.0.0.1/health)"; then
-      api_ok="1"
-      break
-    fi
-    sleep 5
-  done
-
-  if [[ "$api_ok" != "1" ]]; then
-    return 1
-  fi
+  api_response="$(curl_local_https "api.opensocial.so" "/health")"
 
   echo "$api_response"
 
   local docs_headers
-  docs_headers="$(curl --silent --show-error --insecure --head \
-    --header 'Host: docs.opensocial.so' \
-    https://127.0.0.1/docs)"
+  docs_headers="$(curl_local_https "docs.opensocial.so" "/docs" --head)"
   echo "$docs_headers"
 
   if grep -Eiq '^location: https?://[^[:space:]]+:3003/' <<<"$docs_headers"; then
@@ -232,9 +237,7 @@ run_health() {
     return 1
   fi
 
-  curl --silent --show-error --fail --insecure \
-    --header 'Host: docs.opensocial.so' \
-    https://127.0.0.1/docs/ >/dev/null
+  curl_local_https "docs.opensocial.so" "/docs/" >/dev/null
 }
 
 run_logs() {
