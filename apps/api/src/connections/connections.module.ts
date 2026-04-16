@@ -6,7 +6,6 @@ import { ExecutionReconciliationModule } from "../execution-reconciliation/execu
 import { MatchingModule } from "../matching/matching.module.js";
 import { NotificationsModule } from "../notifications/notifications.module.js";
 import { PersonalizationModule } from "../personalization/personalization.module.js";
-import { RealtimeModule } from "../realtime/realtime.module.js";
 import { ConnectionSetupService } from "./connection-setup.service.js";
 import { ConnectionsController } from "./connections.controller.js";
 import { ConnectionsService } from "./connections.service.js";
@@ -20,7 +19,6 @@ import { ConnectionsService } from "./connections.service.js";
     MatchingModule,
     AgentModule,
     AnalyticsModule,
-    RealtimeModule,
   ],
   providers: [ConnectionsService, ConnectionSetupService],
   controllers: [ConnectionsController],

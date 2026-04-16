@@ -5,7 +5,6 @@ import { ExecutionReconciliationModule } from "../execution-reconciliation/execu
 import { NotificationsModule } from "../notifications/notifications.module.js";
 import { PersonalizationModule } from "../personalization/personalization.module.js";
 import { ProtocolModule } from "../protocol/protocol.module.js";
-import { RealtimeModule } from "../realtime/realtime.module.js";
 import { InboxController } from "./inbox.controller.js";
 import { InboxService } from "./inbox.service.js";
 
@@ -18,7 +17,6 @@ import { InboxService } from "./inbox.service.js";
     ExecutionReconciliationModule,
     AnalyticsModule,
     forwardRef(() => ProtocolModule),
-    RealtimeModule,
   ],
   providers: [InboxService],
   controllers: [InboxController],
