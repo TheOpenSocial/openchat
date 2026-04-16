@@ -97,6 +97,25 @@ type ProtocolQueueHealthDeliveryRow = {
   updatedAt: Date | string;
 };
 
+type ProtocolQueueHealthAttemptRow = {
+  deliveryId: string;
+  appId: string;
+  appName: string | null;
+  subscriptionId: string;
+  outcome: string;
+  attemptedAt: Date | string;
+  responseStatusCode: number | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+  durationMs: number | null;
+};
+
+type ProtocolQueueHealthAttemptSummaryRow = {
+  outcome: string;
+  errorCode: string | null;
+  count: number | bigint | string;
+};
+
 type RequestPressureRecipientRow = {
   recipientUserId: string;
   pendingInboundCount: number | bigint | string;
@@ -4200,6 +4219,36 @@ export class AdminController {
        ORDER BY d.updated_at DESC
        LIMIT 10`,
     );
+    const recentAttemptRows = await this.prisma.$queryRawUnsafe<
+      ProtocolQueueHealthAttemptRow[]
+    >(
+      `SELECT a.delivery_id AS "deliveryId",
+              a.app_id AS "appId",
+              COALESCE(pa.registration_json->>'name', a.app_id) AS "appName",
+              a.subscription_id AS "subscriptionId",
+              a.outcome AS "outcome",
+              a.attempted_at AS "attemptedAt",
+              a.response_status_code AS "responseStatusCode",
+              a.error_code AS "errorCode",
+              a.error_message AS "errorMessage",
+              a.duration_ms AS "durationMs"
+       FROM protocol_webhook_delivery_attempts a
+       LEFT JOIN protocol_apps pa ON pa.app_id = a.app_id
+       ORDER BY a.attempted_at DESC
+       LIMIT 20`,
+    );
+    const attemptSummaryRows = await this.prisma.$queryRawUnsafe<
+      ProtocolQueueHealthAttemptSummaryRow[]
+    >(
+      `SELECT outcome,
+              error_code AS "errorCode",
+              COUNT(*)::bigint AS count
+       FROM protocol_webhook_delivery_attempts
+       WHERE attempted_at >= NOW() - INTERVAL '24 hours'
+       GROUP BY outcome, error_code
+       ORDER BY COUNT(*) DESC, outcome ASC
+       LIMIT 20`,
+    );
 
     const toIsoString = (value: Date | string | null | undefined) => {
       if (!value) {
@@ -4246,6 +4295,23 @@ export class AdminController {
       generatedAt: new Date().toISOString(),
       summary,
       apps,
+      recentAttemptSummary: attemptSummaryRows.map((row) => ({
+        outcome: row.outcome,
+        errorCode: row.errorCode,
+        count: Number(row.count ?? 0),
+      })),
+      recentAttempts: recentAttemptRows.map((row) => ({
+        deliveryId: row.deliveryId,
+        appId: row.appId,
+        appName: row.appName,
+        subscriptionId: row.subscriptionId,
+        outcome: row.outcome,
+        attemptedAt: toIsoString(row.attemptedAt) ?? new Date().toISOString(),
+        responseStatusCode: row.responseStatusCode,
+        errorCode: row.errorCode,
+        errorMessage: row.errorMessage,
+        durationMs: row.durationMs,
+      })),
       deadLetterSample: deadLetterSampleRows.map((row) => ({
         deliveryId: row.deliveryId,
         appId: row.appId,

@@ -27,6 +27,13 @@ Operational check:
 - Inspect `GET /api/admin/ops/request-pressure` before and after fanout-heavy tests.
 - Confirm no recipient is unintentionally saturated during repeated manual test runs.
 
+Protocol delivery check:
+- Inspect `GET /api/admin/ops/protocol-queue-health` after action, webhook, or replay-heavy tests.
+- Confirm:
+  - `recentAttemptSummary` is not dominated by `dead_lettered`
+  - `recentAttempts` show retries progressing rather than repeating the same failure forever
+  - `deadLetterSample` is either empty or clearly explained by the test you just ran
+
 ## Scenario B: Launch control gating
 1. Disable new intents via `POST /api/admin/launch-controls`:
    - `{ "enableNewIntents": false, "reason": "qa_gate" }`
@@ -72,6 +79,23 @@ Pass criteria:
 
 Pass criteria:
 - All privacy/compliance endpoints return valid payloads and persist state.
+
+## Scenario F: Protocol delivery and replay health
+1. Register or reuse a protocol app with a webhook subscription.
+2. Trigger a protocol-backed action that should emit a delivery.
+3. Inspect `GET /api/admin/ops/protocol-queue-health`.
+4. If you intentionally point the webhook at a failing endpoint, confirm:
+   - `recentAttemptSummary` shows the expected error bucket
+   - the delivery moves through `retrying` and then `dead_lettered`
+5. Replay the delivery or dead-letter batch through the protocol/admin tooling after fixing the consumer.
+6. Inspect the same endpoint again and confirm:
+   - `recentAttempts` now show `replayed` / `delivered`
+   - dead-letter backlog drops
+
+Pass criteria:
+- failures are visible without raw DB inspection
+- retries and replays are inspectable from the admin snapshot
+- recoveries are obvious from the latest attempts
 
 ## Signoff Template
 - Build SHA:

@@ -68,6 +68,7 @@ The protocol is no longer just a concept. The following pieces are already prese
 - A cron-safe global dispatch endpoint now exists for scheduled protocol webhook execution across apps.
 - Webhook delivery attempts are now persisted per delivery with outcome, duration, status code, and error metadata.
 - Queue inspection now exposes both persisted delivery records and live queue state counts.
+- Admin queue-health inspection now exposes recent delivery attempts and recent attempt outcome/error buckets, so failure-mode verification no longer depends on raw queue tables.
 - Dead-lettered deliveries can now be replayed explicitly through the protocol API and first-party settings surfaces.
 - Dead-lettered deliveries can now be replayed in batch for an app, and usage summaries expose queue-health timestamps for queued, retrying, and dead-lettered work.
 - Usage visibility is now exposed through a protocol app usage summary so first-party settings surfaces can inspect recent protocol activity without raw table access.
@@ -165,6 +166,9 @@ These packages should mirror the backend domain rather than inventing new abstra
    - Dead-letter replay
    - Queue health visibility
    - Replay cursor recovery
+   - Admin queue-health visibility is now stronger for manual verification:
+     - recent attempts
+     - recent outcome/error buckets
 
 4. Review remaining first-party write-path normalization selectively.
    - Keep the public controller boundary protocol-owned.
