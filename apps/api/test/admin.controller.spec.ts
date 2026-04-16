@@ -2372,6 +2372,36 @@ describe("AdminController", () => {
   it("returns protocol queue health snapshot for support role", async () => {
     const prisma = {
       $queryRawUnsafe: vi.fn().mockImplementation(async (query: string) => {
+        if (query.includes("FROM protocol_webhook_delivery_attempts") && query.includes("GROUP BY outcome, error_code")) {
+          return [
+            {
+              outcome: "failed",
+              errorCode: "timeout",
+              count: 2,
+            },
+            {
+              outcome: "delivered",
+              errorCode: null,
+              count: 5,
+            },
+          ];
+        }
+        if (query.includes("FROM protocol_webhook_delivery_attempts a")) {
+          return [
+            {
+              deliveryId: "delivery-1",
+              appId: "app-a",
+              appName: "Protocol App A",
+              subscriptionId: "sub-1",
+              outcome: "failed",
+              attemptedAt: "2026-04-14T15:00:00.000Z",
+              responseStatusCode: 500,
+              errorCode: "timeout",
+              errorMessage: "timeout",
+              durationMs: 1500,
+            },
+          ];
+        }
         if (query.includes('subscription_id AS "subscriptionId"')) {
           return [
             {
@@ -2418,6 +2448,26 @@ describe("AdminController", () => {
             },
           ];
         }
+        if (query.includes("FROM protocol_apps pa") && query.includes('savedCursor')) {
+          return [
+            {
+              appId: "app-a",
+              appName: "Protocol App A",
+              appStatus: "active",
+              savedCursor: 10,
+              latestEventCursor: 12,
+              updatedAt: "2026-04-14T15:00:00.000Z",
+            },
+            {
+              appId: "app-b",
+              appName: "Protocol App B",
+              appStatus: "active",
+              savedCursor: 12,
+              latestEventCursor: 12,
+              updatedAt: "2026-04-14T15:01:00.000Z",
+            },
+          ];
+        }
         return [];
       }),
     };
@@ -2437,11 +2487,25 @@ describe("AdminController", () => {
         deadLetteredCount: number;
         replayableCount: number;
       };
+      replayCursorSummary: {
+        latestEventCursor: number;
+        trackedAppCount: number;
+        laggingAppCount: number;
+        staleAppCount: number;
+        maxCursorLag: number;
+      };
       apps: Array<{ appId: string; replayableCount: number }>;
+      recentAttemptSummary: Array<{
+        outcome: string;
+        errorCode: string | null;
+        count: number;
+      }>;
+      recentAttempts: Array<{ deliveryId: string; errorCode: string | null }>;
       deadLetterSample: Array<{ deliveryId: string; errorMessage: string }>;
+      replayCursorHealth: Array<{ appId: string; cursorLag: number; stale: boolean }>;
     };
 
-    expect(prisma.$queryRawUnsafe).toHaveBeenCalledTimes(2);
+    expect(prisma.$queryRawUnsafe).toHaveBeenCalledTimes(5);
     expect(payload.summary).toEqual({
       appCount: 2,
       queuedCount: 2,
@@ -2449,16 +2513,41 @@ describe("AdminController", () => {
       deadLetteredCount: 4,
       replayableCount: 4,
     });
+    expect(payload.replayCursorSummary).toEqual({
+      trackedAppCount: 2,
+      laggingAppCount: 1,
+      staleAppCount: 0,
+      maxCursorLag: 2,
+      latestEventCursor: 12,
+    });
     expect(payload.apps[0]).toEqual(
       expect.objectContaining({
         appId: "app-a",
         replayableCount: 3,
       }),
     );
+    expect(payload.recentAttemptSummary[0]).toEqual({
+      outcome: "failed",
+      errorCode: "timeout",
+      count: 2,
+    });
+    expect(payload.recentAttempts[0]).toEqual(
+      expect.objectContaining({
+        deliveryId: "delivery-1",
+        errorCode: "timeout",
+      }),
+    );
     expect(payload.deadLetterSample[0]).toEqual(
       expect.objectContaining({
         deliveryId: "delivery-1",
         errorMessage: "timeout",
+      }),
+    );
+    expect(payload.replayCursorHealth[0]).toEqual(
+      expect.objectContaining({
+        appId: "app-a",
+        cursorLag: 2,
+        stale: false,
       }),
     );
     expect(adminAuditService.recordAction).toHaveBeenCalledWith(
