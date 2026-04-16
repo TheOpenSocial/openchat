@@ -646,6 +646,19 @@ export const protocolEventEnvelopeSchema = protocolEnvelopeSchema.extend({
 });
 export type ProtocolEventEnvelope = z.infer<typeof protocolEventEnvelopeSchema>;
 
+export const protocolGrantSubjectTypeValues = [
+  "app",
+  "user",
+  "service",
+  "agent",
+] as const;
+export const protocolGrantSubjectTypeSchema = z.enum(
+  protocolGrantSubjectTypeValues,
+);
+export type ProtocolGrantSubjectType = z.infer<
+  typeof protocolGrantSubjectTypeSchema
+>;
+
 export const protocolAppUsageSummarySchema = z
   .object({
     appId: identifierSchema,
@@ -801,19 +814,6 @@ export const protocolReplayCursorSchema = z
   })
   .strict();
 export type ProtocolReplayCursor = z.infer<typeof protocolReplayCursorSchema>;
-
-export const protocolGrantSubjectTypeValues = [
-  "app",
-  "user",
-  "service",
-  "agent",
-] as const;
-export const protocolGrantSubjectTypeSchema = z.enum(
-  protocolGrantSubjectTypeValues,
-);
-export type ProtocolGrantSubjectType = z.infer<
-  typeof protocolGrantSubjectTypeSchema
->;
 
 export const protocolGrantStatusValues = ["active", "revoked"] as const;
 export const protocolGrantStatusSchema = z.enum(protocolGrantStatusValues);

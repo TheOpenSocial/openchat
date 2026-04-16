@@ -1001,9 +1001,7 @@ export const api = {
     appToken: string,
     input?: Parameters<typeof protocolClient.runWebhookDeliveryQueue>[2],
   ) {
-    return getProtocolAppClient(appId, appToken).runWebhookDeliveryQueue(
-      input,
-    );
+    return getProtocolAppClient(appId, appToken).runWebhookDeliveryQueue(input);
   },
   replayProtocolEvents(appId: string, appToken: string, cursor?: string) {
     return getProtocolAppClient(appId, appToken).replayEvents(cursor);
