@@ -3,6 +3,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import { Job } from "bullmq";
 import { ChatsService } from "../../chats/chats.service.js";
 import { runInTraceSpan } from "../../common/tracing.js";
+import { ModerationService } from "../../moderation/moderation.service.js";
 import { DeadLetterService } from "../dead-letter.service.js";
 import { extractJobTraceId, logJobProcessing } from "../job-logging.js";
 import { validateQueuePayload } from "../queue-validation.js";
@@ -14,6 +15,7 @@ export class ModerationConsumer extends WorkerHost {
 
   constructor(
     private readonly chatsService: ChatsService,
+    private readonly moderationService: ModerationService,
     private readonly deadLetterService: DeadLetterService,
   ) {
     super();
@@ -46,6 +48,7 @@ export class ModerationConsumer extends WorkerHost {
             payload.payload.chatId,
             payload.payload.senderUserId,
             payload.payload.body,
+            this.moderationService,
           );
         }
 

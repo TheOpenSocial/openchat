@@ -12,10 +12,10 @@ import { Prisma } from "@prisma/client";
 import { formatChatReplyBody, parseChatMessageBody } from "@opensocial/types";
 import { Queue } from "bullmq";
 import { randomUUID } from "node:crypto";
+import type { ModerationService } from "../moderation/moderation.service.js";
 import { AnalyticsService } from "../analytics/analytics.service.js";
 import { PrismaService } from "../database/prisma.service.js";
 import { LaunchControlsService } from "../launch-controls/launch-controls.service.js";
-import { ModerationService } from "../moderation/moderation.service.js";
 import { PersonalizationService } from "../personalization/personalization.service.js";
 import { RealtimeEventsService } from "../realtime/realtime-events.service.js";
 import { PresenceService } from "../realtime/presence.service.js";
@@ -86,8 +86,6 @@ export class ChatsService {
     private readonly analyticsService?: AnalyticsService,
     @Optional()
     private readonly launchControlsService?: LaunchControlsService,
-    @Optional()
-    private readonly moderationService?: ModerationService,
     @Optional()
     private readonly personalizationService?: PersonalizationService,
     @Optional()
@@ -2016,13 +2014,14 @@ export class ChatsService {
     chatId: string,
     senderUserId: string,
     body: string,
+    moderationService: ModerationService,
   ) {
-    if (!this.moderationService || !this.prisma.chatMessage?.update) {
+    if (!this.prisma.chatMessage?.update) {
       return null;
     }
 
     const strictModerationEnabled = await this.isModerationStrictnessEnabled();
-    const decision = await this.moderationService.submitForModeration({
+    const decision = await moderationService.submitForModeration({
       contentRef: messageId,
       contentType: "chat_message",
       actorUserId: senderUserId,
