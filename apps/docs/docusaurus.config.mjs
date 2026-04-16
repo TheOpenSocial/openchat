@@ -7,8 +7,9 @@ const __dirname = path.dirname(__filename);
 
 /** @type {import('@docusaurus/types').Config} */
 const config = {
-  title: "OpenSocial Developer Platform",
-  tagline: "Developer platform docs for reading state, connecting apps, dispatching actions, and operating integrations",
+  title: "OpenSocial Developers",
+  tagline:
+    "Build on OpenSocial through stable concepts, auth, actions, webhooks, and agent tooling",
   url: "https://docs.opensocial.so",
   baseUrl: "/",
   organizationName: "TheOpenSocial",
@@ -46,37 +47,27 @@ const config = {
   ],
   themeConfig: {
     navbar: {
-      title: "OpenSocial",
+      title: "OpenSocial Developers",
       items: [
+        {
+          to: "/",
+          label: "Home",
+          position: "left",
+        },
         {
           type: "docSidebar",
           sidebarId: "docsSidebar",
           position: "left",
-          label: "SDK Docs",
+          label: "Protocol",
+        },
+        {
+          to: "/docs/examples/protocol-agent-integration-paths",
+          label: "Agents",
+          position: "left",
         },
         {
           to: "/docs/examples/protocol-sdk-index",
-          label: "Start",
-          position: "left",
-        },
-        {
-          to: "/docs/examples/protocol-core-concepts",
-          label: "Concepts",
-          position: "left",
-        },
-        {
-          to: "/docs/examples/protocol-app-registration-and-tokens",
-          label: "Auth",
-          position: "left",
-        },
-        {
-          to: "/docs/examples/protocol-external-actions-reference",
-          label: "Dispatch",
-          position: "left",
-        },
-        {
-          to: "/docs/examples/protocol-event-subscriptions-and-replay",
-          label: "Webhooks",
+          label: "Resources",
           position: "left",
         },
         {
@@ -86,16 +77,8 @@ const config = {
         },
       ],
     },
-    announcementBar: {
-      id: "sdk_scope",
-      content:
-        "Public docs cover the OpenSocial protocol SDK only: concepts, auth, connect, read, dispatch, webhooks, agents, and recovery.",
-      backgroundColor: "#153b31",
-      textColor: "#eef7f2",
-      isCloseable: false,
-    },
     footer: {
-      style: "dark",
+      style: "light",
       links: [
         {
           title: "Concepts",

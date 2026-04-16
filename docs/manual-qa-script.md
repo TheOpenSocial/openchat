@@ -34,6 +34,13 @@ Protocol delivery check:
   - `recentAttempts` show retries progressing rather than repeating the same failure forever
   - `deadLetterSample` is either empty or clearly explained by the test you just ran
 
+Protocol auth check:
+- Inspect `GET /api/admin/ops/protocol-auth-health` during app-registration, consent, and delegated-action testing.
+- Confirm:
+  - executable delegation is concentrated in `user` subjects, not accidentally drifting into modeled-only subject types
+  - pending consent backlog matches the scenarios you intentionally created
+  - recent auth failures are understandable and bounded rather than climbing silently
+
 ## Scenario B: Launch control gating
 1. Disable new intents via `POST /api/admin/launch-controls`:
    - `{ "enableNewIntents": false, "reason": "qa_gate" }`

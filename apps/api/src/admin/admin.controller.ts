@@ -116,6 +116,26 @@ type ProtocolQueueHealthAttemptSummaryRow = {
   count: number | bigint | string;
 };
 
+type ProtocolAuthHealthAppRow = {
+  appId: string;
+  appName: string | null;
+  appStatus: string;
+  issuedScopeCount: number | bigint | string;
+  issuedCapabilityCount: number | bigint | string;
+  activeGrantCount: number | bigint | string;
+  revokedGrantCount: number | bigint | string;
+  pendingConsentCount: number | bigint | string;
+  approvedConsentCount: number | bigint | string;
+  executableGrantCount: number | bigint | string;
+  modeledOnlyGrantCount: number | bigint | string;
+  recentAuthFailureCount: number | bigint | string;
+};
+
+type ProtocolAuthHealthFailureSummaryRow = {
+  failureType: string;
+  count: number | bigint | string;
+};
+
 type RequestPressureRecipientRow = {
   recipientUserId: string;
   pendingInboundCount: number | bigint | string;
@@ -2564,6 +2584,33 @@ export class AdminController {
     return ok(snapshot);
   }
 
+  @Get("ops/protocol-auth-health")
+  async protocolAuthHealth(
+    @Headers("x-admin-user-id") adminUserIdHeader?: string,
+    @Headers("x-admin-role") adminRoleHeader?: string,
+  ) {
+    const admin = this.parseAdminContext(adminUserIdHeader, adminRoleHeader, [
+      "admin",
+      "support",
+    ]);
+    const snapshot = await this.readProtocolAuthHealthSnapshot();
+    await this.adminAuditService.recordAction({
+      adminUserId: admin.adminUserId,
+      role: admin.role,
+      action: "admin.ops_protocol_auth_health_view",
+      entityType: "protocol_app",
+      metadata: {
+        appCount: snapshot.summary.appCount,
+        activeGrantCount: snapshot.summary.activeGrantCount,
+        pendingConsentCount: snapshot.summary.pendingConsentCount,
+        recentAuthFailureCount: snapshot.summary.recentAuthFailureCount,
+        executableDelegationAppCount: snapshot.summary.executableDelegationAppCount,
+        modeledOnlyDelegationAppCount: snapshot.summary.modeledOnlyDelegationAppCount,
+      },
+    });
+    return ok(snapshot);
+  }
+
   @Get("moderation/queue")
   async moderationQueue(
     @Headers("x-admin-user-id") adminUserIdHeader?: string,
@@ -4328,6 +4375,121 @@ export class AdminController {
         createdAt: toIsoString(row.createdAt) ?? new Date().toISOString(),
         updatedAt: toIsoString(row.updatedAt) ?? new Date().toISOString(),
       })),
+    };
+  }
+
+  private async readProtocolAuthHealthSnapshot() {
+    const appRows = await this.prisma.$queryRawUnsafe<ProtocolAuthHealthAppRow[]>(
+      `SELECT pa.app_id AS "appId",
+              COALESCE(pa.registration_json->>'name', pa.app_id) AS "appName",
+              pa.status AS "appStatus",
+              CARDINALITY(pa.issued_scopes) AS "issuedScopeCount",
+              CARDINALITY(pa.issued_capabilities) AS "issuedCapabilityCount",
+              COALESCE(g.active_grants, 0)::bigint AS "activeGrantCount",
+              COALESCE(g.revoked_grants, 0)::bigint AS "revokedGrantCount",
+              COALESCE(c.pending_consents, 0)::bigint AS "pendingConsentCount",
+              COALESCE(c.approved_consents, 0)::bigint AS "approvedConsentCount",
+              COALESCE(g.executable_grants, 0)::bigint AS "executableGrantCount",
+              COALESCE(g.modeled_only_grants, 0)::bigint AS "modeledOnlyGrantCount",
+              COALESCE(f.recent_auth_failures, 0)::bigint AS "recentAuthFailureCount"
+       FROM protocol_apps pa
+       LEFT JOIN (
+         SELECT app_id,
+                COUNT(*) FILTER (WHERE status = 'active') AS active_grants,
+                COUNT(*) FILTER (WHERE status = 'revoked') AS revoked_grants,
+                COUNT(*) FILTER (WHERE status = 'active' AND subject_type = 'user') AS executable_grants,
+                COUNT(*) FILTER (WHERE status = 'active' AND subject_type IN ('app', 'service', 'agent')) AS modeled_only_grants
+         FROM protocol_app_scope_grants
+         GROUP BY app_id
+       ) g ON g.app_id = pa.app_id
+       LEFT JOIN (
+         SELECT app_id,
+                COUNT(*) FILTER (WHERE status = 'pending') AS pending_consents,
+                COUNT(*) FILTER (WHERE status = 'approved') AS approved_consents
+         FROM protocol_app_consent_requests
+         GROUP BY app_id
+       ) c ON c.app_id = pa.app_id
+       LEFT JOIN (
+         SELECT actor_app_id AS app_id,
+                COUNT(*) AS recent_auth_failures
+         FROM protocol_event_log
+         WHERE event_name = 'protocol.auth.failure'
+           AND created_at >= NOW() - INTERVAL '24 hours'
+           AND actor_app_id IS NOT NULL
+         GROUP BY actor_app_id
+       ) f ON f.app_id = pa.app_id
+       ORDER BY COALESCE(f.recent_auth_failures, 0) DESC,
+                COALESCE(c.pending_consents, 0) DESC,
+                COALESCE(g.active_grants, 0) DESC,
+                pa.app_id ASC`,
+    );
+
+    const authFailureSummaryRows = await this.prisma.$queryRawUnsafe<
+      ProtocolAuthHealthFailureSummaryRow[]
+    >(
+      `SELECT payload->>'failureType' AS "failureType",
+              COUNT(*)::bigint AS count
+       FROM protocol_event_log
+       WHERE event_name = 'protocol.auth.failure'
+         AND created_at >= NOW() - INTERVAL '24 hours'
+       GROUP BY payload->>'failureType'
+       ORDER BY COUNT(*) DESC, payload->>'failureType' ASC`,
+    );
+
+    const apps = appRows.map((row) => ({
+      appId: row.appId,
+      appName: row.appName,
+      appStatus: row.appStatus,
+      issuedScopeCount: Number(row.issuedScopeCount ?? 0),
+      issuedCapabilityCount: Number(row.issuedCapabilityCount ?? 0),
+      activeGrantCount: Number(row.activeGrantCount ?? 0),
+      revokedGrantCount: Number(row.revokedGrantCount ?? 0),
+      pendingConsentCount: Number(row.pendingConsentCount ?? 0),
+      approvedConsentCount: Number(row.approvedConsentCount ?? 0),
+      executableGrantCount: Number(row.executableGrantCount ?? 0),
+      modeledOnlyGrantCount: Number(row.modeledOnlyGrantCount ?? 0),
+      recentAuthFailureCount: Number(row.recentAuthFailureCount ?? 0),
+      hasExecutableDelegation: Number(row.executableGrantCount ?? 0) > 0,
+      hasModeledOnlyDelegation: Number(row.modeledOnlyGrantCount ?? 0) > 0,
+    }));
+
+    const summary = apps.reduce(
+      (accumulator, app) => ({
+        appCount: accumulator.appCount + 1,
+        activeGrantCount: accumulator.activeGrantCount + app.activeGrantCount,
+        pendingConsentCount:
+          accumulator.pendingConsentCount + app.pendingConsentCount,
+        recentAuthFailureCount:
+          accumulator.recentAuthFailureCount + app.recentAuthFailureCount,
+        executableDelegationAppCount:
+          accumulator.executableDelegationAppCount +
+          (app.hasExecutableDelegation ? 1 : 0),
+        modeledOnlyDelegationAppCount:
+          accumulator.modeledOnlyDelegationAppCount +
+          (app.hasModeledOnlyDelegation ? 1 : 0),
+      }),
+      {
+        appCount: 0,
+        activeGrantCount: 0,
+        pendingConsentCount: 0,
+        recentAuthFailureCount: 0,
+        executableDelegationAppCount: 0,
+        modeledOnlyDelegationAppCount: 0,
+      },
+    );
+
+    return {
+      generatedAt: new Date().toISOString(),
+      delegatedExecutionSupport: {
+        executableSubjectTypes: ["user"],
+        modeledOnlySubjectTypes: ["app", "service", "agent"],
+      },
+      summary,
+      authFailureSummary: authFailureSummaryRows.map((row) => ({
+        failureType: row.failureType,
+        count: Number(row.count ?? 0),
+      })),
+      apps,
     };
   }
 

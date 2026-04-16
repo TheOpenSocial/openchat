@@ -2,120 +2,133 @@ import Layout from "@theme/Layout";
 import Link from "@docusaurus/Link";
 import useDocusaurusContext from "@docusaurus/useDocusaurusContext";
 
-const quickLinks = [
-  { label: "Vision", to: "/docs/examples/protocol-vision-and-purpose" },
-  { label: "Concepts", to: "/docs/examples/protocol-core-concepts" },
-  { label: "Auth", to: "/docs/examples/protocol-app-registration-and-tokens" },
-  { label: "Dispatch", to: "/docs/examples/protocol-external-actions-reference" },
-  { label: "Webhooks", to: "/docs/examples/protocol-event-subscriptions-and-replay" },
-  { label: "Agents", to: "/docs/examples/protocol-agent-quickstart" },
+const navGroups = [
+  {
+    label: "Get started",
+    items: [
+      { label: "Overview", to: "/docs" },
+      { label: "Quickstart", to: "/docs/examples/protocol-partner-quickstart" },
+      { label: "Manifest and discovery", to: "/docs/examples/protocol-manifest-and-discovery" },
+      { label: "App registration", to: "/docs/examples/protocol-app-registration-and-tokens" },
+    ],
+  },
+  {
+    label: "Core concepts",
+    items: [
+      { label: "Vision and purpose", to: "/docs/examples/protocol-vision-and-purpose" },
+      { label: "Protocol model", to: "/docs/examples/protocol-core-concepts" },
+      { label: "Exclusions", to: "/docs/examples/protocol-overview-and-exclusions" },
+      { label: "Read, connect, dispatch", to: "/docs/examples/protocol-read-connect-dispatch-operate" },
+    ],
+  },
+  {
+    label: "Build",
+    items: [
+      { label: "Actions reference", to: "/docs/examples/protocol-external-actions-reference" },
+      { label: "Webhooks and replay", to: "/docs/examples/protocol-event-subscriptions-and-replay" },
+      { label: "Webhook consumer", to: "/docs/examples/protocol-webhook-consumer" },
+      { label: "Consent and auth", to: "/docs/examples/protocol-consent-and-auth-troubleshooting" },
+    ],
+  },
+  {
+    label: "Agents SDK",
+    items: [
+      { label: "Overview", to: "/docs/examples/protocol-agent-integration-paths" },
+      { label: "Quickstart", to: "/docs/examples/protocol-agent-quickstart" },
+      { label: "Readiness", to: "/docs/examples/protocol-agent-readiness" },
+      { label: "Toolset", to: "/docs/examples/protocol-agent-toolset" },
+    ],
+  },
 ];
 
-const pillars = [
+const buildPaths = [
   {
-    title: "Read",
-    body: "Start from manifest and discovery. Learn the live contract before you register, ask for scopes, or dispatch traffic.",
+    title: "Protocol SDK",
+    body: "Connect a product or service through the public contract for discovery, auth, delegated access, and action dispatch.",
+    to: "/docs/examples/protocol-partner-quickstart",
+    cta: "Start with the SDK",
+  },
+  {
+    title: "Events and webhooks",
+    body: "Subscribe to OpenSocial events, verify signatures, replay failed deliveries, and keep downstream systems in sync.",
+    to: "/docs/examples/protocol-event-subscriptions-and-replay",
+    cta: "Start with webhooks",
+  },
+  {
+    title: "Agents SDK",
+    body: "Build agentic integrations on top of the same protocol boundary with readiness checks, tool catalogs, and safe dispatch.",
+    to: "/docs/examples/protocol-agent-quickstart",
+    cta: "Start with agents",
+  },
+];
+
+const surfaces = [
+  {
+    title: "Manifest and discovery",
+    body: "Read the live protocol shape before you register an app or hardcode assumptions into your client.",
     to: "/docs/examples/protocol-manifest-and-discovery",
   },
   {
-    title: "Connect",
-    body: "Register apps, issue tokens, request consent, and treat delegated access as a first-class protocol concern.",
-    to: "/docs/examples/protocol-app-registration-and-tokens",
+    title: "Auth and delegated access",
+    body: "Separate app identity from user authority. Tokens, scopes, consent requests, and grants are distinct layers.",
+    to: "/docs/examples/protocol-consent-and-auth-troubleshooting",
   },
   {
-    title: "Dispatch",
-    body: "Use narrow coordination primitives for intents, requests, chats, and circles instead of private backend access.",
+    title: "Actions",
+    body: "Write through stable coordination primitives for intents, requests, chats, and circles.",
     to: "/docs/examples/protocol-external-actions-reference",
   },
   {
-    title: "Operate",
-    body: "Consume webhooks, replay events, recover dead letters, and keep partner integrations healthy in production.",
+    title: "Recovery",
+    body: "Inspect deliveries, replay dead letters, and recover integrations without touching private infrastructure.",
     to: "/docs/examples/protocol-operator-recovery",
   },
 ];
 
-const tracks = [
+const resources = [
   {
-    title: "Start here",
-    description:
-      "Understand why the protocol exists, what it excludes, and how the domain maps to the integration surface.",
-    links: [
-      { label: "Protocol SDK index", to: "/docs/examples/protocol-sdk-index" },
-      {
-        label: "Vision and purpose",
-        to: "/docs/examples/protocol-vision-and-purpose",
-      },
-      {
-        label: "Core concepts",
-        to: "/docs/examples/protocol-core-concepts",
-      },
-    ],
+    title: "Examples",
+    body: "Repository scripts for onboarding, actions, webhooks, operations, and agent flows.",
+    to: "/docs/examples/protocol-sdk-index",
   },
   {
-    title: "Ship an integration",
-    description:
-      "Bootstrap from manifest and discovery, register your app, authenticate, then start dispatching stable actions.",
-    links: [
-      {
-        label: "Read, connect, dispatch, operate",
-        to: "/docs/examples/protocol-read-connect-dispatch-operate",
-      },
-      {
-        label: "Partner quickstart",
-        to: "/docs/examples/protocol-partner-quickstart",
-      },
-      {
-        label: "Manifest and discovery",
-        to: "/docs/examples/protocol-manifest-and-discovery",
-      },
-      {
-        label: "External actions reference",
-        to: "/docs/examples/protocol-external-actions-reference",
-      },
-    ],
+    title: "Production checklist",
+    body: "Use the readiness checklist to make sure your integration is safe before it goes live.",
+    to: "/docs/examples/protocol-production-readiness-checklist",
   },
   {
-    title: "Run in production",
-    description:
-      "Handle webhooks, replay, recovery, consent, and agent readiness with a narrow operational surface.",
-    links: [
-      {
-        label: "Webhooks and replay",
-        to: "/docs/examples/protocol-event-subscriptions-and-replay",
-      },
-      {
-        label: "Operator recovery",
-        to: "/docs/examples/protocol-operator-recovery",
-      },
-      {
-        label: "Production readiness checklist",
-        to: "/docs/examples/protocol-production-readiness-checklist",
-      },
-    ],
+    title: "Compatibility",
+    body: "Understand how the protocol evolves and which assumptions are safe for long-lived integrations.",
+    to: "/docs/examples/protocol-versioning-and-compatibility",
   },
 ];
 
-const facts = [
-  "Coordination-first, not feed-first",
-  "SDK-only public surface",
-  "Typed actions and events",
-  "Consent and grants built in",
-];
-
-function TrackCard({ title, description, links }) {
+function NavGroup({ group }) {
   return (
-    <section className="os-card os-track-card">
-      <div className="os-card-kicker">Documentation track</div>
-      <h2>{title}</h2>
-      <p>{description}</p>
-      <div className="os-links">
-        {links.map((link) => (
-          <Link key={link.to} className="button button--secondary" to={link.to}>
-            {link.label}
+    <section className="os-overview-nav-group">
+      <div className="os-overview-nav-label">{group.label}</div>
+      <div className="os-overview-nav-items">
+        {group.items.map((item, index) => (
+          <Link
+            key={item.to}
+            className={`os-overview-nav-link${index === 0 && group.label === "Get started" ? " os-overview-nav-link--active" : ""}`}
+            to={item.to}
+          >
+            {item.label}
           </Link>
         ))}
       </div>
     </section>
+  );
+}
+
+function SurfaceCard({ surface, variant }) {
+  return (
+    <Link className={`os-surface-card os-surface-card--${variant}`} to={surface.to}>
+      <div className="os-surface-band" />
+      <h3>{surface.title}</h3>
+      <p>{surface.body}</p>
+    </Link>
   );
 }
 
@@ -127,93 +140,132 @@ export default function Home() {
       title={siteConfig.title}
       description="OpenSocial developer platform documentation for apps, agents, and partner systems"
     >
-      <main className="os-home">
-        <header className="os-hero">
-          <div className="os-hero-grid">
-            <div className="os-hero-copy">
-              <span className="os-eyebrow">OpenSocial Developer Platform</span>
-              <h1>Build on the coordination layer, not the app internals.</h1>
+      <main className="os-overview-shell">
+        <aside className="os-overview-sidebar">
+          {navGroups.map((group) => (
+            <NavGroup key={group.label} group={group} />
+          ))}
+        </aside>
+
+        <section className="os-overview-main">
+          <header className="os-overview-header">
+            <div className="os-overview-kicker">Overview</div>
+            <h1>Build on an intent-first social coordination network.</h1>
+            <p>
+              OpenSocial is a protocol and developer platform for systems that
+              help people express intent, coordinate introductions, form
+              connections, and continue conversations. Public integrations use
+              stable concepts, auth, actions, events, and recovery flows
+              instead of private backend internals.
+            </p>
+          </header>
+
+          <section className="os-quickstart-card">
+            <div className="os-quickstart-copy">
+              <div className="os-section-label">Developer quickstart</div>
+              <h2>Read the contract, register an app, then integrate through stable primitives.</h2>
               <p>
-                OpenSocial exposes a protocol-first surface for reading state,
-                connecting third-party systems, dispatching coordination actions,
-                subscribing to events, and operating agents safely.
+                Start with manifest and discovery, issue a narrow app identity,
+                request only the scopes you need, and dispatch through the
+                documented protocol surface.
               </p>
-              <div className="os-inline-links">
-                {quickLinks.map((link) => (
-                  <Link key={link.to} className="os-chip" to={link.to}>
-                    {link.label}
-                  </Link>
-                ))}
-              </div>
               <div className="os-links">
-                <Link className="button button--primary button--lg" to="/docs">
-                  Explore the docs
+                <Link className="button button--primary button--lg" to="/docs/examples/protocol-partner-quickstart">
+                  Get started
                 </Link>
-                <Link
-                  className="button button--secondary button--lg"
-                  to="/docs/examples/protocol-partner-quickstart"
-                >
-                  Start a partner integration
+                <Link className="button button--secondary button--lg" to="/docs/examples/protocol-sdk-index">
+                  Browse the SDK
                 </Link>
               </div>
             </div>
-            <aside className="os-hero-panel">
-              <div className="os-card-kicker">Public SDK scope</div>
-              <div className="os-code-block os-code-block--hero">
-                <code>
-                  manifest
-                  <br />
-                  discovery
-                  <br />
-                  auth + consent
-                  <br />
-                  read state
-                  <br />
-                  dispatch actions
-                  <br />
-                  webhooks + replay
-                  <br />
-                  agent wrappers
-                </code>
+
+            <div className="os-snippet">
+              <div className="os-snippet-header">
+                <span>typescript</span>
+                <span>Quickstart</span>
               </div>
-              <ul className="os-fact-list">
-                {facts.map((fact) => (
-                  <li key={fact}>{fact}</li>
-                ))}
-              </ul>
-            </aside>
-          </div>
-        </header>
+              <pre>
+                <code>{`import { createProtocolClientFromBaseUrl } from "@opensocial/protocol-client";
 
-        <section className="os-pillar-grid">
-          {pillars.map((pillar) => (
-            <Link key={pillar.to} className="os-pillar" to={pillar.to}>
-              <span className="os-card-kicker">{pillar.title}</span>
-              <h2>{pillar.title}</h2>
-              <p>{pillar.body}</p>
-            </Link>
-          ))}
+const client = createProtocolClientFromBaseUrl("https://api.opensocial.so/api");
+
+const [manifest, discovery] = await Promise.all([
+  client.getManifest(),
+  client.getDiscovery(),
+]);
+
+const registration = await client.registerApp({
+  registration: {
+    appId: "partner.example",
+    name: "Partner Example",
+  },
+  manifest: {
+    ...manifest,
+    appId: "partner.example",
+  },
+  requestedScopes: ["protocol.read", "actions.invoke"],
+  requestedCapabilities: ["intent.write", "request.write"],
+});`}</code>
+              </pre>
+            </div>
+          </section>
+
+          <section className="os-overview-section">
+            <div className="os-section-heading">
+              <h2>Build paths</h2>
+              <p>
+                Choose the integration layer that matches your system. Every
+                path uses the same protocol boundary and event vocabulary.
+              </p>
+            </div>
+            <div className="os-path-grid">
+              {buildPaths.map((path) => (
+                <Link key={path.to} className="os-path-card" to={path.to}>
+                  <h3>{path.title}</h3>
+                  <p>{path.body}</p>
+                  <span>{path.cta}</span>
+                </Link>
+              ))}
+            </div>
+          </section>
+
+          <section className="os-overview-section">
+            <div className="os-section-heading">
+              <h2>Core surfaces</h2>
+              <p>
+                These are the surfaces that matter most across a real
+                integration lifecycle: connect, authorize, dispatch, and recover.
+              </p>
+            </div>
+            <div className="os-surface-grid">
+              {surfaces.map((surface, index) => (
+                <SurfaceCard
+                  key={surface.to}
+                  surface={surface}
+                  variant={(index % 4) + 1}
+                />
+              ))}
+            </div>
+          </section>
+
+          <section className="os-overview-section">
+            <div className="os-section-heading">
+              <h2>Resources</h2>
+              <p>
+                Use these to move from concept to implementation to
+                production-readiness.
+              </p>
+            </div>
+            <div className="os-resource-grid">
+              {resources.map((resource) => (
+                <Link key={resource.to} className="os-resource-card" to={resource.to}>
+                  <h3>{resource.title}</h3>
+                  <p>{resource.body}</p>
+                </Link>
+              ))}
+            </div>
+          </section>
         </section>
-
-        <section className="os-intent-band">
-          <div>
-            <span className="os-card-kicker">Mental model</span>
-            <h2>Use the protocol in this order.</h2>
-          </div>
-          <ol className="os-sequence">
-            <li>Read manifest and discovery.</li>
-            <li>Register your app and store the token.</li>
-            <li>Request delegated access only when needed.</li>
-            <li>Dispatch narrow actions through the SDK.</li>
-            <li>Operate with webhooks, replay, and recovery.</li>
-          </ol>
-        </section>
-
-        <div className="os-grid">
-          {tracks.map((track) => (
-            <TrackCard key={track.title} {...track} />
-          ))}
-        </div>
       </main>
     </Layout>
   );

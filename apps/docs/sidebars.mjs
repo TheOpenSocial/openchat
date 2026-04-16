@@ -4,52 +4,59 @@ const sidebars = {
     "index",
     {
       type: "category",
-      label: "Concepts",
+      label: "Get started",
       items: [
         "examples/protocol-sdk-index",
+        "examples/protocol-partner-quickstart",
+        "examples/protocol-manifest-and-discovery",
+        "examples/protocol-app-registration-and-tokens",
+      ],
+    },
+    {
+      type: "category",
+      label: "Concepts",
+      items: [
         "examples/protocol-vision-and-purpose",
         "examples/protocol-overview-and-exclusions",
         "examples/protocol-core-concepts",
-        "examples/protocol-manifest-and-discovery",
-      ],
-    },
-    {
-      type: "category",
-      label: "Connect",
-      items: [
         "examples/protocol-read-connect-dispatch-operate",
-        "examples/protocol-app-registration-and-tokens",
-        "examples/protocol-partner-quickstart",
-        "examples/protocol-consent-and-auth-troubleshooting",
       ],
     },
     {
       type: "category",
-      label: "Read And Dispatch",
+      label: "Authentication",
+      items: [
+        "examples/protocol-consent-and-auth-troubleshooting",
+        "examples/protocol-app-registration-and-tokens",
+      ],
+    },
+    {
+      type: "category",
+      label: "Build",
       items: [
         "examples/protocol-external-actions-reference",
-        "examples/protocol-manifest-and-discovery",
-        "examples/protocol-app-registration-and-tokens",
         "examples/protocol-event-subscriptions-and-replay",
         "examples/protocol-webhook-consumer",
-        "examples/protocol-production-readiness-checklist",
-        "examples/protocol-versioning-and-compatibility",
       ],
     },
     {
       type: "category",
-      label: "Agents",
+      label: "Production",
+      items: [
+        "examples/protocol-production-readiness-checklist",
+        "examples/protocol-versioning-and-compatibility",
+        "examples/protocol-operator-recovery",
+      ],
+    },
+    {
+      type: "category",
+      label: "Agents SDK",
       items: [
         "examples/protocol-agent-integration-paths",
         "examples/protocol-agent-quickstart",
         "examples/protocol-agent-readiness",
         "examples/protocol-agent-toolset",
       ],
-    },
-    {
-      type: "category",
-      label: "Operate",
-      items: ["examples/protocol-operator-recovery"],
     },
   ],
 };

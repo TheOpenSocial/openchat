@@ -113,6 +113,7 @@ Use this as the baseline for all next backlog items. Do not reintroduce generic 
 - Docusaurus docs app is now wired on top of the repo documentation set for manual browsing and publishing
 - EC2 deployment for the docs app is now live through Docker, Caddy, image build, and deploy workflows at `https://docs.opensocial.so`
 - The public docs portal now has SDK-only information architecture, concept-first developer onboarding, protocol vision and core-concepts pages, and Mermaid flow diagrams for the main integration lifecycle.
+- The public docs homepage and navigation now follow a cleaner developer-portal layout, closer to the Vercel/OpenAI style the protocol docs need for partner onboarding.
 - First-party protocol settings/inspection surfaces: shipped as operational tooling, but still partial as polished product UX
 - CI and product-critical golden coverage are green on the current mainline verification pass
 - Mobile-critical backend controller coverage is verified for first-party protocol call-through on:
@@ -132,6 +133,7 @@ Use this as the baseline for all next backlog items. Do not reintroduce generic 
 - audit request-pressure and spam-health controls so recipient load stays bounded as the market grows
 - verify the new recipient inbound pressure guard against real matching behavior and tune its thresholds from observed data
 - use the new admin request-pressure snapshot during staging/manual QA so saturation shows up before users feel it
+- use the new admin protocol-auth snapshot during staging/manual QA so grant subject mix, consent backlog, and auth-failure pressure are visible without raw DB access
 
 ## Package Direction
 
@@ -307,6 +309,9 @@ These packages should mirror the backend domain rather than inventing new abstra
      - runtime commerce and dating actions where the mobile product actually depends on them
      - remaining agent/runtime helpers that still mix direct service writes with protocol call-through
 5. Tighten operator/admin visibility for protocol lag, replay pressure, and token/grant audit usage where it is still thin.
+   - Request-pressure visibility is shipped.
+   - Queue-health visibility is shipped.
+   - Protocol auth-health visibility is now shipped for grants, consent backlog, executable-vs-modeled delegation, and recent auth failures.
 6. Improve user-facing protocol-aware presentation in first-party surfaces without exposing backend internals.
 
 ## Current Direction Guardrails
