@@ -109,6 +109,7 @@ Pass criteria:
 8. Inspect the same endpoint again and confirm:
    - `recentAttempts` now show `replayed` / `delivered`
    - dead-letter backlog drops
+   - `replayCursorSummary` is not quietly showing lagging or stale consumers after queue recovery
 
 Pass criteria:
 - failures are visible without raw DB inspection

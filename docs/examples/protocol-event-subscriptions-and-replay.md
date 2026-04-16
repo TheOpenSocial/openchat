@@ -56,6 +56,16 @@ The key questions are:
 - is it retrying?
 - is it dead-lettered?
 - is the queue draining?
+- is the consumer cursor actually caught up to the event log?
+
+Queue health alone is not enough.
+
+A delivery stream can look healthy while a downstream consumer still lags behind the latest event cursor.
+
+Operationally, inspect both:
+
+- delivery attempt state
+- replay cursor lag
 
 ## Replay options
 

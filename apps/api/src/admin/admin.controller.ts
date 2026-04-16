@@ -116,6 +116,15 @@ type ProtocolQueueHealthAttemptSummaryRow = {
   count: number | bigint | string;
 };
 
+type ProtocolReplayCursorHealthRow = {
+  appId: string;
+  appName: string | null;
+  appStatus: string;
+  savedCursor: number | bigint | string;
+  latestEventCursor: number | bigint | string;
+  updatedAt: Date | string | null;
+};
+
 type ProtocolAuthHealthAppRow = {
   appId: string;
   appName: string | null;
@@ -4376,6 +4385,26 @@ export class AdminController {
        ORDER BY COUNT(*) DESC, outcome ASC
        LIMIT 20`,
     );
+    const replayCursorRows = await this.prisma.$queryRawUnsafe<
+      ProtocolReplayCursorHealthRow[]
+    >(
+      `SELECT pa.app_id AS "appId",
+              COALESCE(pa.registration_json->>'name', pa.app_id) AS "appName",
+              pa.status AS "appStatus",
+              COALESCE(pec.cursor, 0) AS "savedCursor",
+              latest.latest_cursor AS "latestEventCursor",
+              pec.updated_at AS "updatedAt"
+       FROM protocol_apps pa
+       CROSS JOIN (
+         SELECT COALESCE(MAX(cursor), 0)::bigint AS latest_cursor
+         FROM protocol_event_log
+       ) latest
+       LEFT JOIN protocol_event_cursors pec ON pec.app_id = pa.app_id
+       ORDER BY (latest.latest_cursor - COALESCE(pec.cursor, 0)) DESC,
+                pec.updated_at ASC NULLS FIRST,
+                pa.app_id ASC
+       LIMIT 50`,
+    );
 
     const toIsoString = (value: Date | string | null | undefined) => {
       if (!value) {
@@ -4386,6 +4415,7 @@ export class AdminController {
       }
       return value;
     };
+    const now = Date.now();
 
     const apps = appRows.map((row) => ({
       appId: row.appId,
@@ -4418,9 +4448,51 @@ export class AdminController {
       },
     );
 
+    const replayCursorHealth = replayCursorRows.map((row) => {
+      const savedCursor = Number(row.savedCursor ?? 0);
+      const latestEventCursor = Number(row.latestEventCursor ?? 0);
+      const cursorLag = Math.max(0, latestEventCursor - savedCursor);
+      const updatedAt = toIsoString(row.updatedAt);
+      const stale =
+        cursorLag > 0 &&
+        updatedAt !== null &&
+        now - new Date(updatedAt).getTime() >= 24 * 60 * 60_000;
+      return {
+        appId: row.appId,
+        appName: row.appName,
+        appStatus: row.appStatus,
+        savedCursor,
+        latestEventCursor,
+        cursorLag,
+        updatedAt,
+        stale,
+      };
+    });
+
+    const replayCursorSummary = replayCursorHealth.reduce(
+      (accumulator, row) => ({
+        latestEventCursor: Math.max(
+          accumulator.latestEventCursor,
+          row.latestEventCursor,
+        ),
+        trackedAppCount: accumulator.trackedAppCount + 1,
+        laggingAppCount: accumulator.laggingAppCount + (row.cursorLag > 0 ? 1 : 0),
+        staleAppCount: accumulator.staleAppCount + (row.stale ? 1 : 0),
+        maxCursorLag: Math.max(accumulator.maxCursorLag, row.cursorLag),
+      }),
+      {
+        latestEventCursor: 0,
+        trackedAppCount: 0,
+        laggingAppCount: 0,
+        staleAppCount: 0,
+        maxCursorLag: 0,
+      },
+    );
+
     return {
       generatedAt: new Date().toISOString(),
       summary,
+      replayCursorSummary,
       apps,
       recentAttemptSummary: attemptSummaryRows.map((row) => ({
         outcome: row.outcome,
@@ -4455,6 +4527,7 @@ export class AdminController {
         createdAt: toIsoString(row.createdAt) ?? new Date().toISOString(),
         updatedAt: toIsoString(row.updatedAt) ?? new Date().toISOString(),
       })),
+      replayCursorHealth,
     };
   }
 
@@ -5788,6 +5861,34 @@ export class AdminController {
         area: "protocol_queue",
         summary: "Protocol deliveries are retrying but have not dead-lettered.",
         detail: `${input.protocolQueueHealth.summary.retryingCount} deliveries are currently retrying, so downstream failures may still be resolving without manual replay.`,
+      });
+    }
+
+    const stalestReplayCursor = input.protocolQueueHealth.replayCursorHealth.find(
+      (row) => row.stale,
+    );
+    if (stalestReplayCursor) {
+      findings.push({
+        id: "protocol_replay_cursor_stale",
+        level: "watch",
+        area: "protocol_queue",
+        summary: "At least one replay cursor is lagging behind the protocol event log.",
+        detail: `${stalestReplayCursor.appName ?? stalestReplayCursor.appId} is ${stalestReplayCursor.cursorLag} events behind and has not updated its cursor recently.`,
+      });
+      nextActions.push({
+        id: "inspect_replay_cursor_health",
+        label: "Inspect replay cursor lag",
+        endpoint: "/admin/ops/protocol-queue-health",
+        reason:
+          "Queue delivery can look healthy while a consumer still trails the event log, so use replay cursor health before assuming downstream state is current.",
+      });
+    } else if (input.protocolQueueHealth.replayCursorSummary.maxCursorLag > 0) {
+      findings.push({
+        id: "protocol_replay_cursor_lag",
+        level: "watch",
+        area: "protocol_queue",
+        summary: "Replay cursors are behind the latest protocol event log.",
+        detail: `${input.protocolQueueHealth.replayCursorSummary.laggingAppCount} apps have cursor lag, with a maximum lag of ${input.protocolQueueHealth.replayCursorSummary.maxCursorLag} events.`,
       });
     }
 
