@@ -101,6 +101,24 @@ const preflightChecks = [
     args: ["db:generate"],
   },
   {
+    id: "protocol-types-build",
+    summary: "Protocol types package build baseline",
+    cmd: "pnpm",
+    args: ["--filter", "@opensocial/protocol-types", "build"],
+  },
+  {
+    id: "protocol-events-build",
+    summary: "Protocol events package build baseline",
+    cmd: "pnpm",
+    args: ["--filter", "@opensocial/protocol-events", "build"],
+  },
+  {
+    id: "protocol-server-build",
+    summary: "Protocol server package build baseline",
+    cmd: "pnpm",
+    args: ["--filter", "@opensocial/protocol-server", "build"],
+  },
+  {
     id: "types-package-build",
     summary: "Types package build baseline",
     cmd: "pnpm",

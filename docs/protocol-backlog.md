@@ -72,6 +72,7 @@ The protocol is no longer just a concept. The following pieces are already prese
 - Admin queue-health inspection now also exposes replay-cursor lag and stale cursor state, so downstream recovery no longer depends on raw cursor-table inspection.
 - A combined admin manual-verification snapshot now exposes request pressure, protocol queue health, and protocol auth health together so app/manual validation can start from one operator view before drilling into narrower endpoints.
 - The combined admin manual-verification snapshot now also synthesizes an operator assessment with overall status, prioritized findings, and next actions so queue, auth, and request-pressure issues do not need to be correlated by hand during manual QA.
+- The backend ops verification pack now builds the protocol package chain before API validation lanes, so production verification no longer fails on missing workspace protocol artifacts before it reaches the real runtime checks.
 - The public API host shape is now being normalized so `api.opensocial.so/*` is canonical while `/api/*` remains a compatibility path during migration.
 - Production deploy verification now retries across the local TLS warm-up window so a healthy post-restart API does not get marked red by a transient handshake.
 - Dead-lettered deliveries can now be replayed explicitly through the protocol API and first-party settings surfaces.
