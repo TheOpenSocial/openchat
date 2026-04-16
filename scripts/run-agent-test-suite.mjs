@@ -271,7 +271,17 @@ const layerChecks = {
 };
 
 function commandForLayer(selectedLayer) {
-  const baselineChecks = preflightChecks.slice(0, 4);
+  const baselineChecks = preflightChecks.filter((check) =>
+    [
+      "runtime-naming-residue",
+      "prisma-client-generate",
+      "protocol-types-build",
+      "protocol-events-build",
+      "protocol-server-build",
+      "types-package-build",
+      "openai-package-build",
+    ].includes(check.id),
+  );
 
   if (selectedLayer === "full") {
     return [
