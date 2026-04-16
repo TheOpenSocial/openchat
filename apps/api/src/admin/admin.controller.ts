@@ -2618,6 +2618,53 @@ export class AdminController {
     return ok(snapshot);
   }
 
+  @Get("ops/manual-verification")
+  async manualVerificationSnapshot(
+    @Headers("x-admin-user-id") adminUserIdHeader?: string,
+    @Headers("x-admin-role") adminRoleHeader?: string,
+    @Query("limit") limitParam?: string,
+    @Query("hours") hoursParam?: string,
+  ) {
+    const admin = this.parseAdminContext(adminUserIdHeader, adminRoleHeader, [
+      "admin",
+      "support",
+      "moderator",
+    ]);
+    const limit = this.parseLimit(limitParam);
+    const hours = this.normalizeWindowHours(hoursParam);
+    const [requestPressure, protocolQueueHealth, protocolAuthHealth] =
+      await Promise.all([
+        this.readRequestPressureSnapshot({ limit, hours }),
+        this.readProtocolQueueHealthSnapshot(),
+        this.readProtocolAuthHealthSnapshot(),
+      ]);
+
+    await this.adminAuditService.recordAction({
+      adminUserId: admin.adminUserId,
+      role: admin.role,
+      action: "admin.ops_manual_verification_view",
+      entityType: "protocol_app",
+      metadata: {
+        limit,
+        hours,
+        overloadedRecipientCount:
+          requestPressure.summary.overloadedRecipientCount,
+        queuedCount: protocolQueueHealth.summary.queuedCount,
+        deadLetteredCount: protocolQueueHealth.summary.deadLetteredCount,
+        pendingConsentCount: protocolAuthHealth.summary.pendingConsentCount,
+        recentAuthFailureCount:
+          protocolAuthHealth.summary.recentAuthFailureCount,
+      },
+    });
+
+    return ok({
+      generatedAt: new Date().toISOString(),
+      requestPressure,
+      protocolQueueHealth,
+      protocolAuthHealth,
+    });
+  }
+
   @Get("moderation/queue")
   async moderationQueue(
     @Headers("x-admin-user-id") adminUserIdHeader?: string,

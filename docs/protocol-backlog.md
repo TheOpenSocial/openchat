@@ -69,6 +69,7 @@ The protocol is no longer just a concept. The following pieces are already prese
 - Webhook delivery attempts are now persisted per delivery with outcome, duration, status code, and error metadata.
 - Queue inspection now exposes both persisted delivery records and live queue state counts.
 - Admin queue-health inspection now exposes recent delivery attempts and recent attempt outcome/error buckets, so failure-mode verification no longer depends on raw queue tables.
+- A combined admin manual-verification snapshot now exposes request pressure, protocol queue health, and protocol auth health together so app/manual validation can start from one operator view before drilling into narrower endpoints.
 - Dead-lettered deliveries can now be replayed explicitly through the protocol API and first-party settings surfaces.
 - Dead-lettered deliveries can now be replayed in batch for an app, and usage summaries expose queue-health timestamps for queued, retrying, and dead-lettered work.
 - Usage visibility is now exposed through a protocol app usage summary so first-party settings surfaces can inspect recent protocol activity without raw table access.
@@ -136,6 +137,7 @@ Use this as the baseline for all next backlog items. Do not reintroduce generic 
 - verify the new recipient inbound pressure guard against real matching behavior and tune its thresholds from observed data
 - use the new admin request-pressure snapshot during staging/manual QA so saturation shows up before users feel it
 - use the new admin protocol-auth snapshot during staging/manual QA so grant subject mix, consent backlog, and auth-failure pressure are visible without raw DB access
+- use the new combined admin manual-verification snapshot during staging/manual QA so auth, queue, and request-pressure health can be reviewed from one endpoint before investigating specific subviews
 - use the improved delegated-auth failure details during staging/manual QA to tell missing-user-grant problems apart from modeled-only grant configuration
 
 ## Package Direction

@@ -24,10 +24,14 @@ Pass criteria:
 - Chat message is persisted and visible to both participants.
 
 Operational check:
-- Inspect `GET /api/admin/ops/request-pressure` before and after fanout-heavy tests.
+- Inspect `GET /api/admin/ops/manual-verification` before and after fanout-heavy tests.
+- Use it as the default snapshot for request pressure, queue health, and auth health together.
+- If you need deeper detail, then drill into the narrower endpoints below.
+- Inspect `GET /api/admin/ops/request-pressure` only when you need recipient-level detail.
 - Confirm no recipient is unintentionally saturated during repeated manual test runs.
 
 Protocol delivery check:
+- Inspect `GET /api/admin/ops/manual-verification` after action, webhook, or replay-heavy tests.
 - Inspect `GET /api/admin/ops/protocol-queue-health` after action, webhook, or replay-heavy tests.
 - Confirm:
   - `recentAttemptSummary` is not dominated by `dead_lettered`
@@ -35,6 +39,7 @@ Protocol delivery check:
   - `deadLetterSample` is either empty or clearly explained by the test you just ran
 
 Protocol auth check:
+- Inspect `GET /api/admin/ops/manual-verification` during app-registration, consent, and delegated-action testing.
 - Inspect `GET /api/admin/ops/protocol-auth-health` during app-registration, consent, and delegated-action testing.
 - Confirm:
   - executable delegation is concentrated in `user` subjects, not accidentally drifting into modeled-only subject types
@@ -91,12 +96,13 @@ Pass criteria:
 ## Scenario F: Protocol delivery and replay health
 1. Register or reuse a protocol app with a webhook subscription.
 2. Trigger a protocol-backed action that should emit a delivery.
-3. Inspect `GET /api/admin/ops/protocol-queue-health`.
-4. If you intentionally point the webhook at a failing endpoint, confirm:
+3. Inspect `GET /api/admin/ops/manual-verification`.
+4. If you need delivery-level detail, inspect `GET /api/admin/ops/protocol-queue-health`.
+5. If you intentionally point the webhook at a failing endpoint, confirm:
    - `recentAttemptSummary` shows the expected error bucket
    - the delivery moves through `retrying` and then `dead_lettered`
-5. Replay the delivery or dead-letter batch through the protocol/admin tooling after fixing the consumer.
-6. Inspect the same endpoint again and confirm:
+6. Replay the delivery or dead-letter batch through the protocol/admin tooling after fixing the consumer.
+7. Inspect the same endpoint again and confirm:
    - `recentAttempts` now show `replayed` / `delivered`
    - dead-letter backlog drops
 
