@@ -953,6 +953,18 @@ export function ProtocolIntegrationsPanel() {
               <Text className="text-[12px] text-muted">
                 Last revoked: {usageSummary.grantAudit.lastRevokedAt ?? "Never"}
               </Text>
+              <Text className="text-[12px] text-muted">
+                Subjects: user {usageSummary.grantSubjectCounts.user} · app{" "}
+                {usageSummary.grantSubjectCounts.app} · service{" "}
+                {usageSummary.grantSubjectCounts.service} · agent{" "}
+                {usageSummary.grantSubjectCounts.agent}
+              </Text>
+              <Text className="text-[12px] text-muted">
+                Delegated execution currently runs for:{" "}
+                {usageSummary.delegatedExecutionSupport.executableSubjectTypes.join(
+                  ", ",
+                )}
+              </Text>
             </View>
 
             <View className="gap-2 rounded-2xl border border-hairline bg-surfaceMuted/70 px-3 py-3">

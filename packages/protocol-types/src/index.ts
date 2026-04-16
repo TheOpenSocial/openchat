@@ -659,6 +659,20 @@ export const protocolAppUsageSummarySchema = z
         revoked: z.number().int().min(0),
       })
       .strict(),
+    grantSubjectCounts: z
+      .object({
+        user: z.number().int().min(0),
+        app: z.number().int().min(0),
+        service: z.number().int().min(0),
+        agent: z.number().int().min(0),
+      })
+      .strict(),
+    delegatedExecutionSupport: z
+      .object({
+        executableSubjectTypes: z.array(protocolGrantSubjectTypeSchema),
+        modeledOnlySubjectTypes: z.array(protocolGrantSubjectTypeSchema),
+      })
+      .strict(),
     consentRequestCounts: z
       .object({
         pending: z.number().int().min(0),

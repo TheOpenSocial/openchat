@@ -801,6 +801,18 @@ export function ProtocolIntegrationsPanel() {
                       Last revoked:{" "}
                       {usageSummary.grantAudit.lastRevokedAt ?? "Never"}
                     </p>
+                    <p className="mt-1 text-[hsl(var(--foreground))]">
+                      Subjects: user {usageSummary.grantSubjectCounts.user} ·
+                      app {usageSummary.grantSubjectCounts.app} · service{" "}
+                      {usageSummary.grantSubjectCounts.service} · agent{" "}
+                      {usageSummary.grantSubjectCounts.agent}
+                    </p>
+                    <p className="mt-1 text-[hsl(var(--foreground))]">
+                      Delegated execution currently runs for:{" "}
+                      {usageSummary.delegatedExecutionSupport.executableSubjectTypes.join(
+                        ", ",
+                      )}
+                    </p>
                   </div>
                   <div className="rounded-2xl border border-[hsl(var(--border-soft))] bg-[hsl(var(--panel))]/60 px-3 py-3 text-sm">
                     <p className="text-xs uppercase tracking-[0.2em] text-[hsl(var(--muted-foreground))]">

@@ -1880,6 +1880,15 @@ export class ProtocolService {
       GROUP BY status`,
       app.registration.appId,
     );
+    const grantSubjectRows = await this.prisma.$queryRawUnsafe<
+      Array<{ subject_type: string; count: bigint | number | string }>
+    >(
+      `SELECT subject_type, COUNT(*)::bigint AS count
+       FROM protocol_app_scope_grants
+       WHERE app_id = $1
+       GROUP BY subject_type`,
+      app.registration.appId,
+    );
     const queueHealthRows = await this.prisma.$queryRawUnsafe<
       Array<{
         oldest_queued_at: Date | string | null;
@@ -1972,6 +1981,9 @@ export class ProtocolService {
     const grantCounts = Object.fromEntries(
       grantRows.map((row) => [row.status, Number(row.count)]),
     ) as Record<string, number>;
+    const grantSubjectCounts = Object.fromEntries(
+      grantSubjectRows.map((row) => [row.subject_type, Number(row.count)]),
+    ) as Partial<Record<"user" | "app" | "service" | "agent", number>>;
     const consentRequestCounts = Object.fromEntries(
       consentRequestRows.map((row) => [row.status, Number(row.count)]),
     ) as Record<string, number>;
@@ -2022,6 +2034,16 @@ export class ProtocolService {
       grantCounts: {
         active: grantCounts.active ?? 0,
         revoked: grantCounts.revoked ?? 0,
+      },
+      grantSubjectCounts: {
+        user: grantSubjectCounts.user ?? 0,
+        app: grantSubjectCounts.app ?? 0,
+        service: grantSubjectCounts.service ?? 0,
+        agent: grantSubjectCounts.agent ?? 0,
+      },
+      delegatedExecutionSupport: {
+        executableSubjectTypes: ["user"],
+        modeledOnlySubjectTypes: ["app", "service", "agent"],
       },
       consentRequestCounts: {
         pending: consentRequestCounts.pending ?? 0,

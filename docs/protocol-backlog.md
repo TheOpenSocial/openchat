@@ -73,6 +73,7 @@ The protocol is no longer just a concept. The following pieces are already prese
 - Usage visibility is now exposed through a protocol app usage summary so first-party settings surfaces can inspect recent protocol activity without raw table access.
 - Usage summaries now include token and grant audit timestamps for first-party inspection surfaces.
 - Usage summaries now also include structured auth-failure counts and recent auth-failure entries so developers can diagnose missing-token, invalid-token, revoked-app, and grant-scope issues without raw event-log queries.
+- Usage summaries now also make delegated-grant partiality explicit by surfacing grant subject counts plus the currently executable delegated subject types versus modeled-only subject types.
 - First-party mobile and web settings surfaces now support token rotate/revoke and grant creation/revocation flows for protocol apps.
 - First-party mobile and web settings surfaces now frame grants as delegated access and expose dead-letter replay controls.
 - First-party runtime and agent intent/request flows now have protocol-service call-through paths for the cleanest social actions.
@@ -155,6 +156,7 @@ These packages should mirror the backend domain rather than inventing new abstra
 2. Tighten delegated-grant enforcement beyond the core user-grant path.
    - The schema and API support `subjectType=user|app|service|agent`.
    - Runtime enforcement is still centered on active user grants for delegated actions.
+   - Usage summaries now expose that distinction explicitly so manual testing and partner debugging do not mistake modeled grants for executable delegated actors.
    - Decide whether `app|service|agent` subject types should remain modeled-only or become enforced execution paths.
 
 3. Verify scheduled delivery execution and replay behavior under real failure conditions.
