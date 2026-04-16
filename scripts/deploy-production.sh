@@ -212,9 +212,9 @@ curl_local_https() {
     --retry-all-errors \
     --connect-timeout 5 \
     --max-time 15 \
+    --resolve "$host:443:127.0.0.1" \
     "$@" \
-    --header "Host: $host" \
-    "https://127.0.0.1$path"
+    "https://$host$path"
 }
 
 run_health() {
