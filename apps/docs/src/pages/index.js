@@ -3,114 +3,109 @@ import Link from "@docusaurus/Link";
 import useDocusaurusContext from "@docusaurus/useDocusaurusContext";
 
 const quickLinks = [
+  { label: "Vision", to: "/docs/examples/protocol-vision-and-purpose" },
+  { label: "Concepts", to: "/docs/examples/protocol-core-concepts" },
+  { label: "Auth", to: "/docs/examples/protocol-app-registration-and-tokens" },
+  { label: "Dispatch", to: "/docs/examples/protocol-external-actions-reference" },
+  { label: "Webhooks", to: "/docs/examples/protocol-event-subscriptions-and-replay" },
+  { label: "Agents", to: "/docs/examples/protocol-agent-quickstart" },
+];
+
+const pillars = [
   {
-    label: "Concepts",
-    to: "/docs/examples/protocol-overview-and-exclusions",
+    title: "Read",
+    body: "Start from manifest and discovery. Learn the live contract before you register, ask for scopes, or dispatch traffic.",
+    to: "/docs/examples/protocol-manifest-and-discovery",
   },
   {
-    label: "Auth",
+    title: "Connect",
+    body: "Register apps, issue tokens, request consent, and treat delegated access as a first-class protocol concern.",
     to: "/docs/examples/protocol-app-registration-and-tokens",
   },
   {
-    label: "Dispatch",
+    title: "Dispatch",
+    body: "Use narrow coordination primitives for intents, requests, chats, and circles instead of private backend access.",
     to: "/docs/examples/protocol-external-actions-reference",
   },
   {
-    label: "Webhooks",
-    to: "/docs/examples/protocol-event-subscriptions-and-replay",
-  },
-  {
-    label: "Agents",
-    to: "/docs/examples/protocol-agent-quickstart",
-  },
-  {
-    label: "Recovery",
+    title: "Operate",
+    body: "Consume webhooks, replay events, recover dead letters, and keep partner integrations healthy in production.",
     to: "/docs/examples/protocol-operator-recovery",
   },
 ];
 
-const sections = [
+const tracks = [
   {
-    title: "Concepts",
+    title: "Start here",
     description:
-      "Learn the coordination-first model, exclusions, discovery flow, and how apps fit into the protocol before writing code.",
+      "Understand why the protocol exists, what it excludes, and how the domain maps to the integration surface.",
     links: [
+      { label: "Protocol SDK index", to: "/docs/examples/protocol-sdk-index" },
       {
-        label: "Protocol overview",
-        to: "/docs/examples/protocol-overview-and-exclusions",
+        label: "Vision and purpose",
+        to: "/docs/examples/protocol-vision-and-purpose",
       },
       {
-        label: "Manifest + discovery",
-        to: "/docs/examples/protocol-manifest-and-discovery",
-      },
-      {
-        label: "Versioning + compatibility",
-        to: "/docs/examples/protocol-versioning-and-compatibility",
+        label: "Core concepts",
+        to: "/docs/examples/protocol-core-concepts",
       },
     ],
   },
   {
-    title: "Build + Connect",
+    title: "Ship an integration",
     description:
-      "Register an app, authenticate, send stable actions, and consume webhooks and replay without touching internal systems.",
+      "Bootstrap from manifest and discovery, register your app, authenticate, then start dispatching stable actions.",
     links: [
+      {
+        label: "Read, connect, dispatch, operate",
+        to: "/docs/examples/protocol-read-connect-dispatch-operate",
+      },
       {
         label: "Partner quickstart",
         to: "/docs/examples/protocol-partner-quickstart",
       },
       {
-        label: "App registration + tokens",
-        to: "/docs/examples/protocol-app-registration-and-tokens",
+        label: "Manifest and discovery",
+        to: "/docs/examples/protocol-manifest-and-discovery",
       },
       {
-        label: "External actions",
+        label: "External actions reference",
         to: "/docs/examples/protocol-external-actions-reference",
       },
     ],
   },
   {
-    title: "Operate + Recover",
+    title: "Run in production",
     description:
-      "Run webhook consumers safely, reason about replay, and add agent integrations on top of the stable protocol boundary.",
+      "Handle webhooks, replay, recovery, consent, and agent readiness with a narrow operational surface.",
     links: [
       {
-        label: "Webhooks + replay",
+        label: "Webhooks and replay",
         to: "/docs/examples/protocol-event-subscriptions-and-replay",
       },
       {
-        label: "Webhook consumer",
-        to: "/docs/examples/protocol-webhook-consumer",
+        label: "Operator recovery",
+        to: "/docs/examples/protocol-operator-recovery",
       },
       {
-        label: "Agent quickstart",
-        to: "/docs/examples/protocol-agent-quickstart",
+        label: "Production readiness checklist",
+        to: "/docs/examples/protocol-production-readiness-checklist",
       },
     ],
   },
 ];
 
-const highlights = [
-  {
-    title: "Read state",
-    body: "Use manifest, discovery, and typed client helpers to understand the contract before sending traffic.",
-  },
-  {
-    title: "Connect safely",
-    body: "Register apps, store tokens, request consent, and use scoped access instead of private backend access.",
-  },
-  {
-    title: "Dispatch actions",
-    body: "Call stable coordination primitives for intents, requests, chats, and circles through a typed protocol surface.",
-  },
-  {
-    title: "Operate with recovery",
-    body: "Handle webhook delivery, replay, dead-letter recovery, and agent readiness from day one.",
-  },
+const facts = [
+  "Coordination-first, not feed-first",
+  "SDK-only public surface",
+  "Typed actions and events",
+  "Consent and grants built in",
 ];
 
-function SectionCard({ title, description, links }) {
+function TrackCard({ title, description, links }) {
   return (
-    <section className="os-card">
+    <section className="os-card os-track-card">
+      <div className="os-card-kicker">Documentation track</div>
       <h2>{title}</h2>
       <p>{description}</p>
       <div className="os-links">
@@ -130,77 +125,93 @@ export default function Home() {
   return (
     <Layout
       title={siteConfig.title}
-      description="OpenSocial protocol SDK and third-party integration documentation"
+      description="OpenSocial developer platform documentation for apps, agents, and partner systems"
     >
       <main className="os-home">
         <header className="os-hero">
-          <span className="os-eyebrow">Developer Platform</span>
-          <h1>{siteConfig.title}</h1>
-          <p>{siteConfig.tagline}</p>
-          <div className="os-inline-links">
-            {quickLinks.map((link) => (
-              <Link key={link.to} className="os-chip" to={link.to}>
-                {link.label}
-              </Link>
-            ))}
-          </div>
-          <div className="os-links">
-            <Link className="button button--primary button--lg" to="/docs">
-              Open SDK docs
-            </Link>
-            <Link
-              className="button button--secondary button--lg"
-              to="/docs/examples/protocol-sdk-index"
-            >
-              Start with protocol SDK
-            </Link>
+          <div className="os-hero-grid">
+            <div className="os-hero-copy">
+              <span className="os-eyebrow">OpenSocial Developer Platform</span>
+              <h1>Build on the coordination layer, not the app internals.</h1>
+              <p>
+                OpenSocial exposes a protocol-first surface for reading state,
+                connecting third-party systems, dispatching coordination actions,
+                subscribing to events, and operating agents safely.
+              </p>
+              <div className="os-inline-links">
+                {quickLinks.map((link) => (
+                  <Link key={link.to} className="os-chip" to={link.to}>
+                    {link.label}
+                  </Link>
+                ))}
+              </div>
+              <div className="os-links">
+                <Link className="button button--primary button--lg" to="/docs">
+                  Explore the docs
+                </Link>
+                <Link
+                  className="button button--secondary button--lg"
+                  to="/docs/examples/protocol-partner-quickstart"
+                >
+                  Start a partner integration
+                </Link>
+              </div>
+            </div>
+            <aside className="os-hero-panel">
+              <div className="os-card-kicker">Public SDK scope</div>
+              <div className="os-code-block os-code-block--hero">
+                <code>
+                  manifest
+                  <br />
+                  discovery
+                  <br />
+                  auth + consent
+                  <br />
+                  read state
+                  <br />
+                  dispatch actions
+                  <br />
+                  webhooks + replay
+                  <br />
+                  agent wrappers
+                </code>
+              </div>
+              <ul className="os-fact-list">
+                {facts.map((fact) => (
+                  <li key={fact}>{fact}</li>
+                ))}
+              </ul>
+            </aside>
           </div>
         </header>
-        <section className="os-lead-grid">
-          <div className="os-lead-card os-lead-card--dark">
-            <span className="os-card-label">Suggested path</span>
-            <ol className="os-path-list">
-              <li>Read the protocol concepts.</li>
-              <li>Bootstrap from manifest and discovery.</li>
-              <li>Register your app and store the token.</li>
-              <li>Choose direct actions, webhooks, or agents.</li>
-              <li>Use replay and recovery when operating live traffic.</li>
-            </ol>
-          </div>
-          <div className="os-lead-card">
-            <span className="os-card-label">What is published here</span>
-            <div className="os-code-block">
-              <code>
-                concepts
-                <br />
-                auth
-                <br />
-                connect
-                <br />
-                dispatch
-                <br />
-                webhooks
-                <br />
-                sdk helpers
-                <br />
-                agents
-                <br />
-                recovery
-              </code>
-            </div>
-          </div>
-        </section>
-        <section className="os-highlights">
-          {highlights.map((highlight) => (
-            <article key={highlight.title} className="os-highlight">
-              <h2>{highlight.title}</h2>
-              <p>{highlight.body}</p>
-            </article>
+
+        <section className="os-pillar-grid">
+          {pillars.map((pillar) => (
+            <Link key={pillar.to} className="os-pillar" to={pillar.to}>
+              <span className="os-card-kicker">{pillar.title}</span>
+              <h2>{pillar.title}</h2>
+              <p>{pillar.body}</p>
+            </Link>
           ))}
         </section>
+
+        <section className="os-intent-band">
+          <div>
+            <span className="os-card-kicker">Mental model</span>
+            <h2>Use the protocol in this order.</h2>
+          </div>
+          <ol className="os-sequence">
+            <li>Read manifest and discovery.</li>
+            <li>Register your app and store the token.</li>
+            <li>Request delegated access only when needed.</li>
+            <li>Dispatch narrow actions through the SDK.</li>
+            <li>Operate with webhooks, replay, and recovery.</li>
+          </ol>
+        </section>
+
         <div className="os-grid">
-          {sections.map((section) => (
-            <SectionCard key={section.title} {...section} />
+          {tracks.map((track) => (
+            <TrackCard key={track.title} {...track} />
           ))}
         </div>
       </main>

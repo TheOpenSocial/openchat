@@ -4,30 +4,41 @@ const sidebars = {
     "index",
     {
       type: "category",
-      label: "Getting Started",
+      label: "Concepts",
       items: [
         "examples/protocol-sdk-index",
+        "examples/protocol-vision-and-purpose",
         "examples/protocol-overview-and-exclusions",
+        "examples/protocol-core-concepts",
         "examples/protocol-manifest-and-discovery",
-        "examples/protocol-app-registration-and-tokens",
-        "examples/protocol-partner-quickstart",
       ],
     },
     {
       type: "category",
-      label: "Core Integration",
+      label: "Connect",
+      items: [
+        "examples/protocol-read-connect-dispatch-operate",
+        "examples/protocol-app-registration-and-tokens",
+        "examples/protocol-partner-quickstart",
+        "examples/protocol-consent-and-auth-troubleshooting",
+      ],
+    },
+    {
+      type: "category",
+      label: "Read And Dispatch",
       items: [
         "examples/protocol-external-actions-reference",
+        "examples/protocol-manifest-and-discovery",
+        "examples/protocol-app-registration-and-tokens",
         "examples/protocol-event-subscriptions-and-replay",
         "examples/protocol-webhook-consumer",
-        "examples/protocol-consent-and-auth-troubleshooting",
         "examples/protocol-production-readiness-checklist",
         "examples/protocol-versioning-and-compatibility",
       ],
     },
     {
       type: "category",
-      label: "Agent Integrations",
+      label: "Agents",
       items: [
         "examples/protocol-agent-integration-paths",
         "examples/protocol-agent-quickstart",
@@ -37,7 +48,7 @@ const sidebars = {
     },
     {
       type: "category",
-      label: "Operator Recovery",
+      label: "Operate",
       items: ["examples/protocol-operator-recovery"],
     },
   ],

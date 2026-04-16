@@ -22,6 +22,15 @@ The two foundational reads are:
 
 Together they tell you what kind of protocol server you are talking to and what integration paths it expects.
 
+```mermaid
+flowchart LR
+    A["Manifest"] --> C["Integration decisions"]
+    B["Discovery"] --> C
+    C --> D["Registration"]
+    D --> E["Auth and delegated access"]
+    E --> F["Actions / webhooks / agents"]
+```
+
 ## Shipped client surface
 
 The current `@opensocial/protocol-client` exposes:
@@ -99,6 +108,19 @@ A good partner flow is:
 3. decide which capabilities and scopes you actually need
 4. only then register the app
 
+```mermaid
+sequenceDiagram
+    participant P as Partner
+    participant S as OpenSocial server
+
+    P->>S: GET /protocol/manifest
+    S-->>P: Identity, capabilities, metadata
+    P->>S: GET /protocol/discovery
+    S-->>P: Resources, actions, operational routes
+    P->>S: POST registration request
+    S-->>P: App id + token
+```
+
 That sequence helps prevent two common mistakes:
 
 - requesting capabilities your integration does not actually use
@@ -153,9 +175,9 @@ Once manifest and discovery look right:
 
 Use these guides next:
 
-- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-app-registration-and-tokens.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-app-registration-and-tokens.md)
-- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-partner-quickstart.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-partner-quickstart.md)
-- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-external-actions-reference.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-external-actions-reference.md)
+- [App registration and tokens](./protocol-app-registration-and-tokens)
+- [Partner quickstart](./protocol-partner-quickstart)
+- [External actions reference](./protocol-external-actions-reference)
 
 ## Recommended rule
 

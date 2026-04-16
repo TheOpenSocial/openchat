@@ -4,6 +4,10 @@ High-level orientation for the OpenSocial protocol surface.
 
 Use it before the action reference or partner examples.
 
+## One-sentence summary
+
+OpenSocial is a coordination-first protocol for apps and agents that need to read state, dispatch stable actions, and operate integrations without private backend access.
+
 ## What OpenSocial protocol is
 
 OpenSocial protocol is a coordination-first integration surface extracted from the product we already run.
@@ -28,6 +32,14 @@ The protocol lets:
 - partner agents
 
 read state, write approved actions, and subscribe to relevant events without private backend internals.
+
+```mermaid
+flowchart LR
+    A["Apps and agents"] --> B["Protocol SDK"]
+    B --> C["Read live contract"]
+    B --> D["Dispatch stable actions"]
+    B --> E["Consume events and replay"]
+```
 
 ## What it is not
 
@@ -55,6 +67,19 @@ The protocol surface supports three integration modes:
 
 That is the stable mental model for the whole SDK family.
 
+## Why the exclusions matter
+
+The exclusions are not temporary omissions.
+
+They are how the protocol stays:
+
+- narrow
+- teachable
+- stable
+- recoverable
+
+If the public contract tried to expose every product behavior, it would become much harder to operate and much harder for third parties to trust.
+
 ## Resource Shape
 
 The core resource model is:
@@ -72,6 +97,19 @@ The core resource model is:
 - protocol app registration and webhook resources
 
 These are the primitives the backend and SDK are converging around.
+
+## Resource relationship
+
+```mermaid
+flowchart TD
+    U["User / profile"] --> I["Intent"]
+    I --> R["Intent request"]
+    R --> C["Connection or chat"]
+    C --> M["Chat message"]
+    I --> G["Circle"]
+    I --> N["Notification"]
+    I --> T["Agent thread"]
+```
 
 ## Write Surface
 
@@ -118,8 +156,8 @@ Partner integrations need to account for both:
 
 Use these guides for the details:
 
-- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-consent-and-auth-troubleshooting.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-consent-and-auth-troubleshooting.md)
-- [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-operator-recovery.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-operator-recovery.md)
+- [Consent and auth troubleshooting](./protocol-consent-and-auth-troubleshooting)
+- [Operator recovery](./protocol-operator-recovery)
 
 ## SDK Family
 
@@ -144,12 +182,12 @@ Each package stays narrow:
 After this overview, the usual next step is:
 
 - manifest and discovery bootstrap:
-  - [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-manifest-and-discovery.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-manifest-and-discovery.md)
+  - [Manifest and discovery](./protocol-manifest-and-discovery)
 - onboarding flow:
-  - [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-partner-quickstart.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-partner-quickstart.md)
+  - [Partner quickstart](./protocol-partner-quickstart)
 - writable contract:
-  - [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-external-actions-reference.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-external-actions-reference.md)
+  - [External actions reference](./protocol-external-actions-reference)
 - operational recovery:
-  - [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-operator-recovery.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-operator-recovery.md)
+  - [Operator recovery](./protocol-operator-recovery)
 - agent integrations:
-  - [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-integration-paths.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-agent-integration-paths.md)
+  - [Agent integration paths](./protocol-agent-integration-paths)

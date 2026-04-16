@@ -112,6 +112,7 @@ Use this as the baseline for all next backlog items. Do not reintroduce generic 
 - First-party mobile and web clients now consume the protocol SDK through the same base-url and bound-app helper flow we recommend to partners, rather than hand-wiring protocol transport details at each call site.
 - Docusaurus docs app is now wired on top of the repo documentation set for manual browsing and publishing
 - EC2 deployment for the docs app is now live through Docker, Caddy, image build, and deploy workflows at `https://docs.opensocial.so`
+- The public docs portal now has SDK-only information architecture, concept-first developer onboarding, protocol vision and core-concepts pages, and Mermaid flow diagrams for the main integration lifecycle.
 - First-party protocol settings/inspection surfaces: shipped as operational tooling, but still partial as polished product UX
 - CI and product-critical golden coverage are green on the current mainline verification pass
 - Mobile-critical backend controller coverage is verified for first-party protocol call-through on:
@@ -152,6 +153,7 @@ These packages should mirror the backend domain rather than inventing new abstra
    - Confirm manifest, discovery, examples, and client helpers still align with live backend routes.
    - Keep posts, follows, feeds, likes, and other generic social primitives explicitly excluded.
    - Treat docs plus examples as the v0 contract for partner consumption.
+   - Keep the public docs portal concept-first and SDK-only rather than letting it drift back into internal runbooks or raw doc dumps.
    - Status: verified against the current mainline CI and golden pass.
 
 2. Tighten delegated-grant enforcement beyond the core user-grant path.

@@ -8,7 +8,7 @@ const __dirname = path.dirname(__filename);
 /** @type {import('@docusaurus/types').Config} */
 const config = {
   title: "OpenSocial Docs",
-  tagline: "Protocol SDK and third-party integration documentation",
+  tagline: "Developer platform docs for reading state, connecting apps, dispatching actions, and operating integrations",
   url: "https://docs.opensocial.so",
   baseUrl: "/",
   organizationName: "TheOpenSocial",
@@ -56,22 +56,27 @@ const config = {
         },
         {
           to: "/docs/examples/protocol-sdk-index",
-          label: "Protocol SDK",
+          label: "Start",
           position: "left",
         },
         {
-          to: "/docs/examples/protocol-overview-and-exclusions",
+          to: "/docs/examples/protocol-core-concepts",
           label: "Concepts",
           position: "left",
         },
         {
-          to: "/docs/examples/protocol-partner-quickstart",
-          label: "Quickstart",
+          to: "/docs/examples/protocol-app-registration-and-tokens",
+          label: "Auth",
           position: "left",
         },
         {
           to: "/docs/examples/protocol-external-actions-reference",
-          label: "API",
+          label: "Dispatch",
+          position: "left",
+        },
+        {
+          to: "/docs/examples/protocol-event-subscriptions-and-replay",
+          label: "Webhooks",
           position: "left",
         },
         {
@@ -84,7 +89,7 @@ const config = {
     announcementBar: {
       id: "sdk_scope",
       content:
-        "Public docs cover the OpenSocial protocol SDK only: auth, connect, actions, events, webhooks, agents, and recovery.",
+        "Public docs cover the OpenSocial protocol SDK only: concepts, auth, connect, read, dispatch, webhooks, agents, and recovery.",
       backgroundColor: "#153b31",
       textColor: "#eef7f2",
       isCloseable: false,
@@ -100,12 +105,16 @@ const config = {
               to: "/docs",
             },
             {
-              label: "Protocol shape",
-              to: "/docs/examples/protocol-overview-and-exclusions",
+              label: "Vision + purpose",
+              to: "/docs/examples/protocol-vision-and-purpose",
             },
             {
-              label: "Manifest + discovery",
-              to: "/docs/examples/protocol-manifest-and-discovery",
+              label: "Core concepts",
+              to: "/docs/examples/protocol-core-concepts",
+            },
+            {
+              label: "Protocol shape",
+              to: "/docs/examples/protocol-overview-and-exclusions",
             },
           ],
         },
@@ -117,7 +126,11 @@ const config = {
               to: "/docs/examples/protocol-partner-quickstart",
             },
             {
-              label: "External actions",
+              label: "Auth + tokens",
+              to: "/docs/examples/protocol-app-registration-and-tokens",
+            },
+            {
+              label: "Actions reference",
               to: "/docs/examples/protocol-external-actions-reference",
             },
             {

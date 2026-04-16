@@ -16,14 +16,26 @@ If you are new to the protocol, use this order:
 
 That order matches the shipped contract and avoids unsupported assumptions.
 
+```mermaid
+flowchart LR
+    A["Learn the protocol"] --> B["Register and authenticate"]
+    B --> C["Read and dispatch"]
+    C --> D["Subscribe and recover"]
+    D --> E["Add agents if needed"]
+```
+
 ## Core orientation
 
+- vision and purpose:
+  - [Protocol vision and purpose](./protocol-vision-and-purpose)
 - overview and exclusions:
-  - [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-overview-and-exclusions.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-overview-and-exclusions.md)
+  - [Protocol overview and exclusions](./protocol-overview-and-exclusions)
+- core concepts:
+  - [Protocol core concepts](./protocol-core-concepts)
 - manifest and discovery bootstrap:
-  - [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-manifest-and-discovery.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-manifest-and-discovery.md)
+  - [Protocol manifest and discovery](./protocol-manifest-and-discovery)
 - app registration and tokens:
-  - [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-app-registration-and-tokens.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-app-registration-and-tokens.md)
+  - [Protocol app registration and tokens](./protocol-app-registration-and-tokens)
 
 ## Quickstart path
 
