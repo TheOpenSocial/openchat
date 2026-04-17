@@ -2874,6 +2874,8 @@ export class ProtocolService {
       | "request.send"
       | "request.accept"
       | "request.reject"
+      | "connection.create"
+      | "chat.create"
       | "chat.send_message"
       | "circle.create"
       | "circle.join"
