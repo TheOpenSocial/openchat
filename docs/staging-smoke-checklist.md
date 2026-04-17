@@ -76,11 +76,11 @@ Optional automation (moderation drill):
 - Safety default: the drill defaults to `MODERATION_DRILL_ACTION=resolve`, so it is non-destructive unless you explicitly opt into enforcement verification.
 
 ## 1) Environment and Health
-- [ ] `GET /api/health` returns success.
+- [ ] `GET /health` returns success.
 - [ ] `GET /api/admin/health` returns success with valid admin headers.
 - [ ] Admin ops endpoints respond:
-  - [ ] `GET /api/admin/ops/metrics`
-  - [ ] `GET /api/admin/ops/alerts`
+  - [ ] `GET /admin/ops/metrics`
+  - [ ] `GET /admin/ops/alerts`
 
 ## 2) Auth and Session
 - [ ] Google OAuth start endpoint resolves (`GET /api/auth/google`).
@@ -121,7 +121,7 @@ Optional automation (moderation drill):
 
 ## 8) Rollout gates (prod approval)
 Cross-check with `BACKEND_PROGRESS.md` §31 before promoting to production:
-- [ ] Observability: traces/metrics visible for API + workers; alert endpoint (`GET /api/admin/ops/alerts`) reviewed for a quiet baseline.
+- [ ] Observability: traces/metrics visible for API + workers; alert endpoint (`GET /admin/ops/alerts`) reviewed for a quiet baseline.
 - [ ] Incident path: on-call can follow `docs/incident-runbook.md` using current dashboards/links.
 - [ ] Launch controls: feature flags and kill switches exercised in staging (`GET /api/admin/launch-controls`, toggles verified).
 - [ ] Cohort / invite-only: if enabled, non-cohort denial tested.
@@ -132,9 +132,9 @@ Cross-check with `BACKEND_PROGRESS.md` §31 before promoting to production:
 
 Use this compact subset for final launch approval:
 
-- [ ] `GET /api/health` returns success.
+- [ ] `GET /health` returns success.
 - [ ] `GET /api/admin/health` returns success with valid admin headers.
-- [ ] `GET /api/admin/ops/alerts` reviewed and understood for the current baseline.
+- [ ] `GET /admin/ops/alerts` reviewed and understood for the current baseline.
 - [ ] `pnpm test:agentic:suite:verification` passes in the deployed environment.
 - [ ] `pnpm test:backend:ops-pack` passes and the latest artifact says `shipVerdict=ship_ready`.
 - [ ] `pnpm moderation:drill` passes in the deployed environment and the audit path is visible.

@@ -12,40 +12,40 @@
   - `x-admin-api-key`
 
 ## Scenario A: End-to-end happy path
-1. Start OAuth flow (`GET /api/auth/google`) and complete callback.
-2. Create intent (`POST /api/intents`) as seeded sender user.
-3. Verify request appears in recipient inbox (`GET /api/inbox/:userId/requests`).
-4. Accept request (`POST /api/inbox/:requestId/accept`).
-5. Confirm connection/chat exists (`GET /api/chats/:chatId/messages`).
-6. Send a chat message (`POST /api/chats/:chatId/messages`) and verify readback.
+1. Start OAuth flow (`GET /auth/google`) and complete callback.
+2. Create intent (`POST /intents`) as seeded sender user.
+3. Verify request appears in recipient inbox (`GET /inbox/:userId/requests`).
+4. Accept request (`POST /inbox/:requestId/accept`).
+5. Confirm connection/chat exists (`GET /chats/:chatId/messages`).
+6. Send a chat message (`POST /chats/:chatId/messages`) and verify readback.
 
 Pass criteria:
 - Intent reaches `fanout`/`partial`/`connected` state.
 - Chat message is persisted and visible to both participants.
 
 Operational check:
-- Inspect `GET /api/admin/ops/manual-verification` before and after fanout-heavy tests.
+- Inspect `GET /admin/ops/manual-verification` before and after fanout-heavy tests.
   It now includes moderation backlog and stale-flag risk alongside request pressure, queue, and auth health.
 - Use it as the default snapshot for request pressure, queue health, and auth health together.
 - Read `assessment.overallStatus`, `assessment.findings`, and `assessment.nextActions` first instead of manually comparing every subsection on every run.
 - If you need deeper detail, then drill into the narrower endpoints below.
-- Inspect `GET /api/admin/ops/request-pressure` only when you need recipient-level detail.
+- Inspect `GET /admin/ops/request-pressure` only when you need recipient-level detail.
 - Confirm no recipient is unintentionally saturated during repeated manual test runs.
 - Check the concentration summary too, so we catch over-targeting of a small cohort before hard suppression makes it obvious.
 
 Protocol delivery check:
-- Inspect `GET /api/admin/ops/manual-verification` after action, webhook, replay, or moderation-heavy tests.
+- Inspect `GET /admin/ops/manual-verification` after action, webhook, replay, or moderation-heavy tests.
 - Confirm the combined snapshot does not surface a `protocol_queue` critical finding before moving on.
-- Inspect `GET /api/admin/ops/protocol-queue-health` after action, webhook, or replay-heavy tests.
+- Inspect `GET /admin/ops/protocol-queue-health` after action, webhook, or replay-heavy tests.
 - Confirm:
   - `recentAttemptSummary` is not dominated by `dead_lettered`
   - `recentAttempts` show retries progressing rather than repeating the same failure forever
   - `deadLetterSample` is either empty or clearly explained by the test you just ran
 
 Protocol auth check:
-- Inspect `GET /api/admin/ops/manual-verification` during app-registration, consent, and delegated-action testing.
+- Inspect `GET /admin/ops/manual-verification` during app-registration, consent, and delegated-action testing.
 - Confirm the combined snapshot does not surface a `protocol_auth` critical finding before treating the scenario as product-safe.
-- Inspect `GET /api/admin/ops/protocol-auth-health` during app-registration, consent, and delegated-action testing.
+- Inspect `GET /admin/ops/protocol-auth-health` during app-registration, consent, and delegated-action testing.
 - Confirm:
   - executable delegation is concentrated in `user` subjects, not accidentally drifting into modeled-only subject types
   - pending consent backlog matches the scenarios you intentionally created
@@ -53,9 +53,9 @@ Protocol auth check:
   - recent auth-failure samples clearly show whether the issue is missing token, missing scopes, missing capabilities, or modeled-only non-user grants
 
 ## Scenario B: Launch control gating
-1. Disable new intents via `POST /api/admin/launch-controls`:
+1. Disable new intents via `POST /admin/launch-controls`:
    - `{ "enableNewIntents": false, "reason": "qa_gate" }`
-2. Confirm `POST /api/intents` is rejected with service-unavailable.
+2. Confirm `POST /intents` is rejected with service-unavailable.
 3. Re-enable intents, disable realtime:
    - `{ "enableNewIntents": true, "enableRealtimeChat": false, "reason": "qa_gate" }`
 4. Confirm websocket `chat.send` / `room.join` fail with `realtime_chat_disabled`.
@@ -86,8 +86,8 @@ Pass criteria:
 
 ## Scenario E: Privacy/compliance checks
 1. Verify policy endpoints:
-   - `GET /api/privacy/policy`
-   - `GET /api/compliance/policy`
+   - `GET /privacy/policy`
+   - `GET /compliance/policy`
 2. Exercise user rights APIs:
    - data export
    - message deletion
@@ -101,10 +101,10 @@ Pass criteria:
 ## Scenario F: Protocol delivery and replay health
 1. Register or reuse a protocol app with a webhook subscription.
 2. Trigger a protocol-backed action that should emit a delivery.
-3. Inspect `GET /api/admin/ops/manual-verification`.
+3. Inspect `GET /admin/ops/manual-verification`.
    Use the moderation section to catch stale review backlog before a separate moderation drill becomes the first place the issue appears.
 4. Read `assessment.findings` first so you can tell whether the immediate problem is request pressure, queue state, or auth/configuration before drilling further.
-5. If you need delivery-level detail, inspect `GET /api/admin/ops/protocol-queue-health`.
+5. If you need delivery-level detail, inspect `GET /admin/ops/protocol-queue-health`.
 6. If you intentionally point the webhook at a failing endpoint, confirm:
    - `recentAttemptSummary` shows the expected error bucket
    - the delivery moves through `retrying` and then `dead_lettered`

@@ -251,7 +251,7 @@ This should show up in operator tooling as:
 
 This is now shipped at a first-pass level through:
 
-- `GET /api/admin/ops/request-pressure`
+- `GET /admin/ops/request-pressure`
 
 Current snapshot includes:
 
