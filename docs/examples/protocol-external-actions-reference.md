@@ -30,7 +30,7 @@ For auth debugging, use [Consent and auth troubleshooting](./protocol-consent-an
 flowchart LR
     A["Intent actions"] --> D["Protocol event stream"]
     B["Request actions"] --> D
-    C["Chat and circle actions"] --> D
+    C["Connection, chat, and circle actions"] --> D
 ```
 
 ## Intent actions
@@ -84,6 +84,16 @@ Rejects a received request.
 - Capability: `request.write`
 - Emits: `request.rejected`
 - Returns: `ProtocolRequestActionResult`
+
+## Connection action
+
+### `connection.create`
+
+Creates a direct or group connection for the acting user.
+
+- Capability: `connection.write`
+- Emits: `connection.created`
+- Returns: `ProtocolConnectionActionResult`
 
 ## Chat action
 

@@ -35,6 +35,8 @@ import {
   protocolWebhookDeliveryAttemptSchema,
   protocolWebhookDeliveryReplayResultSchema,
   protocolChatMessageActionResultSchema,
+  protocolConnectionActionResultSchema,
+  protocolConnectionCreateActionSchema,
   protocolChatSendMessageActionSchema,
   protocolCircleActionResultSchema,
   protocolCircleCreateActionSchema,
@@ -63,6 +65,8 @@ import {
   type AppRegistrationRequest,
   type CapabilityName,
   type ProtocolChatSendMessageAction,
+  type ProtocolConnectionActionResult,
+  type ProtocolConnectionCreateAction,
   type ProtocolCircleCreateAction,
   type ProtocolCircleJoinAction,
   type ProtocolCircleLeaveAction,
@@ -97,6 +101,7 @@ import {
   verifyProtocolAppToken,
 } from "./protocol-credentials.js";
 import { ChatsService } from "../chats/chats.service.js";
+import { ConnectionsService } from "../connections/connections.service.js";
 import { InboxService } from "../inbox/inbox.service.js";
 import { IntentsService } from "../intents/intents.service.js";
 import { NotificationsService } from "../notifications/notifications.service.js";
@@ -254,6 +259,7 @@ export class ProtocolService {
     @Optional() private readonly intentsService?: IntentsService,
     @Optional() private readonly inboxService?: InboxService,
     @Optional() private readonly chatsService?: ChatsService,
+    @Optional() private readonly connectionsService?: ConnectionsService,
     @Optional()
     private readonly recurringCirclesService?: RecurringCirclesService,
     @Optional()
@@ -1417,6 +1423,28 @@ export class ProtocolService {
     });
   }
 
+  async createConnectionAction(
+    appId: string,
+    appToken: string,
+    input: ProtocolConnectionCreateAction,
+  ) {
+    const payload = protocolConnectionCreateActionSchema.parse(input);
+    const { app, grant } = await this.requireDelegatedActionGrant(
+      appId,
+      appToken,
+      payload.actorUserId,
+      "connection.create",
+      ["connection.write"],
+    );
+    if (!this.connectionsService) {
+      throw new NotFoundException("connection actions unavailable");
+    }
+    return this.executeConnectionCreateAction(payload, {
+      actorAppId: app.registration.appId,
+      grantId: grant.grantId,
+    });
+  }
+
   async createCircleAction(
     appId: string,
     appToken: string,
@@ -1733,6 +1761,12 @@ export class ProtocolService {
     input: ProtocolChatSendMessageAction,
   ) {
     return this.executeChatSendMessageAction(chatId, input, {
+      actorAppId: FIRST_PARTY_PROTOCOL_ACTOR_APP_ID,
+    });
+  }
+
+  async createFirstPartyConnectionAction(input: ProtocolConnectionCreateAction) {
+    return this.executeConnectionCreateAction(input, {
       actorAppId: FIRST_PARTY_PROTOCOL_ACTOR_APP_ID,
     });
   }
@@ -2389,6 +2423,47 @@ export class ProtocolService {
       replyToMessageId: message.replyToMessageId ?? null,
       createdAt:
         this.toIsoString(message.createdAt) ?? new Date().toISOString(),
+      metadata: payload.metadata ?? {},
+    });
+  }
+
+  private async executeConnectionCreateAction(
+    input: ProtocolConnectionCreateAction,
+    context: { actorAppId: string; grantId?: string },
+  ): Promise<ProtocolConnectionActionResult> {
+    const payload = protocolConnectionCreateActionSchema.parse(input);
+    const connection = await this.connectionsService!.createConnection(
+      payload.type,
+      payload.actorUserId,
+      payload.originIntentId,
+    );
+
+    await this.recordEvent({
+      actorAppId: context.actorAppId,
+      event: "connection.created",
+      resource: "connection",
+      payload: {
+        connectionId: connection.id,
+        actorUserId: payload.actorUserId,
+        createdByUserId: connection.createdByUserId,
+        type: connection.type,
+        originIntentId: connection.originIntentId ?? null,
+        grantId: context.grantId ?? null,
+        source:
+          context.actorAppId === FIRST_PARTY_PROTOCOL_ACTOR_APP_ID
+            ? "first_party"
+            : "app",
+      },
+    });
+
+    return protocolConnectionActionResultSchema.parse({
+      action: "connection.create",
+      status: "created",
+      actorUserId: payload.actorUserId,
+      connectionId: connection.id,
+      type: connection.type,
+      originIntentId: connection.originIntentId ?? null,
+      createdByUserId: connection.createdByUserId,
       metadata: payload.metadata ?? {},
     });
   }

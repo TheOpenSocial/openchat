@@ -4,11 +4,11 @@ import { ok } from "../common/api-response.js";
 import { ActorUserId } from "../common/actor-user-id.decorator.js";
 import { assertActorOwnsUser } from "../common/auth-context.js";
 import { parseRequestPayload } from "../common/validation.js";
-import { ConnectionsService } from "./connections.service.js";
+import { ProtocolService } from "../protocol/protocol.service.js";
 
 @Controller("connections")
 export class ConnectionsController {
-  constructor(private readonly connectionsService: ConnectionsService) {}
+  constructor(private readonly protocolService: ProtocolService) {}
 
   @Post()
   async create(@Body() body: unknown, @ActorUserId() actorUserId: string) {
@@ -19,11 +19,14 @@ export class ConnectionsController {
       "connection creator does not match authenticated user",
     );
     return ok(
-      await this.connectionsService.createConnection(
-        payload.type,
-        payload.createdByUserId,
-        payload.originIntentId,
-      ),
+      await this.protocolService.createFirstPartyConnectionAction({
+        actorUserId,
+        type: payload.type,
+        originIntentId: payload.originIntentId,
+        metadata: {
+          source: "connections.controller.create",
+        },
+      }),
     );
   }
 }

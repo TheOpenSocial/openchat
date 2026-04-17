@@ -57,6 +57,14 @@ Repository example:
 
 Once you have an app id and token, exercise the shipped write surface.
 
+That surface currently covers:
+
+- intents
+- requests
+- connections
+- chat messages
+- circles
+
 Primary guide:
 
 - [External actions reference](./protocol-external-actions-reference)

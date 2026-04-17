@@ -9,6 +9,8 @@ import {
   protocolAppTokenRevokeResultSchema,
   protocolChatMessageActionResultSchema,
   protocolChatSendMessageActionSchema,
+  protocolConnectionActionResultSchema,
+  protocolConnectionCreateActionSchema,
   protocolCircleActionResultSchema,
   protocolCircleCreateActionSchema,
   protocolCircleJoinActionSchema,
@@ -59,6 +61,8 @@ import {
   type ProtocolAppUsageSummary,
   type ProtocolChatMessageActionResult,
   type ProtocolChatSendMessageAction,
+  type ProtocolConnectionActionResult,
+  type ProtocolConnectionCreateAction,
   type ProtocolCircleActionResult,
   type ProtocolCircleCreateAction,
   type ProtocolCircleJoinAction,
@@ -240,6 +244,11 @@ export type ProtocolClient = {
     requestId: string,
     payload: ProtocolRequestDecisionInput,
   ) => Promise<ProtocolRequestActionResult>;
+  createConnection: (
+    appId: string,
+    appToken: string,
+    payload: ProtocolConnectionCreateInput,
+  ) => Promise<ProtocolConnectionActionResult>;
   sendChatMessage: (
     appId: string,
     appToken: string,
@@ -364,6 +373,9 @@ export type ProtocolAppClient = {
     requestId: string,
     payload: ProtocolRequestDecisionInput,
   ) => Promise<ProtocolRequestActionResult>;
+  createConnection: (
+    payload: ProtocolConnectionCreateInput,
+  ) => Promise<ProtocolConnectionActionResult>;
   sendChatMessage: (
     chatId: string,
     payload: ProtocolChatSendMessageInput,
@@ -412,6 +424,7 @@ export type ProtocolIntentUpdateInput = ProtocolIntentUpdateAction;
 export type ProtocolIntentCancelInput = ProtocolIntentCancelAction;
 export type ProtocolRequestSendInput = ProtocolIntentRequestSendAction;
 export type ProtocolRequestDecisionInput = ProtocolRequestDecisionAction;
+export type ProtocolConnectionCreateInput = ProtocolConnectionCreateAction;
 export type ProtocolChatSendMessageInput = ProtocolChatSendMessageAction;
 export type ProtocolCircleCreateInput = ProtocolCircleCreateAction;
 export type ProtocolCircleJoinInput = ProtocolCircleJoinAction;
@@ -811,6 +824,17 @@ export function createProtocolClient(
         protocolRequestActionResultSchema,
       );
     },
+    async createConnection(appId, appToken, payload) {
+      const requestPayload = protocolConnectionCreateActionSchema.parse(payload);
+      const response = await transport.request(
+        `/protocol/apps/${appId}/actions/connections`,
+        buildProtocolJsonRequestInit(appToken, requestPayload),
+      );
+      return readProtocolResponseData(
+        response,
+        protocolConnectionActionResultSchema,
+      );
+    },
     async sendChatMessage(appId, appToken, chatId, payload) {
       const requestPayload = protocolChatSendMessageActionSchema.parse(payload);
       const response = await transport.request(
@@ -1007,6 +1031,8 @@ export function bindProtocolAppClient(
       client.acceptRequest(session.appId, session.appToken, requestId, payload),
     rejectRequest: (requestId, payload) =>
       client.rejectRequest(session.appId, session.appToken, requestId, payload),
+    createConnection: (payload) =>
+      client.createConnection(session.appId, session.appToken, payload),
     sendChatMessage: (chatId, payload) =>
       client.sendChatMessage(session.appId, session.appToken, chatId, payload),
     createCircle: (payload) =>

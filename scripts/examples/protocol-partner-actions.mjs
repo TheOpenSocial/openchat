@@ -37,6 +37,14 @@ async function main() {
     flag: "--recipient-user-id",
     envName: "PROTOCOL_RECIPIENT_USER_ID",
   });
+  const connectionType = resolveOptionalStringArg({
+    flag: "--connection-type",
+    envName: "PROTOCOL_CONNECTION_TYPE",
+  });
+  const originIntentId = resolveOptionalStringArg({
+    flag: "--origin-intent-id",
+    envName: "PROTOCOL_ORIGIN_INTENT_ID",
+  });
   const chatId = resolveOptionalStringArg({
     flag: "--chat-id",
     envName: "PROTOCOL_CHAT_ID",
@@ -92,6 +100,16 @@ async function main() {
       metadata: exampleMetadata,
     });
     logSection("protocol-example", "request-sent", request);
+  }
+
+  if (connectionType === "dm" || connectionType === "group") {
+    const connection = await app.createConnection({
+      actorUserId,
+      type: connectionType,
+      originIntentId: originIntentId ?? intent.intentId,
+      metadata: exampleMetadata,
+    });
+    logSection("protocol-example", "connection-created", connection);
   }
 
   if (chatId) {

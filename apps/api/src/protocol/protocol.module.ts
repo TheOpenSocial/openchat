@@ -1,6 +1,7 @@
 import { BullModule } from "@nestjs/bullmq";
 import { Module, forwardRef } from "@nestjs/common";
 import { ChatsModule } from "../chats/chats.module.js";
+import { ConnectionsModule } from "../connections/connections.module.js";
 import { InboxModule } from "../inbox/inbox.module.js";
 import { IntentsModule } from "../intents/intents.module.js";
 import { NotificationsModule } from "../notifications/notifications.module.js";
@@ -17,6 +18,7 @@ import { ProtocolWebhookDeliveryWorkerService } from "./protocol-webhook-deliver
     forwardRef(() => InboxModule),
     NotificationsModule,
     forwardRef(() => ChatsModule),
+    forwardRef(() => ConnectionsModule),
     forwardRef(() => RecurringCirclesModule),
   ],
   controllers: [ProtocolController],

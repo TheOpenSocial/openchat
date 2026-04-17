@@ -14,6 +14,7 @@ import {
   appRegistrationRequestSchema,
   identifierSchema,
   protocolChatSendMessageActionSchema,
+  protocolConnectionCreateActionSchema,
   protocolCircleCreateActionSchema,
   protocolCircleJoinActionSchema,
   protocolCircleLeaveActionSchema,
@@ -611,6 +612,26 @@ export class ProtocolController {
         appId,
         readProtocolAppToken(headers) ?? "",
         chatId,
+        payload,
+      ),
+    );
+  }
+
+  @Post("apps/:appId/actions/connections")
+  async createConnectionAction(
+    @Param("appId") appIdParam: string,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+    @Body() body: unknown,
+  ) {
+    const appId = parseRequestPayload(identifierSchema, appIdParam);
+    const payload = parseRequestPayload(
+      protocolConnectionCreateActionSchema,
+      body,
+    );
+    return ok(
+      await this.protocolService.createConnectionAction(
+        appId,
+        readProtocolAppToken(headers) ?? "",
         payload,
       ),
     );

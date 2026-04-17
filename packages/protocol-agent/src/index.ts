@@ -7,6 +7,7 @@ import {
 import type {
   ProtocolAppOperationalSnapshot,
   ProtocolChatSendMessageAction as ProtocolChatSendMessageInput,
+  ProtocolConnectionCreateAction as ProtocolConnectionCreateInput,
   ProtocolCircleCreateAction as ProtocolCircleCreateInput,
   ProtocolCircleJoinAction as ProtocolCircleJoinInput,
   ProtocolCircleLeaveAction as ProtocolCircleLeaveInput,
@@ -33,6 +34,7 @@ export type ProtocolAgentReadinessIssueCode =
   | "retrying_deliveries_present"
   | "queued_backlog_present"
   | "no_active_grants"
+  | "no_executable_grants"
   | "pending_consent_requests";
 
 export type ProtocolAgentReadinessIssue = {
@@ -97,6 +99,11 @@ export type ProtocolAgentClient = {
       metadata?: ProtocolJsonObject;
     },
   ) => Promise<ProtocolRequestActionResult>;
+  createConnection: (
+    input: Omit<ProtocolConnectionCreateInput, "actorUserId" | "metadata"> & {
+      metadata?: ProtocolJsonObject;
+    },
+  ) => ReturnType<ProtocolAppClient["createConnection"]>;
   sendChatMessage: (
     chatId: string,
     input: Omit<ProtocolChatSendMessageInput, "actorUserId" | "metadata"> & {
@@ -363,6 +370,12 @@ export function bindProtocolAgentClient(
         actorUserId: session.actorUserId,
         metadata: mergeMetadata(session, input.metadata),
       }),
+    createConnection: (input) =>
+      app.createConnection({
+        ...input,
+        actorUserId: session.actorUserId,
+        metadata: mergeMetadata(session, input.metadata),
+      }),
     sendChatMessage: (chatId, input) =>
       app.sendChatMessage(chatId, {
         ...input,
@@ -561,6 +574,29 @@ export function createProtocolAgentToolset(
           metadata: payload.metadata,
         });
       },
+    },
+    {
+      name: "protocol_agent_create_connection",
+      description:
+        "Create a direct or group connection through the OpenSocial protocol.",
+      inputSchema: {
+        type: "object",
+        required: ["type"],
+        additionalProperties: false,
+        properties: {
+          type: { type: "string", enum: ["dm", "group"] },
+          originIntentId: { type: "string" },
+          metadata: metadataSchema,
+        },
+      },
+      invoke: (input) =>
+        agent.createConnection(
+          readProtocolAgentToolInput<
+            Omit<ProtocolConnectionCreateInput, "actorUserId" | "metadata"> & {
+              metadata?: ProtocolJsonObject;
+            }
+          >(input),
+        ),
     },
     {
       name: "protocol_agent_send_chat_message",

@@ -56,6 +56,7 @@ The protocol is no longer just a concept. The following pieces are already prese
   - `request.send`
   - `request.accept`
   - `request.reject`
+  - `connection.create`
   - `chat.send_message`
   - `circle.create`
   - `circle.join`
@@ -134,6 +135,7 @@ Use this as the baseline for all next backlog items. Do not reintroduce generic 
   - intent convert
   - inbox accept and reject
   - sender-side request cancel
+  - direct connection create
   - chat send
   - recurring-circle create and add-member
 
@@ -214,8 +216,11 @@ These packages should mirror the backend domain rather than inventing new abstra
      - recurring-circle create and add-member
    - Remaining likely candidates should be judged against real mobile/product usage, not backend neatness alone.
    - Current review outcome:
-     - chat edit, reaction, and read-receipt flows: stay internal for now
-     - recurring-circle update, archive, pause, resume, and remove-member flows: stay internal for now unless partner demand makes them real protocol actions
+   - chat edit, reaction, and read-receipt flows: stay internal for now
+   - profile updates, photo upload intents, and scheduled-task/saved-search mutations: stay internal for now
+   - runtime commerce listing/offer flows: stay internal for now unless they become explicit partner-facing protocol primitives
+   - direct connection create: now protocol-owned through `connection.create`
+   - recurring-circle update, archive, pause, resume, and remove-member flows: stay internal for now unless partner demand makes them real protocol actions
 
 ### Next
 
