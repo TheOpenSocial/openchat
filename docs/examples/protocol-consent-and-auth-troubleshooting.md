@@ -33,7 +33,9 @@ Inspect the app usage summary first.
 Look at:
 
 - recent auth failures
-- last token rotation
+- token freshness
+- current token issue time
+- recommended rotation-by time
 - last token revocation
 - recent grant activity
 

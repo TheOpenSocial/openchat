@@ -72,10 +72,20 @@ If a write action is denied, inspect the app usage summary first:
 
 ```ts
 const usage = await app.getAppUsageSummary();
-console.log(usage.authFailures);
+console.log(usage.authFailureCounts);
 console.log(usage.tokenAudit);
 console.log(usage.grantAudit);
 ```
+
+`usage.tokenAudit` now also exposes:
+
+- `currentTokenIssuedAt`
+- `recommendedRotateBy`
+- `tokenAgeDays`
+- `rotationWindowDays`
+- `freshness`
+
+So partners can tell whether a credential is still current, should rotate soon, or is already outside the recommended rotation window.
 
 For consent and grant debugging, see [`/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-consent-and-auth-troubleshooting.md`](/Users/cruciblelabs/Documents/openchat/docs/examples/protocol-consent-and-auth-troubleshooting.md).
 

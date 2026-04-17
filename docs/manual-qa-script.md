@@ -48,6 +48,7 @@ Protocol auth check:
 - Inspect `GET /admin/ops/protocol-auth-health` during app-registration, consent, and delegated-action testing.
 - Confirm:
   - executable delegation is concentrated in `user` subjects, not accidentally drifting into modeled-only subject types
+  - token freshness is reasonable for the apps you are exercising, especially `freshness`, `tokenAgeDays`, and `recommendedRotateBy`
   - pending consent backlog matches the scenarios you intentionally created
   - recent auth failures are understandable and bounded rather than climbing silently
   - recent auth-failure samples clearly show whether the issue is missing token, missing scopes, missing capabilities, or modeled-only non-user grants

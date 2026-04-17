@@ -129,6 +129,7 @@ type ProtocolAuthHealthAppRow = {
   appId: string;
   appName: string | null;
   appStatus: string;
+  appCreatedAt: Date | string | null;
   issuedScopeCount: number | bigint | string;
   issuedCapabilityCount: number | bigint | string;
   activeGrantCount: number | bigint | string;
@@ -138,6 +139,7 @@ type ProtocolAuthHealthAppRow = {
   executableGrantCount: number | bigint | string;
   modeledOnlyGrantCount: number | bigint | string;
   recentAuthFailureCount: number | bigint | string;
+  lastRotatedAt: Date | string | null;
 };
 
 type ProtocolAuthHealthFailureSummaryRow = {
@@ -178,6 +180,8 @@ type ManualVerificationNextAction = {
 
 const DEFAULT_MAX_PENDING_INBOUND_REQUESTS_PER_RECIPIENT = 6;
 const DEFAULT_MAX_DAILY_INBOUND_REQUESTS_PER_RECIPIENT = 12;
+const DEFAULT_PROTOCOL_APP_TOKEN_ROTATE_AFTER_DAYS = 90;
+const DEFAULT_PROTOCOL_APP_TOKEN_ROTATE_SOON_WINDOW_DAYS = 14;
 
 @PublicRoute()
 @Controller("admin")
@@ -4550,6 +4554,7 @@ export class AdminController {
       `SELECT pa.app_id AS "appId",
               COALESCE(pa.registration_json->>'name', pa.app_id) AS "appName",
               pa.status AS "appStatus",
+              COALESCE(NULLIF(pa.registration_json->>'createdAt', ''), NULL) AS "appCreatedAt",
               CARDINALITY(pa.issued_scopes) AS "issuedScopeCount",
               CARDINALITY(pa.issued_capabilities) AS "issuedCapabilityCount",
               COALESCE(g.active_grants, 0)::bigint AS "activeGrantCount",
@@ -4558,7 +4563,8 @@ export class AdminController {
               COALESCE(c.approved_consents, 0)::bigint AS "approvedConsentCount",
               COALESCE(g.executable_grants, 0)::bigint AS "executableGrantCount",
               COALESCE(g.modeled_only_grants, 0)::bigint AS "modeledOnlyGrantCount",
-              COALESCE(f.recent_auth_failures, 0)::bigint AS "recentAuthFailureCount"
+              COALESCE(f.recent_auth_failures, 0)::bigint AS "recentAuthFailureCount",
+              tr.last_rotated_at AS "lastRotatedAt"
        FROM protocol_apps pa
        LEFT JOIN (
          SELECT app_id,
@@ -4585,6 +4591,15 @@ export class AdminController {
            AND actor_app_id IS NOT NULL
          GROUP BY actor_app_id
        ) f ON f.app_id = pa.app_id
+       LEFT JOIN (
+         SELECT actor_app_id AS app_id,
+                MAX(created_at) AS last_rotated_at
+         FROM protocol_event_log
+         WHERE event_name = 'app.updated'
+           AND payload->>'update' = 'app_token_rotated'
+           AND actor_app_id IS NOT NULL
+         GROUP BY actor_app_id
+       ) tr ON tr.app_id = pa.app_id
        ORDER BY COALESCE(f.recent_auth_failures, 0) DESC,
                 COALESCE(c.pending_consents, 0) DESC,
                 COALESCE(g.active_grants, 0) DESC,
@@ -4616,22 +4631,85 @@ export class AdminController {
        LIMIT 20`,
     );
 
-    const apps = appRows.map((row) => ({
-      appId: row.appId,
-      appName: row.appName,
-      appStatus: row.appStatus,
-      issuedScopeCount: Number(row.issuedScopeCount ?? 0),
-      issuedCapabilityCount: Number(row.issuedCapabilityCount ?? 0),
-      activeGrantCount: Number(row.activeGrantCount ?? 0),
-      revokedGrantCount: Number(row.revokedGrantCount ?? 0),
-      pendingConsentCount: Number(row.pendingConsentCount ?? 0),
-      approvedConsentCount: Number(row.approvedConsentCount ?? 0),
-      executableGrantCount: Number(row.executableGrantCount ?? 0),
-      modeledOnlyGrantCount: Number(row.modeledOnlyGrantCount ?? 0),
-      recentAuthFailureCount: Number(row.recentAuthFailureCount ?? 0),
-      hasExecutableDelegation: Number(row.executableGrantCount ?? 0) > 0,
-      hasModeledOnlyDelegation: Number(row.modeledOnlyGrantCount ?? 0) > 0,
-    }));
+    const toIsoString = (value: Date | string | null | undefined) => {
+      if (!value) {
+        return null;
+      }
+      if (value instanceof Date) {
+        return value.toISOString();
+      }
+      return value;
+    };
+    const rotationWindowDays = Math.max(
+      1,
+      Number(
+        process.env.PROTOCOL_APP_TOKEN_ROTATE_AFTER_DAYS ||
+          DEFAULT_PROTOCOL_APP_TOKEN_ROTATE_AFTER_DAYS,
+      ),
+    );
+    const rotateSoonWindowDays = Math.max(
+      1,
+      Math.min(
+        rotationWindowDays,
+        Number(
+          process.env.PROTOCOL_APP_TOKEN_ROTATE_SOON_WINDOW_DAYS ||
+            DEFAULT_PROTOCOL_APP_TOKEN_ROTATE_SOON_WINDOW_DAYS,
+        ),
+      ),
+    );
+
+    const apps = appRows.map((row) => {
+      const appCreatedAt = toIsoString(row.appCreatedAt);
+      const lastRotatedAt = toIsoString(row.lastRotatedAt);
+      const currentTokenIssuedAt =
+        lastRotatedAt ?? appCreatedAt ?? new Date().toISOString();
+      const currentTokenIssuedAtMs = Date.parse(currentTokenIssuedAt);
+      const tokenAgeDays = Math.max(
+        0,
+        Math.floor(
+          (Date.now() -
+            (Number.isFinite(currentTokenIssuedAtMs)
+              ? currentTokenIssuedAtMs
+              : Date.now())) /
+            (24 * 60 * 60 * 1000),
+        ),
+      );
+      const freshness =
+        tokenAgeDays >= rotationWindowDays
+          ? "stale"
+          : tokenAgeDays >= rotationWindowDays - rotateSoonWindowDays
+            ? "rotate_soon"
+            : "current";
+      return {
+        appId: row.appId,
+        appName: row.appName,
+        appStatus: row.appStatus,
+        issuedScopeCount: Number(row.issuedScopeCount ?? 0),
+        issuedCapabilityCount: Number(row.issuedCapabilityCount ?? 0),
+        activeGrantCount: Number(row.activeGrantCount ?? 0),
+        revokedGrantCount: Number(row.revokedGrantCount ?? 0),
+        pendingConsentCount: Number(row.pendingConsentCount ?? 0),
+        approvedConsentCount: Number(row.approvedConsentCount ?? 0),
+        executableGrantCount: Number(row.executableGrantCount ?? 0),
+        modeledOnlyGrantCount: Number(row.modeledOnlyGrantCount ?? 0),
+        recentAuthFailureCount: Number(row.recentAuthFailureCount ?? 0),
+        hasExecutableDelegation: Number(row.executableGrantCount ?? 0) > 0,
+        hasModeledOnlyDelegation: Number(row.modeledOnlyGrantCount ?? 0) > 0,
+        tokenPolicy: {
+          currentTokenIssuedAt,
+          lastRotatedAt,
+          tokenAgeDays,
+          rotationWindowDays,
+          recommendedRotateBy: new Date(
+            (Number.isFinite(currentTokenIssuedAtMs)
+              ? currentTokenIssuedAtMs
+              : Date.now()) +
+              rotationWindowDays * 24 * 60 * 60 * 1000,
+          ).toISOString(),
+          freshness,
+        },
+      };
+    });
 
     const summary = apps.reduce(
       (accumulator, app) => ({
@@ -4647,6 +4725,12 @@ export class AdminController {
         modeledOnlyDelegationAppCount:
           accumulator.modeledOnlyDelegationAppCount +
           (app.hasModeledOnlyDelegation ? 1 : 0),
+        rotateSoonTokenCount:
+          accumulator.rotateSoonTokenCount +
+          (app.tokenPolicy.freshness === "rotate_soon" ? 1 : 0),
+        staleTokenCount:
+          accumulator.staleTokenCount +
+          (app.tokenPolicy.freshness === "stale" ? 1 : 0),
       }),
       {
         appCount: 0,
@@ -4655,6 +4739,8 @@ export class AdminController {
         recentAuthFailureCount: 0,
         executableDelegationAppCount: 0,
         modeledOnlyDelegationAppCount: 0,
+        rotateSoonTokenCount: 0,
+        staleTokenCount: 0,
       },
     );
 
@@ -4665,6 +4751,10 @@ export class AdminController {
         modeledOnlySubjectTypes: ["app", "service", "agent"],
       },
       summary,
+      tokenPolicy: {
+        rotationWindowDays,
+        rotateSoonWindowDays,
+      },
       authFailureSummary: authFailureSummaryRows.map((row) => ({
         failureType: row.failureType,
         count: Number(row.count ?? 0),
@@ -6094,6 +6184,41 @@ export class AdminController {
         endpoint: "/admin/ops/protocol-auth-health",
         reason:
           "Use the auth-health snapshot to confirm whether integrations need executable user grants instead of modeled-only app, service, or agent grants.",
+      });
+    }
+
+    const stalestToken = input.protocolAuthHealth.apps
+      .filter((app) => app.tokenPolicy.freshness === "stale")
+      .sort(
+        (left, right) =>
+          right.tokenPolicy.tokenAgeDays - left.tokenPolicy.tokenAgeDays,
+      )[0];
+    if (input.protocolAuthHealth.summary.staleTokenCount > 0) {
+      findings.push({
+        id: "protocol_auth_token_rotation_stale",
+        level: "watch",
+        area: "protocol_auth",
+        summary:
+          "Some protocol app tokens are older than the recommended rotation window.",
+        detail: stalestToken
+          ? `${stalestToken.appName ?? stalestToken.appId} has a token age of ${stalestToken.tokenPolicy.tokenAgeDays} days, beyond the ${stalestToken.tokenPolicy.rotationWindowDays}-day rotation window.`
+          : `${input.protocolAuthHealth.summary.staleTokenCount} apps have tokens older than the recommended rotation window.`,
+      });
+      nextActions.push({
+        id: "inspect_protocol_token_freshness",
+        label: "Inspect token freshness and rotate stale tokens",
+        endpoint: "/admin/ops/protocol-auth-health",
+        reason:
+          "Use token age, last rotation time, and recommended rotation date to rotate stale credentials before they turn into avoidable auth incidents.",
+      });
+    } else if (input.protocolAuthHealth.summary.rotateSoonTokenCount > 0) {
+      findings.push({
+        id: "protocol_auth_token_rotation_due_soon",
+        level: "watch",
+        area: "protocol_auth",
+        summary:
+          "Some protocol app tokens are approaching the recommended rotation window.",
+        detail: `${input.protocolAuthHealth.summary.rotateSoonTokenCount} apps should rotate credentials soon to stay inside the current token policy window.`,
       });
     }
 

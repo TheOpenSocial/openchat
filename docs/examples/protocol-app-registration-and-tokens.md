@@ -172,8 +172,17 @@ The usage summary helps verify rotation state:
 ```ts
 const usage = await app.getAppUsageSummary();
 console.log(usage.tokenAudit.lastRotatedAt);
-console.log(usage.authFailures.recent);
+console.log(usage.tokenAudit.currentTokenIssuedAt);
+console.log(usage.tokenAudit.recommendedRotateBy);
+console.log(usage.tokenAudit.freshness);
+console.log(usage.authFailureCounts);
 ```
+
+Interpretation:
+
+- `freshness: "current"` means the current token is comfortably inside the recommended rotation window
+- `freshness: "rotate_soon"` means the credential is approaching the policy window and should be rotated on the next routine rollout
+- `freshness: "stale"` means the credential is older than the current recommended rotation window and should be rotated deliberately
 
 ## Revoke a token or app
 

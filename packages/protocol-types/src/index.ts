@@ -717,6 +717,11 @@ export const protocolAppUsageSummarySchema = z
         appUpdatedAt: isoDateTimeSchema,
         lastRotatedAt: isoDateTimeSchema.nullable(),
         lastRevokedAt: isoDateTimeSchema.nullable(),
+        currentTokenIssuedAt: isoDateTimeSchema,
+        recommendedRotateBy: isoDateTimeSchema,
+        tokenAgeDays: z.number().int().min(0),
+        rotationWindowDays: z.number().int().min(1),
+        freshness: z.enum(["current", "rotate_soon", "stale"]),
       })
       .strict(),
     grantAudit: z

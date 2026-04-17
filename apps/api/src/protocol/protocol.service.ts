@@ -253,6 +253,7 @@ const FIRST_PARTY_PROTOCOL_ACTOR_APP_ID = "opensocial-firstparty";
 @Injectable()
 export class ProtocolService {
   private readonly logger = new Logger(ProtocolService.name);
+  private static readonly DEFAULT_TOKEN_ROTATION_WINDOW_DAYS = 90;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -294,6 +295,56 @@ export class ProtocolService {
 
   listEvents() {
     return protocolEventCatalog;
+  }
+
+  private getTokenRotationWindowDays() {
+    const configured = Number(
+      process.env.PROTOCOL_APP_TOKEN_ROTATE_AFTER_DAYS ||
+        ProtocolService.DEFAULT_TOKEN_ROTATION_WINDOW_DAYS,
+    );
+    if (!Number.isFinite(configured) || configured < 1) {
+      return ProtocolService.DEFAULT_TOKEN_ROTATION_WINDOW_DAYS;
+    }
+    return Math.floor(configured);
+  }
+
+  private buildTokenAudit(input: {
+    appUpdatedAt: string;
+    appCreatedAt: string | null;
+    lastRotatedAt: string | null;
+    lastRevokedAt: string | null;
+  }) {
+    const rotationWindowDays = this.getTokenRotationWindowDays();
+    const currentTokenIssuedAt =
+      input.lastRotatedAt ?? input.appCreatedAt ?? input.appUpdatedAt;
+    const currentIssuedAtMs = Date.parse(currentTokenIssuedAt);
+    const safeIssuedAtMs = Number.isFinite(currentIssuedAtMs)
+      ? currentIssuedAtMs
+      : Date.now();
+    const tokenAgeDays = Math.max(
+      0,
+      Math.floor((Date.now() - safeIssuedAtMs) / (24 * 60 * 60 * 1000)),
+    );
+    const recommendedRotateBy = new Date(
+      safeIssuedAtMs + rotationWindowDays * 24 * 60 * 60 * 1000,
+    ).toISOString();
+    const freshness =
+      tokenAgeDays >= rotationWindowDays
+        ? "stale"
+        : tokenAgeDays >= Math.max(1, rotationWindowDays - 14)
+          ? "rotate_soon"
+          : "current";
+
+    return {
+      appUpdatedAt: input.appUpdatedAt,
+      lastRotatedAt: input.lastRotatedAt,
+      lastRevokedAt: input.lastRevokedAt,
+      currentTokenIssuedAt,
+      recommendedRotateBy,
+      tokenAgeDays,
+      rotationWindowDays,
+      freshness,
+    };
   }
 
   async listApps() {
@@ -1797,7 +1848,9 @@ export class ProtocolService {
     });
   }
 
-  async createFirstPartyConnectionAction(input: ProtocolConnectionCreateAction) {
+  async createFirstPartyConnectionAction(
+    input: ProtocolConnectionCreateAction,
+  ) {
     return this.executeConnectionCreateAction(input, {
       actorAppId: FIRST_PARTY_PROTOCOL_ACTOR_APP_ID,
     });
@@ -2137,11 +2190,12 @@ export class ProtocolService {
           ? this.toIsoString(queueHealth.last_dead_lettered_at)
           : null,
       },
-      tokenAudit: {
+      tokenAudit: this.buildTokenAudit({
         appUpdatedAt: app.updatedAt,
+        appCreatedAt: app.registration.createdAt ?? null,
         lastRotatedAt,
         lastRevokedAt,
-      },
+      }),
       grantAudit: {
         lastGrantedAt,
         lastRevokedAt: lastGrantRevokedAt,
@@ -2923,7 +2977,9 @@ export class ProtocolService {
         details: {
           actorUserId,
           capabilities,
-          modeledOnlySubjectTypes: [...new Set(modeledOnlyGrants.map((entry) => entry.subjectType))],
+          modeledOnlySubjectTypes: [
+            ...new Set(modeledOnlyGrants.map((entry) => entry.subjectType)),
+          ],
           hasModeledOnlyGrant: modeledOnlyGrants.length > 0,
         },
       });

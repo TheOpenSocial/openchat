@@ -242,7 +242,8 @@ These packages should mirror the backend domain rather than inventing new abstra
 5. Harden token and credential policy beyond the shipped lifecycle mechanics.
    - App token issuance is already live.
    - Hashing, verification, rotation, and revocation are already live.
-   - Remaining work is operational policy: expiry, refresh/reissue policy, and audit expectations.
+   - Usage summaries and auth-health inspection now expose token freshness, token age, and recommended rotation-by timestamps.
+   - Remaining work is policy tuning and operating practice, not missing lifecycle mechanics.
 
 6. Keep consent-request and delegated-access UX aligned with the backend model.
    - Consent requests and approve/reject flows are already live.
