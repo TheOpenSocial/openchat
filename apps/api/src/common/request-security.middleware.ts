@@ -461,6 +461,7 @@ export function requestSecurityMiddleware(
   const isAuthenticated = hasAuthenticatedAccessToken(request);
   const isPlayground = isPlaygroundPath(path);
   const isVerificationBypass = isVerificationBypassRequest(request, path);
+  const isTrustedAdmin = isTrustedAdminRequest(request, path);
   const isTrustedSocialSimBypass = isTrustedSocialSimBypassRequest(
     request,
     path,
@@ -590,7 +591,7 @@ export function requestSecurityMiddleware(
     return;
   }
 
-  if (!isTrustedSocialSimBypass) {
+  if (!isTrustedSocialSimBypass && !isTrustedAdmin) {
     const abuseKey = `abuse:${abuseIdentity}`;
     const abuseWindow = getOrInitWindow(
       abuseCounters,
@@ -613,7 +614,7 @@ export function requestSecurityMiddleware(
     const requestScore = computeAbuseRequestScore({
       isAuthenticated,
       isHighRisk: isHighRiskPath(path),
-      isTrustedAdmin: isTrustedAdminRequest(request, path),
+      isTrustedAdmin,
       isWrite,
       path,
     });
