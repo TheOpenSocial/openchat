@@ -72,8 +72,8 @@ The protocol is no longer just a concept. The following pieces are already prese
 - Queue inspection now exposes both persisted delivery records and live queue state counts.
 - Admin queue-health inspection now exposes recent delivery attempts and recent attempt outcome/error buckets, so failure-mode verification no longer depends on raw queue tables.
 - Admin queue-health inspection now also exposes replay-cursor lag and stale cursor state, so downstream recovery no longer depends on raw cursor-table inspection.
-- A combined admin manual-verification snapshot now exposes request pressure, protocol queue health, and protocol auth health together so app/manual validation can start from one operator view before drilling into narrower endpoints.
-- The combined admin manual-verification snapshot now also synthesizes an operator assessment with overall status, prioritized findings, and next actions so queue, auth, and request-pressure issues do not need to be correlated by hand during manual QA.
+- A combined admin manual-verification snapshot now exposes request pressure, protocol queue health, protocol auth health, and moderation backlog together so app/manual validation can start from one operator view before drilling into narrower endpoints.
+- The combined admin manual-verification snapshot now also synthesizes an operator assessment with overall status, prioritized findings, and next actions so queue, auth, request-pressure, and moderation issues do not need to be correlated by hand during manual QA.
 - The backend ops verification pack now builds the protocol and shared package chain before non-full API validation lanes, so production verification no longer fails on missing workspace package artifacts before it reaches the real runtime checks.
 - The backend ops pack now includes a dedicated protocol delivery recovery drill, so queue visibility and replay verification are explicit evidence rather than an implied side effect of broader smoke lanes.
 - The protocol recovery drill now blocks the backend ops pack on `critical` queue/auth/request-pressure findings instead of reporting them passively.
@@ -153,7 +153,7 @@ Use this as the baseline for all next backlog items. Do not reintroduce generic 
 - use the new admin request-pressure snapshot during staging/manual QA so saturation shows up before users feel it
 - use the new request-pressure concentration summary during staging/manual QA so over-targeting of a small recipient cohort shows up before hard suppression kicks in
 - use the new admin protocol-auth snapshot during staging/manual QA so grant subject mix, consent backlog, and auth-failure pressure are visible without raw DB access
-- use the new combined admin manual-verification snapshot during staging/manual QA so auth, queue, and request-pressure health can be reviewed from one endpoint before investigating specific subviews
+- use the new combined admin manual-verification snapshot during staging/manual QA so auth, queue, request-pressure, and moderation health can be reviewed from one endpoint before investigating specific subviews
 - use the new manual-verification assessment block during staging/manual QA so the first read is "what is wrong and where" rather than three separate raw snapshots
 - use replay-cursor lag in queue health during manual QA so "delivery succeeded" is not mistaken for "consumer state is current"
 - use the improved delegated-auth failure details during staging/manual QA to tell missing-user-grant problems apart from modeled-only grant configuration

@@ -25,6 +25,7 @@ Pass criteria:
 
 Operational check:
 - Inspect `GET /api/admin/ops/manual-verification` before and after fanout-heavy tests.
+  It now includes moderation backlog and stale-flag risk alongside request pressure, queue, and auth health.
 - Use it as the default snapshot for request pressure, queue health, and auth health together.
 - Read `assessment.overallStatus`, `assessment.findings`, and `assessment.nextActions` first instead of manually comparing every subsection on every run.
 - If you need deeper detail, then drill into the narrower endpoints below.
@@ -33,7 +34,7 @@ Operational check:
 - Check the concentration summary too, so we catch over-targeting of a small cohort before hard suppression makes it obvious.
 
 Protocol delivery check:
-- Inspect `GET /api/admin/ops/manual-verification` after action, webhook, or replay-heavy tests.
+- Inspect `GET /api/admin/ops/manual-verification` after action, webhook, replay, or moderation-heavy tests.
 - Confirm the combined snapshot does not surface a `protocol_queue` critical finding before moving on.
 - Inspect `GET /api/admin/ops/protocol-queue-health` after action, webhook, or replay-heavy tests.
 - Confirm:
@@ -101,6 +102,7 @@ Pass criteria:
 1. Register or reuse a protocol app with a webhook subscription.
 2. Trigger a protocol-backed action that should emit a delivery.
 3. Inspect `GET /api/admin/ops/manual-verification`.
+   Use the moderation section to catch stale review backlog before a separate moderation drill becomes the first place the issue appears.
 4. Read `assessment.findings` first so you can tell whether the immediate problem is request pressure, queue state, or auth/configuration before drilling further.
 5. If you need delivery-level detail, inspect `GET /api/admin/ops/protocol-queue-health`.
 6. If you intentionally point the webhook at a failing endpoint, confirm:

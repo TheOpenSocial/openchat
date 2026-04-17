@@ -76,7 +76,7 @@ STAGING_EQUALS_PROD=true BACKEND_OPS_TARGET=staging pnpm test:backend:ops-pack
 - moderation drill passes with report -> flag -> assign -> triage -> audit verification.
 - protocol recovery drill passes in diagnostic mode by default and can be rerun in active mode with protocol app credentials when you want to verify a representative replay.
 - protocol recovery drill now blocks the pack when the combined operator snapshot is already in a `critical` state.
-- smoke verification includes the combined admin manual-verification snapshot so request pressure, protocol queue health, and protocol auth health are readable from one place.
+- smoke verification includes the combined admin manual-verification snapshot so request pressure, protocol queue health, protocol auth health, and moderation backlog are readable from one place.
 - ops-pack artifact status is `passed`.
 - ops-pack artifact `shipVerdict` is `ship_ready`.
 

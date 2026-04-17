@@ -164,7 +164,11 @@ type OpsRiskLevel = "healthy" | "watch" | "critical";
 type ManualVerificationFinding = {
   id: string;
   level: OpsRiskLevel;
-  area: "request_pressure" | "protocol_queue" | "protocol_auth";
+  area:
+    | "request_pressure"
+    | "protocol_queue"
+    | "protocol_auth"
+    | "moderation";
   summary: string;
   detail: string;
 };
@@ -2658,11 +2662,17 @@ export class AdminController {
     ]);
     const limit = this.parseLimit(limitParam);
     const hours = this.normalizeWindowHours(hoursParam);
-    const [requestPressure, protocolQueueHealth, protocolAuthHealth] =
+    const [
+      requestPressure,
+      protocolQueueHealth,
+      protocolAuthHealth,
+      moderationHealth,
+    ] =
       await Promise.all([
         this.readRequestPressureSnapshot({ limit, hours }),
         this.readProtocolQueueHealthSnapshot(),
         this.readProtocolAuthHealthSnapshot(),
+        this.readModerationHealthSnapshot(),
       ]);
 
     await this.adminAuditService.recordAction({
@@ -2680,6 +2690,8 @@ export class AdminController {
         pendingConsentCount: protocolAuthHealth.summary.pendingConsentCount,
         recentAuthFailureCount:
           protocolAuthHealth.summary.recentAuthFailureCount,
+        openModerationFlags: moderationHealth.summary.openFlags,
+        staleModerationFlags24h: moderationHealth.summary.staleFlags24h,
       },
     });
 
@@ -2689,6 +2701,7 @@ export class AdminController {
       requestPressure,
       protocolQueueHealth,
       protocolAuthHealth,
+      moderationHealth,
     });
 
     return ok({
@@ -2697,6 +2710,7 @@ export class AdminController {
       requestPressure,
       protocolQueueHealth,
       protocolAuthHealth,
+      moderationHealth,
     });
   }
 
@@ -5842,6 +5856,88 @@ export class AdminController {
     };
   }
 
+  private async readModerationHealthSnapshot() {
+    const oneHourAgo = new Date(Date.now() - 60 * 60_000);
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60_000);
+    const backlogThreshold = this.parseThreshold(
+      process.env.ALERT_MODERATION_BACKLOG_THRESHOLD,
+      150,
+    );
+    const stale1hThreshold = this.parseThreshold(
+      process.env.ALERT_STALE_MODERATION_1H_THRESHOLD,
+      25,
+    );
+    const stale24hThreshold = this.parseThreshold(
+      process.env.ALERT_STALE_MODERATION_24H_THRESHOLD,
+      5,
+    );
+
+    const [openFlags, staleFlags1h, staleFlags24h, oldestOpenFlag] =
+      await Promise.all([
+        this.prisma.moderationFlag?.count
+          ? this.prisma.moderationFlag.count({ where: { status: "open" } })
+          : 0,
+        this.prisma.moderationFlag?.count
+          ? this.prisma.moderationFlag.count({
+              where: {
+                status: "open",
+                createdAt: { lt: oneHourAgo },
+              },
+            })
+          : 0,
+        this.prisma.moderationFlag?.count
+          ? this.prisma.moderationFlag.count({
+              where: {
+                status: "open",
+                createdAt: { lt: twentyFourHoursAgo },
+              },
+            })
+          : 0,
+        this.prisma.moderationFlag?.findFirst
+          ? this.prisma.moderationFlag.findFirst({
+              where: { status: "open" },
+              orderBy: { createdAt: "asc" },
+              select: {
+                id: true,
+                reason: true,
+                entityType: true,
+                entityId: true,
+                createdAt: true,
+              },
+            })
+          : null,
+      ]);
+
+    return {
+      generatedAt: new Date().toISOString(),
+      thresholds: {
+        backlog: backlogThreshold,
+        stale1h: stale1hThreshold,
+        stale24h: stale24hThreshold,
+      },
+      summary: {
+        openFlags,
+        staleFlags1h,
+        staleFlags24h,
+      },
+      oldestOpenFlag: oldestOpenFlag
+        ? {
+            id: oldestOpenFlag.id,
+            reason: oldestOpenFlag.reason,
+            entityType: oldestOpenFlag.entityType,
+            entityId: oldestOpenFlag.entityId,
+            createdAt: oldestOpenFlag.createdAt.toISOString(),
+            ageMinutes: Math.max(
+              0,
+              Math.round(
+                (Date.now() - oldestOpenFlag.createdAt.getTime()) / 60_000,
+              ),
+            ),
+          }
+        : null,
+    };
+  }
+
   private buildManualVerificationAssessment(input: {
     limit: number;
     hours: number;
@@ -5851,6 +5947,9 @@ export class AdminController {
     >;
     protocolAuthHealth: Awaited<
       ReturnType<AdminController["readProtocolAuthHealthSnapshot"]>
+    >;
+    moderationHealth: Awaited<
+      ReturnType<AdminController["readModerationHealthSnapshot"]>
     >;
   }) {
     const findings: ManualVerificationFinding[] = [];
@@ -6006,6 +6105,59 @@ export class AdminController {
         area: "protocol_auth",
         summary: "Consent requests are pending without active auth failures.",
         detail: `${input.protocolAuthHealth.summary.pendingConsentCount} consent requests are still pending, so delegated actions may remain blocked until they are approved or rejected.`,
+      });
+    }
+
+    if (
+      input.moderationHealth.summary.staleFlags24h >=
+      input.moderationHealth.thresholds.stale24h
+    ) {
+      findings.push({
+        id: "moderation_sla_24h_breach",
+        level: "critical",
+        area: "moderation",
+        summary:
+          "Moderation queue contains flags that have been open beyond the 24-hour SLA.",
+        detail: input.moderationHealth.oldestOpenFlag
+          ? `${input.moderationHealth.summary.staleFlags24h} open flags are older than 24 hours. The oldest is ${input.moderationHealth.oldestOpenFlag.id} (${input.moderationHealth.oldestOpenFlag.reason}) at ${input.moderationHealth.oldestOpenFlag.ageMinutes} minutes old.`
+          : `${input.moderationHealth.summary.staleFlags24h} open flags are older than 24 hours.`,
+      });
+      nextActions.push({
+        id: "inspect_moderation_summary",
+        label: "Inspect moderation backlog",
+        endpoint: "/admin/moderation/summary",
+        reason:
+          "Review stale moderation flags and the oldest open item before more operator drills or high-risk user actions.",
+      });
+    } else if (
+      input.moderationHealth.summary.staleFlags1h >=
+      input.moderationHealth.thresholds.stale1h
+    ) {
+      findings.push({
+        id: "moderation_sla_1h_watch",
+        level: "watch",
+        area: "moderation",
+        summary:
+          "Moderation flags are aging past the one-hour watch threshold.",
+        detail: `${input.moderationHealth.summary.staleFlags1h} open flags are older than 1 hour, which can turn into operator backlog if the queue keeps growing.`,
+      });
+      nextActions.push({
+        id: "inspect_moderation_queue",
+        label: "Inspect moderation queue",
+        endpoint: "/admin/moderation/queue?status=open",
+        reason:
+          "Use the queue view to spot unassigned or stale flags before the moderation SLA degrades further.",
+      });
+    } else if (
+      input.moderationHealth.summary.openFlags >=
+      input.moderationHealth.thresholds.backlog
+    ) {
+      findings.push({
+        id: "moderation_backlog_high",
+        level: "watch",
+        area: "moderation",
+        summary: "The moderation backlog is elevated.",
+        detail: `${input.moderationHealth.summary.openFlags} moderation flags are currently open, which is above the configured backlog watch threshold.`,
       });
     }
 
