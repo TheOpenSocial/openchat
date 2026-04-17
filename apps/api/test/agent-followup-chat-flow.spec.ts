@@ -248,8 +248,12 @@ describe("Agent thread async-followup to chat creation flow", () => {
       notificationsService,
       personalizationService,
       matchingService,
-      agentService,
       executionReconciliationService,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { get: vi.fn().mockReturnValue(agentService) } as any,
     );
     const connectionSetupConsumer = new ConnectionSetupConsumer(
       connectionSetupService,

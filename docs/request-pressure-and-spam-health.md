@@ -123,8 +123,12 @@ Current defaults:
 
 - `MATCHING_MAX_PENDING_INBOUND_REQUESTS_PER_RECIPIENT = 6`
 - `MATCHING_MAX_DAILY_INBOUND_REQUESTS_PER_RECIPIENT = 12`
+- `ALERT_REQUEST_PRESSURE_TOP_RECIPIENT_SHARE_THRESHOLD = 0.4`
+- `ALERT_REQUEST_PRESSURE_MIN_WINDOW_VOLUME_THRESHOLD = 8`
 
 This is the main direct safeguard against one highly responsive or highly visible person being hit over and over.
+
+The admin request-pressure snapshot now reports those concentration thresholds alongside the live top-recipient shares, so operators can tune the watch signal without changing application logic.
 
 ## What Is Still Missing
 

@@ -82,11 +82,12 @@ describe("ConnectionSetupService", () => {
       notificationsService,
       personalizationService,
       matchingService,
-      agentService,
       executionReconciliationService,
       undefined,
       undefined,
       realtimeEventsService,
+      undefined,
+      { get: vi.fn().mockReturnValue(agentService) } as any,
     );
 
     const result = await service.setupFromAcceptedRequest("req-1");
@@ -389,8 +390,12 @@ describe("ConnectionSetupService", () => {
       notificationsService,
       personalizationService,
       matchingService,
-      agentService,
       executionReconciliationService,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { get: vi.fn().mockReturnValue(agentService) } as any,
     );
 
     const result = await service.setupFromAcceptedRequest("req-2");
@@ -487,8 +492,12 @@ describe("ConnectionSetupService", () => {
       notificationsService,
       personalizationService,
       matchingService,
-      agentService,
       executionReconciliationService,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { get: vi.fn().mockReturnValue(agentService) } as any,
     );
 
     const result = await service.setupFromAcceptedRequest("req-3");
@@ -621,8 +630,12 @@ describe("ConnectionSetupService", () => {
       notificationsService,
       personalizationService,
       matchingService,
-      agentService,
       executionReconciliationService,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { get: vi.fn().mockReturnValue(agentService) } as any,
     );
 
     const result = await service.setupFromAcceptedRequest("req-4");
@@ -733,8 +746,12 @@ describe("ConnectionSetupService", () => {
       notificationsService,
       personalizationService,
       matchingService,
-      agentService,
       executionReconciliationService,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { get: vi.fn().mockReturnValue(agentService) } as any,
     );
 
     const result = await service.setupFromAcceptedRequest("req-5");
@@ -1054,7 +1071,6 @@ describe("ConnectionSetupService", () => {
       {
         upsertConversationSummaryEmbedding: vi.fn().mockResolvedValue({}),
       } as any,
-      agentService,
       {
         recordGroupFormationStalled: vi.fn().mockResolvedValue(undefined),
       } as any,
@@ -1062,6 +1078,7 @@ describe("ConnectionSetupService", () => {
       undefined,
       undefined,
       workflowRuntimeService,
+      { get: vi.fn().mockReturnValue(agentService) } as any,
     );
 
     await service.setupFromAcceptedRequest("req-group-replay", "trace-1");
@@ -1266,7 +1283,6 @@ describe("ConnectionSetupService", () => {
       {
         upsertConversationSummaryEmbedding: vi.fn().mockResolvedValue({}),
       } as any,
-      agentService,
       {
         recordGroupFormationStalled: vi.fn().mockResolvedValue(undefined),
       } as any,
@@ -1274,6 +1290,7 @@ describe("ConnectionSetupService", () => {
       undefined,
       undefined,
       workflowRuntimeService,
+      { get: vi.fn().mockReturnValue(agentService) } as any,
     );
 
     await service.setupFromAcceptedRequest("req-group-ready-replay", "trace-1");
@@ -1650,7 +1667,6 @@ describe("ConnectionSetupService", () => {
       {
         upsertConversationSummaryEmbedding: vi.fn().mockResolvedValue({}),
       } as any,
-      agentService,
       {
         recordGroupFormationStalled: vi.fn().mockResolvedValue(undefined),
       } as any,
@@ -1658,6 +1674,7 @@ describe("ConnectionSetupService", () => {
       undefined,
       undefined,
       workflowRuntimeService,
+      { get: vi.fn().mockReturnValue(agentService) } as any,
     );
 
     await service.setupFromAcceptedRequest("req-replay", "trace-1");

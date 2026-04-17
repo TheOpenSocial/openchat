@@ -481,11 +481,14 @@ describe("Agentic communication E2E flow", () => {
       notificationsService,
       personalizationService,
       matchingService,
-      agentService,
       {
         recordGroupFormationStalled: vi.fn().mockResolvedValue(undefined),
       } as any,
       launchControlsService,
+      undefined,
+      undefined,
+      undefined,
+      { get: vi.fn().mockReturnValue(agentService) } as any,
     );
     const connectionSetupConsumer = new ConnectionSetupConsumer(
       connectionSetupService,

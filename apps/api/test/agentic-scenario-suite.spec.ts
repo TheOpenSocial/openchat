@@ -810,7 +810,6 @@ describe("Agentic scenario suite", () => {
       {
         upsertConversationSummaryEmbedding: vi.fn().mockResolvedValue({}),
       } as any,
-      agentService,
       {
         recordGroupFormationStalled: vi.fn().mockResolvedValue(undefined),
       } as any,
@@ -818,6 +817,7 @@ describe("Agentic scenario suite", () => {
       undefined,
       undefined,
       workflowRuntimeService,
+      { get: vi.fn().mockReturnValue(agentService) } as any,
     );
 
     await service.setupFromAcceptedRequest("req-replay-scenario", "trace-1");
@@ -1039,7 +1039,6 @@ describe("Agentic scenario suite", () => {
       {
         upsertConversationSummaryEmbedding: vi.fn().mockResolvedValue({}),
       } as any,
-      agentService,
       {
         recordGroupFormationStalled: vi.fn().mockResolvedValue(undefined),
       } as any,
@@ -1047,6 +1046,7 @@ describe("Agentic scenario suite", () => {
       undefined,
       undefined,
       workflowRuntimeService,
+      { get: vi.fn().mockReturnValue(agentService) } as any,
     );
 
     await service.setupFromAcceptedRequest(
@@ -1274,7 +1274,6 @@ describe("Agentic scenario suite", () => {
       {
         upsertConversationSummaryEmbedding: vi.fn().mockResolvedValue({}),
       } as any,
-      agentService,
       {
         recordGroupFormationStalled: vi.fn().mockResolvedValue(undefined),
       } as any,
@@ -1282,6 +1281,7 @@ describe("Agentic scenario suite", () => {
       undefined,
       undefined,
       workflowRuntimeService,
+      { get: vi.fn().mockReturnValue(agentService) } as any,
     );
 
     await service.setupFromAcceptedRequest(

@@ -164,11 +164,7 @@ type OpsRiskLevel = "healthy" | "watch" | "critical";
 type ManualVerificationFinding = {
   id: string;
   level: OpsRiskLevel;
-  area:
-    | "request_pressure"
-    | "protocol_queue"
-    | "protocol_auth"
-    | "moderation";
+  area: "request_pressure" | "protocol_queue" | "protocol_auth" | "moderation";
   summary: string;
   detail: string;
 };
@@ -2641,8 +2637,10 @@ export class AdminController {
         activeGrantCount: snapshot.summary.activeGrantCount,
         pendingConsentCount: snapshot.summary.pendingConsentCount,
         recentAuthFailureCount: snapshot.summary.recentAuthFailureCount,
-        executableDelegationAppCount: snapshot.summary.executableDelegationAppCount,
-        modeledOnlyDelegationAppCount: snapshot.summary.modeledOnlyDelegationAppCount,
+        executableDelegationAppCount:
+          snapshot.summary.executableDelegationAppCount,
+        modeledOnlyDelegationAppCount:
+          snapshot.summary.modeledOnlyDelegationAppCount,
       },
     });
     return ok(snapshot);
@@ -2667,13 +2665,12 @@ export class AdminController {
       protocolQueueHealth,
       protocolAuthHealth,
       moderationHealth,
-    ] =
-      await Promise.all([
-        this.readRequestPressureSnapshot({ limit, hours }),
-        this.readProtocolQueueHealthSnapshot(),
-        this.readProtocolAuthHealthSnapshot(),
-        this.readModerationHealthSnapshot(),
-      ]);
+    ] = await Promise.all([
+      this.readRequestPressureSnapshot({ limit, hours }),
+      this.readProtocolQueueHealthSnapshot(),
+      this.readProtocolAuthHealthSnapshot(),
+      this.readModerationHealthSnapshot(),
+    ]);
 
     await this.adminAuditService.recordAction({
       adminUserId: admin.adminUserId,
@@ -4490,7 +4487,8 @@ export class AdminController {
           row.latestEventCursor,
         ),
         trackedAppCount: accumulator.trackedAppCount + 1,
-        laggingAppCount: accumulator.laggingAppCount + (row.cursorLag > 0 ? 1 : 0),
+        laggingAppCount:
+          accumulator.laggingAppCount + (row.cursorLag > 0 ? 1 : 0),
         staleAppCount: accumulator.staleAppCount + (row.stale ? 1 : 0),
         maxCursorLag: Math.max(accumulator.maxCursorLag, row.cursorLag),
       }),
@@ -4546,7 +4544,9 @@ export class AdminController {
   }
 
   private async readProtocolAuthHealthSnapshot() {
-    const appRows = await this.prisma.$queryRawUnsafe<ProtocolAuthHealthAppRow[]>(
+    const appRows = await this.prisma.$queryRawUnsafe<
+      ProtocolAuthHealthAppRow[]
+    >(
       `SELECT pa.app_id AS "appId",
               COALESCE(pa.registration_json->>'name', pa.app_id) AS "appName",
               pa.status AS "appStatus",
@@ -4685,8 +4685,7 @@ export class AdminController {
               typeof payload.failureType === "string"
                 ? payload.failureType
                 : "unknown",
-            action:
-              typeof payload.action === "string" ? payload.action : null,
+            action: typeof payload.action === "string" ? payload.action : null,
             issuedAt:
               typeof payload.issuedAt === "string"
                 ? payload.issuedAt
@@ -5693,6 +5692,14 @@ export class AdminController {
       "MATCHING_MAX_DAILY_INBOUND_REQUESTS_PER_RECIPIENT",
       DEFAULT_MAX_DAILY_INBOUND_REQUESTS_PER_RECIPIENT,
     );
+    const concentrationWatchShare = this.parseThreshold(
+      process.env.ALERT_REQUEST_PRESSURE_TOP_RECIPIENT_SHARE_THRESHOLD,
+      0.4,
+    );
+    const concentrationMinWindowVolume = this.parseThreshold(
+      process.env.ALERT_REQUEST_PRESSURE_MIN_WINDOW_VOLUME_THRESHOLD,
+      8,
+    );
 
     const rows = await this.prisma.$queryRaw<RequestPressureRecipientRow[]>`
       SELECT
@@ -5787,11 +5794,12 @@ export class AdminController {
       (sum, recipient) => sum + recipient.windowInboundCount,
       0,
     );
-    const topPendingRecipient = [...recipients].sort(
-      (left, right) =>
-        right.pendingInboundCount - left.pendingInboundCount ||
-        right.windowInboundCount - left.windowInboundCount,
-    )[0] ?? null;
+    const topPendingRecipient =
+      [...recipients].sort(
+        (left, right) =>
+          right.pendingInboundCount - left.pendingInboundCount ||
+          right.windowInboundCount - left.windowInboundCount,
+      )[0] ?? null;
     const topWindowRecipients = [...recipients]
       .sort(
         (left, right) =>
@@ -5837,6 +5845,8 @@ export class AdminController {
       thresholds: {
         pendingInboundCap: pendingCap,
         windowInboundCap: dailyCap,
+        concentrationWatchShare,
+        concentrationMinWindowVolume,
       },
       summary: {
         recipientCount: recipients.length,
@@ -5845,8 +5855,10 @@ export class AdminController {
         totalPendingInboundCount,
         totalWindowInboundCount,
         concentration: {
-          topPendingRecipientUserId: topPendingRecipient?.recipientUserId ?? null,
-          topPendingRecipientDisplayName: topPendingRecipient?.displayName ?? null,
+          topPendingRecipientUserId:
+            topPendingRecipient?.recipientUserId ?? null,
+          topPendingRecipientDisplayName:
+            topPendingRecipient?.displayName ?? null,
           topRecipientPendingShare,
           topRecipientWindowShare,
           topThreeWindowShare,
@@ -5941,7 +5953,9 @@ export class AdminController {
   private buildManualVerificationAssessment(input: {
     limit: number;
     hours: number;
-    requestPressure: Awaited<ReturnType<AdminController["readRequestPressureSnapshot"]>>;
+    requestPressure: Awaited<
+      ReturnType<AdminController["readRequestPressureSnapshot"]>
+    >;
     protocolQueueHealth: Awaited<
       ReturnType<AdminController["readProtocolQueueHealthSnapshot"]>
     >;
@@ -5983,15 +5997,18 @@ export class AdminController {
       });
     }
     if (
-      input.requestPressure.summary.totalWindowInboundCount >= 8 &&
-      input.requestPressure.summary.concentration.topRecipientWindowShare >= 0.4
+      input.requestPressure.summary.totalWindowInboundCount >=
+        input.requestPressure.thresholds.concentrationMinWindowVolume &&
+      input.requestPressure.summary.concentration.topRecipientWindowShare >=
+        input.requestPressure.thresholds.concentrationWatchShare
     ) {
       findings.push({
         id: "request_pressure_concentrated",
         level: "watch",
         area: "request_pressure",
-        summary: "A small recipient cohort is absorbing a disproportionate share of inbound requests.",
-        detail: `${input.requestPressure.summary.concentration.topPendingRecipientDisplayName ?? "The top recipient"} accounts for ${(input.requestPressure.summary.concentration.topRecipientWindowShare * 100).toFixed(0)}% of the rolling-window inbound request volume, which may indicate over-targeting even before hard suppression.`,
+        summary:
+          "A small recipient cohort is absorbing a disproportionate share of inbound requests.",
+        detail: `${input.requestPressure.summary.concentration.topPendingRecipientDisplayName ?? "The top recipient"} accounts for ${(input.requestPressure.summary.concentration.topRecipientWindowShare * 100).toFixed(0)}% of the rolling-window inbound request volume, above the configured ${(input.requestPressure.thresholds.concentrationWatchShare * 100).toFixed(0)}% watch threshold.`,
       });
       nextActions.push({
         id: "inspect_request_pressure_concentration",
@@ -6030,15 +6047,15 @@ export class AdminController {
       });
     }
 
-    const stalestReplayCursor = input.protocolQueueHealth.replayCursorHealth.find(
-      (row) => row.stale,
-    );
+    const stalestReplayCursor =
+      input.protocolQueueHealth.replayCursorHealth.find((row) => row.stale);
     if (stalestReplayCursor) {
       findings.push({
         id: "protocol_replay_cursor_stale",
         level: "watch",
         area: "protocol_queue",
-        summary: "At least one replay cursor is lagging behind the protocol event log.",
+        summary:
+          "At least one replay cursor is lagging behind the protocol event log.",
         detail: `${stalestReplayCursor.appName ?? stalestReplayCursor.appId} is ${stalestReplayCursor.cursorLag} events behind and has not updated its cursor recently.`,
       });
       nextActions.push({
@@ -6067,7 +6084,8 @@ export class AdminController {
         id: "protocol_auth_modeled_only_delegation",
         level: "watch",
         area: "protocol_auth",
-        summary: "Delegated access is configured, but only in modeled-only subject types.",
+        summary:
+          "Delegated access is configured, but only in modeled-only subject types.",
         detail: `${input.protocolAuthHealth.summary.modeledOnlyDelegationAppCount} apps have active app, service, or agent grants without an executable user delegation path, so delegated actions may still fail at runtime.`,
       });
       nextActions.push({
@@ -6082,9 +6100,10 @@ export class AdminController {
     if (input.protocolAuthHealth.summary.recentAuthFailureCount > 0) {
       findings.push({
         id: "protocol_auth_failures",
-        level: latestAuthFailure?.failureType === "missing_delegated_grant"
-          ? "watch"
-          : "critical",
+        level:
+          latestAuthFailure?.failureType === "missing_delegated_grant"
+            ? "watch"
+            : "critical",
         area: "protocol_auth",
         summary: "Recent protocol auth failures were recorded.",
         detail: latestAuthFailure
@@ -6166,7 +6185,8 @@ export class AdminController {
         id: "manual_verification_healthy",
         level: "healthy",
         area: "protocol_queue",
-        summary: "No immediate request pressure, queue, or auth blockers were found.",
+        summary:
+          "No immediate request pressure, queue, or auth blockers were found.",
         detail:
           "Manual verification can proceed to product behavior checks without an obvious operator-side blocker in the current snapshots.",
       });
@@ -6189,7 +6209,9 @@ export class AdminController {
     };
   }
 
-  private resolveOverallOpsRisk(findings: ManualVerificationFinding[]): OpsRiskLevel {
+  private resolveOverallOpsRisk(
+    findings: ManualVerificationFinding[],
+  ): OpsRiskLevel {
     if (findings.some((finding) => finding.level === "critical")) {
       return "critical";
     }
