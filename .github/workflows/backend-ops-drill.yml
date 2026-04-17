@@ -58,6 +58,9 @@ jobs:
       MODERATION_DRILL_ACCESS_TOKEN: ${{ secrets.MODERATION_DRILL_ACCESS_TOKEN || secrets.SMOKE_ACCESS_TOKEN }}
       MODERATION_DRILL_REPORTER_USER_ID: ${{ secrets.MODERATION_DRILL_REPORTER_USER_ID || secrets.SMOKE_USER_ID }}
       MODERATION_DRILL_TARGET_USER_ID: ${{ secrets.MODERATION_DRILL_TARGET_USER_ID || secrets.SMOKE_ADMIN_USER_ID }}
+      PROTOCOL_RECOVERY_APP_ID: ${{ secrets.STAGING_PROTOCOL_RECOVERY_APP_ID || secrets.PROTOCOL_RECOVERY_APP_ID }}
+      PROTOCOL_RECOVERY_APP_TOKEN: ${{ secrets.STAGING_PROTOCOL_RECOVERY_APP_TOKEN || secrets.PROTOCOL_RECOVERY_APP_TOKEN }}
+      PROTOCOL_RECOVERY_DELIVERY_ID: ${{ secrets.STAGING_PROTOCOL_RECOVERY_DELIVERY_ID || secrets.PROTOCOL_RECOVERY_DELIVERY_ID }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -101,10 +104,11 @@ jobs:
 
       - name: Upload backend ops artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: backend-ops-drill-artifacts-${{ github.run_id }}
           if-no-files-found: warn
           path: |
             .artifacts/backend-ops-pack/**/*.json
             .artifacts/agent-test-suite/**/*.json
+            .artifacts/protocol-recovery-drill/**/*.json

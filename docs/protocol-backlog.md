@@ -74,6 +74,7 @@ The protocol is no longer just a concept. The following pieces are already prese
 - The combined admin manual-verification snapshot now also synthesizes an operator assessment with overall status, prioritized findings, and next actions so queue, auth, and request-pressure issues do not need to be correlated by hand during manual QA.
 - The backend ops verification pack now builds the protocol and shared package chain before non-full API validation lanes, so production verification no longer fails on missing workspace package artifacts before it reaches the real runtime checks.
 - The backend ops pack now includes a dedicated protocol delivery recovery drill, so queue visibility and replay verification are explicit evidence rather than an implied side effect of broader smoke lanes.
+- The protocol recovery drill now blocks the backend ops pack on `critical` queue/auth/request-pressure findings instead of reporting them passively.
 - The public API host shape is now being normalized so `api.opensocial.so/*` is canonical while `/api/*` remains a compatibility path during migration.
 - Production deploy verification now retries across the local TLS warm-up window so a healthy post-restart API does not get marked red by a transient handshake.
 - Dead-lettered deliveries can now be replayed explicitly through the protocol API and first-party settings surfaces.

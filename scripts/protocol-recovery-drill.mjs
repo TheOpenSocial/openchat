@@ -278,6 +278,11 @@ async function main() {
       artifact.evidence.queueHealthBefore,
       artifact.evidence.replayAction,
     );
+    if (artifact.assessment.overallStatus === "critical") {
+      throw new Error(
+        "protocol recovery drill found critical operator-side blockers in the current snapshots",
+      );
+    }
     artifact.success = true;
     persistArtifact();
     console.log(
