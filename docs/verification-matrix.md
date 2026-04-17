@@ -32,7 +32,7 @@ Related references:
 | Backend Ops Drill | `green` | workflow [`24579213926`](https://github.com/TheOpenSocial/openchat/actions/runs/24579213926) |
 | Deploy Production | `green` | workflow [`24549101902`](https://github.com/TheOpenSocial/openchat/actions/runs/24549101902) |
 | Build Images | `green` | workflow [`24548784197`](https://github.com/TheOpenSocial/openchat/actions/runs/24548784197) |
-| System Evaluation Matrix | `red` | workflow [`24566993378`](https://github.com/TheOpenSocial/openchat/actions/runs/24566993378) |
+| System Evaluation Matrix | `red` | workflow [`24566993378`](https://github.com/TheOpenSocial/openchat/actions/runs/24566993378) failed because the accepted baseline expected the live social-sim lane but the workflow did not enable it by default |
 | Staging Sandbox Validation | `green` | workflow [`24251759566`](https://github.com/TheOpenSocial/openchat/actions/runs/24251759566) |
 | Staging Mobile E2E Session | `green` | workflow [`24367635640`](https://github.com/TheOpenSocial/openchat/actions/runs/24367635640) |
 | Benchmark Onboarding | `green` | workflow [`23457925557`](https://github.com/TheOpenSocial/openchat/actions/runs/23457925557) |
@@ -115,6 +115,11 @@ These lanes exist and are useful, but should be treated as narrower or condition
 This lane is still the main red:
 
 - system evaluation matrix
+
+The current hardening step is already in progress:
+
+- the workflow now enables live social-sim by default and on the scheduled path
+- the workflow now performs an Ollama readiness check before the matrix run
 
 That means the system is in a good backend/SDK operational state, but the full “all-up system eval” gate is still the area that needs the next serious hardening pass.
 

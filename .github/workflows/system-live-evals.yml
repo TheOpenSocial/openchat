@@ -6,7 +6,7 @@ on:
       enable_live_social_sim:
         description: "Include provider-backed social simulation in the live system gate"
         required: false
-        default: false
+        default: true
         type: boolean
   schedule:
     - cron: "0 12 * * *"
@@ -70,13 +70,93 @@ jobs:
             exit 1
           fi
 
+      - name: Ensure Ollama endpoint is ready
+        shell: bash
+        run: |
+          set -euo pipefail
+          enable_live_social_sim="${{ github.event_name == 'schedule' && 'true' || inputs.enable_live_social_sim }}"
+
+          if [[ "${enable_live_social_sim}" != "true" ]]; then
+            exit 0
+          fi
+
+          if [[ -z "${OLLAMA_BASE_URL:-}" ]]; then
+            echo "OLLAMA_BASE_URL is required when live social simulation is enabled." >&2
+            exit 1
+          fi
+
+          probe_url="${OLLAMA_BASE_URL%/}/api/tags"
+          probe_attempts=10
+          probe_sleep=2
+          ollama_log="/tmp/system-live-evals-ollama.log"
+          local_host="$(node -e 'const url = new URL(process.argv[1]); process.stdout.write(url.hostname);' "${OLLAMA_BASE_URL}")"
+          ollama_bin="$(command -v ollama || true)"
+          started_ollama=0
+
+          probe_tags() {
+            if [[ -n "${OLLAMA_API_KEY:-}" ]]; then
+              curl -fsS --max-time 5 -H "Authorization: Bearer ${OLLAMA_API_KEY}" "${probe_url}"
+            else
+              curl -fsS --max-time 5 "${probe_url}"
+            fi
+          }
+
+          for _ in $(seq 1 "${probe_attempts}"); do
+            if tags_json="$(probe_tags)"; then
+              break
+            fi
+            sleep "${probe_sleep}"
+          done
+
+          if [[ -z "${tags_json:-}" ]]; then
+            if [[ "${local_host}" == "127.0.0.1" || "${local_host}" == "localhost" ]]; then
+              if [[ -n "${ollama_bin}" ]]; then
+                nohup "${ollama_bin}" serve >"${ollama_log}" 2>&1 &
+                started_ollama=1
+              elif command -v sudo >/dev/null 2>&1 && sudo -n systemctl start ollama >/dev/null 2>&1; then
+                started_ollama=1
+              elif command -v systemctl >/dev/null 2>&1 && systemctl --user start ollama >/dev/null 2>&1; then
+                started_ollama=1
+              fi
+
+              for _ in $(seq 1 15); do
+                if tags_json="$(probe_tags)"; then
+                  break
+                fi
+                sleep 2
+              done
+            fi
+          fi
+
+          if [[ -z "${tags_json:-}" ]]; then
+            echo "Ollama endpoint is not reachable at ${OLLAMA_BASE_URL}." >&2
+            echo "Resolved host: ${local_host}" >&2
+            echo "ollama binary: ${ollama_bin:-not-found}" >&2
+            if [[ -f "${ollama_log}" ]]; then
+              echo "--- ollama serve log ---" >&2
+              tail -n 40 "${ollama_log}" >&2 || true
+            fi
+            exit 1
+          fi
+
+          TAGS_JSON="${tags_json}" node <<'EOF'
+          const tags = JSON.parse(process.env.TAGS_JSON ?? "{}");
+          const wanted = process.env.SOCIAL_SIM_OLLAMA_MODEL;
+          const available = new Set((tags.models ?? []).map((model) => model.name));
+          if (!available.has(wanted)) {
+            console.error(`Configured SOCIAL_SIM_OLLAMA_MODEL "${wanted}" is not available on the Ollama endpoint.`);
+            console.error(`Available models: ${[...available].sort().join(", ") || "(none)"}`);
+            process.exit(1);
+          }
+          EOF
+
       - name: Execute Live System Evaluation Matrix
         timeout-minutes: 80
         shell: bash
         run: |
           set -euo pipefail
           cmd=(pnpm eval:system:live:workflows)
-          if [[ "${{ github.event_name == 'workflow_dispatch' && inputs.enable_live_social_sim || false }}" == "true" ]]; then
+          if [[ "${{ github.event_name == 'schedule' && 'true' || inputs.enable_live_social_sim }}" == "true" ]]; then
             cmd+=(--live-social-sim=1)
           fi
           "${cmd[@]}"
@@ -91,7 +171,7 @@ jobs:
 
       - name: Publish System Evaluation Artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: system-live-evals-${{ github.run_id }}
           path: .artifacts/system-live-evals/${{ github.run_id }}

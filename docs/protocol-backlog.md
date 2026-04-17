@@ -136,6 +136,7 @@ Use this as the baseline for all next backlog items. Do not reintroduce generic 
 - The public docs portal now has SDK-only information architecture, concept-first developer onboarding, protocol vision and core-concepts pages, and Mermaid flow diagrams for the main integration lifecycle.
 - The public docs homepage and navigation now follow a cleaner developer-portal layout, closer to the Vercel/OpenAI style the protocol docs need for partner onboarding.
 - Verification coverage is now documented in one canonical matrix that maps CI, deploy, ops drill, eval, sandbox, and mobile session lanes to the evidence each one actually proves.
+- System Evaluation Matrix hardening is now focused on making the live social-sim lane part of the default scheduled/manual workflow path, so baseline comparison reflects the intended release gate instead of failing on a missing lane.
 - First-party protocol settings/inspection surfaces: shipped as operational tooling, but still partial as polished product UX
 - CI and product-critical golden coverage are green on the current mainline verification pass
 - Mobile-critical backend controller coverage is verified for first-party protocol call-through on:
