@@ -88,6 +88,21 @@ The production deploy now also:
 - retries health probes across the brief TLS warm-up window after restart so transient Caddy handshakes do not produce false negatives
 - emits API/docs/nginx logs automatically when that verification fails
 - routes public hosts through explicit Compose network aliases so reverse proxies do not depend on ambiguous short service names
+- syncs request-pressure tuning env vars into the deploy env file so recipient caps and concentration watch thresholds can be adjusted without editing controller code
+
+Relevant optional secrets for deploy-time tuning:
+
+- `MATCHING_MAX_PENDING_INBOUND_REQUESTS_PER_RECIPIENT`
+- `MATCHING_MAX_DAILY_INBOUND_REQUESTS_PER_RECIPIENT`
+- `ALERT_REQUEST_PRESSURE_TOP_RECIPIENT_SHARE_THRESHOLD`
+- `ALERT_REQUEST_PRESSURE_MIN_WINDOW_VOLUME_THRESHOLD`
+
+Staging can override the same settings with:
+
+- `STAGING_MATCHING_MAX_PENDING_INBOUND_REQUESTS_PER_RECIPIENT`
+- `STAGING_MATCHING_MAX_DAILY_INBOUND_REQUESTS_PER_RECIPIENT`
+- `STAGING_ALERT_REQUEST_PRESSURE_TOP_RECIPIENT_SHARE_THRESHOLD`
+- `STAGING_ALERT_REQUEST_PRESSURE_MIN_WINDOW_VOLUME_THRESHOLD`
 
 ## Repo-specific note for this session
 

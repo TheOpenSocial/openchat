@@ -158,6 +158,7 @@ Use this as the baseline for all next backlog items. Do not reintroduce generic 
 - use the new admin request-pressure snapshot during staging/manual QA so saturation shows up before users feel it
 - use the new request-pressure concentration summary during staging/manual QA so over-targeting of a small recipient cohort shows up before hard suppression kicks in
 - use the new configurable request-pressure concentration thresholds during staging/manual QA so market-shape tuning does not require controller edits
+- keep request-pressure caps and concentration watch thresholds wired through deploy env sync so production/staging tuning does not require source edits
 - use the new admin protocol-auth snapshot during staging/manual QA so grant subject mix, consent backlog, and auth-failure pressure are visible without raw DB access
 - use the new combined admin manual-verification snapshot during staging/manual QA so auth, queue, request-pressure, and moderation health can be reviewed from one endpoint before investigating specific subviews
 - use the new manual-verification assessment block during staging/manual QA so the first read is "what is wrong and where" rather than three separate raw snapshots
