@@ -191,9 +191,19 @@ describe("ConnectionSetupService", () => {
       {
         upsertConversationSummaryEmbedding: vi.fn().mockResolvedValue({}),
       } as any,
-      { createAgentMessage: vi.fn().mockResolvedValue({}) } as any,
       {
         recordGroupFormationStalled: vi.fn().mockResolvedValue(undefined),
+      } as any,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        get: vi
+          .fn()
+          .mockReturnValue({
+            createAgentMessage: vi.fn().mockResolvedValue({}),
+          }),
       } as any,
     );
 
@@ -303,11 +313,9 @@ describe("ConnectionSetupService", () => {
       undefined,
       undefined,
       {
-        get: vi
-          .fn()
-          .mockReturnValue({
-            createAgentMessage: vi.fn().mockResolvedValue({}),
-          }),
+        get: vi.fn().mockReturnValue({
+          createAgentMessage: vi.fn().mockResolvedValue({}),
+        }),
       } as any,
     );
 
@@ -886,11 +894,9 @@ describe("ConnectionSetupService", () => {
       undefined,
       undefined,
       {
-        get: vi
-          .fn()
-          .mockReturnValue({
-            createAgentMessage: vi.fn().mockResolvedValue({}),
-          }),
+        get: vi.fn().mockReturnValue({
+          createAgentMessage: vi.fn().mockResolvedValue({}),
+        }),
       } as any,
     );
 
@@ -1410,11 +1416,9 @@ describe("ConnectionSetupService", () => {
       undefined,
       undefined,
       {
-        get: vi
-          .fn()
-          .mockReturnValue({
-            createAgentMessage: vi.fn().mockResolvedValue({}),
-          }),
+        get: vi.fn().mockReturnValue({
+          createAgentMessage: vi.fn().mockResolvedValue({}),
+        }),
       } as any,
     );
 
