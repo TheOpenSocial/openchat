@@ -200,6 +200,20 @@ function countAuthFailures(snapshot: ProtocolAppOperationalSnapshot): number {
   );
 }
 
+function countExecutableGrants(snapshot: ProtocolAppOperationalSnapshot): number {
+  return snapshot.grants.filter(
+    (grant) =>
+      grant.status === "active" && grant.executionMode === "executable",
+  ).length;
+}
+
+function countModeledOnlyGrants(snapshot: ProtocolAppOperationalSnapshot): number {
+  return snapshot.grants.filter(
+    (grant) =>
+      grant.status === "active" && grant.executionMode === "modeled_only",
+  ).length;
+}
+
 export function evaluateProtocolAgentReadiness(
   snapshot: ProtocolAppOperationalSnapshot,
   options: ProtocolAgentReadinessOptions = {},
@@ -249,11 +263,20 @@ export function evaluateProtocolAgentReadiness(
     });
   }
 
-  if (requireActiveGrant && snapshot.grants.length === 0) {
+  const executableGrantCount = countExecutableGrants(snapshot);
+  const modeledOnlyGrantCount = countModeledOnlyGrants(snapshot);
+
+  if (requireActiveGrant && executableGrantCount === 0) {
     issues.push({
-      code: "no_active_grants",
+      code:
+        modeledOnlyGrantCount > 0
+          ? "no_executable_grants"
+          : "no_active_grants",
       severity: "blocking",
-      message: "No active delegated grants are present for this app.",
+      message:
+        modeledOnlyGrantCount > 0
+          ? `Only modeled-only delegated grants are present (${modeledOnlyGrantCount}); executable user grants are still required.`
+          : "No active delegated grants are present for this app.",
     });
   }
 

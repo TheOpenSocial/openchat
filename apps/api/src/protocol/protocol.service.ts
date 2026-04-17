@@ -2875,6 +2875,7 @@ export class ProtocolService {
   }
 
   private mapGrantRow(row: ProtocolAppScopeGrantRow): ProtocolAppScopeGrant {
+    const subjectType = protocolGrantSubjectTypeSchema.parse(row.subject_type);
     return protocolAppScopeGrantSchema.parse({
       grantId: row.id,
       appId: row.app_id,
@@ -2882,8 +2883,9 @@ export class ProtocolService {
       capabilities: (row.capabilities ?? []).map((capability) =>
         capabilityNameSchema.parse(capability),
       ),
-      subjectType: protocolGrantSubjectTypeSchema.parse(row.subject_type),
+      subjectType,
       subjectId: row.subject_id ?? row.app_id,
+      executionMode: subjectType === "user" ? "executable" : "modeled_only",
       status: row.status,
       grantedByUserId: row.granted_by_user_id,
       grantedAt: this.toIsoString(row.granted_at),
@@ -2897,6 +2899,7 @@ export class ProtocolService {
   private mapConsentRequestRow(
     row: ProtocolAppConsentRequestRow,
   ): ProtocolAppConsentRequest {
+    const subjectType = protocolGrantSubjectTypeSchema.parse(row.subject_type);
     return protocolAppConsentRequestSchema.parse({
       protocolId: protocolIds.appConsentRequest,
       requestId: row.id,
@@ -2905,8 +2908,9 @@ export class ProtocolService {
       capabilities: (row.capabilities ?? []).map((capability) =>
         capabilityNameSchema.parse(capability),
       ),
-      subjectType: protocolGrantSubjectTypeSchema.parse(row.subject_type),
+      subjectType,
       subjectId: row.subject_id ?? row.app_id,
+      executionMode: subjectType === "user" ? "executable" : "modeled_only",
       status: protocolConsentRequestStatusSchema.parse(row.status),
       requestedByUserId: row.requested_by_user_id,
       approvedByUserId: row.approved_by_user_id,

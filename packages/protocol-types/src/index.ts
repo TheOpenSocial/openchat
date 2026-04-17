@@ -819,6 +819,17 @@ export const protocolGrantStatusValues = ["active", "revoked"] as const;
 export const protocolGrantStatusSchema = z.enum(protocolGrantStatusValues);
 export type ProtocolGrantStatus = z.infer<typeof protocolGrantStatusSchema>;
 
+export const protocolDelegatedExecutionModeValues = [
+  "executable",
+  "modeled_only",
+] as const;
+export const protocolDelegatedExecutionModeSchema = z.enum(
+  protocolDelegatedExecutionModeValues,
+);
+export type ProtocolDelegatedExecutionMode = z.infer<
+  typeof protocolDelegatedExecutionModeSchema
+>;
+
 export const protocolConsentRequestStatusValues = [
   "pending",
   "approved",
@@ -841,6 +852,7 @@ export const protocolAppScopeGrantSchema = z
     capabilities: z.array(capabilityNameSchema).default([]),
     subjectType: protocolGrantSubjectTypeSchema.default("app"),
     subjectId: z.string().min(1).max(200),
+    executionMode: protocolDelegatedExecutionModeSchema.default("modeled_only"),
     status: protocolGrantStatusSchema.default("active"),
     grantedByUserId: uuidSchema.optional().nullable(),
     grantedAt: isoDateTimeSchema,
@@ -861,6 +873,7 @@ export const protocolAppConsentRequestSchema = z
     capabilities: z.array(capabilityNameSchema).default([]),
     subjectType: protocolGrantSubjectTypeSchema.default("app"),
     subjectId: z.string().min(1).max(200),
+    executionMode: protocolDelegatedExecutionModeSchema.default("modeled_only"),
     status: protocolConsentRequestStatusSchema.default("pending"),
     requestedByUserId: uuidSchema.optional().nullable(),
     approvedByUserId: uuidSchema.optional().nullable(),

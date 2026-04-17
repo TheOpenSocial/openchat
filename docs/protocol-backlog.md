@@ -75,6 +75,7 @@ The protocol is no longer just a concept. The following pieces are already prese
 - The backend ops verification pack now builds the protocol and shared package chain before non-full API validation lanes, so production verification no longer fails on missing workspace package artifacts before it reaches the real runtime checks.
 - The backend ops pack now includes a dedicated protocol delivery recovery drill, so queue visibility and replay verification are explicit evidence rather than an implied side effect of broader smoke lanes.
 - The protocol recovery drill now blocks the backend ops pack on `critical` queue/auth/request-pressure findings instead of reporting them passively.
+- Grant and consent resources now expose `executionMode`, so the user-only executable delegation model is visible in the contract instead of only surfacing as a late action failure.
 - The public API host shape is now being normalized so `api.opensocial.so/*` is canonical while `/api/*` remains a compatibility path during migration.
 - Production deploy verification now retries across the local TLS warm-up window so a healthy post-restart API does not get marked red by a transient handshake.
 - Dead-lettered deliveries can now be replayed explicitly through the protocol API and first-party settings surfaces.
@@ -182,6 +183,7 @@ These packages should mirror the backend domain rather than inventing new abstra
    - The schema and API support `subjectType=user|app|service|agent`.
    - Runtime enforcement is still centered on active user grants for delegated actions.
    - Usage summaries now expose that distinction explicitly so manual testing and partner debugging do not mistake modeled grants for executable delegated actors.
+   - Grant and consent resources now also label each record as `executable` or `modeled_only`, and the agent readiness layer blocks on missing executable grants instead of treating any grant as sufficient.
    - Decide whether `app|service|agent` subject types should remain modeled-only or become enforced execution paths.
 
 3. Verify scheduled delivery execution and replay behavior under real failure conditions.
