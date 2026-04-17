@@ -146,6 +146,7 @@ Use this as the baseline for all next backlog items. Do not reintroduce generic 
 - audit request-pressure and spam-health controls so recipient load stays bounded as the market grows
 - verify the new recipient inbound pressure guard against real matching behavior and tune its thresholds from observed data
 - use the new admin request-pressure snapshot during staging/manual QA so saturation shows up before users feel it
+- use the new request-pressure concentration summary during staging/manual QA so over-targeting of a small recipient cohort shows up before hard suppression kicks in
 - use the new admin protocol-auth snapshot during staging/manual QA so grant subject mix, consent backlog, and auth-failure pressure are visible without raw DB access
 - use the new combined admin manual-verification snapshot during staging/manual QA so auth, queue, and request-pressure health can be reviewed from one endpoint before investigating specific subviews
 - use the new manual-verification assessment block during staging/manual QA so the first read is "what is wrong and where" rather than three separate raw snapshots
@@ -246,6 +247,7 @@ These packages should mirror the backend domain rather than inventing new abstra
    - Current implementation:
      - pending inbound request cap per recipient
      - rolling daily inbound request cap per recipient
+     - admin request-pressure concentration summary for spotting over-targeting before suppression
      - load-aware score penalty before hard suppression
      - admin request-pressure snapshot for operator visibility during manual testing
    - Next work:

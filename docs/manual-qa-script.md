@@ -30,6 +30,7 @@ Operational check:
 - If you need deeper detail, then drill into the narrower endpoints below.
 - Inspect `GET /api/admin/ops/request-pressure` only when you need recipient-level detail.
 - Confirm no recipient is unintentionally saturated during repeated manual test runs.
+- Check the concentration summary too, so we catch over-targeting of a small cohort before hard suppression makes it obvious.
 
 Protocol delivery check:
 - Inspect `GET /api/admin/ops/manual-verification` after action, webhook, or replay-heavy tests.

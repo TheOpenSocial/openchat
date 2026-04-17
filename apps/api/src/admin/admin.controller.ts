@@ -5765,6 +5765,53 @@ export class AdminController {
         (recipient.pendingCapacityRatio >= 0.7 ||
           recipient.windowCapacityRatio >= 0.7),
     ).length;
+    const totalPendingInboundCount = recipients.reduce(
+      (sum, recipient) => sum + recipient.pendingInboundCount,
+      0,
+    );
+    const totalWindowInboundCount = recipients.reduce(
+      (sum, recipient) => sum + recipient.windowInboundCount,
+      0,
+    );
+    const topPendingRecipient = [...recipients].sort(
+      (left, right) =>
+        right.pendingInboundCount - left.pendingInboundCount ||
+        right.windowInboundCount - left.windowInboundCount,
+    )[0] ?? null;
+    const topWindowRecipients = [...recipients]
+      .sort(
+        (left, right) =>
+          right.windowInboundCount - left.windowInboundCount ||
+          right.pendingInboundCount - left.pendingInboundCount,
+      )
+      .slice(0, 3);
+    const topRecipientPendingShare =
+      totalPendingInboundCount > 0 && topPendingRecipient
+        ? Number(
+            (
+              topPendingRecipient.pendingInboundCount / totalPendingInboundCount
+            ).toFixed(3),
+          )
+        : 0;
+    const topRecipientWindowShare =
+      totalWindowInboundCount > 0 && topPendingRecipient
+        ? Number(
+            (
+              topPendingRecipient.windowInboundCount / totalWindowInboundCount
+            ).toFixed(3),
+          )
+        : 0;
+    const topThreeWindowShare =
+      totalWindowInboundCount > 0
+        ? Number(
+            (
+              topWindowRecipients.reduce(
+                (sum, recipient) => sum + recipient.windowInboundCount,
+                0,
+              ) / totalWindowInboundCount
+            ).toFixed(3),
+          )
+        : 0;
 
     return {
       generatedAt: new Date().toISOString(),
@@ -5781,14 +5828,15 @@ export class AdminController {
         recipientCount: recipients.length,
         overloadedRecipientCount,
         nearCapacityRecipientCount,
-        totalPendingInboundCount: recipients.reduce(
-          (sum, recipient) => sum + recipient.pendingInboundCount,
-          0,
-        ),
-        totalWindowInboundCount: recipients.reduce(
-          (sum, recipient) => sum + recipient.windowInboundCount,
-          0,
-        ),
+        totalPendingInboundCount,
+        totalWindowInboundCount,
+        concentration: {
+          topPendingRecipientUserId: topPendingRecipient?.recipientUserId ?? null,
+          topPendingRecipientDisplayName: topPendingRecipient?.displayName ?? null,
+          topRecipientPendingShare,
+          topRecipientWindowShare,
+          topThreeWindowShare,
+        },
       },
       recipients,
     };
@@ -5833,6 +5881,25 @@ export class AdminController {
         area: "request_pressure",
         summary: "Some recipients are nearing the inbound request caps.",
         detail: `${input.requestPressure.summary.nearCapacityRecipientCount} recipients are above the near-capacity threshold without being hard-suppressed yet.`,
+      });
+    }
+    if (
+      input.requestPressure.summary.totalWindowInboundCount >= 8 &&
+      input.requestPressure.summary.concentration.topRecipientWindowShare >= 0.4
+    ) {
+      findings.push({
+        id: "request_pressure_concentrated",
+        level: "watch",
+        area: "request_pressure",
+        summary: "A small recipient cohort is absorbing a disproportionate share of inbound requests.",
+        detail: `${input.requestPressure.summary.concentration.topPendingRecipientDisplayName ?? "The top recipient"} accounts for ${(input.requestPressure.summary.concentration.topRecipientWindowShare * 100).toFixed(0)}% of the rolling-window inbound request volume, which may indicate over-targeting even before hard suppression.`,
+      });
+      nextActions.push({
+        id: "inspect_request_pressure_concentration",
+        label: "Inspect recipient concentration",
+        endpoint: `/admin/ops/request-pressure?limit=${input.limit}&hours=${input.hours}`,
+        reason:
+          "Review whether matching is concentrating too much traffic on a small set of high-performing recipients before it turns into saturation.",
       });
     }
 

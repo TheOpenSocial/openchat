@@ -256,6 +256,7 @@ Current snapshot includes:
 - suppression state and suppression reason
 - soft load penalty before hard suppression
 - active threshold values used by matching
+- concentration signals for the top recipient and top recipient cohort share of total inbound volume
 
 Without this visibility, market-health problems are easy to miss until users complain.
 
