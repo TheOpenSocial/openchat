@@ -54,6 +54,24 @@ const checks = [
     admin: true,
   },
   {
+    id: "ops_request_pressure",
+    method: "GET",
+    path: "/admin/ops/request-pressure",
+    admin: true,
+  },
+  {
+    id: "ops_protocol_queue_health",
+    method: "GET",
+    path: "/admin/ops/protocol-queue-health",
+    admin: true,
+  },
+  {
+    id: "ops_protocol_auth_health",
+    method: "GET",
+    path: "/admin/ops/protocol-auth-health",
+    admin: true,
+  },
+  {
     id: "queue_overview",
     method: "GET",
     path: "/admin/jobs/queues",

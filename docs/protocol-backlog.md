@@ -161,6 +161,7 @@ Use this as the baseline for all next backlog items. Do not reintroduce generic 
 - keep request-pressure caps and concentration watch thresholds wired through deploy env sync so production/staging tuning does not require source edits
 - use the new admin protocol-auth snapshot during staging/manual QA so grant subject mix, consent backlog, and auth-failure pressure are visible without raw DB access
 - use the new combined admin manual-verification snapshot during staging/manual QA so auth, queue, request-pressure, and moderation health can be reviewed from one endpoint before investigating specific subviews
+- keep the smoke lane probing the direct request-pressure, protocol-queue-health, and protocol-auth-health endpoints so route regressions are caught before manual QA
 - use the new manual-verification assessment block during staging/manual QA so the first read is "what is wrong and where" rather than three separate raw snapshots
 - use replay-cursor lag in queue health during manual QA so "delivery succeeded" is not mistaken for "consumer state is current"
 - use the improved delegated-auth failure details during staging/manual QA to tell missing-user-grant problems apart from modeled-only grant configuration
