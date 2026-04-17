@@ -135,6 +135,7 @@ Use this as the baseline for all next backlog items. Do not reintroduce generic 
 - Workflow runtime overrides no longer force JavaScript actions onto Node 24, so deploy and ops lanes stop emitting avoidable Node-20 deprecation warning noise while keeping their actual tool versions unchanged
 - The public docs portal now has SDK-only information architecture, concept-first developer onboarding, protocol vision and core-concepts pages, and Mermaid flow diagrams for the main integration lifecycle.
 - The public docs homepage and navigation now follow a cleaner developer-portal layout, closer to the Vercel/OpenAI style the protocol docs need for partner onboarding.
+- Verification coverage is now documented in one canonical matrix that maps CI, deploy, ops drill, eval, sandbox, and mobile session lanes to the evidence each one actually proves.
 - First-party protocol settings/inspection surfaces: shipped as operational tooling, but still partial as polished product UX
 - CI and product-critical golden coverage are green on the current mainline verification pass
 - Mobile-critical backend controller coverage is verified for first-party protocol call-through on:

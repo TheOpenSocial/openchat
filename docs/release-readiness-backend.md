@@ -5,6 +5,7 @@ This is the backend launch summary for first release windows.
 Primary linked evidence:
 - `docs/backend-launch-smoke-matrix.md`
 - `docs/backend-launch-ops-pack.md`
+- `docs/verification-matrix.md`
 
 ## Known limits
 

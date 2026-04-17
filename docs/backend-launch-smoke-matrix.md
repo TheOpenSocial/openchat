@@ -6,6 +6,7 @@ Use it together with:
 - `docs/backend-launch-ops-pack.md`
 - `docs/release-readiness-backend.md`
 - `docs/staging-smoke-checklist.md`
+- `docs/verification-matrix.md`
 
 ## Goal
 
