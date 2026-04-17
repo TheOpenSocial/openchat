@@ -180,6 +180,17 @@ function isPlaygroundPath(path: string) {
   );
 }
 
+function isSmokeBootstrapPath(path: string) {
+  return (
+    path === "/admin/ops/smoke-session/exchange" ||
+    path === "/api/admin/ops/smoke-session/exchange" ||
+    path === "/admin/ops/smoke-session" ||
+    path === "/api/admin/ops/smoke-session" ||
+    path === "/admin/playground/bootstrap" ||
+    path === "/api/admin/playground/bootstrap"
+  );
+}
+
 function isVerificationBypassPath(path: string) {
   return (
     path.startsWith("/intents") ||
@@ -294,6 +305,34 @@ function isTrustedAdminRequest(request: Request, path: string) {
 
   const adminApiKey = getSingleHeader(request.headers["x-admin-api-key"]);
   return typeof adminApiKey === "string" && adminApiKey === requiredApiKey;
+}
+
+function isTrustedSmokeBootstrapRequest(request: Request, path: string) {
+  if (!isSmokeBootstrapPath(path)) {
+    return false;
+  }
+
+  if (isTrustedAdminRequest(request, path)) {
+    return true;
+  }
+
+  const expectedKey = process.env.SMOKE_SESSION_APPLICATION_KEY?.trim();
+  const expectedToken = process.env.SMOKE_SESSION_APPLICATION_TOKEN?.trim();
+  if (!expectedKey || !expectedToken) {
+    return false;
+  }
+
+  const applicationKey = getSingleHeader(request.headers["x-application-key"]);
+  const applicationToken = getSingleHeader(
+    request.headers["x-application-token"],
+  );
+
+  return (
+    typeof applicationKey === "string" &&
+    typeof applicationToken === "string" &&
+    applicationKey === expectedKey &&
+    applicationToken === expectedToken
+  );
 }
 
 function isVerificationBypassRequest(request: Request, path: string) {
@@ -462,12 +501,13 @@ export function requestSecurityMiddleware(
   const isPlayground = isPlaygroundPath(path);
   const isVerificationBypass = isVerificationBypassRequest(request, path);
   const isTrustedAdmin = isTrustedAdminRequest(request, path);
+  const isTrustedSmokeBootstrap = isTrustedSmokeBootstrapRequest(request, path);
   const isTrustedSocialSimBypass = isTrustedSocialSimBypassRequest(
     request,
     path,
   );
 
-  if (isVerificationBypass) {
+  if (isVerificationBypass || isTrustedSmokeBootstrap) {
     next();
     return;
   }
