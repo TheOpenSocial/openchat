@@ -544,9 +544,15 @@ async function waitForModerationQueueFlag(flagId) {
   drillArtifact.attempts.queuePolls = result.attempts;
   drillArtifact.timings.queuePollMs = result.elapsedMs;
   if (!result.found) {
-    throw new Error(
-      `moderation flag ${flagId} not found in open queue after ${result.attempts} attempts`,
-    );
+    recordStep({
+      stage: "queue_visibility",
+      status: "warning",
+      flagId,
+      attempts: result.attempts,
+      durationMs: result.elapsedMs,
+      error: `moderation flag ${flagId} not found in open queue after ${result.attempts} attempts`,
+    });
+    return null;
   }
   recordStep({
     stage: "queue_visibility",
@@ -790,8 +796,8 @@ async function main() {
 
   const { flagId, reportId } = await resolveFlagId();
 
-  await waitForModerationQueueFlag(flagId);
-  drillArtifact.evidence.queueVerified = true;
+  const queuedFlag = await waitForModerationQueueFlag(flagId);
+  drillArtifact.evidence.queueVerified = Boolean(queuedFlag);
 
   const assignment = await assignFlag(flagId);
   if (assignment?.assigneeUserId !== assignToUserId) {

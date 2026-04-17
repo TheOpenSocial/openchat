@@ -444,3 +444,176 @@ test("moderation drill waits for enforcement visibility when restricting a user"
     fs.rmSync(artifactDir, { recursive: true, force: true });
   }
 });
+
+test("moderation drill tolerates queue visibility lag when assignment and triage still succeed", async () => {
+  const artifactDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), "moderation-drill-"),
+  );
+  const runId = "drill-run-queue-warning";
+  const artifactPath = path.join(artifactDir, `${runId}.json`);
+
+  const server = http.createServer(async (req, res) => {
+    const url = new URL(req.url ?? "/", "http://127.0.0.1");
+    const chunks = [];
+    for await (const chunk of req) {
+      chunks.push(chunk);
+    }
+    const rawBody = Buffer.concat(chunks).toString("utf8");
+    const json = (status, payload) => {
+      res.writeHead(status, { "content-type": "application/json" });
+      res.end(JSON.stringify(payload));
+    };
+
+    if (
+      req.method === "POST" &&
+      url.pathname === "/api/moderation/reports"
+    ) {
+      const body = JSON.parse(rawBody || "{}");
+      assert.equal(body.reporterUserId, "reporter-queue-warning");
+      json(200, {
+        success: true,
+        data: {
+          moderationFlagId: "flag-queue-warning",
+          report: { id: "report-queue-warning" },
+        },
+      });
+      return;
+    }
+
+    if (
+      req.method === "GET" &&
+      url.pathname === "/api/admin/moderation/queue"
+    ) {
+      json(200, {
+        success: true,
+        data: [],
+      });
+      return;
+    }
+
+    if (
+      req.method === "POST" &&
+      url.pathname ===
+        "/api/admin/moderation/flags/flag-queue-warning/assign"
+    ) {
+      json(200, {
+        success: true,
+        data: { assigneeUserId: "admin-queue-warning" },
+      });
+      return;
+    }
+
+    if (
+      req.method === "POST" &&
+      url.pathname ===
+        "/api/admin/moderation/flags/flag-queue-warning/triage"
+    ) {
+      json(200, {
+        success: true,
+        data: {
+          flag: { id: "flag-queue-warning", status: "resolved" },
+        },
+      });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/admin/audit-logs") {
+      json(200, {
+        success: true,
+        data: [
+          {
+            id: "audit-report",
+            action: "moderation.report_submitted",
+            entityId: "report-queue-warning",
+          },
+          {
+            id: "audit-assign",
+            action: "admin.moderation_flag_assigned",
+            entityId: "flag-queue-warning",
+          },
+          {
+            id: "audit-triage",
+            action: "admin.action",
+            entityId: "flag-queue-warning",
+            metadata: {
+              action: "admin.moderation_flag_triage",
+            },
+          },
+        ],
+      });
+      return;
+    }
+
+    json(404, {
+      message: `Unhandled ${req.method} ${url.pathname}`,
+    });
+  });
+
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const address = server.address();
+  assert.ok(address && typeof address === "object");
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+
+  const scriptPath = path.resolve(
+    process.cwd(),
+    "scripts/moderation-drill.mjs",
+  );
+  const child = spawn(process.execPath, [scriptPath], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      SMOKE_BASE_URL: baseUrl,
+      SMOKE_ADMIN_USER_ID: "admin-queue-warning",
+      SMOKE_ADMIN_ROLE: "admin",
+      SMOKE_ADMIN_API_KEY: "admin-api-key",
+      MODERATION_DRILL_REPORTER_USER_ID: "reporter-queue-warning",
+      MODERATION_DRILL_ACCESS_TOKEN: "fresh-token",
+      MODERATION_DRILL_TARGET_USER_ID: "target-queue-warning",
+      MODERATION_DRILL_ENTITY_TYPE: "user",
+      MODERATION_DRILL_ENTITY_ID: "target-queue-warning",
+      MODERATION_DRILL_ASSIGN_TO_USER_ID: "admin-queue-warning",
+      MODERATION_DRILL_ACTION: "resolve",
+      MODERATION_DRILL_RUN_ID: runId,
+      MODERATION_DRILL_ARTIFACT_DIR: artifactDir,
+      MODERATION_DRILL_QUEUE_POLL_TIMEOUT_MS: "200",
+      MODERATION_DRILL_QUEUE_POLL_INTERVAL_MS: "50",
+      MODERATION_DRILL_AUDIT_POLL_TIMEOUT_MS: "2000",
+      MODERATION_DRILL_AUDIT_POLL_INTERVAL_MS: "50",
+      SMOKE_TIMEOUT_MS: "3000",
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  let stdout = "";
+  let stderr = "";
+  child.stdout.on("data", (chunk) => {
+    stdout += chunk.toString();
+  });
+  child.stderr.on("data", (chunk) => {
+    stderr += chunk.toString();
+  });
+
+  try {
+    const [code] = await once(child, "close");
+    assert.equal(code, 0, `stdout:\n${stdout}\n\nstderr:\n${stderr}`);
+
+    const artifact = JSON.parse(fs.readFileSync(artifactPath, "utf8"));
+    assert.equal(artifact.success, true);
+    assert.equal(artifact.evidence.queueVerified, false);
+    assert.equal(artifact.evidence.assignmentVerified, true);
+    assert.equal(artifact.evidence.triageVerified, true);
+    assert.equal(artifact.evidence.auditVerified, true);
+    assert.ok(
+      artifact.steps.some(
+        (step) =>
+          step.stage === "queue_visibility" && step.status === "warning",
+      ),
+    );
+  } finally {
+    await new Promise((resolve, reject) => {
+      server.close((error) => (error ? reject(error) : resolve(undefined)));
+    });
+    fs.rmSync(artifactDir, { recursive: true, force: true });
+  }
+});
