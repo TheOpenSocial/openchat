@@ -83,6 +83,9 @@ jobs:
       - name: Test (OpenAI contracts)
         run: pnpm --filter @opensocial/openai test
 
+      - name: Test (Protocol agent readiness)
+        run: pnpm --filter @opensocial/protocol-agent test
+
       - name: Test (API endpoint contracts)
         run: pnpm --filter @opensocial/api test -- test/onboarding-agent.contract.spec.ts
 

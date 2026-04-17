@@ -1573,8 +1573,39 @@ describe("ProtocolService", () => {
     expect(summary.grantCounts.active).toBe(1);
     expect(summary.queueHealth.replayableCount).toBe(0);
     expect(summary.tokenAudit.appUpdatedAt).not.toBe("");
+    expect(summary.tokenAudit.currentTokenIssuedAt).not.toBe("");
+    expect(summary.tokenAudit.recommendedRotateBy).not.toBe("");
+    expect(summary.tokenAudit.rotationWindowDays).toBeGreaterThan(0);
+    expect(summary.tokenAudit.tokenAgeDays).toBeGreaterThanOrEqual(0);
+    expect(summary.tokenAudit.freshness).toBe("current");
     expect(summary.grantAudit.lastGrantedAt).not.toBeNull();
     expect(summary.latestCursor).not.toBe("");
+  });
+
+  it("marks protocol tokens as stale after the rotation window", async () => {
+    const now = new Date("2026-01-01T00:00:00.000Z");
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+
+    try {
+      const service = createProtocolService();
+      const registration = await service.registerApp(
+        createRegistrationPayload(),
+      );
+
+      vi.setSystemTime(new Date(now.getTime() + 95 * 24 * 60 * 60 * 1000));
+
+      const summary = await service.getAppUsageSummary(
+        "partner.alpha",
+        registration.credentials.appToken,
+      );
+
+      expect(summary.tokenAudit.rotationWindowDays).toBe(90);
+      expect(summary.tokenAudit.tokenAgeDays).toBe(95);
+      expect(summary.tokenAudit.freshness).toBe("stale");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("creates, approves, and rejects consent requests independently of grants", async () => {

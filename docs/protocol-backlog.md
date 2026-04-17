@@ -155,20 +155,20 @@ Use this as the baseline for all next backlog items. Do not reintroduce generic 
 - verify whether the remaining first-party direct writes should become public protocol actions or remain intentionally internal
 - audit request-pressure and spam-health controls so recipient load stays bounded as the market grows
 - verify the new recipient inbound pressure guard against real matching behavior and tune its thresholds from observed data
-- use the new admin request-pressure snapshot during staging/manual QA so saturation shows up before users feel it
-- use the new request-pressure concentration summary during staging/manual QA so over-targeting of a small recipient cohort shows up before hard suppression kicks in
-- use the new configurable request-pressure concentration thresholds during staging/manual QA so market-shape tuning does not require controller edits
+- use the new admin request-pressure snapshot during staging smoke, ops drills, and incident automation so saturation shows up before users feel it
+- use the new request-pressure concentration summary during smoke and ops drills so over-targeting of a small recipient cohort shows up before hard suppression kicks in
+- use the new configurable request-pressure concentration thresholds during CI-backed smoke and ops drills so market-shape tuning does not require controller edits
 - keep request-pressure caps and concentration watch thresholds wired through deploy env sync so production/staging tuning does not require source edits
-- use the new admin protocol-auth snapshot during staging/manual QA so grant subject mix, consent backlog, and auth-failure pressure are visible without raw DB access
-- use the new combined admin manual-verification snapshot during staging/manual QA so auth, queue, request-pressure, and moderation health can be reviewed from one endpoint before investigating specific subviews
-- keep the smoke lane probing the direct request-pressure, protocol-queue-health, and protocol-auth-health endpoints so route regressions are caught before manual QA
-- use the new manual-verification assessment block during staging/manual QA so the first read is "what is wrong and where" rather than three separate raw snapshots
-- use replay-cursor lag in queue health during manual QA so "delivery succeeded" is not mistaken for "consumer state is current"
-- use the improved delegated-auth failure details during staging/manual QA to tell missing-user-grant problems apart from modeled-only grant configuration
+- use the new admin protocol-auth snapshot during smoke and ops drills so grant subject mix, consent backlog, and auth-failure pressure are visible without raw DB access
+- use the new combined admin manual-verification snapshot during staging smoke, ops drills, and incident automation so auth, queue, request-pressure, and moderation health can be reviewed from one endpoint before investigating specific subviews
+- keep the smoke lane probing the direct request-pressure, protocol-queue-health, and protocol-auth-health endpoints so route regressions are caught before broader automation layers rely on the aggregate snapshot
+- use the new manual-verification assessment block during smoke and ops drills so the first read is "what is wrong and where" rather than three separate raw snapshots
+- use replay-cursor lag in queue health during smoke and ops drills so "delivery succeeded" is not mistaken for "consumer state is current"
+- use the improved delegated-auth failure details during smoke and ops drills to tell missing-user-grant problems apart from modeled-only grant configuration
 - keep the backend ops drill aligned with the richer admin queue/manual-verification snapshot contract now that verification-harness package drift has been cleared
 - keep direct `ConnectionSetupService` scenario/spec harnesses aligned with the current constructor contract so backend ops drill failures reflect behavior regressions, not stale positional test wiring
 - use the manual-verification assessment to flag modeled-only delegation before runtime failures occur, so support can spot non-executable grant setups proactively
-- use the dedicated protocol recovery drill artifact when validating queue/replay recovery so delivery evidence is captured in one place
+- use the dedicated protocol recovery drill artifact when validating queue/replay recovery in CI and ops automation so delivery evidence is captured in one place
 
 ## Package Direction
 
