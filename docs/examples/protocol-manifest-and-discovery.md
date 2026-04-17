@@ -55,7 +55,7 @@ Example:
 ```ts
 import { createProtocolClientFromBaseUrl } from "@opensocial/protocol-client";
 
-const client = createProtocolClientFromBaseUrl("https://api.example.com/api");
+const client = createProtocolClientFromBaseUrl("https://api.example.com");
 
 const manifest = await client.getManifest();
 

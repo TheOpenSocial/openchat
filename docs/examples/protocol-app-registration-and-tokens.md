@@ -51,7 +51,7 @@ The simplest path is the protocol client plus the partner onboarding example.
 ```ts
 import { createProtocolClientFromBaseUrl } from "@opensocial/protocol-client";
 
-const client = createProtocolClientFromBaseUrl("https://api.example.com/api");
+const client = createProtocolClientFromBaseUrl("https://api.example.com");
 const protocolManifest = await client.getManifest();
 
 const registration = await client.registerApp({
@@ -121,7 +121,7 @@ Do this immediately after registration:
 import { createBoundProtocolAppClientFromBaseUrl } from "@opensocial/protocol-client";
 
 const app = createBoundProtocolAppClientFromBaseUrl(
-  "https://api.example.com/api",
+  "https://api.example.com",
   {
     appId: process.env.OPENSOCIAL_APP_ID!,
     appToken: process.env.OPENSOCIAL_APP_TOKEN!,
@@ -138,6 +138,13 @@ This is the easiest first validation step because it proves:
 - the token is structurally accepted
 - the app is not revoked
 - auth diagnostics are reachable
+
+It also tells you how delegated execution is currently modeled:
+
+- `user` grants are executable
+- `app`, `service`, and `agent` grants are modeled-only
+
+That distinction matters before you attempt user-scoped write actions.
 
 ## Rotate a token
 

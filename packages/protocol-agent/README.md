@@ -26,7 +26,7 @@ Use it when agent code should operate through the protocol boundary without repe
 import { createProtocolAgentClientFromBaseUrl } from "@opensocial/protocol-agent";
 
 const agent = createProtocolAgentClientFromBaseUrl(
-  "https://api.example.com/api",
+  "https://api.example.com",
   {
     appId: process.env.OPENSOCIAL_APP_ID!,
     appToken: process.env.OPENSOCIAL_APP_TOKEN!,
@@ -51,6 +51,13 @@ await agent.createIntent({
 const readiness = await agent.checkReadiness();
 console.log(readiness.snapshot.queue.deadLetteredCount);
 ```
+
+Delegated execution rule:
+
+- `user` grants are executable today
+- `app`, `service`, and `agent` grants remain modeled-only
+
+So agent readiness should be interpreted as “is there an executable user grant for this actor?” rather than “does any grant row exist?”
 
 For runnable examples, see:
 

@@ -70,6 +70,11 @@ The example:
 - updates that intent
 - optionally sends a request if a recipient user id is provided
 
+Current delegated execution rule:
+
+- the actor must have an executable `user` grant for delegated writes
+- `app`, `service`, and `agent` grants remain modeled-only today
+
 ## Current Scope
 
 The agent wrapper stays inside the shipped coordination primitives:

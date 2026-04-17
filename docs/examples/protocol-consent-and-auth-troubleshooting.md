@@ -49,12 +49,24 @@ Typical causes:
 - consent request still pending
 - revoked grant
 - missing capability for the requested action
+- only modeled-only grants exist for the app
 
 Important rule:
 
 > A consent request is not an active grant.
 
 Approval is what turns a pending request into executable delegated access.
+
+Important rule:
+
+> Not every active grant is executable delegated access.
+
+Current execution model:
+
+- `user` subject grants are executable
+- `app`, `service`, and `agent` subject grants are modeled-only
+
+So an app can have active grants and still be blocked from acting on behalf of a user.
 
 ## Third check: scopes and capabilities
 

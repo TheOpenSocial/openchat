@@ -15,6 +15,11 @@ By the end of this path, you should be able to:
 5. dispatch supported actions
 6. receive events and handle delivery safely
 
+Current delegated execution rule:
+
+- `user` grants are executable
+- `app`, `service`, and `agent` grants are modeled-only
+
 ## The integration path
 
 ```mermaid
@@ -92,6 +97,7 @@ You are using the protocol as intended when:
 - your integration starts from manifest and discovery
 - your app token lifecycle is controlled
 - delegated access is explicit
+- executable user delegation is present before you attempt user-scoped writes
 - your writes map to documented actions
 - webhook replay and recovery are operational
 

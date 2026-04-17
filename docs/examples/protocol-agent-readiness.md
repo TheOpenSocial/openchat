@@ -12,10 +12,18 @@ The shipped readiness helpers look at:
 - dead-lettered deliveries
 - in-flight or failed delivery pressure
 - queued backlog
-- whether active delegated grants exist
+- whether executable delegated grants exist
 - whether consent is still pending
 
 That gives an agent team one place to decide whether it is safe to proceed.
+
+Important:
+
+- active grants are not all equivalent
+- `user` grants are executable today
+- `app`, `service`, and `agent` grants are modeled-only today
+
+If only modeled-only grants exist, readiness should block delegated writes.
 
 ## Basic usage
 
@@ -68,6 +76,8 @@ If readiness is not good enough, the assertion throws with a compact explanation
   - optional blocking state if you decide backlog size should gate execution
 - `no_active_grants`
   - delegated actions are likely to fail
+- `no_executable_grants`
+  - grants exist, but only in modeled-only subject types, so delegated actions are still expected to fail
 - `pending_consent_requests`
   - approval may still be outstanding
 

@@ -15,6 +15,13 @@ Every write action requires:
 
 If any of those are missing, the action should be expected to fail.
 
+Current delegated execution model:
+
+- executable today: `subjectType=user`
+- modeled-only today: `subjectType=app|service|agent`
+
+That means a non-user grant may still appear in auth or usage diagnostics without making a delegated write executable.
+
 For auth debugging, use [Consent and auth troubleshooting](./protocol-consent-and-auth-troubleshooting).
 
 ## Action families
@@ -122,6 +129,7 @@ Across the whole write surface, the most common causes of failure are:
 - missing `actions.invoke`
 - missing capability for the action family
 - no active delegated grant
+- only modeled-only grants exist for the app
 - resource ownership or membership mismatch
 
 ## Related resources
