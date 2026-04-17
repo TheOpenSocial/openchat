@@ -13,6 +13,7 @@ import { timingSafeEqual } from "node:crypto";
 import {
   appRegistrationRequestSchema,
   identifierSchema,
+  protocolChatCreateActionSchema,
   protocolChatSendMessageActionSchema,
   protocolConnectionCreateActionSchema,
   protocolCircleCreateActionSchema,
@@ -589,6 +590,23 @@ export class ProtocolController {
         appId,
         readProtocolAppToken(headers) ?? "",
         requestId,
+        payload,
+      ),
+    );
+  }
+
+  @Post("apps/:appId/actions/chats")
+  async createChatAction(
+    @Param("appId") appIdParam: string,
+    @Headers() headers: Record<string, string | string[] | undefined>,
+    @Body() body: unknown,
+  ) {
+    const appId = parseRequestPayload(identifierSchema, appIdParam);
+    const payload = parseRequestPayload(protocolChatCreateActionSchema, body);
+    return ok(
+      await this.protocolService.createChatAction(
+        appId,
+        readProtocolAppToken(headers) ?? "",
         payload,
       ),
     );

@@ -6,6 +6,8 @@ import {
 } from "@opensocial/protocol-client";
 import type {
   ProtocolAppOperationalSnapshot,
+  ProtocolChatCreateAction as ProtocolChatCreateInput,
+  ProtocolChatActionResult,
   ProtocolChatSendMessageAction as ProtocolChatSendMessageInput,
   ProtocolConnectionCreateAction as ProtocolConnectionCreateInput,
   ProtocolCircleCreateAction as ProtocolCircleCreateInput,
@@ -99,6 +101,11 @@ export type ProtocolAgentClient = {
       metadata?: ProtocolJsonObject;
     },
   ) => Promise<ProtocolRequestActionResult>;
+  createChat: (
+    input: Omit<ProtocolChatCreateInput, "actorUserId" | "metadata"> & {
+      metadata?: ProtocolJsonObject;
+    },
+  ) => Promise<ProtocolChatActionResult>;
   createConnection: (
     input: Omit<ProtocolConnectionCreateInput, "actorUserId" | "metadata"> & {
       metadata?: ProtocolJsonObject;
@@ -370,6 +377,12 @@ export function bindProtocolAgentClient(
         actorUserId: session.actorUserId,
         metadata: mergeMetadata(session, input.metadata),
       }),
+    createChat: (input) =>
+      app.createChat({
+        ...input,
+        actorUserId: session.actorUserId,
+        metadata: mergeMetadata(session, input.metadata),
+      }),
     createConnection: (input) =>
       app.createConnection({
         ...input,
@@ -574,6 +587,29 @@ export function createProtocolAgentToolset(
           metadata: payload.metadata,
         });
       },
+    },
+    {
+      name: "protocol_agent_create_chat",
+      description:
+        "Create a direct or group chat on top of an existing connection through the OpenSocial protocol.",
+      inputSchema: {
+        type: "object",
+        required: ["connectionId", "type"],
+        additionalProperties: false,
+        properties: {
+          connectionId: { type: "string" },
+          type: { type: "string", enum: ["dm", "group"] },
+          metadata: metadataSchema,
+        },
+      },
+      invoke: (input) =>
+        agent.createChat(
+          readProtocolAgentToolInput<
+            Omit<ProtocolChatCreateInput, "actorUserId" | "metadata"> & {
+              metadata?: ProtocolJsonObject;
+            }
+          >(input),
+        ),
     },
     {
       name: "protocol_agent_create_connection",

@@ -62,7 +62,7 @@ That surface currently covers:
 - intents
 - requests
 - connections
-- chat messages
+- chats and chat messages
 - circles
 
 Primary guide:

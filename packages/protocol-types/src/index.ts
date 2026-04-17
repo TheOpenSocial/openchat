@@ -1026,6 +1026,18 @@ export type ProtocolConnectionCreateAction = z.infer<
   typeof protocolConnectionCreateActionSchema
 >;
 
+export const protocolChatCreateActionSchema = z
+  .object({
+    actorUserId: uuidSchema,
+    connectionId: uuidSchema,
+    type: z.enum(["dm", "group"] as const),
+    metadata: protocolJsonObjectSchema.default({}),
+  })
+  .strict();
+export type ProtocolChatCreateAction = z.infer<
+  typeof protocolChatCreateActionSchema
+>;
+
 export const protocolChatSendMessageActionSchema = z
   .object({
     actorUserId: uuidSchema,
@@ -1160,6 +1172,21 @@ export const protocolConnectionActionResultSchema = z
   .strict();
 export type ProtocolConnectionActionResult = z.infer<
   typeof protocolConnectionActionResultSchema
+>;
+
+export const protocolChatActionResultSchema = z
+  .object({
+    action: z.literal("chat.create"),
+    actorUserId: uuidSchema,
+    chatId: uuidSchema,
+    connectionId: uuidSchema,
+    type: z.enum(["dm", "group"] as const),
+    createdAt: isoDateTimeSchema,
+    metadata: protocolJsonObjectSchema.default({}),
+  })
+  .strict();
+export type ProtocolChatActionResult = z.infer<
+  typeof protocolChatActionResultSchema
 >;
 
 export const protocolChatMessageActionResultSchema = z

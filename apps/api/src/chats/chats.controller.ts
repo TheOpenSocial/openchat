@@ -43,11 +43,14 @@ export class ChatsController {
   async createChat(@Body() body: unknown, @ActorUserId() actorUserId: string) {
     const payload = parseRequestPayload(createChatBodySchema, body);
     return ok(
-      await this.chatsService.createChat(
-        payload.connectionId,
-        payload.type,
+      await this.protocolService.createFirstPartyChatAction({
         actorUserId,
-      ),
+        connectionId: payload.connectionId,
+        type: payload.type,
+        metadata: {
+          source: "chats.controller.create",
+        },
+      }),
     );
   }
 

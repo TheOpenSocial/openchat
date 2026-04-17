@@ -97,6 +97,14 @@ Creates a direct or group connection for the acting user.
 
 ## Chat action
 
+### `chat.create`
+
+Creates a direct or group chat on top of an existing connection.
+
+- Capability: `chat.write`
+- Emits: `chat.created`
+- Returns: `ProtocolChatActionResult`
+
 ### `chat.send_message`
 
 Sends a message into an existing chat.

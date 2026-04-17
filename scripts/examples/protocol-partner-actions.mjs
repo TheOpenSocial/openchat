@@ -49,6 +49,10 @@ async function main() {
     flag: "--chat-id",
     envName: "PROTOCOL_CHAT_ID",
   });
+  const chatConnectionId = resolveOptionalStringArg({
+    flag: "--chat-connection-id",
+    envName: "PROTOCOL_CHAT_CONNECTION_ID",
+  });
   const circleTitle = resolveOptionalStringArg({
     flag: "--circle-title",
     envName: "PROTOCOL_CIRCLE_TITLE",
@@ -110,6 +114,16 @@ async function main() {
       metadata: exampleMetadata,
     });
     logSection("protocol-example", "connection-created", connection);
+  }
+
+  if (chatConnectionId) {
+    const chat = await app.createChat({
+      actorUserId,
+      connectionId: chatConnectionId,
+      type: "dm",
+      metadata: exampleMetadata,
+    });
+    logSection("protocol-example", "chat-created", chat);
   }
 
   if (chatId) {

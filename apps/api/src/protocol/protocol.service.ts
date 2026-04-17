@@ -34,6 +34,8 @@ import {
   protocolWebhookDeliveryGlobalDispatchResultSchema,
   protocolWebhookDeliveryAttemptSchema,
   protocolWebhookDeliveryReplayResultSchema,
+  protocolChatActionResultSchema,
+  protocolChatCreateActionSchema,
   protocolChatMessageActionResultSchema,
   protocolConnectionActionResultSchema,
   protocolConnectionCreateActionSchema,
@@ -64,6 +66,8 @@ import {
   type AppRegistration,
   type AppRegistrationRequest,
   type CapabilityName,
+  type ProtocolChatActionResult,
+  type ProtocolChatCreateAction,
   type ProtocolChatSendMessageAction,
   type ProtocolConnectionActionResult,
   type ProtocolConnectionCreateAction,
@@ -1423,6 +1427,28 @@ export class ProtocolService {
     });
   }
 
+  async createChatAction(
+    appId: string,
+    appToken: string,
+    input: ProtocolChatCreateAction,
+  ) {
+    const payload = protocolChatCreateActionSchema.parse(input);
+    const { app, grant } = await this.requireDelegatedActionGrant(
+      appId,
+      appToken,
+      payload.actorUserId,
+      "chat.create",
+      ["chat.write"],
+    );
+    if (!this.chatsService) {
+      throw new NotFoundException("chat actions unavailable");
+    }
+    return this.executeChatCreateAction(payload, {
+      actorAppId: app.registration.appId,
+      grantId: grant.grantId,
+    });
+  }
+
   async createConnectionAction(
     appId: string,
     appToken: string,
@@ -1761,6 +1787,12 @@ export class ProtocolService {
     input: ProtocolChatSendMessageAction,
   ) {
     return this.executeChatSendMessageAction(chatId, input, {
+      actorAppId: FIRST_PARTY_PROTOCOL_ACTOR_APP_ID,
+    });
+  }
+
+  async createFirstPartyChatAction(input: ProtocolChatCreateAction) {
+    return this.executeChatCreateAction(input, {
       actorAppId: FIRST_PARTY_PROTOCOL_ACTOR_APP_ID,
     });
   }
@@ -2464,6 +2496,45 @@ export class ProtocolService {
       type: connection.type,
       originIntentId: connection.originIntentId ?? null,
       createdByUserId: connection.createdByUserId,
+      metadata: payload.metadata ?? {},
+    });
+  }
+
+  private async executeChatCreateAction(
+    input: ProtocolChatCreateAction,
+    context: { actorAppId: string; grantId?: string },
+  ): Promise<ProtocolChatActionResult> {
+    const payload = protocolChatCreateActionSchema.parse(input);
+    const chat = await this.chatsService!.createChat(
+      payload.connectionId,
+      payload.type,
+      payload.actorUserId,
+    );
+
+    await this.recordEvent({
+      actorAppId: context.actorAppId,
+      event: "chat.created",
+      resource: "chat",
+      payload: {
+        chatId: chat.id,
+        connectionId: chat.connectionId,
+        actorUserId: payload.actorUserId,
+        type: chat.type,
+        grantId: context.grantId ?? null,
+        source:
+          context.actorAppId === FIRST_PARTY_PROTOCOL_ACTOR_APP_ID
+            ? "first_party"
+            : "app",
+      },
+    });
+
+    return protocolChatActionResultSchema.parse({
+      action: "chat.create",
+      actorUserId: payload.actorUserId,
+      chatId: chat.id,
+      connectionId: chat.connectionId,
+      type: chat.type,
+      createdAt: this.toIsoString(chat.createdAt) ?? new Date().toISOString(),
       metadata: payload.metadata ?? {},
     });
   }
