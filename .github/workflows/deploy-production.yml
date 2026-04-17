@@ -28,9 +28,6 @@ on:
         required: false
         type: string
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-
 jobs:
   deploy-production:
     runs-on: [self-hosted, linux, x64, opensocial-prod]

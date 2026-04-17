@@ -17,9 +17,6 @@ on:
         default: false
         type: boolean
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-
 jobs:
   backend-ops-drill:
     runs-on: [self-hosted, linux, x64, opensocial-prod]

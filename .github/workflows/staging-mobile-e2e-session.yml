@@ -8,9 +8,6 @@ on:
         required: false
         type: string
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-
 jobs:
   staging-mobile-e2e-session:
     name: Emit Staging Mobile E2E Session

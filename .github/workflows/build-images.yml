@@ -13,7 +13,6 @@ permissions:
   packages: write
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
   REGISTRY: ghcr.io
   IMAGE_OWNER: theopensocial
   IMAGE_TAG: ${{ inputs.image_tag }}

@@ -41,9 +41,6 @@ on:
           - core
           - full
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-
 jobs:
   deploy-staging:
     runs-on: [self-hosted, linux, x64, opensocial-prod]
