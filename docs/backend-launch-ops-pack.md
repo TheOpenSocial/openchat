@@ -75,7 +75,7 @@ STAGING_EQUALS_PROD=true BACKEND_OPS_TARGET=staging pnpm test:backend:ops-pack
 - `test:agentic:suite:verification` passes with required benchmark + prod-smoke gates.
 - moderation drill passes with report -> flag -> assign -> triage -> audit verification.
 - protocol recovery drill passes in diagnostic mode by default and can be rerun in active mode with protocol app credentials when you want to verify a representative replay.
-- protocol recovery drill now blocks the pack when the combined operator snapshot is already in a `critical` state.
+- protocol recovery drill now blocks the pack when protocol-relevant queue/auth/request-pressure findings are already `critical`; unrelated moderation criticals remain visible in artifacts but are handled by the moderation drill.
 - smoke verification includes the combined admin manual-verification snapshot so request pressure, protocol queue health, protocol auth health, and moderation backlog are readable from one place.
 - smoke verification now also probes the direct request-pressure, protocol-queue-health, and protocol-auth-health endpoints so route-level regressions are caught even when the aggregate snapshot still resolves.
 - ops-pack artifact status is `passed`.
@@ -90,7 +90,7 @@ Default behavior:
 - inspects `GET /admin/ops/protocol-queue-health`
 - writes an artifact under `.artifacts/protocol-recovery-drill/`
 - does not perform a replay
-- fails the drill if the combined operator assessment is already `critical`
+- fails the drill if protocol-relevant queue/auth/request-pressure findings are already `critical`
 
 Active replay mode is opt-in:
 - set `PROTOCOL_RECOVERY_ALLOW_REPLAY=1`

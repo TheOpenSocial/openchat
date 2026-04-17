@@ -129,6 +129,12 @@ function assertOk(response, label) {
   }
 }
 
+const BLOCKING_FINDING_AREAS = new Set([
+  "protocol_queue",
+  "protocol_auth",
+  "request_pressure",
+]);
+
 function deriveAssessment(manualVerification, queueHealthBefore, replayAction) {
   const findings = [];
   const nextActions = [];
@@ -181,9 +187,15 @@ function deriveAssessment(manualVerification, queueHealthBefore, replayAction) {
     });
   }
 
+  const blockingFindings = findings.filter(
+    (finding) =>
+      finding.level === "critical" &&
+      BLOCKING_FINDING_AREAS.has(finding.area ?? ""),
+  );
+
   return {
     overallStatus:
-      findings.some((finding) => finding.level === "critical")
+      blockingFindings.length > 0
         ? "critical"
         : findings.some((finding) => finding.level === "watch")
           ? "watch"
