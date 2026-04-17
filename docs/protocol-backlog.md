@@ -130,6 +130,7 @@ Use this as the baseline for all next backlog items. Do not reintroduce generic 
 - Production Compose/Caddy routing now uses explicit network aliases for public upstreams so deploys do not depend on ambiguous short service-name resolution
 - The API boot-time `RealtimeModule` ESM initialization cycle has been broken by making realtime providers globally available and removing feature-module imports that only needed exported realtime services
 - The API boot-time `AgentModule` initialization cycle on the connection setup path has been reduced by deferring the protocol-side module reference and lazily resolving `AgentService` only when sender-thread updates are actually emitted
+- Remaining first-party modules that still depended directly on `AgentModule` for read-side or job wiring now use `forwardRef(...)` so the API is less likely to reintroduce the same ESM boot cycle through experience, onboarding, or job processing paths
 - The public docs portal now has SDK-only information architecture, concept-first developer onboarding, protocol vision and core-concepts pages, and Mermaid flow diagrams for the main integration lifecycle.
 - The public docs homepage and navigation now follow a cleaner developer-portal layout, closer to the Vercel/OpenAI style the protocol docs need for partner onboarding.
 - First-party protocol settings/inspection surfaces: shipped as operational tooling, but still partial as polished product UX

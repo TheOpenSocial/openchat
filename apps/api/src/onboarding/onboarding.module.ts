@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { AgentModule } from "../agent/agent.module.js";
 import { DatabaseModule } from "../database/database.module.js";
 import { DiscoveryModule } from "../discovery/discovery.module.js";
@@ -13,7 +13,7 @@ import { OnboardingService } from "./onboarding.service.js";
     LaunchControlsModule,
     DatabaseModule,
     DiscoveryModule,
-    AgentModule,
+    forwardRef(() => AgentModule),
     IntentsModule,
     PersonalizationModule,
   ],

@@ -1,5 +1,5 @@
 import { BullModule } from "@nestjs/bullmq";
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { AgentModule } from "../agent/agent.module.js";
 import { ChatsModule } from "../chats/chats.module.js";
 import { ConnectionsModule } from "../connections/connections.module.js";
@@ -46,7 +46,7 @@ export const JOB_QUEUE_NAMES = [
     ChatsModule,
     ExecutionReconciliationModule,
     ProfilesModule,
-    AgentModule,
+    forwardRef(() => AgentModule),
     ModerationModule,
     NotificationsModule,
     ProtocolModule,
