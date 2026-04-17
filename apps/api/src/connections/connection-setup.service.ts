@@ -4,6 +4,7 @@ import {
   NotFoundException,
   Optional,
 } from "@nestjs/common";
+import { ModuleRef } from "@nestjs/core";
 import { NotificationType } from "@opensocial/types";
 import { Prisma } from "@prisma/client";
 import { randomUUID } from "node:crypto";
@@ -27,15 +28,16 @@ const CONNECTION_SETUP_SIDE_EFFECT_REPLAY_WINDOW_MS = 30 * 60_000;
 @Injectable()
 export class ConnectionSetupService {
   private readonly logger = new Logger(ConnectionSetupService.name);
+  private agentService: AgentService | null | undefined;
 
   constructor(
+    private readonly moduleRef: ModuleRef,
     private readonly prisma: PrismaService,
     private readonly connectionsService: ConnectionsService,
     private readonly chatsService: ChatsService,
     private readonly notificationsService: NotificationsService,
     private readonly personalizationService: PersonalizationService,
     private readonly matchingService: MatchingService,
-    private readonly agentService: AgentService,
     private readonly executionReconciliationService: ExecutionReconciliationService,
     @Optional()
     private readonly launchControlsService?: LaunchControlsService,
@@ -1041,10 +1043,16 @@ export class ConnectionSetupService {
           message,
         })
       : null;
+    const agentService = this.getAgentService();
     const threadMessage =
       existingMessage ??
-      (await this.agentService.createAgentMessage(senderThread.id, message));
+      (agentService
+        ? await agentService.createAgentMessage(senderThread.id, message)
+        : null);
     const deduped = existingMessage != null;
+    if (!threadMessage) {
+      return;
+    }
 
     if (workflow) {
       await this.workflowRuntimeService?.linkSideEffect({
@@ -1064,6 +1072,23 @@ export class ConnectionSetupService {
         },
       });
     }
+  }
+
+  private getAgentService() {
+    if (this.agentService !== undefined) {
+      return this.agentService;
+    }
+    try {
+      this.agentService = this.moduleRef.get(AgentService, {
+        strict: false,
+      });
+    } catch (error) {
+      this.logger.warn(
+        `agent service unavailable for connection thread update: ${String(error)}`,
+      );
+      this.agentService = null;
+    }
+    return this.agentService;
   }
 
   private async createWorkflowNotification(input: {

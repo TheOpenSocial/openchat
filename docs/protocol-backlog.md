@@ -129,6 +129,7 @@ Use this as the baseline for all next backlog items. Do not reintroduce generic 
 - Production deploy health now verifies local ingress for the public API and docs routes so upstream `502`s and bad docs redirects fail the rollout instead of appearing green
 - Production Compose/Caddy routing now uses explicit network aliases for public upstreams so deploys do not depend on ambiguous short service-name resolution
 - The API boot-time `RealtimeModule` ESM initialization cycle has been broken by making realtime providers globally available and removing feature-module imports that only needed exported realtime services
+- The API boot-time `AgentModule` initialization cycle on the connection setup path has been reduced by deferring the protocol-side module reference and lazily resolving `AgentService` only when sender-thread updates are actually emitted
 - The public docs portal now has SDK-only information architecture, concept-first developer onboarding, protocol vision and core-concepts pages, and Mermaid flow diagrams for the main integration lifecycle.
 - The public docs homepage and navigation now follow a cleaner developer-portal layout, closer to the Vercel/OpenAI style the protocol docs need for partner onboarding.
 - First-party protocol settings/inspection surfaces: shipped as operational tooling, but still partial as polished product UX

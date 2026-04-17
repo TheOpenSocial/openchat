@@ -19,7 +19,7 @@ import { ConnectionsService } from "./connections.service.js";
     PersonalizationModule,
     ExecutionReconciliationModule,
     MatchingModule,
-    AgentModule,
+    forwardRef(() => AgentModule),
     AnalyticsModule,
   ],
   providers: [ConnectionsService, ConnectionSetupService],
