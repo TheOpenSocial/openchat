@@ -31,7 +31,6 @@ export class ConnectionSetupService {
   private agentService: AgentService | null | undefined;
 
   constructor(
-    private readonly moduleRef: ModuleRef,
     private readonly prisma: PrismaService,
     private readonly connectionsService: ConnectionsService,
     private readonly chatsService: ChatsService,
@@ -47,6 +46,8 @@ export class ConnectionSetupService {
     private readonly realtimeEventsService?: RealtimeEventsService,
     @Optional()
     private readonly workflowRuntimeService?: AgentWorkflowRuntimeService,
+    @Optional()
+    private readonly moduleRef?: ModuleRef,
   ) {}
 
   async setupFromAcceptedRequest(requestId: string, traceId?: string) {
@@ -1076,6 +1077,10 @@ export class ConnectionSetupService {
 
   private getAgentService() {
     if (this.agentService !== undefined) {
+      return this.agentService;
+    }
+    if (!this.moduleRef) {
+      this.agentService = null;
       return this.agentService;
     }
     try {
