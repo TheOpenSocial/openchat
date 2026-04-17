@@ -32,6 +32,7 @@ Artifact also records:
 2. `pnpm test:agentic:suite:verification`
 3. `pnpm staging:smoke:verification-lane`
 4. `pnpm moderation:drill`
+5. `pnpm protocol:recovery:drill`
 
 ## Environment
 
@@ -73,9 +74,30 @@ STAGING_EQUALS_PROD=true BACKEND_OPS_TARGET=staging pnpm test:backend:ops-pack
 - `release:check:api` passes.
 - `test:agentic:suite:verification` passes with required benchmark + prod-smoke gates.
 - moderation drill passes with report -> flag -> assign -> triage -> audit verification.
+- protocol recovery drill passes in diagnostic mode by default and can be rerun in active mode with protocol app credentials when you want to verify a representative replay.
 - smoke verification includes the combined admin manual-verification snapshot so request pressure, protocol queue health, and protocol auth health are readable from one place.
 - ops-pack artifact status is `passed`.
 - ops-pack artifact `shipVerdict` is `ship_ready`.
+
+## Protocol recovery drill
+
+The protocol recovery drill makes delivery and replay verification explicit.
+
+Default behavior:
+- inspects `GET /admin/ops/manual-verification`
+- inspects `GET /admin/ops/protocol-queue-health`
+- writes an artifact under `.artifacts/protocol-recovery-drill/`
+- does not perform a replay
+
+Active replay mode is opt-in:
+- set `PROTOCOL_RECOVERY_ALLOW_REPLAY=1`
+- provide:
+  - `PROTOCOL_RECOVERY_APP_ID`
+  - `PROTOCOL_RECOVERY_APP_TOKEN`
+- optionally provide:
+  - `PROTOCOL_RECOVERY_DELIVERY_ID`
+
+If no explicit delivery id is provided, the drill will use the newest dead-lettered delivery from the admin queue-health snapshot when available.
 
 ## Rollback criteria
 

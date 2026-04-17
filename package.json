@@ -38,6 +38,7 @@
     "staging:smoke:api": "node scripts/staging-smoke-api.mjs",
     "staging:smoke:llm-runtime": "node scripts/staging-smoke-llm-runtime.mjs",
     "staging:smoke:verification-lane": "node scripts/run-agent-prod-smoke-lane.mjs",
+    "protocol:recovery:drill": "node scripts/protocol-recovery-drill.mjs",
     "benchmark:onboarding": "node scripts/benchmark-onboarding.mjs",
     "benchmark:agentic": "node scripts/benchmark-agentic-intents.mjs",
     "backfill:runtime": "node scripts/backfill-runtime-domains.mjs",

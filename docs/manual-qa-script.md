@@ -116,6 +116,14 @@ Pass criteria:
 - retries and replays are inspectable from the admin snapshot
 - recoveries are obvious from the latest attempts
 
+Operator shortcut:
+- `pnpm protocol:recovery:drill`
+- use this when you want one artifact that captures:
+  - combined manual verification
+  - queue health before recovery
+  - optional replay evidence
+  - queue health after recovery
+
 ## Signoff Template
 - Build SHA:
 - QA owner:

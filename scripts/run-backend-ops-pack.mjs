@@ -14,6 +14,8 @@ const includeVerification =
 const includeProdSmoke = process.env.BACKEND_OPS_INCLUDE_PROD_SMOKE !== "0";
 const includeModerationDrill =
   process.env.BACKEND_OPS_INCLUDE_MODERATION_DRILL !== "0";
+const includeProtocolRecoveryDrill =
+  process.env.BACKEND_OPS_INCLUDE_PROTOCOL_RECOVERY_DRILL !== "0";
 const stageEqualsProd = process.env.STAGING_EQUALS_PROD === "true";
 const requireRunbooks = process.env.BACKEND_OPS_REQUIRE_RUNBOOKS !== "0";
 const requireEnvReadiness = process.env.BACKEND_OPS_REQUIRE_ENV !== "0";
@@ -86,6 +88,10 @@ const stepEnvRequirements = {
     "SMOKE_APPLICATION_KEY",
     "SMOKE_APPLICATION_TOKEN",
   ],
+  protocol_recovery_drill: [
+    "SMOKE_BASE_URL",
+    "SMOKE_ADMIN_USER_ID",
+  ],
 };
 
 if (includeReleaseCheck) {
@@ -121,6 +127,15 @@ if (includeModerationDrill) {
     summary: "moderation operator drill",
     cmd: "pnpm",
     args: ["moderation:drill"],
+  });
+}
+
+if (includeProtocolRecoveryDrill) {
+  commands.push({
+    id: "protocol_recovery_drill",
+    summary: "protocol delivery recovery drill",
+    cmd: "pnpm",
+    args: ["protocol:recovery:drill"],
   });
 }
 

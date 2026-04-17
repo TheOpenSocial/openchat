@@ -73,6 +73,7 @@ The protocol is no longer just a concept. The following pieces are already prese
 - A combined admin manual-verification snapshot now exposes request pressure, protocol queue health, and protocol auth health together so app/manual validation can start from one operator view before drilling into narrower endpoints.
 - The combined admin manual-verification snapshot now also synthesizes an operator assessment with overall status, prioritized findings, and next actions so queue, auth, and request-pressure issues do not need to be correlated by hand during manual QA.
 - The backend ops verification pack now builds the protocol and shared package chain before non-full API validation lanes, so production verification no longer fails on missing workspace package artifacts before it reaches the real runtime checks.
+- The backend ops pack now includes a dedicated protocol delivery recovery drill, so queue visibility and replay verification are explicit evidence rather than an implied side effect of broader smoke lanes.
 - The public API host shape is now being normalized so `api.opensocial.so/*` is canonical while `/api/*` remains a compatibility path during migration.
 - Production deploy verification now retries across the local TLS warm-up window so a healthy post-restart API does not get marked red by a transient handshake.
 - Dead-lettered deliveries can now be replayed explicitly through the protocol API and first-party settings surfaces.
@@ -150,6 +151,7 @@ Use this as the baseline for all next backlog items. Do not reintroduce generic 
 - use the improved delegated-auth failure details during staging/manual QA to tell missing-user-grant problems apart from modeled-only grant configuration
 - keep the backend ops drill aligned with the richer admin queue/manual-verification snapshot contract now that verification-harness package drift has been cleared
 - use the manual-verification assessment to flag modeled-only delegation before runtime failures occur, so support can spot non-executable grant setups proactively
+- use the dedicated protocol recovery drill artifact when validating queue/replay recovery so delivery evidence is captured in one place
 
 ## Package Direction
 
@@ -187,6 +189,7 @@ These packages should mirror the backend domain rather than inventing new abstra
    - Dead-letter replay
    - Queue health visibility
    - Replay cursor recovery
+   - The backend ops pack now runs a dedicated protocol recovery drill for diagnosis-first evidence, with optional live replay when protocol app credentials are supplied.
    - Admin queue-health visibility is now stronger for manual verification:
      - recent attempts
      - recent outcome/error buckets
