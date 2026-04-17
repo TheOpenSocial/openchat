@@ -199,11 +199,9 @@ describe("ConnectionSetupService", () => {
       undefined,
       undefined,
       {
-        get: vi
-          .fn()
-          .mockReturnValue({
-            createAgentMessage: vi.fn().mockResolvedValue({}),
-          }),
+        get: vi.fn().mockReturnValue({
+          createAgentMessage: vi.fn().mockResolvedValue({}),
+        }),
       } as any,
     );
 
@@ -1782,7 +1780,6 @@ describe("ConnectionSetupService", () => {
       {} as any,
       {} as any,
       launchControlsService,
-      {} as any,
       undefined,
       undefined,
       workflowRuntimeService,
@@ -1842,7 +1839,6 @@ describe("ConnectionSetupService", () => {
       {} as any,
       {} as any,
       undefined,
-      {} as any,
       undefined,
       undefined,
       workflowRuntimeService,
