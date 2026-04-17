@@ -12,6 +12,7 @@ The shipped readiness helpers look at:
 - dead-lettered deliveries
 - in-flight or failed delivery pressure
 - queued backlog
+- token freshness
 - whether executable delegated grants exist
 - whether consent is still pending
 
@@ -47,6 +48,7 @@ const readiness = await agent.checkReadiness({
   requireActiveGrant: true,
   failOnDeadLetters: true,
   failOnAuthFailures: true,
+  failOnStaleToken: false,
 });
 
 assertProtocolAgentReady(readiness);
@@ -59,6 +61,7 @@ await agent.assertReady({
   requireActiveGrant: true,
   failOnDeadLetters: true,
   failOnAuthFailures: true,
+  failOnStaleToken: false,
 });
 ```
 
@@ -74,6 +77,10 @@ If readiness is not good enough, the assertion throws with a compact explanation
   - warning state; delivery pressure is present
 - `queued_backlog_present`
   - optional blocking state if you decide backlog size should gate execution
+- `token_rotation_due_soon`
+  - warning state; rotate on the next routine credential rollout
+- `token_rotation_stale`
+  - warning by default, or blocking if `failOnStaleToken` is enabled
 - `no_active_grants`
   - delegated actions are likely to fail
 - `no_executable_grants`

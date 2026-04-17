@@ -42,6 +42,7 @@ await agent.assertReady({
   requireActiveGrant: true,
   failOnDeadLetters: true,
   failOnAuthFailures: true,
+  failOnStaleToken: false,
 });
 
 await agent.createIntent({
@@ -50,6 +51,7 @@ await agent.createIntent({
 
 const readiness = await agent.checkReadiness();
 console.log(readiness.snapshot.queue.deadLetteredCount);
+console.log(readiness.snapshot.usage.tokenAudit.freshness);
 ```
 
 Delegated execution rule:
@@ -58,6 +60,14 @@ Delegated execution rule:
 - `app`, `service`, and `agent` grants remain modeled-only
 
 So agent readiness should be interpreted as “is there an executable user grant for this actor?” rather than “does any grant row exist?”
+
+Token freshness is also part of the readiness snapshot:
+
+- `current` means the app token is comfortably inside the current rotation policy window
+- `rotate_soon` means the token should rotate on the next routine rollout
+- `stale` means the token is already beyond the recommended rotation window
+
+By default, stale tokens are warnings so existing agents do not break unexpectedly. Set `failOnStaleToken: true` if your runtime should block until credentials are rotated.
 
 For runnable examples, see:
 

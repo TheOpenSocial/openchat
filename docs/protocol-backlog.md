@@ -258,6 +258,7 @@ These packages should mirror the backend domain rather than inventing new abstra
 
 8. Keep the thin agent wrapper aligned with stable protocol actions.
   - The wrapper, readiness model, toolset, and toolkit are shipped.
+  - Agent readiness now also understands token freshness, so partners can choose whether stale credentials are warnings or hard blockers.
   - Remaining work is runtime-specific orchestration guidance, not a second backend surface.
   - Add broader agent-specific protocol actions only if they fit the same coordination-first model.
 

@@ -35,6 +35,8 @@ export type ProtocolAgentReadinessIssueCode =
   | "dead_letters_present"
   | "retrying_deliveries_present"
   | "queued_backlog_present"
+  | "token_rotation_due_soon"
+  | "token_rotation_stale"
   | "no_active_grants"
   | "no_executable_grants"
   | "pending_consent_requests";
@@ -56,6 +58,7 @@ export type ProtocolAgentReadinessOptions = {
   failOnDeadLetters?: boolean;
   failOnAuthFailures?: boolean;
   failOnQueuedBacklog?: boolean;
+  failOnStaleToken?: boolean;
   queuedBacklogThreshold?: number;
 };
 
@@ -171,6 +174,7 @@ const readinessOptionsSchema = {
     failOnDeadLetters: { type: "boolean" },
     failOnAuthFailures: { type: "boolean" },
     failOnQueuedBacklog: { type: "boolean" },
+    failOnStaleToken: { type: "boolean" },
     queuedBacklogThreshold: { type: "integer", minimum: 0 },
   },
 } satisfies ProtocolJsonObject;
@@ -214,14 +218,18 @@ function countAuthFailures(snapshot: ProtocolAppOperationalSnapshot): number {
   );
 }
 
-function countExecutableGrants(snapshot: ProtocolAppOperationalSnapshot): number {
+function countExecutableGrants(
+  snapshot: ProtocolAppOperationalSnapshot,
+): number {
   return snapshot.grants.filter(
     (grant) =>
       grant.status === "active" && grant.executionMode === "executable",
   ).length;
 }
 
-function countModeledOnlyGrants(snapshot: ProtocolAppOperationalSnapshot): number {
+function countModeledOnlyGrants(
+  snapshot: ProtocolAppOperationalSnapshot,
+): number {
   return snapshot.grants.filter(
     (grant) =>
       grant.status === "active" && grant.executionMode === "modeled_only",
@@ -236,6 +244,7 @@ export function evaluateProtocolAgentReadiness(
   const failOnDeadLetters = options.failOnDeadLetters ?? true;
   const failOnAuthFailures = options.failOnAuthFailures ?? true;
   const failOnQueuedBacklog = options.failOnQueuedBacklog ?? false;
+  const failOnStaleToken = options.failOnStaleToken ?? false;
   const queuedBacklogThreshold = options.queuedBacklogThreshold ?? 10;
 
   const issues: ProtocolAgentReadinessIssue[] = [];
@@ -277,15 +286,27 @@ export function evaluateProtocolAgentReadiness(
     });
   }
 
+  if (snapshot.usage.tokenAudit.freshness === "stale") {
+    issues.push({
+      code: "token_rotation_stale",
+      severity: failOnStaleToken ? "blocking" : "warning",
+      message: `App token is ${snapshot.usage.tokenAudit.tokenAgeDays} days old and outside the ${snapshot.usage.tokenAudit.rotationWindowDays}-day recommended rotation window.`,
+    });
+  } else if (snapshot.usage.tokenAudit.freshness === "rotate_soon") {
+    issues.push({
+      code: "token_rotation_due_soon",
+      severity: "warning",
+      message: `App token should rotate soon; recommended rotation date is ${snapshot.usage.tokenAudit.recommendedRotateBy}.`,
+    });
+  }
+
   const executableGrantCount = countExecutableGrants(snapshot);
   const modeledOnlyGrantCount = countModeledOnlyGrants(snapshot);
 
   if (requireActiveGrant && executableGrantCount === 0) {
     issues.push({
       code:
-        modeledOnlyGrantCount > 0
-          ? "no_executable_grants"
-          : "no_active_grants",
+        modeledOnlyGrantCount > 0 ? "no_executable_grants" : "no_active_grants",
       severity: "blocking",
       message:
         modeledOnlyGrantCount > 0
