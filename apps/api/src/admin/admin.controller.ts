@@ -5893,6 +5893,26 @@ export class AdminController {
     }
 
     const latestAuthFailure = input.protocolAuthHealth.recentAuthFailures[0];
+    if (
+      input.protocolAuthHealth.summary.modeledOnlyDelegationAppCount > 0 &&
+      input.protocolAuthHealth.summary.executableDelegationAppCount === 0
+    ) {
+      findings.push({
+        id: "protocol_auth_modeled_only_delegation",
+        level: "watch",
+        area: "protocol_auth",
+        summary: "Delegated access is configured, but only in modeled-only subject types.",
+        detail: `${input.protocolAuthHealth.summary.modeledOnlyDelegationAppCount} apps have active app, service, or agent grants without an executable user delegation path, so delegated actions may still fail at runtime.`,
+      });
+      nextActions.push({
+        id: "inspect_modeled_only_delegation",
+        label: "Review delegated grant subject mix",
+        endpoint: "/admin/ops/protocol-auth-health",
+        reason:
+          "Use the auth-health snapshot to confirm whether integrations need executable user grants instead of modeled-only app, service, or agent grants.",
+      });
+    }
+
     if (input.protocolAuthHealth.summary.recentAuthFailureCount > 0) {
       findings.push({
         id: "protocol_auth_failures",

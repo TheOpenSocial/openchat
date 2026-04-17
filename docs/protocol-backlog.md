@@ -149,6 +149,7 @@ Use this as the baseline for all next backlog items. Do not reintroduce generic 
 - use replay-cursor lag in queue health during manual QA so "delivery succeeded" is not mistaken for "consumer state is current"
 - use the improved delegated-auth failure details during staging/manual QA to tell missing-user-grant problems apart from modeled-only grant configuration
 - keep the backend ops drill aligned with the richer admin queue/manual-verification snapshot contract now that verification-harness package drift has been cleared
+- use the manual-verification assessment to flag modeled-only delegation before runtime failures occur, so support can spot non-executable grant setups proactively
 
 ## Package Direction
 

@@ -2516,7 +2516,7 @@ describe("AdminController", () => {
     expect(payload.replayCursorSummary).toEqual({
       trackedAppCount: 2,
       laggingAppCount: 1,
-      staleAppCount: 0,
+      staleAppCount: 1,
       maxCursorLag: 2,
       latestEventCursor: 12,
     });
@@ -2547,7 +2547,7 @@ describe("AdminController", () => {
       expect.objectContaining({
         appId: "app-a",
         cursorLag: 2,
-        stale: false,
+        stale: true,
       }),
     );
     expect(adminAuditService.recordAction).toHaveBeenCalledWith(
