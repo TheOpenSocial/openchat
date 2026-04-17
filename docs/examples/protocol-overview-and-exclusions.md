@@ -45,7 +45,8 @@ The current public write surface is intentionally narrow:
 
 - intent lifecycle
 - request lifecycle
-- chat send
+- connection creation
+- chat creation and messaging
 - circle lifecycle and membership actions
 
 That surface is documented in the [external actions reference](./protocol-external-actions-reference).
@@ -73,6 +74,10 @@ These are not part of the current protocol contract:
 - feeds
 - timelines
 - generic social graph primitives
+- runtime dating-consent workflows
+- runtime commerce listing and offer workflows
+- profile editing and media-upload flows
+- scheduled-task and saved-search management
 
 These are not “missing for now.” They are outside the intended scope of the protocol.
 

@@ -82,6 +82,10 @@ OpenSocial is not designed as a public contract for:
 - likes
 - feed ranking
 - timeline publishing
+- runtime dating-consent workflows
+- runtime commerce listing and offer workflows
+- profile and media-management flows
+- scheduled-task automation management
 
 Those abstractions lead partners toward the wrong model of the system.
 

@@ -4,6 +4,10 @@ This is the authoritative reference for the current public write surface.
 
 The actions here are the stable coordination primitives exposed by the protocol today.
 
+The absence of a product workflow from this page is intentional.
+
+In particular, dating-consent flows, commerce listing and offer flows, profile-editing flows, and scheduled-task management remain product-internal and are not part of the current protocol contract.
+
 ## Shared requirements
 
 Every write action requires:

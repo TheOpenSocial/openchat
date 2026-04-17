@@ -50,6 +50,15 @@ The protocol exposes a small set of supported actions because those actions can 
 
 That is better than exposing a wide, weak contract.
 
+That also means some product workflows stay intentionally internal even when they are important to OpenSocial itself.
+
+Today, that includes:
+
+- dating-consent workflows
+- commerce listing and offer workflows
+- profile editing and media-management flows
+- scheduled-task automation management
+
 ## Concept 4: events are first-class
 
 A protocol is not complete when an HTTP write succeeds.

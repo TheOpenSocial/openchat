@@ -119,6 +119,7 @@ Use this as the baseline for all next backlog items. Do not reintroduce generic 
 - Scoped grants and consent requests: shipped for the core user-grant path; broader `app|service|agent` enforcement remains partial
 - Webhook subscriptions, delivery attempts, replay, dead-letter recovery, and queue inspection: shipped
 - External action APIs for intents, requests, chats, and circles: shipped
+- Runtime dating-consent workflows, runtime commerce listing and offer workflows, profile/media mutations, and scheduled-task management are now explicitly documented as product-internal rather than implied future protocol surface.
 - First-party HTTP call-through for the cleanest public write paths: shipped
 - Partner-facing SDK packages, examples, and docs: effectively complete for v0
 - First-party mobile and web clients now consume the protocol SDK through the same base-url and bound-app helper flow we recommend to partners, rather than hand-wiring protocol transport details at each call site.
@@ -214,13 +215,15 @@ These packages should mirror the backend domain rather than inventing new abstra
      - intent convert
      - inbox accept and reject
      - sender-side request cancel
+     - direct connection create
+     - direct chat create
      - chat send
      - recurring-circle create and add-member
    - Remaining likely candidates should be judged against real mobile/product usage, not backend neatness alone.
    - Current review outcome:
    - chat edit, reaction, and read-receipt flows: stay internal for now
+   - dating-consent and commerce runtime flows: intentionally internal for now, not deferred protocol primitives
    - profile updates, photo upload intents, and scheduled-task/saved-search mutations: stay internal for now
-   - runtime commerce listing/offer flows: stay internal for now unless they become explicit partner-facing protocol primitives
    - direct connection create: now protocol-owned through `connection.create`
    - direct chat create: now protocol-owned through `chat.create`
    - recurring-circle update, archive, pause, resume, and remove-member flows: stay internal for now unless partner demand makes them real protocol actions
