@@ -846,7 +846,8 @@ export function createProtocolClient(
       return readProtocolResponseData(response, protocolChatActionResultSchema);
     },
     async createConnection(appId, appToken, payload) {
-      const requestPayload = protocolConnectionCreateActionSchema.parse(payload);
+      const requestPayload =
+        protocolConnectionCreateActionSchema.parse(payload);
       const response = await transport.request(
         `/protocol/apps/${appId}/actions/connections`,
         buildProtocolJsonRequestInit(appToken, requestPayload),

@@ -133,7 +133,10 @@ export class InboxController {
         },
       });
       return ok({
-        request: await this.inboxService.getOwnedRequest(requestId, actorUserId),
+        request: await this.inboxService.getOwnedRequest(
+          requestId,
+          actorUserId,
+        ),
         ...(result.unchanged ? { unchanged: true } : {}),
       });
     }

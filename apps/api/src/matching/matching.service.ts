@@ -2188,8 +2188,7 @@ export class MatchingService {
       const suppressed =
         counters.pendingInboundCount >=
           this.maxPendingInboundRequestsPerRecipient ||
-        counters.dailyInboundCount >=
-          this.maxDailyInboundRequestsPerRecipient;
+        counters.dailyInboundCount >= this.maxDailyInboundRequestsPerRecipient;
       const pendingRatio =
         counters.pendingInboundCount /
         this.maxPendingInboundRequestsPerRecipient;

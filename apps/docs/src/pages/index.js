@@ -8,31 +8,58 @@ const navGroups = [
     items: [
       { label: "Overview", to: "/docs" },
       { label: "Quickstart", to: "/docs/examples/protocol-partner-quickstart" },
-      { label: "Manifest and discovery", to: "/docs/examples/protocol-manifest-and-discovery" },
-      { label: "App registration", to: "/docs/examples/protocol-app-registration-and-tokens" },
+      {
+        label: "Manifest and discovery",
+        to: "/docs/examples/protocol-manifest-and-discovery",
+      },
+      {
+        label: "App registration",
+        to: "/docs/examples/protocol-app-registration-and-tokens",
+      },
     ],
   },
   {
     label: "Concepts",
     items: [
-      { label: "What OpenSocial is", to: "/docs/examples/protocol-vision-and-purpose" },
+      {
+        label: "What OpenSocial is",
+        to: "/docs/examples/protocol-vision-and-purpose",
+      },
       { label: "Protocol model", to: "/docs/examples/protocol-core-concepts" },
-      { label: "What is not included", to: "/docs/examples/protocol-overview-and-exclusions" },
+      {
+        label: "What is not included",
+        to: "/docs/examples/protocol-overview-and-exclusions",
+      },
     ],
   },
   {
     label: "Build",
     items: [
-      { label: "Actions reference", to: "/docs/examples/protocol-external-actions-reference" },
-      { label: "Webhooks", to: "/docs/examples/protocol-event-subscriptions-and-replay" },
-      { label: "Webhook consumer", to: "/docs/examples/protocol-webhook-consumer" },
-      { label: "Auth troubleshooting", to: "/docs/examples/protocol-consent-and-auth-troubleshooting" },
+      {
+        label: "Actions reference",
+        to: "/docs/examples/protocol-external-actions-reference",
+      },
+      {
+        label: "Webhooks",
+        to: "/docs/examples/protocol-event-subscriptions-and-replay",
+      },
+      {
+        label: "Webhook consumer",
+        to: "/docs/examples/protocol-webhook-consumer",
+      },
+      {
+        label: "Auth troubleshooting",
+        to: "/docs/examples/protocol-consent-and-auth-troubleshooting",
+      },
     ],
   },
   {
     label: "Agents SDK",
     items: [
-      { label: "Integration paths", to: "/docs/examples/protocol-agent-integration-paths" },
+      {
+        label: "Integration paths",
+        to: "/docs/examples/protocol-agent-integration-paths",
+      },
       { label: "Quickstart", to: "/docs/examples/protocol-agent-quickstart" },
       { label: "Readiness", to: "/docs/examples/protocol-agent-readiness" },
       { label: "Toolset", to: "/docs/examples/protocol-agent-toolset" },
@@ -140,16 +167,24 @@ export default function Home() {
           <section className="os-quickstart-card">
             <div className="os-quickstart-copy">
               <div className="os-section-label">Quickstart</div>
-              <h2>Read the contract, register an app, and start integrating.</h2>
+              <h2>
+                Read the contract, register an app, and start integrating.
+              </h2>
               <p>
                 Start with the protocol model, connect through manifest and
                 discovery, and then build with the documented SDK surface.
               </p>
               <div className="os-links">
-                <Link className="button button--primary button--lg" to="/docs/examples/protocol-partner-quickstart">
+                <Link
+                  className="button button--primary button--lg"
+                  to="/docs/examples/protocol-partner-quickstart"
+                >
                   Get started
                 </Link>
-                <Link className="button button--secondary button--lg" to="/docs/examples/protocol-sdk-index">
+                <Link
+                  className="button button--secondary button--lg"
+                  to="/docs/examples/protocol-sdk-index"
+                >
                   Browse docs
                 </Link>
               </div>
@@ -189,11 +224,17 @@ const discovery = await client.getDiscovery();`}</code>
           <section className="os-overview-section">
             <div className="os-section-heading">
               <h2>Start building</h2>
-              <p>Follow this order if you are integrating for the first time.</p>
+              <p>
+                Follow this order if you are integrating for the first time.
+              </p>
             </div>
             <div className="os-card-grid">
               {gettingStarted.map((item) => (
-                <Link key={item.to} className="os-simple-card os-simple-card--link" to={item.to}>
+                <Link
+                  key={item.to}
+                  className="os-simple-card os-simple-card--link"
+                  to={item.to}
+                >
                   <h3>{item.title}</h3>
                   <p>{item.body}</p>
                 </Link>
@@ -208,7 +249,11 @@ const discovery = await client.getDiscovery();`}</code>
             </div>
             <div className="os-card-grid">
               {resources.map((item) => (
-                <Link key={item.to} className="os-simple-card os-simple-card--link" to={item.to}>
+                <Link
+                  key={item.to}
+                  className="os-simple-card os-simple-card--link"
+                  to={item.to}
+                >
                   <h3>{item.title}</h3>
                   <p>{item.body}</p>
                 </Link>

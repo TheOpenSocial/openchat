@@ -28,7 +28,8 @@ const artifactPath = path.resolve(artifactDir, `${runId}.json`);
 const allowReplay = process.env.PROTOCOL_RECOVERY_ALLOW_REPLAY === "1";
 const replayAppId = process.env.PROTOCOL_RECOVERY_APP_ID?.trim() || "";
 const replayAppToken = process.env.PROTOCOL_RECOVERY_APP_TOKEN?.trim() || "";
-const replayDeliveryId = process.env.PROTOCOL_RECOVERY_DELIVERY_ID?.trim() || "";
+const replayDeliveryId =
+  process.env.PROTOCOL_RECOVERY_DELIVERY_ID?.trim() || "";
 const replayBatchLimit = Number(
   process.env.PROTOCOL_RECOVERY_REPLAY_BATCH_LIMIT || 10,
 );
@@ -152,7 +153,8 @@ function deriveAssessment(manualVerification, queueHealthBefore, replayAction) {
       id: "protocol_dead_letters_need_replay_plan",
       level: "watch",
       area: "protocol_queue",
-      summary: "Dead-lettered deliveries are present, but this run was diagnostic only.",
+      summary:
+        "Dead-lettered deliveries are present, but this run was diagnostic only.",
       detail: `${queueSummary.deadLetteredCount} dead-lettered deliveries are currently replayable. Re-run with protocol app credentials to verify active recovery.`,
     });
     nextActions.push({

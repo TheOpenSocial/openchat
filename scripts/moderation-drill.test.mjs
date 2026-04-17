@@ -464,10 +464,7 @@ test("moderation drill tolerates queue visibility lag when assignment and triage
       res.end(JSON.stringify(payload));
     };
 
-    if (
-      req.method === "POST" &&
-      url.pathname === "/api/moderation/reports"
-    ) {
+    if (req.method === "POST" && url.pathname === "/api/moderation/reports") {
       const body = JSON.parse(rawBody || "{}");
       assert.equal(body.reporterUserId, "reporter-queue-warning");
       json(200, {
@@ -493,8 +490,7 @@ test("moderation drill tolerates queue visibility lag when assignment and triage
 
     if (
       req.method === "POST" &&
-      url.pathname ===
-        "/api/admin/moderation/flags/flag-queue-warning/assign"
+      url.pathname === "/api/admin/moderation/flags/flag-queue-warning/assign"
     ) {
       json(200, {
         success: true,
@@ -505,8 +501,7 @@ test("moderation drill tolerates queue visibility lag when assignment and triage
 
     if (
       req.method === "POST" &&
-      url.pathname ===
-        "/api/admin/moderation/flags/flag-queue-warning/triage"
+      url.pathname === "/api/admin/moderation/flags/flag-queue-warning/triage"
     ) {
       json(200, {
         success: true,

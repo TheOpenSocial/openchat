@@ -8,8 +8,7 @@ const __dirname = path.dirname(__filename);
 /** @type {import('@docusaurus/types').Config} */
 const config = {
   title: "OpenSocial",
-  tagline:
-    "SDK docs for apps, agents, authentication, actions, and events",
+  tagline: "SDK docs for apps, agents, authentication, actions, and events",
   url: "https://docs.opensocial.so",
   baseUrl: "/",
   organizationName: "TheOpenSocial",
@@ -34,8 +33,7 @@ const config = {
           routeBasePath: "docs",
           sidebarPath: path.resolve(__dirname, "./sidebars.mjs"),
           include: ["index.md", "examples/protocol-*.md"],
-          editUrl:
-            "https://github.com/TheOpenSocial/openchat/tree/main/",
+          editUrl: "https://github.com/TheOpenSocial/openchat/tree/main/",
           showLastUpdateTime: true,
         },
         blog: false,

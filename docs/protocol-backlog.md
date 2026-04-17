@@ -137,6 +137,7 @@ Use this as the baseline for all next backlog items. Do not reintroduce generic 
 - The public docs homepage and navigation now follow a cleaner developer-portal layout, closer to the Vercel/OpenAI style the protocol docs need for partner onboarding.
 - Verification coverage is now documented in one canonical matrix that maps CI, deploy, ops drill, eval, sandbox, and mobile session lanes to the evidence each one actually proves.
 - System Evaluation Matrix hardening is now focused on making the live social-sim lane part of the default scheduled/manual workflow path, so baseline comparison reflects the intended release gate instead of failing on a missing lane.
+- The next CI and system-matrix hardening slice is now focused on keeping protocol-agent test dependency changes, stale backend test constructors, and formatting drift aligned with the frozen-lockfile automation path.
 - First-party protocol settings/inspection surfaces: shipped as operational tooling, but still partial as polished product UX
 - CI and product-critical golden coverage are green on the current mainline verification pass
 - Mobile-critical backend controller coverage is verified for first-party protocol call-through on:
@@ -171,6 +172,7 @@ Use this as the baseline for all next backlog items. Do not reintroduce generic 
 - keep direct `ConnectionSetupService` scenario/spec harnesses aligned with the current constructor contract so backend ops drill failures reflect behavior regressions, not stale positional test wiring
 - use the manual-verification assessment to flag modeled-only delegation before runtime failures occur, so support can spot non-executable grant setups proactively
 - use the dedicated protocol recovery drill artifact when validating queue/replay recovery in CI and ops automation so delivery evidence is captured in one place
+- rerun CI and the system-evaluation workflow after the protocol-agent lockfile sync and stale backend spec alignment changes so release confidence reflects the new SDK coverage instead of automation drift
 
 ## Package Direction
 

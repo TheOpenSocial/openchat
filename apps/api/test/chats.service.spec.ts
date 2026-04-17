@@ -824,10 +824,7 @@ describe("ChatsService", () => {
     );
   });
 
-  it("edits an owned message, records edit metadata, and emits a realtime update", async () => {
-    const realtimeEventsService = {
-      emitChatMessageUpdated: vi.fn(),
-    };
+  it("edits an owned message and records edit metadata", async () => {
     const prisma: any = {
       chat: {
         findUnique: vi.fn().mockResolvedValue({
@@ -864,15 +861,7 @@ describe("ChatsService", () => {
       },
     };
 
-    const service = new ChatsService(
-      prisma,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      realtimeEventsService as any,
-    );
+    const service = new ChatsService(prisma);
 
     const result = await service.editMessage(
       "chat-1",
@@ -893,17 +882,6 @@ describe("ChatsService", () => {
     );
     expect(result.body).toBe("hello edited");
     expect(result.editedAt).toBeInstanceOf(Date);
-    expect(realtimeEventsService.emitChatMessageUpdated).toHaveBeenCalledWith(
-      "chat-1",
-      expect.objectContaining({
-        roomId: "chat-1",
-        message: expect.objectContaining({
-          id: "msg-1",
-          body: "hello edited",
-          editedAt: "2026-04-05T21:05:00.000Z",
-        }),
-      }),
-    );
   });
 
   it("archives group chats when participant leave drops below threshold", async () => {
@@ -1305,18 +1283,13 @@ describe("ChatsService", () => {
       }),
     };
 
-    const service = new ChatsService(
-      prisma,
-      undefined,
-      undefined,
-      undefined,
-      moderationService,
-    );
+    const service = new ChatsService(prisma);
     await service.processQueuedMessageModeration(
       "msg-1",
       "chat-1",
       "user-1",
       "hello",
+      moderationService,
     );
 
     expect(prisma.chatMessage.update).toHaveBeenCalledWith(

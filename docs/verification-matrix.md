@@ -28,11 +28,11 @@ Related references:
 
 | Lane | Current status | Latest evidence |
 | --- | --- | --- |
-| CI | `in_progress` | workflow [`24584871617`](https://github.com/TheOpenSocial/openchat/actions/runs/24584871617) |
+| CI | `red` | workflow [`24584871617`](https://github.com/TheOpenSocial/openchat/actions/runs/24584871617) failed on stale API spec constructors and repository formatting drift after the protocol-agent readiness coverage expansion |
 | Backend Ops Drill | `green` | workflow [`24579213926`](https://github.com/TheOpenSocial/openchat/actions/runs/24579213926) |
 | Deploy Production | `green` | workflow [`24549101902`](https://github.com/TheOpenSocial/openchat/actions/runs/24549101902) |
 | Build Images | `green` | workflow [`24548784197`](https://github.com/TheOpenSocial/openchat/actions/runs/24548784197) |
-| System Evaluation Matrix | `red` | workflow [`24566993378`](https://github.com/TheOpenSocial/openchat/actions/runs/24566993378) failed because the accepted baseline expected the live social-sim lane but the workflow did not enable it by default |
+| System Evaluation Matrix | `red` | workflow [`24585708696`](https://github.com/TheOpenSocial/openchat/actions/runs/24585708696) failed at frozen-lockfile install after the protocol-agent test dependency update, after the earlier live social-sim default-lane issue was fixed |
 | Staging Sandbox Validation | `green` | workflow [`24251759566`](https://github.com/TheOpenSocial/openchat/actions/runs/24251759566) |
 | Staging Mobile E2E Session | `green` | workflow [`24367635640`](https://github.com/TheOpenSocial/openchat/actions/runs/24367635640) |
 | Benchmark Onboarding | `green` | workflow [`23457925557`](https://github.com/TheOpenSocial/openchat/actions/runs/23457925557) |
@@ -41,7 +41,7 @@ Related references:
 
 | Lane | Command / workflow | What it does | What a pass proves | Primary evidence | Status |
 | --- | --- | --- | --- | --- | --- |
-| Repo CI | [`.github/workflows/ci.yml`](/Users/cruciblelabs/Documents/openchat/.github/workflows/ci.yml) | Runs backend lint/typecheck/test, API contract slices, protocol-agent readiness tests, web/admin checks, and format validation | Mainline code compiles, core test suites pass, and protocol-agent readiness policy remains enforced in CI | GitHub Actions run + per-job logs | `in_progress` |
+| Repo CI | [`.github/workflows/ci.yml`](/Users/cruciblelabs/Documents/openchat/.github/workflows/ci.yml) | Runs backend lint/typecheck/test, API contract slices, protocol-agent readiness tests, web/admin checks, and format validation | Mainline code compiles, core test suites pass, and protocol-agent readiness policy remains enforced in CI | GitHub Actions run + per-job logs | `red` while stale API specs and format drift are being cleaned up |
 | API lane | `pnpm turbo run test --filter=@opensocial/api...` | Runs backend Vitest coverage including protocol, controller, matching, moderation, and runtime specs | Backend unit/integration-style specs pass in CI | CI backend job logs | `in_progress` |
 | Protocol agent lane | `pnpm --filter @opensocial/protocol-agent test` | Runs protocol-agent readiness unit tests | SDK readiness semantics, including token freshness, are enforced in CI | CI backend job logs | `in_progress` |
 | OpenAI contracts | `pnpm --filter @opensocial/openai test` | Verifies the shared OpenAI package contract layer | Shared OpenAI-facing package behavior is stable enough for API consumers | CI backend job logs | `in_progress` |
@@ -120,6 +120,7 @@ The current hardening step is already in progress:
 
 - the workflow now enables live social-sim by default and on the scheduled path
 - the workflow now performs an Ollama readiness check before the matrix run
+- the workflow now also needs the frozen-lockfile path kept in sync with protocol-agent test dependency changes
 
 That means the system is in a good backend/SDK operational state, but the full “all-up system eval” gate is still the area that needs the next serious hardening pass.
 

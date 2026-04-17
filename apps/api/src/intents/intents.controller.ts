@@ -335,7 +335,9 @@ export class IntentsController {
           source: "intents.controller.convert",
         },
       });
-      return ok(await this.intentsService.getOwnedIntent(intentId, actorUserId));
+      return ok(
+        await this.intentsService.getOwnedIntent(intentId, actorUserId),
+      );
     }
     return ok(
       await this.intentsService.convertIntentMode(intentId, payload.mode, {

@@ -5,6 +5,7 @@ function createConsumer() {
   const chatsService: any = {
     processQueuedMessageModeration: vi.fn().mockResolvedValue(undefined),
   };
+  const moderationService: any = {};
   const deadLetterService: any = {
     captureFailedJob: vi.fn().mockResolvedValue(undefined),
     captureStalledJob: vi.fn().mockResolvedValue(undefined),
@@ -12,8 +13,13 @@ function createConsumer() {
 
   return {
     chatsService,
+    moderationService,
     deadLetterService,
-    consumer: new ModerationConsumer(chatsService, deadLetterService),
+    consumer: new ModerationConsumer(
+      chatsService,
+      moderationService,
+      deadLetterService,
+    ),
   };
 }
 
@@ -44,6 +50,7 @@ describe("ModerationConsumer", () => {
       "22222222-2222-4222-8222-222222222222",
       "33333333-3333-4333-8333-333333333333",
       "hello there",
+      expect.any(Object),
     );
   });
 

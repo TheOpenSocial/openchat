@@ -2372,7 +2372,10 @@ describe("AdminController", () => {
   it("returns protocol queue health snapshot for support role", async () => {
     const prisma = {
       $queryRawUnsafe: vi.fn().mockImplementation(async (query: string) => {
-        if (query.includes("FROM protocol_webhook_delivery_attempts") && query.includes("GROUP BY outcome, error_code")) {
+        if (
+          query.includes("FROM protocol_webhook_delivery_attempts") &&
+          query.includes("GROUP BY outcome, error_code")
+        ) {
           return [
             {
               outcome: "failed",
@@ -2448,7 +2451,10 @@ describe("AdminController", () => {
             },
           ];
         }
-        if (query.includes("FROM protocol_apps pa") && query.includes('savedCursor')) {
+        if (
+          query.includes("FROM protocol_apps pa") &&
+          query.includes("savedCursor")
+        ) {
           return [
             {
               appId: "app-a",
@@ -2502,7 +2508,11 @@ describe("AdminController", () => {
       }>;
       recentAttempts: Array<{ deliveryId: string; errorCode: string | null }>;
       deadLetterSample: Array<{ deliveryId: string; errorMessage: string }>;
-      replayCursorHealth: Array<{ appId: string; cursorLag: number; stale: boolean }>;
+      replayCursorHealth: Array<{
+        appId: string;
+        cursorLag: number;
+        stale: boolean;
+      }>;
     };
 
     expect(prisma.$queryRawUnsafe).toHaveBeenCalledTimes(5);

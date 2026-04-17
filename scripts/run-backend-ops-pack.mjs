@@ -88,10 +88,7 @@ const stepEnvRequirements = {
     "SMOKE_APPLICATION_KEY",
     "SMOKE_APPLICATION_TOKEN",
   ],
-  protocol_recovery_drill: [
-    "SMOKE_BASE_URL",
-    "SMOKE_ADMIN_USER_ID",
-  ],
+  protocol_recovery_drill: ["SMOKE_BASE_URL", "SMOKE_ADMIN_USER_ID"],
 };
 
 if (includeReleaseCheck) {
