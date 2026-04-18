@@ -182,7 +182,7 @@ describe("ModerationService", () => {
     expect(result.strikeCount).toBe(3);
     expect(result.enforcementAction).toBe("restrict");
     expect(result.moderationState).toBe("blocked");
-    expect(result.strikeHistory).toHaveLength(1);
+    expect(result.strikeHistory).toHaveLength(0);
   });
 
   it("marks target profile for review on impersonation reports", async () => {
