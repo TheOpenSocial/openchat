@@ -28,7 +28,7 @@ Related references:
 
 | Lane | Current status | Latest evidence |
 | --- | --- | --- |
-| CI | `in_progress` | workflow [`24592066135`](https://github.com/TheOpenSocial/openchat/actions/runs/24592066135) reduced the red lane to stale API spec and fixture drift, and the next rerun is focused on those backend test mismatches only |
+| CI | `green` | workflow [`24592599694`](https://github.com/TheOpenSocial/openchat/actions/runs/24592599694) passed after the stale API spec and fixture drift cleanup |
 | Backend Ops Drill | `green` | workflow [`24579213926`](https://github.com/TheOpenSocial/openchat/actions/runs/24579213926) |
 | Deploy Production | `green` | workflow [`24549101902`](https://github.com/TheOpenSocial/openchat/actions/runs/24549101902) |
 | Build Images | `green` | workflow [`24548784197`](https://github.com/TheOpenSocial/openchat/actions/runs/24548784197) |
@@ -41,13 +41,13 @@ Related references:
 
 | Lane | Command / workflow | What it does | What a pass proves | Primary evidence | Status |
 | --- | --- | --- | --- | --- | --- |
-| Repo CI | [`.github/workflows/ci.yml`](/Users/cruciblelabs/Documents/openchat/.github/workflows/ci.yml) | Runs backend lint/typecheck/test, API contract slices, protocol-agent readiness tests, web/admin checks, and format validation | Mainline code compiles, core test suites pass, and protocol-agent readiness policy remains enforced in CI | GitHub Actions run + per-job logs | `in_progress` while the remaining API test fixtures are being aligned with current backend behavior |
-| API lane | `pnpm turbo run test --filter=@opensocial/api...` | Runs backend Vitest coverage including protocol, controller, matching, moderation, and runtime specs | Backend unit/integration-style specs pass in CI | CI backend job logs | `in_progress` on stale spec and fixture cleanup only |
-| Protocol agent lane | `pnpm --filter @opensocial/protocol-agent test` | Runs protocol-agent readiness unit tests | SDK readiness semantics, including token freshness, are enforced in CI | CI backend job logs | `in_progress` |
-| OpenAI contracts | `pnpm --filter @opensocial/openai test` | Verifies the shared OpenAI package contract layer | Shared OpenAI-facing package behavior is stable enough for API consumers | CI backend job logs | `in_progress` |
-| API endpoint contracts | `pnpm --filter @opensocial/api test -- test/onboarding-agent.contract.spec.ts` | Runs a focused contract slice for protected agent onboarding endpoints | High-signal endpoint contract did not drift | CI backend job logs | `in_progress` |
-| Admin playground services | `pnpm --filter @opensocial/api test -- test/admin-playground.controller.spec.ts test/admin-playground.service.spec.ts` | Verifies operator playground controller/service behavior | Admin playground control plane is still contract-safe | CI backend job logs | `in_progress` |
-| Contract layer suite | `pnpm test:agentic:suite -- --layer=contract` | Runs the contract subset of the larger agentic suite | Core contract/scenario expectations still hold without needing the full live suite | CI backend job logs + suite artifacts | `in_progress` |
+| Repo CI | [`.github/workflows/ci.yml`](/Users/cruciblelabs/Documents/openchat/.github/workflows/ci.yml) | Runs backend lint/typecheck/test, API contract slices, protocol-agent readiness tests, web/admin checks, and format validation | Mainline code compiles, core test suites pass, and protocol-agent readiness policy remains enforced in CI | GitHub Actions run + per-job logs | `green` |
+| API lane | `pnpm turbo run test --filter=@opensocial/api...` | Runs backend Vitest coverage including protocol, controller, matching, moderation, and runtime specs | Backend unit/integration-style specs pass in CI | CI backend job logs | `green` |
+| Protocol agent lane | `pnpm --filter @opensocial/protocol-agent test` | Runs protocol-agent readiness unit tests | SDK readiness semantics, including token freshness, are enforced in CI | CI backend job logs | `green` |
+| OpenAI contracts | `pnpm --filter @opensocial/openai test` | Verifies the shared OpenAI package contract layer | Shared OpenAI-facing package behavior is stable enough for API consumers | CI backend job logs | `green` |
+| API endpoint contracts | `pnpm --filter @opensocial/api test -- test/onboarding-agent.contract.spec.ts` | Runs a focused contract slice for protected agent onboarding endpoints | High-signal endpoint contract did not drift | CI backend job logs | `green` |
+| Admin playground services | `pnpm --filter @opensocial/api test -- test/admin-playground.controller.spec.ts test/admin-playground.service.spec.ts` | Verifies operator playground controller/service behavior | Admin playground control plane is still contract-safe | CI backend job logs | `green` |
+| Contract layer suite | `pnpm test:agentic:suite -- --layer=contract` | Runs the contract subset of the larger agentic suite | Core contract/scenario expectations still hold without needing the full live suite | CI backend job logs + suite artifacts | `green` |
 
 ## Release and deploy matrix
 
@@ -118,7 +118,7 @@ The current hardening step is now mostly complete:
 - the workflow now performs an Ollama readiness check before the matrix run
 - the workflow now has tolerance-aware baseline comparison for the live provider-backed social-sim lane, and workflow [`24592070223`](https://github.com/TheOpenSocial/openchat/actions/runs/24592070223) confirmed that this clears the last false regression without softening deterministic gates
 
-That means the system is in a good backend/SDK operational state, and the remaining verification focus is keeping CI fully green alongside the now-green all-up system eval gate.
+That means the system is in a good backend/SDK operational state, with both CI and the all-up system eval gate green again.
 
 ## How to use this matrix
 

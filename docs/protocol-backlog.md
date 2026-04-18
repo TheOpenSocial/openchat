@@ -174,7 +174,7 @@ Use this as the baseline for all next backlog items. Do not reintroduce generic 
 - keep direct `ConnectionSetupService` scenario/spec harnesses aligned with the current constructor contract so backend ops drill failures reflect behavior regressions, not stale positional test wiring
 - use the manual-verification assessment to flag modeled-only delegation before runtime failures occur, so support can spot non-executable grant setups proactively
 - use the dedicated protocol recovery drill artifact when validating queue/replay recovery in CI and ops automation so delivery evidence is captured in one place
-- keep CI green after the protocol-agent lockfile sync and stale backend spec alignment changes, now that the system-evaluation workflow has cleared the tolerance-aware live baseline comparison path
+- keep CI green after the protocol-agent lockfile sync and stale backend spec alignment changes, alongside the now-green system-evaluation workflow and backend ops drill
 - inspect the live social-sim benchmark regressions by family, especially `circle`, before changing the accepted baseline so the system-evaluation gate stays meaningful
 
 ## Package Direction
