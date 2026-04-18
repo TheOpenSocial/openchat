@@ -183,18 +183,18 @@ const catalogs = {
     homeThreadLoadFailedBody:
       "The main conversation did not load correctly. Try again.",
     homeThreadRetryCta: "Retry",
-    homeThreadRecoveryKicker: "Agentic social",
-    homeThreadRecoveryTitle: "Reconnecting your main thread",
+    homeThreadRecoveryKicker: "OpenSocial",
+    homeThreadRecoveryTitle: "Reconnecting your conversation",
     homeThreadRecoveryBody:
-      "I’m restoring your conversation and will place it back here as soon as the thread responds.",
-    homeThreadRecoveryWaitingTitle: "Waiting to reconnect your main thread",
+      "I’m restoring your conversation and will place it back here as soon as it responds.",
+    homeThreadRecoveryWaitingTitle: "Waiting to reconnect your conversation",
     homeThreadRecoveryWaitingBody:
-      "I’m keeping this conversation ready and will reconnect as soon as the thread is available.",
+      "I’m keeping this conversation ready and will reconnect as soon as it becomes available.",
     homeThreadRetryingCountdown:
-      "Reconnecting to your main thread in {seconds}s · attempt {attempt}",
+      "Retrying your conversation in {seconds}s · attempt {attempt}",
     homeThreadRetryManualHint:
       "If this keeps happening, retry once the connection settles.",
-    openChatPresenceTitle: "Agentic social",
+    openChatPresenceTitle: "OpenSocial",
     openChatPresenceSubtitle: "Ready when you are.",
     openChatEmptyTitle: "What do you want to do?",
     openChatEmptySubtitle:
@@ -219,13 +219,13 @@ const catalogs = {
     openChatOnboardingCarryoverProcessing:
       "We’re carrying your first intent into your thread.",
     openChatOnboardingCarryoverReady:
-      "Your thread is starting from what you already said.",
+      "Your conversation is starting from what you already said.",
     openChatOnboardingCarryoverQueued:
       "Your first intent is saved and will send as soon as you’re back online.",
     openChatOnboardingCarryoverStartNow: "Start from this",
     openChatOnboardingCarryoverRetry: "Try sending now",
-    openChatOnboardingCarryoverProcessingInline: "Starting your thread…",
-    openChatOnboardingHandoffTitle: "Starting your thread",
+    openChatOnboardingCarryoverProcessingInline: "Starting your conversation…",
+    openChatOnboardingHandoffTitle: "Starting your conversation",
     openChatOnboardingHandoffSubtitle:
       "We’re turning your onboarding signal into your first conversation.",
     openChatSuggestions: "Suggestions",
@@ -550,19 +550,18 @@ const catalogs = {
     homeThreadLoadFailedBody:
       "La conversación principal no se cargó correctamente. Inténtalo de nuevo.",
     homeThreadRetryCta: "Reintentar",
-    homeThreadRecoveryKicker: "Social agéntico",
-    homeThreadRecoveryTitle: "Reconectando tu hilo principal",
+    homeThreadRecoveryKicker: "OpenSocial",
+    homeThreadRecoveryTitle: "Reconectando tu conversación",
     homeThreadRecoveryBody:
-      "Estoy restaurando tu conversación y la voy a traer de vuelta aquí apenas el hilo responda.",
-    homeThreadRecoveryWaitingTitle:
-      "Esperando para reconectar tu hilo principal",
+      "Estoy restaurando tu conversación y la voy a traer de vuelta aquí apenas responda.",
+    homeThreadRecoveryWaitingTitle: "Esperando para reconectar tu conversación",
     homeThreadRecoveryWaitingBody:
-      "Mantengo esta conversación lista y reconectaré apenas el hilo vuelva a estar disponible.",
+      "Mantengo esta conversación lista y reconectaré apenas vuelva a estar disponible.",
     homeThreadRetryingCountdown:
-      "Reconectando tu hilo principal en {seconds}s · intento {attempt}",
+      "Reintentando tu conversación en {seconds}s · intento {attempt}",
     homeThreadRetryManualHint:
       "Si esto sigue pasando, reintenta cuando la conexión se estabilice.",
-    openChatPresenceTitle: "Social agéntico",
+    openChatPresenceTitle: "OpenSocial",
     openChatPresenceSubtitle: "Listo cuando tú quieras.",
     openChatEmptyTitle: "¿Qué quieres hacer?",
     openChatEmptySubtitle:
@@ -587,13 +586,13 @@ const catalogs = {
     openChatOnboardingCarryoverProcessing:
       "Estamos llevando tu primer intent a tu hilo.",
     openChatOnboardingCarryoverReady:
-      "Tu hilo empieza desde lo que ya dijiste.",
+      "Tu conversación empieza desde lo que ya dijiste.",
     openChatOnboardingCarryoverQueued:
       "Tu primer intent quedó guardado y se enviará cuando vuelvas a estar online.",
     openChatOnboardingCarryoverStartNow: "Empezar desde esto",
     openChatOnboardingCarryoverRetry: "Intentar enviar ahora",
-    openChatOnboardingCarryoverProcessingInline: "Iniciando tu hilo…",
-    openChatOnboardingHandoffTitle: "Iniciando tu hilo",
+    openChatOnboardingCarryoverProcessingInline: "Iniciando tu conversación…",
+    openChatOnboardingHandoffTitle: "Iniciando tu conversación",
     openChatOnboardingHandoffSubtitle:
       "Estamos convirtiendo tu señal de onboarding en tu primera conversación.",
     openChatSuggestions: "Sugerencias",

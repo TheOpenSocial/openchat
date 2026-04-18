@@ -153,6 +153,7 @@ Use this as the baseline for all next backlog items. Do not reintroduce generic 
   - recurring-circle create and add-member
 - The next first-party product phase is now focused on mobile-only polish first, starting by replacing operator-style copy on native discovery and related operational surfaces with clearer consumer-facing language.
 - Scheduled tasks, saved searches, recurring circles, and connections are part of that same mobile polish pass so the operational surfaces read like product UX rather than backend consoles.
+- Home-thread runtime and recovery copy are part of the same pass as well, so core navigation and conversation states stop leaking system terminology like "agentic social" and "main thread" into the user-facing shell.
 
 ## Current Verification Focus
 
