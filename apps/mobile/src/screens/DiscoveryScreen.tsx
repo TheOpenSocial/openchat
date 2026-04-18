@@ -72,13 +72,13 @@ export function DiscoveryScreen({
 
       <View className="mb-4 rounded-[28px] border border-white/8 bg-white/[0.03] px-5 py-5">
         <Text className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/34">
-          Activation bootstrap
+          Momentum
         </Text>
         {activationLoading && !activationViewModel ? (
           <View className="mt-4 flex-row items-center gap-3">
             <ActivityIndicator color={appTheme.colors.ink} />
             <Text className="text-[14px] text-muted">
-              Loading activation state
+              Loading your next-step summary
             </Text>
           </View>
         ) : activationViewModel ? (
@@ -99,7 +99,7 @@ export function DiscoveryScreen({
             </Text>
             <View className="mt-4 rounded-[20px] border border-white/8 bg-white/[0.04] px-4 py-4">
               <Text className="text-[12px] font-semibold uppercase tracking-[0.14em] text-white/34">
-                Recommended action
+                Best next step
               </Text>
               <Text className="mt-2 text-[15px] font-semibold tracking-[-0.03em] text-white/92">
                 {activationViewModel.recommendedActionLabel}
@@ -111,7 +111,7 @@ export function DiscoveryScreen({
             {activationViewModel.planSnapshot ? (
               <View className="mt-3 rounded-[20px] border border-white/8 bg-white/[0.04] px-4 py-4">
                 <Text className="text-[12px] font-semibold uppercase tracking-[0.14em] text-white/34">
-                  Plan preview
+                  Suggested path
                 </Text>
                 <Text className="mt-2 text-[15px] font-semibold tracking-[-0.03em] text-white/92">
                   {activationViewModel.planSnapshot.summary}
@@ -133,8 +133,8 @@ export function DiscoveryScreen({
                 disabled={refreshingBootstrap || refreshingPlan}
                 label={
                   refreshingBootstrap || refreshingPlan
-                    ? "Refreshing activation..."
-                    : "Refresh activation"
+                    ? "Refreshing momentum..."
+                    : "Refresh momentum"
                 }
                 onPress={() => {
                   void refreshActivation();
@@ -145,8 +145,8 @@ export function DiscoveryScreen({
                 disabled={refreshingBootstrap}
                 label={
                   refreshingBootstrap
-                    ? "Refreshing bootstrap..."
-                    : "Refresh bootstrap"
+                    ? "Refreshing summary..."
+                    : "Refresh summary"
                 }
                 onPress={() => {
                   void refreshBootstrap();
@@ -155,9 +155,7 @@ export function DiscoveryScreen({
               />
               <PrimaryButton
                 disabled={refreshingPlan}
-                label={
-                  refreshingPlan ? "Refreshing plan..." : "Regenerate plan"
-                }
+                label={refreshingPlan ? "Refreshing path..." : "Refresh path"}
                 onPress={() => {
                   void refreshPlan();
                 }}
@@ -226,8 +224,9 @@ export function DiscoveryScreen({
                 Nothing to surface yet
               </Text>
               <Text className="mt-2 text-[14px] leading-[21px] text-white/56">
-                We will show people, groups, reconnects, and suggestions as they
-                become available.
+                New people, small groups, reconnect opportunities, and gentle
+                prompts will appear here as the system learns where to route you
+                next.
               </Text>
             </View>
           )}

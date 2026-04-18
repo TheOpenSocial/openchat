@@ -49,8 +49,8 @@ export function ConnectionsScreen({
               People and groups you're connected to
             </Text>
             <Text className="text-[14px] leading-[21px] text-white/52">
-              This list is derived from your current chats and connection
-              metadata.
+              Keep track of the people and small groups that are already in your
+              orbit.
             </Text>
           </View>
           <Pressable
@@ -126,7 +126,7 @@ export function ConnectionsScreen({
             </>
           ) : (
             <EmptyState
-              description="When chats and connections exist, they will appear here with the latest metadata."
+              description="When new connections take shape, they’ll show up here so you can jump back into the right conversation quickly."
               title="No connections yet"
             />
           )}

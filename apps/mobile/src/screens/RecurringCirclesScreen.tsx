@@ -36,7 +36,7 @@ export function RecurringCirclesScreen({
         hapticSelection();
         onClose();
       }}
-      subtitle="Circles and their upcoming sessions, powered by the backend recurring scheduler."
+      subtitle="Your repeating groups, upcoming sessions, and the rhythm they create over time."
       title="Your repeating groups"
     >
       {error ? <InlineNotice text={error} tone="error" /> : null}
@@ -100,7 +100,7 @@ export function RecurringCirclesScreen({
         </View>
       ) : (
         <EmptyState
-          description="Create a recurring circle from the backend and it will appear here with its next session and history."
+          description="When you start a repeating group, it’ll appear here with its next session and recent history."
           title="No recurring circles yet"
         />
       )}

@@ -64,7 +64,7 @@ export function SavedSearchesScreen({
           />
         ),
       }}
-      subtitle="Saved discovery and activity searches you can reuse later."
+      subtitle="Reusable discovery filters for the people, plans, and signals you want to revisit."
       title="Reusable discovery filters"
     >
       {error ? <InlineNotice text={error} tone="error" /> : null}
@@ -77,8 +77,8 @@ export function SavedSearchesScreen({
           Keep useful searches close at hand
         </Text>
         <Text className="mt-3 text-[14px] leading-[21px] text-white/58">
-          Saved searches can drive recurring tasks, discovery reminders, and
-          other follow-up flows.
+          Save the patterns that matter so you can come back to them quickly or
+          turn them into lightweight follow-up routines later.
         </Text>
         <View className="mt-4">
           <PrimaryButton
@@ -136,7 +136,7 @@ export function SavedSearchesScreen({
         </View>
       ) : (
         <EmptyState
-          description="As you save more discovery filters, they’ll appear here for quick reuse."
+          description="As you save more filters, they’ll appear here so you can reopen them without rebuilding the same search."
           title="No saved searches"
         />
       )}

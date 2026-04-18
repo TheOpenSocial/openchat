@@ -151,6 +151,8 @@ Use this as the baseline for all next backlog items. Do not reintroduce generic 
   - direct chat create
   - chat send
   - recurring-circle create and add-member
+- The next first-party product phase is now focused on mobile-only polish first, starting by replacing operator-style copy on native discovery and related operational surfaces with clearer consumer-facing language.
+- Scheduled tasks, saved searches, recurring circles, and connections are part of that same mobile polish pass so the operational surfaces read like product UX rather than backend consoles.
 
 ## Current Verification Focus
 

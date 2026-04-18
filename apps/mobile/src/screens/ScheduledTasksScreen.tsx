@@ -67,7 +67,7 @@ export function ScheduledTasksScreen({
           />
         ),
       }}
-      subtitle="Runs, reminders, and digest jobs managed by the backend."
+      subtitle="Recurring follow-ups, reminders, and digest jobs that keep your momentum going."
       title="Automated follow-up jobs"
     >
       {error ? <InlineNotice text={error} tone="error" /> : null}
@@ -80,7 +80,8 @@ export function ScheduledTasksScreen({
           Keep recurring jobs under control
         </Text>
         <Text className="mt-3 text-[14px] leading-[21px] text-white/58">
-          You can run, pause, resume, or archive these tasks from here.
+          Review what is scheduled, run it now when timing matters, or pause it
+          when you want less noise.
         </Text>
         <View className="mt-4">
           <PrimaryButton
@@ -179,7 +180,7 @@ export function ScheduledTasksScreen({
         </View>
       ) : (
         <EmptyState
-          description="When scheduled jobs are created, they’ll show here with their next run and controls."
+          description="When you start using recurring follow-ups, they’ll appear here with their next run and quick controls."
           title="No scheduled tasks"
         />
       )}

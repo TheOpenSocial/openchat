@@ -43,7 +43,7 @@ export function useActivationBootstrap({
       setError(
         nextError instanceof Error
           ? nextError.message
-          : "Unable to load activation bootstrap right now.",
+          : "Unable to refresh your discovery summary right now.",
       );
     } finally {
       setLoading(false);
@@ -65,7 +65,7 @@ export function useActivationBootstrap({
       setError(
         nextError instanceof Error
           ? nextError.message
-          : "Unable to refresh activation plan right now.",
+          : "Unable to refresh your suggested path right now.",
       );
     } finally {
       setLoading(false);
