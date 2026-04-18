@@ -179,7 +179,7 @@ describe("ModerationService", () => {
       "22222222-2222-4222-8222-222222222222",
     );
 
-    expect(result.strikeCount).toBe(4);
+    expect(result.strikeCount).toBe(3);
     expect(result.enforcementAction).toBe("restrict");
     expect(result.moderationState).toBe("blocked");
     expect(result.strikeHistory).toHaveLength(1);

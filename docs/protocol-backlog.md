@@ -174,7 +174,7 @@ Use this as the baseline for all next backlog items. Do not reintroduce generic 
 - keep direct `ConnectionSetupService` scenario/spec harnesses aligned with the current constructor contract so backend ops drill failures reflect behavior regressions, not stale positional test wiring
 - use the manual-verification assessment to flag modeled-only delegation before runtime failures occur, so support can spot non-executable grant setups proactively
 - use the dedicated protocol recovery drill artifact when validating queue/replay recovery in CI and ops automation so delivery evidence is captured in one place
-- rerun CI and the system-evaluation workflow after the protocol-agent lockfile sync and stale backend spec alignment changes so release confidence reflects the new SDK coverage instead of automation drift
+- rerun CI and the system-evaluation workflow after the protocol-agent lockfile sync, stale backend spec alignment, and tolerance-aware live baseline comparison changes so release confidence reflects the new SDK coverage instead of automation drift
 - inspect the live social-sim benchmark regressions by family, especially `circle`, before changing the accepted baseline so the system-evaluation gate stays meaningful
 
 ## Package Direction

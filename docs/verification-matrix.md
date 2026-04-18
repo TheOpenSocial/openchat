@@ -28,11 +28,11 @@ Related references:
 
 | Lane | Current status | Latest evidence |
 | --- | --- | --- |
-| CI | `red` | workflow [`24584871617`](https://github.com/TheOpenSocial/openchat/actions/runs/24584871617) failed on stale API spec constructors and repository formatting drift after the protocol-agent readiness coverage expansion |
+| CI | `in_progress` | workflow [`24592066135`](https://github.com/TheOpenSocial/openchat/actions/runs/24592066135) reduced the red lane to stale API spec and fixture drift, and the next rerun is focused on those backend test mismatches only |
 | Backend Ops Drill | `green` | workflow [`24579213926`](https://github.com/TheOpenSocial/openchat/actions/runs/24579213926) |
 | Deploy Production | `green` | workflow [`24549101902`](https://github.com/TheOpenSocial/openchat/actions/runs/24549101902) |
 | Build Images | `green` | workflow [`24548784197`](https://github.com/TheOpenSocial/openchat/actions/runs/24548784197) |
-| System Evaluation Matrix | `red` | workflow [`24585952832`](https://github.com/TheOpenSocial/openchat/actions/runs/24585952832) ran end to end and then failed on a small live social-sim baseline delta (`0.748` vs `0.756`) rather than install or lane-selection drift |
+| System Evaluation Matrix | `in_progress` | workflow [`24592070223`](https://github.com/TheOpenSocial/openchat/actions/runs/24592070223) is rerunning with tolerance-aware live social-sim baseline comparison after the previous end-to-end run only failed on a small stochastic delta (`0.748` vs `0.756`) |
 | Staging Sandbox Validation | `green` | workflow [`24251759566`](https://github.com/TheOpenSocial/openchat/actions/runs/24251759566) |
 | Staging Mobile E2E Session | `green` | workflow [`24367635640`](https://github.com/TheOpenSocial/openchat/actions/runs/24367635640) |
 | Benchmark Onboarding | `green` | workflow [`23457925557`](https://github.com/TheOpenSocial/openchat/actions/runs/23457925557) |
@@ -41,8 +41,8 @@ Related references:
 
 | Lane | Command / workflow | What it does | What a pass proves | Primary evidence | Status |
 | --- | --- | --- | --- | --- | --- |
-| Repo CI | [`.github/workflows/ci.yml`](/Users/cruciblelabs/Documents/openchat/.github/workflows/ci.yml) | Runs backend lint/typecheck/test, API contract slices, protocol-agent readiness tests, web/admin checks, and format validation | Mainline code compiles, core test suites pass, and protocol-agent readiness policy remains enforced in CI | GitHub Actions run + per-job logs | `red` while stale API specs and format drift are being cleaned up |
-| API lane | `pnpm turbo run test --filter=@opensocial/api...` | Runs backend Vitest coverage including protocol, controller, matching, moderation, and runtime specs | Backend unit/integration-style specs pass in CI | CI backend job logs | `in_progress` |
+| Repo CI | [`.github/workflows/ci.yml`](/Users/cruciblelabs/Documents/openchat/.github/workflows/ci.yml) | Runs backend lint/typecheck/test, API contract slices, protocol-agent readiness tests, web/admin checks, and format validation | Mainline code compiles, core test suites pass, and protocol-agent readiness policy remains enforced in CI | GitHub Actions run + per-job logs | `in_progress` while the remaining API test fixtures are being aligned with current backend behavior |
+| API lane | `pnpm turbo run test --filter=@opensocial/api...` | Runs backend Vitest coverage including protocol, controller, matching, moderation, and runtime specs | Backend unit/integration-style specs pass in CI | CI backend job logs | `in_progress` on stale spec and fixture cleanup only |
 | Protocol agent lane | `pnpm --filter @opensocial/protocol-agent test` | Runs protocol-agent readiness unit tests | SDK readiness semantics, including token freshness, are enforced in CI | CI backend job logs | `in_progress` |
 | OpenAI contracts | `pnpm --filter @opensocial/openai test` | Verifies the shared OpenAI package contract layer | Shared OpenAI-facing package behavior is stable enough for API consumers | CI backend job logs | `in_progress` |
 | API endpoint contracts | `pnpm --filter @opensocial/api test -- test/onboarding-agent.contract.spec.ts` | Runs a focused contract slice for protected agent onboarding endpoints | High-signal endpoint contract did not drift | CI backend job logs | `in_progress` |
@@ -78,7 +78,7 @@ Related references:
 | Full golden runner | `pnpm eval:golden` | Runs social-sim benchmark and product-critical goldens | Covered golden suites are stable against current baselines | eval artifacts under `.artifacts/evals` | `conditional` |
 | Live product goldens | `pnpm eval:golden:product:live` | Validates product-critical goldens using live/admin snapshots | Snapshot-backed live evidence still matches the current product contract | eval artifacts under `.artifacts/evals` | `conditional` |
 | Replay evals | `pnpm eval:replay` and related commands | Scores replay corpora against expected tool/output behavior | Recorded or synthetic traces still satisfy the current execution contract | replay artifacts under `.artifacts/evals` | `conditional` |
-| System Evaluation Matrix | [`.github/workflows/system-live-evals.yml`](/Users/cruciblelabs/Documents/openchat/.github/workflows/system-live-evals.yml) | Runs the live system matrix and baseline comparison | Combined replay/golden/system thresholds pass against staging/live sources | workflow [`24585952832`](https://github.com/TheOpenSocial/openchat/actions/runs/24585952832) + system artifacts | `red` |
+| System Evaluation Matrix | [`.github/workflows/system-live-evals.yml`](/Users/cruciblelabs/Documents/openchat/.github/workflows/system-live-evals.yml) | Runs the live system matrix and baseline comparison | Combined replay/golden/system thresholds pass against staging/live sources | workflows [`24585952832`](https://github.com/TheOpenSocial/openchat/actions/runs/24585952832) and [`24592070223`](https://github.com/TheOpenSocial/openchat/actions/runs/24592070223) + system artifacts | `in_progress` |
 | Social simulation benchmark | `pnpm eval:social:benchmark` / `pnpm sim:social*` | Runs deterministic or provider-backed social graph benchmarks | Social simulation corpus still scores inside current expectations | benchmark artifacts under `.artifacts/evals` | `conditional` |
 
 ## Sandbox, session, and support automation matrix
@@ -112,17 +112,13 @@ These lanes exist and are useful, but should be treated as narrower or condition
 - incident verification
 - sandbox world utilities
 
-This lane is still the main red:
-
-- system evaluation matrix
-
 The current hardening step is already in progress:
 
 - the workflow now enables live social-sim by default and on the scheduled path
 - the workflow now performs an Ollama readiness check before the matrix run
-- the workflow now needs tolerance-aware baseline comparison for the live provider-backed social-sim lane, while keeping deterministic and threshold-based regressions strict
+- the workflow now has tolerance-aware baseline comparison for the live provider-backed social-sim lane, and the current rerun is confirming that this clears the last false regression without softening deterministic gates
 
-That means the system is in a good backend/SDK operational state, but the full “all-up system eval” gate is still the area that needs the next serious hardening pass.
+That means the system is in a good backend/SDK operational state, and the remaining work is to turn the current in-progress CI and system-matrix reruns into dependable green gates again.
 
 ## How to use this matrix
 

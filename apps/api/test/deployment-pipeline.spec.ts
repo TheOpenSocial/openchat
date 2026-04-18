@@ -163,13 +163,13 @@ describe("Deployment pipeline artifacts", () => {
       "GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}",
     );
     expect(stagingWorkflow).toContain(
-      "GOOGLE_REDIRECT_URI: https://api.opensocial.so/api/auth/google/callback",
+      "GOOGLE_REDIRECT_URI: https://api.opensocial.so/auth/google/callback",
     );
     expect(productionWorkflow).toContain(
-      "GOOGLE_REDIRECT_URI: https://api.opensocial.so/api/auth/google/callback",
+      "GOOGLE_REDIRECT_URI: https://api.opensocial.so/auth/google/callback",
     );
     expect(rollbackWorkflow).toContain(
-      "GOOGLE_REDIRECT_URI: https://api.opensocial.so/api/auth/google/callback",
+      "GOOGLE_REDIRECT_URI: https://api.opensocial.so/auth/google/callback",
     );
   });
 

@@ -43,6 +43,24 @@ function createPrismaStub() {
         })) as T;
       }
       if (
+        query.includes("FROM protocol_app_scope_grants") &&
+        query.includes("GROUP BY subject_type")
+      ) {
+        const [appId] = params;
+        const rows = grants.get(appId) ?? [];
+        const counts = rows.reduce(
+          (acc, row) => {
+            acc[row.subject_type] = (acc[row.subject_type] ?? 0n) + 1n;
+            return acc;
+          },
+          {} as Record<string, bigint>,
+        );
+        return Object.entries(counts).map(([subject_type, count]) => ({
+          subject_type,
+          count,
+        })) as T;
+      }
+      if (
         query.includes("FROM protocol_app_consent_requests") &&
         query.includes("GROUP BY status")
       ) {
@@ -612,6 +630,17 @@ function createInboxServiceStub() {
 
 function createChatsServiceStub() {
   return {
+    createChat: async (
+      connectionId: string,
+      type: "dm" | "group",
+      createdByUserId: string,
+    ) => ({
+      id: "00000000-0000-4000-8000-000000000109",
+      connectionId,
+      type,
+      createdByUserId,
+      createdAt: new Date("2026-04-13T00:00:00.000Z"),
+    }),
     createMessage: async (
       chatId: string,
       senderUserId: string,
@@ -624,6 +653,21 @@ function createChatsServiceStub() {
       body,
       replyToMessageId: options?.replyToMessageId ?? null,
       createdAt: new Date("2026-04-13T00:00:00.000Z"),
+    }),
+  };
+}
+
+function createConnectionsServiceStub() {
+  return {
+    createConnection: async (
+      type: "dm" | "group",
+      createdByUserId: string,
+      originIntentId?: string,
+    ) => ({
+      id: "00000000-0000-4000-8000-000000000110",
+      type,
+      createdByUserId,
+      originIntentId: originIntentId ?? null,
     }),
   };
 }
@@ -687,6 +731,7 @@ function createProtocolService() {
     createIntentsServiceStub() as any,
     createInboxServiceStub() as any,
     createChatsServiceStub() as any,
+    createConnectionsServiceStub() as any,
     createRecurringCirclesServiceStub() as any,
     createNotificationsServiceStub() as any,
   );
@@ -1050,6 +1095,7 @@ describe("ProtocolService", () => {
       createIntentsServiceStub() as any,
       createInboxServiceStub() as any,
       createChatsServiceStub() as any,
+      createConnectionsServiceStub() as any,
       createRecurringCirclesServiceStub() as any,
       notificationsService as any,
     );
@@ -1173,6 +1219,7 @@ describe("ProtocolService", () => {
       createIntentsServiceStub() as any,
       createInboxServiceStub() as any,
       createChatsServiceStub() as any,
+      createConnectionsServiceStub() as any,
       createRecurringCirclesServiceStub() as any,
       notificationsService as any,
     );
@@ -1246,6 +1293,7 @@ describe("ProtocolService", () => {
       intentsService as any,
       inboxService as any,
       createChatsServiceStub() as any,
+      createConnectionsServiceStub() as any,
       createRecurringCirclesServiceStub() as any,
       createNotificationsServiceStub() as any,
     );
@@ -1342,6 +1390,7 @@ describe("ProtocolService", () => {
       createIntentsServiceStub() as any,
       createInboxServiceStub() as any,
       createChatsServiceStub() as any,
+      createConnectionsServiceStub() as any,
       createRecurringCirclesServiceStub() as any,
       createNotificationsServiceStub() as any,
     );
@@ -1390,6 +1439,7 @@ describe("ProtocolService", () => {
       createIntentsServiceStub() as any,
       createInboxServiceStub() as any,
       createChatsServiceStub() as any,
+      createConnectionsServiceStub() as any,
       createRecurringCirclesServiceStub() as any,
       createNotificationsServiceStub() as any,
     );
@@ -1451,6 +1501,7 @@ describe("ProtocolService", () => {
       createIntentsServiceStub() as any,
       createInboxServiceStub() as any,
       createChatsServiceStub() as any,
+      createConnectionsServiceStub() as any,
       createRecurringCirclesServiceStub() as any,
       createNotificationsServiceStub() as any,
     );
@@ -1506,6 +1557,7 @@ describe("ProtocolService", () => {
       createIntentsServiceStub() as any,
       createInboxServiceStub() as any,
       createChatsServiceStub() as any,
+      createConnectionsServiceStub() as any,
       createRecurringCirclesServiceStub() as any,
       createNotificationsServiceStub() as any,
     );
@@ -1534,6 +1586,7 @@ describe("ProtocolService", () => {
       createIntentsServiceStub() as any,
       createInboxServiceStub() as any,
       createChatsServiceStub() as any,
+      createConnectionsServiceStub() as any,
       createRecurringCirclesServiceStub() as any,
       createNotificationsServiceStub() as any,
     );

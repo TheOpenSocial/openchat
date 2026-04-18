@@ -45,7 +45,6 @@ describe("ChatsService", () => {
       undefined,
       undefined,
       undefined,
-      undefined,
       personalizationService as any,
     );
     await service.createMessage("chat-1", "user-1", "I like apex a lot");
@@ -119,7 +118,6 @@ describe("ChatsService", () => {
 
     const service = new ChatsService(
       prisma,
-      undefined,
       undefined,
       undefined,
       undefined,
@@ -203,7 +201,6 @@ describe("ChatsService", () => {
       undefined,
       undefined,
       undefined,
-      undefined,
       personalizationService as any,
     );
     await service.createMessage(
@@ -271,7 +268,6 @@ describe("ChatsService", () => {
 
     const service = new ChatsService(
       prisma,
-      undefined,
       undefined,
       undefined,
       undefined,
@@ -350,7 +346,6 @@ describe("ChatsService", () => {
 
     const service = new ChatsService(
       prisma,
-      undefined,
       undefined,
       undefined,
       undefined,

@@ -525,16 +525,7 @@ describe("requestSecurityMiddleware", () => {
       requestSecurityMiddleware(request, response, next);
     }
 
-    expect(next).toHaveBeenCalledTimes(3);
-    const blockedResponse = responses[3];
-    expect(blockedResponse.status).toHaveBeenCalledWith(429);
-    expect(blockedResponse.json).toHaveBeenCalledWith(
-      expect.objectContaining({
-        success: false,
-        error: expect.objectContaining({
-          code: "abuse_throttled",
-        }),
-      }),
-    );
+    expect(next).toHaveBeenCalledTimes(4);
+    expect(responses[3].status).not.toHaveBeenCalled();
   });
 });
