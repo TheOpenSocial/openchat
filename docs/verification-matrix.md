@@ -32,7 +32,7 @@ Related references:
 | Backend Ops Drill | `green` | workflow [`24579213926`](https://github.com/TheOpenSocial/openchat/actions/runs/24579213926) |
 | Deploy Production | `green` | workflow [`24549101902`](https://github.com/TheOpenSocial/openchat/actions/runs/24549101902) |
 | Build Images | `green` | workflow [`24548784197`](https://github.com/TheOpenSocial/openchat/actions/runs/24548784197) |
-| System Evaluation Matrix | `in_progress` | workflow [`24592070223`](https://github.com/TheOpenSocial/openchat/actions/runs/24592070223) is rerunning with tolerance-aware live social-sim baseline comparison after the previous end-to-end run only failed on a small stochastic delta (`0.748` vs `0.756`) |
+| System Evaluation Matrix | `green` | workflow [`24592070223`](https://github.com/TheOpenSocial/openchat/actions/runs/24592070223) passed with tolerance-aware live social-sim baseline comparison, clearing the last false regression in the live provider-backed lane |
 | Staging Sandbox Validation | `green` | workflow [`24251759566`](https://github.com/TheOpenSocial/openchat/actions/runs/24251759566) |
 | Staging Mobile E2E Session | `green` | workflow [`24367635640`](https://github.com/TheOpenSocial/openchat/actions/runs/24367635640) |
 | Benchmark Onboarding | `green` | workflow [`23457925557`](https://github.com/TheOpenSocial/openchat/actions/runs/23457925557) |
@@ -78,7 +78,7 @@ Related references:
 | Full golden runner | `pnpm eval:golden` | Runs social-sim benchmark and product-critical goldens | Covered golden suites are stable against current baselines | eval artifacts under `.artifacts/evals` | `conditional` |
 | Live product goldens | `pnpm eval:golden:product:live` | Validates product-critical goldens using live/admin snapshots | Snapshot-backed live evidence still matches the current product contract | eval artifacts under `.artifacts/evals` | `conditional` |
 | Replay evals | `pnpm eval:replay` and related commands | Scores replay corpora against expected tool/output behavior | Recorded or synthetic traces still satisfy the current execution contract | replay artifacts under `.artifacts/evals` | `conditional` |
-| System Evaluation Matrix | [`.github/workflows/system-live-evals.yml`](/Users/cruciblelabs/Documents/openchat/.github/workflows/system-live-evals.yml) | Runs the live system matrix and baseline comparison | Combined replay/golden/system thresholds pass against staging/live sources | workflows [`24585952832`](https://github.com/TheOpenSocial/openchat/actions/runs/24585952832) and [`24592070223`](https://github.com/TheOpenSocial/openchat/actions/runs/24592070223) + system artifacts | `in_progress` |
+| System Evaluation Matrix | [`.github/workflows/system-live-evals.yml`](/Users/cruciblelabs/Documents/openchat/.github/workflows/system-live-evals.yml) | Runs the live system matrix and baseline comparison | Combined replay/golden/system thresholds pass against staging/live sources | workflows [`24585952832`](https://github.com/TheOpenSocial/openchat/actions/runs/24585952832) and [`24592070223`](https://github.com/TheOpenSocial/openchat/actions/runs/24592070223) + system artifacts | `green` |
 | Social simulation benchmark | `pnpm eval:social:benchmark` / `pnpm sim:social*` | Runs deterministic or provider-backed social graph benchmarks | Social simulation corpus still scores inside current expectations | benchmark artifacts under `.artifacts/evals` | `conditional` |
 
 ## Sandbox, session, and support automation matrix
@@ -112,13 +112,13 @@ These lanes exist and are useful, but should be treated as narrower or condition
 - incident verification
 - sandbox world utilities
 
-The current hardening step is already in progress:
+The current hardening step is now mostly complete:
 
 - the workflow now enables live social-sim by default and on the scheduled path
 - the workflow now performs an Ollama readiness check before the matrix run
-- the workflow now has tolerance-aware baseline comparison for the live provider-backed social-sim lane, and the current rerun is confirming that this clears the last false regression without softening deterministic gates
+- the workflow now has tolerance-aware baseline comparison for the live provider-backed social-sim lane, and workflow [`24592070223`](https://github.com/TheOpenSocial/openchat/actions/runs/24592070223) confirmed that this clears the last false regression without softening deterministic gates
 
-That means the system is in a good backend/SDK operational state, and the remaining work is to turn the current in-progress CI and system-matrix reruns into dependable green gates again.
+That means the system is in a good backend/SDK operational state, and the remaining verification focus is keeping CI fully green alongside the now-green all-up system eval gate.
 
 ## How to use this matrix
 
