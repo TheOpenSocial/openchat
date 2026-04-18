@@ -654,8 +654,6 @@ describe("ChatsService", () => {
       undefined,
       undefined,
       undefined,
-      undefined,
-      undefined,
       presenceService,
     );
 

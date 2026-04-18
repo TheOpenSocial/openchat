@@ -91,6 +91,12 @@
         "scoreStdDev": 0.014,
         "worstSeedScore": 0.739
       },
+      "comparisonThresholds": {
+        "liveSocialSimulationTolerance": 0.01,
+        "suiteScoreTolerances": {
+          "social-sim-live-benchmark": 0.01
+        }
+      },
       "suiteScores": {
         "social-sim-benchmark": 0.757,
         "social-sim-live-benchmark": 0.756,

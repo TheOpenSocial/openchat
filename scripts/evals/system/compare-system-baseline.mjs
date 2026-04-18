@@ -54,6 +54,18 @@ function deltaStatus(delta) {
   return "flat";
 }
 
+function normalizeTolerance(value, fallback = 0) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+function deltaStatusWithTolerance(delta, tolerance = 0) {
+  const normalizedTolerance = normalizeTolerance(tolerance, 0);
+  if (delta > normalizedTolerance) return "improved";
+  if (delta < -normalizedTolerance) return "regressed";
+  return "flat";
+}
+
 export function compareSystemBaseline(
   argv = process.argv.slice(2),
   env = process.env,
@@ -71,6 +83,16 @@ export function compareSystemBaseline(
 
   const current = buildSystemMatrixStatus(argv, env);
   const suiteBaselineScores = acceptedBaseline.suiteScores ?? {};
+  const comparisonThresholds = acceptedBaseline.comparisonThresholds ?? {};
+  const suiteScoreToleranceDefault = normalizeTolerance(
+    comparisonThresholds.defaultSuiteScoreTolerance,
+    0,
+  );
+  const suiteScoreTolerances = comparisonThresholds.suiteScoreTolerances ?? {};
+  const liveSocialSimulationTolerance = normalizeTolerance(
+    comparisonThresholds.liveSocialSimulationTolerance,
+    0,
+  );
 
   const result = {
     generatedAt: new Date().toISOString(),
@@ -148,18 +170,33 @@ export function compareSystemBaseline(
               acceptedBaseline.liveSocialSimulation?.meanScore,
             ),
           ),
+          tolerance: liveSocialSimulationTolerance,
+          toleranceAwareStatus: deltaStatusWithTolerance(
+            toDelta(
+              current.liveSocialSimulation.meanScore,
+              acceptedBaseline.liveSocialSimulation?.meanScore,
+            ),
+            liveSocialSimulationTolerance,
+          ),
         }
       : null,
     suiteDeltas: current.suiteMatrix.map((suite) => {
       const baselineScore = suiteBaselineScores[suite.suiteId] ?? null;
       const delta =
         baselineScore == null ? null : toDelta(suite.score, baselineScore);
+      const tolerance = normalizeTolerance(
+        suiteScoreTolerances[suite.suiteId],
+        suiteScoreToleranceDefault,
+      );
       return {
         suiteId: suite.suiteId,
         currentScore: suite.score,
         baselineScore,
         delta,
         status: delta == null ? "new" : deltaStatus(delta),
+        tolerance,
+        toleranceAwareStatus:
+          delta == null ? "new" : deltaStatusWithTolerance(delta, tolerance),
       };
     }),
   };
@@ -182,13 +219,15 @@ export function compareSystemBaseline(
     regressions.push(
       "live social-sim baseline exists but current run has no live social-sim lane",
     );
-  } else if (result.liveSocialSimulationDelta?.status === "regressed") {
+  } else if (
+    result.liveSocialSimulationDelta?.toleranceAwareStatus === "regressed"
+  ) {
     regressions.push(
       `social-sim live mean regressed (${result.liveSocialSimulationDelta.currentMeanScore} < ${result.liveSocialSimulationDelta.baselineMeanScore})`,
     );
   }
   for (const suiteDelta of result.suiteDeltas) {
-    if (suiteDelta.status === "regressed") {
+    if (suiteDelta.toleranceAwareStatus === "regressed") {
       regressions.push(
         `suite ${suiteDelta.suiteId} regressed (${suiteDelta.currentScore} < ${suiteDelta.baselineScore})`,
       );

@@ -32,7 +32,7 @@ Related references:
 | Backend Ops Drill | `green` | workflow [`24579213926`](https://github.com/TheOpenSocial/openchat/actions/runs/24579213926) |
 | Deploy Production | `green` | workflow [`24549101902`](https://github.com/TheOpenSocial/openchat/actions/runs/24549101902) |
 | Build Images | `green` | workflow [`24548784197`](https://github.com/TheOpenSocial/openchat/actions/runs/24548784197) |
-| System Evaluation Matrix | `red` | workflow [`24585708696`](https://github.com/TheOpenSocial/openchat/actions/runs/24585708696) failed at frozen-lockfile install after the protocol-agent test dependency update, after the earlier live social-sim default-lane issue was fixed |
+| System Evaluation Matrix | `red` | workflow [`24585952832`](https://github.com/TheOpenSocial/openchat/actions/runs/24585952832) ran end to end and then failed on a small live social-sim baseline delta (`0.748` vs `0.756`) rather than install or lane-selection drift |
 | Staging Sandbox Validation | `green` | workflow [`24251759566`](https://github.com/TheOpenSocial/openchat/actions/runs/24251759566) |
 | Staging Mobile E2E Session | `green` | workflow [`24367635640`](https://github.com/TheOpenSocial/openchat/actions/runs/24367635640) |
 | Benchmark Onboarding | `green` | workflow [`23457925557`](https://github.com/TheOpenSocial/openchat/actions/runs/23457925557) |
@@ -78,7 +78,7 @@ Related references:
 | Full golden runner | `pnpm eval:golden` | Runs social-sim benchmark and product-critical goldens | Covered golden suites are stable against current baselines | eval artifacts under `.artifacts/evals` | `conditional` |
 | Live product goldens | `pnpm eval:golden:product:live` | Validates product-critical goldens using live/admin snapshots | Snapshot-backed live evidence still matches the current product contract | eval artifacts under `.artifacts/evals` | `conditional` |
 | Replay evals | `pnpm eval:replay` and related commands | Scores replay corpora against expected tool/output behavior | Recorded or synthetic traces still satisfy the current execution contract | replay artifacts under `.artifacts/evals` | `conditional` |
-| System Evaluation Matrix | [`.github/workflows/system-live-evals.yml`](/Users/cruciblelabs/Documents/openchat/.github/workflows/system-live-evals.yml) | Runs the live system matrix and baseline comparison | Combined replay/golden/system thresholds pass against staging/live sources | workflow [`24566993378`](https://github.com/TheOpenSocial/openchat/actions/runs/24566993378) + system artifacts | `red` |
+| System Evaluation Matrix | [`.github/workflows/system-live-evals.yml`](/Users/cruciblelabs/Documents/openchat/.github/workflows/system-live-evals.yml) | Runs the live system matrix and baseline comparison | Combined replay/golden/system thresholds pass against staging/live sources | workflow [`24585952832`](https://github.com/TheOpenSocial/openchat/actions/runs/24585952832) + system artifacts | `red` |
 | Social simulation benchmark | `pnpm eval:social:benchmark` / `pnpm sim:social*` | Runs deterministic or provider-backed social graph benchmarks | Social simulation corpus still scores inside current expectations | benchmark artifacts under `.artifacts/evals` | `conditional` |
 
 ## Sandbox, session, and support automation matrix
@@ -120,7 +120,7 @@ The current hardening step is already in progress:
 
 - the workflow now enables live social-sim by default and on the scheduled path
 - the workflow now performs an Ollama readiness check before the matrix run
-- the workflow now also needs the frozen-lockfile path kept in sync with protocol-agent test dependency changes
+- the workflow now needs tolerance-aware baseline comparison for the live provider-backed social-sim lane, while keeping deterministic and threshold-based regressions strict
 
 That means the system is in a good backend/SDK operational state, but the full “all-up system eval” gate is still the area that needs the next serious hardening pass.
 
