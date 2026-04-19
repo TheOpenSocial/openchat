@@ -234,7 +234,7 @@ export class VideoTranscriptsService {
         [scriptPath, inputPath, `--output=${outputPath}`, "--convert"],
         {
           env: process.env,
-          stdio: ["ignore", "pipe", "pipe"],
+          stdio: ["ignore", "ignore", "pipe"],
         },
       );
 
