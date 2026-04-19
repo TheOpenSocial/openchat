@@ -37,13 +37,17 @@ async function bootstrap() {
   app.use(requestLoggingMiddleware);
   app.use(requestSecurityMiddleware);
   app.use(adminSecurityMiddleware);
+  const allowedOrigins = [
+    "https://app.opensocial.so",
+    "https://admin.opensocial.so",
+    "https://docs.opensocial.so",
+    "http://localhost:3002",
+    "http://127.0.0.1:3002",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+  ];
   app.enableCors({
-    origin: [
-      "http://localhost:3002",
-      "http://127.0.0.1:3002",
-      "http://localhost:3000",
-      "http://127.0.0.1:3000",
-    ],
+    origin: allowedOrigins,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["content-type", "authorization", "idempotency-key"],
   });
