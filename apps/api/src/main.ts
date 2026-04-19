@@ -59,7 +59,12 @@ async function bootstrap() {
   app.use(adminSecurityMiddleware);
   app.enableCors({
     origin(origin, callback) {
-      callback(null, isAllowedCorsOrigin(origin));
+      if (!isAllowedCorsOrigin(origin)) {
+        callback(null, false);
+        return;
+      }
+
+      callback(null, origin ?? true);
     },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["content-type", "authorization", "idempotency-key"],
