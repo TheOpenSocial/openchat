@@ -190,6 +190,14 @@ run_pull_service() {
   compose_cmd pull "$service"
 }
 
+run_cleanup() {
+  docker system df || true
+  docker container prune --force || true
+  docker image prune --all --force || true
+  docker builder prune --all --force || true
+  docker system df || true
+}
+
 run_migrate() {
   compose_cmd run --rm --entrypoint sh api -lc "corepack enable && pnpm --filter @opensocial/api prisma:migrate:deploy"
 }
@@ -310,6 +318,9 @@ run_phase() {
       ;;
     registry-login)
       run_registry_login
+      ;;
+    cleanup)
+      run_cleanup
       ;;
     pull-api)
       run_pull_service api
