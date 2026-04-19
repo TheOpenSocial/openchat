@@ -2,6 +2,7 @@ import "reflect-metadata";
 import { Logger, ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import type { NextFunction, Request, Response } from "express";
+import type { CorsOptions } from "@nestjs/common/interfaces/external/cors-options.interface";
 import { adminSecurityMiddleware } from "./admin/admin-security.middleware.js";
 import { AppModule } from "./app.module.js";
 import {
@@ -96,7 +97,10 @@ async function bootstrap() {
   app.use(requestSecurityMiddleware);
   app.use(adminSecurityMiddleware);
   app.enableCors({
-    origin(origin, callback) {
+    origin(
+      origin: string | undefined,
+      callback: (error: Error | null, origin?: CorsOptions["origin"]) => void,
+    ) {
       if (!isAllowedCorsOrigin(origin)) {
         callback(null, false);
         return;
