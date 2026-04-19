@@ -191,11 +191,11 @@ run_pull_service() {
 }
 
 run_cleanup() {
-  docker system df || true
+  timeout 30 docker system df || true
   docker container prune --force || true
   docker image prune --all --force || true
-  docker builder prune --all --force || true
-  docker system df || true
+  timeout 120 docker builder prune --all --force || true
+  timeout 30 docker system df || true
 }
 
 run_migrate() {
