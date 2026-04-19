@@ -5,7 +5,6 @@ import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { Button } from "@/src/components/ui/button";
 import { cn } from "@/src/lib/cn";
 import { api, type PublicVideoTranscriptJobStatus } from "@/src/lib/api";
-import { webEnv } from "@/src/lib/env";
 import styles from "./video-transcript-page.module.css";
 
 const STALE_PROCESSING_SECONDS = 120;
@@ -79,7 +78,7 @@ function getStatusCopy(
     default:
       return {
         title: "Video to transcript",
-        description: "Upload a recording and let the background worker turn it into a Markdown transcript.",
+        description: "Upload a recording and get a Markdown transcript.",
         badge: "Ready",
       };
   }
@@ -288,16 +287,8 @@ export function VideoTranscriptPage() {
       <div className={styles.shellInner}>
         <section className={styles.hero}>
           <p className={styles.eyebrow}>OpenSocial Video</p>
-          <h1 className={styles.title}>Video transcripts without leaving the app.</h1>
-          <p className={styles.body}>
-            Upload a recording, let the worker extract the audio, and open the
-            finished Markdown transcript from a temporary link.
-          </p>
-          <p className={styles.meta}>
-            Processing runs against{" "}
-            <span className={styles.inlineCode}>{webEnv.apiBaseUrl}</span> and
-            accepts `mp4`, `mov`, or `webm` uploads up to 1 GB.
-          </p>
+          <h1 className={styles.title}>Turn video into a transcript.</h1>
+          <p className={styles.body}>Upload `mp4`, `mov`, or `webm` up to 1 GB.</p>
         </section>
 
         <div className={styles.grid}>
@@ -316,9 +307,7 @@ export function VideoTranscriptPage() {
               >
                 <span className={styles.fileFieldTitle}>Choose a video file</span>
                 <span className={styles.fileFieldText}>
-                  One upload at a time. The form stays locked while the current
-                  job is active so we do not create duplicate requests by
-                  accident.
+                  One upload at a time. The form stays locked while a job is running.
                 </span>
                 <input
                   accept="video/mp4,video/quicktime,video/webm"
@@ -368,11 +357,6 @@ export function VideoTranscriptPage() {
                 )}
               </div>
 
-              <p className={styles.formHint}>
-                The transcript link will appear here as soon as the worker
-                finishes.
-              </p>
-
               <div className="sr-only" aria-live="polite" aria-atomic="true">
                 {statusText}
               </div>
@@ -411,31 +395,17 @@ export function VideoTranscriptPage() {
             <ol className={styles.timeline}>
               <li className={styles.timelineItem}>
                 <span className={styles.timelineLabel}>1</span>
-                <span>Upload the video to storage.</span>
+                <span>Upload the file.</span>
               </li>
               <li className={styles.timelineItem}>
                 <span className={styles.timelineLabel}>2</span>
-                <span>Reserve the job in the media-processing queue.</span>
+                <span>Process the audio.</span>
               </li>
               <li className={styles.timelineItem}>
                 <span className={styles.timelineLabel}>3</span>
-                <span>Extract audio, chunk when necessary, and transcribe.</span>
-              </li>
-              <li className={styles.timelineItem}>
-                <span className={styles.timelineLabel}>4</span>
-                <span>Return a temporary Markdown link.</span>
+                <span>Open the transcript.</span>
               </li>
             </ol>
-
-            {job?.jobId ? (
-              <>
-                <div className={styles.rule} />
-                <div className={styles.metaBlock}>
-                  <p className={styles.detailLabel}>Job ID</p>
-                  <p className={styles.jobId}>{job.jobId}</p>
-                </div>
-              </>
-            ) : null}
 
             {isStale ? (
               <>
