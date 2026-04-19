@@ -32,6 +32,7 @@ import { RuntimeModule } from "./runtime/runtime.module.js";
 import { ExperienceModule } from "./experience/experience.module.js";
 import { ProtocolModule } from "./protocol/protocol.module.js";
 import { WaitlistModule } from "./waitlist/waitlist.module.js";
+import { VideoTranscriptsModule } from "./video-transcripts/video-transcripts.module.js";
 
 @Module({
   controllers: [HealthController],
@@ -71,6 +72,7 @@ import { WaitlistModule } from "./waitlist/waitlist.module.js";
     ExperienceModule,
     ProtocolModule,
     WaitlistModule,
+    VideoTranscriptsModule,
   ],
   providers: [
     {

@@ -354,6 +354,31 @@ interface ApiEnvelope<T> {
   };
 }
 
+export interface PublicVideoTranscriptUploadIntent {
+  jobId: string;
+  uploadUrl: string;
+  uploadToken: string;
+  storageKey: string;
+  mimeType: "video/mp4" | "video/quicktime" | "video/webm";
+  maxByteSize: number;
+  expiresAt: string;
+  statusUrl: string;
+  requiredHeaders: {
+    "content-type": string;
+  };
+}
+
+export interface PublicVideoTranscriptJobStatus {
+  jobId: string;
+  status: "uploaded" | "queued" | "processing" | "completed" | "failed";
+  transcriptUrl?: string;
+  transcriptExpiresAt?: string;
+  transcriptStorageKey?: string;
+  sourceStorageKey?: string;
+  completedAt?: string;
+  error?: string;
+}
+
 interface AuthLifecycleHandlers {
   onSessionRefreshed?: (tokens: SessionTokens) => void;
   onAuthFailure?: () => void;
@@ -1907,6 +1932,36 @@ export const api = {
       "GET",
       `/profiles/${userId}/photo`,
       accessToken,
+    );
+  },
+  createPublicVideoTranscriptUploadIntent(payload: {
+    fileName: string;
+    mimeType: "video/mp4" | "video/quicktime" | "video/webm";
+    byteSize: number;
+  }) {
+    return request<PublicVideoTranscriptUploadIntent>(
+      "POST",
+      "/public/video-transcripts/upload-intent",
+      payload,
+    );
+  },
+  completePublicVideoTranscriptUpload(
+    jobId: string,
+    payload: {
+      uploadToken: string;
+      byteSize: number;
+    },
+  ) {
+    return request<PublicVideoTranscriptJobStatus>(
+      "POST",
+      `/public/video-transcripts/${jobId}/complete`,
+      payload,
+    );
+  },
+  getPublicVideoTranscriptJob(jobId: string) {
+    return request<PublicVideoTranscriptJobStatus>(
+      "GET",
+      `/public/video-transcripts/${jobId}`,
     );
   },
 };

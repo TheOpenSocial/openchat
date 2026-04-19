@@ -10,6 +10,7 @@ import { NotificationsModule } from "../notifications/notifications.module.js";
 import { ProfilesModule } from "../profiles/profiles.module.js";
 import { ProtocolModule } from "../protocol/protocol.module.js";
 import { ScheduledTasksModule } from "../scheduled-tasks/scheduled-tasks.module.js";
+import { VideoTranscriptsModule } from "../video-transcripts/video-transcripts.module.js";
 import { DeadLetterService } from "./dead-letter.service.js";
 import { OutboxRelayService } from "./outbox-relay.service.js";
 import { AdminMaintenanceConsumer } from "./processors/admin-maintenance.consumer.js";
@@ -51,6 +52,7 @@ export const JOB_QUEUE_NAMES = [
     NotificationsModule,
     ProtocolModule,
     ScheduledTasksModule,
+    VideoTranscriptsModule,
   ],
   providers: [
     DeadLetterService,

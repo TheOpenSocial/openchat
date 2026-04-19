@@ -31,10 +31,12 @@
     "settings:sync:prod": "node scripts/sync-settings.mjs --env production",
     "brand:generate": "node scripts/generate-brand-assets.mjs",
     "admin:key:generate": "node scripts/generate-admin-api-key.mjs",
+    "audio:transcribe": "node scripts/transcribe-audio.mjs",
     "playground:sandbox": "node scripts/playground-sandbox-world.mjs",
     "playground:sandbox:validate": "node scripts/playground-sandbox-world.mjs --action=validate",
     "test:mobile:daily-loop:staging": "node scripts/run-mobile-daily-loop-staging.mjs",
     "test:mobile:daily-loop:staging:native": "node scripts/run-mobile-daily-loop-staging-native.mjs",
+    "test:mobile:sandbox:maestro": "node scripts/run-mobile-sandbox-maestro.mjs",
     "staging:smoke:api": "node scripts/staging-smoke-api.mjs",
     "staging:smoke:llm-runtime": "node scripts/staging-smoke-llm-runtime.mjs",
     "staging:smoke:verification-lane": "node scripts/run-agent-prod-smoke-lane.mjs",
@@ -102,6 +104,7 @@
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.5.0",
+    "openai": "^6.32.0",
     "pg": "^8.20.0"
   },
   "pnpm": {
