@@ -140,6 +140,7 @@ sync_local_checkout() {
   sync_local_env_var "S3_PRESIGNED_UPLOADS_ENABLED" "${S3_PRESIGNED_UPLOADS_ENABLED:-}"
   sync_local_env_var "MEDIA_SIGNING_SECRET" "${MEDIA_SIGNING_SECRET:-}"
   sync_local_env_var "MEDIA_UPLOAD_SIGNING_SECRET" "${MEDIA_UPLOAD_SIGNING_SECRET:-}"
+  sync_local_env_var "VIDEO_TRANSCRIPTS_MAX_BYTES" "${VIDEO_TRANSCRIPTS_MAX_BYTES:-}"
   sync_local_env_var "ADMIN_API_KEY" "${ADMIN_API_KEY:-}"
   sync_local_env_var "PLAYGROUND_ENABLED" "${PLAYGROUND_ENABLED:-}"
   sync_local_env_var "PLAYGROUND_MUTATIONS_ENABLED" "${PLAYGROUND_MUTATIONS_ENABLED:-}"
@@ -226,6 +227,54 @@ run_health() {
   api_response="$(curl_local_https "api.opensocial.so" "/health")"
 
   echo "$api_response"
+
+  local video_page_status
+  video_page_status="$(
+    curl \
+      --silent \
+      --show-error \
+      --output /tmp/opensocial-video-page.html \
+      --write-out "%{http_code}" \
+      --insecure \
+      --retry 12 \
+      --retry-delay 5 \
+      --retry-all-errors \
+      --connect-timeout 5 \
+      --max-time 15 \
+      --resolve "app.opensocial.so:443:127.0.0.1" \
+      "https://app.opensocial.so/video"
+  )"
+  echo "video_page_http=${video_page_status}"
+  if [[ "$video_page_status" != "200" ]]; then
+    echo "Video page is not healthy." >&2
+    head -c 200 /tmp/opensocial-video-page.html || true
+    return 1
+  fi
+
+  local transcript_probe_status
+  transcript_probe_status="$(
+    curl \
+      --silent \
+      --show-error \
+      --output /tmp/opensocial-video-api.json \
+      --write-out "%{http_code}" \
+      --insecure \
+      --retry 12 \
+      --retry-delay 5 \
+      --retry-all-errors \
+      --connect-timeout 5 \
+      --max-time 15 \
+      --resolve "api.opensocial.so:443:127.0.0.1" \
+      --header "content-type: application/json" \
+      --data '{}' \
+      "https://api.opensocial.so/public/video-transcripts/upload-intent"
+  )"
+  echo "video_transcript_probe_http=${transcript_probe_status}"
+  if [[ "$transcript_probe_status" != "400" ]]; then
+    echo "Public video transcript endpoint did not respond as expected." >&2
+    head -c 300 /tmp/opensocial-video-api.json || true
+    return 1
+  fi
 
   local docs_headers
   docs_headers="$(curl_local_https "docs.opensocial.so" "/docs" --head)"
@@ -342,6 +391,7 @@ sync_remote_env_var "MEDIA_CDN_BASE_URL" "${MEDIA_CDN_BASE_URL:-}"
 sync_remote_env_var "S3_PRESIGNED_UPLOADS_ENABLED" "${S3_PRESIGNED_UPLOADS_ENABLED:-}"
 sync_remote_env_var "MEDIA_SIGNING_SECRET" "${MEDIA_SIGNING_SECRET:-}"
 sync_remote_env_var "MEDIA_UPLOAD_SIGNING_SECRET" "${MEDIA_UPLOAD_SIGNING_SECRET:-}"
+sync_remote_env_var "VIDEO_TRANSCRIPTS_MAX_BYTES" "${VIDEO_TRANSCRIPTS_MAX_BYTES:-}"
 sync_remote_env_var "ADMIN_API_KEY" "${ADMIN_API_KEY:-}"
 sync_remote_env_var "PLAYGROUND_ENABLED" "${PLAYGROUND_ENABLED:-}"
 sync_remote_env_var "PLAYGROUND_MUTATIONS_ENABLED" "${PLAYGROUND_MUTATIONS_ENABLED:-}"
