@@ -105,6 +105,14 @@ jobs:
           chmod +x scripts/deploy-production.sh
           DEPLOY_PHASE=registry-login ./scripts/deploy-production.sh
 
+      - name: Cleanup Docker artifacts
+        if: ${{ inputs.deploy_mode == 'images' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x scripts/deploy-production.sh
+          DEPLOY_PHASE=cleanup ./scripts/deploy-production.sh
+
       - name: Pull API image
         if: ${{ inputs.deploy_mode == 'images' }}
         shell: bash

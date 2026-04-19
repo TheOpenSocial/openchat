@@ -62,6 +62,7 @@ export function DiscoveryScreen({
           />
         ),
       }}
+      screenTestID="discovery-screen"
       subtitle="Passive discovery, inbox suggestions, and agent briefings in one place."
       title="Fresh places to go next"
     >

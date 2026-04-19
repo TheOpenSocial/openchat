@@ -1,21 +1,76 @@
 export function AppLoadingScreen({ label = "Loading…" }: { label?: string }) {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-5 bg-black px-6 text-white">
-      <div className="rounded-[1.35rem] border border-white/12 bg-white/[0.03] p-3 shadow-[0_24px_60px_rgba(0,0,0,0.35)] backdrop-blur">
-        <img
-          alt=""
-          className="h-10 w-10"
-          height={40}
-          src="/brand/logo.svg"
-          width={40}
+    <main
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        minHeight: "100dvh",
+        background: "#040404",
+        gap: "28px",
+      }}
+    >
+      {/* Logo mark */}
+      <div style={{ position: "relative" }}>
+        {/* Ambient glow behind logo */}
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            inset: "-40px",
+            background: "radial-gradient(circle, rgba(109,59,255,0.22) 0%, transparent 70%)",
+            filter: "blur(20px)",
+            animation: "ls-pulse 2.8s ease-in-out infinite",
+          }}
+        />
+        <svg
+          viewBox="0 0 1024 1024"
+          aria-hidden="true"
+          style={{ width: 48, height: 48, position: "relative", display: "block" }}
+        >
+          <path
+            d="M 512 309 A 228 228 0 0 0 512 755 A 228 228 0 0 0 512 309 Z"
+            fill="rgba(245,245,247,0.9)"
+          />
+          <circle cx="407" cy="532" r="228" fill="none" stroke="rgba(245,245,247,0.9)" strokeWidth="42" />
+          <circle cx="617" cy="532" r="228" fill="none" stroke="rgba(245,245,247,0.9)" strokeWidth="42" />
+        </svg>
+      </div>
+
+      {/* Thin progress line */}
+      <div
+        style={{
+          width: 48,
+          height: 1,
+          background: "rgba(255,255,255,0.08)",
+          borderRadius: 1,
+          overflow: "hidden",
+          position: "relative",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent)",
+            animation: "ls-shimmer 1.6s ease-in-out infinite",
+          }}
         />
       </div>
-      <div
-        aria-label={label}
-        className="h-9 w-9 rounded-full border-2 border-white/14 border-t-amber-400 motion-safe:animate-spin"
-        role="progressbar"
-      />
-      <p className="text-sm text-white/52">{label}</p>
+
+      <style>{`
+        @keyframes ls-pulse {
+          0%, 100% { opacity: 0.6; transform: scale(1); }
+          50%       { opacity: 1;   transform: scale(1.08); }
+        }
+        @keyframes ls-shimmer {
+          0%   { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
+        }
+      `}</style>
+
+      <span className="sr-only">{label}</span>
     </main>
   );
 }

@@ -1,0 +1,43 @@
+appId: ${MAESTRO_APP_ID}
+---
+- runFlow:
+    when:
+      visible:
+        text: "Source code explorer"
+    commands:
+      - tapOn:
+          point: "92%,21%"
+- runFlow:
+    when:
+      visible:
+        text: "This is the tools menu."
+    commands:
+      - tapOn:
+          text: "Continue"
+- tapOn:
+    text: "Continue"
+    optional: true
+- tapOn:
+    text: "Skip"
+    optional: true
+- tapOn:
+    text: "Try it now"
+    optional: true
+- tapOn:
+    text: "Reload"
+    optional: true
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible:
+        id: "auth-screen"
+    commands:
+      - tapOn:
+          id: "auth-e2e-bypass-button"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      id: "home-status-header"
+    timeout: 120000
+- assertVisible:
+    id: "home-status-header"

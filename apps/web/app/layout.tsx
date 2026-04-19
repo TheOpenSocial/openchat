@@ -1,26 +1,36 @@
 import type { Metadata } from "next";
-import { Space_Grotesk, Source_Sans_3 } from "next/font/google";
+import { Inter, Open_Sans, Roboto } from "next/font/google";
 import type { ReactNode } from "react";
 
 import { AppSessionProvider } from "@/src/features/app-shell/app-session";
 
 import "./globals.css";
 
-const headingFont = Space_Grotesk({
+// Inter — clean, neutral grotesque for all UI and manifesto text
+const inter = Inter({
   subsets: ["latin"],
   variable: "--font-heading",
+  weight: ["300", "400", "500", "600", "700", "800", "900"],
   display: "swap",
 });
 
-const bodyFont = Source_Sans_3({
+const openSans = Open_Sans({
   subsets: ["latin"],
-  variable: "--font-body",
+  variable: "--font-brand",
+  weight: ["700", "800"],
+  display: "swap",
+});
+
+const roboto = Roboto({
+  subsets: ["latin"],
+  variable: "--font-nav",
+  weight: ["400", "500"],
   display: "swap",
 });
 
 export const metadata: Metadata = {
   title: "OpenSocial",
-  description: "Meet through plans — intent-driven social",
+  description: "The agentic social graph.",
   icons: {
     icon: [{ url: "/brand/logo.svg", type: "image/svg+xml" }],
     shortcut: "/brand/logo.svg",
@@ -30,8 +40,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html className={`${headingFont.variable} ${bodyFont.variable}`} lang="en">
-      <body className="font-[var(--font-body)] text-ink antialiased">
+    <html className={`${inter.variable} ${openSans.variable} ${roboto.variable}`} lang="en">
+      <body className="font-[var(--font-heading)] text-ink antialiased">
         <AppSessionProvider>{children}</AppSessionProvider>
       </body>
     </html>

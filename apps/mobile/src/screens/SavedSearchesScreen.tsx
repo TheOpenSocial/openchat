@@ -64,6 +64,7 @@ export function SavedSearchesScreen({
           />
         ),
       }}
+      screenTestID="saved-searches-screen"
       subtitle="Reusable discovery filters for the people, plans, and signals you want to revisit."
       title="Reusable discovery filters"
     >

@@ -1,6 +1,7 @@
 import "./global.css";
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -20,6 +21,10 @@ import {
 } from "./src/lib/api";
 import { queueOfflineProfileSave } from "./src/lib/offline-outbox";
 import { uploadProfilePhotoFromPickerAsset } from "./src/lib/profile-photo-upload";
+import {
+  getMobileQueryClient,
+  useConfigureMobileQuery,
+} from "./src/lib/query-client";
 import {
   clearStoredSession,
   loadStoredSession,
@@ -92,6 +97,7 @@ function mobileSessionFromStoredSession(stored: StoredSession): MobileSession {
 }
 
 function ProductionApp() {
+  useConfigureMobileQuery(E2E_LOCAL_MODE_ENABLED);
   const initialE2ESessionRef = useRef<StoredSession | null>(
     parseE2ESession() ??
       (E2E_LOCAL_MODE_ENABLED ? buildLocalE2ESession() : null),
@@ -688,12 +694,19 @@ function ProductionApp() {
 
 export default function App() {
   const rootLayoutDebug = false;
+  const queryClient = getMobileQueryClient();
   if (rootLayoutDebug) {
     return (
-      <SafeAreaProvider style={{ flex: 1 }}>
-        <StatusBar style="light" />
-      </SafeAreaProvider>
+      <QueryClientProvider client={queryClient}>
+        <SafeAreaProvider style={{ flex: 1 }}>
+          <StatusBar style="light" />
+        </SafeAreaProvider>
+      </QueryClientProvider>
     );
   }
-  return <ProductionApp />;
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ProductionApp />
+    </QueryClientProvider>
+  );
 }

@@ -960,6 +960,10 @@ export function HomeScreen({
             hapticSelection();
             transientRouteActions.openDiscovery();
           }}
+          onOpenInbox={() => {
+            hapticSelection();
+            transientRouteActions.openInbox();
+          }}
           onOpenIntentDetail={(intentId) => {
             hapticSelection();
             transientRouteActions.openIntentDetail(intentId);
@@ -1063,7 +1067,7 @@ export function HomeScreen({
             hapticSelection();
             switch (action) {
               case "review_requests":
-                setActiveTab("activity");
+                transientRouteActions.openInbox();
                 break;
               case "open_matches":
                 transientRouteActions.openDiscovery();

@@ -22,6 +22,13 @@
     "test:e2e:maestro": "MAESTRO_APP_ID=${MAESTRO_APP_ID:-host.exp.Exponent} MAESTRO_EXPO_URL=${MAESTRO_EXPO_URL:-exp://localhost:8089} maestro test .maestro/mobile-critical-path.yaml",
     "test:e2e:maestro:daily-loop": "MAESTRO_APP_ID=${MAESTRO_APP_ID:-host.exp.Exponent} MAESTRO_EXPO_URL=${MAESTRO_EXPO_URL:-exp://localhost:8089} maestro test .maestro/mobile-daily-loop.yaml",
     "test:e2e:maestro:daily-loop:native": "MAESTRO_APP_ID=${MAESTRO_APP_ID:-so.opensocial.app} maestro test .maestro/mobile-daily-loop-native.yaml",
+    "test:e2e:maestro:route-graph": "MAESTRO_APP_ID=${MAESTRO_APP_ID:-host.exp.Exponent} MAESTRO_EXPO_URL=${MAESTRO_EXPO_URL:-exp://localhost:8089} maestro test .maestro/mobile-route-graph.yaml",
+    "test:e2e:maestro:surface-smoke": "MAESTRO_APP_ID=${MAESTRO_APP_ID:-so.opensocial.app} MAESTRO_EXPO_URL=${MAESTRO_EXPO_URL:-exp://localhost:8089} maestro test .maestro/mobile-surface-smoke.yaml",
+    "test:e2e:maestro:sandbox-surface": "MAESTRO_APP_ID=${MAESTRO_APP_ID:-so.opensocial.app} MAESTRO_EXPO_URL=${MAESTRO_EXPO_URL:-exp://localhost:8089} maestro test .maestro/mobile-sandbox-surface-smoke.yaml",
+    "test:e2e:maestro:sandbox-surface:expo-go": "MAESTRO_APP_ID=${MAESTRO_APP_ID:-host.exp.Exponent} MAESTRO_EXPO_URL=${MAESTRO_EXPO_URL:-exp://localhost:8089} maestro test .maestro/mobile-sandbox-surface-smoke-expo-go.yaml",
+    "test:e2e:maestro:sandbox-surface:expo-go:attached": "MAESTRO_APP_ID=${MAESTRO_APP_ID:-host.exp.Exponent} maestro test .maestro/mobile-sandbox-surface-smoke-expo-go-attached.yaml",
+    "test:e2e:maestro:sandbox-home-activity:expo-go:attached": "MAESTRO_APP_ID=${MAESTRO_APP_ID:-host.exp.Exponent} maestro test .maestro/mobile-sandbox-home-activity-expo-go-attached.yaml",
+    "test:e2e:maestro:sandbox-activity-target:expo-go:attached": "MAESTRO_APP_ID=${MAESTRO_APP_ID:-host.exp.Exponent} maestro test .maestro/mobile-sandbox-activity-target-expo-go-attached.yaml",
     "test:e2e:maestro:design": "MAESTRO_APP_ID=${MAESTRO_APP_ID:-host.exp.Exponent} MAESTRO_EXPO_URL=${MAESTRO_EXPO_URL:-exp://localhost:8089} maestro test .maestro/mobile-design-mock.yaml"
   },
   "dependencies": {
@@ -32,6 +39,7 @@
     "@opensocial/types": "workspace:*",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-native-community/netinfo": "^11.5.2",
+    "@tanstack/react-query": "^5.99.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "expo": "^55.0.8",

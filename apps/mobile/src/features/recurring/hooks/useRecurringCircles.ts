@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   api,
   type RecurringCircleRecord,
   type RecurringCircleSessionRecord,
 } from "../../../lib/api";
+import { mobileQueryKeys } from "../../../lib/query-client";
 import {
   buildRecurringCircleItem,
   type RecurringCircleItem,
@@ -17,99 +19,86 @@ type UseRecurringCirclesArgs = {
 
 type SessionMap = Record<string, RecurringCircleSessionRecord[]>;
 
+type RecurringCirclesPayload = {
+  circles: RecurringCircleRecord[];
+  sessionsByCircleId: SessionMap;
+};
+
 export function useRecurringCircles({
   accessToken,
   userId,
 }: UseRecurringCirclesArgs) {
-  const [circles, setCircles] = useState<RecurringCircleRecord[]>([]);
-  const [sessionsByCircleId, setSessionsByCircleId] = useState<SessionMap>({});
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [actingCircleId, setActingCircleId] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const recurringQuery = useQuery({
+    enabled: Boolean(accessToken && userId),
+    queryFn: async (): Promise<RecurringCirclesPayload> => {
+      const nextCircles = await api.listRecurringCircles(userId, accessToken);
+      const sessionEntries: Array<
+        readonly [string, RecurringCircleSessionRecord[]]
+      > = await Promise.all(
+        nextCircles.map(async (circle) => {
+          try {
+            const sessions = await api.listRecurringCircleSessions(
+              circle.id,
+              accessToken,
+            );
+            return [circle.id, sessions] as const;
+          } catch {
+            return [circle.id, [] as RecurringCircleSessionRecord[]] as const;
+          }
+        }),
+      );
 
-  const hydrate = useCallback(
-    async (mode: "initial" | "refresh") => {
-      if (mode === "initial") {
-        setLoading(true);
-      } else {
-        setRefreshing(true);
-      }
-      setError(null);
-
-      try {
-        const nextCircles = await api.listRecurringCircles(userId, accessToken);
-        const sessionEntries: Array<
-          readonly [string, RecurringCircleSessionRecord[]]
-        > = await Promise.all(
-          nextCircles.map(async (circle) => {
-            try {
-              const sessions = await api.listRecurringCircleSessions(
-                circle.id,
-                accessToken,
-              );
-              return [circle.id, sessions] as const;
-            } catch {
-              return [circle.id, [] as RecurringCircleSessionRecord[]] as const;
-            }
-          }),
-        );
-
-        setCircles(nextCircles);
-        setSessionsByCircleId(Object.fromEntries(sessionEntries) as SessionMap);
-      } catch (nextError) {
-        setError(
-          nextError instanceof Error
-            ? nextError.message
-            : "Unable to load recurring circles right now.",
-        );
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
-      }
+      return {
+        circles: nextCircles,
+        sessionsByCircleId: Object.fromEntries(sessionEntries) as SessionMap,
+      };
     },
-    [accessToken, userId],
-  );
-
-  useEffect(() => {
-    void hydrate("initial");
-  }, [hydrate]);
+    queryKey: mobileQueryKeys.recurringCircles(userId),
+  });
 
   const items = useMemo<RecurringCircleItem[]>(
     () =>
-      circles.map((circle) =>
-        buildRecurringCircleItem(circle, sessionsByCircleId[circle.id] ?? []),
+      (recurringQuery.data?.circles ?? []).map((circle) =>
+        buildRecurringCircleItem(
+          circle,
+          recurringQuery.data?.sessionsByCircleId[circle.id] ?? [],
+        ),
       ),
-    [circles, sessionsByCircleId],
+    [recurringQuery.data],
   );
+
+  const refresh = useCallback(async () => {
+    await recurringQuery.refetch();
+  }, [recurringQuery]);
+
+  const runNowMutation = useMutation({
+    mutationFn: (circleId: string) =>
+      api.runRecurringCircleSessionNow(circleId, accessToken),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: mobileQueryKeys.recurringCircles(userId),
+      });
+    },
+  });
 
   const runNow = useCallback(
     async (circleId: string) => {
-      setActingCircleId(circleId);
-      setError(null);
-      try {
-        await api.runRecurringCircleSessionNow(circleId, accessToken);
-        await hydrate("refresh");
-      } catch (nextError) {
-        setError(
-          nextError instanceof Error
-            ? nextError.message
-            : "Unable to run this circle right now.",
-        );
-      } finally {
-        setActingCircleId(null);
-      }
+      await runNowMutation.mutateAsync(circleId);
     },
-    [accessToken, hydrate],
+    [runNowMutation],
   );
 
   return {
-    actingCircleId,
-    error,
+    actingCircleId: runNowMutation.variables ?? null,
+    error:
+      (runNowMutation.error instanceof Error && runNowMutation.error.message) ||
+      (recurringQuery.error instanceof Error && recurringQuery.error.message) ||
+      null,
     items,
-    loading,
-    refresh: () => hydrate("refresh"),
-    refreshing,
+    loading: recurringQuery.isLoading && !recurringQuery.data,
+    refresh,
+    refreshing: recurringQuery.isRefetching,
     runNow,
   };
 }

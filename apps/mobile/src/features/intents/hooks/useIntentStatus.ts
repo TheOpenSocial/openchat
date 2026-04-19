@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, type PendingIntentSummaryItem } from "../../../lib/api";
+import { mobileQueryKeys } from "../../../lib/query-client";
 import { buildIntentDetailViewModel } from "../domain/intent-detail";
 
 type UseIntentStatusArgs = {
@@ -56,17 +58,52 @@ export function useIntentStatus({
   intentId,
   userId,
 }: UseIntentStatusArgs) {
+  const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [acting, setActing] = useState<IntentAction | null>(null);
-  const [explanation, setExplanation] = useState<Awaited<
-    ReturnType<typeof api.getUserIntentExplanation>
-  > | null>(null);
-  const [summaryItem, setSummaryItem] =
-    useState<PendingIntentSummaryItem | null>(null);
+  const intentQuery = useQuery({
+    enabled: Boolean(accessToken && intentId && userId),
+    queryFn: async () => {
+      const [explanation, pendingSummary] = await Promise.all([
+        api.getUserIntentExplanation(intentId, accessToken),
+        api.summarizePendingIntents(userId, 8, accessToken).catch(() => null),
+      ]);
+
+      return {
+        explanation,
+        summaryItem:
+          pendingSummary?.intents.find((item) => item.intentId === intentId) ??
+          null,
+      };
+    },
+    queryKey: mobileQueryKeys.intentStatus(userId, intentId),
+  });
+
+  const actionMutation = useMutation({
+    mutationFn: async (action: IntentAction) => {
+      if (action === "cancel") {
+        await api.cancelIntent(intentId, userId, accessToken);
+      }
+      if (action === "retry") {
+        await api.retryIntent(intentId, accessToken);
+      }
+      if (action === "widen") {
+        await api.widenIntent(intentId, accessToken);
+      }
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: mobileQueryKeys.intentStatus(userId, intentId),
+      });
+    },
+  });
+
+  const acting = actionMutation.variables ?? null;
+  const explanation = intentQuery.data?.explanation ?? null;
+  const summaryItem = intentQuery.data?.summaryItem ?? null;
   const status = explanation?.status ?? null;
   const statusLabel = status ? formatStatusLabel(status) : null;
   const statusDescription = status ? formatStatusDescription(status) : null;
+  const loading = intentQuery.isLoading && !intentQuery.data;
   const actionLocked = loading || acting != null;
   const canRetry = !actionLocked && status !== "cancelled";
   const canWiden =
@@ -74,33 +111,9 @@ export function useIntentStatus({
   const canCancel = !actionLocked && status !== "cancelled";
 
   const refresh = useCallback(async () => {
-    setLoading(true);
     setError(null);
-    try {
-      const [nextExplanation, pendingSummary] = await Promise.all([
-        api.getUserIntentExplanation(intentId, accessToken),
-        api.summarizePendingIntents(userId, 8, accessToken).catch(() => null),
-      ]);
-
-      setExplanation(nextExplanation);
-      setSummaryItem(
-        pendingSummary?.intents.find((item) => item.intentId === intentId) ??
-          null,
-      );
-    } catch (nextError) {
-      setError(
-        nextError instanceof Error
-          ? nextError.message
-          : "Unable to load this intent right now.",
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [accessToken, intentId, userId]);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    await intentQuery.refetch();
+  }, [intentQuery]);
 
   const runAction = useCallback(
     async (action: IntentAction) => {
@@ -112,30 +125,18 @@ export function useIntentStatus({
         return;
       }
 
-      setActing(action);
       setError(null);
       try {
-        if (action === "cancel") {
-          await api.cancelIntent(intentId, userId, accessToken);
-        }
-        if (action === "retry") {
-          await api.retryIntent(intentId, accessToken);
-        }
-        if (action === "widen") {
-          await api.widenIntent(intentId, accessToken);
-        }
-        await refresh();
+        await actionMutation.mutateAsync(action);
       } catch (nextError) {
         setError(
           nextError instanceof Error
             ? nextError.message
             : "Unable to update this intent.",
         );
-      } finally {
-        setActing(null);
       }
     },
-    [accessToken, canCancel, canRetry, canWiden, intentId, refresh, userId],
+    [actionMutation, canCancel, canRetry, canWiden],
   );
 
   const viewModel = useMemo(() => {
@@ -151,7 +152,11 @@ export function useIntentStatus({
 
   return {
     acting,
-    error,
+    error:
+      error ||
+      (intentQuery.error instanceof Error && intentQuery.error.message) ||
+      (actionMutation.error instanceof Error && actionMutation.error.message) ||
+      null,
     canCancel,
     canRetry,
     canWiden,

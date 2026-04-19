@@ -1,0 +1,184 @@
+appId: ${MAESTRO_APP_ID}
+---
+- launchApp:
+    clearState: true
+    permissions:
+      all: unset
+- openLink: ${MAESTRO_EXPO_URL}
+- tapOn:
+    text: "Continue"
+    optional: true
+- tapOn:
+    text: "Skip"
+    optional: true
+- tapOn:
+    text: "Try it now"
+    optional: true
+- tapOn:
+    text: "Reload"
+    optional: true
+- tapOn:
+    text: "Continue"
+    optional: true
+- tapOn:
+    text: "Skip"
+    optional: true
+- tapOn:
+    text: "Try it now"
+    optional: true
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible:
+        id: "auth-screen"
+    commands:
+      - tapOn:
+          id: "auth-e2e-bypass-button"
+- runFlow:
+    when:
+      visible:
+        id: "onboarding-screen"
+    commands:
+      - tapOn:
+          id: "onboarding-s1-continue"
+      - tapOn:
+          id: "onboarding-goal-meet-people"
+      - tapOn:
+          id: "onboarding-s2-continue"
+      - tapOn:
+          id: "onboarding-s3-continue"
+      - tapOn:
+          id: "onboarding-s4-continue"
+      - tapOn:
+          id: "onboarding-display-name"
+      - eraseText
+      - inputText: "Maestro User"
+      - tapOn:
+          id: "onboarding-bio-input"
+      - inputText: "Route graph validation."
+      - tapOn:
+          id: "onboarding-area-input"
+      - inputText: "Buenos Aires"
+      - tapOn:
+          id: "onboarding-country-input"
+      - inputText: "Argentina"
+      - tapOn:
+          id: "onboarding-s5-continue"
+      - tapOn:
+          id: "onboarding-s6-skip"
+- runFlow:
+    when:
+      visible:
+        text: "Continue"
+    commands:
+      - tapOn:
+          text: "Continue"
+- runFlow:
+    when:
+      visible:
+        text: "Reload"
+    commands:
+      - tapOn:
+          text: "Reload"
+- extendedWaitUntil:
+    visible:
+      id: "home-screen"
+    timeout: 30000
+- assertVisible:
+    id: "home-screen"
+- runFlow:
+    when:
+      visible:
+        id: "home-welcome-close"
+    commands:
+      - tapOn:
+          id: "home-welcome-close"
+- runFlow:
+    when:
+      visible:
+        text: "Go home"
+    commands:
+      - tapOn:
+          point: "92%,36%"
+- tapOn:
+    id: "app-bottom-tab-activity"
+- extendedWaitUntil:
+    visible:
+      id: "activity-screen"
+    timeout: 20000
+- assertVisible:
+    id: "activity-screen"
+- tapOn:
+    id: "activity-open-inbox"
+- assertVisible:
+    id: "inbox-screen"
+- tapOn:
+    id: "inbox-close"
+- extendedWaitUntil:
+    visible:
+      id: "activity-screen"
+    timeout: 10000
+- tapOn:
+    id: "activity-open-connections"
+- assertVisible:
+    id: "connections-screen"
+- tapOn:
+    id: "connections-close"
+- extendedWaitUntil:
+    visible:
+      id: "activity-screen"
+    timeout: 10000
+- tapOn:
+    id: "activity-open-discovery"
+- assertVisible:
+    id: "discovery-screen"
+- tapOn:
+    id: "discovery-close"
+- extendedWaitUntil:
+    visible:
+      id: "activity-screen"
+    timeout: 10000
+- tapOn:
+    id: "activity-open-recurring-circles"
+- assertVisible:
+    id: "recurring-circles-screen"
+- tapOn:
+    id: "recurring-circles-close"
+- extendedWaitUntil:
+    visible:
+      id: "activity-screen"
+    timeout: 10000
+- tapOn:
+    id: "activity-open-saved-searches"
+- assertVisible:
+    id: "saved-searches-screen"
+- tapOn:
+    id: "saved-searches-close"
+- extendedWaitUntil:
+    visible:
+      id: "activity-screen"
+    timeout: 10000
+- tapOn:
+    id: "activity-open-scheduled-tasks"
+- assertVisible:
+    id: "scheduled-tasks-screen"
+- tapOn:
+    id: "scheduled-tasks-close"
+- extendedWaitUntil:
+    visible:
+      id: "activity-screen"
+    timeout: 10000
+- tapOn:
+    id: "app-bottom-tab-home"
+- assertVisible:
+    id: "home-screen"
+- tapOn:
+    id: "app-shell-settings"
+- assertVisible:
+    id: "settings-close"
+- tapOn:
+    id: "settings-close"
+- extendedWaitUntil:
+    visible:
+      id: "home-screen"
+    timeout: 10000

@@ -34,6 +34,56 @@ EXPO_PUBLIC_E2E_SESSION_B64=... \
 pnpm test:mobile:daily-loop:staging -- --scenario=baseline
 ```
 
+For a single API-backed mobile audit command, use:
+
+```bash
+pnpm test:mobile:sandbox:maestro -- --scenario=baseline --flow=sandbox-surface
+```
+
+That runner:
+
+- prepares the named sandbox world scenario
+- emits a real mobile session
+- starts Expo with the injected session and API base URL
+- runs Maestro against the native dev app
+- asserts the `Home` and `Activity` content match the sandbox read model
+
+It prefers local admin or smoke credentials when present, and falls back to the
+GitHub staging workflows when they are not.
+
+For the most reliable local Expo Go path, pre-attach the project and then run
+the already-attached surface audit:
+
+```bash
+MAESTRO_APP_ID=host.exp.Exponent maestro test apps/mobile/.maestro/mobile-sandbox-surface-smoke-expo-go-attached.yaml
+```
+
+The attached Expo Go flows assume the injected E2E session is already
+authenticated and onboarded. They intentionally skip first-run onboarding so
+the local audit stays focused on post-auth product surfaces.
+
+For a single Activity quick-link target in that same attached mode:
+
+```bash
+node scripts/run-mobile-sandbox-maestro.mjs \
+  --scenario=baseline \
+  --flow=activity-target \
+  --app-id=host.exp.Exponent \
+  --activity-target-id=activity-open-inbox \
+  --activity-target-screen-id=inbox-screen \
+  --activity-target-close-id=inbox-close
+```
+
+Current caveat:
+
+- the scenario/session preparation path is reliable
+- the remaining native red is the installed dev-client cold-launch handoff on
+  iOS Simulator
+- the current failure mode is `No script URL provided` before `home-screen`
+  becomes visible
+- for CI-grade reliability, prefer Expo Go or a hosted update-manifest path
+  until native dev-client cold-launch is replaced
+
 ## Run critical-path flow
 
 For Expo Go:
@@ -46,6 +96,58 @@ For a native app build:
 
 ```bash
 MAESTRO_APP_ID=com.opensocial.app maestro test apps/mobile/.maestro/mobile-critical-path.yaml
+```
+
+## Run route-graph flow
+
+This is the broader mobile shell audit flow. It validates that the main
+operational surfaces are actually reachable through the app graph:
+
+- Home
+- Activity
+- Inbox
+- Connections
+- Discovery
+- Recurring circles
+- Saved searches
+- Scheduled tasks
+- Settings
+
+For Expo Go:
+
+```bash
+MAESTRO_APP_ID=host.exp.Exponent maestro test apps/mobile/.maestro/mobile-route-graph.yaml
+```
+
+## Run surface-smoke flow
+
+This is the release-grade mobile reachability lane. It boots fresh for each
+major surface and verifies that the screen is actually reachable without relying
+on close-transition timing:
+
+- Settings
+- Activity
+- Inbox
+- Connections
+- Discovery
+- Recurring circles
+- Saved searches
+- Scheduled tasks
+
+For a native dev build:
+
+```bash
+MAESTRO_APP_ID=so.opensocial.app maestro test apps/mobile/.maestro/mobile-surface-smoke.yaml
+```
+
+## Run sandbox-backed surface-smoke flow
+
+This is the strongest mobile data-audit lane right now. It uses sandbox-world
+API data instead of local fake data and asserts that the app renders the
+scenario's `Home` and `Activity` state.
+
+```bash
+pnpm test:mobile:sandbox:maestro -- --scenario=waiting_replies --flow=sandbox-surface
 ```
 
 ## Design mock flow (no API)

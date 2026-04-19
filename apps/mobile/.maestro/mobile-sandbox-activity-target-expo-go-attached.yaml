@@ -1,0 +1,22 @@
+appId: ${MAESTRO_APP_ID}
+---
+- runFlow: subflows/boot-home-expo-go-attached.yaml
+- assertVisible:
+    id: "home-status-header"
+- assertVisible: ${MAESTRO_EXPECTED_HOME_STATUS_TITLE}
+- tapOn:
+    id: "app-bottom-tab-activity"
+- assertVisible:
+    id: "activity-screen"
+- assertVisible: ${MAESTRO_EXPECTED_ACTIVITY_SECTION_TITLE}
+- waitForAnimationToEnd
+- tapOn:
+    id: ${MAESTRO_ACTIVITY_TARGET_ID}
+- assertVisible:
+    id: ${MAESTRO_ACTIVITY_TARGET_SCREEN_ID}
+- waitForAnimationToEnd
+- tapOn:
+    id: ${MAESTRO_ACTIVITY_TARGET_CLOSE_ID}
+- assertVisible:
+    id: "activity-screen"
+

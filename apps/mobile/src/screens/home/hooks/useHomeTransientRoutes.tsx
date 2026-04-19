@@ -5,6 +5,7 @@ import { RouteTransition } from "../../../components/RouteTransition";
 import type { MobileSession, UserProfileDraft } from "../../../types";
 import { ConnectionsScreen } from "../../ConnectionsScreen";
 import { DiscoveryScreen } from "../../DiscoveryScreen";
+import { InboxScreen } from "../../InboxScreen";
 import { IntentDetailScreen } from "../../IntentDetailScreen";
 import { RecurringCirclesScreen } from "../../RecurringCirclesScreen";
 import { SavedSearchesScreen } from "../../SavedSearchesScreen";
@@ -66,6 +67,7 @@ export function useHomeTransientRoutes({
 }: UseHomeTransientRoutesInput) {
   const [connectionsOpen, setConnectionsOpen] = useState(false);
   const [discoveryOpen, setDiscoveryOpen] = useState(false);
+  const [inboxOpen, setInboxOpen] = useState(false);
   const [intentDetailIntentId, setIntentDetailIntentId] = useState<
     string | null
   >(null);
@@ -79,6 +81,7 @@ export function useHomeTransientRoutes({
   const closeTransientRoutes = useCallback(() => {
     setConnectionsOpen(false);
     setDiscoveryOpen(false);
+    setInboxOpen(false);
     setRecurringCirclesOpen(false);
     setSavedSearchesOpen(false);
     setScheduledTasksOpen(false);
@@ -100,6 +103,11 @@ export function useHomeTransientRoutes({
   const openDiscovery = useCallback(() => {
     closeTransientRoutes();
     setDiscoveryOpen(true);
+  }, [closeTransientRoutes]);
+
+  const openInbox = useCallback(() => {
+    closeTransientRoutes();
+    setInboxOpen(true);
   }, [closeTransientRoutes]);
 
   const openRecurringCircles = useCallback(() => {
@@ -167,6 +175,20 @@ export function useHomeTransientRoutes({
     [closeTransientRoutes],
   );
 
+  const openProfileFromInbox = useCallback(
+    (targetUserId: string) => {
+      closeTransientRoutes();
+      setOtherProfileTarget({
+        userId: targetUserId,
+        context: {
+          source: "request",
+          reason: "Opened from an incoming request waiting on your response.",
+        },
+      });
+    },
+    [closeTransientRoutes],
+  );
+
   const openChatFromConnections = useCallback(
     (chatId: string) => {
       closeTransientRoutes();
@@ -194,7 +216,7 @@ export function useHomeTransientRoutes({
           setActiveTab("home");
           break;
         case "inbox":
-          setActiveTab("activity");
+          setInboxOpen(true);
           break;
         case "intent":
           setIntentDetailIntentId(intent.intentId);
@@ -277,6 +299,19 @@ export function useHomeTransientRoutes({
       );
     }
 
+    if (inboxOpen) {
+      return renderTransientScreen(
+        "inbox",
+        <InboxScreen
+          accessToken={session.accessToken}
+          onClose={closeTransientRoutes}
+          onOpenIntentDetail={openIntentDetail}
+          onOpenProfile={openProfileFromInbox}
+          userId={session.userId}
+        />,
+      );
+    }
+
     if (recurringCirclesOpen) {
       return renderTransientScreen(
         "recurring-circles",
@@ -340,15 +375,18 @@ export function useHomeTransientRoutes({
     closeTransientRoutes,
     connectionsOpen,
     discoveryOpen,
+    inboxOpen,
     initialProfile,
     intentDetailIntentId,
     onProfileUpdated,
     openChatFromConnections,
     openConnections,
     openDiscovery,
+    openInbox,
     openIntentDetail,
     openProfileFromConnections,
     openProfileFromDiscovery,
+    openProfileFromInbox,
     openRecurringCircles,
     openSavedSearches,
     openScheduledTasks,
@@ -369,10 +407,12 @@ export function useHomeTransientRoutes({
       openActivity,
       openConnections,
       openDiscovery,
+      openInbox,
       openIntentDetail,
       openProfileFromChat,
       openProfileFromConnections,
       openProfileFromDiscovery,
+      openProfileFromInbox,
       openRecurringCircles,
       openSavedSearches,
       openScheduledTasks,

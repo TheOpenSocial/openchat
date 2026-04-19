@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, type ScheduledTaskRecord } from "../../../lib/api";
+import { mobileQueryKeys } from "../../../lib/query-client";
 import {
   buildScheduledTaskItem,
   type ScheduledTaskItem,
@@ -15,139 +17,115 @@ export function useScheduledTasks({
   accessToken,
   userId,
 }: UseScheduledTasksArgs) {
-  const [scheduledTasks, setScheduledTasks] = useState<ScheduledTaskRecord[]>(
-    [],
-  );
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [actingTaskId, setActingTaskId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const tasksQuery = useQuery({
+    enabled: Boolean(accessToken && userId),
+    queryFn: () => api.listScheduledTasks(userId, undefined, accessToken),
+    queryKey: mobileQueryKeys.scheduledTasks(userId),
+  });
 
   const refresh = useCallback(async () => {
-    setRefreshing(true);
-    setError(null);
+    await tasksQuery.refetch();
+  }, [tasksQuery]);
 
-    try {
-      const nextTasks = await api.listScheduledTasks(
-        userId,
-        undefined,
-        accessToken,
-      );
-      setScheduledTasks(nextTasks);
-    } catch (nextError) {
-      setError(
-        nextError instanceof Error
-          ? nextError.message
-          : "Unable to load scheduled tasks right now.",
-      );
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [accessToken, userId]);
+  const runNowMutation = useMutation({
+    mutationFn: (taskId: string) =>
+      api.runScheduledTaskNow(taskId, accessToken),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: mobileQueryKeys.scheduledTasks(userId),
+      });
+    },
+  });
 
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
+  const pauseMutation = useMutation({
+    mutationFn: (taskId: string) => api.pauseScheduledTask(taskId, accessToken),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: mobileQueryKeys.scheduledTasks(userId),
+      });
+    },
+  });
+
+  const resumeMutation = useMutation({
+    mutationFn: (taskId: string) =>
+      api.resumeScheduledTask(taskId, accessToken),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: mobileQueryKeys.scheduledTasks(userId),
+      });
+    },
+  });
+
+  const archiveMutation = useMutation({
+    mutationFn: (taskId: string) =>
+      api.archiveScheduledTask(taskId, accessToken),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: mobileQueryKeys.scheduledTasks(userId),
+      });
+    },
+  });
 
   const runNow = useCallback(
     async (taskId: string) => {
-      setActingTaskId(taskId);
-      setError(null);
-
-      try {
-        await api.runScheduledTaskNow(taskId, accessToken);
-        await refresh();
-      } catch (nextError) {
-        setError(
-          nextError instanceof Error
-            ? nextError.message
-            : "Unable to run this task right now.",
-        );
-      } finally {
-        setActingTaskId(null);
-      }
+      await runNowMutation.mutateAsync(taskId);
     },
-    [accessToken, refresh],
+    [runNowMutation],
   );
 
   const pause = useCallback(
     async (taskId: string) => {
-      setActingTaskId(taskId);
-      setError(null);
-
-      try {
-        await api.pauseScheduledTask(taskId, accessToken);
-        await refresh();
-      } catch (nextError) {
-        setError(
-          nextError instanceof Error
-            ? nextError.message
-            : "Unable to pause this task.",
-        );
-      } finally {
-        setActingTaskId(null);
-      }
+      await pauseMutation.mutateAsync(taskId);
     },
-    [accessToken, refresh],
+    [pauseMutation],
   );
 
   const resume = useCallback(
     async (taskId: string) => {
-      setActingTaskId(taskId);
-      setError(null);
-
-      try {
-        await api.resumeScheduledTask(taskId, accessToken);
-        await refresh();
-      } catch (nextError) {
-        setError(
-          nextError instanceof Error
-            ? nextError.message
-            : "Unable to resume this task.",
-        );
-      } finally {
-        setActingTaskId(null);
-      }
+      await resumeMutation.mutateAsync(taskId);
     },
-    [accessToken, refresh],
+    [resumeMutation],
   );
 
   const archive = useCallback(
     async (taskId: string) => {
-      setActingTaskId(taskId);
-      setError(null);
-
-      try {
-        await api.archiveScheduledTask(taskId, accessToken);
-        await refresh();
-      } catch (nextError) {
-        setError(
-          nextError instanceof Error
-            ? nextError.message
-            : "Unable to archive this task.",
-        );
-      } finally {
-        setActingTaskId(null);
-      }
+      await archiveMutation.mutateAsync(taskId);
     },
-    [accessToken, refresh],
+    [archiveMutation],
   );
 
   const items = useMemo<ScheduledTaskItem[]>(
-    () => scheduledTasks.map((task) => buildScheduledTaskItem(task)),
-    [scheduledTasks],
+    () =>
+      (tasksQuery.data ?? []).map((task: ScheduledTaskRecord) =>
+        buildScheduledTaskItem(task),
+      ),
+    [tasksQuery.data],
   );
+
+  const actingTaskId =
+    runNowMutation.variables ??
+    pauseMutation.variables ??
+    resumeMutation.variables ??
+    archiveMutation.variables ??
+    null;
+  const error =
+    (runNowMutation.error instanceof Error && runNowMutation.error.message) ||
+    (pauseMutation.error instanceof Error && pauseMutation.error.message) ||
+    (resumeMutation.error instanceof Error && resumeMutation.error.message) ||
+    (archiveMutation.error instanceof Error && archiveMutation.error.message) ||
+    (tasksQuery.error instanceof Error && tasksQuery.error.message) ||
+    null;
 
   return {
     actingTaskId,
     archive,
     error,
     items,
-    loading,
+    loading: tasksQuery.isLoading && !tasksQuery.data,
     pause,
     refresh,
-    refreshing,
+    refreshing: tasksQuery.isRefetching,
     resume,
     runNow,
   };

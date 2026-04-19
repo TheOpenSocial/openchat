@@ -19,6 +19,7 @@ type ActivityScreenProps = {
   onClose?: () => void;
   onOpenConnections?: () => void;
   onOpenDiscovery?: () => void;
+  onOpenInbox?: () => void;
   onOpenIntentDetail?: (intentId: string) => void;
   onOpenRecurringCircles?: () => void;
   onOpenSavedSearches?: () => void;
@@ -31,6 +32,7 @@ export function ActivityScreen({
   onClose,
   onOpenConnections,
   onOpenDiscovery,
+  onOpenInbox,
   onOpenIntentDetail,
   onOpenRecurringCircles,
   onOpenSavedSearches,
@@ -58,6 +60,12 @@ export function ActivityScreen({
   }, [pendingRequestCount]);
   const topSection = sections[0] ?? null;
   const utilityActions = [
+    {
+      id: "inbox",
+      label: "Inbox",
+      onPress: onOpenInbox,
+      testID: "activity-open-inbox",
+    },
     {
       id: "connections",
       label: "Connections",
@@ -89,6 +97,43 @@ export function ActivityScreen({
       testID: "activity-open-scheduled-tasks",
     },
   ];
+
+  const quickLinks = (
+    <View className="gap-3 pt-1">
+      <Text
+        className="text-[10px] font-semibold uppercase tracking-[0.14em]"
+        style={{ color: appTheme.colors.inkFaint }}
+      >
+        Quick links
+      </Text>
+      <View className="flex-row flex-wrap gap-2">
+        {utilityActions.map((action) => (
+          <Pressable
+            accessibilityLabel={`Open ${action.label.toLowerCase()}`}
+            accessibilityRole="button"
+            className="min-h-11 rounded-full border bg-surfaceMuted px-4 py-3"
+            key={action.id}
+            onPress={() => {
+              hapticSelection();
+              action.onPress?.();
+            }}
+            style={({ pressed }) => ({
+              borderColor: appTheme.colors.hairline,
+              opacity: pressed ? appTheme.motion.pressOpacity : 1,
+            })}
+            testID={action.testID}
+          >
+            <Text
+              className="text-[13px] font-semibold tracking-[-0.01em]"
+              style={{ color: appTheme.colors.inkSoft }}
+            >
+              {action.label}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
 
   return (
     <OperationScreenShell
@@ -229,49 +274,20 @@ export function ActivityScreen({
               ))}
             </View>
           ))}
-          <View className="gap-3 pt-1">
-            <Text
-              className="text-[10px] font-semibold uppercase tracking-[0.14em]"
-              style={{ color: appTheme.colors.inkFaint }}
-            >
-              Quick links
-            </Text>
-            <View className="flex-row flex-wrap gap-2">
-              {utilityActions.map((action) => (
-                <Pressable
-                  accessibilityLabel={`Open ${action.label.toLowerCase()}`}
-                  accessibilityRole="button"
-                  className="min-h-11 rounded-full border bg-surfaceMuted px-4 py-3"
-                  key={action.id}
-                  onPress={() => {
-                    hapticSelection();
-                    action.onPress?.();
-                  }}
-                  style={({ pressed }) => ({
-                    borderColor: appTheme.colors.hairline,
-                    opacity: pressed ? appTheme.motion.pressOpacity : 1,
-                  })}
-                  testID={action.testID}
-                >
-                  <Text
-                    className="text-[13px] font-semibold tracking-[-0.01em]"
-                    style={{ color: appTheme.colors.inkSoft }}
-                  >
-                    {action.label}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
+          {quickLinks}
         </View>
       ) : (
-        <View className="rounded-[28px] border border-white/8 bg-white/[0.03] px-5 py-6">
-          <Text className="text-[18px] font-semibold tracking-[-0.03em] text-white/94">
-            You are clear for now
-          </Text>
-          <Text className="mt-2 text-[14px] leading-[21px] text-white/56">
-            New requests, discovery nudges, and system updates will appear here.
-          </Text>
+        <View className="gap-5">
+          <View className="rounded-[28px] border border-white/8 bg-white/[0.03] px-5 py-6">
+            <Text className="text-[18px] font-semibold tracking-[-0.03em] text-white/94">
+              You are clear for now
+            </Text>
+            <Text className="mt-2 text-[14px] leading-[21px] text-white/56">
+              New requests, discovery nudges, and system updates will appear
+              here.
+            </Text>
+          </View>
+          {quickLinks}
         </View>
       )}
     </OperationScreenShell>

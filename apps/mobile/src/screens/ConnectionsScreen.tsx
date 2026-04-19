@@ -38,7 +38,11 @@ export function ConnectionsScreen({
   });
 
   return (
-    <SafeAreaView className="flex-1 bg-[#050506]" style={{ flex: 1 }}>
+    <SafeAreaView
+      className="flex-1 bg-[#050506]"
+      style={{ flex: 1 }}
+      testID="connections-screen"
+    >
       <View className="flex-1 bg-[#050506]" style={{ flex: 1 }}>
         <View className="flex-row items-start justify-between px-5 pb-5 pt-3">
           <View className="max-w-[280px] gap-2">

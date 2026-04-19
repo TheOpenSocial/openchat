@@ -112,6 +112,14 @@ The protocol is no longer just a concept. The following pieces are already prese
 
 Use this as the baseline for all next backlog items. Do not reintroduce generic social primitives like posts or follows.
 
+## Mobile
+
+- Mobile now has a sandbox-backed audit lane:
+  - `pnpm test:mobile:sandbox:maestro -- --scenario=<...> --flow=sandbox-surface`
+- That lane prepares a named sandbox-world scenario, emits a real mobile E2E
+  session, boots Expo with that session, and runs Maestro against API-backed
+  mobile state instead of relying only on local fake-session mode.
+
 ## Progress Snapshot
 
 - Protocol v0 resource shape and exclusions: shipped
@@ -154,6 +162,14 @@ Use this as the baseline for all next backlog items. Do not reintroduce generic 
 - The next first-party product phase is now focused on mobile-only polish first, starting by replacing operator-style copy on native discovery and related operational surfaces with clearer consumer-facing language.
 - Scheduled tasks, saved searches, recurring circles, and connections are part of that same mobile polish pass so the operational surfaces read like product UX rather than backend consoles.
 - Home-thread runtime and recovery copy are part of the same pass as well, so core navigation and conversation states stop leaking system terminology like "agentic social" and "main thread" into the user-facing shell.
+- The mobile data layer is now being normalized around a shared React Query client for server state while the existing external-store shell state remains the lightweight Redux-like local UI layer.
+- Inbox is now part of the mobile transient route graph and Activity quick-link surface, so it is no longer an implemented-but-unreachable screen.
+- Mobile route reachability is now tracked explicitly in `docs/mobile-app-audit.md` and the new Maestro `mobile-route-graph.yaml` flow.
+- The newer native Maestro `mobile-surface-smoke.yaml` lane now reaches Home, Activity, and Inbox entry on the installed dev app, and the remaining red is concentrated in dev-client boot/overlay stability plus top-bar/settings automation rather than missing mobile route wiring.
+- The new `test:mobile:sandbox:maestro` lane now proves sandbox scenario prep plus real mobile-session injection end to end, and the remaining red is specifically the native dev-client cold-launch handoff on iOS Simulator rather than missing backend data or missing mobile route wiring.
+- The stronger local mobile shape now uses attached Expo Go Maestro lanes:
+  - `mobile-sandbox-home-activity-expo-go-attached.yaml` is green locally for real Home and Activity API-backed state
+  - `mobile-sandbox-activity-target-expo-go-attached.yaml` exists for one-target-per-run route validation, and the remaining red is now narrowed to intermittent iOS XCTest bridge drops during longer local interaction chains rather than missing mobile surfaces
 
 ## Current Verification Focus
 

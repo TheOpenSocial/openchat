@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, type ExperienceActivitySummaryResponse } from "../../../lib/api";
 import {
   loadStoredActivitySummary,
   saveStoredActivitySummary,
 } from "../../../lib/experience-storage";
+import { mobileQueryKeys } from "../../../lib/query-client";
 import { useActivityStore } from "../../../store/activity-store";
 import {
   compareActivityItems,
@@ -108,43 +110,21 @@ export function useActivityFeed({
   accessToken,
   userId,
 }: UseActivityFeedArgs): ActivityFeedState {
+  const queryClient = useQueryClient();
   const storedSummary = useActivityStore((store) => store.summary);
   const setActivityState = useActivityStore((store) => store.setActivityState);
-  const [activitySummary, setActivitySummary] =
-    useState<ExperienceActivitySummaryResponse | null>(storedSummary);
-  const [loading, setLoading] = useState(storedSummary == null);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const activityQuery = useQuery({
+    enabled: Boolean(accessToken && userId),
+    initialData: storedSummary ?? undefined,
+    queryFn: () => api.getExperienceActivitySummary(userId, accessToken),
+    queryKey: mobileQueryKeys.activitySummary(userId),
+  });
+
+  const activitySummary = activityQuery.data ?? null;
 
   const refresh = useCallback(async () => {
-    setRefreshing(true);
-    setError(null);
-    try {
-      const nextSummary = await api.getExperienceActivitySummary(
-        userId,
-        accessToken,
-      );
-      setActivitySummary(nextSummary);
-      setActivityState({
-        hasUnread:
-          nextSummary.counts.unreadNotifications > 0 ||
-          nextSummary.counts.pendingRequests > 0,
-        pendingRequestCount: nextSummary.counts.pendingRequests,
-        lastHydratedAt: nextSummary.generatedAt,
-        summary: nextSummary,
-      });
-      void saveStoredActivitySummary(userId, nextSummary).catch(() => {});
-    } catch (nextError) {
-      setError(
-        nextError instanceof Error
-          ? nextError.message
-          : "Unable to load activity right now.",
-      );
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [accessToken, setActivityState, userId]);
+    await activityQuery.refetch();
+  }, [activityQuery]);
 
   useEffect(() => {
     let active = true;
@@ -152,23 +132,30 @@ export function useActivityFeed({
       if (!active || !storedSummary) {
         return;
       }
-      setActivitySummary((current) => current ?? storedSummary);
-      setLoading(false);
-      setActivityState({
-        hasUnread:
-          storedSummary.counts.unreadNotifications > 0 ||
-          storedSummary.counts.pendingRequests > 0,
-        pendingRequestCount: storedSummary.counts.pendingRequests,
-        lastHydratedAt: storedSummary.generatedAt,
-        summary: storedSummary,
-      });
+      queryClient.setQueryData<ExperienceActivitySummaryResponse | undefined>(
+        mobileQueryKeys.activitySummary(userId),
+        (current) => current ?? storedSummary,
+      );
     });
-
-    void refresh();
     return () => {
       active = false;
     };
-  }, [refresh, setActivityState, userId]);
+  }, [queryClient, userId]);
+
+  useEffect(() => {
+    if (!activitySummary) {
+      return;
+    }
+    setActivityState({
+      hasUnread:
+        activitySummary.counts.unreadNotifications > 0 ||
+        activitySummary.counts.pendingRequests > 0,
+      pendingRequestCount: activitySummary.counts.pendingRequests,
+      lastHydratedAt: activitySummary.generatedAt,
+      summary: activitySummary,
+    });
+    void saveStoredActivitySummary(userId, activitySummary).catch(() => {});
+  }, [activitySummary, setActivityState, userId]);
 
   const items = useMemo(() => {
     if (!activitySummary) {
@@ -255,9 +242,10 @@ export function useActivityFeed({
   }, [activitySummary]);
 
   return {
-    loading,
-    refreshing,
-    error,
+    loading: activityQuery.isLoading && !activityQuery.data,
+    refreshing: activityQuery.isRefetching,
+    error:
+      activityQuery.error instanceof Error ? activityQuery.error.message : null,
     items,
     sections,
     pendingRequestCount: activitySummary?.counts.pendingRequests ?? 0,

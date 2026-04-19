@@ -1,0 +1,21 @@
+appId: com.apple.springboard
+---
+- runFlow:
+    when:
+      visible:
+        text: 'Open in "OpenSocial"?'
+    commands:
+      - tapOn:
+          text: "Open"
+      - tapOn:
+          point: "74%,66%"
+          optional: true
+      - waitForAnimationToEnd
+- runFlow:
+    when:
+      visible:
+        text: 'Open in "OpenSocial"?'
+    commands:
+      - tapOn:
+          point: "74%,66%"
+      - waitForAnimationToEnd

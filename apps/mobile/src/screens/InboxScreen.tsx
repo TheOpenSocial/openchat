@@ -57,6 +57,7 @@ export function InboxScreen({
           />
         ),
       }}
+      screenTestID="inbox-screen"
       subtitle="Accept or decline connection requests without leaving the app flow."
       title="Requests waiting on you"
     >

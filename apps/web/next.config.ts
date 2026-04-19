@@ -11,6 +11,14 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   /** Playwright + some clients use 127.0.0.1 while default dev allowlist is `localhost`. */
   allowedDevOrigins: ["127.0.0.1"],
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "images.unsplash.com",
+      },
+    ],
+  },
   experimental: {
     /** Speeds up repeat `next build` by persisting Turbopack cache under `.next` (stable for dev; build cache is still experimental). */
     turbopackFileSystemCacheForBuild: true,

@@ -67,6 +67,7 @@ export function ScheduledTasksScreen({
           />
         ),
       }}
+      screenTestID="scheduled-tasks-screen"
       subtitle="Recurring follow-ups, reminders, and digest jobs that keep your momentum going."
       title="Automated follow-up jobs"
     >
