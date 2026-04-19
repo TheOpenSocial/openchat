@@ -14,6 +14,26 @@ import { assertSecurityPosture } from "./common/security-posture.js";
 import { transportSecurityMiddleware } from "./common/transport-security.middleware.js";
 import { RealtimeIoAdapter } from "./realtime/realtime-io.adapter.js";
 
+const allowedCorsOrigins = new Set([
+  "http://localhost:3002",
+  "http://127.0.0.1:3002",
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+  "https://opensocial.so",
+  "https://www.opensocial.so",
+  "https://app.opensocial.so",
+  "https://admin.opensocial.so",
+  "https://docs.opensocial.so",
+]);
+
+function isAllowedCorsOrigin(origin?: string) {
+  if (!origin) {
+    return true;
+  }
+
+  return allowedCorsOrigins.has(origin);
+}
+
 async function bootstrap() {
   const logger = new Logger("Bootstrap");
   await startOpenTelemetry(logger);
@@ -38,12 +58,9 @@ async function bootstrap() {
   app.use(requestSecurityMiddleware);
   app.use(adminSecurityMiddleware);
   app.enableCors({
-    origin: [
-      "http://localhost:3002",
-      "http://127.0.0.1:3002",
-      "http://localhost:3000",
-      "http://127.0.0.1:3000",
-    ],
+    origin(origin, callback) {
+      callback(null, isAllowedCorsOrigin(origin));
+    },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["content-type", "authorization", "idempotency-key"],
   });
