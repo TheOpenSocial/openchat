@@ -2,7 +2,6 @@ import "reflect-metadata";
 import { Logger, ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import type { NextFunction, Request, Response } from "express";
-import type { CorsOptions } from "@nestjs/common/interfaces/external/cors-options.interface";
 import { adminSecurityMiddleware } from "./admin/admin-security.middleware.js";
 import { AppModule } from "./app.module.js";
 import {
@@ -42,6 +41,11 @@ function corsOriginValue(origin?: string) {
 
   return isAllowedCorsOrigin(origin) ? origin : null;
 }
+
+type CorsOriginCallback = (
+  error: Error | null,
+  origin?: boolean | string | RegExp | Array<boolean | string | RegExp>,
+) => void;
 
 async function bootstrap() {
   const logger = new Logger("Bootstrap");
@@ -99,7 +103,7 @@ async function bootstrap() {
   app.enableCors({
     origin(
       origin: string | undefined,
-      callback: (error: Error | null, origin?: CorsOptions["origin"]) => void,
+      callback: CorsOriginCallback,
     ) {
       if (!isAllowedCorsOrigin(origin)) {
         callback(null, false);
