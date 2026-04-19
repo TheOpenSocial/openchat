@@ -34,6 +34,14 @@ function isAllowedCorsOrigin(origin?: string) {
   return allowedCorsOrigins.has(origin);
 }
 
+function corsOriginValue(origin?: string) {
+  if (!origin) {
+    return null;
+  }
+
+  return isAllowedCorsOrigin(origin) ? origin : null;
+}
+
 async function bootstrap() {
   const logger = new Logger("Bootstrap");
   await startOpenTelemetry(logger);
@@ -53,6 +61,36 @@ async function bootstrap() {
   const websocketAdapter = new RealtimeIoAdapter(app);
   await websocketAdapter.configureRedisAdapter();
   app.useWebSocketAdapter(websocketAdapter);
+  app.use((request: Request, response: Response, next: NextFunction) => {
+    const originHeader = request.headers.origin;
+    const origin =
+      typeof originHeader === "string"
+        ? originHeader
+        : Array.isArray(originHeader)
+          ? originHeader[0]
+          : undefined;
+    const allowedOrigin = corsOriginValue(origin);
+
+    if (allowedOrigin) {
+      response.setHeader("access-control-allow-origin", allowedOrigin);
+      response.setHeader("vary", "Origin");
+      response.setHeader(
+        "access-control-allow-methods",
+        "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+      );
+      response.setHeader(
+        "access-control-allow-headers",
+        "content-type,authorization,idempotency-key",
+      );
+    }
+
+    if (request.method.toUpperCase() === "OPTIONS") {
+      response.status(204).end();
+      return;
+    }
+
+    next();
+  });
   app.use(transportSecurityMiddleware);
   app.use(requestLoggingMiddleware);
   app.use(requestSecurityMiddleware);
