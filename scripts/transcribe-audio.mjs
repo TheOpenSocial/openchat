@@ -502,22 +502,24 @@ function buildMarkdown({
 }
 
 function createProgressReporter(label) {
+  const interactive = Boolean(process.stdout.isTTY);
   const frames = ["|", "/", "-", "\\"];
   let frameIndex = 0;
   let currentPhase = label;
   let chars = 0;
   let closed = false;
+  const interval = interactive
+    ? setInterval(() => {
+        if (closed) {
+          return;
+        }
 
-  const interval = setInterval(() => {
-    if (closed) {
-      return;
-    }
-
-    const frame = frames[frameIndex % frames.length];
-    frameIndex += 1;
-    const suffix = chars > 0 ? ` (${chars.toLocaleString()} chars)` : "";
-    process.stdout.write(`\r${frame} ${currentPhase}${suffix}`);
-  }, 120);
+        const frame = frames[frameIndex % frames.length];
+        frameIndex += 1;
+        const suffix = chars > 0 ? ` (${chars.toLocaleString()} chars)` : "";
+        process.stdout.write(`\r${frame} ${currentPhase}${suffix}`);
+      }, 120)
+    : null;
 
   return {
     update(phase, nextChars = chars) {
@@ -530,8 +532,12 @@ function createProgressReporter(label) {
       }
 
       closed = true;
-      clearInterval(interval);
-      process.stdout.write(`\r${message}\n`);
+      if (interval) {
+        clearInterval(interval);
+      }
+      if (interactive) {
+        process.stdout.write(`\r${message}\n`);
+      }
     },
   };
 }
