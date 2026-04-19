@@ -37,7 +37,7 @@ async function bootstrap() {
   app.use(requestLoggingMiddleware);
   app.use(requestSecurityMiddleware);
   app.use(adminSecurityMiddleware);
-  const allowedOrigins = [
+  const allowedOrigins = new Set([
     "https://app.opensocial.so",
     "https://admin.opensocial.so",
     "https://docs.opensocial.so",
@@ -45,9 +45,31 @@ async function bootstrap() {
     "http://127.0.0.1:3002",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-  ];
+  ]);
   app.enableCors({
-    origin: allowedOrigins,
+    origin: (origin, callback) => {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+
+      if (allowedOrigins.has(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      try {
+        const parsedOrigin = new URL(origin);
+        if (parsedOrigin.hostname.endsWith(".opensocial.so")) {
+          callback(null, true);
+          return;
+        }
+      } catch {
+        // Ignore malformed origins and reject below.
+      }
+
+      callback(null, false);
+    },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["content-type", "authorization", "idempotency-key"],
   });
