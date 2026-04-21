@@ -1,3 +1,7 @@
+opensocial.so {
+  redir https://app.opensocial.so{uri} permanent
+}
+
 api.opensocial.so {
   reverse_proxy opensocial-api:3000
 }

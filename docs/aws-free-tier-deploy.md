@@ -91,6 +91,7 @@ cp .env.production.example .env.production
 
 ## 7) Set DNS records
 Create A records pointing to EC2 Elastic IP:
+- `opensocial.so`
 - `api.opensocial.so`
 - `admin.opensocial.so`
 - `app.opensocial.so`
@@ -119,6 +120,7 @@ docker compose -f docker-compose.prod.yml logs -f valkey
 ```
 
 Quick health checks:
+- `curl -I https://opensocial.so` should redirect to `https://app.opensocial.so`
 - `curl https://api.opensocial.so/health`
 - open `https://admin.opensocial.so`
 - open `https://app.opensocial.so`
@@ -141,7 +143,7 @@ docker compose -f docker-compose.prod.yml --env-file .env.production up -d
 - Move Valkey to managed service when uptime requirements increase.
 
 ## 12) Hardening next
-- Keep Caddy host routing aligned with `api.opensocial.so`, `admin.opensocial.so`, `app.opensocial.so`, and `docs.opensocial.so`.
+- Keep Caddy host routing aligned with `opensocial.so`, `api.opensocial.so`, `admin.opensocial.so`, `app.opensocial.so`, and `docs.opensocial.so`.
 - Restrict SSH ingress to your current IP only.
 - Enable AWS backups/snapshots for RDS.
 - Add CloudWatch metrics and alarms for CPU, memory, 5xx, and container restarts.

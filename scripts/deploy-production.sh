@@ -236,6 +236,15 @@ run_health() {
 
   echo "$api_response"
 
+  local apex_headers
+  apex_headers="$(curl_local_https "opensocial.so" "/" --head)"
+  echo "$apex_headers"
+
+  if ! grep -Eiq '^location: https://app\.opensocial\.so/?$' <<<"$apex_headers"; then
+    echo "Apex domain did not redirect to app.opensocial.so." >&2
+    return 1
+  fi
+
   local video_page_status
   video_page_status="$(
     curl \
