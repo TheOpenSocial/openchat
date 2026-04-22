@@ -70,6 +70,9 @@ export function useChatMessagingController({
   setSendingChatMessage,
   trackTelemetry,
 }: UseChatMessagingControllerInput) {
+  const e2eOfflineFallbackEnabled = Boolean(
+    process.env.EXPO_PUBLIC_E2E_SESSION_B64?.trim(),
+  );
   const handleDraftChatMessageChange = useCallback(
     (value: string) => {
       setDraftChatMessage(value);
@@ -308,6 +311,31 @@ export function useChatMessagingController({
         return false;
       }
 
+      if (e2eOfflineFallbackEnabled) {
+        const editedAt = new Date().toISOString();
+        setChats((current) =>
+          current.map((item) =>
+            item.id === chatId
+              ? {
+                  ...item,
+                  messages: item.messages.map((candidate) =>
+                    candidate.id === messageId
+                      ? {
+                          ...candidate,
+                          body,
+                          editedAt,
+                        }
+                      : candidate,
+                  ),
+                }
+              : item,
+          ),
+        );
+        setBanner(null);
+        hapticImpact();
+        return true;
+      }
+
       try {
         const updatedMessage = await api.editChatMessage(
           chatId,
@@ -344,7 +372,14 @@ export function useChatMessagingController({
         return false;
       }
     },
-    [chatsRef, sessionAccessToken, sessionUserId, setBanner, setChats],
+    [
+      chatsRef,
+      e2eOfflineFallbackEnabled,
+      sessionAccessToken,
+      sessionUserId,
+      setBanner,
+      setChats,
+    ],
   );
 
   const retryFailedChatMessage = useCallback(
@@ -486,6 +521,32 @@ export function useChatMessagingController({
         return;
       }
 
+      if (e2eOfflineFallbackEnabled) {
+        const editedAt = new Date().toISOString();
+        setChats((current) =>
+          current.map((item) =>
+            item.id === chatId
+              ? {
+                  ...item,
+                  messages: item.messages.map((candidate) =>
+                    candidate.id === messageId
+                      ? {
+                          ...candidate,
+                          body: "[deleted]",
+                          editedAt,
+                          reactions: [],
+                        }
+                      : candidate,
+                  ),
+                }
+              : item,
+          ),
+        );
+        setBanner(null);
+        hapticImpact();
+        return;
+      }
+
       try {
         const deletedMessage = await api.softDeleteChatMessage(
           chatId,
@@ -519,11 +580,56 @@ export function useChatMessagingController({
         });
       }
     },
-    [chatsRef, sessionAccessToken, sessionUserId, setBanner, setChats],
+    [
+      chatsRef,
+      e2eOfflineFallbackEnabled,
+      sessionAccessToken,
+      sessionUserId,
+      setBanner,
+      setChats,
+    ],
   );
 
   const reactToChatMessage = useCallback(
     async (chatId: string, messageId: string, emoji: string) => {
+      if (e2eOfflineFallbackEnabled) {
+        const reaction = {
+          id: `reaction_local_${Date.now().toString(36)}`,
+          messageId,
+          userId: sessionUserId,
+          emoji,
+          createdAt: new Date().toISOString(),
+        };
+        setChats((current) =>
+          current.map((thread) =>
+            thread.id === chatId
+              ? {
+                  ...thread,
+                  messages: thread.messages.map((message) =>
+                    message.id === messageId
+                      ? {
+                          ...message,
+                          reactions: [
+                            ...(message.reactions ?? []).filter(
+                              (candidate) =>
+                                !(
+                                  candidate.userId === reaction.userId &&
+                                  candidate.emoji === reaction.emoji
+                                ),
+                            ),
+                            reaction,
+                          ],
+                        }
+                      : message,
+                  ),
+                }
+              : thread,
+          ),
+        );
+        setBanner(null);
+        hapticImpact();
+        return;
+      }
       try {
         const reaction = await api.createChatMessageReaction(
           chatId,
@@ -566,7 +672,13 @@ export function useChatMessagingController({
         });
       }
     },
-    [sessionAccessToken, sessionUserId, setBanner, setChats],
+    [
+      e2eOfflineFallbackEnabled,
+      sessionAccessToken,
+      sessionUserId,
+      setBanner,
+      setChats,
+    ],
   );
 
   return {

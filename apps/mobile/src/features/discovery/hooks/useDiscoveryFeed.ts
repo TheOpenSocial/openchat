@@ -1,5 +1,4 @@
-import { useCallback, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   api,
@@ -7,7 +6,6 @@ import {
   type DiscoveryInboxSuggestionsResponse,
   type PassiveDiscoveryResponse,
 } from "../../../lib/api";
-import { mobileQueryKeys } from "../../../lib/query-client";
 import {
   buildDiscoveryViewModel,
   type DiscoveryFeedViewModel,
@@ -22,9 +20,21 @@ export function useDiscoveryFeed({
   accessToken,
   userId,
 }: UseDiscoveryFeedArgs) {
-  const discoveryQuery = useQuery({
-    enabled: Boolean(accessToken && userId),
-    queryFn: async () => {
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [passiveDiscovery, setPassiveDiscovery] =
+    useState<PassiveDiscoveryResponse | null>(null);
+  const [inboxSuggestions, setInboxSuggestions] =
+    useState<DiscoveryInboxSuggestionsResponse | null>(null);
+  const [agentRecommendations, setAgentRecommendations] =
+    useState<DiscoveryAgentRecommendationsResponse | null>(null);
+
+  const refresh = useCallback(async () => {
+    setRefreshing(true);
+    setError(null);
+
+    try {
       const [
         nextAgentRecommendations,
         nextPassiveDiscovery,
@@ -37,45 +47,40 @@ export function useDiscoveryFeed({
         api.getDiscoveryInboxSuggestions(userId, 4, accessToken),
       ]);
 
-      return {
-        agentRecommendations: nextAgentRecommendations,
-        inboxSuggestions: nextInboxSuggestions,
-        passiveDiscovery: nextPassiveDiscovery,
-      };
-    },
-    queryKey: mobileQueryKeys.discoveryFeed(userId),
-  });
+      setAgentRecommendations(nextAgentRecommendations);
+      setPassiveDiscovery(nextPassiveDiscovery);
+      setInboxSuggestions(nextInboxSuggestions);
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to load discovery right now.",
+      );
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [accessToken, userId]);
 
-  const refresh = useCallback(async () => {
-    await discoveryQuery.refetch();
-  }, [discoveryQuery]);
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
 
   const viewModel = useMemo<DiscoveryFeedViewModel>(
     () =>
       buildDiscoveryViewModel({
-        agentRecommendations:
-          (discoveryQuery.data
-            ?.agentRecommendations as DiscoveryAgentRecommendationsResponse | null) ??
-          null,
-        inboxSuggestions:
-          (discoveryQuery.data
-            ?.inboxSuggestions as DiscoveryInboxSuggestionsResponse | null) ??
-          null,
-        passiveDiscovery:
-          (discoveryQuery.data
-            ?.passiveDiscovery as PassiveDiscoveryResponse | null) ?? null,
+        agentRecommendations,
+        inboxSuggestions,
+        passiveDiscovery,
       }),
-    [discoveryQuery.data],
+    [agentRecommendations, inboxSuggestions, passiveDiscovery],
   );
 
   return {
-    error:
-      discoveryQuery.error instanceof Error
-        ? discoveryQuery.error.message
-        : null,
-    loading: discoveryQuery.isLoading && !discoveryQuery.data,
+    error,
+    loading,
     refresh,
-    refreshing: discoveryQuery.isRefetching,
+    refreshing,
     viewModel,
   };
 }

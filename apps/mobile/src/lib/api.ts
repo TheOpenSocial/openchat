@@ -9,12 +9,6 @@ import {
   buildChatThreadDetail,
   buildChatThreadSummaries,
 } from "./chat-threads";
-import {
-  buildProtocolAppRegistrationRequest,
-  bindProtocolAppClient,
-  createProtocolClientFromBaseUrl,
-  type ProtocolAppRegistrationRequestInput,
-} from "@opensocial/protocol-client";
 
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 type RequestQueryValue = string | number | boolean | null | undefined;
@@ -108,7 +102,6 @@ export interface ChatListItemRecord {
   connectionId: string;
   title: string;
   type: "dm" | "group";
-  createdAt: string;
   highWatermark: string | null;
   unreadCount: number;
   participantCount: number | null;
@@ -228,20 +221,6 @@ export interface ChatMetadataRecord {
   archived: boolean;
 }
 
-export interface ProtocolScopeGrantRecord {
-  grantId: string;
-  appId: string;
-  subjectType: "user" | "app" | "service" | "agent";
-  subjectId: string;
-  scope: string;
-  capabilities: string[];
-  status: "active" | "revoked";
-  createdAt: string;
-  updatedAt: string;
-  revokedAt: string | null;
-  metadata: Record<string, unknown>;
-}
-
 export interface ChatThreadSummaryRecord {
   rootMessage: ChatMessageRecord;
   replyCount: number;
@@ -294,167 +273,6 @@ export interface PendingIntentsSummaryResponse {
   activeIntentCount: number;
   summaryText: string;
   intents: PendingIntentSummaryItem[];
-}
-
-export interface ExperienceHomeSummaryResponse {
-  generatedAt: string;
-  thread: {
-    id: string;
-    title: string | null;
-    createdAt: string | Date;
-  } | null;
-  status: {
-    eyebrow: string;
-    title: string;
-    body: string;
-    tone: "active" | "waiting" | "recovery" | "idle";
-    footnote: string | null;
-    nextAction: {
-      kind:
-        | "review_requests"
-        | "open_matches"
-        | "resume_intent"
-        | "start_intent";
-      label: string;
-    };
-  };
-  counts: {
-    activeIntents: number;
-    pendingRequests: number;
-    unreadNotifications: number;
-    tonightSuggestions: number;
-    reconnectCandidates: number;
-  };
-  spotlight: {
-    coordination: {
-      variant: "accepted" | "waiting";
-      title: string;
-      body: string;
-      actionLabel: string;
-      targetChatId: string | null;
-    } | null;
-    recovery: {
-      title: string;
-      body: string;
-      actionLabel: string;
-      secondaryLabel: string | null;
-    } | null;
-    leadIntent: {
-      intentId: string;
-      rawText: string;
-      status: string;
-      requests: {
-        pending: number;
-        accepted: number;
-        rejected: number;
-        expired: number;
-        cancelled: number;
-      };
-    } | null;
-    topSuggestion: {
-      userId: string;
-      displayName: string;
-      score: number;
-      reason: string;
-    } | null;
-  };
-}
-
-export interface ExperienceActivitySummaryResponse {
-  generatedAt: string;
-  counts: {
-    unreadNotifications: number;
-    pendingRequests: number;
-    activeIntents: number;
-    discoverySuggestions: number;
-  };
-  orderedSections: Array<{
-    id:
-      | "actionRequired"
-      | "updates"
-      | "activeIntents"
-      | "suggestions"
-      | "discoveryHighlights";
-    title: string;
-    subtitle: string;
-    emphasis: "urgent" | "active" | "passive";
-  }>;
-  sections: {
-    actionRequired: Array<{
-      id: string;
-      kind: "request";
-      priority: number;
-      eyebrow: string;
-      title: string;
-      body: string;
-      status: string;
-      intentId: string | null;
-      createdAt: string | Date;
-      cardSummary: {
-        who?: string;
-        what?: string;
-        when?: string;
-      } | null;
-    }>;
-    updates: Array<{
-      id: string;
-      kind: "notification";
-      priority: number;
-      eyebrow: string;
-      title: string;
-      body: string;
-      type: string;
-      channel: string;
-      isRead: boolean;
-      createdAt: string;
-    }>;
-    activeIntents: Array<{
-      intentId: string;
-      priority: number;
-      eyebrow: string;
-      title: string;
-      body: string;
-      rawText: string;
-      status: string;
-      ageMinutes: number;
-      requests: {
-        pending: number;
-        accepted: number;
-        rejected: number;
-        expired: number;
-        cancelled: number;
-      };
-    }>;
-    suggestions: Array<{
-      id: string;
-      priority: number;
-      eyebrow: string;
-      title: string;
-      body: string;
-      score: number;
-      scoreLabel: string;
-    }>;
-    discoveryHighlights: Array<{
-      id: string;
-      priority: number;
-      eyebrow: string;
-      title: string;
-      body: string;
-    }>;
-    discoverySnapshot: {
-      tonightCount: number;
-      groupCount: number;
-      reconnectCount: number;
-    };
-  };
-}
-
-export interface ExperienceBootstrapSummaryResponse {
-  generatedAt: string;
-  home: ExperienceHomeSummaryResponse;
-  activity: {
-    counts: ExperienceActivitySummaryResponse["counts"];
-  };
 }
 
 export interface UserIntentExplanation {
@@ -665,10 +483,11 @@ export interface DiscoveryAgentRecommendationsResponse {
   discovery: PassiveDiscoveryResponse;
 }
 
-const REMOTE_API_BASE_URL = "https://api.opensocial.so";
+const REMOTE_API_BASE_URL = "https://api.opensocial.so/api";
 
 /**
- * Accepts `api.opensocial.so`, `https://api.opensocial.so`, or full `https://…`.
+ * Accepts `api.opensocial.so`, `https://api.opensocial.so`, or full `https://…/api`.
+ * Paths default to `/api` when omitted so `fetch(\`\${base}/auth/…\`)` stays correct.
  */
 function normalizeExpoPublicApiBaseUrl(
   raw: string | undefined,
@@ -693,13 +512,15 @@ function normalizeExpoPublicApiBaseUrl(
     return trimmed;
   }
 
-  const path = parsed.pathname.replace(/\/+$/, "");
-  return `${parsed.origin}${path}`.replace(/\/+$/, "");
+  const path = parsed.pathname.replace(/\/+$/, "") || "";
+  const suffix = path === "" || path === "/" ? "/api" : path;
+
+  return `${parsed.origin}${suffix}`.replace(/\/+$/, "");
 }
 
 const LOCAL_API_BASE = Platform.select({
-  android: "http://10.0.2.2:3000",
-  default: "http://localhost:3000",
+  android: "http://10.0.2.2:3000/api",
+  default: "http://localhost:3000/api",
 });
 
 const maybeConfig = Constants as unknown as {
@@ -709,7 +530,7 @@ const maybeConfig = Constants as unknown as {
 const expoHostUri =
   maybeConfig.expoConfig?.hostUri ?? maybeConfig.expoGoConfig?.debuggerHost;
 const expoLanBase = expoHostUri
-  ? `http://${expoHostUri.split(":")[0]}:3000`
+  ? `http://${expoHostUri.split(":")[0]}:3000/api`
   : null;
 
 const devApiBase = expoLanBase ?? LOCAL_API_BASE;
@@ -719,24 +540,15 @@ const useLocalApiInDev =
   process.env.EXPO_PUBLIC_USE_LOCAL_API === "true";
 
 /**
- * Default: production API (`https://api.opensocial.so`) so dev builds and
+ * Default: production API (`https://api.opensocial.so/api`) so dev builds and
  * store builds behave the same unless you override.
- * - Production host only: `EXPO_PUBLIC_API_BASE_URL=api.opensocial.so`.
- * - Local API: `EXPO_PUBLIC_API_BASE_URL=http://<host>:3000` or
+ * - Production host only: `EXPO_PUBLIC_API_BASE_URL=api.opensocial.so` (https + `/api` added).
+ * - Local API: `EXPO_PUBLIC_API_BASE_URL=http://<host>:3000/api` or
  *   `EXPO_PUBLIC_USE_LOCAL_API=1` (LAN / emulator defaults).
  */
 export const API_BASE_URL =
   normalizeExpoPublicApiBaseUrl(process.env.EXPO_PUBLIC_API_BASE_URL) ??
   (__DEV__ && useLocalApiInDev ? devApiBase : REMOTE_API_BASE_URL);
-
-const protocolClient = createProtocolClientFromBaseUrl(API_BASE_URL);
-
-function getProtocolAppClient(appId: string, appToken: string) {
-  return bindProtocolAppClient(protocolClient, {
-    appId,
-    appToken,
-  });
-}
 
 let refreshInFlight: Promise<SessionTokens> | null = null;
 let authLifecycleHandlers: AuthLifecycleHandlers = {};
@@ -1756,242 +1568,6 @@ export const api = {
       },
       accessToken,
     );
-  },
-  getExperienceHomeSummary(userId: string, accessToken?: string) {
-    return request<ExperienceHomeSummaryResponse>(
-      "GET",
-      `/experience/${userId}/home-summary`,
-      undefined,
-      accessToken,
-    );
-  },
-  getExperienceBootstrapSummary(userId: string, accessToken?: string) {
-    return request<ExperienceBootstrapSummaryResponse>(
-      "GET",
-      `/experience/${userId}/bootstrap`,
-      undefined,
-      accessToken,
-    );
-  },
-  getExperienceActivitySummary(userId: string, accessToken?: string) {
-    return request<ExperienceActivitySummaryResponse>(
-      "GET",
-      `/experience/${userId}/activity-summary`,
-      undefined,
-      accessToken,
-    );
-  },
-  getProtocolManifest() {
-    return protocolClient.getManifest();
-  },
-  getProtocolDiscovery() {
-    return protocolClient.getDiscovery();
-  },
-  listProtocolApps() {
-    return protocolClient.listApps();
-  },
-  getProtocolApp(appId: string) {
-    return protocolClient.getApp(appId);
-  },
-  registerProtocolApp(input: ProtocolAppRegistrationRequestInput) {
-    return protocolClient.registerApp(input);
-  },
-  listProtocolWebhooks(appId: string, appToken: string) {
-    return getProtocolAppClient(appId, appToken).listWebhooks();
-  },
-  createProtocolWebhook(
-    appId: string,
-    appToken: string,
-    payload: Parameters<typeof protocolClient.createWebhook>[2],
-  ) {
-    return getProtocolAppClient(appId, appToken).createWebhook(payload);
-  },
-  listProtocolGrants(appId: string, appToken: string) {
-    return getProtocolAppClient(appId, appToken).listGrants();
-  },
-  listProtocolConsentRequests(appId: string, appToken: string) {
-    return getProtocolAppClient(appId, appToken).listConsentRequests();
-  },
-  createProtocolGrant(
-    appId: string,
-    appToken: string,
-    payload: Parameters<typeof protocolClient.createGrant>[2],
-  ) {
-    return getProtocolAppClient(appId, appToken).createGrant(payload);
-  },
-  createProtocolConsentRequest(
-    appId: string,
-    appToken: string,
-    payload: Parameters<typeof protocolClient.createConsentRequest>[2],
-  ) {
-    return getProtocolAppClient(appId, appToken).createConsentRequest(payload);
-  },
-  approveProtocolConsentRequest(
-    appId: string,
-    appToken: string,
-    requestId: string,
-    payload: Parameters<typeof protocolClient.approveConsentRequest>[3],
-  ) {
-    return getProtocolAppClient(appId, appToken).approveConsentRequest(
-      requestId,
-      payload,
-    );
-  },
-  rejectProtocolConsentRequest(
-    appId: string,
-    appToken: string,
-    requestId: string,
-    payload: Parameters<typeof protocolClient.rejectConsentRequest>[3],
-  ) {
-    return getProtocolAppClient(appId, appToken).rejectConsentRequest(
-      requestId,
-      payload,
-    );
-  },
-  revokeProtocolGrant(
-    appId: string,
-    appToken: string,
-    grantId: string,
-    input?: Parameters<typeof protocolClient.revokeGrant>[3],
-  ) {
-    return getProtocolAppClient(appId, appToken).revokeGrant(grantId, input);
-  },
-  rotateProtocolAppToken(
-    appId: string,
-    appToken: string,
-    input?: Parameters<typeof protocolClient.rotateAppToken>[2],
-  ) {
-    return getProtocolAppClient(appId, appToken).rotateAppToken(input);
-  },
-  revokeProtocolAppToken(
-    appId: string,
-    appToken: string,
-    input?: Parameters<typeof protocolClient.revokeAppToken>[2],
-  ) {
-    return getProtocolAppClient(appId, appToken).revokeAppToken(input);
-  },
-  listProtocolWebhookDeliveries(
-    appId: string,
-    appToken: string,
-    subscriptionId: string,
-  ) {
-    return getProtocolAppClient(appId, appToken).listWebhookDeliveries(
-      subscriptionId,
-    );
-  },
-  listProtocolWebhookDeliveryAttempts(
-    appId: string,
-    appToken: string,
-    deliveryId: string,
-  ) {
-    return getProtocolAppClient(appId, appToken).listWebhookDeliveryAttempts(
-      deliveryId,
-    );
-  },
-  replayProtocolWebhookDelivery(
-    appId: string,
-    appToken: string,
-    deliveryId: string,
-  ) {
-    return getProtocolAppClient(appId, appToken).replayWebhookDelivery(
-      deliveryId,
-    );
-  },
-  replayProtocolDeadLetteredDeliveries(
-    appId: string,
-    appToken: string,
-    input?: Parameters<typeof protocolClient.replayDeadLetteredDeliveries>[2],
-  ) {
-    return getProtocolAppClient(appId, appToken).replayDeadLetteredDeliveries(
-      input,
-    );
-  },
-  inspectProtocolDeliveryQueue(
-    appId: string,
-    appToken: string,
-    cursor?: string,
-  ) {
-    return getProtocolAppClient(appId, appToken).inspectDeliveryQueue(cursor);
-  },
-  getProtocolUsageSummary(appId: string, appToken: string) {
-    return getProtocolAppClient(appId, appToken).getAppUsageSummary();
-  },
-  dispatchProtocolDeliveryQueue(
-    appId: string,
-    appToken: string,
-    input?: Parameters<typeof protocolClient.dispatchWebhookDeliveryQueue>[2],
-  ) {
-    return getProtocolAppClient(appId, appToken).dispatchWebhookDeliveryQueue(
-      input,
-    );
-  },
-  runProtocolDeliveryQueue(
-    appId: string,
-    appToken: string,
-    input?: Parameters<typeof protocolClient.runWebhookDeliveryQueue>[2],
-  ) {
-    return getProtocolAppClient(appId, appToken).runWebhookDeliveryQueue(input);
-  },
-  replayProtocolEvents(appId: string, appToken: string, cursor?: string) {
-    return getProtocolAppClient(appId, appToken).replayEvents(cursor);
-  },
-  getProtocolReplayCursor(appId: string, appToken: string) {
-    return getProtocolAppClient(appId, appToken).getReplayCursor();
-  },
-  saveProtocolReplayCursor(appId: string, appToken: string, cursor: string) {
-    return getProtocolAppClient(appId, appToken).saveReplayCursor(cursor);
-  },
-  createProtocolIntent(
-    appId: string,
-    appToken: string,
-    payload: Parameters<typeof protocolClient.createIntent>[2],
-  ) {
-    return getProtocolAppClient(appId, appToken).createIntent(payload);
-  },
-  sendProtocolRequest(
-    appId: string,
-    appToken: string,
-    payload: Parameters<typeof protocolClient.sendRequest>[2],
-  ) {
-    return getProtocolAppClient(appId, appToken).sendRequest(payload);
-  },
-  acceptProtocolRequest(
-    appId: string,
-    appToken: string,
-    requestId: string,
-    payload: Parameters<typeof protocolClient.acceptRequest>[3],
-  ) {
-    return getProtocolAppClient(appId, appToken).acceptRequest(
-      requestId,
-      payload,
-    );
-  },
-  rejectProtocolRequest(
-    appId: string,
-    appToken: string,
-    requestId: string,
-    payload: Parameters<typeof protocolClient.rejectRequest>[3],
-  ) {
-    return getProtocolAppClient(appId, appToken).rejectRequest(
-      requestId,
-      payload,
-    );
-  },
-  sendProtocolChatMessage(
-    appId: string,
-    appToken: string,
-    chatId: string,
-    payload: Parameters<typeof protocolClient.sendChatMessage>[3],
-  ) {
-    return getProtocolAppClient(appId, appToken).sendChatMessage(
-      chatId,
-      payload,
-    );
-  },
-  buildProtocolAppRegistrationRequest(
-    input: ProtocolAppRegistrationRequestInput,
-  ) {
-    return buildProtocolAppRegistrationRequest(input);
   },
   getUserIntentExplanation(intentId: string, accessToken?: string) {
     return request<UserIntentExplanation>(

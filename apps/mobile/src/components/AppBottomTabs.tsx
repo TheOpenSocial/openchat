@@ -22,12 +22,11 @@ export type MainAppTab = HomeTab;
 
 interface AppBottomTabsProps {
   activeTab: MainAppTab;
-  hasActivity?: boolean;
   unreadChats?: number;
   onChange: (tab: MainAppTab) => void;
 }
 
-const TAB_ORDER: MainAppTab[] = ["chats", "home", "activity", "profile"];
+const TAB_ORDER: MainAppTab[] = ["chats", "home", "profile"];
 
 const TAB_META: Record<
   MainAppTab,
@@ -45,17 +44,12 @@ const TAB_META: Record<
   home: {
     icon: "sparkles-outline",
     label: "Home",
-    hint: "Tab 2 of 4. Opens the home workspace.",
-  },
-  activity: {
-    icon: "notifications-outline",
-    label: "Updates",
-    hint: "Tab 3 of 4. Shows what changed and what needs action.",
+    hint: "Tab 2 of 3. Opens the home workspace.",
   },
   profile: {
     icon: "person-outline",
     label: "Profile",
-    hint: "Tab 4 of 4. Opens your profile.",
+    hint: "Tab 3 of 3. Opens your profile.",
   },
 };
 
@@ -104,17 +98,17 @@ function TabItem({
         flex: 1,
         alignItems: "center",
         justifyContent: "center",
-        minHeight: 58,
+        minHeight: 56,
         opacity: pressed ? appTheme.motion.pressOpacity : 1,
         transform: [{ scale: pressed ? 0.988 : 1 }],
       })}
       testID={`app-bottom-tab-${tab}`}
     >
       <Animated.View
-        className="min-w-[64px] items-center justify-center"
+        className="h-10 w-10 items-center justify-center"
         style={animatedIconStyle}
       >
-        <View className="h-9 w-9 items-center justify-center">
+        <View className="h-10 w-10 items-center justify-center">
           <Ionicons
             color={isActive ? appTheme.colors.background : appTheme.colors.ink}
             style={{ opacity: isActive ? 1 : 0.62 }}
@@ -130,7 +124,6 @@ function TabItem({
             isActive ? "text-canvas" : "text-muted"
           }`}
           allowFontScaling
-          adjustsFontSizeToFit
           minimumFontScale={0.8}
           numberOfLines={1}
         >
@@ -143,7 +136,6 @@ function TabItem({
 
 export function AppBottomTabs({
   activeTab,
-  hasActivity = false,
   onChange,
   unreadChats = 0,
 }: AppBottomTabsProps) {
@@ -164,8 +156,8 @@ export function AppBottomTabs({
   };
 
   const indicatorStyle = useAnimatedStyle(() => {
-    const slotWidth = containerWidth.value / TAB_ORDER.length;
-    const indicatorWidth = Math.max(slotWidth - 26, 0);
+    const slotWidth = containerWidth.value / 3;
+    const indicatorWidth = Math.max(slotWidth - 36, 0);
     const centeredOffset = Math.max(0, (slotWidth - indicatorWidth) / 2);
 
     return {
@@ -232,10 +224,10 @@ export function AppBottomTabs({
         <View>
           <View className="overflow-hidden">
             <Animated.View
-              className="absolute bottom-[6px] left-0 top-[6px] rounded-full border border-hairline bg-ink"
+              className="absolute bottom-[5px] left-0 top-[5px] rounded-full border border-hairline bg-ink"
               style={indicatorStyle}
             />
-            <View className="flex-row items-center py-[4px]">
+            <View className="flex-row items-center py-[3px]">
               <TabItem
                 activeIndex={activeIndex}
                 badgeCount={unreadChats}
@@ -254,14 +246,6 @@ export function AppBottomTabs({
               <TabItem
                 activeIndex={activeIndex}
                 index={2}
-                badgeCount={hasActivity ? 1 : 0}
-                isActive={activeTab === "activity"}
-                onPress={() => onChange("activity")}
-                tab="activity"
-              />
-              <TabItem
-                activeIndex={activeIndex}
-                index={3}
                 isActive={activeTab === "profile"}
                 onPress={() => onChange("profile")}
                 tab="profile"

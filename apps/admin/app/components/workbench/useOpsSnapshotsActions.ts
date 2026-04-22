@@ -17,7 +17,6 @@ import type {
   LlmRuntimeHealthSnapshot,
   LaunchControlsSnapshot,
   OnboardingActivationSnapshot,
-  ProtocolQueueHealthSnapshot,
   SecurityPostureSnapshot,
   VerificationRunsSnapshot,
 } from "./workbench-config";
@@ -81,14 +80,6 @@ export function useOpsSnapshotsActions(input: {
       | ((
           current: LaunchControlsSnapshot | null,
         ) => LaunchControlsSnapshot | null),
-  ) => void;
-  setProtocolQueueHealthSnapshot: (
-    value:
-      | ProtocolQueueHealthSnapshot
-      | null
-      | ((
-          current: ProtocolQueueHealthSnapshot | null,
-        ) => ProtocolQueueHealthSnapshot | null),
   ) => void;
   setSecurityPostureSnapshot: (
     value:
@@ -294,21 +285,6 @@ export function useOpsSnapshotsActions(input: {
           ),
         "Launch controls refreshed.",
         (snapshot) => input.setLaunchControlsSnapshot(snapshot),
-      ),
-    [input],
-  );
-
-  const loadProtocolQueueHealthSnapshot = useCallback(
-    () =>
-      input.runAction(
-        "Load protocol queue health",
-        () =>
-          input.requestApi<ProtocolQueueHealthSnapshot>(
-            "GET",
-            "/admin/ops/protocol-queue-health",
-          ),
-        "Protocol queue health refreshed.",
-        (snapshot) => input.setProtocolQueueHealthSnapshot(snapshot),
       ),
     [input],
   );
@@ -682,7 +658,6 @@ export function useOpsSnapshotsActions(input: {
     loadOnboardingActivationSnapshot,
     loadLlmRuntimeHealthSnapshot,
     loadLaunchControlsSnapshot,
-    loadProtocolQueueHealthSnapshot,
     loadSecurityPostureSnapshot,
     loadVerificationRunsSnapshot,
     loadAgentReliabilitySnapshot,

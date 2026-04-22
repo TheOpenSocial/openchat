@@ -13,12 +13,12 @@ import { appTheme } from "../theme";
 
 type OperationScreenShellProps = {
   children: ReactNode;
-  closeAccessibilityLabel?: string;
+  closeAccessibilityLabel: string;
   closeHint?: string;
   closeTestID?: string;
   eyebrow: string;
-  onClose?: () => void;
-  screenTestID?: string;
+  onClose: () => void;
+  rootTestID?: string;
   scrollContentContainerStyle?: ScrollViewProps["contentContainerStyle"];
   scrollProps?: Omit<ScrollViewProps, "children" | "contentContainerStyle">;
   subtitle: string;
@@ -32,27 +32,17 @@ export function OperationScreenShell({
   closeTestID,
   eyebrow,
   onClose,
-  screenTestID,
+  rootTestID,
   scrollContentContainerStyle,
   scrollProps,
   subtitle,
   title,
 }: OperationScreenShellProps) {
-  const showSafeAutomationClose =
-    Boolean(onClose && closeAccessibilityLabel && closeTestID) &&
-    (__DEV__ || Boolean(process.env.EXPO_PUBLIC_E2E_SESSION));
-  const closeButtonStyle =
-    onClose && closeAccessibilityLabel && !showSafeAutomationClose
-      ? {
-          marginRight: __DEV__ || process.env.EXPO_PUBLIC_E2E_SESSION ? 56 : 0,
-        }
-      : null;
-
   return (
     <SafeAreaView
       className="flex-1 bg-canvas"
       style={{ flex: 1 }}
-      testID={screenTestID}
+      testID={rootTestID}
     >
       <View className="flex-1 bg-canvas" style={{ flex: 1 }}>
         <View className="flex-row items-start justify-between px-5 pb-5 pt-3">
@@ -66,45 +56,21 @@ export function OperationScreenShell({
             <Text className="text-[14px] leading-[21px] text-muted">
               {subtitle}
             </Text>
-            {showSafeAutomationClose ? (
-              <Pressable
-                accessibilityHint={closeHint}
-                accessibilityLabel={closeAccessibilityLabel}
-                accessibilityRole="button"
-                className="mt-2 self-start rounded-full border border-hairline bg-surfaceMuted px-3 py-2"
-                hitSlop={8}
-                onPress={onClose}
-                style={({ pressed }) => ({
-                  opacity: pressed ? appTheme.motion.pressOpacity : 1,
-                })}
-                testID={closeTestID}
-              >
-                <Text
-                  className="text-[12px] font-semibold tracking-[-0.01em]"
-                  style={{ color: appTheme.colors.inkSoft }}
-                >
-                  Back
-                </Text>
-              </Pressable>
-            ) : null}
           </View>
-          {onClose && closeAccessibilityLabel && !showSafeAutomationClose ? (
-            <Pressable
-              accessibilityHint={closeHint}
-              accessibilityLabel={closeAccessibilityLabel}
-              accessibilityRole="button"
-              className="mt-1 h-11 w-11 items-center justify-center rounded-full border border-hairline bg-surfaceMuted"
-              hitSlop={8}
-              onPress={onClose}
-              style={({ pressed }) => ({
-                ...(closeButtonStyle ?? {}),
-                opacity: pressed ? appTheme.motion.pressOpacity : 1,
-              })}
-              testID={closeTestID}
-            >
-              <Ionicons color={appTheme.colors.ink} name="close" size={18} />
-            </Pressable>
-          ) : null}
+          <Pressable
+            accessibilityHint={closeHint}
+            accessibilityLabel={closeAccessibilityLabel}
+            accessibilityRole="button"
+            className="mt-1 h-11 w-11 items-center justify-center rounded-full border border-hairline bg-surfaceMuted"
+            hitSlop={8}
+            onPress={onClose}
+            style={({ pressed }) => ({
+              opacity: pressed ? appTheme.motion.pressOpacity : 1,
+            })}
+            testID={closeTestID}
+          >
+            <Ionicons color={appTheme.colors.ink} name="close" size={18} />
+          </Pressable>
         </View>
 
         <ScrollView

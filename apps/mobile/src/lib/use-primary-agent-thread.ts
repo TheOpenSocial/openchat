@@ -1,56 +1,16 @@
 import { agentThreadMessagesToTranscript } from "@opensocial/types";
 import { useEffect, useRef, useState } from "react";
 
-import { ApiRequestError, api } from "./api";
+import { api } from "./api";
 import type { AgentTimelineMessage } from "../types";
-
-export type PrimaryAgentThreadLoadError = {
-  code: string | null;
-  message: string;
-  offline: boolean;
-  statusCode: number | null;
-  transient: boolean;
-};
 
 type UsePrimaryAgentThreadOptions = {
   enabled: boolean;
   accessToken: string;
   preferredThreadId?: string | null;
   onHydrated: (messages: AgentTimelineMessage[]) => void;
-  onLoadError: (error: PrimaryAgentThreadLoadError) => void;
+  onLoadError: () => void;
 };
-
-function normalizePrimaryAgentThreadLoadError(
-  error: unknown,
-): PrimaryAgentThreadLoadError {
-  if (error instanceof ApiRequestError) {
-    return {
-      code: error.code,
-      message: error.message,
-      offline: error.offline,
-      statusCode: error.statusCode,
-      transient: error.transient,
-    };
-  }
-
-  if (error instanceof Error) {
-    return {
-      code: null,
-      message: error.message,
-      offline: false,
-      statusCode: null,
-      transient: false,
-    };
-  }
-
-  return {
-    code: null,
-    message: "Unknown thread load failure.",
-    offline: false,
-    statusCode: null,
-    transient: false,
-  };
-}
 
 /**
  * Loads the authenticated user’s primary agent thread id and optional initial transcript.
@@ -87,17 +47,16 @@ export function usePrimaryAgentThread({
 
     void (async () => {
       try {
-        let effectiveThreadId = preferredThreadId?.trim() || null;
+        const effectiveThreadId =
+          preferredThreadId ??
+          (await api.getMyAgentThreadSummary(accessToken))?.id ??
+          null;
+        if (cancelled) {
+          return;
+        }
         if (!effectiveThreadId) {
-          const summary = await api.getMyAgentThreadSummary(accessToken);
-          if (cancelled) {
-            return;
-          }
-          if (!summary) {
-            setThreadId(null);
-            return;
-          }
-          effectiveThreadId = summary.id;
+          setThreadId(null);
+          return;
         }
         setThreadId(effectiveThreadId);
         const messages = await api.listAgentThreadMessages(
@@ -108,9 +67,9 @@ export function usePrimaryAgentThread({
           return;
         }
         onHydratedRef.current(agentThreadMessagesToTranscript(messages));
-      } catch (error) {
+      } catch {
         if (!cancelled) {
-          onLoadErrorRef.current(normalizePrimaryAgentThreadLoadError(error));
+          onLoadErrorRef.current();
         }
       } finally {
         if (!cancelled) {
@@ -126,9 +85,9 @@ export function usePrimaryAgentThread({
 
   return {
     loading,
+    threadId,
     reload: () => {
       setReloadNonce((current) => current + 1);
     },
-    threadId,
   };
 }

@@ -18,6 +18,10 @@ import {
   type ChatThreadDetailResponse,
   type ChatThreadSummaryRecord,
 } from "../lib/api";
+import {
+  buildChatThreadDetail,
+  buildChatThreadSummaries,
+} from "../lib/chat-threads";
 import type { RealtimeConnectionState } from "../lib/realtime";
 import type { LocalChatThread } from "./home/domain/types";
 
@@ -129,6 +133,9 @@ export function ChatsListScreen({
   threads,
   typingUsers,
 }: ChatsListScreenProps) {
+  const e2eOfflineFallbackEnabled = Boolean(
+    process.env.EXPO_PUBLIC_E2E_SESSION_B64?.trim(),
+  );
   const [composerOverlayHeight, setComposerOverlayHeight] = useState(110);
   const [pendingReply, setPendingReply] = useState<ChatReplyReference | null>(
     null,
@@ -191,6 +198,17 @@ export function ChatsListScreen({
       })
       .catch(() => {
         if (!cancelled) {
+          if (e2eOfflineFallbackEnabled) {
+            const localThreads = buildChatThreadSummaries(
+              selectedChat.messages,
+            );
+            setThreadSummaries(
+              new Map(
+                localThreads.map((thread) => [thread.rootMessage.id, thread]),
+              ),
+            );
+            return;
+          }
           setThreadSummaries(new Map());
         }
       });
@@ -200,6 +218,7 @@ export function ChatsListScreen({
     };
   }, [
     accessToken,
+    e2eOfflineFallbackEnabled,
     selectedChat?.highWatermark,
     selectedChat?.id,
     selectedChat?.messages.length,
@@ -227,6 +246,16 @@ export function ChatsListScreen({
       })
       .catch(() => {
         if (!cancelled) {
+          if (e2eOfflineFallbackEnabled && selectedChat) {
+            setSelectedThread(
+              buildChatThreadDetail(
+                selectedChat.messages,
+                threadFocus.rootMessageId,
+                selectedChat.id,
+              ),
+            );
+            return;
+          }
           setSelectedThread(null);
         }
       })
@@ -241,6 +270,8 @@ export function ChatsListScreen({
     };
   }, [
     accessToken,
+    e2eOfflineFallbackEnabled,
+    selectedChat,
     selectedChat?.highWatermark,
     selectedChat?.id,
     selectedChat?.messages.length,
@@ -359,7 +390,7 @@ export function ChatsListScreen({
 
       {threads.length === 0 ? (
         <EmptyState
-          description="When a person or group is ready to talk, I’ll open the conversation here."
+          description="When a match is ready, it will show up here."
           title="No chats yet"
         />
       ) : (
@@ -413,13 +444,11 @@ export function ChatsListScreen({
         </ScrollView>
       )}
 
-      <View
-        className="min-h-0 flex-1 overflow-hidden rounded-[26px] border border-hairline bg-surfaceMuted/70"
-        testID="chat-selected-thread"
-      >
+      <View className="min-h-0 flex-1 overflow-hidden rounded-[26px] border border-hairline bg-surfaceMuted/70">
         <View
           className="min-h-0 flex-1 px-4 pt-4"
           style={{ paddingBottom: composerOverlayHeight }}
+          testID={selectedChat ? "chat-selected-thread" : undefined}
         >
           {selectedChat ? (
             <>
@@ -443,8 +472,8 @@ export function ChatsListScreen({
                       onPress={() => {
                         openCounterpartyProfile(moderationTargetUserId);
                       }}
-                      testID="chat-view-profile-button"
                       variant="secondary"
+                      testID="chat-view-profile-button"
                     />
                   </View>
                   <View className="flex-1">
@@ -456,8 +485,8 @@ export function ChatsListScreen({
                           selectedChat.id,
                         )
                       }
-                      testID="chat-report-button"
                       variant="ghost"
+                      testID="chat-report-button"
                     />
                   </View>
                   <View className="flex-1">
@@ -469,8 +498,8 @@ export function ChatsListScreen({
                           selectedChat.id,
                         )
                       }
-                      testID="chat-block-button"
                       variant="ghost"
+                      testID="chat-block-button"
                     />
                   </View>
                 </View>
@@ -581,6 +610,7 @@ export function ChatsListScreen({
                             reply={parsedMessage.reply}
                             role={isOwnMessage ? "user" : "agent"}
                             editedAt={message.editedAt}
+                            testID={`chat-bubble-${message.id}`}
                           />
                           {!isDeletedMessage ? (
                             <View
@@ -854,6 +884,7 @@ export function ChatsListScreen({
                         }
                         reply={parsedMessage.reply}
                         role={isOwnMessage ? "user" : "agent"}
+                        testID={`chat-thread-bubble-${message.id}`}
                       />
                       {entry.depth === 0 ? (
                         <Text className="mt-1 text-[11px] text-muted">

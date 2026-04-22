@@ -1,11 +1,9 @@
 import { IntentDetailScreen } from "@/src/features/intents/intent-detail-screen";
 
-export default async function IntentDetailPage({
+export default function IntentDetailPage({
   params,
 }: {
-  params: Promise<{ intentId: string }>;
+  params: { intentId: string };
 }) {
-  const { intentId } = await params;
-
-  return <IntentDetailScreen intentId={intentId} />;
+  return <IntentDetailScreen intentId={params.intentId} />;
 }

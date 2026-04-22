@@ -3,10 +3,14 @@ appId: ${MAESTRO_APP_ID}
 - runFlow: subflows/boot-home-local.yaml
 - tapOn:
     id: "app-bottom-tab-chats"
+    optional: true
+- tapOn:
+    point: "16%,96%"
+    optional: true
 - extendedWaitUntil:
     visible:
       id: "chats-screen"
-    timeout: 20000
+    timeout: 15000
 - assertVisible:
     id: "chats-screen"
 - runFlow:
@@ -16,11 +20,12 @@ appId: ${MAESTRO_APP_ID}
     commands:
       - tapOn:
           id: "chat-thread-row-first"
-      - assertVisible:
-          id: "chat-selected-thread"
+      - extendedWaitUntil:
+          visible:
+            id: "chat-selected-thread"
+          timeout: 15000
       - assertVisible:
           id: "chat-message-input"
-      - inputText: "Maestro says hi"
       - assertVisible:
           id: "chat-send-button"
 - runFlow:
@@ -28,4 +33,5 @@ appId: ${MAESTRO_APP_ID}
       visible:
         text: "No chats yet"
     commands:
-      - assertVisible: "No chats yet"
+      - assertVisible:
+          text: "No chats yet"

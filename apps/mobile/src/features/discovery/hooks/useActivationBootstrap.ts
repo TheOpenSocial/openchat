@@ -1,12 +1,10 @@
-import { useCallback, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   api,
   type OnboardingActivationBootstrapResponse,
   type OnboardingActivationPlanResponse,
 } from "../../../lib/api";
-import { mobileQueryKeys } from "../../../lib/query-client";
 import {
   buildActivationBootstrapViewModel,
   type ActivationBootstrapViewModel,
@@ -21,60 +19,81 @@ export function useActivationBootstrap({
   accessToken,
   userId,
 }: UseActivationBootstrapArgs) {
-  const bootstrapQuery = useQuery({
-    enabled: Boolean(accessToken && userId),
-    queryFn: () =>
-      api.createOnboardingActivationBootstrap(
+  const [bootstrap, setBootstrap] =
+    useState<OnboardingActivationBootstrapResponse | null>(null);
+  const [plan, setPlan] = useState<OnboardingActivationPlanResponse | null>(
+    null,
+  );
+  const [loading, setLoading] = useState(true);
+  const [refreshingBootstrap, setRefreshingBootstrap] = useState(false);
+  const [refreshingPlan, setRefreshingPlan] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const refreshBootstrap = useCallback(async () => {
+    setRefreshingBootstrap(true);
+    setError(null);
+    try {
+      const nextBootstrap = await api.createOnboardingActivationBootstrap(
         userId,
         { limit: 3 },
         accessToken,
-      ),
-    queryKey: mobileQueryKeys.activationBootstrap(userId),
-  });
-
-  const planQuery = useQuery({
-    enabled: Boolean(accessToken && userId),
-    queryFn: () => api.createOnboardingActivationPlan(userId, {}, accessToken),
-    queryKey: mobileQueryKeys.activationPlan(userId),
-  });
-
-  const refreshBootstrap = useCallback(async () => {
-    await bootstrapQuery.refetch();
-  }, [bootstrapQuery]);
+      );
+      setBootstrap(nextBootstrap);
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to load activation bootstrap right now.",
+      );
+    } finally {
+      setLoading(false);
+      setRefreshingBootstrap(false);
+    }
+  }, [accessToken, userId]);
 
   const refreshPlan = useCallback(async () => {
-    await planQuery.refetch();
-  }, [planQuery]);
+    setRefreshingPlan(true);
+    setError(null);
+    try {
+      const nextPlan = await api.createOnboardingActivationPlan(
+        userId,
+        {},
+        accessToken,
+      );
+      setPlan(nextPlan);
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to refresh activation plan right now.",
+      );
+    } finally {
+      setLoading(false);
+      setRefreshingPlan(false);
+    }
+  }, [accessToken, userId]);
+
+  useEffect(() => {
+    void Promise.all([refreshBootstrap(), refreshPlan()]);
+  }, [refreshBootstrap, refreshPlan]);
 
   const refreshAll = useCallback(async () => {
     await Promise.all([refreshBootstrap(), refreshPlan()]);
   }, [refreshBootstrap, refreshPlan]);
 
   const viewModel = useMemo<ActivationBootstrapViewModel | null>(
-    () =>
-      buildActivationBootstrapViewModel({
-        bootstrap:
-          (bootstrapQuery.data as OnboardingActivationBootstrapResponse | null) ??
-          null,
-        plan:
-          (planQuery.data as OnboardingActivationPlanResponse | null) ?? null,
-      }),
-    [bootstrapQuery.data, planQuery.data],
+    () => buildActivationBootstrapViewModel({ bootstrap, plan }),
+    [bootstrap, plan],
   );
 
   return {
-    error:
-      (bootstrapQuery.error instanceof Error && bootstrapQuery.error.message) ||
-      (planQuery.error instanceof Error && planQuery.error.message) ||
-      null,
-    loading:
-      (bootstrapQuery.isLoading && !bootstrapQuery.data) ||
-      (planQuery.isLoading && !planQuery.data),
+    error,
+    loading,
     refreshAll,
     refreshBootstrap,
     refreshPlan,
-    refreshingBootstrap: bootstrapQuery.isRefetching,
-    refreshingPlan: planQuery.isRefetching,
+    refreshingBootstrap,
+    refreshingPlan,
     viewModel,
   };
 }

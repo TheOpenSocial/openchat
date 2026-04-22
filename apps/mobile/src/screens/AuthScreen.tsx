@@ -1,7 +1,14 @@
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Easing, StyleSheet, Text, View } from "react-native";
+import {
+  Animated,
+  Easing,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { WelcomeBackdrop } from "../components/WelcomeBackdrop";
@@ -18,11 +25,10 @@ import { WelcomeTitleSequence } from "./sign-in/WelcomeTitleSequence";
 
 interface AuthScreenProps {
   onAuthenticated: (code: string) => Promise<void>;
+  onDevBypass?: (() => void | Promise<void>) | null;
   loading: boolean;
   errorMessage: string | null;
   locale?: AppLocale;
-  onE2EBypass?: () => Promise<void> | void;
-  showE2EBypass?: boolean;
 }
 
 WebBrowser.maybeCompleteAuthSession();
@@ -36,10 +42,10 @@ export function AuthScreen({
   loading,
   locale = "en",
   onAuthenticated,
-  onE2EBypass,
-  showE2EBypass = false,
+  onDevBypass = null,
 }: AuthScreenProps) {
   const [oauthLoading, setOauthLoading] = useState(false);
+  const autoBypassTriggeredRef = useRef(false);
   const mobileRedirectUri = useMemo(() => Linking.createURL("auth/google"), []);
   const footerOpacity = useRef(new Animated.Value(0)).current;
 
@@ -63,6 +69,19 @@ export function AuthScreen({
     }
     showErrorToast(errorMessage, { title: t("authSignInFailed", locale) });
   }, [errorMessage, locale]);
+
+  useEffect(() => {
+    if (
+      !__DEV__ ||
+      !onDevBypass ||
+      autoBypassTriggeredRef.current ||
+      !process.env.EXPO_PUBLIC_E2E_SESSION_B64?.trim()
+    ) {
+      return;
+    }
+    autoBypassTriggeredRef.current = true;
+    void onDevBypass();
+  }, [onDevBypass]);
 
   const handleGoogleOAuth = async () => {
     setOauthLoading(true);
@@ -134,14 +153,25 @@ export function AuthScreen({
                 locale={locale}
                 loading={loading}
                 oauthLoading={oauthLoading}
-                onE2EBypassPress={() => {
-                  void onE2EBypass?.();
-                }}
                 onGooglePress={() => {
                   void handleGoogleOAuth();
                 }}
-                showE2EBypass={showE2EBypass}
               />
+              {__DEV__ && onDevBypass ? (
+                <Pressable
+                  accessibilityLabel="Continue with local test session"
+                  accessibilityRole="button"
+                  className="mt-3 self-center rounded-full border border-white/25 bg-white/10 px-4 py-2"
+                  onPress={() => {
+                    void onDevBypass();
+                  }}
+                  testID="auth-e2e-bypass-button"
+                >
+                  <Text className="text-[12px] font-semibold tracking-[0.12em] text-white/85">
+                    Continue locally
+                  </Text>
+                </Pressable>
+              ) : null}
             </Animated.View>
           </View>
         </SafeAreaView>

@@ -24,15 +24,11 @@ import { ok } from "../common/api-response.js";
 import { ActorUserId } from "../common/actor-user-id.decorator.js";
 import { assertActorOwnsUser } from "../common/auth-context.js";
 import { parseRequestPayload } from "../common/validation.js";
-import { ProtocolService } from "../protocol/protocol.service.js";
 import { ChatsService } from "./chats.service.js";
 
 @Controller("chats")
 export class ChatsController {
-  constructor(
-    private readonly chatsService: ChatsService,
-    private readonly protocolService: ProtocolService,
-  ) {}
+  constructor(private readonly chatsService: ChatsService) {}
 
   @Get()
   async listChats(@ActorUserId() actorUserId: string) {
@@ -43,14 +39,11 @@ export class ChatsController {
   async createChat(@Body() body: unknown, @ActorUserId() actorUserId: string) {
     const payload = parseRequestPayload(createChatBodySchema, body);
     return ok(
-      await this.protocolService.createFirstPartyChatAction({
+      await this.chatsService.createChat(
+        payload.connectionId,
+        payload.type,
         actorUserId,
-        connectionId: payload.connectionId,
-        type: payload.type,
-        metadata: {
-          source: "chats.controller.create",
-        },
-      }),
+      ),
     );
   }
 
@@ -149,18 +142,21 @@ export class ChatsController {
       payload.senderUserId,
       "chat sender does not match authenticated user",
     );
-    const protocolResult =
-      await this.protocolService.sendFirstPartyChatMessageAction(chatId, {
-        actorUserId,
-        body: payload.body,
-        clientMessageId: payload.clientMessageId,
-        replyToMessageId: payload.replyToMessageId,
-        metadata: {},
-      });
-    return ok(
-      await this.chatsService.getPersistedMessageForResponse(
+    const firstPartySendResult =
+      await this.chatsService.sendFirstPartyChatMessageAction(
         chatId,
-        protocolResult.messageId,
+        actorUserId,
+        payload.body,
+        {
+          idempotencyKey: payload.clientMessageId,
+          replyToMessageId: payload.replyToMessageId,
+        },
+      );
+    return ok(
+      await this.chatsService.getPersistedMessage(
+        chatId,
+        firstPartySendResult.messageId,
+        actorUserId,
       ),
     );
   }

@@ -14,8 +14,6 @@ const includeVerification =
 const includeProdSmoke = process.env.BACKEND_OPS_INCLUDE_PROD_SMOKE !== "0";
 const includeModerationDrill =
   process.env.BACKEND_OPS_INCLUDE_MODERATION_DRILL !== "0";
-const includeProtocolRecoveryDrill =
-  process.env.BACKEND_OPS_INCLUDE_PROTOCOL_RECOVERY_DRILL !== "0";
 const stageEqualsProd = process.env.STAGING_EQUALS_PROD === "true";
 const requireRunbooks = process.env.BACKEND_OPS_REQUIRE_RUNBOOKS !== "0";
 const requireEnvReadiness = process.env.BACKEND_OPS_REQUIRE_ENV !== "0";
@@ -88,7 +86,6 @@ const stepEnvRequirements = {
     "SMOKE_APPLICATION_KEY",
     "SMOKE_APPLICATION_TOKEN",
   ],
-  protocol_recovery_drill: ["SMOKE_BASE_URL", "SMOKE_ADMIN_USER_ID"],
 };
 
 if (includeReleaseCheck) {
@@ -124,15 +121,6 @@ if (includeModerationDrill) {
     summary: "moderation operator drill",
     cmd: "pnpm",
     args: ["moderation:drill"],
-  });
-}
-
-if (includeProtocolRecoveryDrill) {
-  commands.push({
-    id: "protocol_recovery_drill",
-    summary: "protocol delivery recovery drill",
-    cmd: "pnpm",
-    args: ["protocol:recovery:drill"],
   });
 }
 
@@ -226,10 +214,7 @@ export function buildOpsPackExplainability({
       id: "fill_env_gaps",
       label: "Fill missing environment readiness",
       reason: envReadinessFailures
-        .map(
-          (readiness) =>
-            `${readiness.stepId}: ${readiness.missingEnv.join(", ")}`,
-        )
+        .map((readiness) => `${readiness.stepId}: ${readiness.missingEnv.join(", ")}`)
         .join(" | "),
     });
   }
@@ -466,20 +451,18 @@ async function main() {
               dryRun,
               requireRunbooks,
               requireEnvReadiness,
-              shipVerdict:
-                result.status === "passed" ? "ship_ready" : "blocked",
+              shipVerdict: result.status === "passed" ? "ship_ready" : "blocked",
               blockedReasons: [
                 ...(result.status === "failed"
-                  ? [
-                      result.failureClass === "timeout"
-                        ? `step_timeout:${step.id}`
-                        : `step_failed:${step.id}`,
-                    ]
+                  ? [result.failureClass === "timeout"
+                      ? `step_timeout:${step.id}`
+                      : `step_failed:${step.id}`]
                   : []),
               ],
               steps: [result],
             },
-            lane: verificationRunIngestLaneByStepId[step.id] ?? "verification",
+            lane:
+              verificationRunIngestLaneByStepId[step.id] ?? "verification",
             layer: verificationLayerForStep(step.id),
             runId: `${runId}:${step.id}`,
             status: result.status,
@@ -487,12 +470,7 @@ async function main() {
             stepId: step.id,
             stepSummary: step.summary,
           }),
-          {
-            dryRunMode: dryRun,
-            runLabel:
-              verificationRunIngestLaneByStepId[step.id] ?? "verification",
-            stepId: step.id,
-          },
+          { dryRunMode: dryRun, runLabel: verificationRunIngestLaneByStepId[step.id] ?? "verification", stepId: step.id },
         ),
       );
       if (result.status === "failed") {
@@ -558,8 +536,7 @@ async function main() {
     }),
   };
 
-  artifact.verificationRunIngest =
-    await ingestVerificationRunArtifact(artifact);
+  artifact.verificationRunIngest = await ingestVerificationRunArtifact(artifact);
 
   mkdirSync(path.dirname(artifactPath), { recursive: true });
   writeFileSync(artifactPath, JSON.stringify(artifact, null, 2));

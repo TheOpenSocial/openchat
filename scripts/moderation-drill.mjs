@@ -15,7 +15,8 @@ const adminRole = process.env.SMOKE_ADMIN_ROLE || "admin";
 const adminApiKey = process.env.SMOKE_ADMIN_API_KEY;
 const adminAccessToken = process.env.SMOKE_ACCESS_TOKEN;
 const smokeApplicationKey = process.env.SMOKE_APPLICATION_KEY?.trim() || "";
-const smokeApplicationToken = process.env.SMOKE_APPLICATION_TOKEN?.trim() || "";
+const smokeApplicationToken =
+  process.env.SMOKE_APPLICATION_TOKEN?.trim() || "";
 const timeoutMs = Number(process.env.SMOKE_TIMEOUT_MS || 15000);
 
 const existingFlagId = process.env.MODERATION_DRILL_EXISTING_FLAG_ID?.trim();
@@ -169,16 +170,14 @@ function buildDrillExplainability() {
     nextActions.push({
       id: "check_moderation_queue",
       label: "Check moderation queue visibility",
-      reason:
-        "The drill could not confirm queue visibility for the target flag.",
+      reason: "The drill could not confirm queue visibility for the target flag.",
     });
   }
   if (!drillArtifact.evidence.auditVerified) {
     nextActions.push({
       id: "check_audit_trail",
       label: "Check moderation audit trail",
-      reason:
-        "The drill could not confirm audit visibility for assignment/triage.",
+      reason: "The drill could not confirm audit visibility for assignment/triage.",
     });
   }
   if (latestFailedStep) {
@@ -452,28 +451,20 @@ async function exchangeSmokeSessionWithApplicationCredentials() {
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetch(
-      `${baseUrl}/api/admin/ops/smoke-session/exchange`,
-      {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-          "x-application-key": smokeApplicationKey,
-          "x-application-token": smokeApplicationToken,
-        },
-        body: JSON.stringify({ smokeBaseUrl: baseUrl }),
-        signal: controller.signal,
+    const response = await fetch(`${baseUrl}/api/admin/ops/smoke-session/exchange`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "x-application-key": smokeApplicationKey,
+        "x-application-token": smokeApplicationToken,
       },
-    );
+      body: JSON.stringify({ smokeBaseUrl: baseUrl }),
+      signal: controller.signal,
+    });
     clearTimeout(timeout);
     const payload = await response.json().catch(() => null);
-    if (
-      !response.ok ||
-      !payload ||
-      typeof payload !== "object" ||
-      !("data" in payload)
-    ) {
+    if (!response.ok || !payload || typeof payload !== "object" || !("data" in payload)) {
       throw new Error(
         `smoke session exchange failed (${response.status}): ${JSON.stringify(payload).slice(0, 280)}`,
       );
@@ -483,25 +474,17 @@ async function exchangeSmokeSessionWithApplicationCredentials() {
       throw new Error("smoke session exchange returned no data");
     }
     const envPayload =
-      "env" in data && data.env && typeof data.env === "object"
-        ? data.env
-        : data;
+      "env" in data && data.env && typeof data.env === "object" ? data.env : data;
     const accessToken =
       typeof envPayload.SMOKE_ACCESS_TOKEN === "string"
         ? envPayload.SMOKE_ACCESS_TOKEN
         : "";
     const userId =
-      typeof envPayload.SMOKE_USER_ID === "string"
-        ? envPayload.SMOKE_USER_ID
-        : "";
+      typeof envPayload.SMOKE_USER_ID === "string" ? envPayload.SMOKE_USER_ID : "";
     if (!accessToken || !userId) {
-      throw new Error(
-        "smoke session exchange did not return token and user id",
-      );
+      throw new Error("smoke session exchange did not return token and user id");
     }
-    console.log(
-      "Refreshed moderation drill smoke session via application credentials.",
-    );
+    console.log("Refreshed moderation drill smoke session via application credentials.");
     return { accessToken, userId };
   } finally {
     clearTimeout(timeout);
@@ -544,15 +527,9 @@ async function waitForModerationQueueFlag(flagId) {
   drillArtifact.attempts.queuePolls = result.attempts;
   drillArtifact.timings.queuePollMs = result.elapsedMs;
   if (!result.found) {
-    recordStep({
-      stage: "queue_visibility",
-      status: "warning",
-      flagId,
-      attempts: result.attempts,
-      durationMs: result.elapsedMs,
-      error: `moderation flag ${flagId} not found in open queue after ${result.attempts} attempts`,
-    });
-    return null;
+    throw new Error(
+      `moderation flag ${flagId} not found in open queue after ${result.attempts} attempts`,
+    );
   }
   recordStep({
     stage: "queue_visibility",
@@ -651,31 +628,34 @@ async function waitForAuditEntries(flagId, reportId) {
     async () => {
       const logs = await loadAuditLogs();
       const reportAudit = drillArtifact.evidence.reportCreated
-        ? findAuditLog(logs, (entry) => {
-            if (entry.action !== "moderation.report_submitted") {
-              return false;
-            }
-            const metadata =
-              entry.metadata && typeof entry.metadata === "object"
-                ? entry.metadata
-                : null;
-            const metadataReportId =
-              metadata && typeof metadata.reportId === "string"
-                ? metadata.reportId
-                : null;
-            const metadataTargetUserId =
-              metadata && typeof metadata.targetUserId === "string"
-                ? metadata.targetUserId
-                : null;
-            return (
-              metadataReportId === reportId ||
-              entry.entityId === reportId ||
-              entry.entityId === flagId ||
-              entry.entityId === entityId ||
-              entry.entityId === targetUserId ||
-              entry.entityId === metadataTargetUserId
-            );
-          })
+        ? findAuditLog(
+            logs,
+            (entry) => {
+              if (entry.action !== "moderation.report_submitted") {
+                return false;
+              }
+              const metadata =
+                entry.metadata && typeof entry.metadata === "object"
+                  ? entry.metadata
+                  : null;
+              const metadataReportId =
+                metadata && typeof metadata.reportId === "string"
+                  ? metadata.reportId
+                  : null;
+              const metadataTargetUserId =
+                metadata && typeof metadata.targetUserId === "string"
+                  ? metadata.targetUserId
+                  : null;
+              return (
+                metadataReportId === reportId ||
+                entry.entityId === reportId ||
+                entry.entityId === flagId ||
+                entry.entityId === entityId ||
+                entry.entityId === targetUserId ||
+                entry.entityId === metadataTargetUserId
+              );
+            },
+          )
         : null;
       const assignmentAudit = findAuditLog(
         logs,
@@ -694,8 +674,8 @@ async function waitForAuditEntries(flagId, reportId) {
       );
       const found = Boolean(
         (!drillArtifact.evidence.reportCreated || reportAudit) &&
-        assignmentAudit &&
-        triageAudit,
+          assignmentAudit &&
+          triageAudit,
       );
       return {
         found,
@@ -796,8 +776,8 @@ async function main() {
 
   const { flagId, reportId } = await resolveFlagId();
 
-  const queuedFlag = await waitForModerationQueueFlag(flagId);
-  drillArtifact.evidence.queueVerified = Boolean(queuedFlag);
+  await waitForModerationQueueFlag(flagId);
+  drillArtifact.evidence.queueVerified = true;
 
   const assignment = await assignFlag(flagId);
   if (assignment?.assigneeUserId !== assignToUserId) {
@@ -861,8 +841,7 @@ async function main() {
   };
   drillArtifact.ids.flagId = flagId;
   drillArtifact.ids.reportId = reportId;
-  drillArtifact.timings.totalMs =
-    Date.now() - new Date(drillArtifact.generatedAt).getTime();
+  drillArtifact.timings.totalMs = Date.now() - new Date(drillArtifact.generatedAt).getTime();
   drillArtifact.explainability = buildDrillExplainability();
   persistArtifact();
 

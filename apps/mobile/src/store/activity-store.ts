@@ -1,12 +1,9 @@
 import { useSyncExternalStore } from "react";
 
-import type { ExperienceActivitySummaryResponse } from "../lib/api";
-
 type ActivityState = {
   hasUnread: boolean;
   pendingRequestCount: number;
   lastHydratedAt: string | null;
-  summary: ExperienceActivitySummaryResponse | null;
 };
 
 type ActivityActions = {
@@ -20,7 +17,6 @@ const defaultState: ActivityState = {
   hasUnread: false,
   pendingRequestCount: 0,
   lastHydratedAt: null,
-  summary: null,
 };
 
 let state: ActivityState = defaultState;

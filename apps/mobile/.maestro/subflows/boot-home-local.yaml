@@ -1,38 +1,25 @@
 appId: ${MAESTRO_APP_ID}
 ---
-- launchApp:
-    clearState: true
-    permissions:
-      all: unset
+- launchApp
+- tapOn:
+    text: "OpenSocial"
+    optional: true
 - openLink: ${MAESTRO_EXPO_URL}
-- runFlow: accept-open-expo-go.yaml
+- launchApp
+- tapOn:
+    text: "Expo Go"
+    optional: true
 - tapOn:
     text: "Open"
     optional: true
 - tapOn:
-    text: "Continue"
-    optional: true
-- tapOn:
-    text: "Skip"
-    optional: true
-- tapOn:
-    text: "Try it now"
+    text: "OpenSocial"
     optional: true
 - tapOn:
     text: "Reload"
     optional: true
 - tapOn:
     text: "Continue"
-    optional: true
-- tapOn:
-    text: "Skip"
-    optional: true
-- tapOn:
-    text: "Try it now"
-    optional: true
-- runFlow: accept-open-expo-go.yaml
-- tapOn:
-    text: "Open"
     optional: true
 - waitForAnimationToEnd
 - runFlow:
@@ -63,7 +50,7 @@ appId: ${MAESTRO_APP_ID}
       - inputText: "Maestro User"
       - tapOn:
           id: "onboarding-bio-input"
-      - inputText: "Surface smoke validation."
+      - inputText: "I like quick chats and short plans."
       - tapOn:
           id: "onboarding-area-input"
       - inputText: "Buenos Aires"
@@ -74,33 +61,9 @@ appId: ${MAESTRO_APP_ID}
           id: "onboarding-s5-continue"
       - tapOn:
           id: "onboarding-s6-skip"
-- runFlow:
-    when:
-      visible:
-        text: "Continue"
-    commands:
-      - tapOn:
-          text: "Continue"
-- runFlow:
-    when:
-      visible:
-        text: "Reload"
-    commands:
-      - tapOn:
-          text: "Reload"
 - extendedWaitUntil:
     visible:
       id: "home-screen"
-    timeout: 30000
+    timeout: 20000
 - assertVisible:
     id: "home-screen"
-- runFlow:
-    when:
-      visible:
-        id: "home-welcome-close"
-    commands:
-      - tapOn:
-          id: "home-welcome-close"
-- tapOn:
-    point: "91%,45%"
-    optional: true

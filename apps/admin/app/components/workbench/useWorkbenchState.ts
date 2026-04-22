@@ -18,7 +18,6 @@ import {
   type LlmRuntimeHealthSnapshot,
   type LaunchControlsSnapshot,
   type OnboardingActivationSnapshot,
-  type ProtocolQueueHealthSnapshot,
   type SecurityPostureSnapshot,
   type VerificationRunsSnapshot,
 } from "./workbench-config";
@@ -38,8 +37,6 @@ export function useWorkbenchState() {
     useState<LlmRuntimeHealthSnapshot | null>(null);
   const [launchControlsSnapshot, setLaunchControlsSnapshot] =
     useState<LaunchControlsSnapshot | null>(null);
-  const [protocolQueueHealthSnapshot, setProtocolQueueHealthSnapshot] =
-    useState<ProtocolQueueHealthSnapshot | null>(null);
   const [securityPostureSnapshot, setSecurityPostureSnapshot] =
     useState<SecurityPostureSnapshot | null>(null);
   const [verificationRunsSnapshot, setVerificationRunsSnapshot] =
@@ -198,8 +195,6 @@ export function useWorkbenchState() {
     setLlmRuntimeHealthSnapshot,
     launchControlsSnapshot,
     setLaunchControlsSnapshot,
-    protocolQueueHealthSnapshot,
-    setProtocolQueueHealthSnapshot,
     securityPostureSnapshot,
     setSecurityPostureSnapshot,
     verificationRunsSnapshot,

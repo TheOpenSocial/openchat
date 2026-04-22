@@ -1,7 +1,7 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -81,12 +81,14 @@ function Chip({
   onPress,
   testID,
   tone = "light",
+  testID,
 }: {
   label: string;
   active?: boolean;
   onPress?: () => void;
   testID?: string;
   tone?: "light" | "dark";
+  testID?: string;
 }) {
   const activeClass =
     tone === "dark" ? "border-ink bg-ink" : "border-ink bg-ink";
@@ -114,7 +116,7 @@ function Chip({
   );
 
   if (!onPress) {
-    return content;
+    return <View testID={testID}>{content}</View>;
   }
 
   return (
@@ -174,12 +176,14 @@ function ActionRow({
   onPress,
   testID,
   tone = "default",
+  testID,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   onPress: () => void;
   testID?: string;
   tone?: "default" | "danger";
+  testID?: string;
 }) {
   const iconColor =
     tone === "danger" ? appTheme.colors.danger : appTheme.colors.ink;
@@ -262,6 +266,14 @@ export function ProfileScreen({
   const [editingBio, setEditingBio] = useState(false);
   const [editingInterests, setEditingInterests] = useState(false);
   const [editingPreferences, setEditingPreferences] = useState(false);
+  const scrollViewRef = useRef<ScrollView>(null);
+  const [bioSectionY, setBioSectionY] = useState<number | null>(null);
+  const [interestsSectionY, setInterestsSectionY] = useState<number | null>(
+    null,
+  );
+  const [preferencesSectionY, setPreferencesSectionY] = useState<number | null>(
+    null,
+  );
   const [bioDraft, setBioDraft] = useState("");
   const [locationDraft, setLocationDraft] = useState("");
   const [interestsDraft, setInterestsDraft] = useState("");
@@ -290,15 +302,31 @@ export function ProfileScreen({
     hide();
   }, [avatarUploading, hide, show]);
 
+  const scrollToSection = (targetY: number | null) => {
+    if (targetY == null) {
+      return;
+    }
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        scrollViewRef.current?.scrollTo({
+          animated: true,
+          y: Math.max(0, targetY - 24),
+        });
+      });
+    });
+  };
+
   const beginBioEdit = () => {
     setBioDraft(profile.bio ?? "");
     setLocationDraft(profile.location ?? "");
     setEditingBio(true);
+    scrollToSection(bioSectionY);
   };
 
   const beginInterestsEdit = () => {
     setInterestsDraft(profile.interests.join(", "));
     setEditingInterests(true);
+    scrollToSection(interestsSectionY);
   };
 
   const beginPreferencesEdit = () => {
@@ -310,6 +338,7 @@ export function ProfileScreen({
       notificationModeFromLabel(profile.preferences.notifications),
     );
     setEditingPreferences(true);
+    scrollToSection(preferencesSectionY);
   };
 
   const pickAndUploadAvatar = async (source: "camera" | "library") => {
@@ -449,6 +478,7 @@ export function ProfileScreen({
       />
 
       <ScrollView
+        ref={scrollViewRef}
         className="flex-1"
         contentContainerStyle={{
           paddingBottom:
@@ -581,7 +611,10 @@ export function ProfileScreen({
                       className="flex-1 rounded-full"
                       innerClassName="px-4 py-3"
                     >
-                      <Pressable onPress={beginBioEdit}>
+                      <Pressable
+                        onPress={beginBioEdit}
+                        testID="profile-action-edit"
+                      >
                         <Text className="text-center text-[15px] font-semibold text-ink">
                           Edit profile
                         </Text>
@@ -591,7 +624,10 @@ export function ProfileScreen({
                       className="flex-1 rounded-full"
                       innerClassName="px-4 py-3"
                     >
-                      <Pressable onPress={beginPreferencesEdit}>
+                      <Pressable
+                        onPress={beginPreferencesEdit}
+                        testID="profile-action-preferences"
+                      >
                         <Text className="text-center text-[15px] font-semibold text-ink">
                           Match preferences
                         </Text>
@@ -659,7 +695,12 @@ export function ProfileScreen({
           </Section>
         </Animated.View>
 
-        <Animated.View entering={FadeInUp.delay(80).duration(260)}>
+        <Animated.View
+          entering={FadeInUp.delay(80).duration(260)}
+          onLayout={(event) => {
+            setPreferencesSectionY(event.nativeEvent.layout.y);
+          }}
+        >
           <Section
             eyebrow="How you connect"
             title="Connection profile"
@@ -833,12 +874,18 @@ export function ProfileScreen({
                 }}
                 testID="profile-action-sign-out"
                 tone="danger"
+                testID="profile-action-sign-out"
               />
             </View>
           </Section>
         </Animated.View>
 
-        <Animated.View entering={FadeInUp.delay(200).duration(260)}>
+        <Animated.View
+          entering={FadeInUp.delay(200).duration(260)}
+          onLayout={(event) => {
+            setBioSectionY(event.nativeEvent.layout.y);
+          }}
+        >
           <Section
             eyebrow="Identity"
             title="Edit profile"
@@ -902,7 +949,12 @@ export function ProfileScreen({
           </Section>
         </Animated.View>
 
-        <Animated.View entering={FadeInUp.delay(240).duration(260)}>
+        <Animated.View
+          entering={FadeInUp.delay(240).duration(260)}
+          onLayout={(event) => {
+            setInterestsSectionY(event.nativeEvent.layout.y);
+          }}
+        >
           <Section
             eyebrow="Interests"
             title="Interest signals"

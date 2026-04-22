@@ -29,8 +29,7 @@ export function AppShellTopBar({
     handler();
   };
 
-  const iconButtonClassName =
-    "h-9 w-9 items-center justify-center rounded-full border bg-surfaceMuted";
+  const iconButtonClassName = "h-11 w-11 items-center justify-center";
 
   return (
     <View
@@ -38,7 +37,7 @@ export function AppShellTopBar({
       style={{
         height: headerHeight,
         paddingTop: topInset,
-        paddingBottom: 2,
+        paddingBottom: 4,
         backgroundColor: appTheme.colors.background,
         overflow: "hidden",
       }}
@@ -57,7 +56,7 @@ export function AppShellTopBar({
           testID="app-shell-home"
         >
           <Text
-            className="text-[17px] font-semibold tracking-[-0.018em] text-ink"
+            className="text-[20px] font-semibold tracking-[-0.02em] text-ink"
             allowFontScaling
             adjustsFontSizeToFit
             minimumFontScale={0.82}
@@ -67,8 +66,7 @@ export function AppShellTopBar({
           </Text>
           {subtitle ? (
             <Text
-              className="mt-1 text-[12px] leading-[18px]"
-              style={{ color: appTheme.colors.inkMuted }}
+              className="mt-1 text-[12px] leading-[18px] text-muted"
               allowFontScaling
               adjustsFontSizeToFit
               minimumFontScale={0.85}
@@ -88,7 +86,6 @@ export function AppShellTopBar({
             hitSlop={10}
             onPress={() => dismissAnd(onPressSettings)}
             style={({ pressed }) => ({
-              borderColor: appTheme.colors.hairline,
               opacity: pressed ? appTheme.motion.pressOpacity : 1,
             })}
             testID="app-shell-settings"
@@ -96,7 +93,7 @@ export function AppShellTopBar({
             <Ionicons
               color={appTheme.colors.ink}
               name="settings-outline"
-              size={18}
+              size={19}
             />
           </Pressable>
           <Pressable
@@ -107,7 +104,6 @@ export function AppShellTopBar({
             hitSlop={10}
             onPress={() => dismissAnd(onPressNotifications)}
             style={({ pressed }) => ({
-              borderColor: appTheme.colors.hairline,
               opacity: pressed ? appTheme.motion.pressOpacity : 1,
             })}
             testID="app-shell-notifications"
@@ -116,10 +112,13 @@ export function AppShellTopBar({
               <Ionicons
                 color={appTheme.colors.ink}
                 name="notifications-outline"
-                size={18}
+                size={19}
               />
               {hasNotifications ? (
-                <View className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border border-canvas bg-white/92" />
+                <View
+                  className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full"
+                  style={{ backgroundColor: appTheme.colors.ink }}
+                />
               ) : null}
             </View>
           </Pressable>

@@ -1,13 +1,13 @@
-import { useCallback, useEffect, useMemo } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { api, type ExperienceActivitySummaryResponse } from "../../../lib/api";
 import {
-  loadStoredActivitySummary,
-  saveStoredActivitySummary,
-} from "../../../lib/experience-storage";
-import { mobileQueryKeys } from "../../../lib/query-client";
-import { useActivityStore } from "../../../store/activity-store";
+  api,
+  type DiscoveryInboxSuggestionsResponse,
+  type InboxRequestRecord,
+  type PendingIntentsSummaryResponse,
+  type PassiveDiscoveryResponse,
+} from "../../../lib/api";
+import { useInboxStore } from "../../../store/inbox-store";
 import {
   compareActivityItems,
   type ActivityItem,
@@ -23,84 +23,77 @@ type ActivityFeedState = {
   refreshing: boolean;
   error: string | null;
   items: ActivityItem[];
-  sections: Array<{
-    id:
-      | "actionRequired"
-      | "updates"
-      | "activeIntents"
-      | "suggestions"
-      | "discoveryHighlights";
-    title: string;
-    subtitle: string;
-    emphasis: "urgent" | "active" | "passive";
-    items: ActivityItem[];
-  }>;
   pendingRequestCount: number;
   refresh: () => Promise<void>;
 };
 
-function buildRequestItems(
-  requests: ExperienceActivitySummaryResponse["sections"]["actionRequired"],
-): ActivityItem[] {
+function buildRequestItems(requests: InboxRequestRecord[]): ActivityItem[] {
   return requests.map((request) => ({
     id: `request:${request.id}`,
     kind: "request",
-    priority: request.priority,
-    eyebrow: request.eyebrow,
-    title: request.title,
-    body: request.body,
-    timestamp:
-      typeof request.createdAt === "string"
-        ? request.createdAt
-        : request.createdAt.toISOString(),
-    status: request.status as
-      | "pending"
-      | "accepted"
-      | "rejected"
-      | "expired"
-      | "cancelled",
+    title:
+      request.status === "pending"
+        ? "New request waiting"
+        : request.status === "accepted"
+          ? "Request accepted"
+          : request.status === "rejected"
+            ? "Request declined"
+            : "Request updated",
+    body:
+      request.status === "pending"
+        ? "Someone is waiting for your response."
+        : `This request is now ${request.status}.`,
+    timestamp: request.respondedAt ?? request.createdAt,
+    status: request.status,
     requestId: request.id,
-    intentId: request.intentId ?? "",
+    intentId: request.intentId,
   }));
 }
 
 function buildDiscoveryItems(
-  suggestions: ExperienceActivitySummaryResponse["sections"]["suggestions"],
+  inboxSuggestions: DiscoveryInboxSuggestionsResponse,
+  passiveDiscovery: PassiveDiscoveryResponse,
 ): ActivityItem[] {
-  return suggestions.map((suggestion) => ({
-    id: suggestion.id,
-    kind: "discovery",
-    priority: suggestion.priority,
-    eyebrow: suggestion.eyebrow,
-    title: suggestion.title,
-    body: suggestion.body,
-    scoreLabel: suggestion.scoreLabel,
-  }));
-}
+  const suggestionItems: ActivityItem[] = inboxSuggestions.suggestions.map(
+    (suggestion, index) => ({
+      id: `discovery:${index}:${suggestion.title}`,
+      kind: "discovery",
+      title: suggestion.title,
+      body: suggestion.reason,
+      scoreLabel: `${Math.round(suggestion.score * 100)}% match`,
+    }),
+  );
 
-function buildDiscoveryHighlightItems(
-  highlights: ExperienceActivitySummaryResponse["sections"]["discoveryHighlights"],
-): ActivityItem[] {
-  return highlights.map((highlight) => ({
-    id: highlight.id,
-    kind: "summary",
-    priority: highlight.priority,
-    eyebrow: highlight.eyebrow,
-    title: highlight.title,
-    body: highlight.body,
-  }));
+  const summaryItems: ActivityItem[] = [
+    {
+      id: "summary:tonight",
+      kind: "summary",
+      title: "Tonight is active",
+      body: `${passiveDiscovery.tonight.suggestions.length} people and ${passiveDiscovery.groups.groups.length} group options are available.`,
+    },
+    {
+      id: "summary:reconnects",
+      kind: "summary",
+      title: "Reconnects available",
+      body: `${passiveDiscovery.reconnects.reconnects.length} people are worth revisiting.`,
+    },
+  ];
+
+  return [...suggestionItems, ...summaryItems];
 }
 
 function buildIntentItems(
-  pendingIntents: ExperienceActivitySummaryResponse["sections"]["activeIntents"],
+  pendingIntentsSummary: PendingIntentsSummaryResponse | null,
 ): ActivityItem[] {
-  return pendingIntents.slice(0, 3).map((intent) => ({
+  if (!pendingIntentsSummary) {
+    return [];
+  }
+
+  return pendingIntentsSummary.intents.slice(0, 3).map((intent) => ({
     id: `intent:${intent.intentId}`,
     kind: "intent",
-    priority: intent.priority,
-    eyebrow: intent.eyebrow,
-    title: intent.title,
-    body: intent.body,
+    title: intent.rawText,
+    body: `${intent.requests.pending} pending · ${intent.requests.accepted} accepted · ${intent.requests.rejected + intent.requests.expired + intent.requests.cancelled} closed`,
     intentId: intent.intentId,
     status: intent.status,
   }));
@@ -110,145 +103,76 @@ export function useActivityFeed({
   accessToken,
   userId,
 }: UseActivityFeedArgs): ActivityFeedState {
-  const queryClient = useQueryClient();
-  const storedSummary = useActivityStore((store) => store.summary);
-  const setActivityState = useActivityStore((store) => store.setActivityState);
-  const activityQuery = useQuery({
-    enabled: Boolean(accessToken && userId),
-    initialData: storedSummary ?? undefined,
-    queryFn: () => api.getExperienceActivitySummary(userId, accessToken),
-    queryKey: mobileQueryKeys.activitySummary(userId),
-  });
-
-  const activitySummary = activityQuery.data ?? null;
+  const setRequestsInStore = useInboxStore((store) => store.setRequests);
+  const pendingRequestCount = useInboxStore(
+    (store) => store.pendingRequestCount,
+  );
+  const [requests, setRequests] = useState<InboxRequestRecord[]>([]);
+  const [inboxSuggestions, setInboxSuggestions] =
+    useState<DiscoveryInboxSuggestionsResponse | null>(null);
+  const [passiveDiscovery, setPassiveDiscovery] =
+    useState<PassiveDiscoveryResponse | null>(null);
+  const [pendingIntentsSummary, setPendingIntentsSummary] =
+    useState<PendingIntentsSummaryResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    await activityQuery.refetch();
-  }, [activityQuery]);
-
-  useEffect(() => {
-    let active = true;
-    void loadStoredActivitySummary(userId).then((storedSummary) => {
-      if (!active || !storedSummary) {
-        return;
-      }
-      queryClient.setQueryData<ExperienceActivitySummaryResponse | undefined>(
-        mobileQueryKeys.activitySummary(userId),
-        (current) => current ?? storedSummary,
+    setRefreshing(true);
+    setError(null);
+    try {
+      const [
+        nextRequests,
+        nextInboxSuggestions,
+        nextPassiveDiscovery,
+        nextPendingIntentsSummary,
+      ] = await Promise.all([
+        api.listPendingRequests(userId, accessToken),
+        api.getDiscoveryInboxSuggestions(userId, 4, accessToken),
+        api.getPassiveDiscovery(userId, 3, accessToken),
+        api.summarizePendingIntents(userId, 4, accessToken).catch(() => null),
+      ]);
+      setRequests(nextRequests);
+      setRequestsInStore(nextRequests);
+      setInboxSuggestions(nextInboxSuggestions);
+      setPassiveDiscovery(nextPassiveDiscovery);
+      setPendingIntentsSummary(nextPendingIntentsSummary);
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to load activity right now.",
       );
-    });
-    return () => {
-      active = false;
-    };
-  }, [queryClient, userId]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [accessToken, setRequestsInStore, userId]);
 
   useEffect(() => {
-    if (!activitySummary) {
-      return;
-    }
-    setActivityState({
-      hasUnread:
-        activitySummary.counts.unreadNotifications > 0 ||
-        activitySummary.counts.pendingRequests > 0,
-      pendingRequestCount: activitySummary.counts.pendingRequests,
-      lastHydratedAt: activitySummary.generatedAt,
-      summary: activitySummary,
-    });
-    void saveStoredActivitySummary(userId, activitySummary).catch(() => {});
-  }, [activitySummary, setActivityState, userId]);
+    void refresh();
+  }, [refresh]);
 
   const items = useMemo(() => {
-    if (!activitySummary) {
-      return [];
-    }
+    const requestItems = buildRequestItems(requests);
+    const intentItems = buildIntentItems(pendingIntentsSummary);
+    const discoveryItems =
+      inboxSuggestions && passiveDiscovery
+        ? buildDiscoveryItems(inboxSuggestions, passiveDiscovery)
+        : [];
 
-    const requestItems = buildRequestItems(
-      activitySummary.sections.actionRequired,
+    return [...requestItems, ...intentItems, ...discoveryItems].sort(
+      compareActivityItems,
     );
-    const updateItems: ActivityItem[] = activitySummary.sections.updates.map(
-      (update) => ({
-        id: `update:${update.id}`,
-        kind: "summary",
-        priority: update.priority,
-        eyebrow: update.eyebrow,
-        title: update.title,
-        body: update.body,
-      }),
-    );
-    const intentItems = buildIntentItems(
-      activitySummary.sections.activeIntents,
-    );
-    const suggestionItems = buildDiscoveryItems(
-      activitySummary.sections.suggestions,
-    );
-    const discoveryHighlightItems = buildDiscoveryHighlightItems(
-      activitySummary.sections.discoveryHighlights,
-    );
-
-    return [
-      ...requestItems,
-      ...updateItems,
-      ...intentItems,
-      ...suggestionItems,
-      ...discoveryHighlightItems,
-    ].sort(compareActivityItems);
-  }, [activitySummary]);
-
-  const sections = useMemo(() => {
-    if (!activitySummary) {
-      return [];
-    }
-
-    const actionRequired = buildRequestItems(
-      activitySummary.sections.actionRequired,
-    );
-    const updates: ActivityItem[] = activitySummary.sections.updates.map(
-      (update) => ({
-        id: `update:${update.id}`,
-        kind: "summary",
-        priority: update.priority,
-        eyebrow: update.eyebrow,
-        title: update.title,
-        body: update.body,
-      }),
-    );
-    const activeIntents = buildIntentItems(
-      activitySummary.sections.activeIntents,
-    );
-    const suggestions = buildDiscoveryItems(
-      activitySummary.sections.suggestions,
-    );
-    const discoveryHighlights = buildDiscoveryHighlightItems(
-      activitySummary.sections.discoveryHighlights,
-    );
-
-    const itemsBySection = {
-      actionRequired,
-      updates,
-      activeIntents,
-      suggestions,
-      discoveryHighlights,
-    } as const;
-
-    return activitySummary.orderedSections
-      .map((section) => ({
-        id: section.id,
-        title: section.title,
-        subtitle: section.subtitle,
-        emphasis: section.emphasis,
-        items: [...itemsBySection[section.id]].sort(compareActivityItems),
-      }))
-      .filter((section) => section.items.length > 0);
-  }, [activitySummary]);
+  }, [inboxSuggestions, passiveDiscovery, pendingIntentsSummary, requests]);
 
   return {
-    loading: activityQuery.isLoading && !activityQuery.data,
-    refreshing: activityQuery.isRefetching,
-    error:
-      activityQuery.error instanceof Error ? activityQuery.error.message : null,
+    loading,
+    refreshing,
+    error,
     items,
-    sections,
-    pendingRequestCount: activitySummary?.counts.pendingRequests ?? 0,
+    pendingRequestCount,
     refresh,
   };
 }

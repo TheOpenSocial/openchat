@@ -1,87 +1,10 @@
 appId: ${MAESTRO_APP_ID}
 ---
-- launchApp:
-    permissions:
-      all: unset
-- openLink: ${MAESTRO_EXPO_URL}
-- tapOn:
-    text: "Continue"
-    optional: true
-- tapOn:
-    text: "Skip"
-    optional: true
-- tapOn:
-    text: "Try it now"
-    optional: true
-- tapOn:
-    text: "Reload"
-    optional: true
-- tapOn:
-    text: "Continue"
-    optional: true
-- tapOn:
-    text: "Skip"
-    optional: true
-- tapOn:
-    text: "Try it now"
-    optional: true
-- waitForAnimationToEnd
-- runFlow:
-    when:
-      visible:
-        id: "auth-screen"
-    commands:
-      - tapOn:
-          id: "auth-e2e-bypass-button"
-- runFlow:
-    when:
-      visible:
-        id: "onboarding-screen"
-    commands:
-      - tapOn:
-          id: "onboarding-s1-continue"
-      - tapOn:
-          id: "onboarding-goal-meet-people"
-      - tapOn:
-          id: "onboarding-s2-continue"
-      - tapOn:
-          id: "onboarding-s3-continue"
-      - tapOn:
-          id: "onboarding-s4-continue"
-      - tapOn:
-          id: "onboarding-display-name"
-      - eraseText
-      - inputText: "Maestro User"
-      - tapOn:
-          id: "onboarding-bio-input"
-      - inputText: "I like quick chats and short plans."
-      - tapOn:
-          id: "onboarding-area-input"
-      - inputText: "Buenos Aires"
-      - tapOn:
-          id: "onboarding-country-input"
-      - inputText: "Argentina"
-      - tapOn:
-          id: "onboarding-s5-continue"
-      - tapOn:
-          id: "onboarding-s6-skip"
-- extendedWaitUntil:
-    visible:
-      id: "home-screen"
-    timeout: 20000
+- runFlow: subflows/boot-shell-current.yaml
 - assertVisible:
     id: "home-screen"
-- assertVisible:
-    id: "home-status-header"
 - tapOn:
-    id: "app-shell-settings"
-- assertVisible:
-    id: "settings-close"
-- tapOn:
-    id: "settings-close"
-- waitForAnimationToEnd
-- tapOn:
-    id: "app-shell-notifications"
+    id: "e2e-nav-activity"
 - extendedWaitUntil:
     visible:
       id: "activity-screen"
@@ -89,8 +12,46 @@ appId: ${MAESTRO_APP_ID}
 - assertVisible:
     id: "activity-screen"
 - tapOn:
-    id: "app-bottom-tab-home"
+    point: "91%,54%"
+    optional: true
+- tapOn:
+    point: "91%,12%"
+    optional: true
+- tapOn:
+    id: "activity-close"
+- extendedWaitUntil:
+    visible:
+      id: "e2e-nav-rail"
+    timeout: 15000
 - assertVisible:
     id: "home-screen"
-- assertVisible:
-    id: "home-status-header"
+- tapOn:
+    id: "e2e-nav-profile"
+- extendedWaitUntil:
+    visible:
+      id: "profile-screen"
+    timeout: 15000
+- tapOn:
+    id: "e2e-nav-chats"
+- extendedWaitUntil:
+    visible:
+      id: "chats-screen"
+    timeout: 15000
+- runFlow:
+    when:
+      visible:
+        id: "chat-thread-row-first"
+    commands:
+      - tapOn:
+          id: "chat-thread-row-first"
+      - extendedWaitUntil:
+          visible:
+            id: "chat-selected-thread"
+          timeout: 15000
+- runFlow:
+    when:
+      visible:
+        id: "chat-empty-state"
+    commands:
+      - assertVisible:
+          id: "chat-empty-state"

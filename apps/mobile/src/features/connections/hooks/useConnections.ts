@@ -1,8 +1,6 @@
-import { useCallback, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { api, type ChatMetadataRecord } from "../../../lib/api";
-import { mobileQueryKeys } from "../../../lib/query-client";
 import { useChatsStore } from "../../../store/chats-store";
 import {
   buildConnectionItem,
@@ -16,9 +14,18 @@ type UseConnectionsArgs = {
 
 export function useConnections({ accessToken, userId }: UseConnectionsArgs) {
   const chats = useChatsStore((store) => store.chats);
-  const connectionsQuery = useQuery({
-    enabled: Boolean(accessToken && userId),
-    queryFn: async () => {
+  const [metadataByChatId, setMetadataByChatId] = useState<
+    Record<string, ChatMetadataRecord | null>
+  >({});
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    setRefreshing(true);
+    setError(null);
+
+    try {
       const nextMetadataEntries = await Promise.all(
         chats.map(async (thread) => {
           try {
@@ -30,37 +37,36 @@ export function useConnections({ accessToken, userId }: UseConnectionsArgs) {
         }),
       );
 
-      return Object.fromEntries(nextMetadataEntries) as Record<
-        string,
-        ChatMetadataRecord | null
-      >;
-    },
-    queryKey: [
-      ...mobileQueryKeys.connections(userId),
-      chats.map((chat) => chat.id),
-    ],
-  });
+      setMetadataByChatId(Object.fromEntries(nextMetadataEntries));
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to load connections right now.",
+      );
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [accessToken, chats]);
 
-  const refresh = useCallback(async () => {
-    await connectionsQuery.refetch();
-  }, [connectionsQuery]);
+  useEffect(() => {
+    void refresh();
+  }, [refresh, userId]);
 
   const items = useMemo<ConnectionItem[]>(
     () =>
       chats.map((thread) =>
-        buildConnectionItem(thread, userId, connectionsQuery.data?.[thread.id]),
+        buildConnectionItem(thread, userId, metadataByChatId[thread.id]),
       ),
-    [chats, connectionsQuery.data, userId],
+    [chats, metadataByChatId, userId],
   );
 
   return {
-    error:
-      connectionsQuery.error instanceof Error
-        ? connectionsQuery.error.message
-        : null,
+    error,
     items,
-    loading: connectionsQuery.isLoading && !connectionsQuery.data,
+    loading,
     refresh,
-    refreshing: connectionsQuery.isRefetching,
+    refreshing,
   };
 }

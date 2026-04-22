@@ -4,33 +4,30 @@ import {
   Animated,
   FlatList,
   type LayoutChangeEvent,
+  LayoutAnimation,
+  Platform,
   Pressable,
   ScrollView,
   Text,
+  UIManager,
   View,
 } from "react-native";
 
 import { ChatTranscriptList } from "../components/ChatTranscriptList";
-import type {
-  ExperienceHomeSummaryResponse,
-  PendingIntentsSummaryResponse,
-} from "../lib/api";
+import type { PendingIntentsSummaryResponse } from "../lib/api";
 import { hapticSelection } from "../lib/haptics";
 import type { AppLocale } from "../i18n/strings";
 import { t } from "../i18n/strings";
 import type { TelemetryEventName } from "../lib/telemetry";
 import type { AgentTimelineMessage } from "../types";
 import type { HomeRuntimeViewModel } from "../screens/home/domain/types";
-import { appTheme } from "../theme";
 import { OpenChatComposer } from "./OpenChatComposer";
-import { HomeComposerBanners } from "./HomeComposerBanners";
 import { OpenChatHeader } from "./OpenChatHeader";
-import { HomeStatusHeader } from "./HomeStatusHeader";
-import { HomeSpotlightCards } from "./HomeSpotlightCards";
 import { OpenChatWelcomeSheet } from "./OpenChatWelcomeSheet";
 import { StarterPrompts } from "./StarterPrompts";
 import { ThreadMessage } from "./ThreadMessage";
 import { RUNTIME_SYSTEM_MESSAGE_PREFIX } from "./ThreadMessage";
+import { ThreadStatusTransition } from "./ThreadStatusTransition";
 import { useThreadRuntimePresentation } from "./useThreadRuntimePresentation";
 import {
   deriveThreadRuntimeModel,
@@ -59,14 +56,6 @@ export type OpenChatScreenProps = {
   onDecomposeIntentChange: (value: boolean) => void;
   onDecomposeMaxIntentsChange: (value: number) => void;
   pendingIntentSummary: PendingIntentsSummaryResponse | null;
-  homeSummary?: ExperienceHomeSummaryResponse | null;
-  onPressHomeAction?: (
-    action: ExperienceHomeSummaryResponse["status"]["nextAction"]["kind"],
-  ) => void;
-  onPressActivity?: () => void;
-  onPressCoordination?: (targetChatId: string | null) => void;
-  onPressLeadIntent?: (intentId: string) => void;
-  onPressTopSuggestion?: (userId: string) => void;
   onboardingCarryover?: {
     seed: string;
     state: "processing" | "queued" | "ready";
@@ -78,12 +67,10 @@ export type OpenChatScreenProps = {
     properties?: Record<string, unknown>,
   ) => void;
   runtimeViewModel?: HomeRuntimeViewModel;
-  threadLoadErrorMessage?: string | null;
-  threadLoadRetryAttempt?: number;
-  threadLoadRetrySeconds?: number | null;
-  threadLoadWillAutoRetry?: boolean;
   welcomeSheetVisible?: boolean;
   onDismissWelcomeSheet?: () => void;
+  threadLoadErrorMessage?: string | null;
+  onRetryThreadLoad?: (() => void) | null;
 };
 
 export function OpenChatScreen({
@@ -104,12 +91,6 @@ export function OpenChatScreen({
   onStop,
   onVoiceTranscript,
   pendingIntentSummary,
-  homeSummary = null,
-  onPressHomeAction,
-  onPressActivity,
-  onPressCoordination,
-  onPressLeadIntent,
-  onPressTopSuggestion,
   sending,
   setDraftMessage,
   threadLoading,
@@ -118,12 +99,10 @@ export function OpenChatScreen({
   composerBottomOffset = 0,
   onRuntimeTelemetry,
   runtimeViewModel,
-  threadLoadErrorMessage = null,
-  threadLoadRetryAttempt = 0,
-  threadLoadRetrySeconds = null,
-  threadLoadWillAutoRetry = false,
   welcomeSheetVisible = false,
   onDismissWelcomeSheet,
+  threadLoadErrorMessage = null,
+  onRetryThreadLoad = null,
 }: OpenChatScreenProps) {
   void agentImageUrl;
   void canRegenerate;
@@ -137,7 +116,6 @@ export function OpenChatScreen({
   void onRegenerate;
   void onStop;
   const transcriptRef = useRef<FlatList<AgentTimelineMessage> | null>(null);
-  const lastTranscriptLengthRef = useRef(0);
   const userActive = hasUserTurn(messages);
   const filteredMessages = useMemo(() => {
     const DEBUG_PATTERNS = [
@@ -147,100 +125,12 @@ export function OpenChatScreen({
       /synthesizing final response/i,
       /agentic turn completed/i,
     ];
-    const LOW_SIGNAL_AGENT_PATTERNS = [
-      /^got it\.?\s*i['’]?m finding people who fit this\.?$/i,
-      /^got it\.?\s*i['’]?m looking for people who fit this\.?$/i,
-      /^i['’]?m still looking\.?$/i,
-      /^quick update:\s*/i,
-    ];
-
-    const nextMessages = messages.filter((m) => {
-      if (m.role === "workflow") {
-        return false;
-      }
+    return messages.filter((m) => {
       const body = m.body?.trim() ?? "";
       if (!body) return false;
-      if (DEBUG_PATTERNS.some((pattern) => pattern.test(body))) {
-        return false;
-      }
-      if (
-        m.role === "agent" &&
-        LOW_SIGNAL_AGENT_PATTERNS.some((pattern) => pattern.test(body))
-      ) {
-        return false;
-      }
-      return true;
+      return !DEBUG_PATTERNS.some((pattern) => pattern.test(body));
     });
-    const dedupedMessages = nextMessages.filter((message, index) => {
-      const previous = nextMessages[index - 1];
-      if (!previous || previous.role !== message.role) {
-        return true;
-      }
-      const previousBody = previous.body.trim();
-      const currentBody = message.body.trim();
-      if (previousBody === currentBody) {
-        return false;
-      }
-
-      if (message.role === "agent") {
-        const normalize = (value: string) =>
-          value
-            .toLowerCase()
-            .replace(/\s+/g, " ")
-            .replace(/[“”"'`]/g, "")
-            .trim();
-        const previousComparable = normalize(previousBody).slice(0, 110);
-        const currentComparable = normalize(currentBody).slice(0, 110);
-        if (
-          previousComparable.length > 40 &&
-          currentComparable.length > 40 &&
-          previousComparable === currentComparable
-        ) {
-          return false;
-        }
-      }
-
-      return true;
-    });
-
-    if (!homeSummary) {
-      return dedupedMessages;
-    }
-
-    const lastUserIndex = [...dedupedMessages]
-      .map((message) => message.role)
-      .lastIndexOf("user");
-
-    if (lastUserIndex < 0) {
-      return dedupedMessages.slice(-1);
-    }
-
-    const recentUserMessage = dedupedMessages[lastUserIndex];
-    const recentAgentReply =
-      dedupedMessages
-        .slice(lastUserIndex + 1)
-        .filter(
-          (message) =>
-            message.role === "agent" ||
-            message.role === "system" ||
-            message.role === "error",
-        )
-        .at(-1) ??
-      dedupedMessages
-        .slice(0, lastUserIndex)
-        .filter(
-          (message) =>
-            message.role === "agent" ||
-            message.role === "system" ||
-            message.role === "error",
-        )
-        .at(-1) ??
-      null;
-
-    return recentAgentReply
-      ? [recentUserMessage, recentAgentReply]
-      : [recentUserMessage];
-  }, [homeSummary, messages]);
+  }, [messages]);
   const hasTranscriptMessages = filteredMessages.length > 0;
   const seedPromptBody = t("homeAgentSeedPrompt", locale).trim();
   const hasOnlySeedPrompt =
@@ -289,7 +179,6 @@ export function OpenChatScreen({
   const phase = runtime.phase;
   const transcriptMessages = useMemo(() => {
     const shouldShowRuntimeSystem =
-      !homeSummary &&
       hasUserTurn(filteredMessages) &&
       (runtime.state === "matching" ||
         runtime.state === "sending" ||
@@ -305,6 +194,13 @@ export function OpenChatScreen({
     };
     return [...filteredMessages, runtimeMessage];
   }, [filteredMessages, runtime.state, runtime.thinkingLabel]);
+
+  useEffect(() => {
+    if (Platform.OS === "android") {
+      UIManager.setLayoutAnimationEnabledExperimental?.(true);
+    }
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+  }, [filteredMessages.length]);
 
   const canSend =
     runtimeViewModel?.canSend ?? (draftMessage.trim().length > 0 && !sending);
@@ -326,38 +222,25 @@ export function OpenChatScreen({
   const starterOpacity = useRef(new Animated.Value(0)).current;
   const starterTranslateY = useRef(new Animated.Value(14)).current;
 
-  const composerInsetBottom = composerBottomOffset + 10;
-  const transcriptBottomPadding =
-    composerOverlayHeight + composerInsetBottom + 24;
-
   useEffect(() => {
-    const previousLength = lastTranscriptLengthRef.current;
-    const nextLength = transcriptMessages.length;
-    lastTranscriptLengthRef.current = nextLength;
-
-    if (nextLength <= previousLength) {
-      return;
-    }
-
-    if (previousLength === 0) {
-      return;
-    }
-
     if (atBottom) {
       setPendingUpdates(0);
-      requestAnimationFrame(() => {
-        transcriptRef.current?.scrollToEnd({ animated: true });
-      });
+      transcriptRef.current?.scrollToEnd({ animated: true });
       return;
     }
-
     setPendingUpdates((current) => current + 1);
-  }, [atBottom, transcriptMessages.length]);
+  }, [atBottom, filteredMessages.length]);
+
+  useEffect(() => {
+    if (Platform.OS === "android") {
+      UIManager.setLayoutAnimationEnabledExperimental?.(true);
+    }
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+  }, [showOnboardingCarryover, onboardingCarryover?.state]);
 
   useEffect(() => {
     if (
       hasRenderableTranscriptMessages ||
-      showThreadLoadErrorState ||
       carryoverProcessing ||
       showOnboardingCarryover
     ) {
@@ -398,7 +281,6 @@ export function OpenChatScreen({
   }, [
     carryoverProcessing,
     hasRenderableTranscriptMessages,
-    showThreadLoadErrorState,
     showOnboardingCarryover,
     starterOpacity,
     starterTranslateY,
@@ -414,21 +296,13 @@ export function OpenChatScreen({
   };
 
   return (
-    <View
-      className="min-h-0 flex-1 px-5 pt-3"
-      style={{ backgroundColor: appTheme.colors.background }}
-    >
+    <View className="min-h-0 flex-1 bg-[#050506] px-5 pt-3">
       <OpenChatHeader locale={locale} showPresence={!userActive} />
-      <HomeStatusHeader
-        onPressAction={onPressHomeAction}
-        summary={homeSummary}
-      />
-      <HomeSpotlightCards
-        onPressActivity={onPressActivity}
-        onPressCoordination={onPressCoordination}
-        onPressLeadIntent={onPressLeadIntent}
-        onPressTopSuggestion={onPressTopSuggestion}
-        summary={homeSummary}
+      <ThreadStatusTransition
+        contextLabel={null}
+        hint={null}
+        showThinking={false}
+        thinkingLabel={runtime.thinkingLabel}
       />
 
       {showOnboardingCarryover ? (
@@ -484,11 +358,44 @@ export function OpenChatScreen({
         </View>
       ) : null}
 
-      {hasRenderableTranscriptMessages ? (
+      {typeof threadLoadErrorMessage === "string" &&
+      threadLoadErrorMessage.trim().length > 0 ? (
+        <View className="mb-4 rounded-[20px] border border-white/[0.08] bg-white/[0.03] px-4 py-4">
+          <Text className="text-[15px] font-semibold tracking-[-0.02em] text-white/92">
+            {threadLoadErrorMessage}
+          </Text>
+          <Text className="mt-1.5 text-[13px] leading-[20px] text-white/48">
+            {t("homeThreadLoadFailedBody", locale)}
+          </Text>
+          {onRetryThreadLoad ? (
+            <Pressable
+              accessibilityRole="button"
+              className="mt-3 self-start rounded-full border border-white/12 bg-white/[0.06] px-3.5 py-2"
+              onPress={onRetryThreadLoad}
+            >
+              <Text className="text-[12px] font-semibold text-white/92">
+                {t("homeThreadRetryCta", locale)}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+
+      {showThreadLoadingState ? (
+        <View className="min-h-0 flex-1 items-center justify-center py-8">
+          <ActivityIndicator color="rgba(255,255,255,0.72)" size="small" />
+          <Text className="mt-4 text-center text-[22px] font-semibold tracking-tight text-white/92">
+            OpenSocial
+          </Text>
+          <Text className="mt-3 max-w-[280px] text-center text-[14px] leading-[21px] text-white/42">
+            {t("agentHistoryLoading", locale)}
+          </Text>
+        </View>
+      ) : hasRenderableTranscriptMessages ? (
         <View className="-mx-5 min-h-0 flex-1">
           <ChatTranscriptList
-            contentPaddingBottom={transcriptBottomPadding}
-            contentPaddingTop={8}
+            contentPaddingBottom={composerOverlayHeight + 18}
+            contentPaddingTop={14}
             listRef={transcriptRef}
             messages={transcriptMessages}
             onAtBottomChange={setAtBottom}
@@ -499,44 +406,6 @@ export function OpenChatScreen({
             )}
           />
         </View>
-      ) : showThreadLoadingState ? (
-        <View className="min-h-0 flex-1 items-center justify-center py-8">
-          <ActivityIndicator color="rgba(255,255,255,0.72)" size="small" />
-          <Text className="mt-4 text-center text-[14px] leading-[21px] text-white/56">
-            {t("agentHistoryLoading", locale)}
-          </Text>
-        </View>
-      ) : threadLoadErrorMessage ? (
-        <View className="min-h-0 flex-1 items-center justify-center px-8 py-8">
-          <View className="items-center">
-            <View className="rounded-full border border-white/[0.08] bg-white/[0.04] px-4 py-2">
-              <Text className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/42">
-                {t("homeThreadRecoveryKicker", locale)}
-              </Text>
-            </View>
-            <View className="mt-6 h-12 w-12 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03]">
-              <ActivityIndicator color="rgba(255,255,255,0.72)" size="small" />
-            </View>
-            <Text className="mt-5 text-center text-[24px] font-semibold tracking-[-0.03em] text-white/92">
-              {threadLoadWillAutoRetry
-                ? t("homeThreadRecoveryTitle", locale)
-                : t("homeThreadRecoveryWaitingTitle", locale)}
-            </Text>
-            <Text className="mt-3 max-w-[280px] text-center text-[14px] leading-[22px] text-white/48">
-              {threadLoadWillAutoRetry
-                ? t("homeThreadRecoveryBody", locale)
-                : t("homeThreadRecoveryWaitingBody", locale)}
-            </Text>
-            {threadLoadWillAutoRetry ? (
-              <Text className="mt-4 text-center text-[12px] font-medium text-white/58">
-                {t("homeThreadRetryingCountdown", locale, {
-                  attempt: threadLoadRetryAttempt,
-                  seconds: String(Math.max(1, threadLoadRetrySeconds ?? 1)),
-                })}
-              </Text>
-            ) : null}
-          </View>
-        </View>
       ) : carryoverProcessing ? (
         <View className="min-h-0 flex-1 items-center justify-center py-8">
           <Text className="text-center text-[22px] font-semibold tracking-tight text-white/92">
@@ -546,14 +415,16 @@ export function OpenChatScreen({
             Processing your first intent.
           </Text>
         </View>
+      ) : showThreadLoadErrorState ? (
+        <View className="min-h-0 flex-1" />
       ) : (
         <ScrollView
           className="-mx-5 min-h-0 flex-1"
           contentContainerStyle={{
             minHeight: "100%",
-            paddingBottom: transcriptBottomPadding + 16,
+            paddingBottom: composerOverlayHeight + 40,
             paddingHorizontal: 20,
-            paddingTop: 56,
+            paddingTop: 58,
           }}
           keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
@@ -603,22 +474,14 @@ export function OpenChatScreen({
           <Pressable
             accessibilityLabel="Jump to latest update"
             accessibilityRole="button"
-            className="min-h-11 rounded-full border px-4 py-3"
+            className="rounded-full border border-white/[0.1] bg-white/[0.08] px-3.5 py-2"
             onPress={() => {
               hapticSelection();
               transcriptRef.current?.scrollToEnd({ animated: true });
               setPendingUpdates(0);
             }}
-            style={({ pressed }) => ({
-              backgroundColor: appTheme.colors.panel,
-              borderColor: appTheme.colors.hairlineStrong,
-              opacity: pressed ? appTheme.motion.pressOpacity : 1,
-            })}
           >
-            <Text
-              className="text-[12px] font-medium"
-              style={{ color: appTheme.colors.ink }}
-            >
+            <Text className="text-[12px] font-medium text-white/90">
               {pendingUpdates > 1 ? `${pendingUpdates} updates` : "New update"}
             </Text>
           </Pressable>
@@ -629,7 +492,7 @@ export function OpenChatScreen({
         className="absolute"
         onLayout={onComposerLayout}
         pointerEvents="box-none"
-        style={{ bottom: composerInsetBottom, left: 8, right: 8 }}
+        style={{ bottom: 10, left: 5, right: 5 }}
       >
         <OpenChatComposer
           canSend={canSend}
@@ -641,15 +504,6 @@ export function OpenChatScreen({
           onVoiceTranscript={onVoiceTranscript}
           sendTestID="agent-send-intent-button"
           sending={sending}
-          topAccessory={
-            <HomeComposerBanners
-              onPressActivity={onPressActivity}
-              onPressCoordination={onPressCoordination}
-              onPressLeadIntent={onPressLeadIntent}
-              onPressTopSuggestion={onPressTopSuggestion}
-              summary={homeSummary}
-            />
-          }
           value={draftMessage}
         />
       </View>

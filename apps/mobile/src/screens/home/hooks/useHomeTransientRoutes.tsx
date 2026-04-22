@@ -3,6 +3,7 @@ import { View } from "react-native";
 
 import { RouteTransition } from "../../../components/RouteTransition";
 import type { MobileSession, UserProfileDraft } from "../../../types";
+import { ActivityScreen } from "../../ActivityScreen";
 import { ConnectionsScreen } from "../../ConnectionsScreen";
 import { DiscoveryScreen } from "../../DiscoveryScreen";
 import { InboxScreen } from "../../InboxScreen";
@@ -65,6 +66,7 @@ export function useHomeTransientRoutes({
   setActiveTab,
   setSelectedChatId,
 }: UseHomeTransientRoutesInput) {
+  const [activityOpen, setActivityOpen] = useState(false);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
   const [discoveryOpen, setDiscoveryOpen] = useState(false);
   const [inboxOpen, setInboxOpen] = useState(false);
@@ -79,6 +81,7 @@ export function useHomeTransientRoutes({
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const closeTransientRoutes = useCallback(() => {
+    setActivityOpen(false);
     setConnectionsOpen(false);
     setDiscoveryOpen(false);
     setInboxOpen(false);
@@ -92,8 +95,8 @@ export function useHomeTransientRoutes({
 
   const openActivity = useCallback(() => {
     closeTransientRoutes();
-    setActiveTab("activity");
-  }, [closeTransientRoutes, setActiveTab]);
+    setActivityOpen(true);
+  }, [closeTransientRoutes]);
 
   const openConnections = useCallback(() => {
     closeTransientRoutes();
@@ -182,7 +185,7 @@ export function useHomeTransientRoutes({
         userId: targetUserId,
         context: {
           source: "request",
-          reason: "Opened from an incoming request waiting on your response.",
+          reason: "This person sent you a connection request.",
         },
       });
     },
@@ -204,7 +207,7 @@ export function useHomeTransientRoutes({
 
       switch (intent.kind) {
         case "activity":
-          setActiveTab("activity");
+          setActivityOpen(true);
           break;
         case "connections":
           setConnectionsOpen(true);
@@ -273,6 +276,24 @@ export function useHomeTransientRoutes({
       );
     }
 
+    if (activityOpen) {
+      return renderTransientScreen(
+        "activity",
+        <ActivityScreen
+          accessToken={session.accessToken}
+          onClose={closeTransientRoutes}
+          onOpenConnections={openConnections}
+          onOpenDiscovery={openDiscovery}
+          onOpenInbox={openInbox}
+          onOpenIntentDetail={openIntentDetail}
+          onOpenRecurringCircles={openRecurringCircles}
+          onOpenSavedSearches={openSavedSearches}
+          onOpenScheduledTasks={openScheduledTasks}
+          userId={session.userId}
+        />,
+      );
+    }
+
     if (connectionsOpen) {
       return renderTransientScreen(
         "connections",
@@ -296,19 +317,6 @@ export function useHomeTransientRoutes({
           userId={session.userId}
         />,
         { animated: false },
-      );
-    }
-
-    if (inboxOpen) {
-      return renderTransientScreen(
-        "inbox",
-        <InboxScreen
-          accessToken={session.accessToken}
-          onClose={closeTransientRoutes}
-          onOpenIntentDetail={openIntentDetail}
-          onOpenProfile={openProfileFromInbox}
-          userId={session.userId}
-        />,
       );
     }
 
@@ -357,6 +365,19 @@ export function useHomeTransientRoutes({
       );
     }
 
+    if (inboxOpen) {
+      return renderTransientScreen(
+        "inbox",
+        <InboxScreen
+          accessToken={session.accessToken}
+          onClose={closeTransientRoutes}
+          onOpenIntentDetail={openIntentDetail}
+          onOpenProfile={openProfileFromInbox}
+          userId={session.userId}
+        />,
+      );
+    }
+
     if (otherProfileTarget) {
       return renderTransientScreen(
         `profile:${otherProfileTarget.userId}`,
@@ -372,11 +393,12 @@ export function useHomeTransientRoutes({
 
     return null;
   }, [
+    activityOpen,
     closeTransientRoutes,
     connectionsOpen,
     discoveryOpen,
-    inboxOpen,
     initialProfile,
+    inboxOpen,
     intentDetailIntentId,
     onProfileUpdated,
     openChatFromConnections,
@@ -403,12 +425,12 @@ export function useHomeTransientRoutes({
 
   return {
     actions: {
+      closeAll: closeTransientRoutes,
       handlePushRouteIntent,
       openActivity,
       openConnections,
       openDiscovery,
       openInbox,
-      openIntentDetail,
       openProfileFromChat,
       openProfileFromConnections,
       openProfileFromDiscovery,

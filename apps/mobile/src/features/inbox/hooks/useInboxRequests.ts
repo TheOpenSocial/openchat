@@ -1,8 +1,6 @@
-import { useCallback, useEffect, useMemo } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useState } from "react";
 
 import { api, type InboxRequestRecord } from "../../../lib/api";
-import { mobileQueryKeys } from "../../../lib/query-client";
 import { useInboxStore } from "../../../store/inbox-store";
 
 type UseInboxRequestsArgs = {
@@ -14,76 +12,83 @@ export function useInboxRequests({
   accessToken,
   userId,
 }: UseInboxRequestsArgs) {
-  const queryClient = useQueryClient();
   const setRequestsInStore = useInboxStore((store) => store.setRequests);
-  const requestsQuery = useQuery({
-    enabled: Boolean(accessToken && userId),
-    queryFn: () => api.listPendingRequests(userId, accessToken),
-    queryKey: mobileQueryKeys.inboxRequests(userId),
-  });
-
-  const requests = useMemo<InboxRequestRecord[]>(
-    () => requestsQuery.data ?? [],
-    [requestsQuery.data],
-  );
-
-  useEffect(() => {
-    setRequestsInStore(requests);
-  }, [requests, setRequestsInStore]);
+  const [requests, setRequests] = useState<InboxRequestRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [actingRequestId, setActingRequestId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    await requestsQuery.refetch();
-  }, [requestsQuery]);
+    setRefreshing(true);
+    setError(null);
+    try {
+      const nextRequests = await api.listPendingRequests(userId, accessToken);
+      setRequests(nextRequests);
+      setRequestsInStore(nextRequests);
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to load inbox right now.",
+      );
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [accessToken, setRequestsInStore, userId]);
 
-  const acceptMutation = useMutation({
-    mutationFn: (requestId: string) =>
-      api.acceptRequest(requestId, accessToken),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: mobileQueryKeys.inboxRequests(userId),
-      });
-    },
-  });
-
-  const rejectMutation = useMutation({
-    mutationFn: (requestId: string) =>
-      api.rejectRequest(requestId, accessToken),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: mobileQueryKeys.inboxRequests(userId),
-      });
-    },
-  });
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
 
   const accept = useCallback(
     async (requestId: string) => {
-      await acceptMutation.mutateAsync(requestId);
+      setActingRequestId(requestId);
+      setError(null);
+      try {
+        await api.acceptRequest(requestId, accessToken);
+        await refresh();
+      } catch (nextError) {
+        setError(
+          nextError instanceof Error
+            ? nextError.message
+            : "Unable to accept this request.",
+        );
+      } finally {
+        setActingRequestId(null);
+      }
     },
-    [acceptMutation],
+    [accessToken, refresh],
   );
 
   const reject = useCallback(
     async (requestId: string) => {
-      await rejectMutation.mutateAsync(requestId);
+      setActingRequestId(requestId);
+      setError(null);
+      try {
+        await api.rejectRequest(requestId, accessToken);
+        await refresh();
+      } catch (nextError) {
+        setError(
+          nextError instanceof Error
+            ? nextError.message
+            : "Unable to reject this request.",
+        );
+      } finally {
+        setActingRequestId(null);
+      }
     },
-    [rejectMutation],
+    [accessToken, refresh],
   );
-
-  const actingRequestId =
-    acceptMutation.variables ?? rejectMutation.variables ?? null;
-  const error =
-    (acceptMutation.error instanceof Error && acceptMutation.error.message) ||
-    (rejectMutation.error instanceof Error && rejectMutation.error.message) ||
-    (requestsQuery.error instanceof Error && requestsQuery.error.message) ||
-    null;
 
   return {
     accept,
     actingRequestId,
     error,
-    loading: requestsQuery.isLoading && !requestsQuery.data,
+    loading,
     refresh,
-    refreshing: requestsQuery.isRefetching,
+    refreshing,
     reject,
     requests,
   };

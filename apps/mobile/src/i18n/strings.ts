@@ -54,13 +54,9 @@ const catalogs = {
     onboardingHybridProcessingWordOne: "Understanding your intent.",
     onboardingHybridProcessingWordTwo: "Mapping your best starting point.",
     onboardingHybridProcessingWordThree: "Preparing your next step.",
-    onboardingHybridProcessingStatus:
-      "Turning what you shared into a starting point that feels right.",
     onboardingHybridExampleLabel: "Example",
     onboardingHybridExampleText:
       "“Looking for people nearby to share good conversations this week.”",
-    onboardingHybridExampleHint:
-      "Start with the real thing you want. We will shape the rest with you.",
     onboardingHybridCapturedTitle: "You said",
     onboardingHybridCapturedHint: "We’re using this to shape the next step.",
     onboardingHybridFollowUpVoiceHint: "Speak your answer.",
@@ -183,22 +179,11 @@ const catalogs = {
     homeQueuedActions: "{count} action{plural} queued for sync.",
     homeAgentSeedPrompt:
       "What would you like to do today, or who would you like to meet?",
-    homeThreadLoadFailedTitle: "Could not load your conversation",
+    homeThreadLoadFailedTitle: "Could not load your main conversation.",
     homeThreadLoadFailedBody:
-      "I could not restore your main conversation yet. Try again in a moment.",
-    homeThreadRetryCta: "Retry",
-    homeThreadRecoveryKicker: "OpenSocial",
-    homeThreadRecoveryTitle: "Reconnecting your conversation",
-    homeThreadRecoveryBody:
-      "I’m restoring your conversation now and will bring it back here as soon as it responds.",
-    homeThreadRecoveryWaitingTitle: "Waiting to reconnect your conversation",
-    homeThreadRecoveryWaitingBody:
-      "I’m holding your place here and will reconnect the conversation as soon as it becomes available.",
-    homeThreadRetryingCountdown:
-      "Retrying your conversation in {seconds}s · attempt {attempt}",
-    homeThreadRetryManualHint:
-      "If this keeps happening, retry once the connection settles.",
-    openChatPresenceTitle: "OpenSocial",
+      "Retry now, or start from a fresh thread on this device while we reconnect.",
+    homeThreadRetryCta: "Retry loading",
+    openChatPresenceTitle: "Agentic social",
     openChatPresenceSubtitle: "Ready when you are.",
     openChatEmptyTitle: "What do you want to do?",
     openChatEmptySubtitle:
@@ -223,13 +208,13 @@ const catalogs = {
     openChatOnboardingCarryoverProcessing:
       "We’re carrying your first intent into your thread.",
     openChatOnboardingCarryoverReady:
-      "Your conversation is starting from what you already said.",
+      "Your thread is starting from what you already said.",
     openChatOnboardingCarryoverQueued:
       "Your first intent is saved and will send as soon as you’re back online.",
     openChatOnboardingCarryoverStartNow: "Start from this",
     openChatOnboardingCarryoverRetry: "Try sending now",
-    openChatOnboardingCarryoverProcessingInline: "Starting your conversation…",
-    openChatOnboardingHandoffTitle: "Starting your conversation",
+    openChatOnboardingCarryoverProcessingInline: "Starting your thread…",
+    openChatOnboardingHandoffTitle: "Starting your thread",
     openChatOnboardingHandoffSubtitle:
       "We’re turning your onboarding signal into your first conversation.",
     openChatSuggestions: "Suggestions",
@@ -269,7 +254,7 @@ const catalogs = {
     chatsSyncingNow: "Syncing...",
     chatsEmptyTitle: "No chats yet",
     chatsEmptyDescription:
-      "When someone accepts or a group comes together, I’ll open the conversation here for you.",
+      "Create a chat sandbox to test message persistence using the live API.",
     chatsUnread: "{count} unread",
     chatsReportUser: "Report user",
     chatsBlockUser: "Block user",
@@ -423,13 +408,9 @@ const catalogs = {
     onboardingHybridProcessingWordOne: "Entendiendo tu intención.",
     onboardingHybridProcessingWordTwo: "Armando tu mejor punto de inicio.",
     onboardingHybridProcessingWordThree: "Preparando el siguiente paso.",
-    onboardingHybridProcessingStatus:
-      "Convirtiendo lo que compartiste en un punto de inicio que se sienta bien.",
     onboardingHybridExampleLabel: "Ejemplo",
     onboardingHybridExampleText:
       "“Quiero conocer gente cerca para tener buenas charlas esta semana.”",
-    onboardingHybridExampleHint:
-      "Empieza por lo que realmente quieres. Nosotros te ayudamos a darle forma.",
     onboardingHybridCapturedTitle: "Dijiste",
     onboardingHybridCapturedHint:
       "Estamos usando esto para dar forma al siguiente paso.",
@@ -554,22 +535,11 @@ const catalogs = {
     homeQueuedActions: "{count} acción{plural} en cola para sincronizar.",
     homeAgentSeedPrompt:
       "¿Qué te gustaría hacer hoy, o a quién te gustaría conocer?",
-    homeThreadLoadFailedTitle: "No se pudo cargar tu conversación",
+    homeThreadLoadFailedTitle: "No pudimos cargar tu conversación principal.",
     homeThreadLoadFailedBody:
-      "La conversación principal no se cargó correctamente. Inténtalo de nuevo.",
-    homeThreadRetryCta: "Reintentar",
-    homeThreadRecoveryKicker: "OpenSocial",
-    homeThreadRecoveryTitle: "Reconectando tu conversación",
-    homeThreadRecoveryBody:
-      "Estoy restaurando tu conversación y la voy a traer de vuelta aquí apenas responda.",
-    homeThreadRecoveryWaitingTitle: "Esperando para reconectar tu conversación",
-    homeThreadRecoveryWaitingBody:
-      "Mantengo esta conversación lista y reconectaré apenas vuelva a estar disponible.",
-    homeThreadRetryingCountdown:
-      "Reintentando tu conversación en {seconds}s · intento {attempt}",
-    homeThreadRetryManualHint:
-      "Si esto sigue pasando, reintenta cuando la conexión se estabilice.",
-    openChatPresenceTitle: "OpenSocial",
+      "Intenta de nuevo ahora, o empieza desde un hilo nuevo en este dispositivo mientras nos reconectamos.",
+    homeThreadRetryCta: "Reintentar carga",
+    openChatPresenceTitle: "Social agéntico",
     openChatPresenceSubtitle: "Listo cuando tú quieras.",
     openChatEmptyTitle: "¿Qué quieres hacer?",
     openChatEmptySubtitle:
@@ -594,13 +564,13 @@ const catalogs = {
     openChatOnboardingCarryoverProcessing:
       "Estamos llevando tu primer intent a tu hilo.",
     openChatOnboardingCarryoverReady:
-      "Tu conversación empieza desde lo que ya dijiste.",
+      "Tu hilo empieza desde lo que ya dijiste.",
     openChatOnboardingCarryoverQueued:
       "Tu primer intent quedó guardado y se enviará cuando vuelvas a estar online.",
     openChatOnboardingCarryoverStartNow: "Empezar desde esto",
     openChatOnboardingCarryoverRetry: "Intentar enviar ahora",
-    openChatOnboardingCarryoverProcessingInline: "Iniciando tu conversación…",
-    openChatOnboardingHandoffTitle: "Iniciando tu conversación",
+    openChatOnboardingCarryoverProcessingInline: "Iniciando tu hilo…",
+    openChatOnboardingHandoffTitle: "Iniciando tu hilo",
     openChatOnboardingHandoffSubtitle:
       "Estamos convirtiendo tu señal de onboarding en tu primera conversación.",
     openChatSuggestions: "Sugerencias",

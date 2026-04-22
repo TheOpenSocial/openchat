@@ -5,7 +5,6 @@ import {
   LlmRuntimeHealthPanel,
   LaunchControlsPanel,
   OnboardingActivationHealthPanel,
-  ProtocolQueueHealthPanel,
   ReliabilityPanels,
   ScheduledTaskOperatorPanel,
   SecurityPosturePanel,
@@ -23,7 +22,6 @@ import {
   type SavedSearchRecord,
   type ScheduledTaskRecord,
   type ScheduledTaskRunRecord,
-  type ProtocolQueueHealthSnapshot,
   type SecurityPostureSnapshot,
   type VerificationRunsSnapshot,
 } from "./workbench-config";
@@ -64,7 +62,6 @@ export function OverviewTab({
   launchControlsSnapshot,
   llmRuntimeHealthSnapshot,
   onboardingActivationSnapshot,
-  protocolQueueHealthSnapshot,
   savedSearches,
   relayCount,
   agentReliabilitySnapshot,
@@ -91,7 +88,6 @@ export function OverviewTab({
   loadLaunchControlsSnapshot,
   loadLlmRuntimeHealthSnapshot,
   loadOnboardingActivationSnapshot,
-  loadProtocolQueueHealthSnapshot,
   loadSavedSearchesSnapshot,
   loadScheduledTaskRuns,
   loadScheduledTasksSnapshot,
@@ -135,7 +131,6 @@ export function OverviewTab({
   launchControlsSnapshot: LaunchControlsSnapshot | null;
   llmRuntimeHealthSnapshot: LlmRuntimeHealthSnapshot | null;
   onboardingActivationSnapshot: OnboardingActivationSnapshot | null;
-  protocolQueueHealthSnapshot: ProtocolQueueHealthSnapshot | null;
   savedSearches: SavedSearchRecord[];
   relayCount: number | null;
   agentReliabilitySnapshot: AgentReliabilitySnapshot | null;
@@ -162,7 +157,6 @@ export function OverviewTab({
   loadLaunchControlsSnapshot: () => Promise<unknown>;
   loadLlmRuntimeHealthSnapshot: () => Promise<unknown>;
   loadOnboardingActivationSnapshot: () => Promise<unknown>;
-  loadProtocolQueueHealthSnapshot: () => Promise<unknown>;
   loadSavedSearchesSnapshot: () => Promise<unknown>;
   loadScheduledTaskRuns: (taskId: string) => Promise<unknown>;
   loadScheduledTasksSnapshot: () => Promise<unknown>;
@@ -382,12 +376,6 @@ export function OverviewTab({
           </div>
         )}
       </Panel>
-
-      <ProtocolQueueHealthPanel
-        adminButtonClass={adminButtonClass}
-        loadProtocolQueueHealthSnapshot={loadProtocolQueueHealthSnapshot}
-        protocolQueueHealthSnapshot={protocolQueueHealthSnapshot}
-      />
 
       <div className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
         <Panel

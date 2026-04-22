@@ -435,7 +435,7 @@ export function useAgentIntentController({
             tone: "info",
             text: offlineFailure
               ? "Network issue detected. Your message is queued and will retry automatically."
-              : "The service is temporarily unavailable. Your message is queued and will retry automatically.",
+              : "Service issue detected. Your message is queued and will retry automatically.",
           });
           options?.onOutcome?.("queued");
           return;

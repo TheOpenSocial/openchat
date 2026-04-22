@@ -1,8 +1,6 @@
-import { useCallback, useMemo } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { api, type SavedSearchRecord } from "../../../lib/api";
-import { mobileQueryKeys } from "../../../lib/query-client";
 import {
   buildSavedSearchTaskItem,
   type SavedSearchTaskItem,
@@ -17,53 +15,71 @@ export function useSavedSearches({
   accessToken,
   userId,
 }: UseSavedSearchesArgs) {
-  const queryClient = useQueryClient();
-  const savedSearchesQuery = useQuery({
-    enabled: Boolean(accessToken && userId),
-    queryFn: () => api.listSavedSearches(userId, accessToken),
-    queryKey: mobileQueryKeys.savedSearches(userId),
-  });
+  const [savedSearches, setSavedSearches] = useState<SavedSearchRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [deletingSearchId, setDeletingSearchId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    await savedSearchesQuery.refetch();
-  }, [savedSearchesQuery]);
+    setRefreshing(true);
+    setError(null);
 
-  const removeMutation = useMutation({
-    mutationFn: (searchId: string) =>
-      api.deleteSavedSearch(searchId, accessToken),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: mobileQueryKeys.savedSearches(userId),
-      });
-    },
-  });
+    try {
+      const nextSavedSearches = await api.listSavedSearches(
+        userId,
+        accessToken,
+      );
+      setSavedSearches(nextSavedSearches);
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to load saved searches right now.",
+      );
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [accessToken, userId]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
 
   const remove = useCallback(
     async (searchId: string) => {
-      await removeMutation.mutateAsync(searchId);
+      setDeletingSearchId(searchId);
+      setError(null);
+
+      try {
+        await api.deleteSavedSearch(searchId, accessToken);
+        await refresh();
+      } catch (nextError) {
+        setError(
+          nextError instanceof Error
+            ? nextError.message
+            : "Unable to delete this saved search.",
+        );
+      } finally {
+        setDeletingSearchId(null);
+      }
     },
-    [removeMutation],
+    [accessToken, refresh],
   );
 
   const items = useMemo<SavedSearchTaskItem[]>(
-    () =>
-      (savedSearchesQuery.data ?? []).map((search: SavedSearchRecord) =>
-        buildSavedSearchTaskItem(search),
-      ),
-    [savedSearchesQuery.data],
+    () => savedSearches.map((search) => buildSavedSearchTaskItem(search)),
+    [savedSearches],
   );
 
   return {
-    deletingSearchId: removeMutation.variables ?? null,
-    error:
-      (removeMutation.error instanceof Error && removeMutation.error.message) ||
-      (savedSearchesQuery.error instanceof Error &&
-        savedSearchesQuery.error.message) ||
-      null,
+    deletingSearchId,
+    error,
     items,
-    loading: savedSearchesQuery.isLoading && !savedSearchesQuery.data,
+    loading,
     refresh,
-    refreshing: savedSearchesQuery.isRefetching,
+    refreshing,
     remove,
   };
 }

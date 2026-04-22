@@ -23,6 +23,7 @@ import { hapticSelection } from "../lib/haptics";
 import { appTheme } from "../theme";
 import type { UserProfileDraft } from "../types";
 import { useSelfProfileData } from "./profile/useProfileData";
+import { ProtocolIntegrationsPanel } from "./settings/ProtocolIntegrationsPanel";
 import { joinDisplayName, splitDisplayName } from "./settings/domain/name";
 import { ProtocolIntegrationsPanel } from "./settings/ProtocolIntegrationsPanel";
 
@@ -458,6 +459,8 @@ export function SettingsScreen({
                   value={lastName}
                 />
               </View>
+
+              <ProtocolIntegrationsPanel accessToken={accessToken} />
 
               {error ? (
                 <Text className="text-[13px] leading-[19px] text-[#fca5a5]">

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type ChangeEvent } from "react";
+import { useEffect, useState } from "react";
 
 import {
   WorkspaceHeader,
@@ -13,8 +13,92 @@ import { Button } from "@/src/components/ui/button";
 import { Input } from "@/src/components/ui/input";
 import { Label } from "@/src/components/ui/label";
 import { useAppSession } from "@/src/features/app-shell/app-session";
-import { ProtocolIntegrationsPanel } from "@/src/features/settings/protocol-integrations-panel";
-import { api } from "@/src/lib/api";
+import { API_BASE_URL, api } from "@/src/lib/api";
+
+interface ProtocolAppVisibility {
+  appId: string;
+  name: string;
+  status: string;
+  createdAt: string | null;
+  capabilities: string[];
+  scopes: string[];
+}
+
+interface ProtocolEventVisibility {
+  eventId: string;
+  eventName: string;
+  occurredAt: string | null;
+  summary: string;
+}
+
+interface ProtocolQueueVisibility {
+  totalDue: number | null;
+  pending: number | null;
+  retrying: number | null;
+  deadLetter: number | null;
+  lastRunAt: string | null;
+  nextRunAt: string | null;
+}
+
+interface ApiEnvelope<T> {
+  success: boolean;
+  data?: T;
+  error?: {
+    code: string;
+    message: string;
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function asString(value: unknown, fallback: string) {
+  return typeof value === "string" && value.trim().length > 0
+    ? value
+    : fallback;
+}
+
+function asStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((entry): entry is string => typeof entry === "string");
+}
+
+async function loadProtocolEnvelope<T>(
+  path: string,
+  accessToken: string,
+  signal?: AbortSignal,
+) {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+    },
+    signal,
+  });
+
+  if (response.status === 404) {
+    return null;
+  }
+
+  const raw = (await response.json().catch(() => null)) as unknown;
+  if (!isRecord(raw) || typeof raw.success !== "boolean") {
+    if (!response.ok) {
+      throw new Error(
+        `Protocol visibility request failed (${response.status})`,
+      );
+    }
+    return null;
+  }
+
+  const envelope = raw as ApiEnvelope<T>;
+  if (!response.ok || !envelope.success) {
+    throw new Error(envelope.error?.message ?? "Could not load protocol data.");
+  }
+
+  return envelope.data ?? null;
+}
 
 export function SettingsScreen() {
   const {
@@ -31,8 +115,16 @@ export function SettingsScreen() {
     uploadProfilePhoto,
   } = useAppSession();
   const [saving, setSaving] = useState(false);
+  const [protocolLoading, setProtocolLoading] = useState(false);
+  const [protocolError, setProtocolError] = useState<string | null>(null);
+  const [protocolApps, setProtocolApps] = useState<ProtocolAppVisibility[]>([]);
+  const [protocolEvents, setProtocolEvents] = useState<
+    ProtocolEventVisibility[]
+  >([]);
+  const [protocolQueue, setProtocolQueue] =
+    useState<ProtocolQueueVisibility | null>(null);
 
-  const onPhotoChange = async (event: ChangeEvent<HTMLInputElement>) => {
+  const onPhotoChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
     if (!file) {
       return;
@@ -83,6 +175,170 @@ export function SettingsScreen() {
     }
   };
 
+  useEffect(() => {
+    const accessToken = session?.accessToken;
+    if (!accessToken) {
+      setProtocolApps([]);
+      setProtocolEvents([]);
+      setProtocolQueue(null);
+      setProtocolError(null);
+      setProtocolLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setProtocolLoading(true);
+    setProtocolError(null);
+
+    void (async () => {
+      try {
+        const appsPayload = await loadProtocolEnvelope<unknown[]>(
+          "/protocol/apps",
+          accessToken,
+          controller.signal,
+        );
+        const apps = (appsPayload ?? []).flatMap((entry, index) => {
+          if (!isRecord(entry)) {
+            return [];
+          }
+          const appId = asString(
+            entry.appId ?? entry.id ?? entry.app_id,
+            `app-${index + 1}`,
+          );
+          return [
+            {
+              appId,
+              name: asString(entry.name ?? entry.appName ?? entry.label, appId),
+              status: asString(entry.status ?? entry.state, "unknown"),
+              createdAt:
+                typeof entry.createdAt === "string"
+                  ? entry.createdAt
+                  : typeof entry.created_at === "string"
+                    ? entry.created_at
+                    : null,
+              capabilities: asStringArray(
+                entry.capabilities ?? entry.permissions,
+              ),
+              scopes: asStringArray(entry.scopes ?? entry.grants),
+            },
+          ];
+        });
+
+        setProtocolApps(apps);
+
+        const appId = apps[0]?.appId ?? null;
+        if (!appId) {
+          setProtocolEvents([]);
+          setProtocolQueue(null);
+          return;
+        }
+
+        const [eventsPayload, queuePayload] = await Promise.all([
+          loadProtocolEnvelope<unknown[]>(
+            `/protocol/apps/${encodeURIComponent(appId)}/events/replay?limit=5`,
+            accessToken,
+            controller.signal,
+          ),
+          loadProtocolEnvelope<Record<string, unknown>>(
+            `/protocol/apps/${encodeURIComponent(appId)}/delivery-queue`,
+            accessToken,
+            controller.signal,
+          ),
+        ]);
+
+        const events = (eventsPayload ?? []).flatMap((entry, index) => {
+          if (!isRecord(entry)) {
+            return [];
+          }
+          return [
+            {
+              eventId: asString(
+                entry.eventId ?? entry.id ?? entry.event_id,
+                `event-${index + 1}`,
+              ),
+              eventName: asString(
+                entry.eventName ?? entry.name ?? entry.type,
+                "protocol.event",
+              ),
+              occurredAt:
+                typeof entry.occurredAt === "string"
+                  ? entry.occurredAt
+                  : typeof entry.createdAt === "string"
+                    ? entry.createdAt
+                    : null,
+              summary: asString(
+                entry.summary ??
+                  entry.message ??
+                  entry.description ??
+                  JSON.stringify(entry.payload ?? entry.data ?? {}),
+                "Protocol event",
+              ),
+            },
+          ];
+        });
+        setProtocolEvents(events);
+
+        if (queuePayload && isRecord(queuePayload)) {
+          setProtocolQueue({
+            totalDue:
+              typeof queuePayload.totalDue === "number"
+                ? queuePayload.totalDue
+                : typeof queuePayload.dueCount === "number"
+                  ? queuePayload.dueCount
+                  : null,
+            pending:
+              typeof queuePayload.pending === "number"
+                ? queuePayload.pending
+                : typeof queuePayload.pendingCount === "number"
+                  ? queuePayload.pendingCount
+                  : null,
+            retrying:
+              typeof queuePayload.retrying === "number"
+                ? queuePayload.retrying
+                : typeof queuePayload.retryCount === "number"
+                  ? queuePayload.retryCount
+                  : null,
+            deadLetter:
+              typeof queuePayload.deadLetter === "number"
+                ? queuePayload.deadLetter
+                : typeof queuePayload.deadLetterCount === "number"
+                  ? queuePayload.deadLetterCount
+                  : null,
+            lastRunAt:
+              typeof queuePayload.lastRunAt === "string"
+                ? queuePayload.lastRunAt
+                : typeof queuePayload.updatedAt === "string"
+                  ? queuePayload.updatedAt
+                  : null,
+            nextRunAt:
+              typeof queuePayload.nextRunAt === "string"
+                ? queuePayload.nextRunAt
+                : null,
+          });
+        } else {
+          setProtocolQueue(null);
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setProtocolError(
+            error instanceof Error
+              ? error.message
+              : "Could not load protocol activity.",
+          );
+          setProtocolApps([]);
+          setProtocolEvents([]);
+          setProtocolQueue(null);
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setProtocolLoading(false);
+        }
+      }
+    })();
+
+    return () => controller.abort();
+  }, [session?.accessToken]);
+
   return (
     <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
       <WorkspacePanel>
@@ -113,7 +369,7 @@ export function SettingsScreen() {
             <Label htmlFor="display-name">Display name</Label>
             <Input
               id="display-name"
-              onChange={(event: ChangeEvent<HTMLInputElement>) =>
+              onChange={(event) =>
                 setProfileDraft((current) => ({
                   ...current,
                   displayName: event.currentTarget.value,
@@ -187,8 +443,6 @@ export function SettingsScreen() {
       </WorkspacePanel>
 
       <div className="space-y-4">
-        <ProtocolIntegrationsPanel />
-
         <WorkspacePanel>
           <WorkspaceHeader
             description="Keep the shell lightweight while still making the route easy to reach."
@@ -218,6 +472,178 @@ export function SettingsScreen() {
                 </Button>
               </Link>
             </div>
+          </div>
+        </WorkspacePanel>
+
+        <WorkspacePanel>
+          <WorkspaceHeader
+            description="Read-only visibility into protocol activity, app registrations, and delivery health."
+            title="Protocol usage"
+          />
+          <div className="mt-4 space-y-4">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <WorkspaceMutedPanel>
+                <p className="text-xs uppercase tracking-[0.24em] text-ash/60">
+                  Registered apps
+                </p>
+                <p className="mt-2 text-2xl font-semibold text-white">
+                  {protocolLoading ? "…" : String(protocolApps.length)}
+                </p>
+              </WorkspaceMutedPanel>
+              <WorkspaceMutedPanel>
+                <p className="text-xs uppercase tracking-[0.24em] text-ash/60">
+                  Recent events
+                </p>
+                <p className="mt-2 text-2xl font-semibold text-white">
+                  {protocolLoading ? "…" : String(protocolEvents.length)}
+                </p>
+              </WorkspaceMutedPanel>
+              <WorkspaceMutedPanel>
+                <p className="text-xs uppercase tracking-[0.24em] text-ash/60">
+                  Delivery queue
+                </p>
+                <p className="mt-2 text-2xl font-semibold text-white">
+                  {protocolLoading ? "…" : (protocolQueue?.totalDue ?? "—")}
+                </p>
+              </WorkspaceMutedPanel>
+            </div>
+
+            {protocolError ? (
+              <WorkspaceMutedPanel>
+                <p className="text-sm leading-6 text-ash">
+                  Protocol visibility is unavailable right now.
+                </p>
+                <p className="mt-2 text-sm leading-6 text-ash/70">
+                  {protocolError}
+                </p>
+              </WorkspaceMutedPanel>
+            ) : null}
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <WorkspaceMutedPanel>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.24em] text-ash/60">
+                    Recent protocol events
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-ash/80">
+                    Latest activity from the first visible protocol app.
+                  </p>
+                </div>
+                <div className="mt-4 space-y-3">
+                  {protocolEvents.length > 0 ? (
+                    protocolEvents.slice(0, 5).map((event) => (
+                      <div
+                        className="rounded-2xl border border-white/8 bg-white/[0.03] p-3"
+                        key={event.eventId}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-white">
+                              {event.eventName}
+                            </p>
+                            <p className="mt-1 text-sm leading-6 text-ash/70">
+                              {event.summary}
+                            </p>
+                          </div>
+                          <p className="shrink-0 text-[11px] uppercase tracking-[0.24em] text-ash/40">
+                            {event.occurredAt
+                              ? new Date(event.occurredAt).toLocaleString()
+                              : "recent"}
+                          </p>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm leading-6 text-ash/70">
+                      No protocol events are visible yet.
+                    </p>
+                  )}
+                </div>
+              </WorkspaceMutedPanel>
+
+              <WorkspaceMutedPanel>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.24em] text-ash/60">
+                    Delivery queue summary
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-ash/80">
+                    Current due, retrying, and dead-letter counts for webhook
+                    delivery.
+                  </p>
+                </div>
+                <div className="mt-4 space-y-3">
+                  {protocolQueue ? (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-3">
+                        <p className="text-xs uppercase tracking-[0.24em] text-ash/60">
+                          Due
+                        </p>
+                        <p className="mt-2 text-2xl font-semibold text-white">
+                          {protocolQueue.totalDue ?? "—"}
+                        </p>
+                      </div>
+                      <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-3">
+                        <p className="text-xs uppercase tracking-[0.24em] text-ash/60">
+                          Pending / retrying
+                        </p>
+                        <p className="mt-2 text-2xl font-semibold text-white">
+                          {[
+                            protocolQueue.pending ?? "—",
+                            protocolQueue.retrying ?? "—",
+                          ].join(" / ")}
+                        </p>
+                      </div>
+                      <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-3 sm:col-span-2">
+                        <p className="text-xs uppercase tracking-[0.24em] text-ash/60">
+                          Dead-letter
+                        </p>
+                        <p className="mt-2 text-lg font-medium text-white">
+                          {protocolQueue.deadLetter ?? "—"}
+                        </p>
+                        <p className="mt-2 text-sm leading-6 text-ash/70">
+                          Last run{" "}
+                          {protocolQueue.lastRunAt
+                            ? new Date(protocolQueue.lastRunAt).toLocaleString()
+                            : "not available"}
+                          {protocolQueue.nextRunAt
+                            ? ` · next ${new Date(
+                                protocolQueue.nextRunAt,
+                              ).toLocaleString()}`
+                            : ""}
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm leading-6 text-ash/70">
+                      No queue summary is available yet.
+                    </p>
+                  )}
+                </div>
+              </WorkspaceMutedPanel>
+            </div>
+
+            <WorkspaceMutedPanel>
+              <p className="text-xs uppercase tracking-[0.24em] text-ash/60">
+                Protocol apps
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {protocolApps.length > 0 ? (
+                  protocolApps.map((app) => (
+                    <div
+                      className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm text-ash"
+                      key={app.appId}
+                    >
+                      {app.name}
+                      <span className="ml-2 text-ash/50">{app.status}</span>
+                    </div>
+                  ))
+                ) : (
+                  <span className="text-sm leading-6 text-ash/70">
+                    No protocol apps are registered for this session yet.
+                  </span>
+                )}
+              </div>
+            </WorkspaceMutedPanel>
           </div>
         </WorkspacePanel>
       </div>

@@ -12,11 +12,12 @@ import { Prisma } from "@prisma/client";
 import { formatChatReplyBody, parseChatMessageBody } from "@opensocial/types";
 import { Queue } from "bullmq";
 import { randomUUID } from "node:crypto";
-import type { ModerationService } from "../moderation/moderation.service.js";
 import { AnalyticsService } from "../analytics/analytics.service.js";
 import { PrismaService } from "../database/prisma.service.js";
 import { LaunchControlsService } from "../launch-controls/launch-controls.service.js";
+import { ModerationService } from "../moderation/moderation.service.js";
 import { PersonalizationService } from "../personalization/personalization.service.js";
+import { RealtimeEventsService } from "../realtime/realtime-events.service.js";
 import { PresenceService } from "../realtime/presence.service.js";
 
 const MESSAGE_IDEMPOTENCY_TTL_MS = 60 * 60 * 1000;
@@ -86,7 +87,11 @@ export class ChatsService {
     @Optional()
     private readonly launchControlsService?: LaunchControlsService,
     @Optional()
+    private readonly moderationService?: ModerationService,
+    @Optional()
     private readonly personalizationService?: PersonalizationService,
+    @Optional()
+    private readonly realtimeEventsService?: RealtimeEventsService,
     @Optional()
     private readonly presenceService?: PresenceService,
   ) {
@@ -122,6 +127,97 @@ export class ChatsService {
       }
     }
     return this.prisma.chat.create({ data: { connectionId, type } });
+  }
+
+  async listChatsForUser(userId: string) {
+    if (!this.prisma.chat?.findMany || !this.prisma.user?.findMany) {
+      return [];
+    }
+
+    const chats = await this.prisma.chat.findMany({
+      where: {
+        connection: {
+          participants: {
+            some: {
+              userId,
+              leftAt: null,
+            },
+          },
+        },
+      },
+      orderBy: [{ createdAt: "desc" }],
+      select: {
+        id: true,
+        connectionId: true,
+        type: true,
+        createdAt: true,
+        messages: {
+          orderBy: [{ createdAt: "desc" }],
+          take: 1,
+          select: {
+            id: true,
+            createdAt: true,
+          },
+        },
+        connection: {
+          select: {
+            status: true,
+            participants: {
+              where: { leftAt: null },
+              orderBy: [{ joinedAt: "asc" }],
+              select: {
+                userId: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const participantUserIds = Array.from(
+      new Set(
+        chats.flatMap((chat) =>
+          chat.connection.participants.map((participant) => participant.userId),
+        ),
+      ),
+    );
+    const users = await this.prisma.user.findMany({
+      where: {
+        id: { in: participantUserIds },
+      },
+      select: {
+        id: true,
+        displayName: true,
+      },
+    });
+    const userNamesById = new Map(
+      users.map((user) => [user.id, user.displayName.trim() || "Unknown user"]),
+    );
+
+    return chats.map((chat) => {
+      const counterpartNames = chat.connection.participants
+        .map((participant) => participant.userId)
+        .filter((participantUserId) => participantUserId !== userId)
+        .map(
+          (participantUserId) =>
+            userNamesById.get(participantUserId) ?? "Unknown user",
+        );
+      const title =
+        chat.type === "group"
+          ? counterpartNames.join(", ") || "Group chat"
+          : (counterpartNames[0] ?? "Direct message");
+
+      return {
+        id: chat.id,
+        connectionId: chat.connectionId,
+        title,
+        type: chat.type,
+        highWatermark: chat.messages[0]?.createdAt?.toISOString?.() ?? null,
+        unreadCount: 0,
+        participantCount: chat.connection.participants.length,
+        connectionStatus: chat.connection.status,
+      };
+    });
   }
 
   async createMessage(
@@ -314,11 +410,44 @@ export class ChatsService {
     return message;
   }
 
-  async getPersistedMessageForResponse(chatId: string, messageId: string) {
-    const message = await this.prisma.chatMessage.findFirst({
+  async sendFirstPartyChatMessageAction(
+    chatId: string,
+    senderUserId: string,
+    body: string,
+    options?: {
+      idempotencyKey?: string;
+      replyToMessageId?: string;
+      moderationState?: "clean" | "flagged" | "blocked" | "review";
+      isSystem?: boolean;
+    },
+  ) {
+    const message = await this.createMessage(chatId, senderUserId, body, {
+      idempotencyKey: options?.idempotencyKey,
+      replyToMessageId: options?.replyToMessageId,
+      moderationState: options?.moderationState,
+      isSystem: options?.isSystem,
+    });
+    return {
+      messageId: message.id,
+      chatId: message.chatId,
+    };
+  }
+
+  async getPersistedMessage(
+    chatId: string,
+    messageId: string,
+    viewerUserId?: string,
+  ) {
+    if (viewerUserId) {
+      await this.assertActiveParticipant(chatId, viewerUserId);
+    }
+    if (!this.prisma.chatMessage?.findUnique) {
+      throw new NotFoundException("message not found");
+    }
+
+    const message = await this.prisma.chatMessage.findUnique({
       where: {
         id: messageId,
-        chatId,
       },
       select: {
         id: true,
@@ -326,29 +455,15 @@ export class ChatsService {
         senderUserId: true,
         body: true,
         moderationState: true,
+        replyToMessageId: true,
         createdAt: true,
         editedAt: true,
-        replyToMessageId: true,
       },
     });
-
-    if (!message) {
-      throw new NotFoundException("chat message not found");
+    if (!message || message.chatId !== chatId) {
+      throw new NotFoundException("message not found");
     }
-
-    const [hydrated] = await this.hydrateMessagesForThreadResponse(chatId, [
-      {
-        id: message.id,
-        senderUserId: message.senderUserId,
-        body: message.body,
-        moderationState: message.moderationState,
-        createdAt: message.createdAt,
-        editedAt: message.editedAt ?? null,
-        replyToMessageId: message.replyToMessageId ?? null,
-      },
-    ]);
-
-    return hydrated;
+    return message;
   }
 
   async listMessages(
@@ -1199,103 +1314,6 @@ export class ChatsService {
     };
   }
 
-  async listChatsForUser(userId: string) {
-    if (
-      !this.prisma.chat?.findMany ||
-      !this.prisma.connectionParticipant?.findMany ||
-      !this.prisma.user?.findMany
-    ) {
-      return [];
-    }
-
-    const chats = await this.prisma.chat.findMany({
-      where: {
-        connection: {
-          participants: {
-            some: {
-              userId,
-              leftAt: null,
-            },
-          },
-        },
-      },
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        type: true,
-        createdAt: true,
-        connectionId: true,
-        messages: {
-          orderBy: { createdAt: "desc" },
-          take: 1,
-          select: {
-            createdAt: true,
-          },
-        },
-        connection: {
-          select: {
-            status: true,
-            participants: {
-              where: { leftAt: null },
-              orderBy: [{ role: "asc" }, { joinedAt: "asc" }],
-              select: {
-                userId: true,
-              },
-            },
-          },
-        },
-      },
-    });
-
-    const participantUserIds = Array.from(
-      new Set(
-        chats.flatMap((chat) =>
-          chat.connection.participants.map((participant) => participant.userId),
-        ),
-      ),
-    );
-    const users = await this.prisma.user.findMany({
-      where: { id: { in: participantUserIds } },
-      select: {
-        id: true,
-        displayName: true,
-      },
-    });
-    const displayNameByUserId = new Map(
-      users.map((user) => [user.id, user.displayName]),
-    );
-
-    return chats.map((chat) => {
-      const otherParticipants = chat.connection.participants.filter(
-        (participant) => participant.userId !== userId,
-      );
-      const title =
-        chat.type === "group"
-          ? otherParticipants
-              .slice(0, 3)
-              .map((participant) =>
-                displayNameByUserId.get(participant.userId)?.trim(),
-              )
-              .filter(Boolean)
-              .join(", ") || "Group"
-          : displayNameByUserId
-              .get(otherParticipants[0]?.userId ?? "")
-              ?.trim() || "Direct chat";
-
-      return {
-        id: chat.id,
-        connectionId: chat.connectionId,
-        type: chat.type,
-        title,
-        createdAt: chat.createdAt,
-        highWatermark: chat.messages[0]?.createdAt ?? null,
-        unreadCount: 0,
-        participantCount: chat.connection.participants.length,
-        connectionStatus: chat.connection.status,
-      };
-    });
-  }
-
   async leaveChat(chatId: string, userId: string) {
     if (
       !this.prisma.chat?.findUnique ||
@@ -1848,6 +1866,20 @@ export class ChatsService {
       },
     );
 
+    const realtimeMessage = {
+      ...hydratedMessage,
+      createdAt: hydratedMessage.createdAt.toISOString(),
+      editedAt: hydratedMessage.editedAt?.toISOString() ?? null,
+      reactions: hydratedMessage.reactions.map((reaction) => ({
+        ...reaction,
+        createdAt: reaction.createdAt.toISOString(),
+      })),
+    };
+    this.realtimeEventsService?.emitChatMessageUpdated(chatId, {
+      roomId: chatId,
+      message: realtimeMessage,
+    });
+
     return hydratedMessage;
   }
 
@@ -1997,14 +2029,13 @@ export class ChatsService {
     chatId: string,
     senderUserId: string,
     body: string,
-    moderationService: ModerationService,
   ) {
-    if (!this.prisma.chatMessage?.update) {
+    if (!this.moderationService || !this.prisma.chatMessage?.update) {
       return null;
     }
 
     const strictModerationEnabled = await this.isModerationStrictnessEnabled();
-    const decision = await moderationService.submitForModeration({
+    const decision = await this.moderationService.submitForModeration({
       contentRef: messageId,
       contentType: "chat_message",
       actorUserId: senderUserId,

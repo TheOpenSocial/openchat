@@ -45,6 +45,7 @@ describe("ChatsService", () => {
       undefined,
       undefined,
       undefined,
+      undefined,
       personalizationService as any,
     );
     await service.createMessage("chat-1", "user-1", "I like apex a lot");
@@ -118,6 +119,7 @@ describe("ChatsService", () => {
 
     const service = new ChatsService(
       prisma,
+      undefined,
       undefined,
       undefined,
       undefined,
@@ -201,6 +203,7 @@ describe("ChatsService", () => {
       undefined,
       undefined,
       undefined,
+      undefined,
       personalizationService as any,
     );
     await service.createMessage(
@@ -268,6 +271,7 @@ describe("ChatsService", () => {
 
     const service = new ChatsService(
       prisma,
+      undefined,
       undefined,
       undefined,
       undefined,
@@ -346,6 +350,7 @@ describe("ChatsService", () => {
 
     const service = new ChatsService(
       prisma,
+      undefined,
       undefined,
       undefined,
       undefined,
@@ -649,6 +654,8 @@ describe("ChatsService", () => {
       undefined,
       undefined,
       undefined,
+      undefined,
+      undefined,
       presenceService,
     );
 
@@ -817,7 +824,10 @@ describe("ChatsService", () => {
     );
   });
 
-  it("edits an owned message and records edit metadata", async () => {
+  it("edits an owned message, records edit metadata, and emits a realtime update", async () => {
+    const realtimeEventsService = {
+      emitChatMessageUpdated: vi.fn(),
+    };
     const prisma: any = {
       chat: {
         findUnique: vi.fn().mockResolvedValue({
@@ -854,7 +864,15 @@ describe("ChatsService", () => {
       },
     };
 
-    const service = new ChatsService(prisma);
+    const service = new ChatsService(
+      prisma,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      realtimeEventsService as any,
+    );
 
     const result = await service.editMessage(
       "chat-1",
@@ -875,6 +893,17 @@ describe("ChatsService", () => {
     );
     expect(result.body).toBe("hello edited");
     expect(result.editedAt).toBeInstanceOf(Date);
+    expect(realtimeEventsService.emitChatMessageUpdated).toHaveBeenCalledWith(
+      "chat-1",
+      expect.objectContaining({
+        roomId: "chat-1",
+        message: expect.objectContaining({
+          id: "msg-1",
+          body: "hello edited",
+          editedAt: "2026-04-05T21:05:00.000Z",
+        }),
+      }),
+    );
   });
 
   it("archives group chats when participant leave drops below threshold", async () => {
@@ -1276,13 +1305,18 @@ describe("ChatsService", () => {
       }),
     };
 
-    const service = new ChatsService(prisma);
+    const service = new ChatsService(
+      prisma,
+      undefined,
+      undefined,
+      undefined,
+      moderationService,
+    );
     await service.processQueuedMessageModeration(
       "msg-1",
       "chat-1",
       "user-1",
       "hello",
-      moderationService,
     );
 
     expect(prisma.chatMessage.update).toHaveBeenCalledWith(
@@ -1412,5 +1446,55 @@ describe("ChatsService", () => {
     } finally {
       vi.unstubAllEnvs();
     }
+  });
+
+  it("re-reads a persisted message with the same scalar shape as createMessage", async () => {
+    const persistedMessage = {
+      id: "msg-1",
+      chatId: "chat-1",
+      senderUserId: "user-1",
+      body: "hello",
+      moderationState: "clean",
+      replyToMessageId: "msg-root",
+      createdAt: new Date("2026-04-14T12:00:00.000Z"),
+      editedAt: null,
+    };
+    const prisma: any = {
+      chat: {
+        findUnique: vi.fn().mockResolvedValue({ connectionId: "conn-1" }),
+      },
+      chatMessage: {
+        findUnique: vi.fn().mockResolvedValue(persistedMessage),
+      },
+      connectionParticipant: {
+        findFirst: vi.fn().mockResolvedValue({ id: "participant-1" }),
+      },
+    };
+
+    const service = new ChatsService(prisma);
+    const result = await service.getPersistedMessage(
+      "chat-1",
+      "msg-1",
+      "user-1",
+    );
+
+    expect(prisma.chatMessage.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: "msg-1",
+        },
+        select: expect.objectContaining({
+          id: true,
+          chatId: true,
+          senderUserId: true,
+          body: true,
+          moderationState: true,
+          replyToMessageId: true,
+          createdAt: true,
+          editedAt: true,
+        }),
+      }),
+    );
+    expect(result).toEqual(persistedMessage);
   });
 });

@@ -1,0 +1,93 @@
+appId: ${MAESTRO_APP_ID}
+---
+- tapOn:
+    point: "93%,43%"
+    optional: true
+- tapOn:
+    text: "Minimize"
+    optional: true
+- tapOn:
+    text: "Dismiss"
+    optional: true
+- tapOn:
+    text: "Skip"
+    optional: true
+- tapOn:
+    id: "settings-close"
+    optional: true
+- tapOn:
+    id: "other-profile-close"
+    optional: true
+- tapOn:
+    id: "intent-detail-close"
+    optional: true
+- tapOn:
+    id: "chat-thread-close"
+    optional: true
+- tapOn:
+    id: "inbox-close"
+    optional: true
+- tapOn:
+    id: "connections-close"
+    optional: true
+- tapOn:
+    id: "discovery-close"
+    optional: true
+- tapOn:
+    id: "recurring-circles-close"
+    optional: true
+- tapOn:
+    id: "saved-searches-close"
+    optional: true
+- tapOn:
+    id: "scheduled-tasks-close"
+    optional: true
+- tapOn:
+    id: "activity-close"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "e2e-nav-rail"
+    timeout: 15000
+- runFlow:
+    when:
+      visible:
+        id: "e2e-nav-chats"
+    commands:
+      - tapOn:
+          id: "e2e-nav-chats"
+- runFlow:
+    when:
+      visible:
+        id: "app-bottom-tab-chats"
+    commands:
+      - tapOn:
+          id: "app-bottom-tab-chats"
+- extendedWaitUntil:
+    visible:
+      id: "chats-screen"
+    timeout: 15000
+- assertVisible:
+    id: "chats-screen"
+- runFlow:
+    when:
+      visible:
+        id: "chat-thread-row-first"
+    commands:
+      - tapOn:
+          id: "chat-thread-row-first"
+      - extendedWaitUntil:
+          visible:
+            id: "chat-selected-thread"
+          timeout: 15000
+      - assertVisible:
+          id: "chat-message-input"
+      - assertVisible:
+          id: "chat-send-button"
+- runFlow:
+    when:
+      visible:
+        text: "No chats yet"
+    commands:
+      - assertVisible:
+          text: "No chats yet"

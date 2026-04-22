@@ -1,0 +1,88 @@
+appId: ${MAESTRO_APP_ID}
+---
+- tapOn:
+    point: "93%,43%"
+    optional: true
+- tapOn:
+    text: "Minimize"
+    optional: true
+- tapOn:
+    text: "Dismiss"
+    optional: true
+- tapOn:
+    text: "Skip"
+    optional: true
+- tapOn:
+    id: "settings-close"
+    optional: true
+- tapOn:
+    id: "other-profile-close"
+    optional: true
+- tapOn:
+    id: "intent-detail-close"
+    optional: true
+- tapOn:
+    id: "chat-thread-close"
+    optional: true
+- tapOn:
+    id: "inbox-close"
+    optional: true
+- tapOn:
+    id: "connections-close"
+    optional: true
+- tapOn:
+    id: "discovery-close"
+    optional: true
+- tapOn:
+    id: "recurring-circles-close"
+    optional: true
+- tapOn:
+    id: "saved-searches-close"
+    optional: true
+- tapOn:
+    id: "scheduled-tasks-close"
+    optional: true
+- tapOn:
+    id: "activity-close"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "e2e-nav-rail"
+    timeout: 15000
+- tapOn:
+    id: "e2e-nav-profile"
+- extendedWaitUntil:
+    visible:
+      id: "profile-screen"
+    timeout: 15000
+- tapOn:
+    id: "profile-bio-cancel"
+    optional: true
+- tapOn:
+    id: "profile-interests-cancel"
+    optional: true
+- tapOn:
+    id: "profile-preferences-cancel"
+    optional: true
+- runFlow:
+    when:
+      visible:
+        id: "profile-action-preferences"
+    commands:
+      - tapOn:
+          id: "profile-action-preferences"
+- scrollUntilVisible:
+    element:
+      id: "profile-preferences-save"
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: "profile-preference-mode-group"
+- tapOn:
+    id: "profile-preference-notification-digest"
+- tapOn:
+    id: "profile-preferences-save"
+- extendedWaitUntil:
+    visible:
+      id: "profile-action-preferences"
+    timeout: 15000

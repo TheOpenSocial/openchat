@@ -78,8 +78,8 @@ export function buildActivationBootstrapViewModel(input: {
     executionStateLabel: labelForExecutionState(bootstrap.execution.status),
     onboardingStateLabel: titleCase(bootstrap.onboardingState),
     primaryThreadLabel: bootstrap.primaryThread
-      ? `Main thread: ${bootstrap.primaryThread.title ?? "Untitled"}`
-      : "Main thread not ready yet",
+      ? `Primary thread: ${bootstrap.primaryThread.title ?? "Untitled"}`
+      : "No primary thread yet",
     planSnapshot: input.plan
       ? {
           actionLabel: input.plan.recommendedAction.label,
