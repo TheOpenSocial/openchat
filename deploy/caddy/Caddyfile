@@ -6,6 +6,10 @@ api.opensocial.so {
   reverse_proxy opensocial-api:3000
 }
 
+origin-api.opensocial.so {
+  reverse_proxy opensocial-api:3000
+}
+
 admin.opensocial.so {
   reverse_proxy opensocial-admin:3001
 }
