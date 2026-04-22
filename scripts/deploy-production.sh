@@ -237,7 +237,7 @@ run_health() {
   echo "$api_response"
 
   local apex_headers
-  apex_headers="$(curl_local_https "opensocial.so" "/" --head)"
+  apex_headers="$(curl_local_https "opensocial.so" "/" --head | tr -d '\r')"
   echo "$apex_headers"
 
   if ! grep -Eiq '^location: https://app\.opensocial\.so/?$' <<<"$apex_headers"; then
@@ -294,7 +294,7 @@ run_health() {
   fi
 
   local docs_headers
-  docs_headers="$(curl_local_https "docs.opensocial.so" "/docs" --head)"
+  docs_headers="$(curl_local_https "docs.opensocial.so" "/docs" --head | tr -d '\r')"
   echo "$docs_headers"
 
   if grep -Eiq '^location: https?://[^[:space:]]+:3003/' <<<"$docs_headers"; then
