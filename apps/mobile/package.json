@@ -27,8 +27,13 @@
     "test:e2e:maestro:sandbox-surface": "MAESTRO_APP_ID=${MAESTRO_APP_ID:-so.opensocial.app} MAESTRO_EXPO_URL=${MAESTRO_EXPO_URL:-exp://localhost:8089} maestro test .maestro/mobile-sandbox-surface-smoke.yaml",
     "test:e2e:maestro:sandbox-surface:expo-go": "MAESTRO_APP_ID=${MAESTRO_APP_ID:-host.exp.Exponent} MAESTRO_EXPO_URL=${MAESTRO_EXPO_URL:-exp://localhost:8089} maestro test .maestro/mobile-sandbox-surface-smoke-expo-go.yaml",
     "test:e2e:maestro:sandbox-surface:expo-go:attached": "MAESTRO_APP_ID=${MAESTRO_APP_ID:-host.exp.Exponent} maestro test .maestro/mobile-sandbox-surface-smoke-expo-go-attached.yaml",
+    "test:e2e:maestro:sandbox-surface:expo-go:current": "MAESTRO_APP_ID=${MAESTRO_APP_ID:-host.exp.Exponent} maestro test .maestro/mobile-sandbox-surface-smoke-expo-go-current.yaml",
     "test:e2e:maestro:sandbox-home-activity:expo-go:attached": "MAESTRO_APP_ID=${MAESTRO_APP_ID:-host.exp.Exponent} maestro test .maestro/mobile-sandbox-home-activity-expo-go-attached.yaml",
     "test:e2e:maestro:sandbox-activity-target:expo-go:attached": "MAESTRO_APP_ID=${MAESTRO_APP_ID:-host.exp.Exponent} maestro test .maestro/mobile-sandbox-activity-target-expo-go-attached.yaml",
+    "test:e2e:maestro:sandbox-activity-target:expo-go:current": "MAESTRO_APP_ID=${MAESTRO_APP_ID:-host.exp.Exponent} maestro test .maestro/mobile-sandbox-activity-target-from-current-expo-go-attached.yaml",
+    "test:e2e:maestro:profile-persistence": "MAESTRO_APP_ID=${MAESTRO_APP_ID:-host.exp.Exponent} MAESTRO_EXPO_URL=${MAESTRO_EXPO_URL:-exp://localhost:8089} maestro test .maestro/mobile-profile-persistence.yaml",
+    "test:e2e:maestro:settings-persistence": "MAESTRO_APP_ID=${MAESTRO_APP_ID:-host.exp.Exponent} MAESTRO_EXPO_URL=${MAESTRO_EXPO_URL:-exp://localhost:8089} maestro test .maestro/mobile-settings-persistence.yaml",
+    "test:e2e:maestro:chats-core": "MAESTRO_APP_ID=${MAESTRO_APP_ID:-host.exp.Exponent} MAESTRO_EXPO_URL=${MAESTRO_EXPO_URL:-exp://localhost:8089} maestro test .maestro/mobile-chats-core.yaml",
     "test:e2e:maestro:design": "MAESTRO_APP_ID=${MAESTRO_APP_ID:-host.exp.Exponent} MAESTRO_EXPO_URL=${MAESTRO_EXPO_URL:-exp://localhost:8089} maestro test .maestro/mobile-design-mock.yaml"
   },
   "dependencies": {

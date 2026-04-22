@@ -54,10 +54,10 @@ export function HomeStatusHeader({
   const tone = toneClasses(summary.status.tone);
   const compactEyebrow =
     summary.status.tone === "recovery"
-      ? "Recover"
+      ? "Agent"
       : summary.status.tone === "waiting"
-        ? "Waiting"
-        : "Live";
+        ? "Agent"
+        : "Agent";
 
   return (
     <View

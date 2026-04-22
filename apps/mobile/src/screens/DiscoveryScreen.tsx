@@ -222,12 +222,11 @@ export function DiscoveryScreen({
           ) : (
             <View className="rounded-[28px] border border-white/8 bg-white/[0.03] px-5 py-6">
               <Text className="text-[18px] font-semibold tracking-[-0.03em] text-white/94">
-                Nothing to surface yet
+                Nothing new is ready yet
               </Text>
               <Text className="mt-2 text-[14px] leading-[21px] text-white/56">
-                New people, small groups, reconnect opportunities, and gentle
-                prompts will appear here as the system learns where to route you
-                next.
+                I’ll bring new people, small groups, reconnects, and timely
+                prompts here when there is something worth checking.
               </Text>
             </View>
           )}

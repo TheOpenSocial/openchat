@@ -329,6 +329,7 @@ export function SettingsScreen({
       className="flex-1 bg-canvas"
       edges={["top", "bottom", "left", "right"]}
       style={{ flex: 1, backgroundColor: appTheme.colors.background }}
+      testID="settings-screen"
     >
       {loadingModal}
 
@@ -434,6 +435,7 @@ export function SettingsScreen({
                   returnKeyType="next"
                   ref={firstNameRef}
                   blurOnSubmit={false}
+                  testID="settings-first-name-input"
                   value={firstName}
                 />
                 <CalmTextField
@@ -452,6 +454,7 @@ export function SettingsScreen({
                   selectionColor={appTheme.colors.ink}
                   returnKeyType="done"
                   ref={lastNameRef}
+                  testID="settings-last-name-input"
                   value={lastName}
                 />
               </View>
@@ -477,6 +480,7 @@ export function SettingsScreen({
             onPress={() => {
               void handleSave();
             }}
+            testID="settings-save-button"
           />
         </View>
       </KeyboardAvoidingView>

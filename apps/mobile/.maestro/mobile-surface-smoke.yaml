@@ -74,4 +74,12 @@ appId: ${MAESTRO_APP_ID}
 - tapOn:
     id: "app-shell-settings"
 - assertVisible:
+    id: "settings-screen"
+- assertVisible:
     id: "settings-close"
+
+- runFlow: subflows/boot-home-local.yaml
+- tapOn:
+    id: "app-bottom-tab-profile"
+- assertVisible:
+    id: "profile-screen"

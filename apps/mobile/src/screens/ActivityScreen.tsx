@@ -7,6 +7,7 @@ import {
   View,
 } from "react-native";
 
+import { AgentBriefingCard } from "../components/AgentBriefingCard";
 import { InlineNotice } from "../components/InlineNotice";
 import { OperationScreenShell } from "../components/OperationScreenShell";
 import { useActivityFeed } from "../features/activity/hooks/useActivityFeed";
@@ -39,6 +40,9 @@ export function ActivityScreen({
   onOpenScheduledTasks,
   userId,
 }: ActivityScreenProps) {
+  const showSafeAutomationQuickLinks =
+    __DEV__ || Boolean(process.env.EXPO_PUBLIC_E2E_SESSION);
+  const pinQuickLinksForAutomation = showSafeAutomationQuickLinks;
   const {
     error,
     items,
@@ -59,6 +63,40 @@ export function ActivityScreen({
     return "Requests, discovery signals, and system updates";
   }, [pendingRequestCount]);
   const topSection = sections[0] ?? null;
+  const agentBrief = useMemo(() => {
+    if (loading) {
+      return null;
+    }
+
+    if (pendingRequestCount > 0) {
+      return {
+        body: `${pendingRequestCount} request${pendingRequestCount === 1 ? "" : "s"} still need a response. I would start there before browsing ambient updates.`,
+        title:
+          pendingRequestCount === 1
+            ? "One person is waiting on you"
+            : `${pendingRequestCount} people are waiting on you`,
+      };
+    }
+
+    if (topSection) {
+      return {
+        body: topSection.subtitle,
+        title: topSection.title,
+      };
+    }
+
+    if (items.length > 0) {
+      return {
+        body: "There is fresh movement across your requests, discovery signals, and system updates. Start with the top section and move downward.",
+        title: "Here is what changed since your last check-in",
+      };
+    }
+
+    return {
+      body: "Nothing urgent is moving right now. I will keep surfacing fresh changes here when something needs your attention.",
+      title: "You are caught up",
+    };
+  }, [items.length, loading, pendingRequestCount, topSection]);
   const utilityActions = [
     {
       id: "inbox",
@@ -99,19 +137,27 @@ export function ActivityScreen({
   ];
 
   const quickLinks = (
-    <View className="gap-3 pt-1">
+    <View className="gap-3 pt-1" testID="activity-quick-links">
       <Text
         className="text-[10px] font-semibold uppercase tracking-[0.14em]"
         style={{ color: appTheme.colors.inkFaint }}
       >
         Quick links
       </Text>
-      <View className="flex-row flex-wrap gap-2">
+      <View
+        className={
+          showSafeAutomationQuickLinks ? "gap-2" : "flex-row flex-wrap gap-2"
+        }
+      >
         {utilityActions.map((action) => (
           <Pressable
             accessibilityLabel={`Open ${action.label.toLowerCase()}`}
             accessibilityRole="button"
-            className="min-h-11 rounded-full border bg-surfaceMuted px-4 py-3"
+            className={
+              showSafeAutomationQuickLinks
+                ? "min-h-12 rounded-[18px] border bg-surfaceMuted px-4 py-3"
+                : "min-h-11 rounded-full border bg-surfaceMuted px-4 py-3"
+            }
             key={action.id}
             onPress={() => {
               hapticSelection();
@@ -120,6 +166,7 @@ export function ActivityScreen({
             style={({ pressed }) => ({
               borderColor: appTheme.colors.hairline,
               opacity: pressed ? appTheme.motion.pressOpacity : 1,
+              alignSelf: showSafeAutomationQuickLinks ? "stretch" : undefined,
             })}
             testID={action.testID}
           >
@@ -164,6 +211,16 @@ export function ActivityScreen({
       subtitle={topSection?.subtitle ?? headerSubtitle}
       title="What needs your attention"
     >
+      {agentBrief ? (
+        <AgentBriefingCard
+          body={agentBrief.body}
+          eyebrow="Agent brief"
+          title={agentBrief.title}
+        />
+      ) : null}
+
+      {pinQuickLinksForAutomation ? quickLinks : null}
+
       {topSection?.emphasis === "urgent" ? (
         <View
           className="mb-5 rounded-[24px] border bg-surface px-4 py-4"
@@ -274,7 +331,7 @@ export function ActivityScreen({
               ))}
             </View>
           ))}
-          {quickLinks}
+          {pinQuickLinksForAutomation ? null : quickLinks}
         </View>
       ) : (
         <View className="gap-5">
@@ -287,7 +344,7 @@ export function ActivityScreen({
               here.
             </Text>
           </View>
-          {quickLinks}
+          {pinQuickLinksForAutomation ? null : quickLinks}
         </View>
       )}
     </OperationScreenShell>

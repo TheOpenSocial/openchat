@@ -1,137 +1,101 @@
 appId: ${MAESTRO_APP_ID}
 ---
-- runFlow: subflows/boot-home-expo-go-attached.yaml
-- assertVisible:
-    id: "home-status-header"
-- assertVisible: ${MAESTRO_EXPECTED_HOME_STATUS_TITLE}
-
-- tapOn:
-    id: "app-bottom-tab-activity"
-- waitForAnimationToEnd
-- tapOn:
-    id: "app-bottom-tab-activity"
-    optional: true
+- runFlow: subflows/boot-activity-expo-go-attached.yaml
 - assertVisible:
     id: "activity-screen"
 - assertVisible: ${MAESTRO_EXPECTED_ACTIVITY_SECTION_TITLE}
-- waitForAnimationToEnd
-- scrollUntilVisible:
-    element:
-      text: "Quick links"
-    direction: DOWN
-    visibilityPercentage: 20
-    speed: 45
-    centerElement: false
-    waitToSettleTimeoutMs: 500
-    timeout: 25000
-- assertVisible: "Quick links"
+- assertVisible:
+    id: "activity-quick-links"
 
 - tapOn:
     id: "activity-open-inbox"
 - assertVisible:
     id: "inbox-screen"
-- waitForAnimationToEnd
 - tapOn:
     id: "inbox-close"
-- assertVisible:
-    id: "activity-screen"
-- waitForAnimationToEnd
+- runFlow: subflows/return-to-activity-expo-go-current.yaml
+
 - scrollUntilVisible:
     element:
-      text: "Connections"
+      id: "activity-open-connections"
     direction: DOWN
     visibilityPercentage: 20
     speed: 45
     centerElement: false
     waitToSettleTimeoutMs: 500
     timeout: 25000
-
 - tapOn:
     id: "activity-open-connections"
 - assertVisible:
     id: "connections-screen"
-- waitForAnimationToEnd
 - tapOn:
     id: "connections-close"
-- assertVisible:
-    id: "activity-screen"
-- waitForAnimationToEnd
+- runFlow: subflows/return-to-activity-expo-go-current.yaml
+
 - scrollUntilVisible:
     element:
-      text: "Discovery"
+      id: "activity-open-discovery"
     direction: DOWN
     visibilityPercentage: 20
     speed: 45
     centerElement: false
     waitToSettleTimeoutMs: 500
     timeout: 25000
-
 - tapOn:
     id: "activity-open-discovery"
 - assertVisible:
     id: "discovery-screen"
-- waitForAnimationToEnd
 - tapOn:
     id: "discovery-close"
-- assertVisible:
-    id: "activity-screen"
-- waitForAnimationToEnd
+- runFlow: subflows/return-to-activity-expo-go-current.yaml
+
 - scrollUntilVisible:
     element:
-      text: "Circles"
+      id: "activity-open-recurring-circles"
     direction: DOWN
     visibilityPercentage: 20
     speed: 45
     centerElement: false
     waitToSettleTimeoutMs: 500
     timeout: 25000
-
 - tapOn:
     id: "activity-open-recurring-circles"
 - assertVisible:
     id: "recurring-circles-screen"
-- waitForAnimationToEnd
 - tapOn:
     id: "recurring-circles-close"
-- assertVisible:
-    id: "activity-screen"
-- waitForAnimationToEnd
+- runFlow: subflows/return-to-activity-expo-go-current.yaml
+
 - scrollUntilVisible:
     element:
-      text: "Searches"
+      id: "activity-open-saved-searches"
     direction: DOWN
     visibilityPercentage: 20
     speed: 45
     centerElement: false
     waitToSettleTimeoutMs: 500
     timeout: 25000
-
 - tapOn:
     id: "activity-open-saved-searches"
 - assertVisible:
     id: "saved-searches-screen"
-- waitForAnimationToEnd
 - tapOn:
     id: "saved-searches-close"
-- assertVisible:
-    id: "activity-screen"
-- waitForAnimationToEnd
+- runFlow: subflows/return-to-activity-expo-go-current.yaml
+
 - scrollUntilVisible:
     element:
-      text: "Tasks"
+      id: "activity-open-scheduled-tasks"
     direction: DOWN
     visibilityPercentage: 20
     speed: 45
     centerElement: false
     waitToSettleTimeoutMs: 500
     timeout: 25000
-
 - tapOn:
     id: "activity-open-scheduled-tasks"
 - assertVisible:
     id: "scheduled-tasks-screen"
-- waitForAnimationToEnd
 - tapOn:
     id: "scheduled-tasks-close"
-- assertVisible:
-    id: "activity-screen"
+- runFlow: subflows/return-to-activity-expo-go-current.yaml

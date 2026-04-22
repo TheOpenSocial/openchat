@@ -1,4 +1,4 @@
-export const supportedLocales = ["en", "es"] as const;
+export const supportedLocales = ["en", "es", "fr"] as const;
 export type AppLocale = (typeof supportedLocales)[number];
 
 const catalogs = {
@@ -6,6 +6,7 @@ const catalogs = {
     localeLabel: "Language",
     localeEnglish: "English",
     localeSpanish: "Spanish",
+    localeFrench: "French",
     offlineNotice: "You're offline — reconnect to sync.",
     sendBlockedOffline: "Can't send while offline.",
     agentComposerModeChat: "Chat",
@@ -26,6 +27,7 @@ const catalogs = {
     localeLabel: "Idioma",
     localeEnglish: "Inglés",
     localeSpanish: "Español",
+    localeFrench: "Francés",
     offlineNotice: "No tienes conexión. Reconéctate para sincronizar.",
     sendBlockedOffline: "No se puede enviar sin conexión.",
     agentComposerModeChat: "Chat",
@@ -41,6 +43,27 @@ const catalogs = {
       "Nota de voz (opcional): adjuntamos la transcripción con tu mensaje.",
     agentImageUrlOptional:
       "Enlace de imagen (opcional): adjunta una foto si ayuda.",
+  },
+  fr: {
+    localeLabel: "Langue",
+    localeEnglish: "Anglais",
+    localeSpanish: "Espagnol",
+    localeFrench: "Français",
+    offlineNotice: "Vous êtes hors ligne. Reconnectez-vous pour synchroniser.",
+    sendBlockedOffline: "Impossible d'envoyer hors ligne.",
+    agentComposerModeChat: "Chat",
+    agentComposerModeIntent: "Plans et intentions",
+    agentHistoryLoading: "Chargement de votre conversation…",
+    agentWorkflowThinking: "Réflexion…",
+    agentWorkflowRouting: "Recherche du bon chemin…",
+    agentComposerHintChat:
+      "Écrivez ici pour les réponses et les prochaines étapes dans ce fil.",
+    agentComposerHintIntent:
+      "Décrivez ce que vous voulez faire et nous l'orienterons vers les bonnes personnes.",
+    agentVoiceTranscriptOptional:
+      "Note vocale (optionnel) : nous joignons la transcription à votre message.",
+    agentImageUrlOptional:
+      "Lien d'image (optionnel) : joignez une image si cela aide.",
   },
 } as const;
 

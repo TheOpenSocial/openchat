@@ -421,6 +421,9 @@ export function HomeScreen({
   const [agentThreadLoadError, setAgentThreadLoadError] = useState<
     string | null
   >(null);
+  const [agentThreadLoadErrorCode, setAgentThreadLoadErrorCode] = useState<
+    string | null
+  >(null);
   const [agentThreadRetryAttempt, setAgentThreadRetryAttempt] = useState(0);
   const [agentThreadRetryNextAt, setAgentThreadRetryNextAt] = useState<
     number | null
@@ -434,6 +437,7 @@ export function HomeScreen({
     enabled: agentThreadSyncEnabled,
     onHydrated: (messages) => {
       setAgentThreadLoadError(null);
+      setAgentThreadLoadErrorCode(null);
       setAgentThreadRetryAttempt(0);
       setAgentThreadRetryNextAt(null);
       setAgentTimeline(
@@ -468,8 +472,9 @@ export function HomeScreen({
           ? "Your main thread is rate-limited for a moment. I’m holding here instead of retrying."
           : error.transient
             ? "Your main thread is temporarily unavailable. I’m reconnecting now."
-            : "I couldn’t restore your main thread yet.";
+            : "I couldn’t restore your main thread yet, but I’m still holding your place here.";
       setAgentThreadLoadError(recoveryMessage);
+      setAgentThreadLoadErrorCode(error.code);
       setAgentThreadRetryAttempt(nextAttempt);
       setAgentThreadRetryNextAt(
         canAutoRetry
@@ -502,7 +507,12 @@ export function HomeScreen({
   const homeRuntimeViewModel = useMemo(
     () =>
       deriveHomeRuntimeViewModel({
-        hasError: Boolean(agentThreadLoadError),
+        hasError:
+          Boolean(agentThreadLoadError) &&
+          !(
+            agentThreadLoadErrorCode === "abuse_throttled" &&
+            homeSummary != null
+          ),
         messages: agentTimeline,
         pending: pendingIntentSummary,
         sending: sendingIntent,
@@ -511,13 +521,17 @@ export function HomeScreen({
       }),
     [
       agentThreadLoadError,
+      agentThreadLoadErrorCode,
       agentThreadLoading,
       agentTimeline,
       draftIntentText,
+      homeSummary,
       pendingIntentSummary,
       sendingIntent,
     ],
   );
+  const shouldSuppressThreadRecoveryShell =
+    agentThreadLoadErrorCode === "abuse_throttled" && homeSummary != null;
 
   useEffect(() => {
     void refreshPendingOutboxCount().catch(() => {});
@@ -1057,7 +1071,9 @@ export function HomeScreen({
           runtimeViewModel={homeRuntimeViewModel}
           sending={sendingIntent}
           setDraftMessage={setDraftIntentText}
-          threadLoadErrorMessage={agentThreadLoadError}
+          threadLoadErrorMessage={
+            shouldSuppressThreadRecoveryShell ? null : agentThreadLoadError
+          }
           threadLoadRetryAttempt={agentThreadRetryAttempt}
           threadLoadRetrySeconds={agentThreadRetrySeconds}
           threadLoadWillAutoRetry={agentThreadRetryNextAt != null}

@@ -609,7 +609,10 @@ export function ProtocolIntegrationsPanel() {
   };
 
   return (
-    <View className="space-y-4 rounded-[28px] border border-hairline bg-surfaceMuted/70 p-4">
+    <View
+      className="space-y-4 rounded-[28px] border border-hairline bg-surfaceMuted/70 p-4"
+      testID="settings-protocol-panel"
+    >
       <View className="space-y-2">
         <Text className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
           Protocol integrations
@@ -727,6 +730,7 @@ export function ProtocolIntegrationsPanel() {
             resetInspectionState();
           }}
           placeholder="select or paste an app id"
+          testID="settings-protocol-app-id"
           value={selectedAppId}
         />
 
@@ -740,6 +744,7 @@ export function ProtocolIntegrationsPanel() {
           onChangeText={setAppToken}
           placeholder="paste app token"
           secureTextEntry
+          testID="settings-protocol-app-token"
           value={appToken}
         />
 
@@ -749,6 +754,7 @@ export function ProtocolIntegrationsPanel() {
           onPress={() => {
             void inspectWebhooks();
           }}
+          testID="settings-protocol-load-webhooks"
         />
 
         {webhooksError ? (
@@ -856,6 +862,7 @@ export function ProtocolIntegrationsPanel() {
             onPress={() => {
               void loadUsageSummary();
             }}
+            testID="settings-protocol-load-activity"
           />
           <PrimaryButton
             label={dispatchingQueue ? "Dispatching..." : "Dispatch queue"}
@@ -863,6 +870,7 @@ export function ProtocolIntegrationsPanel() {
             onPress={() => {
               void dispatchQueue();
             }}
+            testID="settings-protocol-dispatch-queue"
             variant="secondary"
           />
           <PrimaryButton
@@ -870,6 +878,7 @@ export function ProtocolIntegrationsPanel() {
             onPress={() => {
               void loadQueueInspection();
             }}
+            testID="settings-protocol-inspect-queue"
             variant="secondary"
           />
           <PrimaryButton
@@ -880,6 +889,7 @@ export function ProtocolIntegrationsPanel() {
             onPress={() => {
               void replayDeadLetters();
             }}
+            testID="settings-protocol-replay-dead-letters"
             variant="secondary"
           />
         </View>

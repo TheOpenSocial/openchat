@@ -1,6 +1,14 @@
 #!/usr/bin/env node
 
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
@@ -11,8 +19,10 @@ const DEFAULT_PORT = "8089";
 const DEFAULT_APP_ID = "so.opensocial.app";
 const DEFAULT_API_BASE_URL = "https://api.opensocial.so";
 const ARTIFACT_ROOT = ".artifacts/mobile-sandbox-maestro";
+const RECENT_CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1_000;
 const REPO_CWD = "/Users/cruciblelabs/Documents/openchat";
 const REPO_SLUG = "TheOpenSocial/openchat";
+const RUNNER_LOCK_ROOT = join(REPO_CWD, ARTIFACT_ROOT, ".locks");
 
 function getArg(flag, fallback = undefined) {
   const exact = `${flag}=`;
@@ -58,11 +68,127 @@ function run(command, args, options = {}) {
   });
 }
 
+function safeReadJson(path) {
+  try {
+    return JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function isProcessAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function terminateProcess(pid, label) {
+  try {
+    process.kill(pid, "SIGTERM");
+  } catch {
+    return;
+  }
+
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    if (!isProcessAlive(pid)) {
+      return;
+    }
+    await delay(500);
+  }
+
+  try {
+    process.kill(pid, "SIGKILL");
+  } catch {
+    return;
+  }
+
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    if (!isProcessAlive(pid)) {
+      return;
+    }
+    await delay(250);
+  }
+
+  throw new Error(`Unable to stop overlapping ${label} process ${pid}`);
+}
+
+async function acquireSingleFlightLock({ scenario, flow, appId }) {
+  mkdirSync(RUNNER_LOCK_ROOT, { recursive: true });
+  const key = sanitizeSlug(`${scenario}-${flow}-${appId || "default"}`);
+  const lockPath = join(RUNNER_LOCK_ROOT, `${key}.json`);
+  const currentPid = process.pid;
+  const existing = safeReadJson(lockPath);
+
+  if (existing?.pid && existing.pid !== currentPid && isProcessAlive(existing.pid)) {
+    console.warn(
+      `Stopping overlapping mobile sandbox runner ${existing.pid} for ${scenario}/${flow}/${appId}`,
+    );
+    await terminateProcess(existing.pid, "mobile sandbox runner");
+  }
+
+  writeFileSync(
+    lockPath,
+    JSON.stringify(
+      {
+        appId,
+        flow,
+        pid: currentPid,
+        scenario,
+        startedAt: new Date().toISOString(),
+      },
+      null,
+      2,
+    ),
+    "utf8",
+  );
+
+  const cleanup = () => {
+    const current = safeReadJson(lockPath);
+    if (current?.pid === currentPid && existsSync(lockPath)) {
+      unlinkSync(lockPath);
+    }
+  };
+
+  process.on("exit", cleanup);
+  process.on("SIGINT", () => {
+    cleanup();
+    process.exit(130);
+  });
+  process.on("SIGTERM", () => {
+    cleanup();
+    process.exit(143);
+  });
+}
+
 async function attachToSimulatorUrl(simulatorId, url, waitMs = 8_000) {
   await run("xcrun", ["simctl", "openurl", simulatorId, url], {
     cwd: REPO_CWD,
   });
   await delay(waitMs);
+}
+
+async function ensureSimulatorReady(simulatorId) {
+  await run("open", ["-a", "Simulator"], {
+    cwd: REPO_CWD,
+  }).catch(() => {});
+  await run("xcrun", ["simctl", "bootstatus", simulatorId, "-b"], {
+    cwd: REPO_CWD,
+  });
+}
+
+async function rebootSimulator(simulatorId) {
+  await run("xcrun", ["simctl", "shutdown", simulatorId], {
+    cwd: REPO_CWD,
+  }).catch(() => {});
+  await delay(2_000);
+  await run("xcrun", ["simctl", "boot", simulatorId], {
+    cwd: REPO_CWD,
+  }).catch(() => {});
+  await ensureSimulatorReady(simulatorId);
+  await delay(4_000);
 }
 
 async function runMaestroWithRetry({
@@ -90,6 +216,7 @@ async function runMaestroWithRetry({
       if (attempt >= attempts || !isXCTestDriverDrop || appId !== "host.exp.Exponent") {
         break;
       }
+      await rebootSimulator(simulatorId);
       await run("xcrun", ["simctl", "terminate", simulatorId, appId], {
         cwd: REPO_CWD,
       }).catch(() => {});
@@ -264,36 +391,54 @@ async function prepareScenarioViaLocal(baseUrl, worldId, scenario) {
 }
 
 async function prepareScenarioViaGitHub(worldId, scenario, artifactDir) {
-  await triggerWorkflowAndWait("staging-sandbox-world.yml", [
-    "-f",
-    "action=scenario",
-    "-f",
-    `world_id=${worldId}`,
-    "-f",
-    `scenario=${scenario}`,
-  ]);
-  const inspectRunId = await triggerWorkflowAndWait("staging-sandbox-world.yml", [
-    "-f",
-    "action=inspect",
-    "-f",
-    `world_id=${worldId}`,
-  ]);
-  const inspectDir = join(artifactDir, "sandbox-inspect");
-  mkdirSync(inspectDir, { recursive: true });
-  await retry(`download sandbox inspect ${inspectRunId}`, () =>
-    run("gh", [
-      "run",
-      "download",
-      inspectRunId,
-      "--repo",
-      REPO_SLUG,
-      "-n",
-      "staging-sandbox-world-output",
-      "-D",
-      inspectDir,
-    ]),
-  );
-  return JSON.parse(readFileSync(join(inspectDir, "sandbox-world-output.json"), "utf8"));
+  try {
+    return await retry(
+      "prepare sandbox scenario via GitHub",
+      async () => {
+        await triggerWorkflowAndWait("staging-sandbox-world.yml", [
+          "-f",
+          "action=scenario",
+          "-f",
+          `world_id=${worldId}`,
+          "-f",
+          `scenario=${scenario}`,
+        ]);
+        const inspectRunId = await triggerWorkflowAndWait("staging-sandbox-world.yml", [
+          "-f",
+          "action=inspect",
+          "-f",
+          `world_id=${worldId}`,
+        ]);
+        const inspectDir = join(artifactDir, "sandbox-inspect");
+        mkdirSync(inspectDir, { recursive: true });
+        await retry(`download sandbox inspect ${inspectRunId}`, () =>
+          run("gh", [
+            "run",
+            "download",
+            inspectRunId,
+            "--repo",
+            REPO_SLUG,
+            "-n",
+            "staging-sandbox-world-output",
+            "-D",
+            inspectDir,
+          ]),
+        );
+        return JSON.parse(readFileSync(join(inspectDir, "sandbox-world-output.json"), "utf8"));
+      },
+      2,
+      3_000,
+    );
+  } catch (error) {
+    const cached = readLatestCachedArtifact("scenario-inspect.json");
+    if (!cached) {
+      throw error;
+    }
+    console.warn(
+      `prepare sandbox scenario via GitHub failed; reusing cached scenario artifact from ${cached.path}`,
+    );
+    return JSON.parse(cached.contents);
+  }
 }
 
 async function emitSessionLocally(baseUrl) {
@@ -317,27 +462,87 @@ async function emitSessionLocally(baseUrl) {
 }
 
 async function emitSessionViaGitHub(targetUserId, artifactDir) {
-  const fields = [];
-  if (targetUserId) {
-    fields.push("-f", `smoke_user_id=${targetUserId}`);
+  try {
+    const fields = [];
+    if (targetUserId) {
+      fields.push("-f", `smoke_user_id=${targetUserId}`);
+    }
+    const runId = await triggerWorkflowAndWait("staging-mobile-e2e-session.yml", fields);
+    const sessionDir = join(artifactDir, "session");
+    mkdirSync(sessionDir, { recursive: true });
+    await retry(`download mobile session ${runId}`, () =>
+      run("gh", [
+        "run",
+        "download",
+        runId,
+        "--repo",
+        REPO_SLUG,
+        "-n",
+        `staging-mobile-e2e-session-${runId}`,
+        "-D",
+        sessionDir,
+      ]),
+    );
+    return JSON.parse(readFileSync(join(sessionDir, "mobile-e2e-session.json"), "utf8"));
+  } catch (error) {
+    const cached = readLatestCachedArtifact("mobile-session.json");
+    if (!cached) {
+      throw error;
+    }
+    console.warn(
+      `emit mobile session via GitHub failed; reusing cached session artifact from ${cached.path}`,
+    );
+    return JSON.parse(cached.contents);
   }
-  const runId = await triggerWorkflowAndWait("staging-mobile-e2e-session.yml", fields);
-  const sessionDir = join(artifactDir, "session");
-  mkdirSync(sessionDir, { recursive: true });
-  await retry(`download mobile session ${runId}`, () =>
-    run("gh", [
-      "run",
-      "download",
-      runId,
-      "--repo",
-      REPO_SLUG,
-      "-n",
-      `staging-mobile-e2e-session-${runId}`,
-      "-D",
-      sessionDir,
-    ]),
-  );
-  return JSON.parse(readFileSync(join(sessionDir, "mobile-e2e-session.json"), "utf8"));
+}
+
+function readLatestCachedArtifact(filename) {
+  const root = join(REPO_CWD, ARTIFACT_ROOT);
+  let entries = [];
+  try {
+    entries = readdirSync(root, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+
+  const candidates = entries
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => {
+      const path = join(root, entry.name, filename);
+      try {
+        const stat = statSync(path);
+        return {
+          path,
+          mtimeMs: stat.mtimeMs,
+        };
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean)
+    .sort((left, right) => right.mtimeMs - left.mtimeMs);
+
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  const latest = candidates[0];
+  return {
+    path: latest.path,
+    mtimeMs: latest.mtimeMs,
+    contents: readFileSync(latest.path, "utf8"),
+  };
+}
+
+function readLatestRecentCachedArtifact(filename, maxAgeMs = RECENT_CACHE_MAX_AGE_MS) {
+  const latest = readLatestCachedArtifact(filename);
+  if (!latest) {
+    return null;
+  }
+  if (Date.now() - latest.mtimeMs > maxAgeMs) {
+    return null;
+  }
+  return latest;
 }
 
 function toHttpDevServerUrl(url) {
@@ -494,16 +699,79 @@ function expectedActivitySectionTitle(inspectPayload) {
   );
 }
 
+const ACTIVITY_SURFACE_TARGETS = [
+  {
+    id: "activity-open-inbox",
+    screenId: "inbox-screen",
+    closeId: "inbox-close",
+  },
+  {
+    id: "activity-open-connections",
+    screenId: "connections-screen",
+    closeId: "connections-close",
+  },
+  {
+    id: "activity-open-discovery",
+    screenId: "discovery-screen",
+    closeId: "discovery-close",
+  },
+  {
+    id: "activity-open-recurring-circles",
+    screenId: "recurring-circles-screen",
+    closeId: "recurring-circles-close",
+  },
+  {
+    id: "activity-open-saved-searches",
+    screenId: "saved-searches-screen",
+    closeId: "saved-searches-close",
+  },
+  {
+    id: "activity-open-scheduled-tasks",
+    screenId: "scheduled-tasks-screen",
+    closeId: "scheduled-tasks-close",
+  },
+];
+
+function deriveActivityTargetLabel(activityTargetId) {
+  switch (activityTargetId) {
+    case "activity-open-inbox":
+      return "Inbox";
+    case "activity-open-connections":
+      return "Connections";
+    case "activity-open-discovery":
+      return "Discovery";
+    case "activity-open-recurring-circles":
+      return "Circles";
+    case "activity-open-saved-searches":
+      return "Searches";
+    case "activity-open-scheduled-tasks":
+      return "Tasks";
+    default:
+      return null;
+  }
+}
+
+function deriveActivityTargetAccessibilityLabel(activityTargetId) {
+  const label = deriveActivityTargetLabel(activityTargetId);
+  return label ? `Open ${label.toLowerCase()}` : null;
+}
+
 async function main() {
   const scenario = getArg("--scenario", "baseline");
   const worldId = getArg("--world-id", DEFAULT_WORLD_ID);
   const flow = getArg("--flow", DEFAULT_FLOW);
   const requestedPort = Number.parseInt(getArg("--port", DEFAULT_PORT), 10) || 8089;
   const appId = getArg("--app-id", DEFAULT_APP_ID);
+  await acquireSingleFlightLock({ appId, flow, scenario });
   const baseUrl = resolveBaseUrl();
   const activityTargetId = getArg("--activity-target-id");
   const activityTargetScreenId = getArg("--activity-target-screen-id");
   const activityTargetCloseId = getArg("--activity-target-close-id");
+  const activityTargetLabel =
+    getArg("--activity-target-label") ?? deriveActivityTargetLabel(activityTargetId);
+  const activityTargetAccessibilityLabel =
+    getArg("--activity-target-accessibility-label") ??
+    deriveActivityTargetAccessibilityLabel(activityTargetId);
 
   const artifactDir = join(
     REPO_CWD,
@@ -512,9 +780,17 @@ async function main() {
   );
   mkdirSync(artifactDir, { recursive: true });
 
+  const recentCachedScenario = readLatestRecentCachedArtifact("scenario-inspect.json");
   const inspectPayload = localSandboxCredsAvailable()
     ? await prepareScenarioViaLocal(baseUrl, worldId, scenario)
-    : await prepareScenarioViaGitHub(worldId, scenario, artifactDir);
+    : recentCachedScenario
+      ? (() => {
+          console.warn(
+            `reusing recent cached scenario artifact from ${recentCachedScenario.path}`,
+          );
+          return JSON.parse(recentCachedScenario.contents);
+        })()
+      : await prepareScenarioViaGitHub(worldId, scenario, artifactDir);
 
   const targetUserId =
     inspectPayload?.world?.focalUserId ??
@@ -522,9 +798,17 @@ async function main() {
     process.env.SMOKE_TARGET_USER_ID ??
     "";
 
+  const recentCachedSession = readLatestRecentCachedArtifact("mobile-session.json");
   const sessionPayload = localSmokeCredsAvailable()
     ? await emitSessionLocally(baseUrl)
-    : await emitSessionViaGitHub(targetUserId, artifactDir);
+    : recentCachedSession
+      ? (() => {
+          console.warn(
+            `reusing recent cached session artifact from ${recentCachedSession.path}`,
+          );
+          return JSON.parse(recentCachedSession.contents);
+        })()
+      : await emitSessionViaGitHub(targetUserId, artifactDir);
 
   writeFileSync(
     join(artifactDir, "scenario-inspect.json"),
@@ -550,6 +834,7 @@ async function main() {
     appId,
   });
   const simulatorId = await resolveBootedSimulatorId();
+  await ensureSimulatorReady(simulatorId);
 
   const cleanup = () => {
     if (!metroChild.killed) {
@@ -570,7 +855,7 @@ async function main() {
     const flowScript =
       flow === "sandbox-surface"
         ? appId === "host.exp.Exponent"
-          ? "test:e2e:maestro:sandbox-surface:expo-go:attached"
+          ? null
           : "test:e2e:maestro:sandbox-surface"
         : flow === "home-activity"
           ? "test:e2e:maestro:sandbox-home-activity:expo-go:attached"
@@ -584,7 +869,7 @@ async function main() {
               ? "test:e2e:maestro:daily-loop:native"
               : null;
 
-    if (!flowScript) {
+    if (!flowScript && !(flow === "sandbox-surface" && appId === "host.exp.Exponent")) {
       throw new Error(`Unsupported flow ${flow}`);
     }
 
@@ -612,23 +897,47 @@ async function main() {
       await attachToSimulatorUrl(simulatorId, expUrl, 8_000);
     }
 
-    await runMaestroWithRetry({
-      flowScript,
-      appId,
-      simulatorId,
-      expUrl,
-      env: {
-        ...process.env,
-        MAESTRO_APP_ID: appId,
-        MAESTRO_EXPO_URL: expUrl,
-        MAESTRO_EXPECTED_HOME_STATUS_TITLE: expectedHomeStatusTitle,
-        MAESTRO_EXPECTED_ACTIVITY_SECTION_TITLE: expectedActivityTitle,
-        MAESTRO_ACTIVITY_TARGET_ID: activityTargetId,
-        MAESTRO_ACTIVITY_TARGET_SCREEN_ID: activityTargetScreenId,
-        MAESTRO_ACTIVITY_TARGET_CLOSE_ID: activityTargetCloseId,
-        PATH: `${process.env.HOME}/.maestro/bin:${process.env.PATH ?? ""}`,
-      },
-    });
+    const baseEnv = {
+      ...process.env,
+      MAESTRO_APP_ID: appId,
+      MAESTRO_EXPO_URL: expUrl,
+      MAESTRO_EXPECTED_HOME_STATUS_TITLE: expectedHomeStatusTitle,
+      MAESTRO_EXPECTED_ACTIVITY_SECTION_TITLE: expectedActivityTitle,
+      MAESTRO_DRIVER_STARTUP_TIMEOUT:
+        process.env.MAESTRO_DRIVER_STARTUP_TIMEOUT ?? "120000",
+      PATH: `${process.env.HOME}/.maestro/bin:${process.env.PATH ?? ""}`,
+    };
+
+    if (flow === "sandbox-surface" && appId === "host.exp.Exponent") {
+      await run("xcrun", ["simctl", "terminate", simulatorId, appId], {
+        cwd: REPO_CWD,
+      }).catch(() => {});
+      await delay(1_000);
+      await attachToSimulatorUrl(simulatorId, expUrl, 8_000);
+      await runMaestroWithRetry({
+        flowScript: "test:e2e:maestro:sandbox-surface:expo-go:current",
+        appId,
+        simulatorId,
+        expUrl,
+        env: baseEnv,
+      });
+    } else {
+      await runMaestroWithRetry({
+        flowScript,
+        appId,
+        simulatorId,
+        expUrl,
+        env: {
+          ...baseEnv,
+          MAESTRO_ACTIVITY_TARGET_ID: activityTargetId,
+          MAESTRO_ACTIVITY_TARGET_LABEL: activityTargetLabel,
+          MAESTRO_ACTIVITY_TARGET_ACCESSIBILITY_LABEL:
+            activityTargetAccessibilityLabel,
+          MAESTRO_ACTIVITY_TARGET_SCREEN_ID: activityTargetScreenId,
+          MAESTRO_ACTIVITY_TARGET_CLOSE_ID: activityTargetCloseId,
+        },
+      });
+    }
   } finally {
     cleanup();
     await delay(1_500);
@@ -650,6 +959,8 @@ async function main() {
         expectedHomeStatusTitle,
         expectedActivitySectionTitle: expectedActivityTitle,
         activityTargetId,
+        activityTargetLabel,
+        activityTargetAccessibilityLabel,
         activityTargetScreenId,
         activityTargetCloseId,
       },

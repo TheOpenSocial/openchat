@@ -327,7 +327,10 @@ export function ChatsListScreen({
   const reactionOptions = ["👍", "🔥", "😂"];
 
   return (
-    <View className="min-h-0 flex-1 bg-canvas px-5 pb-4 pt-2">
+    <View
+      className="min-h-0 flex-1 bg-canvas px-5 pb-4 pt-2"
+      testID="chats-screen"
+    >
       <View className="mb-4 flex-row items-center gap-2 px-0.5">
         <View className="rounded-full border border-hairline bg-surfaceMuted px-2.5 py-1">
           <Text
@@ -356,12 +359,12 @@ export function ChatsListScreen({
 
       {threads.length === 0 ? (
         <EmptyState
-          description="When a match is ready, it will show up here."
+          description="When a person or group is ready to talk, I’ll open the conversation here."
           title="No chats yet"
         />
       ) : (
-        <ScrollView className="mb-4 max-h-44">
-          {threads.map((thread) => (
+        <ScrollView className="mb-4 max-h-44" testID="chat-thread-list">
+          {threads.map((thread, index) => (
             <Pressable
               accessibilityHint={
                 thread.unreadCount > 0
@@ -379,6 +382,11 @@ export function ChatsListScreen({
               onPress={() => {
                 void onOpenChat(thread.id);
               }}
+              testID={
+                index === 0
+                  ? "chat-thread-row-first"
+                  : `chat-thread-row-${thread.id}`
+              }
             >
               <Text className="text-[14px] font-semibold text-ink">
                 {thread.title}
@@ -405,7 +413,10 @@ export function ChatsListScreen({
         </ScrollView>
       )}
 
-      <View className="min-h-0 flex-1 overflow-hidden rounded-[26px] border border-hairline bg-surfaceMuted/70">
+      <View
+        className="min-h-0 flex-1 overflow-hidden rounded-[26px] border border-hairline bg-surfaceMuted/70"
+        testID="chat-selected-thread"
+      >
         <View
           className="min-h-0 flex-1 px-4 pt-4"
           style={{ paddingBottom: composerOverlayHeight }}
@@ -432,6 +443,7 @@ export function ChatsListScreen({
                       onPress={() => {
                         openCounterpartyProfile(moderationTargetUserId);
                       }}
+                      testID="chat-view-profile-button"
                       variant="secondary"
                     />
                   </View>
@@ -444,6 +456,7 @@ export function ChatsListScreen({
                           selectedChat.id,
                         )
                       }
+                      testID="chat-report-button"
                       variant="ghost"
                     />
                   </View>
@@ -456,6 +469,7 @@ export function ChatsListScreen({
                           selectedChat.id,
                         )
                       }
+                      testID="chat-block-button"
                       variant="ghost"
                     />
                   </View>
@@ -598,6 +612,7 @@ export function ChatsListScreen({
                                         emoji,
                                       );
                                     }}
+                                    testID={`chat-reaction-${message.id}-${emoji}`}
                                   >
                                     <Text className="text-[11px] text-ink">
                                       {emoji}
@@ -616,6 +631,7 @@ export function ChatsListScreen({
                                       message.replyToMessageId ?? message.id,
                                     );
                                   }}
+                                  testID={`chat-thread-open-${message.id}`}
                                 >
                                   <Text className="text-[11px] text-ink">
                                     {(() => {
@@ -679,7 +695,10 @@ export function ChatsListScreen({
               className="absolute inset-0 bg-surface/30"
             />
             {pendingEdit ? (
-              <View className="mb-2 flex-row items-start justify-between gap-3 rounded-[18px] border border-hairline bg-surface px-3 py-2">
+              <View
+                className="mb-2 flex-row items-start justify-between gap-3 rounded-[18px] border border-hairline bg-surface px-3 py-2"
+                testID="chat-edit-banner"
+              >
                 <View className="min-w-0 flex-1">
                   <Text className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">
                     Editing
@@ -706,7 +725,10 @@ export function ChatsListScreen({
                 </Pressable>
               </View>
             ) : pendingReply ? (
-              <View className="mb-2 flex-row items-start justify-between gap-3 rounded-[18px] border border-hairline bg-surface px-3 py-2">
+              <View
+                className="mb-2 flex-row items-start justify-between gap-3 rounded-[18px] border border-hairline bg-surface px-3 py-2"
+                testID="chat-reply-banner"
+              >
                 <View className="min-w-0 flex-1">
                   <Text className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">
                     Replying
@@ -763,7 +785,10 @@ export function ChatsListScreen({
         transparent={false}
         visible={threadFocus != null}
       >
-        <View className="flex-1 bg-canvas px-5 pb-4 pt-4">
+        <View
+          className="flex-1 bg-canvas px-5 pb-4 pt-4"
+          testID="chat-thread-modal"
+        >
           <View className="mb-3 flex-row items-center justify-between gap-3">
             <View className="min-w-0 flex-1">
               <Text className="text-[18px] font-semibold tracking-[-0.02em] text-ink">
@@ -780,6 +805,7 @@ export function ChatsListScreen({
               accessibilityRole="button"
               className="rounded-full border border-hairline bg-surfaceMuted px-3 py-2"
               onPress={closeThreadFocus}
+              testID="chat-thread-close"
             >
               <Text className="text-[12px] font-semibold text-ink">Close</Text>
             </Pressable>

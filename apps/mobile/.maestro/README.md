@@ -119,6 +119,19 @@ For Expo Go:
 MAESTRO_APP_ID=host.exp.Exponent maestro test apps/mobile/.maestro/mobile-route-graph.yaml
 ```
 
+This route graph now includes:
+
+- Home
+- Profile
+- Settings
+- Activity
+- Inbox
+- Connections
+- Discovery
+- Recurring circles
+- Saved searches
+- Scheduled tasks
+
 ## Run surface-smoke flow
 
 This is the release-grade mobile reachability lane. It boots fresh for each
@@ -138,6 +151,17 @@ For a native dev build:
 
 ```bash
 MAESTRO_APP_ID=so.opensocial.app maestro test apps/mobile/.maestro/mobile-surface-smoke.yaml
+```
+
+## Run persistence and chat lanes
+
+These are the next focused upgrade lanes for raising weaker surfaces toward
+release-grade readiness:
+
+```bash
+pnpm --filter @opensocial/mobile test:e2e:maestro:profile-persistence
+pnpm --filter @opensocial/mobile test:e2e:maestro:settings-persistence
+pnpm --filter @opensocial/mobile test:e2e:maestro:chats-core
 ```
 
 ## Run sandbox-backed surface-smoke flow

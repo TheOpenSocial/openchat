@@ -1,0 +1,160 @@
+appId: ${MAESTRO_APP_ID}
+---
+- runFlow:
+    when:
+      notVisible:
+        id: "activity-screen"
+    commands:
+      - runFlow:
+          when:
+            visible:
+              text: "Source code explorer"
+          commands:
+            - swipe:
+                direction: DOWN
+            - tapOn:
+                point: "92%,48%"
+            - tapOn:
+                point: "92%,48%"
+      - runFlow:
+          when:
+            visible:
+              text: "This is the tools menu."
+          commands:
+            - tapOn:
+                text: "Continue"
+      - tapOn:
+          id: "auth-e2e-bypass-button"
+          optional: true
+      - tapOn:
+          id: "auth-e2e-bypass-button"
+          optional: true
+      - tapOn:
+          id: "onboarding-e2e-bypass-button"
+          optional: true
+      - tapOn:
+          id: "home-welcome-skip"
+          optional: true
+      - runFlow:
+          when:
+            visible:
+              id: "auth-screen"
+          commands:
+            - extendedWaitUntil:
+                visible:
+                  id: "auth-e2e-bypass-button"
+                timeout: 10000
+            - tapOn:
+                id: "auth-e2e-bypass-button"
+      - runFlow:
+          when:
+            visible:
+              id: "onboarding-screen"
+          commands:
+            - extendedWaitUntil:
+                visible:
+                  id: "onboarding-e2e-bypass-button"
+                timeout: 10000
+            - tapOn:
+                id: "onboarding-e2e-bypass-button"
+      - runFlow:
+          when:
+            visible:
+              id: "home-welcome-close"
+          commands:
+            - tapOn:
+                id: "home-welcome-skip"
+                optional: true
+            - tapOn:
+                id: "home-welcome-close"
+                optional: true
+      - runFlow:
+          when:
+            visible:
+              id: "home-screen"
+          commands:
+            - tapOn:
+                id: "app-bottom-tab-activity"
+                optional: true
+            - tapOn:
+                text: "Updates"
+                optional: true
+            - waitForAnimationToEnd
+      - runFlow:
+          when:
+            visible:
+              id: "inbox-close"
+          commands:
+            - tapOn:
+                id: "inbox-close"
+      - runFlow:
+          when:
+            visible:
+              id: "connections-close"
+          commands:
+            - tapOn:
+                id: "connections-close"
+      - runFlow:
+          when:
+            visible:
+              id: "discovery-close"
+          commands:
+            - tapOn:
+                id: "discovery-close"
+      - runFlow:
+          when:
+            visible:
+              id: "recurring-circles-close"
+          commands:
+            - tapOn:
+                id: "recurring-circles-close"
+      - runFlow:
+          when:
+            visible:
+              id: "saved-searches-close"
+          commands:
+            - tapOn:
+                id: "saved-searches-close"
+      - runFlow:
+          when:
+            visible:
+              id: "scheduled-tasks-close"
+          commands:
+            - tapOn:
+                id: "scheduled-tasks-close"
+      - runFlow:
+          when:
+            visible:
+              id: "activity-close"
+          commands:
+            - tapOn:
+                id: "activity-close"
+      - runFlow:
+          when:
+            visible:
+              id: "app-bottom-tab-activity"
+          commands:
+            - tapOn:
+                id: "app-bottom-tab-activity"
+            - tapOn:
+                id: "app-bottom-tab-activity"
+      - tapOn:
+          text: "Updates"
+          optional: true
+- extendedWaitUntil:
+    visible:
+      id: "activity-screen"
+    timeout: 30000
+- assertVisible:
+    id: "activity-screen"
+- runFlow:
+    when:
+      notVisible:
+        id: "activity-quick-links"
+    commands:
+      - swipe:
+          direction: DOWN
+      - swipe:
+          direction: DOWN
+- assertVisible:
+    id: "activity-quick-links"

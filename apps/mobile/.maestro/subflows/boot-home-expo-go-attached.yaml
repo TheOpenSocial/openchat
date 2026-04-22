@@ -27,14 +27,125 @@ appId: ${MAESTRO_APP_ID}
     text: "Reload"
     optional: true
 - waitForAnimationToEnd
+- tapOn:
+    id: "auth-e2e-bypass-button"
+    optional: true
+- tapOn:
+    id: "auth-e2e-bypass-button"
+    optional: true
+- tapOn:
+    id: "onboarding-e2e-bypass-button"
+    optional: true
+- tapOn:
+    id: "home-welcome-skip"
+    optional: true
 - runFlow:
     when:
       visible:
         id: "auth-screen"
     commands:
+      - extendedWaitUntil:
+          visible:
+            id: "auth-e2e-bypass-button"
+          timeout: 10000
       - tapOn:
           id: "auth-e2e-bypass-button"
+- runFlow:
+    when:
+      visible:
+        id: "onboarding-screen"
+    commands:
+      - extendedWaitUntil:
+          visible:
+            id: "onboarding-e2e-bypass-button"
+          timeout: 10000
+      - tapOn:
+          id: "onboarding-e2e-bypass-button"
+- runFlow:
+    when:
+      visible:
+        id: "home-welcome-close"
+    commands:
+      - waitForAnimationToEnd
+      - tapOn:
+          id: "home-welcome-skip"
+          optional: true
+      - tapOn:
+          id: "home-welcome-primary"
+          optional: true
+      - tapOn:
+          id: "home-welcome-close"
+          optional: true
 - waitForAnimationToEnd
+- runFlow:
+    when:
+      notVisible:
+        id: "home-status-header"
+    commands:
+      - runFlow:
+          when:
+            visible:
+              id: "inbox-close"
+          commands:
+            - tapOn:
+                id: "inbox-close"
+      - runFlow:
+          when:
+            visible:
+              id: "connections-close"
+          commands:
+            - tapOn:
+                id: "connections-close"
+      - runFlow:
+          when:
+            visible:
+              id: "discovery-close"
+          commands:
+            - tapOn:
+                id: "discovery-close"
+      - runFlow:
+          when:
+            visible:
+              id: "recurring-circles-close"
+          commands:
+            - tapOn:
+                id: "recurring-circles-close"
+      - runFlow:
+          when:
+            visible:
+              id: "saved-searches-close"
+          commands:
+            - tapOn:
+                id: "saved-searches-close"
+      - runFlow:
+          when:
+            visible:
+              id: "scheduled-tasks-close"
+          commands:
+            - tapOn:
+                id: "scheduled-tasks-close"
+      - runFlow:
+          when:
+            visible:
+              id: "activity-close"
+          commands:
+            - tapOn:
+                id: "activity-close"
+      - runFlow:
+          when:
+            visible:
+              id: "chats-close"
+          commands:
+            - tapOn:
+                id: "chats-close"
+      - runFlow:
+          when:
+            visible:
+              id: "app-bottom-tab-home"
+          commands:
+            - tapOn:
+                id: "app-bottom-tab-home"
+      - waitForAnimationToEnd
 - extendedWaitUntil:
     visible:
       id: "home-status-header"

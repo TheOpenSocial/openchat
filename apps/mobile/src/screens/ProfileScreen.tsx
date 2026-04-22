@@ -79,11 +79,13 @@ function Chip({
   label,
   active = false,
   onPress,
+  testID,
   tone = "light",
 }: {
   label: string;
   active?: boolean;
   onPress?: () => void;
+  testID?: string;
   tone?: "light" | "dark";
 }) {
   const activeClass =
@@ -115,7 +117,11 @@ function Chip({
     return content;
   }
 
-  return <Pressable onPress={onPress}>{content}</Pressable>;
+  return (
+    <Pressable onPress={onPress} testID={testID}>
+      {content}
+    </Pressable>
+  );
 }
 
 function Section({
@@ -166,11 +172,13 @@ function ActionRow({
   icon,
   label,
   onPress,
+  testID,
   tone = "default",
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   onPress: () => void;
+  testID?: string;
   tone?: "default" | "danger";
 }) {
   const iconColor =
@@ -181,6 +189,7 @@ function ActionRow({
     <Pressable
       className="flex-row items-center justify-between py-3"
       onPress={onPress}
+      testID={testID}
     >
       <View className="flex-row items-center gap-3">
         <Ionicons color={iconColor} name={icon} size={16} />
@@ -430,7 +439,7 @@ export function ProfileScreen({
   };
 
   return (
-    <View className="flex-1 bg-[#0b0d10] pt-2">
+    <View className="flex-1 bg-[#0b0d10] pt-2" testID="profile-screen">
       {loadingModal}
       <LinearGradient
         colors={["#0f1216", "#0b0d10", "#090a0d"]}
@@ -677,6 +686,7 @@ export function ProfileScreen({
                             option.key as UserProfileDraft["socialMode"],
                           );
                         }}
+                        testID={`profile-preference-mode-${option.key}`}
                       />
                     ))}
                   </View>
@@ -699,6 +709,7 @@ export function ProfileScreen({
                         onPress={() => {
                           setNotificationDraft(mode);
                         }}
+                        testID={`profile-preference-notification-${mode}`}
                       />
                     ))}
                   </View>
@@ -719,6 +730,7 @@ export function ProfileScreen({
                       disabled={saving}
                       label="Cancel"
                       onPress={() => setEditingPreferences(false)}
+                      testID="profile-preferences-cancel"
                       variant="ghost"
                     />
                   </View>
@@ -729,6 +741,7 @@ export function ProfileScreen({
                       onPress={() => {
                         void savePreferences();
                       }}
+                      testID="profile-preferences-save"
                     />
                   </View>
                 </View>
@@ -777,18 +790,21 @@ export function ProfileScreen({
                 icon="person-outline"
                 label="Edit profile"
                 onPress={beginBioEdit}
+                testID="profile-action-edit"
               />
               <View className="h-px bg-hairline/70" />
               <ActionRow
                 icon="options-outline"
                 label="Refine preferences"
                 onPress={beginPreferencesEdit}
+                testID="profile-action-preferences"
               />
               <View className="h-px bg-hairline/70" />
               <ActionRow
                 icon="add-circle-outline"
                 label="Update interests"
                 onPress={beginInterestsEdit}
+                testID="profile-action-interests"
               />
               <View className="h-px bg-hairline/70" />
               <ActionRow
@@ -798,12 +814,14 @@ export function ProfileScreen({
                   hapticSelection();
                   void refreshUnderstanding();
                 }}
+                testID="profile-action-refresh-understanding"
               />
               <View className="h-px bg-hairline/70" />
               <ActionRow
                 icon="camera-outline"
                 label="Update profile photo"
                 onPress={openAvatarActions}
+                testID="profile-action-photo"
               />
               <View className="h-px bg-hairline/70" />
               <ActionRow
@@ -813,6 +831,7 @@ export function ProfileScreen({
                   hapticSelection();
                   void onResetSession();
                 }}
+                testID="profile-action-sign-out"
                 tone="danger"
               />
             </View>
@@ -834,6 +853,7 @@ export function ProfileScreen({
                   placeholder="What are you into? What kind of people or plans are you hoping to find?"
                   placeholderTextColor={appTheme.colors.muted}
                   selectionColor={appTheme.colors.ink}
+                  testID="profile-bio-input"
                   value={bioDraft}
                 />
                 <TextInput
@@ -842,6 +862,7 @@ export function ProfileScreen({
                   placeholder="City, Country"
                   placeholderTextColor={appTheme.colors.muted}
                   selectionColor={appTheme.colors.ink}
+                  testID="profile-location-input"
                   value={locationDraft}
                 />
                 <View className="flex-row gap-2">
@@ -850,6 +871,7 @@ export function ProfileScreen({
                       disabled={saving}
                       label="Cancel"
                       onPress={() => setEditingBio(false)}
+                      testID="profile-bio-cancel"
                       variant="ghost"
                     />
                   </View>
@@ -860,6 +882,7 @@ export function ProfileScreen({
                       onPress={() => {
                         void saveBio();
                       }}
+                      testID="profile-bio-save"
                     />
                   </View>
                 </View>
@@ -893,6 +916,7 @@ export function ProfileScreen({
                   placeholder="AI, design, football, startup dinners"
                   placeholderTextColor={appTheme.colors.muted}
                   selectionColor={appTheme.colors.ink}
+                  testID="profile-interests-input"
                   value={interestsDraft}
                 />
                 <View className="flex-row gap-2">
@@ -901,6 +925,7 @@ export function ProfileScreen({
                       disabled={saving}
                       label="Cancel"
                       onPress={() => setEditingInterests(false)}
+                      testID="profile-interests-cancel"
                       variant="ghost"
                     />
                   </View>
@@ -911,6 +936,7 @@ export function ProfileScreen({
                       onPress={() => {
                         void saveInterests();
                       }}
+                      testID="profile-interests-save"
                     />
                   </View>
                 </View>

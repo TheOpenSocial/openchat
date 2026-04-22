@@ -130,7 +130,7 @@ export function ConnectionsScreen({
             </>
           ) : (
             <EmptyState
-              description="When new connections take shape, they’ll show up here so you can jump back into the right conversation quickly."
+              description="When a connection becomes real, I’ll keep it here so you can jump back in without searching for it."
               title="No connections yet"
             />
           )}

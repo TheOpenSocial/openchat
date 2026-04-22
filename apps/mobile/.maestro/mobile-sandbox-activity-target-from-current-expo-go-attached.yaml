@@ -1,6 +1,5 @@
 appId: ${MAESTRO_APP_ID}
 ---
-- runFlow: subflows/boot-activity-expo-go-attached.yaml
 - assertVisible:
     id: "activity-screen"
 - assertVisible: ${MAESTRO_EXPECTED_ACTIVITY_SECTION_TITLE}

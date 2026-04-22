@@ -170,6 +170,7 @@ Use this as the baseline for all next backlog items. Do not reintroduce generic 
 - The stronger local mobile shape now uses attached Expo Go Maestro lanes:
   - `mobile-sandbox-home-activity-expo-go-attached.yaml` is green locally for real Home and Activity API-backed state
   - `mobile-sandbox-activity-target-expo-go-attached.yaml` exists for one-target-per-run route validation, and the remaining red is now narrowed to intermittent iOS XCTest bridge drops during longer local interaction chains rather than missing mobile surfaces
+- Mobile Home now keeps the summary-driven shell usable when the primary agent-thread load is temporarily `abuse_throttled`, so repeated local E2E session runs do not fall back into the reconnect shell as aggressively during otherwise healthy API-backed automation.
 
 ## Current Verification Focus
 

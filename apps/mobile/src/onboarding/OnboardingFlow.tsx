@@ -215,6 +215,8 @@ export function OnboardingFlow({
   locale = "en",
   onSubmit,
 }: OnboardingFlowProps) {
+  const showAutomationBypass =
+    __DEV__ || Boolean(process.env.EXPO_PUBLIC_E2E_SESSION);
   const [draft, setDraft] = useState<OnboardingDraftState>(() =>
     defaultOnboardingState(session.displayName),
   );
@@ -745,6 +747,21 @@ export function OnboardingFlow({
     });
   }, [draft, onSubmit]);
 
+  const finishWithAutomationBypass = useCallback(async () => {
+    await onSubmit(
+      {
+        ...draft,
+        stepIndex: ONBOARDING_STEP_COUNT - 1,
+      },
+      {
+        firstIntentText:
+          draft.firstIntentText.trim() ||
+          draft.onboardingIntakeText.trim() ||
+          "Find people to talk with today",
+      },
+    );
+  }, [draft, onSubmit]);
+
   const stageLabel = STAGE_LABELS[stepIndex] ?? STAGE_LABELS[0];
 
   const body = (
@@ -769,42 +786,42 @@ export function OnboardingFlow({
               <Text className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted">
                 OpenSocial
               </Text>
-              <View className="mt-8 h-[220px] w-[220px] items-center justify-center">
+              <View className="mt-7 h-[204px] w-[204px] items-center justify-center">
                 <Animated.View
-                  className="absolute h-[192px] w-[192px] rounded-full border border-hairline/80"
+                  className="absolute h-[184px] w-[184px] rounded-full border border-hairline/70"
                   style={{
                     opacity: ripple.interpolate({
                       inputRange: [0, 1],
-                      outputRange: [0.22, 0],
+                      outputRange: [0.16, 0],
                     }),
                     transform: [
                       {
                         scale: ripple.interpolate({
                           inputRange: [0, 1],
-                          outputRange: [0.76, 1.18],
+                          outputRange: [0.82, 1.12],
                         }),
                       },
                     ],
                   }}
                 />
                 <Animated.View
-                  className="absolute h-[200px] w-[200px] rounded-full bg-surfaceMuted/50"
+                  className="absolute h-[188px] w-[188px] rounded-full bg-surfaceMuted/40"
                   style={{
                     opacity: systemOpacity,
                     transform: [{ scale: systemScale }],
                   }}
                 />
                 <Animated.View
-                  className="absolute h-[200px] w-[200px] items-center justify-center"
+                  className="absolute h-[188px] w-[188px] items-center justify-center"
                   style={{
                     opacity: systemOpacity,
                     transform: [{ scale: systemScale }],
                   }}
                 >
-                  <SystemBlobAnimation lottieRef={lottieRef} size={188} />
+                  <SystemBlobAnimation lottieRef={lottieRef} size={176} />
                 </Animated.View>
               </View>
-              <Text className="mt-8 text-center text-[32px] font-semibold leading-[36px] tracking-tight text-ink">
+              <Text className="mt-7 text-center text-[32px] font-semibold leading-[36px] tracking-tight text-ink">
                 {t("onboardingHybridTitle", locale)}
               </Text>
               <Text className="mt-4 max-w-[300px] text-center text-[15px] leading-[23px] text-muted">
@@ -815,7 +832,7 @@ export function OnboardingFlow({
             </View>
 
             <View
-              className="mt-8 rounded-[24px] border border-hairline bg-surfaceMuted/55 px-5 py-4"
+              className="mt-7 rounded-[24px] border border-hairline bg-surfaceMuted/50 px-5 py-4"
               style={layout.expressionSignalCard}
             >
               {processing && lastSpokenTurn.trim().length > 0 ? (
@@ -850,8 +867,11 @@ export function OnboardingFlow({
                   <Text className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted">
                     {t("onboardingHybridExampleLabel", locale)}
                   </Text>
-                  <Text className="mt-3 text-[14px] leading-[23px] text-muted">
+                  <Text className="mt-3 text-[16px] leading-[25px] text-ink/88">
                     {t("onboardingHybridExampleText", locale)}
+                  </Text>
+                  <Text className="mt-3 text-[13px] leading-[21px] text-muted">
+                    {t("onboardingHybridExampleHint", locale)}
                   </Text>
                 </>
               )}
@@ -1295,6 +1315,19 @@ export function OnboardingFlow({
             {t("onboardingHybridManual", locale)}
           </Text>
         </Pressable>
+        {showAutomationBypass ? (
+          <Pressable
+            accessibilityRole="button"
+            className="items-center py-2"
+            disabled={processing || loading}
+            onPress={() => {
+              void finishWithAutomationBypass();
+            }}
+            testID="onboarding-e2e-bypass-button"
+          >
+            <Text className="text-[14px] text-muted">Continue to app</Text>
+          </Pressable>
+        ) : null}
       </View>
     ) : stepIndex === 1 ? (
       <PrimaryButton

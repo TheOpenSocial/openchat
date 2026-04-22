@@ -21,6 +21,34 @@ function initials(name: string) {
   return parts.map((part) => part[0]?.toUpperCase() ?? "").join("");
 }
 
+function notificationBrief(summary: ExperienceHomeSummaryResponse) {
+  if (summary.counts.pendingRequests > 0) {
+    if (summary.counts.pendingRequests === 1) {
+      return {
+        body: "One person is waiting on you. A quick reply keeps the momentum up.",
+        kicker: "Agent brief",
+        title: "You have one decision to make",
+      };
+    }
+
+    return {
+      body: `${summary.counts.pendingRequests} people are waiting. I would clear those replies before checking lighter updates.`,
+      kicker: "Agent brief",
+      title: `${summary.counts.pendingRequests} replies need your attention`,
+    };
+  }
+
+  if (summary.counts.unreadNotifications > 0) {
+    return {
+      body: `${summary.counts.unreadNotifications} update${summary.counts.unreadNotifications === 1 ? "" : "s"} came in while you were away. Start there before opening a new thread.`,
+      kicker: "Agent brief",
+      title: "There is fresh movement to review",
+    };
+  }
+
+  return null;
+}
+
 function AvatarMark({
   label,
   tone = "human",
@@ -147,8 +175,8 @@ export function HomeComposerBanners({
     banner = (
       <Banner
         key="waiting"
-        body={summary.spotlight.coordination.body}
-        kicker="Live replies"
+        body={`Someone is still deciding. ${summary.spotlight.coordination.body}`}
+        kicker="Agent brief"
         onPress={() =>
           onPressCoordination?.(
             summary.spotlight.coordination?.targetChatId ?? null,
@@ -157,15 +185,15 @@ export function HomeComposerBanners({
         primaryAvatar={{ label: "AI", tone: "agent" }}
         secondaryAvatar={{ label: "…", tone: "human" }}
         testID="home-composer-banner-waiting"
-        title="Waiting on replies"
+        title="A conversation is waiting on the next reply"
       />
     );
   } else if (summary.spotlight.topSuggestion) {
     banner = (
       <Banner
         key="top-suggestion"
-        body={summary.spotlight.topSuggestion.reason}
-        kicker="Best human lead"
+        body={`This is the strongest match on the board right now. ${summary.spotlight.topSuggestion.reason}`}
+        kicker="Agent brief"
         onPress={() =>
           onPressTopSuggestion?.(summary.spotlight.topSuggestion?.userId ?? "")
         }
@@ -175,34 +203,31 @@ export function HomeComposerBanners({
         }}
         secondaryAvatar={{ label: "AI", tone: "agent" }}
         testID="home-composer-banner-top-suggestion"
-        title={summary.spotlight.topSuggestion.displayName}
+        title={`Talk to ${summary.spotlight.topSuggestion.displayName} next`}
       />
     );
   } else if (
     summary.counts.pendingRequests > 0 ||
     summary.counts.unreadNotifications > 0
   ) {
+    const brief = notificationBrief(summary);
     banner = (
       <Banner
         key="attention"
-        body={
-          summary.counts.pendingRequests > 0
-            ? `${summary.counts.pendingRequests} request${summary.counts.pendingRequests === 1 ? "" : "s"} need attention`
-            : `${summary.counts.unreadNotifications} update${summary.counts.unreadNotifications === 1 ? "" : "s"} unread`
-        }
-        kicker="Notifications"
+        body={brief?.body ?? "There is new activity to review."}
+        kicker={brief?.kicker ?? "Agent brief"}
         onPress={onPressActivity}
         primaryAvatar={{ label: "AI", tone: "agent" }}
         testID="home-composer-banner-attention"
-        title="Keep things moving"
+        title={brief?.title ?? "Keep things moving"}
       />
     );
   } else if (summary.spotlight.recovery) {
     banner = (
       <Banner
         key="recovery"
-        body={summary.spotlight.recovery.body}
-        kicker="Next move"
+        body={`Here is the best next move I can see right now. ${summary.spotlight.recovery.body}`}
+        kicker="Agent brief"
         onPress={() =>
           summary.spotlight.leadIntent
             ? onPressLeadIntent?.(summary.spotlight.leadIntent.intentId)

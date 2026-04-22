@@ -173,12 +173,22 @@ appId: ${MAESTRO_APP_ID}
 - assertVisible:
     id: "home-screen"
 - tapOn:
+    id: "app-bottom-tab-profile"
+- extendedWaitUntil:
+    visible:
+      id: "profile-screen"
+    timeout: 15000
+- assertVisible:
+    id: "profile-screen"
+- tapOn:
     id: "app-shell-settings"
+- assertVisible:
+    id: "settings-screen"
 - assertVisible:
     id: "settings-close"
 - tapOn:
     id: "settings-close"
 - extendedWaitUntil:
     visible:
-      id: "home-screen"
+      id: "profile-screen"
     timeout: 10000

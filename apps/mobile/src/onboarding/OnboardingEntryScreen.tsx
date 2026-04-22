@@ -59,58 +59,58 @@ export function OnboardingEntryScreen({
         {t("onboardingEntryKicker", locale)}
       </Text>
 
-      <View className="mt-10 h-[208px] w-[208px] items-center justify-center">
+      <View className="mt-8 h-[196px] w-[196px] items-center justify-center">
         <Animated.View
-          className="absolute h-[208px] w-[208px] rounded-full border border-white/10"
+          className="absolute h-[196px] w-[196px] rounded-full border border-white/8"
           style={{
             opacity: ripple.interpolate({
               inputRange: [0, 1],
-              outputRange: [0.24, 0],
+              outputRange: [0.2, 0],
             }),
             transform: [
               {
                 scale: ripple.interpolate({
                   inputRange: [0, 1],
-                  outputRange: [0.78, 1.3],
+                  outputRange: [0.82, 1.24],
                 }),
               },
             ],
           }}
         />
         <Animated.View
-          className="absolute h-[168px] w-[168px] rounded-full border border-white/[0.07]"
+          className="absolute h-[156px] w-[156px] rounded-full border border-white/[0.05]"
           style={{
             opacity: ripple.interpolate({
               inputRange: [0, 1],
-              outputRange: [0.18, 0],
+              outputRange: [0.14, 0],
             }),
             transform: [
               {
                 scale: ripple.interpolate({
                   inputRange: [0, 1],
-                  outputRange: [0.9, 1.18],
+                  outputRange: [0.92, 1.14],
                 }),
               },
             ],
           }}
         />
-        <View className="h-[120px] w-[120px] items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03]">
+        <View className="h-[112px] w-[112px] items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.025]">
           <Image
             resizeMode="contain"
             source={logoAsset}
-            style={{ height: 56, opacity: 0.96, width: 56 }}
+            style={{ height: 54, opacity: 0.96, width: 54 }}
           />
         </View>
       </View>
 
-      <Text className="mt-10 text-center text-[34px] font-semibold leading-[38px] tracking-tight text-white">
+      <Text className="mt-8 text-center text-[34px] font-semibold leading-[38px] tracking-tight text-white">
         {t("onboardingEntryTitle", locale)}
       </Text>
       <Text className="mt-4 max-w-[320px] text-center text-[16px] leading-[24px] text-white/52">
         {t("onboardingEntrySubtitle", locale)}
       </Text>
 
-      <View className="mt-10 items-center">
+      <View className="mt-8 items-center">
         <VoiceMicButton
           accessibilityLabelActive={t("onboardingEntryListening", locale)}
           accessibilityLabelIdle={t("onboardingEntryTitle", locale)}
@@ -131,7 +131,7 @@ export function OnboardingEntryScreen({
         ) : null}
       </View>
 
-      <View className="mt-10 w-full max-w-[320px]">
+      <View className="mt-8 w-full max-w-[320px]">
         <PrimaryButton
           label={t("onboardingEntryManual", locale)}
           onPress={onManual}
@@ -149,7 +149,7 @@ export function OnboardingEntryScreen({
           opacity: pressed ? appTheme.motion.pressOpacity : 1,
         })}
       >
-        <Text className="text-[13px] text-white/28">
+        <Text className="text-[12px] text-white/22">
           {t("onboardingHowItWorksCta", locale)}
         </Text>
       </Pressable>

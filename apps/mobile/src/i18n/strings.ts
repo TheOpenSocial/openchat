@@ -54,9 +54,13 @@ const catalogs = {
     onboardingHybridProcessingWordOne: "Understanding your intent.",
     onboardingHybridProcessingWordTwo: "Mapping your best starting point.",
     onboardingHybridProcessingWordThree: "Preparing your next step.",
+    onboardingHybridProcessingStatus:
+      "Turning what you shared into a starting point that feels right.",
     onboardingHybridExampleLabel: "Example",
     onboardingHybridExampleText:
       "“Looking for people nearby to share good conversations this week.”",
+    onboardingHybridExampleHint:
+      "Start with the real thing you want. We will shape the rest with you.",
     onboardingHybridCapturedTitle: "You said",
     onboardingHybridCapturedHint: "We’re using this to shape the next step.",
     onboardingHybridFollowUpVoiceHint: "Speak your answer.",
@@ -181,15 +185,15 @@ const catalogs = {
       "What would you like to do today, or who would you like to meet?",
     homeThreadLoadFailedTitle: "Could not load your conversation",
     homeThreadLoadFailedBody:
-      "The main conversation did not load correctly. Try again.",
+      "I could not restore your main conversation yet. Try again in a moment.",
     homeThreadRetryCta: "Retry",
     homeThreadRecoveryKicker: "OpenSocial",
     homeThreadRecoveryTitle: "Reconnecting your conversation",
     homeThreadRecoveryBody:
-      "I’m restoring your conversation and will place it back here as soon as it responds.",
+      "I’m restoring your conversation now and will bring it back here as soon as it responds.",
     homeThreadRecoveryWaitingTitle: "Waiting to reconnect your conversation",
     homeThreadRecoveryWaitingBody:
-      "I’m keeping this conversation ready and will reconnect as soon as it becomes available.",
+      "I’m holding your place here and will reconnect the conversation as soon as it becomes available.",
     homeThreadRetryingCountdown:
       "Retrying your conversation in {seconds}s · attempt {attempt}",
     homeThreadRetryManualHint:
@@ -265,7 +269,7 @@ const catalogs = {
     chatsSyncingNow: "Syncing...",
     chatsEmptyTitle: "No chats yet",
     chatsEmptyDescription:
-      "Create a chat sandbox to test message persistence using the live API.",
+      "When someone accepts or a group comes together, I’ll open the conversation here for you.",
     chatsUnread: "{count} unread",
     chatsReportUser: "Report user",
     chatsBlockUser: "Block user",
@@ -419,9 +423,13 @@ const catalogs = {
     onboardingHybridProcessingWordOne: "Entendiendo tu intención.",
     onboardingHybridProcessingWordTwo: "Armando tu mejor punto de inicio.",
     onboardingHybridProcessingWordThree: "Preparando el siguiente paso.",
+    onboardingHybridProcessingStatus:
+      "Convirtiendo lo que compartiste en un punto de inicio que se sienta bien.",
     onboardingHybridExampleLabel: "Ejemplo",
     onboardingHybridExampleText:
       "“Quiero conocer gente cerca para tener buenas charlas esta semana.”",
+    onboardingHybridExampleHint:
+      "Empieza por lo que realmente quieres. Nosotros te ayudamos a darle forma.",
     onboardingHybridCapturedTitle: "Dijiste",
     onboardingHybridCapturedHint:
       "Estamos usando esto para dar forma al siguiente paso.",

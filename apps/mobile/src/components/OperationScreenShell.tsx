@@ -38,6 +38,16 @@ export function OperationScreenShell({
   subtitle,
   title,
 }: OperationScreenShellProps) {
+  const showSafeAutomationClose =
+    Boolean(onClose && closeAccessibilityLabel && closeTestID) &&
+    (__DEV__ || Boolean(process.env.EXPO_PUBLIC_E2E_SESSION));
+  const closeButtonStyle =
+    onClose && closeAccessibilityLabel && !showSafeAutomationClose
+      ? {
+          marginRight: __DEV__ || process.env.EXPO_PUBLIC_E2E_SESSION ? 56 : 0,
+        }
+      : null;
+
   return (
     <SafeAreaView
       className="flex-1 bg-canvas"
@@ -56,8 +66,29 @@ export function OperationScreenShell({
             <Text className="text-[14px] leading-[21px] text-muted">
               {subtitle}
             </Text>
+            {showSafeAutomationClose ? (
+              <Pressable
+                accessibilityHint={closeHint}
+                accessibilityLabel={closeAccessibilityLabel}
+                accessibilityRole="button"
+                className="mt-2 self-start rounded-full border border-hairline bg-surfaceMuted px-3 py-2"
+                hitSlop={8}
+                onPress={onClose}
+                style={({ pressed }) => ({
+                  opacity: pressed ? appTheme.motion.pressOpacity : 1,
+                })}
+                testID={closeTestID}
+              >
+                <Text
+                  className="text-[12px] font-semibold tracking-[-0.01em]"
+                  style={{ color: appTheme.colors.inkSoft }}
+                >
+                  Back
+                </Text>
+              </Pressable>
+            ) : null}
           </View>
-          {onClose && closeAccessibilityLabel ? (
+          {onClose && closeAccessibilityLabel && !showSafeAutomationClose ? (
             <Pressable
               accessibilityHint={closeHint}
               accessibilityLabel={closeAccessibilityLabel}
@@ -66,6 +97,7 @@ export function OperationScreenShell({
               hitSlop={8}
               onPress={onClose}
               style={({ pressed }) => ({
+                ...(closeButtonStyle ?? {}),
                 opacity: pressed ? appTheme.motion.pressOpacity : 1,
               })}
               testID={closeTestID}

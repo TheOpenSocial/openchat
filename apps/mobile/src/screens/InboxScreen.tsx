@@ -1,5 +1,7 @@
+import { useMemo } from "react";
 import { ActivityIndicator, RefreshControl, Text, View } from "react-native";
 
+import { AgentBriefingCard } from "../components/AgentBriefingCard";
 import { InlineNotice } from "../components/InlineNotice";
 import { OperationScreenShell } from "../components/OperationScreenShell";
 import { RequestRow } from "../features/inbox/components/RequestRow";
@@ -36,6 +38,31 @@ export function InboxScreen({
     userId,
   });
 
+  const agentBrief = useMemo(() => {
+    if (loading) {
+      return null;
+    }
+
+    if (requests.length === 0) {
+      return {
+        body: "You are clear right now. I will surface new connection requests here as soon as they need a response.",
+        title: "No one is waiting on you",
+      };
+    }
+
+    if (requests.length === 1) {
+      return {
+        body: "You have one open request. A quick yes or no will keep the thread moving and unblock the other person.",
+        title: "One reply needs your call",
+      };
+    }
+
+    return {
+      body: `${requests.length} requests are waiting. I would start with the most recent one, then clear the rest in one pass so nothing stalls.`,
+      title: `${requests.length} replies are stacked up`,
+    };
+  }, [loading, requests.length]);
+
   return (
     <OperationScreenShell
       closeAccessibilityLabel="Close inbox"
@@ -61,6 +88,14 @@ export function InboxScreen({
       subtitle="Accept or decline connection requests without leaving the app flow."
       title="Requests waiting on you"
     >
+      {agentBrief ? (
+        <AgentBriefingCard
+          body={agentBrief.body}
+          eyebrow="Agent brief"
+          title={agentBrief.title}
+        />
+      ) : null}
+
       {error ? <InlineNotice text={error} tone="error" /> : null}
 
       {loading ? (
