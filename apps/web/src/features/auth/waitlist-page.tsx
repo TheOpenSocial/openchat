@@ -5,19 +5,10 @@ import type { ChangeEvent, FormEvent } from "react";
 import { useState } from "react";
 
 import { api, isRetryableApiError } from "@/src/lib/api";
+import { waitlistLocales, type WaitlistLocale } from "./waitlist-locale";
 import styles from "./waitlist-page.module.css";
 
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
-
-const waitlistLocales = ["en", "es", "fr"] as const;
-
-export type WaitlistLocale = (typeof waitlistLocales)[number];
-
-export function isWaitlistLocale(
-  value: string | undefined,
-): value is WaitlistLocale {
-  return value === "en" || value === "es" || value === "fr";
-}
 
 type WaitlistStatus = "idle" | "submitting" | "success" | "error";
 type Theme = "light" | "dark";

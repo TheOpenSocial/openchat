@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 
+import { WaitlistPage } from "@/src/features/auth/waitlist-page";
 import {
-  WaitlistPage,
   isWaitlistLocale,
   type WaitlistLocale,
-} from "@/src/features/auth/waitlist-page";
+} from "@/src/features/auth/waitlist-locale";
 
 export const metadata: Metadata = {
   title: "Join Waitlist | OpenSocial",
