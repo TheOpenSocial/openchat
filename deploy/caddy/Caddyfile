@@ -3,11 +3,11 @@ opensocial.so {
 }
 
 api.opensocial.so {
-  respond "OpenSocial API is temporarily unavailable." 503
+  reverse_proxy opensocial-api:3000
 }
 
 origin-api.opensocial.so {
-  respond "OpenSocial API is temporarily unavailable." 503
+  reverse_proxy opensocial-api:3000
 }
 
 admin.opensocial.so {
