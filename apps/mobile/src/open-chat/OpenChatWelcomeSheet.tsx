@@ -87,7 +87,7 @@ export function OpenChatWelcomeSheet({
       transparent
       visible={visible}
     >
-      <View className="flex-1 justify-end">
+      <View className="flex-1 justify-end" testID="home-welcome-sheet">
         <Animated.View
           className="absolute inset-0"
           style={{ opacity: backdropOpacity }}
@@ -160,6 +160,7 @@ export function OpenChatWelcomeSheet({
                 style={({ pressed }) => ({
                   opacity: pressed ? appTheme.motion.pressOpacity : 1,
                 })}
+                testID="home-welcome-close"
               >
                 <Ionicons
                   color="rgba(255,255,255,0.78)"
@@ -223,6 +224,7 @@ export function OpenChatWelcomeSheet({
                 style={({ pressed }) => ({
                   opacity: pressed ? appTheme.motion.pressOpacity : 1,
                 })}
+                testID="home-welcome-primary"
               >
                 <Text className="text-[15px] font-semibold text-[#0a0d12]">
                   {t("homeWelcomePrimaryCta", locale)}
@@ -238,6 +240,7 @@ export function OpenChatWelcomeSheet({
                 style={({ pressed }) => ({
                   opacity: pressed ? appTheme.motion.pressOpacity : 1,
                 })}
+                testID="home-welcome-skip"
               >
                 <Text className="text-[15px] font-medium text-white/78">
                   {t("homeWelcomeSkip", locale)}

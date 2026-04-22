@@ -1,9 +1,10 @@
 import { forwardRef, useState } from "react";
 import { Text, TextInput, type TextInputProps, View } from "react-native";
 
+import { appTheme } from "../theme";
 import { cn } from "../lib/cn";
 
-const PLACEHOLDER_MUTED = "rgba(255,255,255,0.35)";
+const PLACEHOLDER_MUTED = appTheme.colors.muted;
 
 interface CalmTextFieldProps extends TextInputProps {
   label?: string;
@@ -43,9 +44,11 @@ export const CalmTextField = forwardRef<TextInput, CalmTextFieldProps>(
         {label ? (
           <Text
             className={cn(
-              "text-[12px] font-medium",
-              focused ? "text-white/62" : "text-white/45",
+              "text-[13px] font-semibold",
+              focused ? "text-ink/88" : "text-muted",
             )}
+            allowFontScaling
+            minimumFontScale={0.85}
           >
             {label}
           </Text>
@@ -71,6 +74,7 @@ export const CalmTextField = forwardRef<TextInput, CalmTextFieldProps>(
               inputClassName,
             )}
             multiline={multiline}
+            allowFontScaling
             onBlur={(event) => {
               setFocused(false);
               onBlur?.(event);
@@ -80,14 +84,18 @@ export const CalmTextField = forwardRef<TextInput, CalmTextFieldProps>(
               onFocus?.(event);
             }}
             placeholderTextColor={placeholderTextColor}
-            selectionColor="rgba(255,255,255,0.75)"
+            selectionColor={appTheme.colors.ink}
             testID={testID}
             textAlignVertical={multiline ? "top" : "center"}
             {...props}
           />
         </View>
         {helperText ? (
-          <Text className="text-[12px] leading-[18px] text-white/30">
+          <Text
+            className="text-[12px] leading-[18px] text-muted"
+            allowFontScaling
+            minimumFontScale={0.85}
+          >
             {helperText}
           </Text>
         ) : null}

@@ -1,0 +1,75 @@
+appId: ${MAESTRO_APP_ID}
+---
+- runFlow: subflows/boot-shell-current.yaml
+- tapOn:
+    id: "e2e-nav-profile"
+- extendedWaitUntil:
+    visible:
+      id: "profile-screen"
+    timeout: 15000
+- tapOn:
+    id: "profile-bio-cancel"
+    optional: true
+- tapOn:
+    id: "profile-interests-cancel"
+    optional: true
+- tapOn:
+    id: "profile-preferences-cancel"
+    optional: true
+- runFlow:
+    when:
+      visible:
+        id: "profile-action-preferences"
+    commands:
+      - tapOn:
+          id: "profile-action-preferences"
+- runFlow:
+    when:
+      notVisible:
+        id: "profile-preferences-save"
+    commands:
+      - scrollUntilVisible:
+          element:
+            id: "profile-action-preferences"
+          direction: DOWN
+          timeout: 15000
+      - tapOn:
+          id: "profile-action-preferences"
+- scrollUntilVisible:
+    element:
+      id: "profile-preferences-save"
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: "profile-preference-mode-group"
+- tapOn:
+    id: "profile-preference-notification-digest"
+- tapOn:
+    id: "profile-preferences-save"
+- extendedWaitUntil:
+    visible:
+      id: "profile-action-preferences"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      id: "profile-action-preferences"
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: "profile-action-preferences"
+- runFlow:
+    when:
+      notVisible:
+        id: "profile-preferences-save"
+    commands:
+      - tapOn:
+          id: "profile-action-preferences"
+- scrollUntilVisible:
+    element:
+      id: "profile-preferences-save"
+    direction: DOWN
+    timeout: 15000
+- assertVisible:
+    id: "profile-preference-mode-group"
+- assertVisible:
+    id: "profile-preference-notification-digest"

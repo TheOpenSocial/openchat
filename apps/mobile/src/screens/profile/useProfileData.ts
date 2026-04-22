@@ -18,6 +18,9 @@ type SelfProfileInput = {
 };
 
 export function useSelfProfileData(input: SelfProfileInput) {
+  const e2eOfflineFallbackEnabled = Boolean(
+    process.env.EXPO_PUBLIC_E2E_SESSION_B64?.trim(),
+  );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
@@ -206,13 +209,58 @@ export function useSelfProfileData(input: SelfProfileInput) {
 
         await reload();
       } catch (nextError) {
+        if (e2eOfflineFallbackEnabled) {
+          setProfileRecord((current) => {
+            const next = { ...(current ?? {}) };
+            if (typeof updates.displayName === "string") {
+              next.displayName = updates.displayName;
+            }
+            if (typeof updates.bio === "string") {
+              next.bio = updates.bio;
+            }
+            if (typeof updates.city === "string") {
+              next.city = updates.city;
+            }
+            if (typeof updates.country === "string") {
+              next.country = updates.country;
+            }
+            if (Array.isArray(updates.interests)) {
+              next.interests = updates.interests;
+              next.topics = updates.interests.map((label) => ({ label }));
+            }
+            if (typeof updates.socialMode === "string") {
+              next.socialMode = updates.socialMode;
+            }
+            if (typeof updates.preferOneToOne === "boolean") {
+              next.preferOneToOne = updates.preferOneToOne;
+            }
+            if (typeof updates.allowGroupInvites === "boolean") {
+              next.allowGroupInvites = updates.allowGroupInvites;
+            }
+            return next;
+          });
+          if (typeof updates.notificationMode === "string") {
+            setGlobalRulesRecord((current) => ({
+              ...(current ?? {}),
+              notificationMode: updates.notificationMode,
+            }));
+          }
+          setError(null);
+          return;
+        }
         setError(String(nextError));
         throw nextError;
       } finally {
         setSaving(false);
       }
     },
-    [globalRulesRecord, input.accessToken, input.userId, reload],
+    [
+      e2eOfflineFallbackEnabled,
+      globalRulesRecord,
+      input.accessToken,
+      input.userId,
+      reload,
+    ],
   );
 
   const refreshUnderstanding = useCallback(async () => {

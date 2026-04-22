@@ -7,7 +7,13 @@ export function mergeChatMessages(
 ) {
   const dedupedById = new Map<string, LocalChatMessageRecord>();
   for (const message of [...existing, ...incoming]) {
-    dedupedById.set(message.id, message);
+    const current = dedupedById.get(message.id);
+    dedupedById.set(
+      message.id,
+      current
+        ? { ...current, ...message }
+        : (message as LocalChatMessageRecord),
+    );
   }
 
   const sorted = Array.from(dedupedById.values()).sort((left, right) => {

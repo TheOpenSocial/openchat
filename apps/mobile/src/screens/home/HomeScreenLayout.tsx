@@ -2,18 +2,18 @@ import type { ReactNode } from "react";
 import { KeyboardAvoidingView, Platform, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { AnimatedScreen } from "../../components/AnimatedScreen";
 import { AppBottomTabs } from "../../components/AppBottomTabs";
 import { AppShell } from "../../components/AppShell";
 import { InlineNotice } from "../../components/InlineNotice";
+import { RouteTransition } from "../../components/RouteTransition";
 import type { AppLocale } from "../../i18n/strings";
+import { appTheme } from "../../theme";
 import type { HomeTab } from "../../types";
 
 type BannerTone = "error" | "info" | "success";
-const HOME_SHELL_BACKGROUND_COLOR = "#050506";
 const HOME_SHELL_STYLE = {
   flex: 1,
-  backgroundColor: HOME_SHELL_BACKGROUND_COLOR,
+  backgroundColor: appTheme.colors.background,
 } as const;
 
 type HomeScreenLayoutProps = {
@@ -100,11 +100,11 @@ export function HomeScreenLayout({
               className="min-h-0 flex-1"
               style={{ paddingBottom: shellContentBottomInset, paddingTop: 14 }}
             >
-              <AnimatedScreen screenKey={activeTab}>
+              <RouteTransition routeKey={activeTab}>
                 {activeTab === "home" ? homeContent : null}
                 {activeTab === "chats" ? chatsContent : null}
                 {activeTab === "profile" ? profileContent : null}
-              </AnimatedScreen>
+              </RouteTransition>
             </View>
           </AppShell>
 

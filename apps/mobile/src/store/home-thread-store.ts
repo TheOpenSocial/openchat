@@ -70,6 +70,7 @@ function resolveNext<T>(prev: T, value: SetStateAction<T>) {
 
 function setState(patch: Partial<HomeThreadState>) {
   state = { ...state, ...patch };
+  storeSnapshot = { ...state, ...actions };
   emit();
 }
 
@@ -139,6 +140,9 @@ const actions: HomeThreadActions = {
   },
 };
 
+let storeSnapshot: HomeThreadStore = { ...state, ...actions };
+const defaultSnapshot: HomeThreadStore = { ...defaultState, ...actions };
+
 function subscribe(listener: () => void) {
   listeners.add(listener);
   return () => listeners.delete(listener);
@@ -149,7 +153,7 @@ export function useHomeThreadStore<T>(
 ): T {
   return useSyncExternalStore(
     subscribe,
-    () => selector({ ...state, ...actions }),
-    () => selector({ ...defaultState, ...actions }),
+    () => selector(storeSnapshot),
+    () => selector(defaultSnapshot),
   );
 }

@@ -3,11 +3,12 @@
 ## Required headers
 - `x-admin-user-id` (UUID)
 - `x-admin-role` (`admin`, `support`, `moderator`)
-- `x-admin-api-key` when enabled
+- `x-admin-api-key` when enabled for non-browser admin callers
 
 ## Web dashboard sign-in (`apps/admin`)
 - Operators sign in with **Google**; the API issues a normal user session and the UI uses that user’s id as `x-admin-user-id`.
 - Configure **`ADMIN_ALLOWED_USER_IDS`** / **`ADMIN_ROLE_BINDINGS`** so only intended accounts can call `/api/admin/*`.
+- Keep **`ADMIN_API_KEY`** empty for the hosted admin dashboard. The browser UI does not send `x-admin-api-key`; use the key only for scripts or tooling that can inject the header directly.
 - Set **`ADMIN_DASHBOARD_REDIRECT_URIS`** to the full admin callback URL (e.g. `https://admin.example.com/auth/callback`). For local dev, `http://localhost:3001/auth/callback` works when the variable is unset.
 - Google OAuth still uses **`GOOGLE_REDIRECT_URI`** pointing at the **API** (`…/api/auth/google/callback`); the API then redirects the browser to the admin callback with `?code=`.
 - Agent thread **SSE** in the admin UI authenticates via **`access_token`** query on the stream URL only; avoid logging full stream URLs in production.
@@ -61,6 +62,7 @@
 ## Launch controls
 - View: `GET /api/admin/launch-controls`
 - Update: `POST /api/admin/launch-controls`
+- Launch-control mutations now require an `admin` role and should include a `reason` when enabling invite-only mode, enabling the global kill switch, or disabling any feature gate.
 
 High-impact toggles:
 - `enableNewIntents`
@@ -68,6 +70,15 @@ High-impact toggles:
 - `enablePushNotifications`
 - `globalKillSwitch`
 - `inviteOnlyMode` + `alphaCohortUserIds`
+
+## Scheduled-task admin operations
+- Inspect: `GET /api/admin/scheduled-tasks`
+- Inspect runs: `GET /api/admin/scheduled-tasks/:taskId/runs`
+- Pause: `POST /api/admin/scheduled-tasks/:taskId/pause`
+- Resume: `POST /api/admin/scheduled-tasks/:taskId/resume`
+- Archive: `POST /api/admin/scheduled-tasks/:taskId/archive`
+- Run now: `POST /api/admin/scheduled-tasks/:taskId/run-now`
+- These mutations are admin-only and should include a short `reason` for audit clarity.
 
 ## Escalation criteria
 Escalate to incident runbook when:

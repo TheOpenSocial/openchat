@@ -72,6 +72,7 @@ function resolveNext<T>(prev: T, value: SetStateAction<T>) {
 
 function setState(patch: Partial<ChatsState>) {
   state = { ...state, ...patch };
+  storeSnapshot = { ...state, ...actions };
   emit();
 }
 
@@ -121,6 +122,9 @@ const actions: ChatsActions = {
   },
 };
 
+let storeSnapshot: ChatsStore = { ...state, ...actions };
+const defaultSnapshot: ChatsStore = { ...defaultState, ...actions };
+
 function subscribe(listener: () => void) {
   listeners.add(listener);
   return () => listeners.delete(listener);
@@ -129,7 +133,7 @@ function subscribe(listener: () => void) {
 export function useChatsStore<T>(selector: (store: ChatsStore) => T): T {
   return useSyncExternalStore(
     subscribe,
-    () => selector({ ...state, ...actions }),
-    () => selector({ ...defaultState, ...actions }),
+    () => selector(storeSnapshot),
+    () => selector(defaultSnapshot),
   );
 }

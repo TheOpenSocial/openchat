@@ -1,0 +1,69 @@
+appId: ${MAESTRO_APP_ID}
+---
+- launchApp
+- tapOn:
+    text: "OpenSocial"
+    optional: true
+- openLink: ${MAESTRO_EXPO_URL}
+- launchApp
+- tapOn:
+    text: "Expo Go"
+    optional: true
+- tapOn:
+    text: "Open"
+    optional: true
+- tapOn:
+    text: "OpenSocial"
+    optional: true
+- tapOn:
+    text: "Reload"
+    optional: true
+- tapOn:
+    text: "Continue"
+    optional: true
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible:
+        id: "auth-screen"
+    commands:
+      - tapOn:
+          id: "auth-e2e-bypass-button"
+- runFlow:
+    when:
+      visible:
+        id: "onboarding-screen"
+    commands:
+      - tapOn:
+          id: "onboarding-s1-continue"
+      - tapOn:
+          id: "onboarding-goal-meet-people"
+      - tapOn:
+          id: "onboarding-s2-continue"
+      - tapOn:
+          id: "onboarding-s3-continue"
+      - tapOn:
+          id: "onboarding-s4-continue"
+      - tapOn:
+          id: "onboarding-display-name"
+      - eraseText
+      - inputText: "Maestro User"
+      - tapOn:
+          id: "onboarding-bio-input"
+      - inputText: "I like quick chats and short plans."
+      - tapOn:
+          id: "onboarding-area-input"
+      - inputText: "Buenos Aires"
+      - tapOn:
+          id: "onboarding-country-input"
+      - inputText: "Argentina"
+      - tapOn:
+          id: "onboarding-s5-continue"
+      - tapOn:
+          id: "onboarding-s6-skip"
+- extendedWaitUntil:
+    visible:
+      id: "home-screen"
+    timeout: 20000
+- assertVisible:
+    id: "home-screen"

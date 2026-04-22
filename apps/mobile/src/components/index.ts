@@ -1,6 +1,7 @@
 export { AgentIntentToolbar } from "./AgentIntentToolbar";
 export { AgentSuggestionChips } from "./AgentSuggestionChips";
 export { AnimatedScreen } from "./AnimatedScreen";
+export { RouteTransition } from "./RouteTransition";
 export { AppDrawer } from "./AppDrawer";
 export { AppTopBar } from "./AppTopBar";
 export { ChatTranscriptList } from "./ChatTranscriptList";

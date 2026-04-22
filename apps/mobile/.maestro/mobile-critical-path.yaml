@@ -1,101 +1,57 @@
 appId: ${MAESTRO_APP_ID}
 ---
-- launchApp
-- tapOn:
-    text: "OpenSocial"
-    optional: true
-- openLink: ${MAESTRO_EXPO_URL}
-- tapOn:
-    text: "OpenSocial"
-    optional: true
-- tapOn:
-    text: "Reload"
-    optional: true
-- tapOn:
-    text: "Continue"
-    optional: true
-- waitForAnimationToEnd
-- runFlow:
-    when:
-      visible:
-        id: "auth-screen"
-    commands:
-      - tapOn:
-          id: "auth-e2e-bypass-button"
-- runFlow:
-    when:
-      visible:
-        id: "onboarding-screen"
-    commands:
-      - tapOn:
-          id: "onboarding-s1-continue"
-      - tapOn:
-          id: "onboarding-goal-meet-people"
-      - tapOn:
-          id: "onboarding-s2-continue"
-      - tapOn:
-          id: "onboarding-s3-continue"
-      - tapOn:
-          id: "onboarding-s4-continue"
-      - tapOn:
-          id: "onboarding-display-name"
-      - eraseText
-      - inputText: "Maestro User"
-      - tapOn:
-          id: "onboarding-bio-input"
-      - inputText: "I like quick chats and short plans."
-      - tapOn:
-          id: "onboarding-area-input"
-      - inputText: "Buenos Aires"
-      - tapOn:
-          id: "onboarding-country-input"
-      - inputText: "Argentina"
-      - tapOn:
-          id: "onboarding-s5-continue"
-      - tapOn:
-          id: "onboarding-s6-skip"
-- extendedWaitUntil:
-    visible:
-      id: "home-screen"
-    timeout: 20000
+- runFlow: subflows/boot-shell-current.yaml
 - assertVisible:
     id: "home-screen"
-- assertVisible:
-    id: "home-drawer-open-button"
 - tapOn:
-    id: "home-drawer-open-button"
-- assertVisible:
-    id: "home-drawer-sheet"
-- tapOn:
-    id: "home-drawer-close"
-- waitForAnimationToEnd
-# After the drawer, XCUITest intermittently omits tab `testID`s; first tab is Home (agent chat).
-- tapOn:
-    point: "12%,96%"
-- tapOn:
-    point: "50%,87%"
-- inputText: "Looking for a football conversation now."
-- tapOn:
-    point: "91%,87%"
-- tapOn:
-    id: "home-tab-chats"
-- tapOn:
-    id: "chat-create-button"
+    id: "e2e-nav-activity"
 - extendedWaitUntil:
     visible:
-      id: "chat-thread-latest"
+      id: "activity-screen"
+    timeout: 15000
+- assertVisible:
+    id: "activity-screen"
+- tapOn:
+    point: "91%,54%"
+    optional: true
+- tapOn:
+    point: "91%,12%"
+    optional: true
+- tapOn:
+    id: "activity-close"
+- extendedWaitUntil:
+    visible:
+      id: "e2e-nav-rail"
+    timeout: 15000
+- assertVisible:
+    id: "home-screen"
+- tapOn:
+    id: "e2e-nav-profile"
+- extendedWaitUntil:
+    visible:
+      id: "profile-screen"
     timeout: 15000
 - tapOn:
-    id: "chat-thread-latest"
-- waitForAnimationToEnd
-- tapOn:
-    point: "48%,70%"
-- inputText: "Hello from maestro"
-- pressKey: Enter
-- waitForAnimationToEnd
+    id: "e2e-nav-chats"
 - extendedWaitUntil:
     visible:
-      id: "chat-user-message"
-    timeout: 20000
-- assertVisible:
-    id: "chat-user-message"
+      id: "chats-screen"
+    timeout: 15000
+- runFlow:
+    when:
+      visible:
+        id: "chat-thread-row-first"
+    commands:
+      - tapOn:
+          id: "chat-thread-row-first"
+      - extendedWaitUntil:
+          visible:
+            id: "chat-selected-thread"
+          timeout: 15000
+- runFlow:
+    when:
+      visible:
+        id: "chat-empty-state"
+    commands:
+      - assertVisible:
+          id: "chat-empty-state"

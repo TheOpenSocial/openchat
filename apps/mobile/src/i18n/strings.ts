@@ -179,6 +179,10 @@ const catalogs = {
     homeQueuedActions: "{count} action{plural} queued for sync.",
     homeAgentSeedPrompt:
       "What would you like to do today, or who would you like to meet?",
+    homeThreadLoadFailedTitle: "Could not load your main conversation.",
+    homeThreadLoadFailedBody:
+      "Retry now, or start from a fresh thread on this device while we reconnect.",
+    homeThreadRetryCta: "Retry loading",
     openChatPresenceTitle: "Agentic social",
     openChatPresenceSubtitle: "Ready when you are.",
     openChatEmptyTitle: "What do you want to do?",
@@ -531,6 +535,10 @@ const catalogs = {
     homeQueuedActions: "{count} acción{plural} en cola para sincronizar.",
     homeAgentSeedPrompt:
       "¿Qué te gustaría hacer hoy, o a quién te gustaría conocer?",
+    homeThreadLoadFailedTitle: "No pudimos cargar tu conversación principal.",
+    homeThreadLoadFailedBody:
+      "Intenta de nuevo ahora, o empieza desde un hilo nuevo en este dispositivo mientras nos reconectamos.",
+    homeThreadRetryCta: "Reintentar carga",
     openChatPresenceTitle: "Social agéntico",
     openChatPresenceSubtitle: "Listo cuando tú quieras.",
     openChatEmptyTitle: "¿Qué quieres hacer?",

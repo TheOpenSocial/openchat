@@ -1,13 +1,29 @@
 import { JsonView } from "@/app/components/JsonView";
 import { Panel } from "@/app/components/Panel";
 import {
+  AgentOpsPanels,
   LlmRuntimeHealthPanel,
+  LaunchControlsPanel,
   OnboardingActivationHealthPanel,
+  ReliabilityPanels,
+  ScheduledTaskOperatorPanel,
+  SecurityPosturePanel,
   SystemControlsPanel,
 } from "./OverviewRuntimePanels";
 import {
+  type AgentActionsSnapshot,
+  type AgentOutcomesSnapshot,
+  type AgentReliabilitySnapshot,
+  type AgentWorkflowDetailSnapshot,
+  type AgentWorkflowListSnapshot,
   type LlmRuntimeHealthSnapshot,
+  type LaunchControlsSnapshot,
   type OnboardingActivationSnapshot,
+  type SavedSearchRecord,
+  type ScheduledTaskRecord,
+  type ScheduledTaskRunRecord,
+  type SecurityPostureSnapshot,
+  type VerificationRunsSnapshot,
 } from "./workbench-config";
 
 interface DeadLetterRow {
@@ -42,24 +58,59 @@ export function OverviewTab({
   debugResponse,
   deadLetters,
   health,
+  launchControlReason,
+  launchControlsSnapshot,
   llmRuntimeHealthSnapshot,
   onboardingActivationSnapshot,
+  savedSearches,
   relayCount,
+  agentReliabilitySnapshot,
+  agentOutcomesSnapshot,
+  agentActionsSnapshot,
+  agentWorkflowListSnapshot,
+  agentWorkflowDetailSnapshot,
+  scheduledTaskActionReason,
+  scheduledTaskRuns,
+  scheduledTasks,
+  selectedScheduledTaskId,
+  selectedWorkflowRunId,
+  verificationRunsSnapshot,
   threadId,
   userId,
+  archiveScheduledTask,
   executeDebugQuery,
   loadDeadLetters,
+  loadAgentActionsSnapshot,
+  loadAgentReliabilitySnapshot,
+  loadAgentOutcomesSnapshot,
+  loadAgentWorkflowDetailSnapshot,
+  loadAgentWorkflowListSnapshot,
+  loadLaunchControlsSnapshot,
   loadLlmRuntimeHealthSnapshot,
   loadOnboardingActivationSnapshot,
+  loadSavedSearchesSnapshot,
+  loadScheduledTaskRuns,
+  loadScheduledTasksSnapshot,
+  loadSecurityPostureSnapshot,
+  loadVerificationRunsSnapshot,
+  pauseScheduledTask,
   relayOutbox,
   replayDeadLetter,
+  resumeScheduledTask,
+  runScheduledTaskNow,
+  securityPostureSnapshot,
   setAdminRole,
   setAdminUserId,
   setDebugBodyInput,
   setDebugMethod,
   setDebugPath,
   setDebugQueryInput,
+  setLaunchControlReason,
+  setScheduledTaskActionReason,
+  setSelectedScheduledTaskId,
+  setSelectedWorkflowRunId,
   setThreadId,
+  toggleLaunchControl,
   setUserId,
 }: {
   adminButtonClass: string;
@@ -76,26 +127,85 @@ export function OverviewTab({
   debugResponse: unknown;
   deadLetters: DeadLetterRow[];
   health: string;
+  launchControlReason: string;
+  launchControlsSnapshot: LaunchControlsSnapshot | null;
   llmRuntimeHealthSnapshot: LlmRuntimeHealthSnapshot | null;
   onboardingActivationSnapshot: OnboardingActivationSnapshot | null;
+  savedSearches: SavedSearchRecord[];
   relayCount: number | null;
+  agentReliabilitySnapshot: AgentReliabilitySnapshot | null;
+  agentOutcomesSnapshot: AgentOutcomesSnapshot | null;
+  agentActionsSnapshot: AgentActionsSnapshot | null;
+  agentWorkflowListSnapshot: AgentWorkflowListSnapshot | null;
+  agentWorkflowDetailSnapshot: AgentWorkflowDetailSnapshot | null;
+  scheduledTaskActionReason: string;
+  scheduledTaskRuns: ScheduledTaskRunRecord[];
+  scheduledTasks: ScheduledTaskRecord[];
+  selectedScheduledTaskId: string;
+  selectedWorkflowRunId: string;
+  verificationRunsSnapshot: VerificationRunsSnapshot | null;
   threadId: string;
   userId: string;
+  archiveScheduledTask: (taskId: string) => Promise<unknown>;
   executeDebugQuery: () => Promise<unknown>;
   loadDeadLetters: () => Promise<unknown>;
+  loadAgentActionsSnapshot: () => Promise<unknown>;
+  loadAgentReliabilitySnapshot: () => Promise<unknown>;
+  loadAgentOutcomesSnapshot: () => Promise<unknown>;
+  loadAgentWorkflowDetailSnapshot: (workflowRunId?: string) => Promise<unknown>;
+  loadAgentWorkflowListSnapshot: () => Promise<unknown>;
+  loadLaunchControlsSnapshot: () => Promise<unknown>;
   loadLlmRuntimeHealthSnapshot: () => Promise<unknown>;
   loadOnboardingActivationSnapshot: () => Promise<unknown>;
+  loadSavedSearchesSnapshot: () => Promise<unknown>;
+  loadScheduledTaskRuns: (taskId: string) => Promise<unknown>;
+  loadScheduledTasksSnapshot: () => Promise<unknown>;
+  loadSecurityPostureSnapshot: () => Promise<unknown>;
+  loadVerificationRunsSnapshot: () => Promise<unknown>;
+  pauseScheduledTask: (taskId: string) => Promise<unknown>;
   relayOutbox: () => Promise<unknown>;
   replayDeadLetter: (id: string) => Promise<unknown>;
+  resumeScheduledTask: (taskId: string) => Promise<unknown>;
+  runScheduledTaskNow: (taskId: string) => Promise<unknown>;
+  securityPostureSnapshot: SecurityPostureSnapshot | null;
   setAdminRole: (value: "admin" | "support" | "moderator") => void;
   setAdminUserId: (value: string) => void;
   setDebugBodyInput: (value: string) => void;
   setDebugMethod: (value: "GET" | "POST" | "PUT" | "PATCH") => void;
   setDebugPath: (value: string) => void;
   setDebugQueryInput: (value: string) => void;
+  setLaunchControlReason: (value: string) => void;
+  setScheduledTaskActionReason: (value: string) => void;
+  setSelectedScheduledTaskId: (value: string) => void;
+  setSelectedWorkflowRunId: (value: string) => void;
   setThreadId: (value: string) => void;
+  toggleLaunchControl: (
+    field: "globalKillSwitch" | "enableNewIntents" | "inviteOnlyMode",
+    nextValue: boolean,
+  ) => Promise<unknown>;
   setUserId: (value: string) => void;
 }) {
+  const fillDebugPreset = ({
+    method = "GET",
+    path,
+    body = "{}",
+    query = "{}",
+  }: {
+    method?: "GET" | "POST" | "PUT" | "PATCH";
+    path: string;
+    body?: string;
+    query?: string;
+  }) => {
+    setDebugMethod(method);
+    setDebugPath(path);
+    setDebugQueryInput(query);
+    setDebugBodyInput(body);
+  };
+
+  const selectedTaskRunsPresetPath = selectedScheduledTaskId.trim()
+    ? `/admin/scheduled-tasks/${selectedScheduledTaskId.trim()}/runs`
+    : "/admin/scheduled-tasks/:taskId/runs";
+
   return (
     <section className="mt-4 space-y-4">
       <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
@@ -168,6 +278,63 @@ export function OverviewTab({
         llmRuntimeHealthSnapshot={llmRuntimeHealthSnapshot}
         loadLlmRuntimeHealthSnapshot={loadLlmRuntimeHealthSnapshot}
       />
+      <div className="grid gap-4 lg:grid-cols-2">
+        <LaunchControlsPanel
+          adminButtonClass={adminButtonClass}
+          adminButtonGhostClass={adminButtonGhostClass}
+          adminInputClass={adminInputClass}
+          launchControlReason={launchControlReason}
+          launchControlsSnapshot={launchControlsSnapshot}
+          loadLaunchControlsSnapshot={loadLaunchControlsSnapshot}
+          setLaunchControlReason={setLaunchControlReason}
+          toggleLaunchControl={toggleLaunchControl}
+        />
+        <SecurityPosturePanel
+          adminButtonClass={adminButtonClass}
+          loadSecurityPostureSnapshot={loadSecurityPostureSnapshot}
+          securityPostureSnapshot={securityPostureSnapshot}
+        />
+      </div>
+      <ReliabilityPanels
+        adminButtonClass={adminButtonClass}
+        agentReliabilitySnapshot={agentReliabilitySnapshot}
+        loadAgentReliabilitySnapshot={loadAgentReliabilitySnapshot}
+        loadVerificationRunsSnapshot={loadVerificationRunsSnapshot}
+        verificationRunsSnapshot={verificationRunsSnapshot}
+      />
+      <AgentOpsPanels
+        adminButtonClass={adminButtonClass}
+        agentActionsSnapshot={agentActionsSnapshot}
+        agentOutcomesSnapshot={agentOutcomesSnapshot}
+        agentWorkflowDetailSnapshot={agentWorkflowDetailSnapshot}
+        agentWorkflowListSnapshot={agentWorkflowListSnapshot}
+        loadAgentActionsSnapshot={loadAgentActionsSnapshot}
+        loadAgentOutcomesSnapshot={loadAgentOutcomesSnapshot}
+        loadAgentWorkflowDetailSnapshot={loadAgentWorkflowDetailSnapshot}
+        loadAgentWorkflowListSnapshot={loadAgentWorkflowListSnapshot}
+        selectedWorkflowRunId={selectedWorkflowRunId}
+        setSelectedWorkflowRunId={setSelectedWorkflowRunId}
+      />
+      <ScheduledTaskOperatorPanel
+        adminButtonClass={adminButtonClass}
+        adminButtonGhostClass={adminButtonGhostClass}
+        adminInputClass={adminInputClass}
+        archiveScheduledTask={archiveScheduledTask}
+        loadSavedSearchesSnapshot={loadSavedSearchesSnapshot}
+        loadScheduledTaskRuns={loadScheduledTaskRuns}
+        loadScheduledTasksSnapshot={loadScheduledTasksSnapshot}
+        pauseScheduledTask={pauseScheduledTask}
+        resumeScheduledTask={resumeScheduledTask}
+        runScheduledTaskNow={runScheduledTaskNow}
+        savedSearches={savedSearches}
+        scheduledTaskActionReason={scheduledTaskActionReason}
+        scheduledTaskRuns={scheduledTaskRuns}
+        scheduledTasks={scheduledTasks}
+        selectedScheduledTaskId={selectedScheduledTaskId}
+        setScheduledTaskActionReason={setScheduledTaskActionReason}
+        setSelectedScheduledTaskId={setSelectedScheduledTaskId}
+        userId={userId}
+      />
 
       <Panel
         subtitle="Replay failed jobs without touching Redis manually."
@@ -212,7 +379,8 @@ export function OverviewTab({
 
       <div className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
         <Panel
-          subtitle="Call any API route directly from admin with JSON query/body payloads."
+          className="border-dashed border-border/80 bg-muted/25"
+          subtitle="Secondary escape hatch for routes without dedicated UI. Prefer the panels above, then use this for one-off inspection or payload experiments."
           title="Internal Query Helper"
         >
           <div className="grid gap-3 md:grid-cols-3">
@@ -272,7 +440,111 @@ export function OverviewTab({
             </label>
           </div>
 
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Presets
+            </p>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              <button
+                className={adminButtonGhostClass}
+                onClick={() => fillDebugPreset({ path: "/admin/health" })}
+                type="button"
+              >
+                Health check
+              </button>
+              <button
+                className={adminButtonGhostClass}
+                onClick={() =>
+                  fillDebugPreset({ path: "/admin/jobs/dead-letters" })
+                }
+                type="button"
+              >
+                Dead letters
+              </button>
+              <button
+                className={adminButtonGhostClass}
+                onClick={() =>
+                  fillDebugPreset({
+                    path: "/admin/ops/verification-runs",
+                  })
+                }
+                type="button"
+              >
+                Verification runs
+              </button>
+              <button
+                className={adminButtonGhostClass}
+                onClick={() =>
+                  fillDebugPreset({
+                    path: "/admin/ops/agent-reliability",
+                  })
+                }
+                type="button"
+              >
+                Agent reliability
+              </button>
+              <button
+                className={adminButtonGhostClass}
+                onClick={() =>
+                  fillDebugPreset({
+                    path: "/admin/ops/agent-outcomes",
+                  })
+                }
+                type="button"
+              >
+                Agent outcomes
+              </button>
+              <button
+                className={adminButtonGhostClass}
+                onClick={() =>
+                  fillDebugPreset({
+                    path: "/admin/ops/agent-actions",
+                  })
+                }
+                type="button"
+              >
+                Agent actions
+              </button>
+              <button
+                className={adminButtonGhostClass}
+                onClick={() =>
+                  fillDebugPreset({ path: "/admin/security/posture" })
+                }
+                type="button"
+              >
+                Security posture
+              </button>
+              <button
+                className={adminButtonGhostClass}
+                onClick={() =>
+                  fillDebugPreset({
+                    path: "/admin/launch-controls",
+                  })
+                }
+                type="button"
+              >
+                Launch controls
+              </button>
+              <button
+                className={adminButtonGhostClass}
+                disabled={!selectedScheduledTaskId.trim()}
+                onClick={() =>
+                  fillDebugPreset({
+                    path: selectedTaskRunsPresetPath,
+                  })
+                }
+                type="button"
+              >
+                Selected task runs
+              </button>
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Keep payloads empty for simple GETs. For write routes, switch the
+              method first and then edit only the body you need.
+            </p>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
             <button
               className={adminButtonClass}
               onClick={() => {
@@ -285,10 +557,7 @@ export function OverviewTab({
             <button
               className={adminButtonGhostClass}
               onClick={() => {
-                setDebugMethod("GET");
-                setDebugPath("/admin/health");
-                setDebugQueryInput("{}");
-                setDebugBodyInput("{}");
+                fillDebugPreset({ path: "/admin/health" });
               }}
               type="button"
             >
@@ -297,10 +566,7 @@ export function OverviewTab({
             <button
               className={adminButtonGhostClass}
               onClick={() => {
-                setDebugMethod("GET");
-                setDebugPath("/admin/jobs/dead-letters");
-                setDebugQueryInput("{}");
-                setDebugBodyInput("{}");
+                fillDebugPreset({ path: "/admin/jobs/dead-letters" });
               }}
               type="button"
             >

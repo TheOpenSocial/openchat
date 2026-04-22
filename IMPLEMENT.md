@@ -3,10 +3,10 @@ Now implement the entire project end-to-end.
 Non-negotiable constraint
 
 Do not stop after a milestone to ask me questions or wait for confirmation.
-Proceed through every milestone in PROGRESS.md until the whole project is complete and fully validated.
+Proceed through every milestone in BACKEND_PROGRESS.md until the whole project is complete and fully validated.
 Execution rules (follow strictly)
 
-Treat PROGRESS.md as the source of truth. If anything is ambiguous, make a reasonable decision and record it in PROGRESS.md before coding.
+Treat BACKEND_PROGRESS.md as the source of truth. If anything is ambiguous, make a reasonable decision and record it in BACKEND_PROGRESS.md before coding.
 
 Implement deliberately with small, reviewable commits. Avoid bundling unrelated changes.
 
@@ -21,10 +21,10 @@ If a bug is discovered at any point:
 write a failing test that reproduces it
 fix the bug
 confirm the test now passes
-record a short note in PROGRESS.md under “Implementation Notes”
+record a short note in BACKEND_PROGRESS.md under “Implementation Notes”
 Validation requirements
 
-Maintain a “verification checklist” section in PROGRESS that stays accurate as the repo evolves.
+Maintain a “verification checklist” section in BACKEND_PROGRESS.md that stays accurate as the repo evolves.
 Determinism is required for serialization, ops journaling, replay, and export codegen. Enforce with snapshot tests and stable ordering.
 Documentation requirements
 
@@ -42,7 +42,7 @@ repo structure overview
 troubleshooting section (top issues and fixes)
 Completion criteria (do not stop until all are true)
 
-All milestones in PROGRESS.md are implemented and checked off.
+All milestones in BACKEND_PROGRESS.md are implemented and checked off.
 npm run dev works 
 npm test, npm run lint, and npm run typecheck all pass.
 documentation.md is accurate and complete.

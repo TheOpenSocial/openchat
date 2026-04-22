@@ -67,6 +67,75 @@ export interface ChatMessageRecord {
   senderUserId: string;
   body: string;
   createdAt: string;
+  moderationState?: "clean" | "flagged" | "blocked" | "review";
+  replyToMessageId?: string | null;
+  editedAt?: string | null;
+  reactions?: Array<{
+    id: string;
+    messageId: string;
+    userId: string;
+    emoji: string;
+    createdAt: string;
+  }>;
+  status?: {
+    state: "sent" | "delivered" | "read";
+    deliveredCount: number;
+    readCount: number;
+    pendingCount: number;
+  };
+}
+
+export interface ChatThreadSummaryRecord {
+  messageId: string;
+  rootMessageId: string;
+  directReplyCount: number;
+  branchReplyCount: number;
+  latestReplyAt: string | null;
+}
+
+export interface ChatThreadDetailEntryRecord {
+  depth: number;
+  message: ChatMessageRecord;
+}
+
+export interface ChatThreadDetailRecord {
+  chatId: string;
+  thread: {
+    rootMessage: ChatMessageRecord;
+    replyCount: number;
+    messageCount: number;
+    participantCount: number;
+    lastReplyAt: string | null;
+    lastActivityAt: string;
+  };
+  entries: ChatThreadDetailEntryRecord[];
+}
+
+export interface ChatMetadataRecord {
+  chatId: string;
+  type: "dm" | "group";
+  connectionId: string;
+  createdAt: string;
+  connectionType: "dm" | "group";
+  connectionStatus: string;
+  ownerUserId: string;
+  participantCount: number;
+  participants: Array<{
+    userId: string;
+    role: string;
+    joinedAt: string;
+    presence?: {
+      online: boolean;
+      state:
+        | "online"
+        | "away"
+        | "invisible"
+        | "available_now"
+        | "available_today";
+      lastSeenAt?: string | null;
+    };
+  }>;
+  archived: boolean;
 }
 
 export interface RecurringCircleRecord {
@@ -1437,11 +1506,41 @@ export const api = {
       accessToken,
     );
   },
+  getChatMetadata(chatId: string, accessToken?: string) {
+    return request<ChatMetadataRecord>(
+      "GET",
+      `/chats/${chatId}/metadata`,
+      undefined,
+      accessToken,
+    );
+  },
+  listChatThreads(chatId: string, accessToken?: string) {
+    return request<{
+      chatId: string;
+      threads: Array<{
+        rootMessage: ChatMessageRecord;
+        replyCount: number;
+        messageCount: number;
+        participantCount: number;
+        lastReplyAt: string | null;
+        lastActivityAt: string;
+      }>;
+    }>("GET", `/chats/${chatId}/threads`, undefined, accessToken);
+  },
+  getChatThread(chatId: string, rootMessageId: string, accessToken?: string) {
+    return request<ChatThreadDetailRecord>(
+      "GET",
+      `/chats/${chatId}/threads/${rootMessageId}`,
+      undefined,
+      accessToken,
+    );
+  },
   createChatMessage(
     chatId: string,
     senderUserId: string,
     body: string,
     accessToken?: string,
+    options?: { replyToMessageId?: string },
   ) {
     return request<ChatMessageRecord>(
       "POST",
@@ -1449,6 +1548,79 @@ export const api = {
       {
         senderUserId,
         body,
+        ...(options?.replyToMessageId
+          ? { replyToMessageId: options.replyToMessageId }
+          : {}),
+      },
+      accessToken,
+    );
+  },
+  editChatMessage(
+    chatId: string,
+    messageId: string,
+    userId: string,
+    body: string,
+    accessToken?: string,
+  ) {
+    return request<ChatMessageRecord>(
+      "PATCH",
+      `/chats/${chatId}/messages/${messageId}`,
+      {
+        userId,
+        body,
+      },
+      accessToken,
+    );
+  },
+  createChatMessageReaction(
+    chatId: string,
+    messageId: string,
+    userId: string,
+    emoji: string,
+    accessToken?: string,
+  ) {
+    return request<{
+      id: string;
+      messageId: string;
+      userId: string;
+      emoji: string;
+      createdAt: string;
+    }>(
+      "POST",
+      `/chats/${chatId}/messages/${messageId}/reactions`,
+      {
+        userId,
+        emoji,
+      },
+      accessToken,
+    );
+  },
+  markChatMessageRead(
+    chatId: string,
+    messageId: string,
+    userId: string,
+    accessToken?: string,
+  ) {
+    return request<Record<string, unknown>>(
+      "POST",
+      `/chats/${chatId}/messages/${messageId}/read`,
+      {
+        userId,
+      },
+      accessToken,
+    );
+  },
+  softDeleteChatMessage(
+    chatId: string,
+    messageId: string,
+    userId: string,
+    accessToken?: string,
+  ) {
+    return request<ChatMessageRecord>(
+      "POST",
+      `/chats/${chatId}/messages/${messageId}/soft-delete`,
+      {
+        userId,
       },
       accessToken,
     );

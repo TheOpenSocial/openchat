@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import {
@@ -194,7 +195,12 @@ export function RequestsScreen() {
                       {request.wave} · {request.status}
                     </p>
                   </div>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Link href={`/intents/${request.intentId}`}>
+                      <Button size="sm" type="button" variant="outline">
+                        Open intent
+                      </Button>
+                    </Link>
                     <Button
                       onClick={() => {
                         void actOnRequest(request.id, "accept");

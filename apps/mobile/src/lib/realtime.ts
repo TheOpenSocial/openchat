@@ -1,6 +1,11 @@
 import { io, type Socket } from "socket.io-client";
 
-import { API_BASE_URL, type ChatMessageRecord } from "./api";
+import {
+  API_BASE_URL,
+  type ChatMessageReactionRecord,
+  type ChatMessageRecord,
+  type ChatMessageStatusRecord,
+} from "./api";
 
 export type RealtimeConnectionState = "connecting" | "connected" | "offline";
 
@@ -23,13 +28,51 @@ interface RealtimeTypingPayload {
   isTyping: boolean;
 }
 
-interface RealtimeCallbacks {
+interface RealtimeReceiptPayload {
+  chatId: string;
+  messageId: string;
+  userId: string;
+}
+
+interface RealtimeRequestCreatedPayload {
+  requestId: string;
+  intentId: string;
+}
+
+interface RealtimeRequestUpdatedPayload {
+  requestId: string;
+  status: "pending" | "accepted" | "rejected" | "expired" | "cancelled";
+}
+
+interface RealtimeIntentUpdatedPayload {
+  intentId: string;
+  status: string;
+}
+
+interface RealtimeConnectionCreatedPayload {
+  connectionId: string;
+  type: "dm" | "group";
+}
+
+interface RealtimeModerationNoticePayload {
+  userId: string;
+  reason: string;
+}
+
+export interface RealtimeCallbacks {
   onConnectionStateChange?: (state: RealtimeConnectionState) => void;
   onConnectionRecovered?: (payload: RealtimeConnectionRecovered) => void;
   onChatMessageCreated?: (chatId: string, message: ChatMessageRecord) => void;
+  onChatMessageUpdated?: (chatId: string, message: ChatMessageRecord) => void;
   onChatReplay?: (chatId: string, messages: ChatMessageRecord[]) => void;
+  onChatReceipt?: (payload: RealtimeReceiptPayload) => void;
+  onConnectionCreated?: (payload: RealtimeConnectionCreatedPayload) => void;
+  onIntentUpdated?: (payload: RealtimeIntentUpdatedPayload) => void;
+  onModerationNotice?: (payload: RealtimeModerationNoticePayload) => void;
   onTyping?: (payload: RealtimeTypingPayload) => void;
   onPresenceUpdated?: (payload: RealtimePresenceUpdated) => void;
+  onRequestCreated?: (payload: RealtimeRequestCreatedPayload) => void;
+  onRequestUpdated?: (payload: RealtimeRequestUpdatedPayload) => void;
 }
 
 interface CreateRealtimeSessionOptions {
@@ -43,12 +86,91 @@ interface CreateRealtimeSessionOptions {
 export interface RealtimeSession {
   updateRooms: (roomIds: string[]) => void;
   publishChatMessage: (chatId: string, message: ChatMessageRecord) => void;
+  publishReadReceipt: (
+    chatId: string,
+    messageId: string,
+    userId: string,
+  ) => void;
   publishTyping: (chatId: string, userId: string, isTyping: boolean) => void;
   disconnect: () => void;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+const moderationStates = ["clean", "flagged", "blocked", "review"] as const;
+
+function parseModerationState(
+  value: unknown,
+): ChatMessageRecord["moderationState"] | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  return moderationStates.includes(value as (typeof moderationStates)[number])
+    ? (value as ChatMessageRecord["moderationState"])
+    : undefined;
+}
+
+function parseChatMessageStatus(
+  value: unknown,
+): ChatMessageStatusRecord | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const { state, deliveredCount, readCount, pendingCount } = value;
+  if (
+    (state === "sent" || state === "delivered" || state === "read") &&
+    typeof deliveredCount === "number" &&
+    typeof readCount === "number" &&
+    typeof pendingCount === "number"
+  ) {
+    return {
+      state,
+      deliveredCount,
+      readCount,
+      pendingCount,
+    };
+  }
+
+  return null;
+}
+
+function parseChatMessageReactions(
+  value: unknown,
+): ChatMessageReactionRecord[] | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  return value
+    .map((item) => {
+      if (!isRecord(item)) {
+        return null;
+      }
+      const { id, messageId, userId, emoji, createdAt } = item;
+      if (
+        typeof id !== "string" ||
+        typeof messageId !== "string" ||
+        typeof userId !== "string" ||
+        typeof emoji !== "string" ||
+        typeof createdAt !== "string"
+      ) {
+        return null;
+      }
+      return {
+        id,
+        messageId,
+        userId,
+        emoji,
+        createdAt,
+      };
+    })
+    .filter(
+      (reaction): reaction is ChatMessageReactionRecord => reaction != null,
+    );
 }
 
 function getRealtimeUrl(apiBaseUrl: string) {
@@ -85,6 +207,12 @@ function parseChatMessageRecord(
   const body = typeof value.body === "string" ? value.body : null;
   const createdAt =
     typeof value.createdAt === "string" ? value.createdAt : null;
+  const moderationState = parseModerationState(value.moderationState);
+  const replyToMessageId =
+    typeof value.replyToMessageId === "string" ? value.replyToMessageId : null;
+  const editedAt = typeof value.editedAt === "string" ? value.editedAt : null;
+  const reactions = parseChatMessageReactions(value.reactions);
+  const status = parseChatMessageStatus(value.status);
   const chatId =
     typeof value.chatId === "string" && value.chatId.length > 0
       ? value.chatId
@@ -100,6 +228,11 @@ function parseChatMessageRecord(
     senderUserId,
     body,
     createdAt,
+    ...(moderationState ? { moderationState } : {}),
+    ...(replyToMessageId ? { replyToMessageId } : {}),
+    ...(editedAt ? { editedAt } : {}),
+    ...(reactions ? { reactions } : {}),
+    ...(status ? { status } : {}),
   };
 }
 
@@ -117,6 +250,117 @@ function parseTypingPayload(payload: unknown): RealtimeTypingPayload | null {
   }
 
   return { roomId, userId, isTyping };
+}
+
+function parseReceiptPayload(payload: unknown): RealtimeReceiptPayload | null {
+  if (!isRecord(payload)) {
+    return null;
+  }
+
+  const chatId = typeof payload.chatId === "string" ? payload.chatId : null;
+  const messageId =
+    typeof payload.messageId === "string" ? payload.messageId : null;
+  const userId = typeof payload.userId === "string" ? payload.userId : null;
+  if (!chatId || !messageId || !userId) {
+    return null;
+  }
+
+  return { chatId, messageId, userId };
+}
+
+function parseRequestCreatedPayload(
+  payload: unknown,
+): RealtimeRequestCreatedPayload | null {
+  if (!isRecord(payload)) {
+    return null;
+  }
+
+  const requestId =
+    typeof payload.requestId === "string" ? payload.requestId : null;
+  const intentId =
+    typeof payload.intentId === "string" ? payload.intentId : null;
+  if (!requestId || !intentId) {
+    return null;
+  }
+
+  return { intentId, requestId };
+}
+
+function parseRequestUpdatedPayload(
+  payload: unknown,
+): RealtimeRequestUpdatedPayload | null {
+  if (!isRecord(payload)) {
+    return null;
+  }
+
+  const requestId =
+    typeof payload.requestId === "string" ? payload.requestId : null;
+  const status = typeof payload.status === "string" ? payload.status : null;
+  if (
+    !requestId ||
+    !status ||
+    !["pending", "accepted", "rejected", "expired", "cancelled"].includes(
+      status,
+    )
+  ) {
+    return null;
+  }
+
+  return {
+    requestId,
+    status: status as RealtimeRequestUpdatedPayload["status"],
+  };
+}
+
+function parseIntentUpdatedPayload(
+  payload: unknown,
+): RealtimeIntentUpdatedPayload | null {
+  if (!isRecord(payload)) {
+    return null;
+  }
+
+  const intentId =
+    typeof payload.intentId === "string" ? payload.intentId : null;
+  const status = typeof payload.status === "string" ? payload.status : null;
+  if (!intentId || !status) {
+    return null;
+  }
+
+  return { intentId, status };
+}
+
+function parseConnectionCreatedPayload(
+  payload: unknown,
+): RealtimeConnectionCreatedPayload | null {
+  if (!isRecord(payload)) {
+    return null;
+  }
+
+  const connectionId =
+    typeof payload.connectionId === "string" ? payload.connectionId : null;
+  const type =
+    payload.type === "group" ? "group" : payload.type === "dm" ? "dm" : null;
+  if (!connectionId || !type) {
+    return null;
+  }
+
+  return { connectionId, type };
+}
+
+function parseModerationNoticePayload(
+  payload: unknown,
+): RealtimeModerationNoticePayload | null {
+  if (!isRecord(payload)) {
+    return null;
+  }
+
+  const userId = typeof payload.userId === "string" ? payload.userId : null;
+  const reason = typeof payload.reason === "string" ? payload.reason : null;
+  if (!userId || !reason) {
+    return null;
+  }
+
+  return { reason, userId };
 }
 
 function parsePresenceUpdated(
@@ -181,7 +425,7 @@ function parseChatReplayPayload(payload: unknown): {
   }
 
   const messages = messagesRaw
-    .map((item) => {
+    .map((item): ChatMessageRecord | null => {
       if (!isRecord(item)) {
         return null;
       }
@@ -198,13 +442,26 @@ function parseChatReplayPayload(payload: unknown): {
       if (!id || !senderUserId || !body || !createdAt) {
         return null;
       }
-      return {
+      const moderationState = parseModerationState(item.moderationState);
+      const reactions = parseChatMessageReactions(item.reactions);
+      const status = parseChatMessageStatus(item.status);
+      const message: ChatMessageRecord = {
         id,
         chatId: roomId,
         senderUserId,
         body,
         createdAt,
-      } satisfies ChatMessageRecord;
+        ...(moderationState ? { moderationState } : {}),
+        ...(typeof item.replyToMessageId === "string"
+          ? { replyToMessageId: item.replyToMessageId }
+          : {}),
+        ...(typeof item.editedAt === "string"
+          ? { editedAt: item.editedAt }
+          : {}),
+        ...(reactions ? { reactions } : {}),
+        ...(status ? { status } : {}),
+      };
+      return message;
     })
     .filter((message): message is ChatMessageRecord => message != null);
 
@@ -284,6 +541,20 @@ export function createRealtimeSession(
     }
   });
 
+  socket.on("chat.message.updated", (payload: unknown) => {
+    if (!isRecord(payload)) {
+      return;
+    }
+    const roomId = typeof payload.roomId === "string" ? payload.roomId : null;
+    const message = parseChatMessageRecord(
+      isRecord(payload.message) ? payload.message : null,
+      roomId ?? undefined,
+    );
+    if (roomId && message) {
+      callbacks.onChatMessageUpdated?.(roomId, message);
+    }
+  });
+
   socket.on("chat.replay", (payload: unknown) => {
     const parsed = parseChatReplayPayload(payload);
     if (parsed) {
@@ -295,6 +566,48 @@ export function createRealtimeSession(
     const parsed = parseTypingPayload(payload);
     if (parsed) {
       callbacks.onTyping?.(parsed);
+    }
+  });
+
+  socket.on("chat.receipt", (payload: unknown) => {
+    const parsed = parseReceiptPayload(payload);
+    if (parsed) {
+      callbacks.onChatReceipt?.(parsed);
+    }
+  });
+
+  socket.on("request.created", (payload: unknown) => {
+    const parsed = parseRequestCreatedPayload(payload);
+    if (parsed) {
+      callbacks.onRequestCreated?.(parsed);
+    }
+  });
+
+  socket.on("request.updated", (payload: unknown) => {
+    const parsed = parseRequestUpdatedPayload(payload);
+    if (parsed) {
+      callbacks.onRequestUpdated?.(parsed);
+    }
+  });
+
+  socket.on("intent.updated", (payload: unknown) => {
+    const parsed = parseIntentUpdatedPayload(payload);
+    if (parsed) {
+      callbacks.onIntentUpdated?.(parsed);
+    }
+  });
+
+  socket.on("connection.created", (payload: unknown) => {
+    const parsed = parseConnectionCreatedPayload(payload);
+    if (parsed) {
+      callbacks.onConnectionCreated?.(parsed);
+    }
+  });
+
+  socket.on("moderation.notice", (payload: unknown) => {
+    const parsed = parseModerationNoticePayload(payload);
+    if (parsed) {
+      callbacks.onModerationNotice?.(parsed);
     }
   });
 
@@ -324,6 +637,13 @@ export function createRealtimeSession(
       socket.emit("chat.message.created", {
         roomId: chatId,
         payload: message,
+      });
+    },
+    publishReadReceipt(chatId: string, messageId: string, userId: string) {
+      socket.emit("receipt.read", {
+        chatId,
+        messageId,
+        userId,
       });
     },
     publishTyping(chatId: string, userId: string, isTyping: boolean) {

@@ -40,6 +40,17 @@ type UseChatMessagingControllerInput = {
   ) => void;
 };
 
+function buildOwnMessageStatus(): NonNullable<
+  LocalChatMessageRecord["status"]
+> {
+  return {
+    state: "read" as const,
+    deliveredCount: 1,
+    readCount: 1,
+    pendingCount: 0,
+  };
+}
+
 export function useChatMessagingController({
   chatsRef,
   draftChatMessage,
@@ -59,6 +70,9 @@ export function useChatMessagingController({
   setSendingChatMessage,
   trackTelemetry,
 }: UseChatMessagingControllerInput) {
+  const e2eOfflineFallbackEnabled = Boolean(
+    process.env.EXPO_PUBLIC_E2E_SESSION_B64?.trim(),
+  );
   const handleDraftChatMessageChange = useCallback(
     (value: string) => {
       setDraftChatMessage(value);
@@ -111,106 +125,137 @@ export function useChatMessagingController({
     ],
   );
 
-  const sendChatMessage = useCallback(async () => {
-    const messageBody = draftChatMessage.trim();
-    if (!selectedChat || messageBody.length === 0 || sendingChatMessage) {
-      return;
-    }
-    const chatId = selectedChat.id;
-    const hadMessages = selectedChat.messages.length > 0;
-    const hasCounterpartyMessage = selectedChat.messages.some(
-      (message) => message.senderUserId !== sessionUserId,
-    );
-    const optimisticMessageId = `message_local_${Date.now().toString(36)}`;
-    const optimisticMessage: LocalChatMessageRecord = {
-      id: optimisticMessageId,
-      chatId,
-      senderUserId: sessionUserId,
-      body: messageBody,
-      createdAt: new Date().toISOString(),
-      deliveryStatus: "sending",
-    };
-
-    setSendingChatMessage(true);
-    setDraftChatMessage("");
-    setChats((current) =>
-      current.map((thread) =>
-        thread.id === chatId
-          ? {
-              ...thread,
-              messages: mergeChatMessages(thread.messages, [optimisticMessage]),
-              highWatermark: optimisticMessage.createdAt,
-              unreadCount: 0,
-            }
-          : thread,
-      ),
-    );
-    if (localTypingStopTimeoutRef.current) {
-      clearTimeout(localTypingStopTimeoutRef.current);
-      localTypingStopTimeoutRef.current = null;
-    }
-    if (localTypingActiveRef.current) {
-      realtimeSessionRef.current?.publishTyping(chatId, sessionUserId, false);
-      localTypingActiveRef.current = false;
-    }
-    try {
-      if (!netOnline) {
-        throw new Error("offline");
+  const sendChatMessage = useCallback(
+    async (messageOverride?: string, replyToMessageId?: string) => {
+      const messageBody = (messageOverride ?? draftChatMessage).trim();
+      if (!selectedChat || messageBody.length === 0 || sendingChatMessage) {
+        return;
       }
-
-      const message = await api.createChatMessage(
-        chatId,
-        sessionUserId,
-        messageBody,
-        sessionAccessToken,
-        {
-          clientMessageId: createClientMessageId(),
-        },
+      const chatId = selectedChat.id;
+      const hadMessages = selectedChat.messages.length > 0;
+      const hasCounterpartyMessage = selectedChat.messages.some(
+        (message) => message.senderUserId !== sessionUserId,
       );
+      const optimisticMessageId = `message_local_${Date.now().toString(36)}`;
+      const optimisticMessage: LocalChatMessageRecord = {
+        id: optimisticMessageId,
+        chatId,
+        senderUserId: sessionUserId,
+        body: messageBody,
+        createdAt: new Date().toISOString(),
+        deliveryStatus: "sending",
+      };
+
+      setSendingChatMessage(true);
+      setDraftChatMessage("");
       setChats((current) =>
         current.map((thread) =>
           thread.id === chatId
             ? {
                 ...thread,
-                messages: mergeChatMessages(
-                  thread.messages.filter(
-                    (item) => item.id !== optimisticMessageId,
-                  ),
-                  [message],
-                ),
-                highWatermark: message.createdAt,
+                messages: mergeChatMessages(thread.messages, [
+                  optimisticMessage,
+                ]),
+                highWatermark: optimisticMessage.createdAt,
                 unreadCount: 0,
               }
             : thread,
         ),
       );
-      realtimeSessionRef.current?.publishChatMessage(chatId, message);
-      if (!hadMessages) {
-        trackTelemetry("first_message_sent", {
-          chatId,
-          bodyLength: messageBody.length,
-        });
-      } else if (hasCounterpartyMessage) {
-        trackTelemetry("message_replied", {
-          chatId,
-          bodyLength: messageBody.length,
-        });
+      if (localTypingStopTimeoutRef.current) {
+        clearTimeout(localTypingStopTimeoutRef.current);
+        localTypingStopTimeoutRef.current = null;
       }
-      hapticImpact();
-    } catch (error) {
-      if (
-        isOfflineApiError(error) ||
-        isRetryableApiError(error) ||
-        !netOnline
-      ) {
-        await queueOfflineComposerSend({
-          userId: sessionUserId,
-          mode: "chat",
-          threadId: chatId,
-          text: messageBody,
-          idempotencyKey: createClientMessageId(),
-        });
-        await refreshPendingOutboxCount().catch(() => {});
+      if (localTypingActiveRef.current) {
+        realtimeSessionRef.current?.publishTyping(chatId, sessionUserId, false);
+        localTypingActiveRef.current = false;
+      }
+      try {
+        if (!netOnline) {
+          throw new Error("offline");
+        }
+
+        const message = await api.createChatMessage(
+          chatId,
+          sessionUserId,
+          messageBody,
+          sessionAccessToken,
+          {
+            clientMessageId: createClientMessageId(),
+            ...(replyToMessageId ? { replyToMessageId } : {}),
+          },
+        );
+        const normalizedMessage: LocalChatMessageRecord = {
+          ...message,
+          status: message.status ?? buildOwnMessageStatus(),
+        };
+        setChats((current) =>
+          current.map((thread) =>
+            thread.id === chatId
+              ? {
+                  ...thread,
+                  messages: mergeChatMessages(
+                    thread.messages.filter(
+                      (item) => item.id !== optimisticMessageId,
+                    ),
+                    [normalizedMessage],
+                  ),
+                  highWatermark: normalizedMessage.createdAt,
+                  unreadCount: 0,
+                }
+              : thread,
+          ),
+        );
+        realtimeSessionRef.current?.publishChatMessage(
+          chatId,
+          normalizedMessage,
+        );
+        if (!hadMessages) {
+          trackTelemetry("first_message_sent", {
+            chatId,
+            bodyLength: messageBody.length,
+          });
+        } else if (hasCounterpartyMessage) {
+          trackTelemetry("message_replied", {
+            chatId,
+            bodyLength: messageBody.length,
+          });
+        }
+        hapticImpact();
+      } catch (error) {
+        if (
+          isOfflineApiError(error) ||
+          isRetryableApiError(error) ||
+          !netOnline
+        ) {
+          await queueOfflineComposerSend({
+            userId: sessionUserId,
+            mode: "chat",
+            threadId: chatId,
+            text: messageBody,
+            idempotencyKey: createClientMessageId(),
+          });
+          await refreshPendingOutboxCount().catch(() => {});
+          setChats((current) =>
+            current.map((thread) =>
+              thread.id === chatId
+                ? {
+                    ...thread,
+                    messages: thread.messages.map((message) =>
+                      message.id === optimisticMessageId
+                        ? { ...message, deliveryStatus: "queued" }
+                        : message,
+                    ),
+                  }
+                : thread,
+            ),
+          );
+          setBanner({
+            tone: "info",
+            text: "Message queued. It will send automatically when network is back.",
+          });
+          return;
+        }
         setChats((current) =>
           current.map((thread) =>
             thread.id === chatId
@@ -218,7 +263,7 @@ export function useChatMessagingController({
                   ...thread,
                   messages: thread.messages.map((message) =>
                     message.id === optimisticMessageId
-                      ? { ...message, deliveryStatus: "queued" }
+                      ? { ...message, deliveryStatus: "failed" }
                       : message,
                   ),
                 }
@@ -226,49 +271,116 @@ export function useChatMessagingController({
           ),
         );
         setBanner({
-          tone: "info",
-          text: "Message queued. It will send automatically when network is back.",
+          tone: "error",
+          text: `Failed to send message: ${String(error)}`,
         });
-        return;
+      } finally {
+        setSendingChatMessage(false);
       }
-      setChats((current) =>
-        current.map((thread) =>
-          thread.id === chatId
-            ? {
-                ...thread,
-                messages: thread.messages.map((message) =>
-                  message.id === optimisticMessageId
-                    ? { ...message, deliveryStatus: "failed" }
-                    : message,
-                ),
-              }
-            : thread,
-        ),
-      );
-      setBanner({
-        tone: "error",
-        text: `Failed to send message: ${String(error)}`,
-      });
-    } finally {
-      setSendingChatMessage(false);
-    }
-  }, [
-    draftChatMessage,
-    localTypingActiveRef,
-    localTypingStopTimeoutRef,
-    netOnline,
-    refreshPendingOutboxCount,
-    realtimeSessionRef,
-    selectedChat,
-    sendingChatMessage,
-    sessionAccessToken,
-    sessionUserId,
-    setBanner,
-    setChats,
-    setDraftChatMessage,
-    setSendingChatMessage,
-    trackTelemetry,
-  ]);
+    },
+    [
+      draftChatMessage,
+      localTypingActiveRef,
+      localTypingStopTimeoutRef,
+      netOnline,
+      refreshPendingOutboxCount,
+      realtimeSessionRef,
+      selectedChat,
+      sendingChatMessage,
+      sessionAccessToken,
+      sessionUserId,
+      setBanner,
+      setChats,
+      setDraftChatMessage,
+      setSendingChatMessage,
+      trackTelemetry,
+    ],
+  );
+
+  const editOwnChatMessage = useCallback(
+    async (chatId: string, messageId: string, body: string) => {
+      const thread = chatsRef.current.find((item) => item.id === chatId);
+      const message = thread?.messages.find((item) => item.id === messageId);
+      if (
+        !thread ||
+        !message ||
+        message.senderUserId !== sessionUserId ||
+        message.deliveryStatus != null ||
+        body.trim().length === 0
+      ) {
+        return false;
+      }
+
+      if (e2eOfflineFallbackEnabled) {
+        const editedAt = new Date().toISOString();
+        setChats((current) =>
+          current.map((item) =>
+            item.id === chatId
+              ? {
+                  ...item,
+                  messages: item.messages.map((candidate) =>
+                    candidate.id === messageId
+                      ? {
+                          ...candidate,
+                          body,
+                          editedAt,
+                        }
+                      : candidate,
+                  ),
+                }
+              : item,
+          ),
+        );
+        setBanner(null);
+        hapticImpact();
+        return true;
+      }
+
+      try {
+        const updatedMessage = await api.editChatMessage(
+          chatId,
+          messageId,
+          sessionUserId,
+          body,
+          sessionAccessToken,
+        );
+        setChats((current) =>
+          current.map((item) =>
+            item.id === chatId
+              ? {
+                  ...item,
+                  messages: item.messages.map((candidate) =>
+                    candidate.id === messageId
+                      ? {
+                          ...candidate,
+                          ...updatedMessage,
+                          status: candidate.status ?? updatedMessage.status,
+                        }
+                      : candidate,
+                  ),
+                }
+              : item,
+          ),
+        );
+        hapticImpact();
+        return true;
+      } catch (error) {
+        setBanner({
+          tone: "error",
+          text: `Could not edit message: ${String(error)}`,
+        });
+        return false;
+      }
+    },
+    [
+      chatsRef,
+      e2eOfflineFallbackEnabled,
+      sessionAccessToken,
+      sessionUserId,
+      setBanner,
+      setChats,
+    ],
+  );
 
   const retryFailedChatMessage = useCallback(
     async (chatId: string, messageId: string) => {
@@ -311,6 +423,10 @@ export function useChatMessagingController({
             clientMessageId: createClientMessageId(),
           },
         );
+        const normalizedSent: LocalChatMessageRecord = {
+          ...sent,
+          status: sent.status ?? buildOwnMessageStatus(),
+        };
         setChats((current) =>
           current.map((item) =>
             item.id === chatId
@@ -318,14 +434,14 @@ export function useChatMessagingController({
                   ...item,
                   messages: mergeChatMessages(
                     item.messages.filter((message) => message.id !== messageId),
-                    [sent],
+                    [normalizedSent],
                   ),
-                  highWatermark: sent.createdAt,
+                  highWatermark: normalizedSent.createdAt,
                 }
               : item,
           ),
         );
-        realtimeSessionRef.current?.publishChatMessage(chatId, sent);
+        realtimeSessionRef.current?.publishChatMessage(chatId, normalizedSent);
       } catch (error) {
         if (
           isOfflineApiError(error) ||
@@ -392,8 +508,184 @@ export function useChatMessagingController({
     ],
   );
 
+  const deleteOwnChatMessage = useCallback(
+    async (chatId: string, messageId: string) => {
+      const thread = chatsRef.current.find((item) => item.id === chatId);
+      const message = thread?.messages.find((item) => item.id === messageId);
+      if (
+        !thread ||
+        !message ||
+        message.senderUserId !== sessionUserId ||
+        message.deliveryStatus != null
+      ) {
+        return;
+      }
+
+      if (e2eOfflineFallbackEnabled) {
+        const editedAt = new Date().toISOString();
+        setChats((current) =>
+          current.map((item) =>
+            item.id === chatId
+              ? {
+                  ...item,
+                  messages: item.messages.map((candidate) =>
+                    candidate.id === messageId
+                      ? {
+                          ...candidate,
+                          body: "[deleted]",
+                          editedAt,
+                          reactions: [],
+                        }
+                      : candidate,
+                  ),
+                }
+              : item,
+          ),
+        );
+        setBanner(null);
+        hapticImpact();
+        return;
+      }
+
+      try {
+        const deletedMessage = await api.softDeleteChatMessage(
+          chatId,
+          messageId,
+          sessionUserId,
+          sessionAccessToken,
+        );
+        setChats((current) =>
+          current.map((item) =>
+            item.id === chatId
+              ? {
+                  ...item,
+                  messages: item.messages.map((candidate) =>
+                    candidate.id === messageId
+                      ? {
+                          ...candidate,
+                          ...deletedMessage,
+                          status: candidate.status ?? deletedMessage.status,
+                        }
+                      : candidate,
+                  ),
+                }
+              : item,
+          ),
+        );
+        hapticImpact();
+      } catch (error) {
+        setBanner({
+          tone: "error",
+          text: `Could not delete message: ${String(error)}`,
+        });
+      }
+    },
+    [
+      chatsRef,
+      e2eOfflineFallbackEnabled,
+      sessionAccessToken,
+      sessionUserId,
+      setBanner,
+      setChats,
+    ],
+  );
+
+  const reactToChatMessage = useCallback(
+    async (chatId: string, messageId: string, emoji: string) => {
+      if (e2eOfflineFallbackEnabled) {
+        const reaction = {
+          id: `reaction_local_${Date.now().toString(36)}`,
+          messageId,
+          userId: sessionUserId,
+          emoji,
+          createdAt: new Date().toISOString(),
+        };
+        setChats((current) =>
+          current.map((thread) =>
+            thread.id === chatId
+              ? {
+                  ...thread,
+                  messages: thread.messages.map((message) =>
+                    message.id === messageId
+                      ? {
+                          ...message,
+                          reactions: [
+                            ...(message.reactions ?? []).filter(
+                              (candidate) =>
+                                !(
+                                  candidate.userId === reaction.userId &&
+                                  candidate.emoji === reaction.emoji
+                                ),
+                            ),
+                            reaction,
+                          ],
+                        }
+                      : message,
+                  ),
+                }
+              : thread,
+          ),
+        );
+        setBanner(null);
+        hapticImpact();
+        return;
+      }
+      try {
+        const reaction = await api.createChatMessageReaction(
+          chatId,
+          messageId,
+          sessionUserId,
+          emoji,
+          sessionAccessToken,
+        );
+        setChats((current) =>
+          current.map((thread) =>
+            thread.id === chatId
+              ? {
+                  ...thread,
+                  messages: thread.messages.map((message) =>
+                    message.id === messageId
+                      ? {
+                          ...message,
+                          reactions: [
+                            ...(message.reactions ?? []).filter(
+                              (candidate) =>
+                                !(
+                                  candidate.userId === reaction.userId &&
+                                  candidate.emoji === reaction.emoji
+                                ),
+                            ),
+                            reaction,
+                          ],
+                        }
+                      : message,
+                  ),
+                }
+              : thread,
+          ),
+        );
+        hapticImpact();
+      } catch (error) {
+        setBanner({
+          tone: "error",
+          text: `Could not react to message: ${String(error)}`,
+        });
+      }
+    },
+    [
+      e2eOfflineFallbackEnabled,
+      sessionAccessToken,
+      sessionUserId,
+      setBanner,
+      setChats,
+    ],
+  );
+
   return {
+    editOwnChatMessage,
+    deleteOwnChatMessage,
     handleDraftChatMessageChange,
+    reactToChatMessage,
     retryFailedChatMessage,
     sendChatMessage,
   };

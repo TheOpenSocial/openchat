@@ -467,12 +467,31 @@ model ChatMessage {
   senderUserId    String           @map("sender_user_id") @db.Uuid
   body            String
   moderationState ModerationState  @default(clean) @map("moderation_state")
+  replyToMessageId String?          @map("reply_to_message_id") @db.Uuid
   createdAt       DateTime         @default(now()) @map("created_at")
+  editedAt        DateTime?        @map("edited_at")
   chat            Chat             @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  replyToMessage  ChatMessage?     @relation("ChatMessageReplies", fields: [replyToMessageId], references: [id], onDelete: SetNull)
+  replies         ChatMessage[]    @relation("ChatMessageReplies")
   receipts        MessageReceipt[]
+  reactions       ChatMessageReaction[]
 
   @@index([chatId, createdAt])
+  @@index([replyToMessageId])
   @@map("chat_messages")
+}
+
+model ChatMessageReaction {
+  id         String      @id @default(uuid()) @db.Uuid
+  messageId  String      @map("message_id") @db.Uuid
+  userId     String      @map("user_id") @db.Uuid
+  emoji      String
+  createdAt  DateTime    @default(now()) @map("created_at")
+  message    ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+  @@index([messageId, createdAt])
+  @@map("chat_message_reactions")
 }
 
 model ChatMessageArchive {

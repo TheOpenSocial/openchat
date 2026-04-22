@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import {
@@ -321,6 +322,15 @@ export function DiscoverScreen() {
                 <p key={factor}>{factor}</p>
               ))}
             </div>
+            {selectedIntentId ? (
+              <div className="mt-3">
+                <Link href={`/intents/${selectedIntentId}`}>
+                  <Button size="sm" type="button" variant="secondary">
+                    Open intent detail
+                  </Button>
+                </Link>
+              </div>
+            ) : null}
           </WorkspaceMutedPanel>
         </div>
       </WorkspacePanel>

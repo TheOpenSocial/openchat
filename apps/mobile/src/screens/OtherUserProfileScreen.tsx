@@ -90,6 +90,7 @@ export function OtherUserProfileScreen({
     <SafeAreaView
       className="absolute inset-0 z-40 bg-canvas"
       edges={["top", "bottom", "left", "right"]}
+      testID="other-profile-screen"
     >
       <View className="flex-row items-center justify-between px-5 pb-3 pt-2">
         <Pressable

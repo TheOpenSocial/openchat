@@ -16,6 +16,16 @@ cd "$MOBILE"
 echo ">> expo prebuild --platform ios"
 pnpm exec expo prebuild --platform ios
 
+# Local device signing often uses a team provisioning profile without Push capability.
+# expo-notifications may re-add aps-environment during prebuild; strip it for local debug runs.
+ENTITLEMENTS_FILE="$MOBILE/ios/OpenSocial/OpenSocial.entitlements"
+if [[ -f "$ENTITLEMENTS_FILE" ]]; then
+  if /usr/libexec/PlistBuddy -c "Print :aps-environment" "$ENTITLEMENTS_FILE" >/dev/null 2>&1; then
+    echo ">> removing aps-environment entitlement for local debug signing"
+    /usr/libexec/PlistBuddy -c "Delete :aps-environment" "$ENTITLEMENTS_FILE" || true
+  fi
+fi
+
 METRO_PID=""
 stop_metro() {
   if [[ -n "${METRO_PID}" ]] && kill -0 "${METRO_PID}" 2>/dev/null; then

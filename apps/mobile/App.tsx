@@ -354,6 +354,35 @@ function ProductionApp() {
     }
   };
 
+  const handleDevBypass = useCallback(async () => {
+    const nextSession: MobileSession = {
+      userId: "e2e-user",
+      displayName: "Maestro User",
+      email: "maestro@example.com",
+      accessToken: "e2e-access-token",
+      refreshToken: "e2e-refresh-token",
+      sessionId: "e2e-session",
+    };
+
+    setAuthError(null);
+    setSession(nextSession);
+    setProfile((current) => ({
+      ...current,
+      displayName: nextSession.displayName,
+    }));
+    setStage("home");
+    void saveStoredSession({
+      userId: nextSession.userId,
+      displayName: nextSession.displayName,
+      email: nextSession.email,
+      accessToken: nextSession.accessToken,
+      refreshToken: nextSession.refreshToken,
+      sessionId: nextSession.sessionId,
+      profileCompleted: true,
+      onboardingState: "complete",
+    }).catch(() => {});
+  }, []);
+
   const handleOnboardingComplete = async (
     state: OnboardingDraftState,
     meta: { firstIntentText: string | null },
@@ -553,6 +582,7 @@ function ProductionApp() {
               locale={locale}
               loading={authLoading}
               onAuthenticated={handleAuthenticate}
+              onDevBypass={handleDevBypass}
             />
           ) : null}
           {stage === "onboarding" && session ? (

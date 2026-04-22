@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
 import { AccessibilityInfo, Animated, Easing, StyleSheet } from "react-native";
 
+import { appTheme } from "../theme";
+
 interface StageCurtainProps {
   visible: boolean;
 }
@@ -58,7 +60,7 @@ export function StageCurtain({ visible }: StageCurtainProps) {
 const styles = StyleSheet.create({
   curtain: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "#050506",
+    backgroundColor: appTheme.colors.background,
     zIndex: 9999,
   },
 });

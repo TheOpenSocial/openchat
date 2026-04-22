@@ -6,12 +6,14 @@ interface SecurityPostureChecks {
   declaredDatabaseEncryptionAtRest: boolean;
   declaredObjectStorageEncryptionAtRest: boolean;
   jwtSecretsRotationConfigured: boolean;
+  adminDashboardAuthCompatible: boolean;
 }
 
 interface SecurityPostureResult {
   generatedAt: string;
   strictMode: boolean;
   strictStartupEnforcement: boolean;
+  status: "healthy" | "watch" | "critical";
   environment: string;
   checks: SecurityPostureChecks;
   violations: string[];
@@ -62,6 +64,16 @@ function hasJwtRotationConfiguration() {
   );
 }
 
+function isAdminDashboardAuthCompatible() {
+  const adminApiKey = process.env.ADMIN_API_KEY?.trim();
+  const adminDashboardRedirectUris =
+    process.env.ADMIN_DASHBOARD_REDIRECT_URIS?.trim();
+  if (!adminApiKey) {
+    return true;
+  }
+  return !adminDashboardRedirectUris;
+}
+
 export function evaluateSecurityPosture(): SecurityPostureResult {
   const checks: SecurityPostureChecks = {
     databaseTlsConfigured: databaseUrlHasTls(process.env.DATABASE_URL),
@@ -77,6 +89,7 @@ export function evaluateSecurityPosture(): SecurityPostureResult {
       process.env.OBJECT_STORAGE_ENCRYPTION_AT_REST,
     ),
     jwtSecretsRotationConfigured: hasJwtRotationConfiguration(),
+    adminDashboardAuthCompatible: isAdminDashboardAuthCompatible(),
   };
 
   const violations: string[] = [];
@@ -101,14 +114,30 @@ export function evaluateSecurityPosture(): SecurityPostureResult {
   if (!checks.jwtSecretsRotationConfigured) {
     violations.push("JWT secrets rotation chain is not configured");
   }
+  if (!checks.adminDashboardAuthCompatible) {
+    violations.push(
+      "ADMIN_API_KEY is configured while admin dashboard redirects are enabled; the hosted admin UI does not send x-admin-api-key",
+    );
+  }
+
+  const strictMode = parseBooleanFlag(process.env.SECURITY_STRICT_MODE);
+  const strictStartupEnforcement = parseBooleanFlag(
+    process.env.SECURITY_STRICT_STARTUP_ENFORCE,
+  );
+  const environment = process.env.NODE_ENV ?? "development";
+  const status =
+    violations.length === 0
+      ? "healthy"
+      : strictMode && strictStartupEnforcement && environment === "production"
+        ? "critical"
+        : "watch";
 
   return {
     generatedAt: new Date().toISOString(),
-    strictMode: parseBooleanFlag(process.env.SECURITY_STRICT_MODE),
-    strictStartupEnforcement: parseBooleanFlag(
-      process.env.SECURITY_STRICT_STARTUP_ENFORCE,
-    ),
-    environment: process.env.NODE_ENV ?? "development",
+    strictMode,
+    strictStartupEnforcement,
+    status,
+    environment,
     checks,
     violations,
   };

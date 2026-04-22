@@ -123,6 +123,8 @@ function TabItem({
           className={`text-[10px] font-semibold tracking-[0.02em] ${
             isActive ? "text-canvas" : "text-muted"
           }`}
+          allowFontScaling
+          minimumFontScale={0.8}
           numberOfLines={1}
         >
           {meta.label}
@@ -212,7 +214,7 @@ export function AppBottomTabs({
           backgroundColor: appTheme.colors.background,
           borderTopColor: appTheme.colors.hairline,
           borderTopWidth: 1,
-          shadowColor: "#000",
+          shadowColor: appTheme.colors.background,
           shadowOffset: { width: 0, height: -2 },
           shadowOpacity: 0.14,
           shadowRadius: 12,

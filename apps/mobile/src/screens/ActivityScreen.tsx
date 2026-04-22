@@ -61,6 +61,7 @@ export function ActivityScreen({
         hapticSelection();
         onClose();
       }}
+      rootTestID="activity-screen"
       scrollProps={{
         refreshControl: (
           <RefreshControl

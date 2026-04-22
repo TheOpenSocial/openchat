@@ -9,6 +9,7 @@ import {
 } from "@/src/components/layout/workspace";
 import { Button } from "@/src/components/ui/button";
 import { useAppSession } from "@/src/features/app-shell/app-session";
+import Link from "next/link";
 import {
   api,
   type SavedSearchRecord,
@@ -252,6 +253,16 @@ export function AutomationsScreen() {
             >
               New automation
             </Button>
+            <Link href="/saved-searches">
+              <Button type="button" variant="secondary">
+                Open saved searches
+              </Button>
+            </Link>
+            <Link href="/scheduled-tasks">
+              <Button type="button" variant="secondary">
+                Open scheduled tasks
+              </Button>
+            </Link>
           </div>
           {loading ? (
             <p className="text-sm text-ash">Loading automations…</p>

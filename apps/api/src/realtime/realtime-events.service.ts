@@ -69,6 +69,19 @@ export class RealtimeEventsService {
     );
   }
 
+  emitChatMessageUpdated(
+    roomId: string,
+    payload: { roomId: string; message: unknown },
+  ) {
+    return this.safePublish("chat.message.updated", () =>
+      this.realtimeGateway?.publishRoomEvent(
+        roomId,
+        "chat.message.updated",
+        payload,
+      ),
+    );
+  }
+
   private safePublish(eventName: string, publish: () => unknown) {
     if (!this.realtimeGateway) {
       return false;

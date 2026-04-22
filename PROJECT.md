@@ -47,7 +47,7 @@ OpenSocial is an intent-driven social connection platform where users describe w
 
 ## Definition of Done
 A task is done only when all conditions are true:
-- Code/config changes are scoped to a single task from `PROGRESS.md`.
+- Code/config changes are scoped to a single task from `BACKEND_PROGRESS.md`.
 - Acceptance criteria in the task description are satisfied.
 - Root checks pass (or task explicitly documents why a known placeholder command is expected):
   - `pnpm lint`

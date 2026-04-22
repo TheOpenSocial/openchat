@@ -322,4 +322,4 @@ This document aligns with:
 - [23_personalization_and_user_rules.md](/Users/cruciblelabs/Documents/openchat/23_personalization_and_user_rules.md)
 - [25_search_discovery_and_recommendations.md](/Users/cruciblelabs/Documents/openchat/25_search_discovery_and_recommendations.md)
 - [24_notifications_delivery_and_digests.md](/Users/cruciblelabs/Documents/openchat/24_notifications_delivery_and_digests.md)
-- [PROGRESS.md](/Users/cruciblelabs/Documents/openchat/PROGRESS.md)
+- [BACKEND_PROGRESS.md](/Users/cruciblelabs/Documents/openchat/BACKEND_PROGRESS.md)

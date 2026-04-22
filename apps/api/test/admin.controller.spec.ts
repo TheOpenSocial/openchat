@@ -607,6 +607,12 @@ describe("AdminController", () => {
       watch: 0,
       critical: 0,
     });
+    expect(response.data.explainability).toEqual(
+      expect.objectContaining({
+        summary: "Filtered workflow runs are healthy.",
+        nextActions: expect.any(Array),
+      }),
+    );
     expect(response.data.runs[0]?.workflowRunId).toBe("social:intent:intent-1");
     expect(adminAuditService.recordAction).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1684,6 +1690,18 @@ describe("AdminController", () => {
       }),
     ]);
     expect(payload.items[0]?.replayHint).toContain("approval checkpoint");
+    expect((result.data as any).explainability).toEqual(
+      expect.objectContaining({
+        summary: expect.stringContaining("denied"),
+        statusCounts: expect.objectContaining({
+          denied: 1,
+        }),
+        primaryItem: expect.objectContaining({
+          tool: "intro.send_request",
+          status: "denied",
+        }),
+      }),
+    );
     expect(adminAuditService.recordAction).toHaveBeenCalledWith(
       expect.objectContaining({
         role: "support",
@@ -2841,6 +2859,15 @@ describe("AdminController", () => {
     expect(listed.data.summary.totalRuns).toBe(1);
     expect(listed.data.summary.byStatus.passed).toBe(1);
     expect(listed.data.summary.byLane.verification).toBe(1);
+    expect(listed.data.explainability).toEqual(
+      expect.objectContaining({
+        summary: expect.any(String),
+        laneCoverage: expect.objectContaining({
+          verification: true,
+        }),
+        nextActions: expect.any(Array),
+      }),
+    );
     expect(listed.data.runs[0]?.runId).toBe(
       "agent-suite-2026-03-26T22-00-00-000Z",
     );
@@ -3072,6 +3099,15 @@ describe("AdminController", () => {
     expect(payload.introRequestAcceptance.accepted).toBe(2);
     expect(payload.circleJoinConversion.conversionRate).toBe(0.5);
     expect(payload.followupUsefulness.usefulnessRate).toBe(1);
+    expect((result.data as any).explainability).toEqual(
+      expect.objectContaining({
+        summary: expect.stringContaining("denied/failed actions"),
+        topTool: expect.objectContaining({
+          tool: "intro.send_request",
+        }),
+        nextActions: expect.any(Array),
+      }),
+    );
     expect(adminAuditService.recordAction).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "admin.ops_agent_outcomes_view",

@@ -1,0 +1,33 @@
+appId: ${MAESTRO_APP_ID}
+---
+- tapOn:
+    point: "93%,43%"
+    optional: true
+- tapOn:
+    text: "Minimize"
+    optional: true
+- tapOn:
+    text: "Dismiss"
+    optional: true
+- tapOn:
+    text: "Skip"
+    optional: true
+- tapOn:
+    id: "e2e-nav-settings"
+- extendedWaitUntil:
+    visible:
+      id: "settings-screen"
+    timeout: 15000
+- tapOn:
+    id: "settings-first-name-input"
+- eraseText
+- inputText: "Maestro"
+- tapOn:
+    id: "settings-last-name-input"
+- eraseText
+- inputText: "Settings"
+- tapOn:
+    id: "settings-save-button"
+- waitForAnimationToEnd
+- assertVisible:
+    id: "settings-protocol-panel"

@@ -49,6 +49,7 @@ function emit() {
 function setState(patch: Partial<HomeShellState>) {
   const next = { ...state, ...patch };
   state = next;
+  storeSnapshot = { ...state, ...actions };
   emit();
 }
 
@@ -76,6 +77,9 @@ const actions: HomeShellActions = {
   },
 };
 
+let storeSnapshot: HomeShellStore = { ...state, ...actions };
+const defaultSnapshot: HomeShellStore = { ...defaultState, ...actions };
+
 function subscribe(listener: () => void) {
   listeners.add(listener);
   return () => {
@@ -88,7 +92,7 @@ export function useHomeShellStore<T>(
 ): T {
   return useSyncExternalStore(
     subscribe,
-    () => selector({ ...state, ...actions }),
-    () => selector({ ...defaultState, ...actions }),
+    () => selector(storeSnapshot),
+    () => selector(defaultSnapshot),
   );
 }

@@ -41,11 +41,14 @@ describe("LaunchControlsService", () => {
   });
 
   it("updates controls and writes audit metadata", async () => {
-    const findMany = vi.fn().mockResolvedValue([
-      { key: "launch.global_kill_switch", value: true },
-      { key: "launch.enable_new_intents", value: false },
-      { key: "launch.enable_discovery", value: false },
-    ]);
+    const findMany = vi
+      .fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { key: "launch.global_kill_switch", value: true },
+        { key: "launch.enable_new_intents", value: false },
+        { key: "launch.enable_discovery", value: false },
+      ]);
     const prisma: any = {
       userPreference: {
         findMany,
@@ -72,12 +75,69 @@ describe("LaunchControlsService", () => {
       expect.objectContaining({
         data: expect.objectContaining({
           action: "launch_controls.updated",
+          metadata: expect.objectContaining({
+            changedKeys: expect.arrayContaining([
+              "globalKillSwitch",
+              "enableNewIntents",
+              "enableDiscovery",
+            ]),
+            changedFrom: expect.objectContaining({
+              globalKillSwitch: false,
+            }),
+            changedTo: expect.objectContaining({
+              globalKillSwitch: true,
+            }),
+          }),
         }),
       }),
     );
     expect(updated.globalKillSwitch).toBe(true);
     expect(updated.enableNewIntents).toBe(false);
     expect(updated.enableDiscovery).toBe(false);
+  });
+
+  it("requires a reason for high-impact changes", async () => {
+    const prisma: any = {
+      userPreference: {
+        findMany: vi.fn().mockResolvedValue([]),
+        findFirst: vi.fn().mockResolvedValue(null),
+        create: vi.fn().mockResolvedValue({}),
+        update: vi.fn().mockResolvedValue({}),
+      },
+      auditLog: {
+        create: vi.fn().mockResolvedValue({}),
+      },
+    };
+
+    const service = new LaunchControlsService(prisma);
+
+    await expect(
+      service.updateControls({
+        globalKillSwitch: true,
+      }),
+    ).rejects.toThrow("reason is required");
+  });
+
+  it("rejects no-op updates", async () => {
+    const prisma: any = {
+      userPreference: {
+        findMany: vi.fn().mockResolvedValue([]),
+        findFirst: vi.fn().mockResolvedValue(null),
+        create: vi.fn().mockResolvedValue({}),
+        update: vi.fn().mockResolvedValue({}),
+      },
+      auditLog: {
+        create: vi.fn().mockResolvedValue({}),
+      },
+    };
+
+    const service = new LaunchControlsService(prisma);
+
+    await expect(
+      service.updateControls({
+        enableNewIntents: true,
+      }),
+    ).rejects.toThrow("no launch-control changes requested");
   });
 
   it("blocks non-cohort users when invite-only mode is enabled", async () => {

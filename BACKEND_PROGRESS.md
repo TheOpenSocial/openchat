@@ -3,8 +3,8 @@
 This file is the durable execution source of truth for coding agents.
 
 Operating model:
-- `PROGRESS.md`: long-running roadmap, status, evidence, blockers
-- `tasks.md`: immediate implementation slice only
+- `BACKEND_PROGRESS.md`: long-running roadmap, status, evidence, blockers
+- `BACKEND_TASKS.md`: immediate implementation slice only
 - `AGENT_TEST_SUITE.md`: verification cadence, release gates, suite semantics
 
 ## Status Legend
@@ -223,6 +223,9 @@ Priority order:
 - 2026-03-29: completed the next backend product/operator slice. Added `POST /api/onboarding/activation-execute` for replay-safe first-action execution, deepened DM/group memory extraction with clause-aware preference/location/language/relationship/budget/safety detection, and hardened moderation drill evidence with bounded polling plus structured `.artifacts/moderation-drill/*.json` output. Verified with `node --test scripts/moderation-drill.test.mjs`, `node --test scripts/run-backend-ops-pack.test.mjs`, `pnpm --filter @opensocial/api exec vitest run test/personalization.service.spec.ts test/chats.service.spec.ts test/onboarding-flow.contract.spec.ts test/onboarding.service.spec.ts test/agent-conversation.service.spec.ts test/admin.controller.spec.ts`, and `pnpm --filter @opensocial/api exec tsc --noEmit`.
 - 2026-03-29: closed the retrieval-ranking regression surfaced during integration. Explicit durable preferences now rank above older inferred summaries even when query wording differs (`like` vs `likes` / `prefer*` variants), and retrieval/debug excerpts now render human-readable memory leads such as `prefers apex`. Verified with `node scripts/run-agent-test-suite.mjs --layer=contract` and `pnpm release:check:api`.
 - 2026-03-29: closed the backend launch-evidence path. `Deploy Staging` run `23708298801` was green on commit `055b2ce`, including post-deploy backend golden verification. `Backend Ops Drill` run `23709635423` was green on commit `866445f` after fixing moderation drill audit matching and verification-run ingestion layer normalization in `scripts/moderation-drill.mjs` and `scripts/run-backend-ops-pack.mjs`. Verified locally with `node --test scripts/moderation-drill.test.mjs scripts/run-backend-ops-pack.test.mjs`.
+- 2026-04-09: closed the admin/backend hardening slice. Added admin-audited launch-control reads/updates with stricter mutation semantics, admin scheduled-task mutations (`pause`, `resume`, `archive`, `run-now`), and security-posture detection for the unsupported hosted-dashboard-plus-`ADMIN_API_KEY` configuration. Synced the operator docs/runbook to the current hosted-admin auth path. Verified with `pnpm --filter @opensocial/api exec vitest run test/launch-controls.service.spec.ts test/scheduled-tasks.service.spec.ts test/security-posture.spec.ts test/admin-security.middleware.spec.ts` and `pnpm --filter @opensocial/api exec tsc --noEmit`.
+- 2026-04-09: closed the remaining operator-evidence/explainability slice. Added higher-signal `explainability` summaries to `GET /api/admin/ops/verification-runs` and `GET /api/admin/ops/agent-workflows`, including dominant failure signal, lane coverage, suspect stage focus, and next operator actions. `scripts/run-backend-ops-pack.mjs` and `scripts/moderation-drill.mjs` now emit explainability summaries into their artifacts so ingested evidence is easier to triage from admin. Verified with `pnpm --filter @opensocial/api exec vitest run test/admin.controller.spec.ts test/launch-controls.service.spec.ts test/scheduled-tasks.service.spec.ts test/security-posture.spec.ts test/admin-security.middleware.spec.ts`, `node --test scripts/run-backend-ops-pack.test.mjs scripts/moderation-drill.test.mjs`, `pnpm --filter @opensocial/api exec tsc --noEmit`, and `pnpm --filter @opensocial/api lint`.
+- 2026-04-09: completed a follow-on admin explainability pass for operator telemetry surfaces. `GET /api/admin/ops/agent-outcomes` and `GET /api/admin/ops/agent-actions` now return compact `explainability` blocks with summary, primary risk/tooling signal, rates/status counts, and next operator actions. Verified with `pnpm --filter @opensocial/api exec vitest run test/admin.controller.spec.ts`, `pnpm --filter @opensocial/api exec tsc --noEmit`, and `pnpm --filter @opensocial/api lint`.
 
 ---
 
@@ -1804,7 +1807,7 @@ Production rollout is approved only when:
 - [x] Keep fallback chunk streaming path when true model stream is unavailable
 
 ### 33.2 Frontend parity (parallel lane)
-- [~] Tracked in `PROGRESS_FRONTEND.md` and Section `34.3` frontend execution board (parallel lane)
+- [~] Tracked in `FRONTEND_PROGRESS.md` and Section `34.3` frontend execution board (parallel lane)
 
 ### 33.3 Multimodal backend I/O for agent turns
 - [x] Extend agent respond payload with `voiceTranscript` and `attachments`
@@ -1849,7 +1852,7 @@ Production rollout is approved only when:
 - [x] Mobile app: consume streaming respond path and composer support for `voiceTranscript` + `attachments` (image URL) payloads.
 - [x] Admin app: moderation triage panel for agent-thread `moderation_flags` + triage/assign actions (pairs with `moderation.agent_risk_assessed` audits).
 - [x] Shared frontend: i18n catalog wiring and locale switching across web/mobile/admin.
-- [x] Frontend critical path and capability matrix maintained in `PROGRESS_FRONTEND.md`.
+- [x] Frontend critical path and capability matrix maintained in `FRONTEND_PROGRESS.md`.
 
 ### 34.4 Task queue (one-by-one status)
 - [x] `B-01` Wire true OpenAI delta streaming into agent workflow updates.

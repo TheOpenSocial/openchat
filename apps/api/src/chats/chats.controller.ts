@@ -142,11 +142,22 @@ export class ChatsController {
       payload.senderUserId,
       "chat sender does not match authenticated user",
     );
+    const firstPartySendResult =
+      await this.chatsService.sendFirstPartyChatMessageAction(
+        chatId,
+        actorUserId,
+        payload.body,
+        {
+          idempotencyKey: payload.clientMessageId,
+          replyToMessageId: payload.replyToMessageId,
+        },
+      );
     return ok(
-      await this.chatsService.createMessage(chatId, actorUserId, payload.body, {
-        idempotencyKey: payload.clientMessageId,
-        replyToMessageId: payload.replyToMessageId,
-      }),
+      await this.chatsService.getPersistedMessage(
+        chatId,
+        firstPartySendResult.messageId,
+        actorUserId,
+      ),
     );
   }
 

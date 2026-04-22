@@ -367,6 +367,57 @@ export class ScheduledTasksService {
     });
   }
 
+  async adminPauseTask(taskId: string) {
+    await this.requireTaskById(taskId);
+    return this.prisma.scheduledTask.update({
+      where: { id: taskId },
+      data: { status: "paused" },
+    });
+  }
+
+  async adminResumeTask(taskId: string) {
+    const task = await this.requireTaskById(taskId);
+    const schedule =
+      task.scheduleConfig as unknown as ScheduledTaskCreateBody["schedule"];
+    return this.prisma.scheduledTask.update({
+      where: { id: taskId },
+      data: {
+        status: "active",
+        nextRunAt: this.computeNextRunAt(schedule, new Date()),
+      },
+    });
+  }
+
+  async adminArchiveTask(taskId: string) {
+    await this.requireTaskById(taskId);
+    return this.prisma.scheduledTask.update({
+      where: { id: taskId },
+      data: {
+        status: "archived",
+        nextRunAt: null,
+      },
+    });
+  }
+
+  async adminRunTaskNow(taskId: string) {
+    const task = await this.requireTaskById(taskId);
+    const run = await this.prisma.scheduledTaskRun.create({
+      data: {
+        scheduledTaskId: task.id,
+        userId: task.userId,
+        status: "queued",
+        traceId: randomUUID(),
+      },
+    });
+    await this.enqueueRun(task.id, run.id, "manual");
+    return {
+      taskId: task.id,
+      runId: run.id,
+      userId: task.userId,
+      status: "queued" as const,
+    };
+  }
+
   private async executeTask(task: {
     id: string;
     userId: string;
@@ -695,6 +746,18 @@ export class ScheduledTasksService {
       where: {
         id: taskId,
         userId,
+      },
+    });
+    if (!task) {
+      throw new NotFoundException("scheduled task not found");
+    }
+    return task;
+  }
+
+  private async requireTaskById(taskId: string) {
+    const task = await this.prisma.scheduledTask.findUnique({
+      where: {
+        id: taskId,
       },
     });
     if (!task) {

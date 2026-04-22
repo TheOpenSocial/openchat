@@ -3,8 +3,8 @@
 This document is the canonical backend verification and remediation runbook for OpenSocial's agentic runtime.
 
 Roadmap ownership:
-- `PROGRESS.md` is the durable execution roadmap
-- `tasks.md` is the immediate implementation slice
+- `BACKEND_PROGRESS.md` is the durable execution roadmap
+- `BACKEND_TASKS.md` is the immediate implementation slice
 - `AGENT_TEST_SUITE.md` is verification policy only
 
 This file should not become a second backlog or product roadmap.
@@ -27,8 +27,8 @@ The suite exists to prove that the backend can:
 
 ## Verification Scope
 - This document defines release gates, suite layers, artifacts, remediation flow, and execution cadence.
-- Product prioritization, feature sequencing, and launch backlog ownership belong in `PROGRESS.md`.
-- The immediate coding queue belongs in `tasks.md`.
+- Product prioritization, feature sequencing, and launch backlog ownership belong in `BACKEND_PROGRESS.md`.
+- The immediate coding queue belongs in `BACKEND_TASKS.md`.
 
 ## Cadence vs Ship Gate
 - Default cadence:
@@ -419,9 +419,9 @@ The existing runtime health, agentic evals, dead-letter, and replay paths are th
 
 ## Interruption-Safe Handoff
 If work is interrupted, the next implementer should:
-1. check `PROGRESS.md` ATS tasks in order
+1. check `BACKEND_PROGRESS.md` ATS tasks in order
 2. inspect recent workflow runs in admin ops
 3. inspect latest failing scenarios and benchmarks
 4. continue from the earliest incomplete dependency
 
-This document and `PROGRESS.md` together are the source of truth for continuation.
+This document and `BACKEND_PROGRESS.md` together are the source of truth for continuation.

@@ -1,5 +1,5 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { Keyboard, Pressable, StyleSheet, Text, View } from "react-native";
+import { Keyboard, Pressable, Text, View } from "react-native";
 
 import { appTheme } from "../theme";
 
@@ -38,17 +38,10 @@ export function AppShellTopBar({
         height: headerHeight,
         paddingTop: topInset,
         paddingBottom: 4,
-        backgroundColor: "rgba(33,33,33,0.94)",
+        backgroundColor: appTheme.colors.background,
         overflow: "hidden",
       }}
     >
-      <View
-        pointerEvents="none"
-        style={[
-          StyleSheet.absoluteFillObject,
-          { backgroundColor: "rgba(33,33,33,0.24)" },
-        ]}
-      />
       <View className="flex-row items-center justify-between gap-4">
         <Pressable
           accessibilityHint="Dismisses the current screen and returns to the Home tab."
@@ -64,6 +57,9 @@ export function AppShellTopBar({
         >
           <Text
             className="text-[20px] font-semibold tracking-[-0.02em] text-ink"
+            allowFontScaling
+            adjustsFontSizeToFit
+            minimumFontScale={0.82}
             numberOfLines={1}
           >
             {title}
@@ -71,6 +67,9 @@ export function AppShellTopBar({
           {subtitle ? (
             <Text
               className="mt-1 text-[12px] leading-[18px] text-muted"
+              allowFontScaling
+              adjustsFontSizeToFit
+              minimumFontScale={0.85}
               numberOfLines={1}
             >
               {subtitle}

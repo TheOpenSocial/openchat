@@ -7,6 +7,14 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import {
+  designSandboxWorldV1Fixture,
+  normalizeDesignSandboxWorldFixture,
+} from "./sandbox-worlds/design-sandbox-v1.fixture.js";
+import {
+  seedDesignSandboxWorld as seedDesignSandboxWorldFixture,
+  type SandboxWorldSeedResult,
+} from "./sandbox-worlds/design-sandbox-seeder.js";
 
 type BootstrapInput = {
   rotateProbeToken?: boolean;
@@ -184,6 +192,38 @@ export class AdminPlaygroundService {
       },
       notes,
     };
+  }
+
+  async seedDesignSandboxWorld(actor: {
+    adminUserId: string;
+    role: AdminRole;
+  }) {
+    const fixture = normalizeDesignSandboxWorldFixture(
+      designSandboxWorldV1Fixture,
+    );
+    const result: SandboxWorldSeedResult = await seedDesignSandboxWorldFixture(
+      this.prisma,
+      actor,
+      fixture,
+    );
+
+    await this.adminAuditService.recordAction({
+      adminUserId: actor.adminUserId,
+      role: actor.role,
+      action: "admin.playground_seed_design_sandbox_world",
+      entityType: "admin_playground",
+      entityId: result.worldId,
+      metadata: {
+        worldId: result.worldId,
+        name: result.name,
+        ownerUserId: result.ownerUserId,
+        focalUserId: result.focalUserId,
+        seededAt: result.seededAt,
+        summary: result.summary,
+      },
+    });
+
+    return result;
   }
 
   async runScenario(

@@ -410,6 +410,62 @@ export class ChatsService {
     return message;
   }
 
+  async sendFirstPartyChatMessageAction(
+    chatId: string,
+    senderUserId: string,
+    body: string,
+    options?: {
+      idempotencyKey?: string;
+      replyToMessageId?: string;
+      moderationState?: "clean" | "flagged" | "blocked" | "review";
+      isSystem?: boolean;
+    },
+  ) {
+    const message = await this.createMessage(chatId, senderUserId, body, {
+      idempotencyKey: options?.idempotencyKey,
+      replyToMessageId: options?.replyToMessageId,
+      moderationState: options?.moderationState,
+      isSystem: options?.isSystem,
+    });
+    return {
+      messageId: message.id,
+      chatId: message.chatId,
+    };
+  }
+
+  async getPersistedMessage(
+    chatId: string,
+    messageId: string,
+    viewerUserId?: string,
+  ) {
+    if (viewerUserId) {
+      await this.assertActiveParticipant(chatId, viewerUserId);
+    }
+    if (!this.prisma.chatMessage?.findUnique) {
+      throw new NotFoundException("message not found");
+    }
+
+    const message = await this.prisma.chatMessage.findUnique({
+      where: {
+        id: messageId,
+      },
+      select: {
+        id: true,
+        chatId: true,
+        senderUserId: true,
+        body: true,
+        moderationState: true,
+        replyToMessageId: true,
+        createdAt: true,
+        editedAt: true,
+      },
+    });
+    if (!message || message.chatId !== chatId) {
+      throw new NotFoundException("message not found");
+    }
+    return message;
+  }
+
   async listMessages(
     chatId: string,
     limit = 50,

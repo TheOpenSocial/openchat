@@ -1,0 +1,70 @@
+appId: ${MAESTRO_APP_ID}
+---
+- runFlow: subflows/boot-home-local.yaml
+- tapOn:
+    id: "app-bottom-tab-profile"
+    optional: true
+- tapOn:
+    point: "84%,96%"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "profile-screen"
+    timeout: 15000
+- assertVisible:
+    id: "profile-screen"
+- tapOn:
+    id: "profile-action-edit"
+- scrollUntilVisible:
+    element:
+      id: "profile-bio-input"
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: "profile-bio-input"
+- eraseText
+- inputText: "Maestro profile bio"
+- tapOn:
+    id: "profile-location-input"
+- eraseText
+- inputText: "Cordoba, Argentina"
+- tapOn:
+    id: "profile-bio-save"
+- extendedWaitUntil:
+    visible:
+      text: "Cordoba, Argentina"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      id: "profile-action-interests"
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    id: "profile-action-interests"
+- tapOn:
+    id: "profile-interests-input"
+- eraseText
+- inputText: "MaestroInterest, Design"
+- tapOn:
+    id: "profile-interests-save"
+- extendedWaitUntil:
+    visible:
+      text: "MaestroInterest"
+    timeout: 15000
+- tapOn:
+    id: "app-shell-home"
+- waitForAnimationToEnd
+- tapOn:
+    id: "app-bottom-tab-profile"
+    optional: true
+- tapOn:
+    point: "84%,96%"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: "profile-screen"
+    timeout: 15000
+- assertVisible:
+    text: "Cordoba, Argentina"
+- assertVisible:
+    text: "MaestroInterest"

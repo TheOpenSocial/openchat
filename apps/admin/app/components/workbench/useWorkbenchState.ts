@@ -3,10 +3,23 @@
 import { useRef, useState } from "react";
 import { type HttpMethod } from "../../lib/api";
 import {
+  type SavedSearchesSnapshot,
+  type ScheduledTaskRunsSnapshot,
+  type ScheduledTasksSnapshot,
+} from "./operator-surface-types";
+import {
   type AdminTab,
+  type AgentActionsSnapshot,
+  type AgentOutcomesSnapshot,
+  type AgentReliabilitySnapshot,
+  type AgentWorkflowDetailSnapshot,
+  type AgentWorkflowListSnapshot,
   type Banner,
   type LlmRuntimeHealthSnapshot,
+  type LaunchControlsSnapshot,
   type OnboardingActivationSnapshot,
+  type SecurityPostureSnapshot,
+  type VerificationRunsSnapshot,
 } from "./workbench-config";
 
 const DEFAULT_UUID = "00000000-0000-0000-0000-000000000000";
@@ -22,6 +35,29 @@ export function useWorkbenchState() {
     useState<OnboardingActivationSnapshot | null>(null);
   const [llmRuntimeHealthSnapshot, setLlmRuntimeHealthSnapshot] =
     useState<LlmRuntimeHealthSnapshot | null>(null);
+  const [launchControlsSnapshot, setLaunchControlsSnapshot] =
+    useState<LaunchControlsSnapshot | null>(null);
+  const [securityPostureSnapshot, setSecurityPostureSnapshot] =
+    useState<SecurityPostureSnapshot | null>(null);
+  const [verificationRunsSnapshot, setVerificationRunsSnapshot] =
+    useState<VerificationRunsSnapshot | null>(null);
+  const [agentReliabilitySnapshot, setAgentReliabilitySnapshot] =
+    useState<AgentReliabilitySnapshot | null>(null);
+  const [agentOutcomesSnapshot, setAgentOutcomesSnapshot] =
+    useState<AgentOutcomesSnapshot | null>(null);
+  const [agentActionsSnapshot, setAgentActionsSnapshot] =
+    useState<AgentActionsSnapshot | null>(null);
+  const [agentWorkflowListSnapshot, setAgentWorkflowListSnapshot] =
+    useState<AgentWorkflowListSnapshot | null>(null);
+  const [agentWorkflowDetailSnapshot, setAgentWorkflowDetailSnapshot] =
+    useState<AgentWorkflowDetailSnapshot | null>(null);
+  const [selectedWorkflowRunId, setSelectedWorkflowRunId] = useState("");
+  const [launchControlReason, setLaunchControlReason] = useState(
+    "operator dashboard change",
+  );
+  const [scheduledTaskActionReason, setScheduledTaskActionReason] = useState(
+    "operator dashboard change",
+  );
   const [deadLetters, setDeadLetters] = useState<
     Array<{
       id: string;
@@ -101,11 +137,13 @@ export function useWorkbenchState() {
     useState<unknown>(null);
   const [recurringCircleSessionSnapshot, setRecurringCircleSessionSnapshot] =
     useState<unknown>(null);
-  const [savedSearchSnapshot, setSavedSearchSnapshot] = useState<unknown>(null);
+  const [savedSearchSnapshot, setSavedSearchSnapshot] =
+    useState<SavedSearchesSnapshot | null>(null);
   const [scheduledTaskSnapshot, setScheduledTaskSnapshot] =
-    useState<unknown>(null);
+    useState<ScheduledTasksSnapshot | null>(null);
   const [scheduledTaskRunsSnapshot, setScheduledTaskRunsSnapshot] =
-    useState<unknown>(null);
+    useState<ScheduledTaskRunsSnapshot | null>(null);
+  const [adminScheduledTaskId, setAdminScheduledTaskId] = useState("");
   const [discoveryPassiveSnapshot, setDiscoveryPassiveSnapshot] =
     useState<unknown>(null);
   const [discoveryInboxSnapshot, setDiscoveryInboxSnapshot] =
@@ -155,6 +193,28 @@ export function useWorkbenchState() {
     setOnboardingActivationSnapshot,
     llmRuntimeHealthSnapshot,
     setLlmRuntimeHealthSnapshot,
+    launchControlsSnapshot,
+    setLaunchControlsSnapshot,
+    securityPostureSnapshot,
+    setSecurityPostureSnapshot,
+    verificationRunsSnapshot,
+    setVerificationRunsSnapshot,
+    agentReliabilitySnapshot,
+    setAgentReliabilitySnapshot,
+    agentOutcomesSnapshot,
+    setAgentOutcomesSnapshot,
+    agentActionsSnapshot,
+    setAgentActionsSnapshot,
+    agentWorkflowListSnapshot,
+    setAgentWorkflowListSnapshot,
+    agentWorkflowDetailSnapshot,
+    setAgentWorkflowDetailSnapshot,
+    selectedWorkflowRunId,
+    setSelectedWorkflowRunId,
+    launchControlReason,
+    setLaunchControlReason,
+    scheduledTaskActionReason,
+    setScheduledTaskActionReason,
     deadLetters,
     setDeadLetters,
     adminUserId,
@@ -234,6 +294,8 @@ export function useWorkbenchState() {
     setScheduledTaskSnapshot,
     scheduledTaskRunsSnapshot,
     setScheduledTaskRunsSnapshot,
+    adminScheduledTaskId,
+    setAdminScheduledTaskId,
     discoveryPassiveSnapshot,
     setDiscoveryPassiveSnapshot,
     discoveryInboxSnapshot,

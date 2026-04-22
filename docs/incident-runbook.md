@@ -50,4 +50,4 @@
 ## Post-incident
 - Write timeline with absolute UTC timestamps.
 - Document root cause, impact, and prevention actions.
-- Update `PROGRESS.md` Implementation Notes and relevant runbook sections.
+- Update `BACKEND_PROGRESS.md` Implementation Notes and relevant runbook sections.

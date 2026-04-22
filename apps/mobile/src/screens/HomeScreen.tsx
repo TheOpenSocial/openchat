@@ -53,6 +53,7 @@ import { useActivityStore } from "../store/activity-store";
 import { useHomeShellStore } from "../store/home-shell-store";
 import { useHomeThreadStore } from "../store/home-thread-store";
 import { useChatsStore } from "../store/chats-store";
+import { E2ENavRail } from "../features/debug/components/E2ENavRail";
 
 export interface HomeScreenProps {
   session: MobileSession;
@@ -149,6 +150,8 @@ export function HomeScreen({
   onResetSession,
   session,
 }: HomeScreenProps) {
+  const showE2ENavRail =
+    __DEV__ || Boolean(process.env.EXPO_PUBLIC_E2E_SESSION_B64?.trim());
   void initialProfile;
   const insets = useSafeAreaInsets();
   const { locale } = useHomeLocale("en");
@@ -763,7 +766,45 @@ export function HomeScreen({
   }
 
   if (transientScreen) {
-    return transientScreen;
+    return (
+      <View className="flex-1">
+        {transientScreen}
+        <E2ENavRail
+          onOpenActivity={() => {
+            hapticSelection();
+            transientRouteActions.openActivity();
+          }}
+          onOpenChats={() => {
+            hapticSelection();
+            transientRouteActions.closeAll();
+            setActiveTab("chats");
+          }}
+          onOpenHome={() => {
+            hapticSelection();
+            transientRouteActions.closeAll();
+            setActiveTab("home");
+          }}
+          onOpenInbox={() => {
+            hapticSelection();
+            transientRouteActions.openInbox();
+          }}
+          onOpenPeerProfile={() => {
+            hapticSelection();
+            transientRouteActions.openProfileFromDiscovery("e2e-peer-user");
+          }}
+          onOpenProfile={() => {
+            hapticSelection();
+            transientRouteActions.closeAll();
+            setActiveTab("profile");
+          }}
+          onOpenSettings={() => {
+            hapticSelection();
+            transientRouteActions.openSettings();
+          }}
+          visible={showE2ENavRail}
+        />
+      </View>
+    );
   }
 
   return (
@@ -871,6 +912,40 @@ export function HomeScreen({
       }}
       overlay={
         <>
+          <E2ENavRail
+            onOpenActivity={() => {
+              hapticSelection();
+              transientRouteActions.openActivity();
+            }}
+            onOpenChats={() => {
+              hapticSelection();
+              transientRouteActions.closeAll();
+              setActiveTab("chats");
+            }}
+            onOpenHome={() => {
+              hapticSelection();
+              transientRouteActions.closeAll();
+              setActiveTab("home");
+            }}
+            onOpenInbox={() => {
+              hapticSelection();
+              transientRouteActions.openInbox();
+            }}
+            onOpenPeerProfile={() => {
+              hapticSelection();
+              transientRouteActions.openProfileFromDiscovery("e2e-peer-user");
+            }}
+            onOpenProfile={() => {
+              hapticSelection();
+              transientRouteActions.closeAll();
+              setActiveTab("profile");
+            }}
+            onOpenSettings={() => {
+              hapticSelection();
+              transientRouteActions.openSettings();
+            }}
+            visible={showE2ENavRail}
+          />
           {showPushDebug ? (
             <View
               className="absolute left-4 top-4 max-w-[260px] rounded-[18px] border border-white/[0.08] bg-black/55 px-3 py-2.5"
