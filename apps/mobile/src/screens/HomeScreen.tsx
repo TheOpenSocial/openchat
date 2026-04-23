@@ -6,7 +6,6 @@ import {
   api,
   type ChatMessageRecord,
   type ChatMetadataRecord,
-  type ExperienceHomeSummaryResponse,
   type PendingIntentsSummaryResponse,
 } from "../lib/api";
 import { t } from "../i18n/strings";
@@ -14,6 +13,7 @@ import { type RealtimeSession } from "../lib/realtime";
 import { DevOrb } from "../components/DevOrb";
 import { hapticSelection } from "../lib/haptics";
 import {
+  loadStoredActivitySummary,
   loadStoredHomeSummary,
   saveStoredHomeSummary,
 } from "../lib/experience-storage";
@@ -29,6 +29,7 @@ import {
   UserProfileDraft,
 } from "../types";
 import { HomeAgentThreadScreen } from "./HomeAgentThreadScreen";
+import { ActivityScreen } from "./ActivityScreen";
 import { ChatsListScreen } from "./ChatsListScreen";
 import { ProfileScreen } from "./ProfileScreen";
 import { HomeScreenLayout } from "./home/HomeScreenLayout";
@@ -49,7 +50,6 @@ import { useChatsHydration } from "./home/hooks/useChatsHydration";
 import { useHomeRecoveryController } from "./home/hooks/useHomeRecoveryController";
 import { useHomeWelcomeSheet } from "./home/hooks/useHomeWelcomeSheet";
 import { useHomeTransientRoutes } from "./home/hooks/useHomeTransientRoutes";
-import { useActivityIndicator } from "../features/activity/hooks/useActivityIndicator";
 import {
   usePushLifecycle,
   type PushRouteIntent,
@@ -263,7 +263,12 @@ export function HomeScreen({
   const setBanner = useHomeShellStore((store) => store.setBanner);
   const homeSummary = useHomeShellStore((store) => store.homeSummary);
   const setHomeSummary = useHomeShellStore((store) => store.setHomeSummary);
+  const setBootstrapHydratedAt = useHomeShellStore(
+    (store) => store.setBootstrapHydratedAt,
+  );
   const resetShell = useHomeShellStore((store) => store.resetShell);
+  const setActivityState = useActivityStore((store) => store.setActivityState);
+  const resetActivity = useActivityStore((store) => store.resetActivity);
   const chats = useChatsStore((store) => store.chats);
   const setChats = useChatsStore((store) => store.setChats);
   const resetChats = useChatsStore((store) => store.resetChats);
@@ -352,11 +357,6 @@ export function HomeScreen({
     userId: session.userId,
   });
 
-  useActivityIndicator({
-    accessToken: session.accessToken,
-    userId: session.userId,
-  });
-
   useEffect(() => {
     let active = true;
 
@@ -368,6 +368,22 @@ export function HomeScreen({
       })
       .catch(() => {});
 
+    void loadStoredActivitySummary(session.userId)
+      .then((stored) => {
+        if (!active || !stored) {
+          return;
+        }
+        setActivityState({
+          hasUnread:
+            stored.counts.pendingRequests > 0 ||
+            stored.counts.unreadNotifications > 0,
+          lastHydratedAt: stored.generatedAt,
+          pendingRequestCount: stored.counts.pendingRequests,
+          unreadNotificationCount: stored.counts.unreadNotifications,
+        });
+      })
+      .catch(() => {});
+
     if (skipNetwork) {
       return () => {
         active = false;
@@ -375,20 +391,39 @@ export function HomeScreen({
     }
 
     void api
-      .getExperienceHomeSummary(session.userId, session.accessToken)
-      .then((summary: ExperienceHomeSummaryResponse) => {
+      .getExperienceBootstrapSummary(session.userId, session.accessToken)
+      .then((bootstrap) => {
         if (!active) {
           return;
         }
-        setHomeSummary(summary);
-        void saveStoredHomeSummary(session.userId, summary).catch(() => {});
+        setHomeSummary(bootstrap.home);
+        setActivityState({
+          hasUnread:
+            bootstrap.activity.counts.pendingRequests > 0 ||
+            bootstrap.activity.counts.unreadNotifications > 0,
+          lastHydratedAt: bootstrap.generatedAt,
+          pendingRequestCount: bootstrap.activity.counts.pendingRequests,
+          unreadNotificationCount:
+            bootstrap.activity.counts.unreadNotifications,
+        });
+        setBootstrapHydratedAt(bootstrap.generatedAt);
+        void saveStoredHomeSummary(session.userId, bootstrap.home).catch(
+          () => {},
+        );
       })
       .catch(() => {});
 
     return () => {
       active = false;
     };
-  }, [session.accessToken, session.userId, setHomeSummary, skipNetwork]);
+  }, [
+    session.accessToken,
+    session.userId,
+    setActivityState,
+    setBootstrapHydratedAt,
+    setHomeSummary,
+    skipNetwork,
+  ]);
 
   useEffect(() => {
     setChatStorageReady(false);
@@ -459,11 +494,13 @@ export function HomeScreen({
     }
     sessionFingerprintRef.current = nextFingerprint;
     resetShell();
+    resetActivity();
     resetHomeThread();
     resetChats();
     void clearStoredChats(session.userId).catch(() => {});
   }, [
     resetChats,
+    resetActivity,
     resetHomeThread,
     resetShell,
     session.sessionId,
@@ -866,7 +903,8 @@ export function HomeScreen({
           currentScreenTestID={currentE2EScreenTestID}
           onOpenActivity={() => {
             hapticSelection();
-            transientRouteActions.openActivity();
+            transientRouteActions.closeAll();
+            setActiveTab("activity");
           }}
           onOpenChats={() => {
             hapticSelection();
@@ -957,6 +995,23 @@ export function HomeScreen({
           typingUsers={typingUsers}
         />
       }
+      activityContent={
+        <ActivityScreen
+          accessToken={session.accessToken}
+          onClose={() => {
+            hapticSelection();
+            setActiveTab("home");
+          }}
+          onOpenConnections={transientRouteActions.openConnections}
+          onOpenDiscovery={transientRouteActions.openDiscovery}
+          onOpenInbox={transientRouteActions.openInbox}
+          onOpenIntentDetail={transientRouteActions.openIntentDetail}
+          onOpenRecurringCircles={transientRouteActions.openRecurringCircles}
+          onOpenSavedSearches={transientRouteActions.openSavedSearches}
+          onOpenScheduledTasks={transientRouteActions.openScheduledTasks}
+          userId={session.userId}
+        />
+      }
       hasNotifications={
         activityHasUnread ||
         Boolean(agentThreadLoadError) ||
@@ -1023,7 +1078,8 @@ export function HomeScreen({
       }}
       onPressNotifications={() => {
         hapticSelection();
-        transientRouteActions.openActivity();
+        transientRouteActions.closeAll();
+        setActiveTab("activity");
       }}
       onTabChange={(tab) => {
         hapticSelection();
@@ -1035,7 +1091,8 @@ export function HomeScreen({
             currentScreenTestID={currentE2EScreenTestID}
             onOpenActivity={() => {
               hapticSelection();
-              transientRouteActions.openActivity();
+              transientRouteActions.closeAll();
+              setActiveTab("activity");
             }}
             onOpenChats={() => {
               hapticSelection();
@@ -1165,7 +1222,9 @@ export function HomeScreen({
           ? "OpenSocial"
           : activeTab === "chats"
             ? "Chats"
-            : "Profile"
+            : activeTab === "activity"
+              ? "Activity"
+              : "Profile"
       }
       unreadChatsCount={unreadChatsCount}
       visibleBanner={visibleBanner}

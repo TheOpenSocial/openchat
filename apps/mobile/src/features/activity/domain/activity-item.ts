@@ -1,41 +1,59 @@
+import type {
+  ExperienceActivitySectionId,
+  InboxRequestRecord,
+} from "../../../lib/api";
+
+type ActivityItemBase = {
+  id: string;
+  body: string;
+  eyebrow: string;
+  priority: number;
+  sectionId: ExperienceActivitySectionId;
+  timestamp?: string | null;
+  title: string;
+};
+
 export type ActivityItem =
-  | {
-      id: string;
+  | (ActivityItemBase & {
       kind: "request";
-      title: string;
-      body: string;
-      timestamp: string;
-      status: "pending" | "accepted" | "rejected" | "expired" | "cancelled";
+      status: InboxRequestRecord["status"];
       requestId: string;
       intentId: string;
-    }
-  | {
-      id: string;
+    })
+  | (ActivityItemBase & {
+      kind: "notification";
+      isRead: boolean;
+      notificationType: string;
+    })
+  | (ActivityItemBase & {
       kind: "intent";
-      title: string;
-      body: string;
       intentId: string;
       status: string;
-    }
-  | {
-      id: string;
+    })
+  | (ActivityItemBase & {
       kind: "discovery";
-      title: string;
-      body: string;
       scoreLabel: string;
-    }
-  | {
-      id: string;
+    })
+  | (ActivityItemBase & {
       kind: "summary";
-      title: string;
-      body: string;
-    };
+    });
+
+export type ActivitySection = {
+  id: ExperienceActivitySectionId;
+  title: string;
+  subtitle: string;
+  emphasis: "urgent" | "active" | "passive";
+  items: ActivityItem[];
+};
 
 export function compareActivityItems(
   left: ActivityItem,
   right: ActivityItem,
 ): number {
-  const leftTime = left.kind === "request" ? Date.parse(left.timestamp) : 0;
-  const rightTime = right.kind === "request" ? Date.parse(right.timestamp) : 0;
+  if (right.priority !== left.priority) {
+    return right.priority - left.priority;
+  }
+  const leftTime = left.timestamp ? Date.parse(left.timestamp) : 0;
+  const rightTime = right.timestamp ? Date.parse(right.timestamp) : 0;
   return rightTime - leftTime;
 }

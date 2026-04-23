@@ -12,6 +12,8 @@ function iconNameForItem(item: ActivityItem) {
         : "mail-open-outline";
     case "intent":
       return "flash-outline";
+    case "notification":
+      return item.isRead ? "notifications-outline" : "notifications";
     case "discovery":
       return "sparkles-outline";
     case "summary":
@@ -48,6 +50,20 @@ function appearanceForItem(item: ActivityItem) {
       eyebrowColor: appTheme.colors.inkMuted,
     };
   }
+  if (item.kind === "notification") {
+    return {
+      accentBackground: item.isRead
+        ? appTheme.colors.panelSoft
+        : appTheme.colors.panel,
+      accentBorder: item.isRead
+        ? appTheme.colors.hairline
+        : appTheme.colors.hairlineStrong,
+      iconColor: item.isRead ? appTheme.colors.inkMuted : appTheme.colors.ink,
+      eyebrowColor: item.isRead
+        ? appTheme.colors.inkMuted
+        : appTheme.colors.inkSoft,
+    };
+  }
   if (item.kind === "discovery") {
     return {
       accentBackground: appTheme.colors.panelSoft,
@@ -78,9 +94,11 @@ export function ActivityRow({
       ? "Opens the request details."
       : item.kind === "intent"
         ? "Opens the intent details."
-        : item.kind === "discovery"
-          ? "Opens the discovery item."
-          : "Opens the system update.";
+        : item.kind === "notification"
+          ? "Opens the related update."
+          : item.kind === "discovery"
+            ? "Opens the discovery item."
+            : "Opens the system update.";
 
   return (
     <Pressable

@@ -1,16 +1,23 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   api,
-  type DiscoveryInboxSuggestionsResponse,
-  type InboxRequestRecord,
-  type PendingIntentsSummaryResponse,
-  type PassiveDiscoveryResponse,
+  type ExperienceActivitySectionId,
+  type ExperienceActivitySectionMeta,
+  type ExperienceActivitySummaryResponse,
 } from "../../../lib/api";
+import {
+  loadStoredActivitySummary,
+  saveStoredActivitySummary,
+} from "../../../lib/experience-storage";
+import { mobileQueryKeys } from "../../../lib/query-client";
+import { useActivityStore } from "../../../store/activity-store";
 import { useInboxStore } from "../../../store/inbox-store";
 import {
   compareActivityItems,
   type ActivityItem,
+  type ActivitySection,
 } from "../domain/activity-item";
 
 type UseActivityFeedArgs = {
@@ -25,154 +32,243 @@ type ActivityFeedState = {
   items: ActivityItem[];
   pendingRequestCount: number;
   refresh: () => Promise<void>;
+  sections: ActivitySection[];
+  summary: ExperienceActivitySummaryResponse | null;
 };
 
-function buildRequestItems(requests: InboxRequestRecord[]): ActivityItem[] {
-  return requests.map((request) => ({
-    id: `request:${request.id}`,
+function hydrateStores(
+  summary: ExperienceActivitySummaryResponse,
+  setActivityState: (patch: {
+    hasUnread: boolean;
+    lastHydratedAt: string;
+    pendingRequestCount: number;
+    unreadNotificationCount: number;
+  }) => void,
+  setPendingRequestCount: (count: number) => void,
+) {
+  setActivityState({
+    hasUnread:
+      summary.counts.pendingRequests > 0 ||
+      summary.counts.unreadNotifications > 0,
+    lastHydratedAt: summary.generatedAt,
+    pendingRequestCount: summary.counts.pendingRequests,
+    unreadNotificationCount: summary.counts.unreadNotifications,
+  });
+  setPendingRequestCount(summary.counts.pendingRequests);
+}
+
+function emptySection(meta: ExperienceActivitySectionMeta): ActivitySection {
+  return {
+    ...meta,
+    items: [],
+  };
+}
+
+function requestItems(
+  summary: ExperienceActivitySummaryResponse,
+): ActivityItem[] {
+  return summary.sections.actionRequired.map((item) => ({
+    id: `request:${item.id}`,
     kind: "request",
-    title:
-      request.status === "pending"
-        ? "New request waiting"
-        : request.status === "accepted"
-          ? "Request accepted"
-          : request.status === "rejected"
-            ? "Request declined"
-            : "Request updated",
-    body:
-      request.status === "pending"
-        ? "Someone is waiting for your response."
-        : `This request is now ${request.status}.`,
-    timestamp: request.respondedAt ?? request.createdAt,
-    status: request.status,
-    requestId: request.id,
-    intentId: request.intentId,
+    body: item.body,
+    eyebrow: item.eyebrow,
+    intentId: item.intentId,
+    priority: item.priority,
+    requestId: item.id,
+    sectionId: "actionRequired",
+    status: item.status,
+    timestamp: item.createdAt,
+    title: item.title,
   }));
 }
 
-function buildDiscoveryItems(
-  inboxSuggestions: DiscoveryInboxSuggestionsResponse,
-  passiveDiscovery: PassiveDiscoveryResponse,
+function notificationItems(
+  summary: ExperienceActivitySummaryResponse,
 ): ActivityItem[] {
-  const suggestionItems: ActivityItem[] = inboxSuggestions.suggestions.map(
-    (suggestion, index) => ({
-      id: `discovery:${index}:${suggestion.title}`,
-      kind: "discovery",
-      title: suggestion.title,
-      body: suggestion.reason,
-      scoreLabel: `${Math.round(suggestion.score * 100)}% match`,
-    }),
-  );
-
-  const summaryItems: ActivityItem[] = [
-    {
-      id: "summary:tonight",
-      kind: "summary",
-      title: "Tonight is active",
-      body: `${passiveDiscovery.tonight.suggestions.length} people and ${passiveDiscovery.groups.groups.length} group options are available.`,
-    },
-    {
-      id: "summary:reconnects",
-      kind: "summary",
-      title: "Reconnects available",
-      body: `${passiveDiscovery.reconnects.reconnects.length} people are worth revisiting.`,
-    },
-  ];
-
-  return [...suggestionItems, ...summaryItems];
+  return summary.sections.updates.map((item) => ({
+    id: `notification:${item.id}`,
+    kind: "notification",
+    body: item.body,
+    eyebrow: item.eyebrow,
+    isRead: item.isRead,
+    notificationType: item.type,
+    priority: item.priority,
+    sectionId: "updates",
+    timestamp: item.createdAt,
+    title: item.title,
+  }));
 }
 
-function buildIntentItems(
-  pendingIntentsSummary: PendingIntentsSummaryResponse | null,
+function intentItems(
+  summary: ExperienceActivitySummaryResponse,
 ): ActivityItem[] {
-  if (!pendingIntentsSummary) {
+  return summary.sections.activeIntents.map((item) => ({
+    id: `intent:${item.intentId}`,
+    kind: "intent",
+    body: item.body,
+    eyebrow: item.eyebrow,
+    intentId: item.intentId,
+    priority: item.priority,
+    sectionId: "activeIntents",
+    status: item.status,
+    title: item.title,
+  }));
+}
+
+function suggestionItems(
+  summary: ExperienceActivitySummaryResponse,
+): ActivityItem[] {
+  return summary.sections.suggestions.map((item) => ({
+    id: `discovery:${item.id}`,
+    kind: "discovery",
+    body: item.body,
+    eyebrow: item.eyebrow,
+    priority: item.priority,
+    scoreLabel: item.scoreLabel,
+    sectionId: "suggestions",
+    title: item.title,
+  }));
+}
+
+function highlightItems(
+  summary: ExperienceActivitySummaryResponse,
+): ActivityItem[] {
+  return summary.sections.discoveryHighlights.map((item) => ({
+    id: `summary:${item.id}`,
+    kind: "summary",
+    body: item.body,
+    eyebrow: item.eyebrow,
+    priority: item.priority,
+    sectionId: "discoveryHighlights",
+    title: item.title,
+  }));
+}
+
+function sectionItems(
+  summary: ExperienceActivitySummaryResponse,
+  sectionId: ExperienceActivitySectionId,
+) {
+  switch (sectionId) {
+    case "actionRequired":
+      return requestItems(summary);
+    case "updates":
+      return notificationItems(summary);
+    case "activeIntents":
+      return intentItems(summary);
+    case "suggestions":
+      return suggestionItems(summary);
+    case "discoveryHighlights":
+      return highlightItems(summary);
+  }
+}
+
+function buildSections(
+  summary: ExperienceActivitySummaryResponse | null,
+): ActivitySection[] {
+  if (!summary) {
     return [];
   }
 
-  return pendingIntentsSummary.intents.slice(0, 3).map((intent) => ({
-    id: `intent:${intent.intentId}`,
-    kind: "intent",
-    title: intent.rawText,
-    body: `${intent.requests.pending} pending · ${intent.requests.accepted} accepted · ${intent.requests.rejected + intent.requests.expired + intent.requests.cancelled} closed`,
-    intentId: intent.intentId,
-    status: intent.status,
-  }));
+  return summary.orderedSections
+    .map((meta) => {
+      const items = sectionItems(summary, meta.id).sort(compareActivityItems);
+      return items.length > 0 ? { ...meta, items } : emptySection(meta);
+    })
+    .filter((section) => section.items.length > 0);
 }
 
 export function useActivityFeed({
   accessToken,
   userId,
 }: UseActivityFeedArgs): ActivityFeedState {
-  const setRequestsInStore = useInboxStore((store) => store.setRequests);
+  const queryClient = useQueryClient();
+  const setActivityState = useActivityStore((store) => store.setActivityState);
+  const setPendingRequestCount = useInboxStore(
+    (store) => store.setPendingRequestCount,
+  );
   const pendingRequestCount = useInboxStore(
     (store) => store.pendingRequestCount,
   );
-  const [requests, setRequests] = useState<InboxRequestRecord[]>([]);
-  const [inboxSuggestions, setInboxSuggestions] =
-    useState<DiscoveryInboxSuggestionsResponse | null>(null);
-  const [passiveDiscovery, setPassiveDiscovery] =
-    useState<PassiveDiscoveryResponse | null>(null);
-  const [pendingIntentsSummary, setPendingIntentsSummary] =
-    useState<PendingIntentsSummaryResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const refresh = useCallback(async () => {
-    setRefreshing(true);
-    setError(null);
-    try {
-      const [
-        nextRequests,
-        nextInboxSuggestions,
-        nextPassiveDiscovery,
-        nextPendingIntentsSummary,
-      ] = await Promise.all([
-        api.listPendingRequests(userId, accessToken),
-        api.getDiscoveryInboxSuggestions(userId, 4, accessToken),
-        api.getPassiveDiscovery(userId, 3, accessToken),
-        api.summarizePendingIntents(userId, 4, accessToken).catch(() => null),
-      ]);
-      setRequests(nextRequests);
-      setRequestsInStore(nextRequests);
-      setInboxSuggestions(nextInboxSuggestions);
-      setPassiveDiscovery(nextPassiveDiscovery);
-      setPendingIntentsSummary(nextPendingIntentsSummary);
-    } catch (nextError) {
-      setError(
-        nextError instanceof Error
-          ? nextError.message
-          : "Unable to load activity right now.",
-      );
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [accessToken, setRequestsInStore, userId]);
+  const [summary, setSummary] =
+    useState<ExperienceActivitySummaryResponse | null>(null);
+  const activitySummaryQuery = useQuery({
+    enabled: Boolean(userId) && Boolean(accessToken),
+    queryKey: mobileQueryKeys.activitySummary(userId),
+    queryFn: () => api.getExperienceActivitySummary(userId, accessToken),
+  });
 
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    let active = true;
+    void loadStoredActivitySummary(userId)
+      .then((stored) => {
+        if (!active || !stored) {
+          return;
+        }
+        setSummary(stored);
+        hydrateStores(stored, setActivityState, setPendingRequestCount);
+        queryClient.setQueryData(
+          mobileQueryKeys.activitySummary(userId),
+          stored,
+        );
+      })
+      .catch(() => {});
 
-  const items = useMemo(() => {
-    const requestItems = buildRequestItems(requests);
-    const intentItems = buildIntentItems(pendingIntentsSummary);
-    const discoveryItems =
-      inboxSuggestions && passiveDiscovery
-        ? buildDiscoveryItems(inboxSuggestions, passiveDiscovery)
-        : [];
+    return () => {
+      active = false;
+    };
+  }, [queryClient, setActivityState, setPendingRequestCount, userId]);
 
-    return [...requestItems, ...intentItems, ...discoveryItems].sort(
-      compareActivityItems,
+  const refresh = useCallback(async () => {
+    const result = await activitySummaryQuery.refetch();
+    if (result.data) {
+      setSummary(result.data);
+      hydrateStores(result.data, setActivityState, setPendingRequestCount);
+      void saveStoredActivitySummary(userId, result.data).catch(() => {});
+    }
+  }, [activitySummaryQuery, setActivityState, setPendingRequestCount, userId]);
+
+  useEffect(() => {
+    if (!activitySummaryQuery.data) {
+      return;
+    }
+    setSummary(activitySummaryQuery.data);
+    hydrateStores(
+      activitySummaryQuery.data,
+      setActivityState,
+      setPendingRequestCount,
     );
-  }, [inboxSuggestions, passiveDiscovery, pendingIntentsSummary, requests]);
+    void saveStoredActivitySummary(userId, activitySummaryQuery.data).catch(
+      () => {},
+    );
+  }, [
+    activitySummaryQuery.data,
+    setActivityState,
+    setPendingRequestCount,
+    userId,
+  ]);
+
+  const activeSummary = activitySummaryQuery.data ?? summary;
+  const sections = useMemo(() => buildSections(activeSummary), [activeSummary]);
+  const items = useMemo(
+    () =>
+      sections.flatMap((section) => section.items).sort(compareActivityItems),
+    [sections],
+  );
+  const error =
+    activitySummaryQuery.error instanceof Error
+      ? activitySummaryQuery.error.message
+      : activitySummaryQuery.error
+        ? "Unable to load activity right now."
+        : null;
 
   return {
-    loading,
-    refreshing,
+    loading: activitySummaryQuery.isLoading && !activeSummary,
+    refreshing: activitySummaryQuery.isRefetching,
     error,
     items,
     pendingRequestCount,
     refresh,
+    sections,
+    summary: activeSummary,
   };
 }

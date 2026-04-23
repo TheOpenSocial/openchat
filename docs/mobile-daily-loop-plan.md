@@ -238,6 +238,12 @@ These are product read models that remove stitched client-side aggregation from 
     - [useActivityFeed.ts](/Users/cruciblelabs/Documents/openchat/apps/mobile/src/features/activity/hooks/useActivityFeed.ts)
 
 24. Added structured spotlight cards below the `Home` status so the active search and best lead are visible without opening another surface.
+
+25. Wired the mobile app root to React Query and moved the `Activity` summary fetch onto the shared mobile query cache while preserving AsyncStorage snapshot fallback.
+    Frontend files:
+    - [App.tsx](/Users/cruciblelabs/Documents/openchat/apps/mobile/App.tsx)
+    - [query-client.ts](/Users/cruciblelabs/Documents/openchat/apps/mobile/src/lib/query-client.ts)
+    - [useActivityFeed.ts](/Users/cruciblelabs/Documents/openchat/apps/mobile/src/features/activity/hooks/useActivityFeed.ts)
     Frontend files:
     - [HomeSpotlightCards.tsx](/Users/cruciblelabs/Documents/openchat/apps/mobile/src/open-chat/HomeSpotlightCards.tsx)
     - [OpenChatScreen.tsx](/Users/cruciblelabs/Documents/openchat/apps/mobile/src/open-chat/OpenChatScreen.tsx)

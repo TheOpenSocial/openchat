@@ -3,6 +3,7 @@ import { useSyncExternalStore } from "react";
 type ActivityState = {
   hasUnread: boolean;
   pendingRequestCount: number;
+  unreadNotificationCount: number;
   lastHydratedAt: string | null;
 };
 
@@ -16,6 +17,7 @@ type ActivityStore = ActivityState & ActivityActions;
 const defaultState: ActivityState = {
   hasUnread: false,
   pendingRequestCount: 0,
+  unreadNotificationCount: 0,
   lastHydratedAt: null,
 };
 

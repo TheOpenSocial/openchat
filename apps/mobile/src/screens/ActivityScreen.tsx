@@ -39,7 +39,7 @@ export function ActivityScreen({
   onOpenScheduledTasks,
   userId,
 }: ActivityScreenProps) {
-  const { error, items, loading, pendingRequestCount, refresh, refreshing } =
+  const { error, loading, pendingRequestCount, refresh, refreshing, sections } =
     useActivityFeed({
       accessToken,
       userId,
@@ -77,100 +77,105 @@ export function ActivityScreen({
       subtitle={headerSubtitle}
       title="What needs your attention"
     >
-      <View className="flex-row gap-2 pb-4">
-        <Pressable
-          accessibilityLabel="Open connections"
-          accessibilityRole="button"
-          className="flex-1 rounded-full border border-white/10 bg-white/[0.04] px-4 py-3"
-          hitSlop={8}
-          onPress={() => {
-            hapticSelection();
-            onOpenConnections?.();
-          }}
-          style={({ pressed }) => ({
-            opacity: pressed ? appTheme.motion.pressOpacity : 1,
-          })}
-          testID="activity-open-connections"
-        >
-          <Text className="text-center text-[13px] font-semibold tracking-[-0.01em] text-white/84">
-            Connections
-          </Text>
-        </Pressable>
-        <Pressable
-          accessibilityLabel="Open discovery"
-          accessibilityRole="button"
-          className="flex-1 rounded-full border border-white/10 bg-white/[0.04] px-4 py-3"
-          hitSlop={8}
-          onPress={() => {
-            hapticSelection();
-            onOpenDiscovery?.();
-          }}
-          style={({ pressed }) => ({
-            opacity: pressed ? appTheme.motion.pressOpacity : 1,
-          })}
-          testID="activity-open-discovery"
-        >
-          <Text className="text-center text-[13px] font-semibold tracking-[-0.01em] text-white/84">
-            Discovery
-          </Text>
-        </Pressable>
-      </View>
+      <View className="pb-4" testID="activity-quick-links">
+        <Text className="mb-3 text-[12px] font-semibold uppercase tracking-[0.16em] text-white/45">
+          Quick links
+        </Text>
+        <View className="flex-row gap-2">
+          <Pressable
+            accessibilityLabel="Open connections"
+            accessibilityRole="button"
+            className="flex-1 rounded-full border border-white/10 bg-white/[0.04] px-4 py-3"
+            hitSlop={8}
+            onPress={() => {
+              hapticSelection();
+              onOpenConnections?.();
+            }}
+            style={({ pressed }) => ({
+              opacity: pressed ? appTheme.motion.pressOpacity : 1,
+            })}
+            testID="activity-open-connections"
+          >
+            <Text className="text-center text-[13px] font-semibold tracking-[-0.01em] text-white/84">
+              Connections
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityLabel="Open discovery"
+            accessibilityRole="button"
+            className="flex-1 rounded-full border border-white/10 bg-white/[0.04] px-4 py-3"
+            hitSlop={8}
+            onPress={() => {
+              hapticSelection();
+              onOpenDiscovery?.();
+            }}
+            style={({ pressed }) => ({
+              opacity: pressed ? appTheme.motion.pressOpacity : 1,
+            })}
+            testID="activity-open-discovery"
+          >
+            <Text className="text-center text-[13px] font-semibold tracking-[-0.01em] text-white/84">
+              Discovery
+            </Text>
+          </Pressable>
+        </View>
 
-      <View className="flex-row gap-2 pb-4">
-        <Pressable
-          accessibilityLabel="Open recurring circles"
-          accessibilityRole="button"
-          className="flex-1 rounded-full border border-white/10 bg-white/[0.04] px-4 py-3"
-          hitSlop={8}
-          onPress={() => {
-            hapticSelection();
-            onOpenRecurringCircles?.();
-          }}
-          style={({ pressed }) => ({
-            opacity: pressed ? appTheme.motion.pressOpacity : 1,
-          })}
-          testID="activity-open-recurring-circles"
-        >
-          <Text className="text-center text-[13px] font-semibold tracking-[-0.01em] text-white/84">
-            Circles
-          </Text>
-        </Pressable>
-        <Pressable
-          accessibilityLabel="Open saved searches"
-          accessibilityRole="button"
-          className="flex-1 rounded-full border border-white/10 bg-white/[0.04] px-4 py-3"
-          hitSlop={8}
-          onPress={() => {
-            hapticSelection();
-            onOpenSavedSearches?.();
-          }}
-          style={({ pressed }) => ({
-            opacity: pressed ? appTheme.motion.pressOpacity : 1,
-          })}
-          testID="activity-open-saved-searches"
-        >
-          <Text className="text-center text-[13px] font-semibold tracking-[-0.01em] text-white/84">
-            Searches
-          </Text>
-        </Pressable>
-        <Pressable
-          accessibilityLabel="Open scheduled tasks"
-          accessibilityRole="button"
-          className="flex-1 rounded-full border border-white/10 bg-white/[0.04] px-4 py-3"
-          hitSlop={8}
-          onPress={() => {
-            hapticSelection();
-            onOpenScheduledTasks?.();
-          }}
-          style={({ pressed }) => ({
-            opacity: pressed ? appTheme.motion.pressOpacity : 1,
-          })}
-          testID="activity-open-scheduled-tasks"
-        >
-          <Text className="text-center text-[13px] font-semibold tracking-[-0.01em] text-white/84">
-            Tasks
-          </Text>
-        </Pressable>
+        <View className="mt-2 flex-row gap-2">
+          <Pressable
+            accessibilityLabel="Open recurring circles"
+            accessibilityRole="button"
+            className="flex-1 rounded-full border border-white/10 bg-white/[0.04] px-4 py-3"
+            hitSlop={8}
+            onPress={() => {
+              hapticSelection();
+              onOpenRecurringCircles?.();
+            }}
+            style={({ pressed }) => ({
+              opacity: pressed ? appTheme.motion.pressOpacity : 1,
+            })}
+            testID="activity-open-recurring-circles"
+          >
+            <Text className="text-center text-[13px] font-semibold tracking-[-0.01em] text-white/84">
+              Circles
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityLabel="Open saved searches"
+            accessibilityRole="button"
+            className="flex-1 rounded-full border border-white/10 bg-white/[0.04] px-4 py-3"
+            hitSlop={8}
+            onPress={() => {
+              hapticSelection();
+              onOpenSavedSearches?.();
+            }}
+            style={({ pressed }) => ({
+              opacity: pressed ? appTheme.motion.pressOpacity : 1,
+            })}
+            testID="activity-open-saved-searches"
+          >
+            <Text className="text-center text-[13px] font-semibold tracking-[-0.01em] text-white/84">
+              Searches
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityLabel="Open scheduled tasks"
+            accessibilityRole="button"
+            className="flex-1 rounded-full border border-white/10 bg-white/[0.04] px-4 py-3"
+            hitSlop={8}
+            onPress={() => {
+              hapticSelection();
+              onOpenScheduledTasks?.();
+            }}
+            style={({ pressed }) => ({
+              opacity: pressed ? appTheme.motion.pressOpacity : 1,
+            })}
+            testID="activity-open-scheduled-tasks"
+          >
+            <Text className="text-center text-[13px] font-semibold tracking-[-0.01em] text-white/84">
+              Tasks
+            </Text>
+          </Pressable>
+        </View>
       </View>
 
       {error ? <InlineNotice text={error} tone="error" /> : null}
@@ -180,23 +185,43 @@ export function ActivityScreen({
           <ActivityIndicator color={appTheme.colors.ink} />
           <Text className="mt-4 text-[14px] text-muted">Loading activity</Text>
         </View>
-      ) : items.length > 0 ? (
-        <View className="gap-3">
-          {items.map((item) => (
-            <ActivityRow
-              item={item}
-              key={item.id}
-              onPress={(pressedItem) => {
-                if (pressedItem.kind === "request") {
-                  hapticSelection();
-                  onOpenInbox?.();
-                }
-                if (pressedItem.kind === "intent") {
-                  hapticSelection();
-                  onOpenIntentDetail?.(pressedItem.intentId);
-                }
-              }}
-            />
+      ) : sections.length > 0 ? (
+        <View className="gap-6">
+          {sections.map((section) => (
+            <View key={section.id} className="gap-3">
+              <View>
+                <Text className="text-[12px] font-semibold uppercase tracking-[0.16em] text-white/45">
+                  {section.title}
+                </Text>
+                <Text className="mt-1 text-[13px] leading-[19px] text-white/48">
+                  {section.subtitle}
+                </Text>
+              </View>
+              {section.items.map((item) => (
+                <ActivityRow
+                  item={item}
+                  key={item.id}
+                  onPress={(pressedItem) => {
+                    if (pressedItem.kind === "request") {
+                      hapticSelection();
+                      onOpenInbox?.();
+                    }
+                    if (pressedItem.kind === "intent") {
+                      hapticSelection();
+                      onOpenIntentDetail?.(pressedItem.intentId);
+                    }
+                    if (pressedItem.kind === "notification") {
+                      hapticSelection();
+                      onOpenInbox?.();
+                    }
+                    if (pressedItem.kind === "discovery") {
+                      hapticSelection();
+                      onOpenDiscovery?.();
+                    }
+                  }}
+                />
+              ))}
+            </View>
           ))}
         </View>
       ) : (

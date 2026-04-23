@@ -547,6 +547,111 @@ export interface ExperienceHomeSummaryResponse {
   };
 }
 
+export type ExperienceActivitySectionId =
+  | "actionRequired"
+  | "updates"
+  | "activeIntents"
+  | "suggestions"
+  | "discoveryHighlights";
+
+export interface ExperienceActivitySectionMeta {
+  id: ExperienceActivitySectionId;
+  title: string;
+  subtitle: string;
+  emphasis: "urgent" | "active" | "passive";
+}
+
+export interface ExperienceActivityRequestItem {
+  id: string;
+  kind: "request";
+  priority: number;
+  eyebrow: string;
+  title: string;
+  body: string;
+  status: InboxRequestRecord["status"];
+  intentId: string;
+  createdAt: string;
+  cardSummary?: {
+    who?: string;
+    what?: string;
+    when?: string;
+  } | null;
+}
+
+export interface ExperienceActivityNotificationItem {
+  id: string;
+  kind: "notification";
+  priority: number;
+  eyebrow: string;
+  title: string;
+  body: string;
+  type: string;
+  channel: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
+export interface ExperienceActivityIntentItem {
+  intentId: string;
+  priority: number;
+  eyebrow: string;
+  title: string;
+  body: string;
+  rawText: string;
+  status: string;
+  ageMinutes: number;
+  requests: PendingIntentSummaryItem["requests"];
+}
+
+export interface ExperienceActivitySuggestionItem {
+  id: string;
+  priority: number;
+  eyebrow: string;
+  title: string;
+  body: string;
+  score: number;
+  scoreLabel: string;
+}
+
+export interface ExperienceActivityHighlightItem {
+  id: string;
+  priority: number;
+  eyebrow: string;
+  title: string;
+  body: string;
+}
+
+export interface ExperienceActivitySummaryResponse {
+  generatedAt: string;
+  counts: {
+    unreadNotifications: number;
+    pendingRequests: number;
+    activeIntents: number;
+    discoverySuggestions: number;
+  };
+  orderedSections: ExperienceActivitySectionMeta[];
+  sections: {
+    actionRequired: ExperienceActivityRequestItem[];
+    updates: ExperienceActivityNotificationItem[];
+    activeIntents: ExperienceActivityIntentItem[];
+    suggestions: ExperienceActivitySuggestionItem[];
+    discoveryHighlights: ExperienceActivityHighlightItem[];
+    discoverySnapshot: {
+      tonightCount: number;
+      groupCount: number;
+      reconnectCount: number;
+    };
+  };
+}
+
+export interface ExperienceBootstrapSummaryResponse {
+  generatedAt: string;
+  home: ExperienceHomeSummaryResponse;
+  activity: {
+    counts: ExperienceActivitySummaryResponse["counts"];
+  };
+}
+
 const REMOTE_API_BASE_URL = "https://api.opensocial.so/api";
 
 /**
@@ -2096,6 +2201,22 @@ export const api = {
     return request<ExperienceHomeSummaryResponse>(
       "GET",
       `/experience/${userId}/home-summary`,
+      undefined,
+      accessToken,
+    );
+  },
+  getExperienceActivitySummary(userId: string, accessToken?: string) {
+    return request<ExperienceActivitySummaryResponse>(
+      "GET",
+      `/experience/${userId}/activity-summary`,
+      undefined,
+      accessToken,
+    );
+  },
+  getExperienceBootstrapSummary(userId: string, accessToken?: string) {
+    return request<ExperienceBootstrapSummaryResponse>(
+      "GET",
+      `/experience/${userId}/bootstrap`,
       undefined,
       accessToken,
     );

@@ -18,20 +18,19 @@ export function useActivityIndicator({
     let active = true;
 
     void api
-      .listPendingRequests(userId, accessToken)
-      .then((requests) => {
+      .getExperienceActivitySummary(userId, accessToken)
+      .then((summary) => {
         if (!active) {
           return;
         }
 
-        const pendingRequestCount = requests.filter(
-          (request) => request.status === "pending",
-        ).length;
-
         setActivityState({
-          hasUnread: pendingRequestCount > 0,
-          pendingRequestCount,
-          lastHydratedAt: new Date().toISOString(),
+          hasUnread:
+            summary.counts.pendingRequests > 0 ||
+            summary.counts.unreadNotifications > 0,
+          pendingRequestCount: summary.counts.pendingRequests,
+          unreadNotificationCount: summary.counts.unreadNotifications,
+          lastHydratedAt: summary.generatedAt,
         });
       })
       .catch(() => {

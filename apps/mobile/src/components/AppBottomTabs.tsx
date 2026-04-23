@@ -22,11 +22,12 @@ export type MainAppTab = HomeTab;
 
 interface AppBottomTabsProps {
   activeTab: MainAppTab;
+  hasActivity?: boolean;
   unreadChats?: number;
   onChange: (tab: MainAppTab) => void;
 }
 
-const TAB_ORDER: MainAppTab[] = ["chats", "home", "profile"];
+const TAB_ORDER: MainAppTab[] = ["chats", "home", "activity", "profile"];
 
 const TAB_META: Record<
   MainAppTab,
@@ -39,17 +40,22 @@ const TAB_META: Record<
   chats: {
     icon: "chatbubble-outline",
     label: "Chats",
-    hint: "Tab 1 of 3. Shows your conversations.",
+    hint: "Tab 1 of 4. Shows your conversations.",
   },
   home: {
     icon: "sparkles-outline",
     label: "Home",
-    hint: "Tab 2 of 3. Opens the home workspace.",
+    hint: "Tab 2 of 4. Opens the home workspace.",
   },
   profile: {
     icon: "person-outline",
     label: "Profile",
-    hint: "Tab 3 of 3. Opens your profile.",
+    hint: "Tab 4 of 4. Opens your profile.",
+  },
+  activity: {
+    icon: "notifications-outline",
+    label: "Activity",
+    hint: "Tab 3 of 4. Shows requests, updates, and active searches.",
   },
 };
 
@@ -136,6 +142,7 @@ function TabItem({
 
 export function AppBottomTabs({
   activeTab,
+  hasActivity = false,
   onChange,
   unreadChats = 0,
 }: AppBottomTabsProps) {
@@ -156,7 +163,7 @@ export function AppBottomTabs({
   };
 
   const indicatorStyle = useAnimatedStyle(() => {
-    const slotWidth = containerWidth.value / 3;
+    const slotWidth = containerWidth.value / TAB_ORDER.length;
     const indicatorWidth = Math.max(slotWidth - 36, 0);
     const centeredOffset = Math.max(0, (slotWidth - indicatorWidth) / 2);
 
@@ -246,6 +253,14 @@ export function AppBottomTabs({
               <TabItem
                 activeIndex={activeIndex}
                 index={2}
+                badgeCount={hasActivity ? 1 : 0}
+                isActive={activeTab === "activity"}
+                onPress={() => onChange("activity")}
+                tab="activity"
+              />
+              <TabItem
+                activeIndex={activeIndex}
+                index={3}
                 isActive={activeTab === "profile"}
                 onPress={() => onChange("profile")}
                 tab="profile"

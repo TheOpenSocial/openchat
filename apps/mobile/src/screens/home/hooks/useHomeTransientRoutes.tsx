@@ -398,6 +398,7 @@ export function useHomeTransientRoutes({
       openConnections,
       openDiscovery,
       openInbox,
+      openIntentDetail,
       openProfileFromChat,
       openProfileFromConnections,
       openProfileFromDiscovery,
