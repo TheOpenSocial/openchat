@@ -18,6 +18,10 @@ function formatUpdatedAt(value: string | null) {
   })}`;
 }
 
+function protocolTestId(value: string) {
+  return value.replace(/[^a-zA-Z0-9_-]/g, "-").toLowerCase();
+}
+
 export function ProtocolIntegrationsPanel({
   accessToken,
 }: {
@@ -43,6 +47,7 @@ export function ProtocolIntegrationsPanel({
     ];
   }, [snapshot]);
   const recentEvents = snapshot?.recentEvents.slice(0, 3) ?? [];
+  const visibleApps = snapshot?.apps.slice(0, 4) ?? [];
   const linkedApps = snapshot?.linkedApps ?? 0;
   const hasLiveData =
     linkedApps > 0 ||
@@ -127,6 +132,70 @@ export function ProtocolIntegrationsPanel({
       </View>
 
       <View className="gap-4">
+        <View className="gap-3" testID="settings-protocol-linked-apps">
+          <View className="flex-row items-end justify-between gap-3">
+            <Text className="text-[12px] font-semibold uppercase tracking-[0.12em] text-muted">
+              Linked protocol apps
+            </Text>
+            {linkedApps > visibleApps.length ? (
+              <Text className="text-[12px] font-medium text-muted">
+                +{linkedApps - visibleApps.length} more
+              </Text>
+            ) : null}
+          </View>
+          {visibleApps.length > 0 ? (
+            <View className="gap-2">
+              {visibleApps.map((app) => (
+                <View
+                  key={app.appId}
+                  className="rounded-2xl border border-hairline bg-canvas px-3 py-2.5"
+                  testID={`settings-protocol-app-${protocolTestId(app.appId)}`}
+                >
+                  <View className="flex-row items-start justify-between gap-3">
+                    <View className="min-w-0 flex-1">
+                      <Text
+                        className="text-[14px] font-semibold tracking-[-0.02em] text-ink"
+                        numberOfLines={1}
+                      >
+                        {app.name}
+                      </Text>
+                      <Text
+                        className="mt-1 text-[12px] font-medium text-muted"
+                        numberOfLines={1}
+                      >
+                        {app.appId}
+                      </Text>
+                    </View>
+                    <View className="rounded-full border border-hairline bg-surfaceMuted px-2 py-1">
+                      <Text className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+                        {app.status}
+                      </Text>
+                    </View>
+                  </View>
+                  {app.summary ? (
+                    <Text
+                      className="mt-2 text-[12px] leading-[18px] text-ink/75"
+                      numberOfLines={2}
+                    >
+                      {app.summary}
+                    </Text>
+                  ) : null}
+                  <Text className="mt-2 text-[11px] font-medium text-muted">
+                    {`${app.kind} · ${app.issuedScopes.length} scopes · ${app.issuedCapabilities.length} capabilities`}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <View className="rounded-2xl border border-dashed border-hairline bg-canvas/60 px-3 py-4">
+              <Text className="text-[13px] font-medium text-muted">
+                No protocol apps are linked yet. Registered partner apps will
+                appear here with their current status and issued access.
+              </Text>
+            </View>
+          )}
+        </View>
+
         <View className="gap-3">
           <Text className="text-[12px] font-semibold uppercase tracking-[0.12em] text-muted">
             Supported protocol events
