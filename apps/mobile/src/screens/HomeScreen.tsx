@@ -6,12 +6,17 @@ import {
   api,
   type ChatMessageRecord,
   type ChatMetadataRecord,
+  type ExperienceHomeSummaryResponse,
   type PendingIntentsSummaryResponse,
 } from "../lib/api";
 import { t } from "../i18n/strings";
 import { type RealtimeSession } from "../lib/realtime";
 import { DevOrb } from "../components/DevOrb";
 import { hapticSelection } from "../lib/haptics";
+import {
+  loadStoredHomeSummary,
+  saveStoredHomeSummary,
+} from "../lib/experience-storage";
 import { loadOfflineOutbox } from "../lib/offline-outbox";
 import { clearStoredChats } from "../lib/chat-storage";
 import { useNetworkOnline } from "../lib/use-network-online";
@@ -19,6 +24,7 @@ import { usePrimaryAgentThread } from "../lib/use-primary-agent-thread";
 import { useKeyboardVisible } from "../hooks/useKeyboardVisible";
 import {
   AgentTimelineMessage,
+  HomeTab,
   MobileSession,
   UserProfileDraft,
 } from "../types";
@@ -94,6 +100,45 @@ function describePushRouteIntent(intent: PushRouteIntent | null) {
       return `profile:${intent.userId}`;
     default:
       return intent.kind;
+  }
+}
+
+function getE2EScreenTestID(activeTab: HomeTab, routeKind: string | null) {
+  switch (routeKind) {
+    case "activity":
+      return "activity-screen";
+    case "connections":
+      return "connections-screen";
+    case "discovery":
+      return "discovery-screen";
+    case "inbox":
+      return "inbox-screen";
+    case "intent":
+      return "intent-detail-screen";
+    case "otherProfile":
+      return "other-profile-screen";
+    case "recurringCircles":
+      return "recurring-circles-screen";
+    case "savedSearches":
+      return "saved-searches-screen";
+    case "scheduledTasks":
+      return "scheduled-tasks-screen";
+    case "settings":
+      return "settings-screen";
+    default:
+      break;
+  }
+
+  switch (activeTab) {
+    case "activity":
+      return "activity-screen";
+    case "chats":
+      return "chats-screen";
+    case "profile":
+      return "profile-screen";
+    case "home":
+    default:
+      return "home-screen";
   }
 }
 
@@ -216,6 +261,8 @@ export function HomeScreen({
   const resetHomeThread = useHomeThreadStore((store) => store.resetHomeThread);
   const banner = useHomeShellStore((store) => store.banner);
   const setBanner = useHomeShellStore((store) => store.setBanner);
+  const homeSummary = useHomeShellStore((store) => store.homeSummary);
+  const setHomeSummary = useHomeShellStore((store) => store.setHomeSummary);
   const resetShell = useHomeShellStore((store) => store.resetShell);
   const chats = useChatsStore((store) => store.chats);
   const setChats = useChatsStore((store) => store.setChats);
@@ -270,22 +317,35 @@ export function HomeScreen({
       chats.reduce((sum, thread) => sum + Math.max(0, thread.unreadCount), 0),
     [chats],
   );
-  const showDevOrb = __DEV__ || process.env.EXPO_PUBLIC_ENABLE_DEV_ORB === "1";
+  const showDevOrb =
+    !showE2ENavRail &&
+    (__DEV__ || process.env.EXPO_PUBLIC_ENABLE_DEV_ORB === "1");
   const DEV_ORB_UNLOCK_WINDOW_MS = 10 * 60 * 1000;
   const activityHasUnread = useActivityStore((store) => store.hasUnread);
+  const shellUnreadNotifications = Math.max(
+    0,
+    homeSummary?.counts.unreadNotifications ?? 0,
+  );
   const nonChatRealtimeCallbacks = useNonChatRealtimeController({
     setBanner,
   });
   const showPushDebug =
     __DEV__ || process.env.EXPO_PUBLIC_ENABLE_PUSH_DEBUG === "1";
-  const { actions: transientRouteActions, transientScreen } =
-    useHomeTransientRoutes({
-      initialProfile,
-      onProfileUpdated,
-      session,
-      setActiveTab,
-      setSelectedChatId,
-    });
+  const {
+    actions: transientRouteActions,
+    routeKind: transientRouteKind,
+    transientScreen,
+  } = useHomeTransientRoutes({
+    initialProfile,
+    onProfileUpdated,
+    session,
+    setActiveTab,
+    setSelectedChatId,
+  });
+  const currentE2EScreenTestID = getE2EScreenTestID(
+    activeTab,
+    transientRouteKind,
+  );
   const { push, pushDebug } = usePushLifecycle({
     enabled: true,
     onRouteIntent: transientRouteActions.handlePushRouteIntent,
@@ -296,6 +356,39 @@ export function HomeScreen({
     accessToken: session.accessToken,
     userId: session.userId,
   });
+
+  useEffect(() => {
+    let active = true;
+
+    void loadStoredHomeSummary(session.userId)
+      .then((stored) => {
+        if (active && stored) {
+          setHomeSummary(stored);
+        }
+      })
+      .catch(() => {});
+
+    if (skipNetwork) {
+      return () => {
+        active = false;
+      };
+    }
+
+    void api
+      .getExperienceHomeSummary(session.userId, session.accessToken)
+      .then((summary: ExperienceHomeSummaryResponse) => {
+        if (!active) {
+          return;
+        }
+        setHomeSummary(summary);
+        void saveStoredHomeSummary(session.userId, summary).catch(() => {});
+      })
+      .catch(() => {});
+
+    return () => {
+      active = false;
+    };
+  }, [session.accessToken, session.userId, setHomeSummary, skipNetwork]);
 
   useEffect(() => {
     setChatStorageReady(false);
@@ -770,6 +863,7 @@ export function HomeScreen({
       <View className="flex-1">
         {transientScreen}
         <E2ENavRail
+          currentScreenTestID={currentE2EScreenTestID}
           onOpenActivity={() => {
             hapticSelection();
             transientRouteActions.openActivity();
@@ -778,6 +872,14 @@ export function HomeScreen({
             hapticSelection();
             transientRouteActions.closeAll();
             setActiveTab("chats");
+          }}
+          onOpenConnections={() => {
+            hapticSelection();
+            transientRouteActions.openConnections();
+          }}
+          onOpenDiscovery={() => {
+            hapticSelection();
+            transientRouteActions.openDiscovery();
           }}
           onOpenHome={() => {
             hapticSelection();
@@ -796,6 +898,18 @@ export function HomeScreen({
             hapticSelection();
             transientRouteActions.closeAll();
             setActiveTab("profile");
+          }}
+          onOpenRecurringCircles={() => {
+            hapticSelection();
+            transientRouteActions.openRecurringCircles();
+          }}
+          onOpenSavedSearches={() => {
+            hapticSelection();
+            transientRouteActions.openSavedSearches();
+          }}
+          onOpenScheduledTasks={() => {
+            hapticSelection();
+            transientRouteActions.openScheduledTasks();
           }}
           onOpenSettings={() => {
             hapticSelection();
@@ -843,7 +957,12 @@ export function HomeScreen({
           typingUsers={typingUsers}
         />
       }
-      hasNotifications={activityHasUnread || pendingOutboxCount > 0}
+      hasNotifications={
+        activityHasUnread ||
+        Boolean(agentThreadLoadError) ||
+        pendingOutboxCount > 0 ||
+        shellUnreadNotifications > 0
+      }
       homeContent={
         <HomeAgentThreadScreen
           agentImageUrl={agentImageUrlDraft}
@@ -913,6 +1032,7 @@ export function HomeScreen({
       overlay={
         <>
           <E2ENavRail
+            currentScreenTestID={currentE2EScreenTestID}
             onOpenActivity={() => {
               hapticSelection();
               transientRouteActions.openActivity();
@@ -921,6 +1041,14 @@ export function HomeScreen({
               hapticSelection();
               transientRouteActions.closeAll();
               setActiveTab("chats");
+            }}
+            onOpenConnections={() => {
+              hapticSelection();
+              transientRouteActions.openConnections();
+            }}
+            onOpenDiscovery={() => {
+              hapticSelection();
+              transientRouteActions.openDiscovery();
             }}
             onOpenHome={() => {
               hapticSelection();
@@ -939,6 +1067,18 @@ export function HomeScreen({
               hapticSelection();
               transientRouteActions.closeAll();
               setActiveTab("profile");
+            }}
+            onOpenRecurringCircles={() => {
+              hapticSelection();
+              transientRouteActions.openRecurringCircles();
+            }}
+            onOpenSavedSearches={() => {
+              hapticSelection();
+              transientRouteActions.openSavedSearches();
+            }}
+            onOpenScheduledTasks={() => {
+              hapticSelection();
+              transientRouteActions.openScheduledTasks();
             }}
             onOpenSettings={() => {
               hapticSelection();

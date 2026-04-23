@@ -33,7 +33,7 @@ Status legend:
 | Create settings persistence Maestro lane | `done` | New focused lane |
 | Create chats core Maestro lane | `done` | New focused lane |
 | Create current-state Maestro lanes | `done` | Added `*-current.yaml` flows for already-attached local iteration |
-| Add transient-safe E2E rail recovery | `done` | E2E rail now renders over transient routes too |
+| Add transient-safe E2E rail recovery | `done` | E2E rail now renders as a top-layer overlay with deterministic current-route markers |
 | Add package scripts for focused lanes | `done` | Mobile package updated |
 | Update Maestro README with focused lanes | `done` | Usage documented |
 | Create standalone readiness matrix doc | `done` | `docs/mobile-readiness-matrix.md` |
@@ -48,21 +48,22 @@ Status legend:
 | Add focused lane for notifications | `done` | Current-state lane now proves shell bell -> Activity entry |
 | Add notifications roundtrip lane | `done` | Current-state lane now proves shell recovery after Activity close |
 | Add focused lane for other-profile traversal | `done` | Current-state peer-profile lane now proves open + close |
-| Repair stale legacy critical-path ids | `done` | Critical path has been rewritten around current shell/activity/profile/chats selectors |
+| Repair stale legacy critical-path ids | `done` | Critical path passed locally on 2026-04-22 on the rewritten shell/activity/profile/chats path |
 | Add focused lane for chat edit/reaction/delete mutations | `done` | Current-state mutation lane added for seeded local thread proof |
 | Add dev-only local auth bypass for current-state mobile lanes | `done` | `auth-e2e-bypass-button` now exists and routes through a local session shortcut |
 | Add persisted-reopen lane for profile preferences | `done` | Current-state local lane now passes through save + reopen persistence on the stabilized `localhost:8090` Expo path |
-| Add focused lane for photo-update fallback | `next` | Needs E2E-safe strategy |
-| Add route-graph audit lane for mobile shell | `next` | Needed for broader confidence |
+| Add focused lane for photo-update fallback | `done` | Current-state profile and settings photo lanes both passed locally on 2026-04-22 through the real avatar actions and update markers |
+| Add route-graph audit lane for mobile shell | `done` | `mobile-route-graph.yaml` passed locally on 2026-04-23 through Home, Activity, Inbox, Connections, Discovery, Recurring circles, Saved searches, Scheduled tasks, Profile, and Settings |
 | Replace brittle point taps where route ids exist | `in_progress` | Focused lanes already improved, legacy lane still stale |
 | Dismiss Expo Go tools overlay in current-state flows | `done` | Current-state flows now begin by closing the tools sheet |
 | Tighten onboarding completion coverage | `next` | Landing is preserved, path needs stronger proof |
 | Tighten Home recovery/empty states coverage | `next` | Existing UI stronger than automation proof |
 | Stabilize current-state auth-to-home handoff in Expo Go | `done` | Mutation lane now passes on the injected-session Expo Go path instead of depending on the local bypass tap |
 | Stabilize Expo Go against stale localhost project fallback | `done` | Shared shell-boot subflow exists, Maestro defaults now point at `exp://localhost:8090`, and the local Expo server is dependable on that port |
-| Dismiss Expo tools sheet during long critical-path returns | `in_progress` | Critical path now reaches Activity cleanly, but the Expo tools overlay can still hijack the Activity -> Home return step |
-| Tighten notifications shell coverage | `in_progress` | Entry and roundtrip are proven; unread-state coverage still missing |
+| Dismiss Expo tools sheet during long critical-path returns | `done` | Current critical path now passes locally on 2026-04-22 on the shared shell-boot + E2E rail path |
+| Tighten notifications shell coverage | `done` | Current-state unread and roundtrip lanes both passed locally on 2026-04-22 on the shared shell-boot path |
 | Refresh readiness scores from real reruns | `done` | Settings, Profile, Chats thread, and chat mutation current-state lanes now reflected in the matrix |
+| Collapse transient route state to one active route | `done` | Replaced competing fullscreen booleans with one explicit transient route so only one route can be active |
 
 ## Source Of Truth
 

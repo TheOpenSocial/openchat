@@ -12,16 +12,10 @@ appId: ${MAESTRO_APP_ID}
 - assertVisible:
     id: "activity-screen"
 - tapOn:
-    point: "91%,54%"
-    optional: true
-- tapOn:
-    point: "91%,12%"
-    optional: true
-- tapOn:
-    id: "activity-close"
+    id: "e2e-nav-home"
 - extendedWaitUntil:
     visible:
-      id: "e2e-nav-rail"
+      id: "home-screen"
     timeout: 15000
 - assertVisible:
     id: "home-screen"

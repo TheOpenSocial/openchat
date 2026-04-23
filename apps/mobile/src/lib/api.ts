@@ -483,6 +483,70 @@ export interface DiscoveryAgentRecommendationsResponse {
   discovery: PassiveDiscoveryResponse;
 }
 
+export interface ExperienceHomeSummaryResponse {
+  generatedAt: string;
+  thread: {
+    id: string;
+    title: string | null;
+    createdAt: string;
+  } | null;
+  status: {
+    eyebrow: string;
+    title: string;
+    body: string;
+    tone: "idle" | "active" | "waiting" | "recovery";
+    footnote: string;
+    nextAction: {
+      kind:
+        | "review_requests"
+        | "open_matches"
+        | "resume_intent"
+        | "start_intent";
+      label: string;
+      text?: string;
+    };
+  };
+  counts: {
+    activeIntents: number;
+    pendingRequests: number;
+    unreadNotifications: number;
+    tonightSuggestions: number;
+    reconnectCandidates: number;
+  };
+  spotlight: {
+    coordination: {
+      variant: "accepted" | "waiting";
+      title: string;
+      body: string;
+      actionLabel: string;
+      targetChatId: string | null;
+    } | null;
+    recovery: {
+      title: string;
+      body: string;
+      actionLabel: string;
+    } | null;
+    leadIntent: {
+      intentId: string;
+      rawText: string;
+      status: string;
+      requests: {
+        pending: number;
+        accepted: number;
+        rejected: number;
+        expired: number;
+        cancelled: number;
+      };
+    } | null;
+    topSuggestion: {
+      userId: string;
+      displayName: string;
+      score: number;
+      reason: string;
+    } | null;
+  };
+}
+
 const REMOTE_API_BASE_URL = "https://api.opensocial.so/api";
 
 /**
@@ -2026,6 +2090,14 @@ export const api = {
       {
         limit,
       },
+    );
+  },
+  getExperienceHomeSummary(userId: string, accessToken?: string) {
+    return request<ExperienceHomeSummaryResponse>(
+      "GET",
+      `/experience/${userId}/home-summary`,
+      undefined,
+      accessToken,
     );
   },
   publishAgentRecommendations(

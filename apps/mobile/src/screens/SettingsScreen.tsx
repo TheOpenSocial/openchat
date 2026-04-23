@@ -18,14 +18,17 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { CalmTextField } from "../components/CalmTextField";
 import { PrimaryButton } from "../components/PrimaryButton";
-import { useLoadingModal } from "../hooks/useLoadingModal";
+import {
+  getE2EProfilePhotoAsset,
+  shouldUseE2EProfilePhotoShortcut,
+} from "../lib/e2e-profile-photo";
 import { hapticSelection } from "../lib/haptics";
+import { useLoadingModal } from "../hooks/useLoadingModal";
 import { appTheme } from "../theme";
 import type { UserProfileDraft } from "../types";
 import { useSelfProfileData } from "./profile/useProfileData";
 import { ProtocolIntegrationsPanel } from "./settings/ProtocolIntegrationsPanel";
 import { joinDisplayName, splitDisplayName } from "./settings/domain/name";
-import { ProtocolIntegrationsPanel } from "./settings/ProtocolIntegrationsPanel";
 
 type SettingsScreenProps = {
   accessToken: string;
@@ -60,6 +63,7 @@ function NameAvatar({
       disabled={uploading}
       hitSlop={12}
       onPress={onPress}
+      testID="settings-avatar-trigger"
     >
       <View className="h-32 w-32 items-center justify-center overflow-hidden rounded-[40px] border border-hairline bg-surfaceMuted/85">
         {avatarUrl ? (
@@ -67,6 +71,7 @@ function NameAvatar({
             className="h-full w-full"
             resizeMode="cover"
             source={{ uri: avatarUrl }}
+            testID="settings-avatar-image"
           />
         ) : (
           <View className="h-full w-full items-center justify-center bg-surfaceMuted/70">
@@ -133,14 +138,21 @@ export function SettingsScreen({
   onProfileUpdated,
   userId,
 }: SettingsScreenProps) {
-  const { avatarUploading, error, profile, save, saving, updateAvatar } =
-    useSelfProfileData({
-      accessToken,
-      displayName,
-      email,
-      initialDraft,
-      userId,
-    });
+  const {
+    avatarUploading,
+    avatarUpdateNonce,
+    error,
+    profile,
+    save,
+    saving,
+    updateAvatar,
+  } = useSelfProfileData({
+    accessToken,
+    displayName,
+    email,
+    initialDraft,
+    userId,
+  });
 
   const initialName = useMemo(
     () => splitDisplayName(profile.name || displayName),
@@ -223,6 +235,21 @@ export function SettingsScreen({
         return;
       }
 
+      if (shouldUseE2EProfilePhotoShortcut()) {
+        try {
+          await updateAvatar(await getE2EProfilePhotoAsset());
+          hapticSelection();
+        } catch (nextError) {
+          Alert.alert(
+            "Photo not uploaded",
+            nextError instanceof Error
+              ? nextError.message
+              : "Try again in a moment.",
+          );
+        }
+        return;
+      }
+
       const permission =
         source === "camera"
           ? await ImagePicker.requestCameraPermissionsAsync()
@@ -284,6 +311,11 @@ export function SettingsScreen({
 
   const openAvatarActions = useCallback(() => {
     if (avatarUploading) {
+      return;
+    }
+
+    if (shouldUseE2EProfilePhotoShortcut()) {
+      void handleAvatarPick("library");
       return;
     }
 
@@ -413,6 +445,12 @@ export function SettingsScreen({
                     onPress={openAvatarActions}
                     uploading={avatarUploading}
                   />
+                  {avatarUpdateNonce > 0 ? (
+                    <View
+                      className="mt-2 h-2 w-2 rounded-full bg-transparent"
+                      testID="settings-avatar-updated"
+                    />
+                  ) : null}
                 </View>
               </View>
 
@@ -467,8 +505,6 @@ export function SettingsScreen({
                   {error}
                 </Text>
               ) : null}
-
-              <ProtocolIntegrationsPanel />
             </View>
           </ScrollView>
         </View>

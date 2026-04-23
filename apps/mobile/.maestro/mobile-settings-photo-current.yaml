@@ -1,0 +1,17 @@
+appId: ${MAESTRO_APP_ID}
+---
+- runFlow: "subflows/boot-shell-current.yaml"
+- tapOn:
+    id: "e2e-nav-settings"
+- extendedWaitUntil:
+    visible:
+      id: "settings-screen"
+    timeout: 15000
+- tapOn:
+    id: "settings-avatar-trigger"
+- extendedWaitUntil:
+    visible:
+      id: "settings-avatar-updated"
+    timeout: 30000
+- assertVisible:
+    id: "settings-avatar-updated"

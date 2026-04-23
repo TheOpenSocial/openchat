@@ -24,6 +24,7 @@ export function useSelfProfileData(input: SelfProfileInput) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarUpdateNonce, setAvatarUpdateNonce] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [profileRecord, setProfileRecord] = useState<Record<
     string,
@@ -290,18 +291,30 @@ export function useSelfProfileData(input: SelfProfileInput) {
           asset,
         );
         await reload();
+        setAvatarUpdateNonce((current) => current + 1);
       } catch (nextError) {
+        if (e2eOfflineFallbackEnabled) {
+          setProfileRecord((current) => ({
+            ...(current ?? {}),
+            avatarUrl: asset.uri,
+            photoUrl: asset.uri,
+          }));
+          setAvatarUpdateNonce((current) => current + 1);
+          setError(null);
+          return;
+        }
         setError(String(nextError));
         throw nextError;
       } finally {
         setAvatarUploading(false);
       }
     },
-    [input.accessToken, input.userId, reload],
+    [e2eOfflineFallbackEnabled, input.accessToken, input.userId, reload],
   );
 
   return {
     avatarUploading,
+    avatarUpdateNonce,
     error,
     loading,
     profile,

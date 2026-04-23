@@ -17,6 +17,10 @@ import {
 import Animated, { FadeInUp } from "react-native-reanimated";
 
 import { PrimaryButton } from "../components/PrimaryButton";
+import {
+  getE2EProfilePhotoAsset,
+  shouldUseE2EProfilePhotoShortcut,
+} from "../lib/e2e-profile-photo";
 import { hapticSelection } from "../lib/haptics";
 import { useKeyboardVisible } from "../hooks/useKeyboardVisible";
 import { useLoadingModal } from "../hooks/useLoadingModal";
@@ -81,14 +85,12 @@ function Chip({
   onPress,
   testID,
   tone = "light",
-  testID,
 }: {
   label: string;
   active?: boolean;
   onPress?: () => void;
   testID?: string;
   tone?: "light" | "dark";
-  testID?: string;
 }) {
   const activeClass =
     tone === "dark" ? "border-ink bg-ink" : "border-ink bg-ink";
@@ -176,14 +178,12 @@ function ActionRow({
   onPress,
   testID,
   tone = "default",
-  testID,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   onPress: () => void;
   testID?: string;
   tone?: "default" | "danger";
-  testID?: string;
 }) {
   const iconColor =
     tone === "danger" ? appTheme.colors.danger : appTheme.colors.ink;
@@ -215,7 +215,13 @@ function ActionRow({
 function notificationModeToDraftValue(
   value: UserProfileDraft["notificationMode"],
 ): "immediate" | "digest" | "quiet" {
-  return value === "digest" ? "digest" : "immediate";
+  if (value === "digest") {
+    return "digest";
+  }
+  if (value === "quiet") {
+    return "quiet";
+  }
+  return "immediate";
 }
 
 function notificationModeFromLabel(
@@ -248,6 +254,7 @@ export function ProfileScreen({
   const keyboardVisible = useKeyboardVisible();
   const {
     avatarUploading,
+    avatarUpdateNonce,
     error,
     loading,
     profile,
@@ -346,6 +353,19 @@ export function ProfileScreen({
       return;
     }
 
+    if (shouldUseE2EProfilePhotoShortcut()) {
+      try {
+        await updateAvatar(await getE2EProfilePhotoAsset());
+        hapticSelection();
+      } catch (error) {
+        Alert.alert(
+          "Photo not uploaded",
+          error instanceof Error ? error.message : "Try again in a moment.",
+        );
+      }
+      return;
+    }
+
     const permission =
       source === "camera"
         ? await ImagePicker.requestCameraPermissionsAsync()
@@ -400,6 +420,11 @@ export function ProfileScreen({
 
   const openAvatarActions = () => {
     if (avatarUploading) {
+      return;
+    }
+
+    if (shouldUseE2EProfilePhotoShortcut()) {
+      void pickAndUploadAvatar("library");
       return;
     }
 
@@ -559,11 +584,13 @@ export function ProfileScreen({
                       <Pressable
                         disabled={avatarUploading}
                         onPress={openAvatarActions}
+                        testID="profile-avatar-trigger"
                       >
                         <Image
                           source={{ uri: profile.avatarUrl }}
                           className="h-24 w-24"
                           resizeMode="cover"
+                          testID="profile-avatar-image"
                         />
                       </Pressable>
                     ) : (
@@ -571,6 +598,7 @@ export function ProfileScreen({
                         disabled={avatarUploading}
                         className="h-24 w-24 items-center justify-center"
                         onPress={openAvatarActions}
+                        testID="profile-avatar-trigger"
                       >
                         <Text className="text-[30px] font-semibold text-ink">
                           {initial}
@@ -578,6 +606,12 @@ export function ProfileScreen({
                       </Pressable>
                     )}
                   </View>
+                  {avatarUpdateNonce > 0 ? (
+                    <View
+                      className="mt-2 h-2 w-2 rounded-full bg-transparent"
+                      testID="profile-avatar-updated"
+                    />
+                  ) : null}
                 </View>
 
                 <View>
@@ -874,7 +908,6 @@ export function ProfileScreen({
                 }}
                 testID="profile-action-sign-out"
                 tone="danger"
-                testID="profile-action-sign-out"
               />
             </View>
           </Section>

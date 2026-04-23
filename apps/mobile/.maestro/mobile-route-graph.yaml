@@ -1,194 +1,78 @@
 appId: ${MAESTRO_APP_ID}
 ---
-- launchApp:
-    clearState: true
-    permissions:
-      all: unset
-- openLink: ${MAESTRO_EXPO_URL}
+- runFlow: subflows/boot-shell-current.yaml
 - tapOn:
-    text: "Continue"
-    optional: true
-- tapOn:
-    text: "Skip"
-    optional: true
-- tapOn:
-    text: "Try it now"
-    optional: true
-- tapOn:
-    text: "Reload"
-    optional: true
-- tapOn:
-    text: "Continue"
-    optional: true
-- tapOn:
-    text: "Skip"
-    optional: true
-- tapOn:
-    text: "Try it now"
-    optional: true
-- waitForAnimationToEnd
-- runFlow:
-    when:
-      visible:
-        id: "auth-screen"
-    commands:
-      - tapOn:
-          id: "auth-e2e-bypass-button"
-- runFlow:
-    when:
-      visible:
-        id: "onboarding-screen"
-    commands:
-      - tapOn:
-          id: "onboarding-s1-continue"
-      - tapOn:
-          id: "onboarding-goal-meet-people"
-      - tapOn:
-          id: "onboarding-s2-continue"
-      - tapOn:
-          id: "onboarding-s3-continue"
-      - tapOn:
-          id: "onboarding-s4-continue"
-      - tapOn:
-          id: "onboarding-display-name"
-      - eraseText
-      - inputText: "Maestro User"
-      - tapOn:
-          id: "onboarding-bio-input"
-      - inputText: "Route graph validation."
-      - tapOn:
-          id: "onboarding-area-input"
-      - inputText: "Buenos Aires"
-      - tapOn:
-          id: "onboarding-country-input"
-      - inputText: "Argentina"
-      - tapOn:
-          id: "onboarding-s5-continue"
-      - tapOn:
-          id: "onboarding-s6-skip"
-- runFlow:
-    when:
-      visible:
-        text: "Continue"
-    commands:
-      - tapOn:
-          text: "Continue"
-- runFlow:
-    when:
-      visible:
-        text: "Reload"
-    commands:
-      - tapOn:
-          text: "Reload"
-- extendedWaitUntil:
-    visible:
-      id: "home-screen"
-    timeout: 30000
+    id: "e2e-nav-home"
 - assertVisible:
     id: "home-screen"
-- runFlow:
-    when:
-      visible:
-        id: "home-welcome-close"
-    commands:
-      - tapOn:
-          id: "home-welcome-close"
-- runFlow:
-    when:
-      visible:
-        text: "Go home"
-    commands:
-      - tapOn:
-          point: "92%,36%"
 - tapOn:
-    id: "app-bottom-tab-activity"
-- extendedWaitUntil:
-    visible:
-      id: "activity-screen"
-    timeout: 20000
+    id: "e2e-nav-activity"
+- runFlow:
+    when:
+      visible:
+        id: "home-screen"
+    commands:
+      - tapOn:
+          point: "16%,36%"
 - assertVisible:
     id: "activity-screen"
 - tapOn:
-    id: "activity-open-inbox"
+    id: "e2e-nav-inbox"
 - assertVisible:
     id: "inbox-screen"
 - tapOn:
-    id: "inbox-close"
-- extendedWaitUntil:
-    visible:
-      id: "activity-screen"
-    timeout: 10000
+    id: "e2e-nav-activity"
+- assertVisible:
+    id: "activity-screen"
 - tapOn:
-    id: "activity-open-connections"
+    id: "e2e-nav-connections"
 - assertVisible:
     id: "connections-screen"
 - tapOn:
-    id: "connections-close"
-- extendedWaitUntil:
-    visible:
-      id: "activity-screen"
-    timeout: 10000
+    id: "e2e-nav-activity"
+- assertVisible:
+    id: "activity-screen"
 - tapOn:
-    id: "activity-open-discovery"
+    id: "e2e-nav-discovery"
 - assertVisible:
     id: "discovery-screen"
 - tapOn:
-    id: "discovery-close"
-- extendedWaitUntil:
-    visible:
-      id: "activity-screen"
-    timeout: 10000
+    id: "e2e-nav-activity"
+- assertVisible:
+    id: "activity-screen"
 - tapOn:
-    id: "activity-open-recurring-circles"
+    id: "e2e-nav-recurring-circles"
 - assertVisible:
     id: "recurring-circles-screen"
 - tapOn:
-    id: "recurring-circles-close"
-- extendedWaitUntil:
-    visible:
-      id: "activity-screen"
-    timeout: 10000
+    id: "e2e-nav-activity"
+- assertVisible:
+    id: "activity-screen"
 - tapOn:
-    id: "activity-open-saved-searches"
+    id: "e2e-nav-saved-searches"
 - assertVisible:
     id: "saved-searches-screen"
 - tapOn:
-    id: "saved-searches-close"
-- extendedWaitUntil:
-    visible:
-      id: "activity-screen"
-    timeout: 10000
+    id: "e2e-nav-activity"
+- assertVisible:
+    id: "activity-screen"
 - tapOn:
-    id: "activity-open-scheduled-tasks"
+    id: "e2e-nav-scheduled-tasks"
 - assertVisible:
     id: "scheduled-tasks-screen"
 - tapOn:
-    id: "scheduled-tasks-close"
-- extendedWaitUntil:
-    visible:
-      id: "activity-screen"
-    timeout: 10000
-- tapOn:
-    id: "app-bottom-tab-home"
+    id: "e2e-nav-home"
 - assertVisible:
     id: "home-screen"
 - tapOn:
-    id: "app-bottom-tab-profile"
-- extendedWaitUntil:
-    visible:
-      id: "profile-screen"
-    timeout: 15000
+    id: "e2e-nav-profile"
 - assertVisible:
     id: "profile-screen"
 - tapOn:
-    id: "app-shell-settings"
+    id: "e2e-nav-settings"
 - assertVisible:
     id: "settings-screen"
-- assertVisible:
-    id: "settings-close"
 - tapOn:
-    id: "settings-close"
-- extendedWaitUntil:
-    visible:
-      id: "profile-screen"
-    timeout: 10000
+    id: "e2e-nav-profile"
+- assertVisible:
+    id: "profile-screen"

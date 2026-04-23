@@ -1,12 +1,14 @@
 appId: ${MAESTRO_APP_ID}
 ---
 - runFlow: "subflows/boot-shell-current.yaml"
-- tapOn:
-    id: "e2e-nav-home"
+- assertVisible:
+    id: "home-screen"
 - extendedWaitUntil:
     visible:
-      id: "home-screen"
-    timeout: 15000
+      id: "app-shell-notifications-unread-indicator"
+    timeout: 20000
+- assertVisible:
+    id: "app-shell-notifications-unread-indicator"
 - tapOn:
     id: "e2e-nav-activity"
 - extendedWaitUntil:
@@ -21,5 +23,3 @@ appId: ${MAESTRO_APP_ID}
     visible:
       id: "home-screen"
     timeout: 15000
-- assertVisible:
-    id: "home-screen"

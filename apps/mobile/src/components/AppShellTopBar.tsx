@@ -118,6 +118,7 @@ export function AppShellTopBar({
                 <View
                   className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full"
                   style={{ backgroundColor: appTheme.colors.ink }}
+                  testID="app-shell-notifications-unread-indicator"
                 />
               ) : null}
             </View>

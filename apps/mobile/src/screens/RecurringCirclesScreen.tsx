@@ -36,7 +36,7 @@ export function RecurringCirclesScreen({
         hapticSelection();
         onClose();
       }}
-      screenTestID="recurring-circles-screen"
+      rootTestID="recurring-circles-screen"
       subtitle="Your repeating groups, upcoming sessions, and the rhythm they create over time."
       title="Your repeating groups"
     >

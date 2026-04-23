@@ -30,6 +30,18 @@ type OtherProfileTarget = {
   userId: string;
 };
 
+type TransientRoute =
+  | { kind: "activity" }
+  | { kind: "connections" }
+  | { kind: "discovery" }
+  | { kind: "inbox" }
+  | { kind: "intent"; intentId: string }
+  | { kind: "otherProfile"; target: OtherProfileTarget }
+  | { kind: "recurringCircles" }
+  | { kind: "savedSearches" }
+  | { kind: "scheduledTasks" }
+  | { kind: "settings" };
+
 type UseHomeTransientRoutesInput = {
   initialProfile: UserProfileDraft;
   onProfileUpdated: (profile: UserProfileDraft) => void;
@@ -66,190 +78,154 @@ export function useHomeTransientRoutes({
   setActiveTab,
   setSelectedChatId,
 }: UseHomeTransientRoutesInput) {
-  const [activityOpen, setActivityOpen] = useState(false);
-  const [connectionsOpen, setConnectionsOpen] = useState(false);
-  const [discoveryOpen, setDiscoveryOpen] = useState(false);
-  const [inboxOpen, setInboxOpen] = useState(false);
-  const [intentDetailIntentId, setIntentDetailIntentId] = useState<
-    string | null
-  >(null);
-  const [otherProfileTarget, setOtherProfileTarget] =
-    useState<OtherProfileTarget | null>(null);
-  const [recurringCirclesOpen, setRecurringCirclesOpen] = useState(false);
-  const [savedSearchesOpen, setSavedSearchesOpen] = useState(false);
-  const [scheduledTasksOpen, setScheduledTasksOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [route, setRoute] = useState<TransientRoute | null>(null);
 
   const closeTransientRoutes = useCallback(() => {
-    setActivityOpen(false);
-    setConnectionsOpen(false);
-    setDiscoveryOpen(false);
-    setInboxOpen(false);
-    setRecurringCirclesOpen(false);
-    setSavedSearchesOpen(false);
-    setScheduledTasksOpen(false);
-    setIntentDetailIntentId(null);
-    setSettingsOpen(false);
-    setOtherProfileTarget(null);
+    setRoute(null);
   }, []);
 
   const openActivity = useCallback(() => {
-    closeTransientRoutes();
-    setActivityOpen(true);
-  }, [closeTransientRoutes]);
+    setRoute({ kind: "activity" });
+  }, []);
 
   const openConnections = useCallback(() => {
-    closeTransientRoutes();
-    setConnectionsOpen(true);
-  }, [closeTransientRoutes]);
+    setRoute({ kind: "connections" });
+  }, []);
 
   const openDiscovery = useCallback(() => {
-    closeTransientRoutes();
-    setDiscoveryOpen(true);
-  }, [closeTransientRoutes]);
+    setRoute({ kind: "discovery" });
+  }, []);
 
   const openInbox = useCallback(() => {
-    closeTransientRoutes();
-    setInboxOpen(true);
-  }, [closeTransientRoutes]);
+    setRoute({ kind: "inbox" });
+  }, []);
 
   const openRecurringCircles = useCallback(() => {
-    closeTransientRoutes();
-    setRecurringCirclesOpen(true);
-  }, [closeTransientRoutes]);
+    setRoute({ kind: "recurringCircles" });
+  }, []);
 
   const openSavedSearches = useCallback(() => {
-    closeTransientRoutes();
-    setSavedSearchesOpen(true);
-  }, [closeTransientRoutes]);
+    setRoute({ kind: "savedSearches" });
+  }, []);
 
   const openScheduledTasks = useCallback(() => {
-    closeTransientRoutes();
-    setScheduledTasksOpen(true);
-  }, [closeTransientRoutes]);
+    setRoute({ kind: "scheduledTasks" });
+  }, []);
 
   const openSettings = useCallback(() => {
-    closeTransientRoutes();
-    setSettingsOpen(true);
-  }, [closeTransientRoutes]);
+    setRoute({ kind: "settings" });
+  }, []);
 
-  const openIntentDetail = useCallback(
-    (intentId: string) => {
-      closeTransientRoutes();
-      setIntentDetailIntentId(intentId);
-    },
-    [closeTransientRoutes],
-  );
+  const openIntentDetail = useCallback((intentId: string) => {
+    setRoute({ kind: "intent", intentId });
+  }, []);
 
-  const openProfileFromChat = useCallback(
-    (target: OtherProfileTarget) => {
-      closeTransientRoutes();
-      setOtherProfileTarget(target);
-    },
-    [closeTransientRoutes],
-  );
+  const openProfileFromChat = useCallback((target: OtherProfileTarget) => {
+    setRoute({ kind: "otherProfile", target });
+  }, []);
 
-  const openProfileFromConnections = useCallback(
-    (targetUserId: string) => {
-      closeTransientRoutes();
-      setOtherProfileTarget({
+  const openProfileFromConnections = useCallback((targetUserId: string) => {
+    setRoute({
+      kind: "otherProfile",
+      target: {
         userId: targetUserId,
         context: {
           source: "chat",
           reason: "You are connected through an existing direct chat.",
         },
-      });
-    },
-    [closeTransientRoutes],
-  );
+      },
+    });
+  }, []);
 
-  const openProfileFromDiscovery = useCallback(
-    (targetUserId: string) => {
-      closeTransientRoutes();
-      setOtherProfileTarget({
+  const openProfileFromDiscovery = useCallback((targetUserId: string) => {
+    setRoute({
+      kind: "otherProfile",
+      target: {
         userId: targetUserId,
         context: {
           source: "request",
           reason:
             "Suggested from discovery as a strong match for your current intent.",
         },
-      });
-    },
-    [closeTransientRoutes],
-  );
+      },
+    });
+  }, []);
 
-  const openProfileFromInbox = useCallback(
-    (targetUserId: string) => {
-      closeTransientRoutes();
-      setOtherProfileTarget({
+  const openProfileFromInbox = useCallback((targetUserId: string) => {
+    setRoute({
+      kind: "otherProfile",
+      target: {
         userId: targetUserId,
         context: {
           source: "request",
           reason: "This person sent you a connection request.",
         },
-      });
-    },
-    [closeTransientRoutes],
-  );
+      },
+    });
+  }, []);
 
   const openChatFromConnections = useCallback(
     (chatId: string) => {
-      closeTransientRoutes();
+      setRoute(null);
       setActiveTab("chats");
       setSelectedChatId(chatId);
     },
-    [closeTransientRoutes, setActiveTab, setSelectedChatId],
+    [setActiveTab, setSelectedChatId],
   );
 
   const handlePushRouteIntent = useCallback(
     (intent: PushRouteIntent) => {
-      closeTransientRoutes();
-
       switch (intent.kind) {
         case "activity":
-          setActivityOpen(true);
+          setRoute({ kind: "activity" });
           break;
         case "connections":
-          setConnectionsOpen(true);
+          setRoute({ kind: "connections" });
           break;
         case "discovery":
-          setDiscoveryOpen(true);
+          setRoute({ kind: "discovery" });
           break;
         case "home":
+          setRoute(null);
           setActiveTab("home");
           break;
         case "inbox":
-          setInboxOpen(true);
+          setRoute({ kind: "inbox" });
           break;
         case "intent":
-          setIntentDetailIntentId(intent.intentId);
+          setRoute({ kind: "intent", intentId: intent.intentId });
           break;
         case "profile":
           if (intent.userId === session.userId) {
+            setRoute(null);
             setActiveTab("profile");
             break;
           }
-          setOtherProfileTarget({
-            userId: intent.userId,
-            context: {
-              source: "chat",
-              reason: "Opened from a notification.",
+          setRoute({
+            kind: "otherProfile",
+            target: {
+              userId: intent.userId,
+              context: {
+                source: "chat",
+                reason: "Opened from a notification.",
+              },
             },
           });
           break;
         case "recurringCircles":
-          setRecurringCirclesOpen(true);
+          setRoute({ kind: "recurringCircles" });
           break;
         case "savedSearches":
-          setSavedSearchesOpen(true);
+          setRoute({ kind: "savedSearches" });
           break;
         case "scheduledTasks":
-          setScheduledTasksOpen(true);
+          setRoute({ kind: "scheduledTasks" });
           break;
         case "settings":
-          setSettingsOpen(true);
+          setRoute({ kind: "settings" });
           break;
         case "chat":
+          setRoute(null);
           setActiveTab("chats");
           setSelectedChatId(intent.chatId);
           break;
@@ -257,11 +233,11 @@ export function useHomeTransientRoutes({
           break;
       }
     },
-    [closeTransientRoutes, session.userId, setActiveTab, setSelectedChatId],
+    [session.userId, setActiveTab, setSelectedChatId],
   );
 
   const transientScreen = useMemo(() => {
-    if (settingsOpen) {
+    if (route?.kind === "settings") {
       return renderTransientScreen(
         "settings",
         <SettingsScreen
@@ -276,7 +252,7 @@ export function useHomeTransientRoutes({
       );
     }
 
-    if (activityOpen) {
+    if (route?.kind === "activity") {
       return renderTransientScreen(
         "activity",
         <ActivityScreen
@@ -294,7 +270,7 @@ export function useHomeTransientRoutes({
       );
     }
 
-    if (connectionsOpen) {
+    if (route?.kind === "connections") {
       return renderTransientScreen(
         "connections",
         <ConnectionsScreen
@@ -307,7 +283,7 @@ export function useHomeTransientRoutes({
       );
     }
 
-    if (discoveryOpen) {
+    if (route?.kind === "discovery") {
       return renderTransientScreen(
         "discovery",
         <DiscoveryScreen
@@ -320,7 +296,7 @@ export function useHomeTransientRoutes({
       );
     }
 
-    if (recurringCirclesOpen) {
+    if (route?.kind === "recurringCircles") {
       return renderTransientScreen(
         "recurring-circles",
         <RecurringCirclesScreen
@@ -331,7 +307,7 @@ export function useHomeTransientRoutes({
       );
     }
 
-    if (savedSearchesOpen) {
+    if (route?.kind === "savedSearches") {
       return renderTransientScreen(
         "saved-searches",
         <SavedSearchesScreen
@@ -342,7 +318,7 @@ export function useHomeTransientRoutes({
       );
     }
 
-    if (scheduledTasksOpen) {
+    if (route?.kind === "scheduledTasks") {
       return renderTransientScreen(
         "scheduled-tasks",
         <ScheduledTasksScreen
@@ -353,19 +329,19 @@ export function useHomeTransientRoutes({
       );
     }
 
-    if (intentDetailIntentId) {
+    if (route?.kind === "intent") {
       return renderTransientScreen(
-        `intent:${intentDetailIntentId}`,
+        `intent:${route.intentId}`,
         <IntentDetailScreen
           accessToken={session.accessToken}
-          intentId={intentDetailIntentId}
+          intentId={route.intentId}
           onClose={closeTransientRoutes}
           userId={session.userId}
         />,
       );
     }
 
-    if (inboxOpen) {
+    if (route?.kind === "inbox") {
       return renderTransientScreen(
         "inbox",
         <InboxScreen
@@ -378,28 +354,23 @@ export function useHomeTransientRoutes({
       );
     }
 
-    if (otherProfileTarget) {
+    if (route?.kind === "otherProfile") {
       return renderTransientScreen(
-        `profile:${otherProfileTarget.userId}`,
+        `profile:${route.target.userId}`,
         <OtherUserProfileScreen
           accessToken={session.accessToken}
           currentUserId={session.userId}
           onClose={closeTransientRoutes}
-          targetUserId={otherProfileTarget.userId}
-          context={otherProfileTarget.context}
+          targetUserId={route.target.userId}
+          context={route.target.context}
         />,
       );
     }
 
     return null;
   }, [
-    activityOpen,
     closeTransientRoutes,
-    connectionsOpen,
-    discoveryOpen,
     initialProfile,
-    inboxOpen,
-    intentDetailIntentId,
     onProfileUpdated,
     openChatFromConnections,
     openConnections,
@@ -412,15 +383,11 @@ export function useHomeTransientRoutes({
     openRecurringCircles,
     openSavedSearches,
     openScheduledTasks,
-    otherProfileTarget,
-    recurringCirclesOpen,
-    savedSearchesOpen,
-    scheduledTasksOpen,
+    route,
     session.accessToken,
     session.displayName,
     session.email,
     session.userId,
-    settingsOpen,
   ]);
 
   return {
@@ -440,6 +407,7 @@ export function useHomeTransientRoutes({
       openScheduledTasks,
       openSettings,
     },
+    routeKind: route?.kind ?? null,
     transientScreen,
   };
 }

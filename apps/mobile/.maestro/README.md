@@ -132,6 +132,10 @@ This route graph now includes:
 - Saved searches
 - Scheduled tasks
 
+Verified locally on 2026-04-23 against Expo Go with an injected E2E session.
+The flow uses the debug-only E2E rail for deterministic shell traversal and
+current-route assertions.
+
 ## Run surface-smoke flow
 
 This is the release-grade mobile reachability lane. It boots fresh for each
@@ -213,12 +217,15 @@ When Expo Go is already attached to a live project and sitting in Home, use the 
 MAESTRO_APP_ID=host.exp.Exponent maestro test apps/mobile/.maestro/mobile-profile-persistence-current.yaml
 MAESTRO_APP_ID=host.exp.Exponent maestro test apps/mobile/.maestro/mobile-profile-preferences-current.yaml
 MAESTRO_APP_ID=host.exp.Exponent maestro test apps/mobile/.maestro/mobile-profile-preferences-reopen-current.yaml
+MAESTRO_APP_ID=host.exp.Exponent maestro test apps/mobile/.maestro/mobile-profile-photo-current.yaml
+MAESTRO_APP_ID=host.exp.Exponent maestro test apps/mobile/.maestro/mobile-settings-photo-current.yaml
 MAESTRO_APP_ID=host.exp.Exponent maestro test apps/mobile/.maestro/mobile-settings-persistence-current.yaml
 MAESTRO_APP_ID=host.exp.Exponent maestro test apps/mobile/.maestro/mobile-settings-reopen-current.yaml
 MAESTRO_APP_ID=host.exp.Exponent maestro test apps/mobile/.maestro/mobile-chats-core-current.yaml
 MAESTRO_APP_ID=host.exp.Exponent maestro test apps/mobile/.maestro/mobile-chats-thread-current.yaml
 MAESTRO_APP_ID=host.exp.Exponent maestro test apps/mobile/.maestro/mobile-chats-mutations-current.yaml
 MAESTRO_APP_ID=host.exp.Exponent maestro test apps/mobile/.maestro/mobile-notifications-entry-current.yaml
+MAESTRO_APP_ID=host.exp.Exponent maestro test apps/mobile/.maestro/mobile-notifications-unread-current.yaml
 MAESTRO_APP_ID=host.exp.Exponent maestro test apps/mobile/.maestro/mobile-notifications-roundtrip-current.yaml
 MAESTRO_APP_ID=host.exp.Exponent maestro test apps/mobile/.maestro/mobile-other-profile-current.yaml
 ```
@@ -227,11 +234,14 @@ These currently prove:
 - `mobile-profile-persistence-current.yaml`: profile bio/location/interests edits save and remain visible in-session
 - `mobile-profile-preferences-current.yaml`: match preferences opens, saves, and exits back to shell state
 - `mobile-profile-preferences-reopen-current.yaml`: match preferences survive a close/reopen cycle in-session
+- `mobile-profile-photo-current.yaml`: profile photo update path uses a deterministic E2E asset shortcut and update marker
+- `mobile-settings-photo-current.yaml`: settings photo update path uses a deterministic E2E asset shortcut and update marker
 - `mobile-settings-persistence-current.yaml`: settings identity edits save and the protocol panel remains available
 - `mobile-settings-reopen-current.yaml`: settings identity edits survive a close/reopen cycle in-session
 - `mobile-chats-core-current.yaml`: chats surface opens reliably and honors the empty-state contract when no seeded thread exists
 - `mobile-chats-thread-current.yaml`: seeded local chat fixture proves selected-thread composer and thread modal behavior
 - `mobile-chats-mutations-current.yaml`: seeded local chat fixture proves edit, reaction, and delete flows in-session
 - `mobile-notifications-entry-current.yaml`: shell notifications button routes into Activity
+- `mobile-notifications-unread-current.yaml`: shell unread indicator is visible before routing into Activity and returning home
 - `mobile-notifications-roundtrip-current.yaml`: notifications entry returns cleanly to the shell after Activity close
 - `mobile-other-profile-current.yaml`: E2E peer-profile traversal opens and closes a real other-profile surface
