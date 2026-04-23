@@ -48,7 +48,6 @@ export class ModerationConsumer extends WorkerHost {
             payload.payload.chatId,
             payload.payload.senderUserId,
             payload.payload.body,
-            this.moderationService,
           );
         }
 

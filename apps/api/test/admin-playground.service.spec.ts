@@ -29,14 +29,20 @@ describe("AdminPlaygroundService", () => {
       userInterest: {
         deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
         createMany: vi.fn().mockResolvedValue({ count: 0 }),
+        upsert: vi.fn().mockResolvedValue({}),
       },
       userTopic: {
         deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
         createMany: vi.fn().mockResolvedValue({ count: 0 }),
+        upsert: vi.fn().mockResolvedValue({}),
+      },
+      userPreference: {
+        upsert: vi.fn().mockResolvedValue({}),
       },
       userAvailabilityWindow: {
         deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
         createMany: vi.fn().mockResolvedValue({ count: 0 }),
+        upsert: vi.fn().mockResolvedValue({}),
       },
       agentThread: {
         findFirst: vi
@@ -46,6 +52,9 @@ describe("AdminPlaygroundService", () => {
         findUnique: vi
           .fn()
           .mockResolvedValueOnce(null)
+          .mockResolvedValue({ id: "99999999-9999-4999-8999-999999999999" }),
+        upsert: vi
+          .fn()
           .mockResolvedValue({ id: "99999999-9999-4999-8999-999999999999" }),
         update: vi
           .fn()
@@ -79,13 +88,20 @@ describe("AdminPlaygroundService", () => {
       },
       chatMessage: {
         findUnique: vi.fn().mockResolvedValue(null),
+        upsert: vi.fn().mockResolvedValue({ id: "chat-message-1" }),
         create: vi.fn().mockResolvedValue({ id: "chat-message-1" }),
         deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+      chatMembership: {
+        upsert: vi.fn().mockResolvedValue({}),
       },
       intent: {
         upsert: vi.fn().mockResolvedValue({ id: "intent-1" }),
         update: vi.fn().mockResolvedValue({ id: "intent-1" }),
         deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+      intentCandidate: {
+        upsert: vi.fn().mockResolvedValue({ id: "candidate-1" }),
       },
       intentRequest: {
         findFirst: vi.fn().mockResolvedValue(null),
@@ -101,6 +117,11 @@ describe("AdminPlaygroundService", () => {
         deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
       },
     };
+    (prisma as any).$transaction = vi
+      .fn()
+      .mockImplementation(async (callback: (tx: typeof prisma) => unknown) =>
+        callback(prisma),
+      );
     const authService = overrides.authService ?? {
       issueSessionTokens: vi.fn().mockResolvedValue({
         accessToken: "playground-access-token",
@@ -352,6 +373,7 @@ describe("AdminPlaygroundService", () => {
     expect(experienceService.getActivitySummary).toHaveBeenCalledWith(
       "77777777-7777-4777-8777-777777777777",
     );
-    expect(inspection.experience.home.status.title).toBe("A match is moving");
+    expect(inspection.experience.home).not.toBeNull();
+    expect(inspection.experience.home?.status.title).toBe("A match is moving");
   });
 });

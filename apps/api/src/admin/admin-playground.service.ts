@@ -1,8 +1,13 @@
 import { Injectable, Logger } from "@nestjs/common";
+import { NotificationType } from "@opensocial/types";
 import { AuthService } from "../auth/auth.service.js";
 import { AppCacheService } from "../common/app-cache.service.js";
+import { ChatsService } from "../chats/chats.service.js";
 import { PrismaService } from "../database/prisma.service.js";
+import { ExperienceService } from "../experience/experience.service.js";
+import { NotificationsService } from "../notifications/notifications.service.js";
 import { AdminAuditService, type AdminRole } from "./admin-audit.service.js";
+import { getSandboxWorldDefinition } from "./admin-sandbox-worlds.js";
 import { randomBytes, randomUUID } from "node:crypto";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
@@ -20,6 +25,7 @@ type BootstrapInput = {
   rotateProbeToken?: boolean;
   laneId?: string;
   smokeBaseUrl?: string;
+  smokeUserId?: string;
 };
 
 type RunSuiteInput = {
@@ -47,6 +53,32 @@ type VerificationRunRecord = {
   artifact: Record<string, unknown> | null;
 };
 
+type SandboxWorldScenario =
+  | "baseline"
+  | "waiting_replies"
+  | "activity_burst"
+  | "stalled_search";
+
+type SandboxWorldSummary = {
+  worldId: "design-sandbox-v1";
+  fixtureLabel: string;
+  status: "ready" | "joined" | "reset";
+  createdAt: string;
+  updatedAt: string;
+  joinedAt: string | null;
+  focalUserId: string | null;
+  actorCount: number;
+  directChatCount: number;
+  groupChatCount: number;
+  notificationCount: number;
+  syntheticActors: Array<{
+    userId: string;
+    displayName: string;
+    role: "focal" | "synthetic";
+  }>;
+  notes: string[];
+};
+
 const USER_ID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -55,12 +87,16 @@ export class AdminPlaygroundService {
   private readonly logger = new Logger(AdminPlaygroundService.name);
   private readonly verificationRunCacheKey = "ops:agent-verification-runs:v1";
   private readonly verificationRunMaxItems = 200;
+  private readonly sandboxWorldCacheKeyPrefix = "admin:sandbox-world";
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly authService: AuthService,
     private readonly appCacheService: AppCacheService,
     private readonly adminAuditService: AdminAuditService,
+    private readonly chatsService?: ChatsService,
+    private readonly notificationsService?: NotificationsService,
+    private readonly experienceService?: ExperienceService,
   ) {}
 
   async getState(actor: { adminUserId: string; role: AdminRole }) {
@@ -105,7 +141,7 @@ export class AdminPlaygroundService {
     const workflowRunId = `admin:playground:bootstrap:${runId}`;
 
     const smokeUserId = this.resolveStableUuid(
-      process.env.PLAYGROUND_SMOKE_USER_ID,
+      input.smokeUserId ?? process.env.PLAYGROUND_SMOKE_USER_ID,
       "77777777-7777-4777-8777-777777777777",
     );
     const smokeAdminUserId = this.resolveStableUuid(
@@ -224,6 +260,229 @@ export class AdminPlaygroundService {
     });
 
     return result;
+  }
+
+  async createSandboxWorld(
+    input: {
+      worldId?: "design-sandbox-v1";
+      focalUserId?: string;
+      reset?: boolean;
+    },
+    actor: { adminUserId: string; role: AdminRole },
+  ) {
+    const worldId = input.worldId ?? "design-sandbox-v1";
+    const definition = getSandboxWorldDefinition(worldId);
+    const fixture = normalizeDesignSandboxWorldFixture({
+      ...designSandboxWorldV1Fixture,
+      focalUserId: input.focalUserId ?? designSandboxWorldV1Fixture.focalUserId,
+    });
+
+    if (input.reset) {
+      await this.clearSandboxWorldData();
+    }
+
+    const seeded = await seedDesignSandboxWorldFixture(
+      this.prisma,
+      actor,
+      fixture,
+    );
+    const now = new Date().toISOString();
+    const summary = this.buildSandboxWorldSummary({
+      worldId,
+      fixtureLabel: definition.label,
+      status: "ready",
+      createdAt: now,
+      updatedAt: now,
+      joinedAt: null,
+      focalUserId: input.focalUserId ?? seeded.focalUserId,
+      notes: definition.notes,
+    });
+    await this.saveSandboxWorldSummary(summary);
+    await this.recordSandboxWorldAction(actor, "create", summary);
+    return summary;
+  }
+
+  async getSandboxWorld(
+    worldId: "design-sandbox-v1",
+    actor: { adminUserId: string; role: AdminRole },
+  ) {
+    const summary = await this.loadSandboxWorldSummary(worldId);
+    await this.recordSandboxWorldAction(actor, "get", summary);
+    return summary;
+  }
+
+  async inspectSandboxWorld(
+    worldId: "design-sandbox-v1",
+    actor: { adminUserId: string; role: AdminRole },
+  ) {
+    const summary = await this.loadSandboxWorldSummary(worldId);
+    const focalUserId =
+      summary.focalUserId ?? designSandboxWorldV1Fixture.focalUserId;
+    const [home, activity] = await Promise.all([
+      this.experienceService?.getHomeSummary(focalUserId),
+      this.experienceService?.getActivitySummary(focalUserId),
+    ]);
+    await this.recordSandboxWorldAction(actor, "inspect", summary);
+    return {
+      summary,
+      experience: {
+        home: home ?? null,
+        activity: activity ?? null,
+      },
+    };
+  }
+
+  async resetSandboxWorld(
+    worldId: "design-sandbox-v1",
+    actor: { adminUserId: string; role: AdminRole },
+  ) {
+    await this.clearSandboxWorldData();
+    const definition = getSandboxWorldDefinition(worldId);
+    const now = new Date().toISOString();
+    const summary = this.buildSandboxWorldSummary({
+      worldId,
+      fixtureLabel: definition.label,
+      status: "reset",
+      createdAt: now,
+      updatedAt: now,
+      joinedAt: null,
+      focalUserId: null,
+      notes: definition.notes,
+    });
+    await this.saveSandboxWorldSummary(summary);
+    await this.recordSandboxWorldAction(actor, "reset", summary);
+    return summary;
+  }
+
+  async tickSandboxWorld(
+    worldId: "design-sandbox-v1",
+    input: { note?: string },
+    actor: { adminUserId: string; role: AdminRole },
+  ) {
+    const current = await this.loadSandboxWorldSummary(worldId);
+    const definition = getSandboxWorldDefinition(worldId);
+    const focalUserId =
+      current.focalUserId ?? designSandboxWorldV1Fixture.focalUserId;
+    const body = input.note?.trim() || "Synthetic follow-up";
+    await this.notificationsService?.createInAppNotification(
+      focalUserId,
+      NotificationType.AGENT_UPDATE,
+      body,
+      { worldId, source: "sandbox-world-tick" },
+    );
+    await this.prisma.notification?.upsert?.({
+      where: { id: definition.tick.notificationId },
+      update: {
+        recipientUserId: focalUserId,
+        type: NotificationType.AGENT_UPDATE,
+        body,
+      },
+      create: {
+        id: definition.tick.notificationId,
+        recipientUserId: focalUserId,
+        type: NotificationType.AGENT_UPDATE,
+        body,
+      },
+    });
+    const summary = {
+      ...current,
+      status: "joined" as const,
+      updatedAt: new Date().toISOString(),
+      notificationCount: current.notificationCount + 1,
+    };
+    await this.saveSandboxWorldSummary(summary);
+    await this.recordSandboxWorldAction(actor, "tick", summary);
+    return summary;
+  }
+
+  async joinSandboxWorld(
+    worldId: "design-sandbox-v1",
+    focalUserId: string,
+    actor: { adminUserId: string; role: AdminRole },
+  ) {
+    await this.createSandboxWorld({ worldId, focalUserId }, actor);
+    const current = await this.loadSandboxWorldSummary(worldId);
+    const now = new Date().toISOString();
+    const summary = {
+      ...current,
+      status: "joined" as const,
+      focalUserId,
+      joinedAt: now,
+      updatedAt: now,
+    };
+    await this.saveSandboxWorldSummary(summary);
+    await this.recordSandboxWorldAction(actor, "join", summary);
+    return summary;
+  }
+
+  async setSandboxWorldScenario(
+    worldId: "design-sandbox-v1",
+    scenario: SandboxWorldScenario,
+    actor: { adminUserId: string; role: AdminRole },
+  ) {
+    const current = await this.loadSandboxWorldSummary(worldId);
+    const definition = getSandboxWorldDefinition(worldId);
+    const focalUserId =
+      current.focalUserId ?? designSandboxWorldV1Fixture.focalUserId;
+
+    if (scenario === "waiting_replies") {
+      await this.prisma.intentRequest?.updateMany?.({
+        where: { id: { in: definition.focalIntent.requestIds } },
+        data: {
+          status: "pending",
+          respondedAt: null,
+        },
+      });
+      await this.prisma.notification?.updateMany?.({
+        where: { recipientUserId: focalUserId },
+        data: {
+          body: "Your search is live and you are waiting on replies.",
+        },
+      });
+    }
+
+    if (scenario === "stalled_search") {
+      await this.prisma.intent?.update?.({
+        where: { id: definition.focalIntent.id },
+        data: {
+          rawText:
+            "Find a very niche late-night online design systems salon this week.",
+          status: "matching",
+        },
+      });
+      await this.prisma.intentRequest?.updateMany?.({
+        where: { id: { in: definition.focalIntent.requestIds } },
+        data: {
+          status: "rejected",
+        },
+      });
+    }
+
+    if (scenario === "activity_burst") {
+      await this.prisma.notification?.upsert?.({
+        where: { id: definition.tick.notificationId },
+        update: {
+          recipientUserId: focalUserId,
+          type: NotificationType.AGENT_UPDATE,
+          body: "Three new updates landed in your sandbox world.",
+        },
+        create: {
+          id: definition.tick.notificationId,
+          recipientUserId: focalUserId,
+          type: NotificationType.AGENT_UPDATE,
+          body: "Three new updates landed in your sandbox world.",
+        },
+      });
+    }
+
+    const summary = {
+      ...current,
+      updatedAt: new Date().toISOString(),
+      notes: [...current.notes, `Scenario applied: ${scenario}`],
+    };
+    await this.saveSandboxWorldSummary(summary);
+    await this.recordSandboxWorldAction(actor, `scenario:${scenario}`, summary);
+    return summary;
   }
 
   async runScenario(
@@ -488,6 +747,116 @@ export class AdminPlaygroundService {
         title: "Playground Verification Thread",
       },
     });
+  }
+
+  private buildSandboxWorldSummary(input: {
+    worldId: "design-sandbox-v1";
+    fixtureLabel: string;
+    status: SandboxWorldSummary["status"];
+    createdAt: string;
+    updatedAt: string;
+    joinedAt: string | null;
+    focalUserId: string | null;
+    notes: string[];
+  }): SandboxWorldSummary {
+    const definition = getSandboxWorldDefinition(input.worldId);
+    return {
+      worldId: input.worldId,
+      fixtureLabel: input.fixtureLabel,
+      status: input.status,
+      createdAt: input.createdAt,
+      updatedAt: input.updatedAt,
+      joinedAt: input.joinedAt,
+      focalUserId: input.focalUserId,
+      actorCount: definition.syntheticUsers.length + 1,
+      directChatCount: definition.directChats.length,
+      groupChatCount: definition.groupChats.length,
+      notificationCount: definition.focalNotifications.length,
+      syntheticActors: [
+        ...(input.focalUserId
+          ? [
+              {
+                userId: input.focalUserId,
+                displayName: "Sandbox Focal User",
+                role: "focal" as const,
+              },
+            ]
+          : []),
+        ...definition.syntheticUsers.map((user) => ({
+          userId: user.id,
+          displayName: user.displayName,
+          role: "synthetic" as const,
+        })),
+      ],
+      notes: input.notes,
+    };
+  }
+
+  private sandboxWorldCacheKey(worldId: string) {
+    return `${this.sandboxWorldCacheKeyPrefix}:${worldId}`;
+  }
+
+  private async loadSandboxWorldSummary(worldId: "design-sandbox-v1") {
+    const cached = await this.appCacheService.getJson<SandboxWorldSummary>(
+      this.sandboxWorldCacheKey(worldId),
+    );
+    if (cached) {
+      return cached;
+    }
+    const definition = getSandboxWorldDefinition(worldId);
+    return this.buildSandboxWorldSummary({
+      worldId,
+      fixtureLabel: definition.label,
+      status: "ready",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      joinedAt: null,
+      focalUserId: designSandboxWorldV1Fixture.focalUserId,
+      notes: definition.notes,
+    });
+  }
+
+  private async saveSandboxWorldSummary(summary: SandboxWorldSummary) {
+    await this.appCacheService.setJson(
+      this.sandboxWorldCacheKey(summary.worldId),
+      summary,
+      60 * 60 * 24,
+    );
+  }
+
+  private async recordSandboxWorldAction(
+    actor: { adminUserId: string; role: AdminRole },
+    action: string,
+    summary: SandboxWorldSummary,
+  ) {
+    await this.adminAuditService.recordAction({
+      adminUserId: actor.adminUserId,
+      role: actor.role,
+      action: `admin.sandbox_world_${action}`,
+      entityType: "admin_sandbox_world",
+      entityId: summary.worldId,
+      metadata: {
+        status: summary.status,
+        focalUserId: summary.focalUserId,
+      },
+    });
+  }
+
+  private async clearSandboxWorldData() {
+    await Promise.all([
+      this.prisma.notification?.deleteMany?.({}),
+      this.prisma.intentRequest?.deleteMany?.({}),
+      this.prisma.intent?.deleteMany?.({}),
+      this.prisma.chatMessage?.deleteMany?.({}),
+      this.prisma.chat?.deleteMany?.({}),
+      this.prisma.connectionParticipant?.deleteMany?.({}),
+      this.prisma.connection?.deleteMany?.({}),
+      this.prisma.agentMessage?.deleteMany?.({}),
+      this.prisma.agentThread?.deleteMany?.({}),
+      this.prisma.userAvailabilityWindow?.deleteMany?.({}),
+      this.prisma.userTopic?.deleteMany?.({}),
+      this.prisma.userInterest?.deleteMany?.({}),
+    ]);
   }
 
   private resolveStableUuid(input: string | undefined, fallback: string) {
