@@ -652,6 +652,40 @@ export interface ExperienceBootstrapSummaryResponse {
   };
 }
 
+export interface ProtocolVisibilitySummaryResponse {
+  generatedAt: string;
+  linkedApps: number;
+  apps: Array<{
+    appId: string;
+    name: string;
+    summary?: string;
+    kind: "web" | "server" | "agent" | "mobile";
+    status: "draft" | "active" | "paused" | "revoked";
+    issuedScopes: string[];
+    issuedCapabilities: string[];
+  }>;
+  recentEvents: Array<{
+    name: string;
+    resource: string;
+    summary: string;
+  }>;
+  queue: {
+    queuedCount: number;
+    retryingCount: number;
+    deliveredCount: number;
+    failedCount: number;
+    deadLetteredCount: number;
+    replayableCount: number;
+    workerQueue: {
+      waiting: number;
+      active: number;
+      delayed: number;
+      completed: number;
+      failed: number;
+    };
+  };
+}
+
 const REMOTE_API_BASE_URL = "https://api.opensocial.so/api";
 
 /**
@@ -2219,6 +2253,19 @@ export const api = {
       `/experience/${userId}/bootstrap`,
       undefined,
       accessToken,
+    );
+  },
+  getProtocolVisibilitySummary(
+    accessToken?: string,
+    requestOptions?: RequestOptions,
+  ) {
+    return request<ProtocolVisibilitySummaryResponse>(
+      "GET",
+      "/protocol/visibility-summary",
+      undefined,
+      accessToken,
+      undefined,
+      requestOptions,
     );
   },
   publishAgentRecommendations(

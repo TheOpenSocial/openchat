@@ -27,6 +27,8 @@ import {
 
 const client = createProtocolClientFromBaseUrl("https://api.example.com/api");
 const protocolManifest = await client.getManifest();
+const visibility = await client.getVisibilitySummary();
+console.log(visibility.linkedApps, visibility.queue.replayableCount);
 const appId = "partner.example";
 const registration = await client.registerApp({
   registration: {

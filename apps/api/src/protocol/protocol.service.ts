@@ -31,6 +31,7 @@ import {
   protocolAppConsentRequestDecisionSchema,
   protocolAppConsentRequestSchema,
   protocolAppUsageSummarySchema,
+  protocolVisibilitySummarySchema,
   protocolWebhookDeliveryGlobalDispatchResultSchema,
   protocolWebhookDeliveryAttemptSchema,
   protocolWebhookDeliveryReplayResultSchema,
@@ -96,6 +97,7 @@ import {
   type ProtocolReplayCursor,
   type ResourceName,
   type ProtocolScopeName,
+  type ProtocolVisibilitySummary,
   type WebhookSubscription,
   type WebhookSubscriptionCreate,
 } from "@opensocial/protocol-types";
@@ -238,6 +240,11 @@ type ProtocolAppConsentRequestRow = {
   updated_at: Date | string;
 };
 
+type ProtocolDeliveryStatusCountRow = {
+  status: string;
+  count: bigint | number | string;
+};
+
 type RegisteredProtocolApp = {
   status: string;
   registration: AppRegistration;
@@ -354,6 +361,57 @@ export class ProtocolService {
        ORDER BY app_id ASC`,
     );
     return rows.map((row) => this.mapAppRow(row));
+  }
+
+  async getVisibilitySummary(): Promise<ProtocolVisibilitySummary> {
+    const [apps, deliveryRows, queueState] = await Promise.all([
+      this.listApps(),
+      this.prisma.$queryRawUnsafe<ProtocolDeliveryStatusCountRow[]>(
+        `SELECT status, COUNT(*)::bigint AS count
+         FROM protocol_webhook_deliveries
+         GROUP BY status`,
+      ),
+      this.protocolWebhooksQueue.getJobCounts(
+        "waiting",
+        "active",
+        "delayed",
+        "completed",
+        "failed",
+      ),
+    ]);
+    const deliveryCounts = Object.fromEntries(
+      deliveryRows.map((row) => [row.status, Number(row.count)]),
+    ) as Record<string, number>;
+
+    return protocolVisibilitySummarySchema.parse({
+      generatedAt: new Date().toISOString(),
+      linkedApps: apps.length,
+      apps: apps.slice(0, 6).map((app) => ({
+        appId: app.registration.appId,
+        name: app.registration.name,
+        summary: app.registration.summary,
+        kind: app.registration.kind,
+        status: app.registration.status,
+        issuedScopes: app.issuedScopes,
+        issuedCapabilities: app.issuedCapabilities,
+      })),
+      recentEvents: protocolEventCatalog.slice(0, 6),
+      queue: {
+        queuedCount: deliveryCounts.queued ?? 0,
+        retryingCount: deliveryCounts.retrying ?? 0,
+        deliveredCount: deliveryCounts.delivered ?? 0,
+        failedCount: deliveryCounts.failed ?? 0,
+        deadLetteredCount: deliveryCounts.dead_lettered ?? 0,
+        replayableCount: deliveryCounts.dead_lettered ?? 0,
+        workerQueue: {
+          waiting: queueState.waiting ?? 0,
+          active: queueState.active ?? 0,
+          delayed: queueState.delayed ?? 0,
+          completed: queueState.completed ?? 0,
+          failed: queueState.failed ?? 0,
+        },
+      },
+    });
   }
 
   async getApp(appId: string) {

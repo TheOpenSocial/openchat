@@ -572,6 +572,66 @@ export const protocolAppRecordSchema = z
   })
   .strict();
 export type ProtocolAppRecord = z.infer<typeof protocolAppRecordSchema>;
+
+export const protocolVisibilityAppSchema = z
+  .object({
+    appId: identifierSchema,
+    name: z.string().min(1).max(120),
+    summary: z.string().min(1).max(280).optional(),
+    kind: appRegistrationKindSchema,
+    status: appRegistrationStatusSchema,
+    issuedScopes: z.array(protocolScopeNameSchema).default([]),
+    issuedCapabilities: z.array(capabilityNameSchema).default([]),
+  })
+  .strict();
+export type ProtocolVisibilityApp = z.infer<typeof protocolVisibilityAppSchema>;
+
+export const protocolVisibilityEventSchema = z
+  .object({
+    name: eventNameSchema,
+    resource: resourceNameSchema,
+    summary: z.string().min(1).max(280),
+  })
+  .strict();
+export type ProtocolVisibilityEvent = z.infer<
+  typeof protocolVisibilityEventSchema
+>;
+
+export const protocolVisibilityQueueSummarySchema = z
+  .object({
+    queuedCount: z.number().int().min(0),
+    retryingCount: z.number().int().min(0),
+    deliveredCount: z.number().int().min(0),
+    failedCount: z.number().int().min(0),
+    deadLetteredCount: z.number().int().min(0),
+    replayableCount: z.number().int().min(0),
+    workerQueue: z
+      .object({
+        waiting: z.number().int().min(0),
+        active: z.number().int().min(0),
+        delayed: z.number().int().min(0),
+        completed: z.number().int().min(0),
+        failed: z.number().int().min(0),
+      })
+      .strict(),
+  })
+  .strict();
+export type ProtocolVisibilityQueueSummary = z.infer<
+  typeof protocolVisibilityQueueSummarySchema
+>;
+
+export const protocolVisibilitySummarySchema = z
+  .object({
+    generatedAt: isoDateTimeSchema,
+    linkedApps: z.number().int().min(0),
+    apps: z.array(protocolVisibilityAppSchema),
+    recentEvents: z.array(protocolVisibilityEventSchema),
+    queue: protocolVisibilityQueueSummarySchema,
+  })
+  .strict();
+export type ProtocolVisibilitySummary = z.infer<
+  typeof protocolVisibilitySummarySchema
+>;
 export const protocolAppTokenRotateResultSchema =
   protocolAppRegistrationResultSchema;
 export type ProtocolAppTokenRotateResult = ProtocolAppRegistrationResult;

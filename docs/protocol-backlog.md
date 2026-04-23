@@ -87,6 +87,13 @@ Acceptance criteria:
 - usage data is visible without leaving the product shell
 - no feed-style or admin-dashboard-style protocol UI leaks into the main product surfaces
 
+## Completed Slices
+
+- Added a typed protocol visibility summary read model for mobile/settings usage.
+- Exposed `GET /protocol/visibility-summary` from the backend.
+- Added `getVisibilitySummary()` to `@opensocial/protocol-client`.
+- Wired the mobile Settings protocol panel to the summary through React Query.
+
 ## Tests To Keep
 
 - queue dispatch tests for scheduled and manual runs

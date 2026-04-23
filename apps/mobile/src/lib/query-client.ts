@@ -53,6 +53,7 @@ export const mobileQueryKeys = {
     intentId,
   ],
   recurringCircles: (userId: string) => ["mobile", "recurring-circles", userId],
+  protocolVisibility: () => ["mobile", "protocol-visibility"],
   savedSearches: (userId: string) => ["mobile", "saved-searches", userId],
   scheduledTasks: (userId: string) => ["mobile", "scheduled-tasks", userId],
 } as const;

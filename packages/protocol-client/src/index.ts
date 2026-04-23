@@ -25,6 +25,7 @@ import {
   protocolAppScopeGrantSchema,
   protocolAppRegistrationResultSchema,
   protocolDiscoveryDocumentSchema,
+  protocolVisibilitySummarySchema,
   protocolIntentActionResultSchema,
   protocolIntentCancelActionSchema,
   protocolIntentCreateActionSchema,
@@ -57,6 +58,7 @@ import {
   type ProtocolAppScopeGrantCreate,
   type ProtocolAppScopeGrantRevoke,
   type ProtocolAppRegistrationResult,
+  type ProtocolVisibilitySummary as ProtocolVisibilitySummaryShape,
   type ProtocolAppConsentRequest,
   type ProtocolAppConsentRequestCreate,
   type ProtocolAppConsentRequestDecision,
@@ -105,6 +107,7 @@ export type ProtocolClientFetchLike = (
 export type ProtocolClient = {
   getManifest: () => Promise<ProtocolManifest>;
   getDiscovery: () => Promise<ProtocolDiscoveryDocument>;
+  getVisibilitySummary: () => Promise<ProtocolVisibilitySummary>;
   listApps: () => Promise<ProtocolAppRecord[]>;
   getApp: (appId: string) => Promise<ProtocolAppRecord>;
   registerApp: (
@@ -415,6 +418,7 @@ export type ProtocolAppClient = {
 export type ProtocolAppRecord = ProtocolAppRecordShape;
 export type ProtocolAppOperationalSnapshot =
   ProtocolAppOperationalSnapshotShape;
+export type ProtocolVisibilitySummary = ProtocolVisibilitySummaryShape;
 export type ProtocolAppRegistrationRequestInput =
   ProtocolAppRegistrationRequestShape;
 export type ProtocolAppTokenRotateInput = ProtocolAppTokenRotateInputShape;
@@ -507,6 +511,13 @@ export function createProtocolClient(
       return readProtocolResponseData(
         response,
         protocolDiscoveryDocumentSchema,
+      );
+    },
+    async getVisibilitySummary() {
+      const response = await transport.request("/protocol/visibility-summary");
+      return readProtocolResponseData(
+        response,
+        protocolVisibilitySummarySchema,
       );
     },
     async listApps() {

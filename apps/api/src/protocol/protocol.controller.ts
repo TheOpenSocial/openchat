@@ -63,6 +63,11 @@ export class ProtocolController {
     return ok(this.protocolService.getDiscovery());
   }
 
+  @Get("visibility-summary")
+  async getVisibilitySummary() {
+    return ok(await this.protocolService.getVisibilitySummary());
+  }
+
   @Get("events")
   async listEvents() {
     return ok(this.protocolService.listEvents());

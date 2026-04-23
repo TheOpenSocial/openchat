@@ -1,162 +1,21 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Pressable, Text, View } from "react-native";
+import { useQuery } from "@tanstack/react-query";
 
-import { API_BASE_URL } from "../../lib/api";
+import { api } from "../../lib/api";
+import { mobileQueryKeys } from "../../lib/query-client";
 import { appTheme } from "../../theme";
 
-type ProtocolEventItem = {
-  title: string;
-  subtitle: string;
-  detail: string;
-};
-
-type ProtocolQueueItem = {
-  title: string;
-  value: string;
-};
-
-type ProtocolSnapshot = {
-  linkedApps: number;
-  recentEvents: ProtocolEventItem[];
-  queueItems: ProtocolQueueItem[];
-  source: "live" | "empty";
-  updatedAt: string | null;
-};
-
-function extractEnvelopeData(payload: unknown) {
-  if (
-    typeof payload === "object" &&
-    payload !== null &&
-    "success" in payload &&
-    typeof (payload as { success?: unknown }).success === "boolean"
-  ) {
-    const envelope = payload as {
-      success: boolean;
-      data?: unknown;
-    };
-
-    return envelope.success ? envelope.data : null;
+function formatUpdatedAt(value: string | null) {
+  if (!value) {
+    return "No protocol data loaded yet.";
   }
 
-  return payload;
-}
-
-function toStringOrEmpty(value: unknown) {
-  return typeof value === "string" ? value : "";
-}
-
-function toDisplayString(value: unknown) {
-  if (typeof value === "string") {
-    return value;
-  }
-  if (typeof value === "number" || typeof value === "bigint") {
-    return String(value);
-  }
-  if (typeof value === "boolean") {
-    return value ? "true" : "false";
-  }
-  return "";
-}
-
-function asProtocolEvents(payload: unknown): ProtocolEventItem[] {
-  const data = extractEnvelopeData(payload);
-  if (!Array.isArray(data)) {
-    return [];
-  }
-
-  return data
-    .map((entry) => {
-      if (typeof entry !== "object" || entry === null) {
-        return null;
-      }
-
-      const record = entry as Record<string, unknown>;
-      const title =
-        toStringOrEmpty(record.title) ||
-        toStringOrEmpty(record.eventType) ||
-        toStringOrEmpty(record.type) ||
-        toStringOrEmpty(record.kind) ||
-        "Protocol event";
-      const subtitle =
-        toStringOrEmpty(record.subtitle) ||
-        toStringOrEmpty(record.appName) ||
-        toStringOrEmpty(record.appId) ||
-        toStringOrEmpty(record.subjectId) ||
-        "Recent activity";
-      const detail =
-        toStringOrEmpty(record.detail) ||
-        toStringOrEmpty(record.summary) ||
-        toStringOrEmpty(record.message) ||
-        toStringOrEmpty(record.createdAt) ||
-        "";
-
-      return { title, subtitle, detail };
-    })
-    .filter((item): item is ProtocolEventItem => item != null)
-    .slice(0, 3);
-}
-
-function asQueueSummary(payload: unknown): ProtocolQueueItem[] {
-  const data = extractEnvelopeData(payload);
-  if (typeof data !== "object" || data === null) {
-    return [];
-  }
-
-  const record = data as Record<string, unknown>;
-  const counts = [
-    {
-      title: "Queued",
-      value:
-        toDisplayString(record.queuedCount) ||
-        toDisplayString(record.queued) ||
-        toDisplayString(record.pendingCount) ||
-        toDisplayString(record.pending) ||
-        "0",
-    },
-    {
-      title: "Failed",
-      value:
-        toDisplayString(record.failedCount) ||
-        toDisplayString(record.failed) ||
-        toDisplayString(record.deadLetteredCount) ||
-        toDisplayString(record.deadLettered) ||
-        "0",
-    },
-    {
-      title: "Delivered",
-      value:
-        toDisplayString(record.deliveredCount) ||
-        toDisplayString(record.delivered) ||
-        "0",
-    },
-  ];
-
-  return counts;
-}
-
-async function fetchProtocolJson(
-  path: string,
-  accessToken: string,
-  signal?: AbortSignal,
-) {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    headers: {
-      authorization: `Bearer ${accessToken}`,
-      accept: "application/json",
-    },
-    signal,
-  });
-
-  if (response.status === 404) {
-    return null;
-  }
-
-  if (!response.ok) {
-    return null;
-  }
-
-  return response.json().catch(() => null);
+  return `Last refreshed ${new Date(value).toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  })}`;
 }
 
 export function ProtocolIntegrationsPanel({
@@ -164,64 +23,32 @@ export function ProtocolIntegrationsPanel({
 }: {
   accessToken: string;
 }) {
-  const [snapshot, setSnapshot] = useState<ProtocolSnapshot>({
-    linkedApps: 0,
-    recentEvents: [],
-    queueItems: [],
-    source: "empty",
-    updatedAt: null,
+  const protocolVisibilityQuery = useQuery({
+    queryKey: mobileQueryKeys.protocolVisibility(),
+    queryFn: ({ signal }) =>
+      api.getProtocolVisibilitySummary(accessToken, { signal }),
   });
-  const [loading, setLoading] = useState(false);
-
-  const refresh = useCallback(
-    async (signal?: AbortSignal) => {
-      setLoading(true);
-      try {
-        const [appsPayload, eventsPayload, queuePayload] = await Promise.all([
-          fetchProtocolJson("/protocol/apps", accessToken, signal),
-          fetchProtocolJson("/protocol/events?limit=3", accessToken, signal),
-          fetchProtocolJson(
-            "/protocol/delivery-queue/summary",
-            accessToken,
-            signal,
-          ),
-        ]);
-
-        const linkedApps = Array.isArray(extractEnvelopeData(appsPayload))
-          ? (extractEnvelopeData(appsPayload) as unknown[]).length
-          : 0;
-        const recentEvents = asProtocolEvents(eventsPayload);
-        const queueItems = asQueueSummary(queuePayload);
-
-        setSnapshot({
-          linkedApps,
-          recentEvents,
-          queueItems,
-          source:
-            linkedApps > 0 || recentEvents.length > 0 || queueItems.length > 0
-              ? "live"
-              : "empty",
-          updatedAt: new Date().toISOString(),
-        });
-      } finally {
-        setLoading(false);
-      }
-    },
-    [accessToken],
-  );
-
-  useEffect(() => {
-    const controller = new AbortController();
-    void refresh(controller.signal);
-    return () => controller.abort();
-  }, [refresh]);
-
-  const statusLabel = useMemo(() => {
-    if (loading) {
-      return "Refreshing";
+  const snapshot = protocolVisibilityQuery.data ?? null;
+  const loading =
+    protocolVisibilityQuery.isLoading || protocolVisibilityQuery.isRefetching;
+  const queueItems = useMemo(() => {
+    if (!snapshot) {
+      return [];
     }
-    return snapshot.source === "live" ? "Live" : "Not connected";
-  }, [loading, snapshot.source]);
+    return [
+      { title: "Queued", value: String(snapshot.queue.queuedCount) },
+      { title: "Retrying", value: String(snapshot.queue.retryingCount) },
+      { title: "Failed", value: String(snapshot.queue.failedCount) },
+      { title: "Replayable", value: String(snapshot.queue.replayableCount) },
+    ];
+  }, [snapshot]);
+  const recentEvents = snapshot?.recentEvents.slice(0, 3) ?? [];
+  const linkedApps = snapshot?.linkedApps ?? 0;
+  const hasLiveData =
+    linkedApps > 0 ||
+    recentEvents.length > 0 ||
+    queueItems.some((item) => item.value !== "0");
+  const statusLabel = loading ? "Refreshing" : hasLiveData ? "Live" : "Ready";
 
   return (
     <View
@@ -237,9 +64,8 @@ export function ProtocolIntegrationsPanel({
             Usage and delivery
           </Text>
           <Text className="text-[13px] leading-[19px] text-muted">
-            Visibility for protocol apps, recent events, and the delivery queue.
-            The panel stays useful even before the protocol backend is fully
-            wired.
+            Visibility for protocol apps, supported events, and the delivery
+            queue.
           </Text>
         </View>
 
@@ -250,7 +76,7 @@ export function ProtocolIntegrationsPanel({
           className="min-h-11 flex-row items-center gap-2 rounded-full border border-hairline bg-canvas px-3"
           disabled={loading}
           onPress={() => {
-            void refresh();
+            void protocolVisibilityQuery.refetch();
           }}
           testID="settings-protocol-refresh"
         >
@@ -262,16 +88,16 @@ export function ProtocolIntegrationsPanel({
       </View>
 
       <Text className="mb-4 text-[12px] font-medium text-muted">
-        {snapshot.updatedAt
-          ? `Last refreshed ${new Date(snapshot.updatedAt).toLocaleTimeString(
-              [],
-              {
-                hour: "numeric",
-                minute: "2-digit",
-              },
-            )}`
-          : "No protocol data loaded yet."}
+        {formatUpdatedAt(snapshot?.generatedAt ?? null)}
       </Text>
+
+      {protocolVisibilityQuery.error ? (
+        <View className="mb-4 rounded-2xl border border-red-400/25 bg-red-400/10 px-3 py-3">
+          <Text className="text-[13px] font-medium text-red-100">
+            Protocol visibility is unavailable right now.
+          </Text>
+        </View>
+      ) : null}
 
       <View className="mb-4 flex-row flex-wrap gap-2">
         <View className="min-w-[96px] flex-1 rounded-2xl border border-hairline bg-canvas px-3 py-2.5">
@@ -279,15 +105,15 @@ export function ProtocolIntegrationsPanel({
             Linked apps
           </Text>
           <Text className="mt-1 text-[18px] font-semibold tracking-[-0.03em] text-ink">
-            {snapshot.linkedApps}
+            {linkedApps}
           </Text>
         </View>
         <View className="min-w-[96px] flex-1 rounded-2xl border border-hairline bg-canvas px-3 py-2.5">
           <Text className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">
-            Recent events
+            Event catalog
           </Text>
           <Text className="mt-1 text-[18px] font-semibold tracking-[-0.03em] text-ink">
-            {snapshot.recentEvents.length}
+            {snapshot?.recentEvents.length ?? 0}
           </Text>
         </View>
         <View className="min-w-[96px] flex-1 rounded-2xl border border-hairline bg-canvas px-3 py-2.5">
@@ -295,7 +121,7 @@ export function ProtocolIntegrationsPanel({
             Queue summary
           </Text>
           <Text className="mt-1 text-[18px] font-semibold tracking-[-0.03em] text-ink">
-            {snapshot.queueItems.length ? "Live" : "Idle"}
+            {snapshot ? "Live" : "Idle"}
           </Text>
         </View>
       </View>
@@ -303,35 +129,32 @@ export function ProtocolIntegrationsPanel({
       <View className="gap-4">
         <View className="gap-3">
           <Text className="text-[12px] font-semibold uppercase tracking-[0.12em] text-muted">
-            Recent protocol events
+            Supported protocol events
           </Text>
-          {snapshot.recentEvents.length > 0 ? (
+          {recentEvents.length > 0 ? (
             <View className="gap-2">
-              {snapshot.recentEvents.map((event, index) => (
+              {recentEvents.map((event) => (
                 <View
-                  key={`${event.title}:${event.subtitle}:${index}`}
+                  key={event.name}
                   className="rounded-2xl border border-hairline bg-canvas px-3 py-2.5"
                 >
                   <Text className="text-[14px] font-semibold tracking-[-0.02em] text-ink">
-                    {event.title}
+                    {event.name}
                   </Text>
                   <Text className="mt-1 text-[12px] font-medium text-muted">
-                    {event.subtitle}
+                    {event.resource}
                   </Text>
-                  {event.detail ? (
-                    <Text className="mt-1 text-[12px] leading-[18px] text-ink/75">
-                      {event.detail}
-                    </Text>
-                  ) : null}
+                  <Text className="mt-1 text-[12px] leading-[18px] text-ink/75">
+                    {event.summary}
+                  </Text>
                 </View>
               ))}
             </View>
           ) : (
             <View className="rounded-2xl border border-dashed border-hairline bg-canvas/60 px-3 py-4">
               <Text className="text-[13px] font-medium text-muted">
-                No protocol events are available yet. Once the protocol backend
-                is connected, recent registrations, grants, and deliveries will
-                appear here.
+                Protocol events will appear here when the visibility summary is
+                available.
               </Text>
             </View>
           )}
@@ -341,9 +164,9 @@ export function ProtocolIntegrationsPanel({
           <Text className="text-[12px] font-semibold uppercase tracking-[0.12em] text-muted">
             Delivery queue summary
           </Text>
-          {snapshot.queueItems.length > 0 ? (
+          {queueItems.length > 0 ? (
             <View className="flex-row flex-wrap gap-2">
-              {snapshot.queueItems.map((item) => (
+              {queueItems.map((item) => (
                 <View
                   key={item.title}
                   className="min-w-[96px] flex-1 rounded-2xl border border-hairline bg-canvas px-3 py-2.5"
@@ -360,8 +183,7 @@ export function ProtocolIntegrationsPanel({
           ) : (
             <View className="rounded-2xl border border-dashed border-hairline bg-canvas/60 px-3 py-4">
               <Text className="text-[13px] font-medium text-muted">
-                Delivery queue details will show here when the protocol delivery
-                worker is wired to this branch.
+                Queue counts will show here once the backend summary responds.
               </Text>
             </View>
           )}
