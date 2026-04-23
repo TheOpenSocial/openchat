@@ -3,7 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import {
-  isPublicLocale,
+  publicLocaleControlLabels,
   publicLocaleLabels,
   publicLocales,
   type PublicLocale,
@@ -25,7 +25,11 @@ export function PublicLocaleSwitcher({ locale }: { locale: PublicLocale }) {
   };
 
   return (
-    <div aria-label="Language" className="public-locale-switcher" role="group">
+    <div
+      aria-label={publicLocaleControlLabels[locale]}
+      className="public-locale-switcher"
+      role="group"
+    >
       {publicLocales.map((option) => (
         <button
           aria-pressed={locale === option}

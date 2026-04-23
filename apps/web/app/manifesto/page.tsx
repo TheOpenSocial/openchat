@@ -1,11 +1,8 @@
 import type { Metadata } from "next";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 
 import { ManifestoPage } from "@/src/features/auth/manifesto-page";
-import {
-  isPublicLocale,
-  type PublicLocale,
-} from "@/src/features/auth/public-locale";
+import { resolvePublicLocale } from "@/src/features/auth/public-locale";
 
 export const metadata: Metadata = {
   title: "Manifesto | OpenSocial",
@@ -19,6 +16,7 @@ export default async function ManifestoRoute({
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const cookieStore = await cookies();
+  const headerStore = await headers();
   const params = searchParams ? await searchParams : undefined;
   const stored = cookieStore.get("opensocial-public-theme")?.value;
   const storedLocale = cookieStore.get("opensocial-public-locale")?.value;
@@ -26,11 +24,11 @@ export default async function ManifestoRoute({
   const searchLocale = Array.isArray(params?.lang)
     ? params?.lang[0]
     : params?.lang;
-  const initialLocale: PublicLocale = isPublicLocale(searchLocale)
-    ? searchLocale
-    : isPublicLocale(storedLocale)
-      ? storedLocale
-      : "en";
+  const initialLocale = resolvePublicLocale({
+    acceptLanguage: headerStore.get("accept-language"),
+    searchLocale,
+    storedLocale,
+  });
   return (
     <ManifestoPage initialLocale={initialLocale} initialTheme={initialTheme} />
   );
