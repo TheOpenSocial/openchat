@@ -92,7 +92,7 @@ async function loadProtocolEnvelope<T>(
     return null;
   }
 
-  const envelope = raw as ApiEnvelope<T>;
+  const envelope = raw as unknown as ApiEnvelope<T>;
   if (!response.ok || !envelope.success) {
     throw new Error(envelope.error?.message ?? "Could not load protocol data.");
   }
