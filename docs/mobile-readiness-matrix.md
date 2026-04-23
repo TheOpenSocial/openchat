@@ -12,7 +12,7 @@ Scale:
 | --- | --- | --- | --- |
 | Auth entry | `9/10` | Stable auth selectors plus a dev-only bypass and injected-session boot path are in place | Needs non-dev coverage for full release confidence |
 | Onboarding landing | `8/10` | User-designed motion and cycling phrases preserved | Needs full path proof after landing |
-| Onboarding completion | `7/10` | Current critical path drives onboarding to home | Needs dedicated completion regression lane |
+| Onboarding completion | `8/10` | Dedicated first-run onboarding completion lane now exists and exercises an incomplete E2E session into Home | Needs local Maestro rerun before it can be claimed as `10/10` |
 | Home shell | `9/10` | `home-screen`, shell top bar, bottom tabs, and transient-safe E2E rail are wired | Needs broader interaction regression coverage |
 | Home agent thread | `9/10` | `mobile-critical-path.yaml` passed locally on 2026-04-22 through shell, Activity, Profile, Chats, and seeded thread entry | Still needs a dedicated retry/error-state companion lane for full release confidence |
 | Activity / updates guidance | `10/10` | `mobile-route-graph.yaml` passed locally on 2026-04-23 through Activity, Inbox, Connections, Discovery, Recurring circles, Saved searches, and Scheduled tasks | None on the current local MVP scope |
@@ -51,6 +51,7 @@ Scale:
 | `mobile-notifications-entry-current.yaml` | `8/10` | Passed locally on 2026-04-20 through shell bell -> Activity assertion | Needs unread-state and return-path coverage |
 | `mobile-notifications-unread-current.yaml` | `10/10` | Passed locally on 2026-04-22 through shared shell boot, unread indicator assertion, Activity route entry, and return to Home | None on the current local MVP scope |
 | `mobile-notifications-roundtrip-current.yaml` | `10/10` | Passed locally on 2026-04-22 through shared shell boot, Activity route entry, and clean return to Home | None on the current local MVP scope |
+| `mobile-onboarding-completion.yaml` | `8/10` | Now boots fresh with an incomplete injected E2E session, asserts onboarding, completes through the dev-only onboarding shortcut, and asserts Home | Needs local Maestro rerun before it can be claimed as `10/10` |
 | `mobile-profile-photo-current.yaml` | `10/10` | Passed locally on 2026-04-22 through the real profile avatar action, deterministic E2E asset shortcut, and visible update marker | None on the current local MVP scope |
 | `mobile-settings-photo-current.yaml` | `10/10` | Passed locally on 2026-04-22 through the real settings avatar action, deterministic E2E asset shortcut, and visible update marker | None on the current local MVP scope |
 | `mobile-route-graph.yaml` | `10/10` | Passed locally on 2026-04-23 through shared shell boot, Home, Activity, Inbox, Connections, Discovery, Recurring circles, Saved searches, Scheduled tasks, Profile, and Settings | None on the current local MVP scope |

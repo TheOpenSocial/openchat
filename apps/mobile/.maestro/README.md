@@ -98,6 +98,26 @@ For a native app build:
 MAESTRO_APP_ID=com.opensocial.app maestro test apps/mobile/.maestro/mobile-critical-path.yaml
 ```
 
+## Run onboarding completion flow
+
+This flow starts from a fresh Expo Go app state, injects an incomplete E2E
+session, proves the onboarding shell renders, completes through the dev-only
+onboarding shortcut, and asserts Home.
+
+Start Expo with the incomplete onboarding session:
+
+```bash
+EXPO_PUBLIC_ENABLE_E2E_LOCAL_MODE=1 \
+EXPO_PUBLIC_E2E_SESSION_B64="eyJ1c2VySWQiOiJlMmUtb25ib2FyZGluZy11c2VyIiwiZGlzcGxheU5hbWUiOiJNYWVzdHJvIE9uYm9hcmRpbmciLCJlbWFpbCI6Im1hZXN0cm8tb25ib2FyZGluZ0BleGFtcGxlLmNvbSIsImFjY2Vzc1Rva2VuIjoiZTJlLWFjY2Vzcy10b2tlbiIsInJlZnJlc2hUb2tlbiI6ImUyZS1yZWZyZXNoLXRva2VuIiwic2Vzc2lvbklkIjoiZTJlLW9uYm9hcmRpbmctc2Vzc2lvbiIsInByb2ZpbGVDb21wbGV0ZWQiOmZhbHNlLCJvbmJvYXJkaW5nU3RhdGUiOiJwcm9maWxlIn0=" \
+pnpm --filter @opensocial/mobile dev -- --port 8090 --clear
+```
+
+Run Maestro:
+
+```bash
+MAESTRO_APP_ID=host.exp.Exponent MAESTRO_EXPO_URL=exp://127.0.0.1:8090 maestro test apps/mobile/.maestro/mobile-onboarding-completion.yaml
+```
+
 ## Run route-graph flow
 
 This is the broader mobile shell audit flow. It validates that the main

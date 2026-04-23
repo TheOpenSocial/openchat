@@ -40,6 +40,9 @@ import { AppStage, MobileSession, UserProfileDraft } from "./src/types";
 const MOBILE_LOCALE_STORAGE_KEY = "opensocial.mobile.locale.v1";
 const INJECTED_E2E_SESSION_B64 =
   process.env.EXPO_PUBLIC_E2E_SESSION_B64?.trim() || null;
+const ENABLE_E2E_LOCAL_MODE =
+  process.env.EXPO_PUBLIC_ENABLE_E2E_LOCAL_MODE === "1" ||
+  process.env.EXPO_PUBLIC_ENABLE_E2E_LOCAL_MODE === "true";
 
 function decodeBase64Json(input: string) {
   const decode =
@@ -85,6 +88,12 @@ function loadInjectedSession(): StoredSession | null {
   } catch {
     return null;
   }
+}
+
+function isLocalE2ESession(session: Pick<MobileSession, "accessToken">) {
+  return (
+    __DEV__ && (ENABLE_E2E_LOCAL_MODE || session.accessToken.startsWith("e2e-"))
+  );
 }
 
 function ProductionApp() {
@@ -212,6 +221,25 @@ function ProductionApp() {
         }
         stored = await loadStoredSession();
         if (!stored) {
+          return;
+        }
+
+        if (
+          injected &&
+          __DEV__ &&
+          injected.profileCompleted === false &&
+          injected.onboardingState !== "complete"
+        ) {
+          const restoredSession = mobileSessionFromStored(stored);
+          if (!mounted) {
+            return;
+          }
+          setSession(restoredSession);
+          setProfile((current) => ({
+            ...current,
+            displayName: stored.displayName,
+          }));
+          setStage("onboarding");
           return;
         }
 
@@ -444,6 +472,11 @@ function ProductionApp() {
     };
 
     try {
+      if (isLocalE2ESession(session)) {
+        await finalizeLocally(false);
+        return;
+      }
+
       await api.updateProfile(
         session.userId,
         {

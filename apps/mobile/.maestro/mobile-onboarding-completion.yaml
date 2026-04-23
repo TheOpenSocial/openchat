@@ -1,5 +1,44 @@
 appId: ${MAESTRO_APP_ID}
 ---
-- runFlow: subflows/boot-shell-current.yaml
+- launchApp:
+    clearState: true
+    permissions:
+      all: unset
+- openLink: ${MAESTRO_EXPO_URL}
+- runFlow:
+    when:
+      visible:
+        text: "Open"
+    commands:
+      - tapOn:
+          text: "Open"
+- runFlow:
+    when:
+      visible:
+        text: "Continue"
+    commands:
+      - tapOn:
+          text: "Continue"
+- runFlow:
+    when:
+      visible:
+        text: "Minimize"
+    commands:
+      - tapOn:
+          text: "Minimize"
+- extendedWaitUntil:
+    visible:
+      id: "onboarding-screen"
+    timeout: 45000
+- assertVisible:
+    id: "onboarding-screen"
+- assertVisible:
+    id: "onboarding-e2e-bypass-button"
+- tapOn:
+    id: "onboarding-e2e-bypass-button"
+- extendedWaitUntil:
+    visible:
+      id: "home-screen"
+    timeout: 45000
 - assertVisible:
     id: "home-screen"

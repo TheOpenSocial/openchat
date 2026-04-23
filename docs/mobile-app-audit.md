@@ -56,7 +56,7 @@ Status legend:
 | Add route-graph audit lane for mobile shell | `done` | `mobile-route-graph.yaml` passed locally on 2026-04-23 through Home, Activity, Inbox, Connections, Discovery, Recurring circles, Saved searches, Scheduled tasks, Profile, and Settings |
 | Replace brittle point taps where route ids exist | `in_progress` | Focused lanes already improved, legacy lane still stale |
 | Dismiss Expo Go tools overlay in current-state flows | `done` | Current-state flows now begin by closing the tools sheet |
-| Tighten onboarding completion coverage | `next` | Landing is preserved, path needs stronger proof |
+| Tighten onboarding completion coverage | `in_progress` | Real first-run lane now injects an incomplete E2E session, asserts onboarding, completes through the dev-only onboarding shortcut, and lands in Home; needs a local Maestro rerun before marking done |
 | Tighten Home recovery/empty states coverage | `next` | Existing UI stronger than automation proof |
 | Stabilize current-state auth-to-home handoff in Expo Go | `done` | Mutation lane now passes on the injected-session Expo Go path instead of depending on the local bypass tap |
 | Stabilize Expo Go against stale localhost project fallback | `done` | Shared shell-boot subflow exists, Maestro defaults now point at `exp://localhost:8090`, and the local Expo server is dependable on that port |
@@ -67,4 +67,4 @@ Status legend:
 
 ## Source Of Truth
 
-Use [docs/mobile-readiness-matrix.md](/Users/cruciblelabs/.codex/worktrees/189c/openchat/docs/mobile-readiness-matrix.md) for current numeric readiness scores.
+Use [docs/mobile-readiness-matrix.md](/Users/cruciblelabs/Documents/openchat/docs/mobile-readiness-matrix.md) for current numeric readiness scores.
