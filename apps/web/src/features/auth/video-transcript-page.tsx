@@ -46,7 +46,8 @@ function getStatusCopy(
     case "uploaded":
       return {
         title: "Upload complete",
-        description: "Your file is in storage and the transcript request has been accepted.",
+        description:
+          "Your file is in storage and the transcript request has been accepted.",
         badge: "Uploaded",
       };
     case "queued":
@@ -66,13 +67,15 @@ function getStatusCopy(
     case "completed":
       return {
         title: "Transcript ready",
-        description: "The Markdown transcript is ready to open from a temporary signed link.",
+        description:
+          "The Markdown transcript is ready to open from a temporary signed link.",
         badge: "Ready",
       };
     case "failed":
       return {
         title: "Processing failed",
-        description: "The worker stopped before the transcript could be completed. Clear the session and try again.",
+        description:
+          "The worker stopped before the transcript could be completed. Clear the session and try again.",
         badge: "Failed",
       };
     default:
@@ -89,10 +92,31 @@ function OpenSocialHeader() {
     <header className="os-nav os-nav--visible" aria-label="Site navigation">
       <div className="os-nav-inner">
         <Link className="os-nav-logo" href="/" aria-label="OpenSocial home">
-          <svg viewBox="0 0 1024 1024" aria-hidden="true" className="os-nav-mark">
-            <path d="M512 309A228 228 0 0 0 512 755A228 228 0 0 0 512 309Z" fill="currentColor" />
-            <circle cx="407" cy="532" r="228" fill="none" stroke="currentColor" strokeWidth="42" />
-            <circle cx="617" cy="532" r="228" fill="none" stroke="currentColor" strokeWidth="42" />
+          <svg
+            viewBox="0 0 1024 1024"
+            aria-hidden="true"
+            className="os-nav-mark"
+          >
+            <path
+              d="M512 309A228 228 0 0 0 512 755A228 228 0 0 0 512 309Z"
+              fill="currentColor"
+            />
+            <circle
+              cx="407"
+              cy="532"
+              r="228"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="42"
+            />
+            <circle
+              cx="617"
+              cy="532"
+              r="228"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="42"
+            />
           </svg>
           <span className="os-nav-name" aria-label="OpenSocial">
             <span className="os-nav-short" aria-hidden="true">
@@ -157,7 +181,8 @@ export function VideoTranscriptPage() {
   const elapsedSeconds = activeRun
     ? Math.floor((clock - activeRun.startedAt) / 1000)
     : 0;
-  const isStale = job?.status === "processing" && elapsedSeconds >= STALE_PROCESSING_SECONDS;
+  const isStale =
+    job?.status === "processing" && elapsedSeconds >= STALE_PROCESSING_SECONDS;
   const formLocked = busy || jobIsActive;
   const canSubmit = Boolean(file) && !formLocked;
   const copy = useMemo(
@@ -288,7 +313,9 @@ export function VideoTranscriptPage() {
         <section className={styles.hero}>
           <p className={styles.eyebrow}>OpenSocial Video</p>
           <h1 className={styles.title}>Turn video into a transcript.</h1>
-          <p className={styles.body}>Upload `mp4`, `mov`, or `webm` up to 1 GB.</p>
+          <p className={styles.body}>
+            Upload `mp4`, `mov`, or `webm` up to 1 GB.
+          </p>
         </section>
 
         <div className={styles.grid}>
@@ -301,13 +328,23 @@ export function VideoTranscriptPage() {
               <p className={styles.panelBadge}>{copy.badge}</p>
             </div>
 
-            <form className={styles.form} onSubmit={handleSubmit} aria-busy={formLocked}>
+            <form
+              className={styles.form}
+              onSubmit={handleSubmit}
+              aria-busy={formLocked}
+            >
               <label
-                className={cn(styles.fileField, formLocked && styles.fileFieldLocked)}
+                className={cn(
+                  styles.fileField,
+                  formLocked && styles.fileFieldLocked,
+                )}
               >
-                <span className={styles.fileFieldTitle}>Choose a video file</span>
+                <span className={styles.fileFieldTitle}>
+                  Choose a video file
+                </span>
                 <span className={styles.fileFieldText}>
-                  One upload at a time. The form stays locked while a job is running.
+                  One upload at a time. The form stays locked while a job is
+                  running.
                 </span>
                 <input
                   accept="video/mp4,video/quicktime,video/webm"
@@ -411,11 +448,13 @@ export function VideoTranscriptPage() {
               <>
                 <div className={styles.rule} />
                 <div className={styles.notice}>
-                  <p className={styles.noticeTitle}>This is taking longer than usual.</p>
+                  <p className={styles.noticeTitle}>
+                    This is taking longer than usual.
+                  </p>
                   <p className={styles.noticeText}>
-                    The current job has been active for {formatElapsed(elapsedSeconds)}.
-                    You can check again now or clear this session and upload a
-                    new file.
+                    The current job has been active for{" "}
+                    {formatElapsed(elapsedSeconds)}. You can check again now or
+                    clear this session and upload a new file.
                   </p>
                   <div className={styles.noticeActions}>
                     <Button

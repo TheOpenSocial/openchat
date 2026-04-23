@@ -75,7 +75,10 @@ function parseArgs(argv = process.argv.slice(2), env = process.env) {
 
   return {
     inputPath: normalizeString(flags.get("input") ?? positionals[0], ""),
-    outputPath: normalizeString(flags.get("output") ?? env.TRANSCRIPT_OUTPUT, ""),
+    outputPath: normalizeString(
+      flags.get("output") ?? env.TRANSCRIPT_OUTPUT,
+      "",
+    ),
     model: normalizeString(
       flags.get("model") ?? env.OPENAI_TRANSCRIPTION_MODEL,
       "gpt-4o-transcribe",
@@ -90,8 +93,10 @@ function parseArgs(argv = process.argv.slice(2), env = process.env) {
     ),
     polish:
       flags.has("polish") ||
-      normalizeString(env.OPENAI_TRANSCRIPT_POLISH_ENABLED, "").toLowerCase() ===
-        "true",
+      normalizeString(
+        env.OPENAI_TRANSCRIPT_POLISH_ENABLED,
+        "",
+      ).toLowerCase() === "true",
     polishModel: normalizeString(
       flags.get("polish-model") ?? env.OPENAI_TRANSCRIPT_POLISH_MODEL,
       "gpt-4.1-mini",
@@ -171,13 +176,17 @@ function formatSeconds(totalSeconds) {
   const remainingSeconds = seconds % 60;
 
   return [hours, minutes, remainingSeconds]
-    .map((value, index) => (index === 0 ? String(value) : String(value).padStart(2, "0")))
+    .map((value, index) =>
+      index === 0 ? String(value) : String(value).padStart(2, "0"),
+    )
     .join(":");
 }
 
 function isLikelyUnsupportedAudioError(error) {
-  const message = normalizeString(error instanceof Error ? error.message : String(error), "")
-    .toLowerCase();
+  const message = normalizeString(
+    error instanceof Error ? error.message : String(error),
+    "",
+  ).toLowerCase();
 
   return (
     message.includes("audio file might be corrupted") ||
@@ -188,7 +197,9 @@ function isLikelyUnsupportedAudioError(error) {
 }
 
 function commandExists(command) {
-  const pathEntries = normalizeString(process.env.PATH, "").split(path.delimiter);
+  const pathEntries = normalizeString(process.env.PATH, "").split(
+    path.delimiter,
+  );
   for (const entry of pathEntries) {
     if (!entry) {
       continue;
@@ -229,7 +240,10 @@ function runCommand(command, args) {
 
       reject(
         new Error(
-          normalizeString(stderr, normalizeString(stdout, `${command} exited with code ${code}`)),
+          normalizeString(
+            stderr,
+            normalizeString(stdout, `${command} exited with code ${code}`),
+          ),
         ),
       );
     });
@@ -389,7 +403,8 @@ async function splitAudioIntoChunks(inputPath, audioProbe, reporter) {
     );
   }
 
-  const chunkDurationExceeded = chunkDurationSeconds > OPENAI_AUDIO_MAX_DURATION_SECONDS;
+  const chunkDurationExceeded =
+    chunkDurationSeconds > OPENAI_AUDIO_MAX_DURATION_SECONDS;
   if (chunkDurationExceeded) {
     throw new Error(
       `Automatic chunking calculated a chunk duration of ${formatSeconds(
@@ -471,7 +486,9 @@ function buildMarkdown({
     sections.push(`- Transcription source: \`${transcriptionSourcePath}\``);
   }
 
-  sections.push(`- Automatic conversion applied: ${conversionApplied ? "yes" : "no"}`);
+  sections.push(
+    `- Automatic conversion applied: ${conversionApplied ? "yes" : "no"}`,
+  );
   sections.push(`- Chunked upload count: ${chunkCount}`);
 
   if (audioProbe?.format?.format_name) {
@@ -485,7 +502,13 @@ function buildMarkdown({
     sections.push(`- Detected audio codec: \`${audioStream.codec_name}\``);
   }
 
-  sections.push("", "## Transcript", "", formatTranscriptBody(transcriptText), "");
+  sections.push(
+    "",
+    "## Transcript",
+    "",
+    formatTranscriptBody(transcriptText),
+    "",
+  );
 
   if (polishedTranscriptText) {
     sections.push(
@@ -556,13 +579,19 @@ async function transcribeWithStreaming(openai, request, reporter) {
   let transcriptText = "";
 
   for await (const event of stream) {
-    if (event?.type === "transcript.text.delta" && typeof event.delta === "string") {
+    if (
+      event?.type === "transcript.text.delta" &&
+      typeof event.delta === "string"
+    ) {
       transcriptText += event.delta;
       reporter.update("Receiving transcript", transcriptText.length);
       continue;
     }
 
-    if (event?.type === "transcript.text.done" && typeof event.text === "string") {
+    if (
+      event?.type === "transcript.text.done" &&
+      typeof event.text === "string"
+    ) {
       transcriptText = event.text;
       reporter.update("Finalizing transcript", transcriptText.length);
       continue;
@@ -570,7 +599,10 @@ async function transcribeWithStreaming(openai, request, reporter) {
 
     if (event?.type === "error") {
       throw new Error(
-        normalizeString(event.error?.message, "OpenAI streaming transcription failed."),
+        normalizeString(
+          event.error?.message,
+          "OpenAI streaming transcription failed.",
+        ),
       );
     }
   }
@@ -752,8 +784,7 @@ async function polishTranscript(openai, transcriptText, reporter, model) {
         content: [
           {
             type: "input_text",
-            text:
-              "You clean up speech transcripts for readability. Fix unclear or awkward sentences, restore paragraph structure, and lightly correct grammar and punctuation. Preserve the original meaning, do not invent facts, and do not summarize or omit material.",
+            text: "You clean up speech transcripts for readability. Fix unclear or awkward sentences, restore paragraph structure, and lightly correct grammar and punctuation. Preserve the original meaning, do not invent facts, and do not summarize or omit material.",
           },
         ],
       },

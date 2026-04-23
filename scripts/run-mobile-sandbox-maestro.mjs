@@ -62,7 +62,9 @@ function run(command, args, options = {}) {
         resolve();
         return;
       }
-      reject(new Error(`${command} ${args.join(" ")} failed with code ${code}`));
+      reject(
+        new Error(`${command} ${args.join(" ")} failed with code ${code}`),
+      );
     });
     child.on("error", reject);
   });
@@ -122,7 +124,11 @@ async function acquireSingleFlightLock({ scenario, flow, appId }) {
   const currentPid = process.pid;
   const existing = safeReadJson(lockPath);
 
-  if (existing?.pid && existing.pid !== currentPid && isProcessAlive(existing.pid)) {
+  if (
+    existing?.pid &&
+    existing.pid !== currentPid &&
+    isProcessAlive(existing.pid)
+  ) {
     console.warn(
       `Stopping overlapping mobile sandbox runner ${existing.pid} for ${scenario}/${flow}/${appId}`,
     );
@@ -213,7 +219,11 @@ async function runMaestroWithRetry({
       const isXCTestDriverDrop =
         message.includes("Failed to connect to /127.0.0.1:7001") ||
         message.includes("Failed to connect to /127.0.0.1:");
-      if (attempt >= attempts || !isXCTestDriverDrop || appId !== "host.exp.Exponent") {
+      if (
+        attempt >= attempts ||
+        !isXCTestDriverDrop ||
+        appId !== "host.exp.Exponent"
+      ) {
         break;
       }
       await rebootSimulator(simulatorId);
@@ -235,7 +245,9 @@ async function retry(label, fn, attempts = 3, delayMs = 2_000) {
     } catch (error) {
       lastError = error;
       if (attempt < attempts) {
-        console.warn(`${label} failed on attempt ${attempt}/${attempts}; retrying`);
+        console.warn(
+          `${label} failed on attempt ${attempt}/${attempts}; retrying`,
+        );
         await delay(delayMs);
         continue;
       }
@@ -308,21 +320,28 @@ async function findAvailablePort(startPort, attempts = 12) {
 function localSandboxCredsAvailable() {
   return Boolean(
     (process.env.PLAYGROUND_ADMIN_USER_ID || process.env.SMOKE_ADMIN_USER_ID) &&
-      (process.env.PLAYGROUND_ADMIN_API_KEY || process.env.SMOKE_ADMIN_API_KEY),
+    (process.env.PLAYGROUND_ADMIN_API_KEY || process.env.SMOKE_ADMIN_API_KEY),
   );
 }
 
 function localSmokeCredsAvailable() {
   return Boolean(
     process.env.SMOKE_ADMIN_USER_ID ||
-      (process.env.SMOKE_APPLICATION_KEY && process.env.SMOKE_APPLICATION_TOKEN),
+    (process.env.SMOKE_APPLICATION_KEY && process.env.SMOKE_APPLICATION_TOKEN),
   );
 }
 
 async function triggerWorkflowAndWait(workflowFile, fields) {
   const before = Date.now() - 5_000;
   await retry(`dispatch ${workflowFile}`, () =>
-    run("gh", ["workflow", "run", workflowFile, "--repo", REPO_SLUG, ...fields]),
+    run("gh", [
+      "workflow",
+      "run",
+      workflowFile,
+      "--repo",
+      REPO_SLUG,
+      ...fields,
+    ]),
   );
   await delay(3_000);
 
@@ -403,12 +422,10 @@ async function prepareScenarioViaGitHub(worldId, scenario, artifactDir) {
           "-f",
           `scenario=${scenario}`,
         ]);
-        const inspectRunId = await triggerWorkflowAndWait("staging-sandbox-world.yml", [
-          "-f",
-          "action=inspect",
-          "-f",
-          `world_id=${worldId}`,
-        ]);
+        const inspectRunId = await triggerWorkflowAndWait(
+          "staging-sandbox-world.yml",
+          ["-f", "action=inspect", "-f", `world_id=${worldId}`],
+        );
         const inspectDir = join(artifactDir, "sandbox-inspect");
         mkdirSync(inspectDir, { recursive: true });
         await retry(`download sandbox inspect ${inspectRunId}`, () =>
@@ -424,7 +441,9 @@ async function prepareScenarioViaGitHub(worldId, scenario, artifactDir) {
             inspectDir,
           ]),
         );
-        return JSON.parse(readFileSync(join(inspectDir, "sandbox-world-output.json"), "utf8"));
+        return JSON.parse(
+          readFileSync(join(inspectDir, "sandbox-world-output.json"), "utf8"),
+        );
       },
       2,
       3_000,
@@ -454,10 +473,14 @@ async function emitSessionLocally(baseUrl) {
     cwd: REPO_CWD,
     env: { ...env, SMOKE_REFRESH_REQUIRED: "1" },
   });
-  const sessionRaw = await capture("node", ["scripts/emit-mobile-e2e-session.mjs"], {
-    cwd: REPO_CWD,
-    env,
-  });
+  const sessionRaw = await capture(
+    "node",
+    ["scripts/emit-mobile-e2e-session.mjs"],
+    {
+      cwd: REPO_CWD,
+      env,
+    },
+  );
   return JSON.parse(sessionRaw);
 }
 
@@ -467,7 +490,10 @@ async function emitSessionViaGitHub(targetUserId, artifactDir) {
     if (targetUserId) {
       fields.push("-f", `smoke_user_id=${targetUserId}`);
     }
-    const runId = await triggerWorkflowAndWait("staging-mobile-e2e-session.yml", fields);
+    const runId = await triggerWorkflowAndWait(
+      "staging-mobile-e2e-session.yml",
+      fields,
+    );
     const sessionDir = join(artifactDir, "session");
     mkdirSync(sessionDir, { recursive: true });
     await retry(`download mobile session ${runId}`, () =>
@@ -483,7 +509,9 @@ async function emitSessionViaGitHub(targetUserId, artifactDir) {
         sessionDir,
       ]),
     );
-    return JSON.parse(readFileSync(join(sessionDir, "mobile-e2e-session.json"), "utf8"));
+    return JSON.parse(
+      readFileSync(join(sessionDir, "mobile-e2e-session.json"), "utf8"),
+    );
   } catch (error) {
     const cached = readLatestCachedArtifact("mobile-session.json");
     if (!cached) {
@@ -534,7 +562,10 @@ function readLatestCachedArtifact(filename) {
   };
 }
 
-function readLatestRecentCachedArtifact(filename, maxAgeMs = RECENT_CACHE_MAX_AGE_MS) {
+function readLatestRecentCachedArtifact(
+  filename,
+  maxAgeMs = RECENT_CACHE_MAX_AGE_MS,
+) {
   const latest = readLatestCachedArtifact(filename);
   if (!latest) {
     return null;
@@ -575,7 +606,13 @@ function toNativeDevClientUrl(httpUrl) {
   return `opensocial://expo-development-client/?url=${encodeURIComponent(httpUrl)}`;
 }
 
-async function startExpoMetro({ encodedSession, baseUrl, port, artifactDir, appId }) {
+async function startExpoMetro({
+  encodedSession,
+  baseUrl,
+  port,
+  artifactDir,
+  appId,
+}) {
   const env = {
     ...process.env,
     EXPO_PUBLIC_ENABLE_E2E_AUTH_BYPASS: "1",
@@ -587,7 +624,8 @@ async function startExpoMetro({ encodedSession, baseUrl, port, artifactDir, appI
 
   const logPath = join(artifactDir, "expo.log");
   const useExpoGo = appId === "host.exp.Exponent";
-  const useNativeDevClient = !useExpoGo && process.env.MAESTRO_NATIVE_DEV_CLIENT !== "0";
+  const useNativeDevClient =
+    !useExpoGo && process.env.MAESTRO_NATIVE_DEV_CLIENT !== "0";
 
   if (useNativeDevClient) {
     await run("pnpm", ["--filter", "@opensocial/mobile", "predev"], {
@@ -596,21 +634,28 @@ async function startExpoMetro({ encodedSession, baseUrl, port, artifactDir, appI
     });
   }
 
-  const startArgs =
-    useExpoGo
+  const startArgs = useExpoGo
+    ? [
+        "--filter",
+        "@opensocial/mobile",
+        "dev",
+        "--",
+        "--clear",
+        "--go",
+        "--lan",
+        "--port",
+        String(port),
+      ]
+    : !useNativeDevClient
       ? [
           "--filter",
           "@opensocial/mobile",
           "dev",
           "--",
           "--clear",
-          "--go",
-          "--lan",
           "--port",
           String(port),
         ]
-      : !useNativeDevClient
-        ? ["--filter", "@opensocial/mobile", "dev", "--", "--clear", "--port", String(port)]
       : [
           "--filter",
           "@opensocial/mobile",
@@ -661,7 +706,11 @@ async function startExpoMetro({ encodedSession, baseUrl, port, artifactDir, appI
     child.on("exit", (code) => {
       if (!resolved) {
         clearTimeout(timeout);
-        reject(new Error(`Expo dev server exited before URL was ready (code ${code})`));
+        reject(
+          new Error(
+            `Expo dev server exited before URL was ready (code ${code})`,
+          ),
+        );
       }
     });
     child.on("error", (error) => {
@@ -676,7 +725,13 @@ async function startExpoMetro({ encodedSession, baseUrl, port, artifactDir, appI
 }
 
 async function resolveBootedSimulatorId() {
-  const raw = await capture("xcrun", ["simctl", "list", "devices", "booted", "-j"]);
+  const raw = await capture("xcrun", [
+    "simctl",
+    "list",
+    "devices",
+    "booted",
+    "-j",
+  ]);
   const payload = JSON.parse(raw);
   const runtimes = Object.values(payload.devices ?? {});
   for (const entries of runtimes) {
@@ -760,7 +815,8 @@ async function main() {
   const scenario = getArg("--scenario", "baseline");
   const worldId = getArg("--world-id", DEFAULT_WORLD_ID);
   const flow = getArg("--flow", DEFAULT_FLOW);
-  const requestedPort = Number.parseInt(getArg("--port", DEFAULT_PORT), 10) || 8089;
+  const requestedPort =
+    Number.parseInt(getArg("--port", DEFAULT_PORT), 10) || 8089;
   const appId = getArg("--app-id", DEFAULT_APP_ID);
   await acquireSingleFlightLock({ appId, flow, scenario });
   const baseUrl = resolveBaseUrl();
@@ -768,7 +824,8 @@ async function main() {
   const activityTargetScreenId = getArg("--activity-target-screen-id");
   const activityTargetCloseId = getArg("--activity-target-close-id");
   const activityTargetLabel =
-    getArg("--activity-target-label") ?? deriveActivityTargetLabel(activityTargetId);
+    getArg("--activity-target-label") ??
+    deriveActivityTargetLabel(activityTargetId);
   const activityTargetAccessibilityLabel =
     getArg("--activity-target-accessibility-label") ??
     deriveActivityTargetAccessibilityLabel(activityTargetId);
@@ -780,7 +837,9 @@ async function main() {
   );
   mkdirSync(artifactDir, { recursive: true });
 
-  const recentCachedScenario = readLatestRecentCachedArtifact("scenario-inspect.json");
+  const recentCachedScenario = readLatestRecentCachedArtifact(
+    "scenario-inspect.json",
+  );
   const inspectPayload = localSandboxCredsAvailable()
     ? await prepareScenarioViaLocal(baseUrl, worldId, scenario)
     : recentCachedScenario
@@ -798,7 +857,9 @@ async function main() {
     process.env.SMOKE_TARGET_USER_ID ??
     "";
 
-  const recentCachedSession = readLatestRecentCachedArtifact("mobile-session.json");
+  const recentCachedSession = readLatestRecentCachedArtifact(
+    "mobile-session.json",
+  );
   const sessionPayload = localSmokeCredsAvailable()
     ? await emitSessionLocally(baseUrl)
     : recentCachedSession
@@ -826,7 +887,12 @@ async function main() {
   const expectedActivityTitle = expectedActivitySectionTitle(inspectPayload);
   const port = await findAvailablePort(requestedPort);
 
-  const { child: metroChild, expUrl, httpUrl, nativeDevClientUrl } = await startExpoMetro({
+  const {
+    child: metroChild,
+    expUrl,
+    httpUrl,
+    nativeDevClientUrl,
+  } = await startExpoMetro({
     encodedSession: sessionPayload.encodedSession,
     baseUrl,
     port,
@@ -861,15 +927,18 @@ async function main() {
           ? "test:e2e:maestro:sandbox-home-activity:expo-go:attached"
           : flow === "activity-target"
             ? "test:e2e:maestro:sandbox-activity-target:expo-go:attached"
-        : flow === "surface-smoke"
-          ? "test:e2e:maestro:surface-smoke"
-          : flow === "route-graph"
-            ? "test:e2e:maestro:route-graph"
-            : flow === "daily-loop"
-              ? "test:e2e:maestro:daily-loop:native"
-              : null;
+            : flow === "surface-smoke"
+              ? "test:e2e:maestro:surface-smoke"
+              : flow === "route-graph"
+                ? "test:e2e:maestro:route-graph"
+                : flow === "daily-loop"
+                  ? "test:e2e:maestro:daily-loop:native"
+                  : null;
 
-    if (!flowScript && !(flow === "sandbox-surface" && appId === "host.exp.Exponent")) {
+    if (
+      !flowScript &&
+      !(flow === "sandbox-surface" && appId === "host.exp.Exponent")
+    ) {
       throw new Error(`Unsupported flow ${flow}`);
     }
 

@@ -262,7 +262,9 @@
 .statusBody {
   margin-top: 20px;
   font-size: 15px;
-  transition: color 180ms ease, opacity 180ms ease;
+  transition:
+    color 180ms ease,
+    opacity 180ms ease;
 }
 
 .timeline {

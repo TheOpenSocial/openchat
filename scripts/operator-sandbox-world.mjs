@@ -71,7 +71,11 @@ function getActionPlan(action) {
 const { flags, positional } = parseArgs(process.argv.slice(2));
 const env = resolveSharedAdminEnv(process.env);
 const action = (flags.action || positional[0] || "all").trim();
-const worldId = (flags["world-id"] || process.env.SANDBOX_WORLD_ID || "design-sandbox-v1").trim();
+const worldId = (
+  flags["world-id"] ||
+  process.env.SANDBOX_WORLD_ID ||
+  "design-sandbox-v1"
+).trim();
 const focalUserId = (
   flags["focal-user-id"] ||
   process.env.SANDBOX_WORLD_FOCAL_USER_ID ||
@@ -86,7 +90,8 @@ const adminApiKey = (flags["admin-api-key"] || env.adminApiKey || "").trim();
 const hostHeader = (flags["host-header"] || env.hostHeader || "").trim();
 const dryRun = flags["dry-run"] === "1" || flags["dry-run"] === "true";
 const artifactPath =
-  flags["artifact-path"] || `.artifacts/staging-sandbox-world/${Date.now()}.json`;
+  flags["artifact-path"] ||
+  `.artifacts/staging-sandbox-world/${Date.now()}.json`;
 
 if (
   flags.help === "true" ||
@@ -116,7 +121,9 @@ if (!baseUrl) {
   process.exit(1);
 }
 if (!adminUserId) {
-  console.error("Missing admin user id. Set SMOKE_ADMIN_USER_ID or pass --admin-user-id.");
+  console.error(
+    "Missing admin user id. Set SMOKE_ADMIN_USER_ID or pass --admin-user-id.",
+  );
   process.exit(1);
 }
 
@@ -131,11 +138,14 @@ const headers = {
 };
 
 async function callWorld(pathSuffix, method, body) {
-  const response = await fetch(`${baseUrl}/api/admin/playground/worlds${pathSuffix}`, {
-    method,
-    headers,
-    body: method === "GET" ? undefined : JSON.stringify(body ?? {}),
-  });
+  const response = await fetch(
+    `${baseUrl}/api/admin/playground/worlds${pathSuffix}`,
+    {
+      method,
+      headers,
+      body: method === "GET" ? undefined : JSON.stringify(body ?? {}),
+    },
+  );
   let payload = null;
   try {
     payload = await response.json();

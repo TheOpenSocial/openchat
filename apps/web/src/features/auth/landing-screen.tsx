@@ -59,7 +59,9 @@ function useIntroSequence() {
         setSkipped(true);
         setStage("done");
       }
-    } catch {}
+    } catch {
+      // Session storage can be blocked in privacy modes; the intro should still run.
+    }
   }, []);
 
   // Mark seen when the exit animation begins
@@ -67,7 +69,9 @@ function useIntroSequence() {
     if (stage === "exit") {
       try {
         sessionStorage.setItem(INTRO_SEEN_KEY, "1");
-      } catch {}
+      } catch {
+        // Session storage can be blocked in privacy modes; skipping persistence is safe.
+      }
     }
   }, [stage]);
 
@@ -304,6 +308,7 @@ function Section({
     <section
       className={`mf-s${active ? " mf-s--visible" : ""} ${className}`}
       data-anim={variant}
+      data-section-index={idx}
     >
       <div className="mf-inner">{children}</div>
     </section>
