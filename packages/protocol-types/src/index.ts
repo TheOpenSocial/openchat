@@ -620,6 +620,37 @@ export type ProtocolVisibilityQueueSummary = z.infer<
   typeof protocolVisibilityQueueSummarySchema
 >;
 
+export const protocolVisibilityAccessSummarySchema = z
+  .object({
+    grantCounts: z
+      .object({
+        active: z.number().int().min(0),
+        revoked: z.number().int().min(0),
+      })
+      .strict(),
+    consentRequestCounts: z
+      .object({
+        pending: z.number().int().min(0),
+        approved: z.number().int().min(0),
+        rejected: z.number().int().min(0),
+        cancelled: z.number().int().min(0),
+        expired: z.number().int().min(0),
+      })
+      .strict(),
+    webhookCounts: z
+      .object({
+        active: z.number().int().min(0),
+        paused: z.number().int().min(0),
+        failed: z.number().int().min(0),
+        revoked: z.number().int().min(0),
+      })
+      .strict(),
+  })
+  .strict();
+export type ProtocolVisibilityAccessSummary = z.infer<
+  typeof protocolVisibilityAccessSummarySchema
+>;
+
 export const protocolVisibilitySummarySchema = z
   .object({
     generatedAt: isoDateTimeSchema,
@@ -627,6 +658,7 @@ export const protocolVisibilitySummarySchema = z
     apps: z.array(protocolVisibilityAppSchema),
     recentEvents: z.array(protocolVisibilityEventSchema),
     queue: protocolVisibilityQueueSummarySchema,
+    access: protocolVisibilityAccessSummarySchema,
   })
   .strict();
 export type ProtocolVisibilitySummary = z.infer<

@@ -245,6 +245,11 @@ type ProtocolDeliveryStatusCountRow = {
   count: bigint | number | string;
 };
 
+type ProtocolStatusCountRow = {
+  status: string;
+  count: bigint | number | string;
+};
+
 type RegisteredProtocolApp = {
   status: string;
   registration: AppRegistration;
@@ -364,11 +369,33 @@ export class ProtocolService {
   }
 
   async getVisibilitySummary(): Promise<ProtocolVisibilitySummary> {
-    const [apps, deliveryRows, queueState] = await Promise.all([
+    const [
+      apps,
+      deliveryRows,
+      grantRows,
+      consentRequestRows,
+      webhookRows,
+      queueState,
+    ] = await Promise.all([
       this.listApps(),
       this.prisma.$queryRawUnsafe<ProtocolDeliveryStatusCountRow[]>(
         `SELECT status, COUNT(*)::bigint AS count
          FROM protocol_webhook_deliveries
+         GROUP BY status`,
+      ),
+      this.prisma.$queryRawUnsafe<ProtocolStatusCountRow[]>(
+        `SELECT status, COUNT(*)::bigint AS count
+         FROM protocol_app_scope_grants
+         GROUP BY status`,
+      ),
+      this.prisma.$queryRawUnsafe<ProtocolStatusCountRow[]>(
+        `SELECT status, COUNT(*)::bigint AS count
+         FROM protocol_app_consent_requests
+         GROUP BY status`,
+      ),
+      this.prisma.$queryRawUnsafe<ProtocolStatusCountRow[]>(
+        `SELECT status, COUNT(*)::bigint AS count
+         FROM protocol_webhook_subscriptions
          GROUP BY status`,
       ),
       this.protocolWebhooksQueue.getJobCounts(
@@ -381,6 +408,15 @@ export class ProtocolService {
     ]);
     const deliveryCounts = Object.fromEntries(
       deliveryRows.map((row) => [row.status, Number(row.count)]),
+    ) as Record<string, number>;
+    const grantCounts = Object.fromEntries(
+      grantRows.map((row) => [row.status, Number(row.count)]),
+    ) as Record<string, number>;
+    const consentRequestCounts = Object.fromEntries(
+      consentRequestRows.map((row) => [row.status, Number(row.count)]),
+    ) as Record<string, number>;
+    const webhookCounts = Object.fromEntries(
+      webhookRows.map((row) => [row.status, Number(row.count)]),
     ) as Record<string, number>;
 
     return protocolVisibilitySummarySchema.parse({
@@ -409,6 +445,25 @@ export class ProtocolService {
           delayed: queueState.delayed ?? 0,
           completed: queueState.completed ?? 0,
           failed: queueState.failed ?? 0,
+        },
+      },
+      access: {
+        grantCounts: {
+          active: grantCounts.active ?? 0,
+          revoked: grantCounts.revoked ?? 0,
+        },
+        consentRequestCounts: {
+          pending: consentRequestCounts.pending ?? 0,
+          approved: consentRequestCounts.approved ?? 0,
+          rejected: consentRequestCounts.rejected ?? 0,
+          cancelled: consentRequestCounts.cancelled ?? 0,
+          expired: consentRequestCounts.expired ?? 0,
+        },
+        webhookCounts: {
+          active: webhookCounts.active ?? 0,
+          paused: webhookCounts.paused ?? 0,
+          failed: webhookCounts.failed ?? 0,
+          revoked: webhookCounts.revoked ?? 0,
         },
       },
     });

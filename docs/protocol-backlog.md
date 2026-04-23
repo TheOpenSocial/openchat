@@ -94,6 +94,7 @@ Acceptance criteria:
 - Added `getVisibilitySummary()` to `@opensocial/protocol-client`.
 - Wired the mobile Settings protocol panel to the summary through React Query.
 - Exposed linked protocol app details in mobile Settings with stable selectors.
+- Added grant, consent-request, and webhook counts to the visibility summary.
 
 ## Tests To Keep
 

@@ -46,12 +46,32 @@ export function ProtocolIntegrationsPanel({
       { title: "Replayable", value: String(snapshot.queue.replayableCount) },
     ];
   }, [snapshot]);
+  const accessItems = useMemo(() => {
+    if (!snapshot) {
+      return [];
+    }
+    return [
+      {
+        title: "Active grants",
+        value: String(snapshot.access.grantCounts.active),
+      },
+      {
+        title: "Pending consent",
+        value: String(snapshot.access.consentRequestCounts.pending),
+      },
+      {
+        title: "Active webhooks",
+        value: String(snapshot.access.webhookCounts.active),
+      },
+    ];
+  }, [snapshot]);
   const recentEvents = snapshot?.recentEvents.slice(0, 3) ?? [];
   const visibleApps = snapshot?.apps.slice(0, 4) ?? [];
   const linkedApps = snapshot?.linkedApps ?? 0;
   const hasLiveData =
     linkedApps > 0 ||
     recentEvents.length > 0 ||
+    accessItems.some((item) => item.value !== "0") ||
     queueItems.some((item) => item.value !== "0");
   const statusLabel = loading ? "Refreshing" : hasLiveData ? "Live" : "Ready";
 
@@ -191,6 +211,36 @@ export function ProtocolIntegrationsPanel({
               <Text className="text-[13px] font-medium text-muted">
                 No protocol apps are linked yet. Registered partner apps will
                 appear here with their current status and issued access.
+              </Text>
+            </View>
+          )}
+        </View>
+
+        <View className="gap-3" testID="settings-protocol-access-summary">
+          <Text className="text-[12px] font-semibold uppercase tracking-[0.12em] text-muted">
+            Access and webhooks
+          </Text>
+          {accessItems.length > 0 ? (
+            <View className="flex-row flex-wrap gap-2">
+              {accessItems.map((item) => (
+                <View
+                  key={item.title}
+                  className="min-w-[96px] flex-1 rounded-2xl border border-hairline bg-canvas px-3 py-2.5"
+                >
+                  <Text className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">
+                    {item.title}
+                  </Text>
+                  <Text className="mt-1 text-[18px] font-semibold tracking-[-0.03em] text-ink">
+                    {item.value}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <View className="rounded-2xl border border-dashed border-hairline bg-canvas/60 px-3 py-4">
+              <Text className="text-[13px] font-medium text-muted">
+                Grant, consent, and webhook counts will show here once the
+                backend summary responds.
               </Text>
             </View>
           )}

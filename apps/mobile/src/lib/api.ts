@@ -684,6 +684,25 @@ export interface ProtocolVisibilitySummaryResponse {
       failed: number;
     };
   };
+  access: {
+    grantCounts: {
+      active: number;
+      revoked: number;
+    };
+    consentRequestCounts: {
+      pending: number;
+      approved: number;
+      rejected: number;
+      cancelled: number;
+      expired: number;
+    };
+    webhookCounts: {
+      active: number;
+      paused: number;
+      failed: number;
+      revoked: number;
+    };
+  };
 }
 
 const REMOTE_API_BASE_URL = "https://api.opensocial.so/api";
