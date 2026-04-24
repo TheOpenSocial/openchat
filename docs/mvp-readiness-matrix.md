@@ -35,6 +35,13 @@ Use the all-up runner to see the launch evidence lanes without executing them:
 pnpm test:mvp:readiness-pack -- --list
 ```
 
+Use the promotion plan to see the exact `9/10` -> `10/10` checklist without
+executing any lane:
+
+```bash
+pnpm test:mvp:readiness-pack -- --promotion-plan
+```
+
 Run intentionally when backend credentials, SDK build prerequisites, and mobile
 automation state are ready:
 
@@ -99,6 +106,12 @@ Scenario proof expected from list output:
 | Settings/protocol | Current mobile proof is visibility-focused, not action/operation management | `pnpm test:mobile:readiness-pack -- --lane=settings-protocol-promotion` plus protocol backend/SDK packs for grants, webhooks, queue, and replay in the current release window | mobile + sdk |
 | Backend daily-loop scenarios | Scenario validation is wired, but no fresh all-scenario purpose-pack pass is recorded in this matrix | `pnpm test:purpose:scenario-pack -- --backend` output showing `baseline`, `waiting_replies`, `activity_burst`, and `stalled_search` all pass, with the scenario proof table above used as the evidence checklist | backend |
 | SDK partner examples | Preflight metadata now lists client vs agent prerequisites, but no fresh package/example evidence has passed in this release window | SDK readiness pack run plus intentional partner example evidence after dist prerequisites are prepared | sdk |
+
+The same checklist is available in dry form from:
+
+```bash
+pnpm test:mvp:readiness-pack -- --promotion-plan
+```
 
 ## User-Visible MVP
 

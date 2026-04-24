@@ -55,6 +55,86 @@ const LANES = [
   },
 ];
 
+const PROMOTION_CHECKS = [
+  {
+    area: "Mobile signed-out landing",
+    readiness: "9/10",
+    command: "pnpm test:mobile:readiness-pack -- --lane=auth-landing-current",
+    evidence: "Maestro output for the signed-out auth landing lane",
+    promotes: "Signed-out landing",
+    notes: "Protects the designed video backdrop and cycling title sequence.",
+  },
+  {
+    area: "Mobile onboarding and Home recovery",
+    readiness: "8-9/10",
+    command:
+      "pnpm test:mobile:readiness-pack -- --lane=onboarding-completion,auth-onboarding-home-recovery",
+    evidence:
+      "Maestro output for first-run onboarding plus auth/onboarding/Home recovery",
+    promotes: "Onboarding to Home and Home shell",
+    notes:
+      "Still requires a non-dev auth/onboarding proof plan before full release confidence.",
+  },
+  {
+    area: "Mobile chats",
+    readiness: "9/10",
+    command:
+      "pnpm test:mobile:readiness-pack -- --lane=chats-thread-current,chats-mutations-current",
+    evidence: "Maestro output for thread, modal, reply, edit, reaction, delete",
+    promotes: "Chats list, thread core, and thread modal",
+    notes: "Use same-window evidence because chat proof is split across lanes.",
+  },
+  {
+    area: "Mobile Profile",
+    readiness: "9/10",
+    command: "pnpm test:mobile:readiness-pack -- --lane=profile-promotion",
+    evidence:
+      "Maestro output for profile persistence, preferences, reopen, avatar, peer profile, and chat provenance",
+    promotes: "Profile overview, bio, interests, peer profile",
+    notes: "Does not change scores until the grouped lane passes.",
+  },
+  {
+    area: "Settings/protocol visibility",
+    readiness: "9/10",
+    command:
+      "pnpm test:mobile:readiness-pack -- --lane=settings-protocol-promotion && pnpm test:sdk:readiness-pack -- --run --lane=protocol-client,protocol-agent && pnpm test:backend:ops-pack",
+    evidence:
+      "Mobile Settings/protocol Maestro output plus SDK protocol package output plus backend ops artifact",
+    promotes:
+      "Settings identity, protocol visibility, grants/webhooks/queue/replay confidence",
+    notes: "Mobile proves visibility; SDK/backend prove protocol operations.",
+  },
+  {
+    area: "Backend daily-loop read models",
+    readiness: "9/10",
+    command: "pnpm test:purpose:scenario-pack -- --backend",
+    evidence:
+      "Sandbox validation output for baseline, waiting_replies, activity_burst, stalled_search",
+    promotes: "Backend Daily-loop read models",
+    notes: "Requires all four scenario sections plus completion output.",
+  },
+  {
+    area: "Mobile daily-loop scenarios",
+    readiness: "9/10",
+    command: "pnpm test:purpose:scenario-pack -- --mobile",
+    evidence:
+      "Mobile sandbox Maestro output for baseline, waiting_replies, activity_burst, stalled_search",
+    promotes: "Mobile Daily-loop Home and Activity scenario rendering",
+    notes: "Pair with backend scenario evidence for full product confidence.",
+  },
+  {
+    area: "SDK partner examples",
+    readiness: "9/10",
+    command:
+      "pnpm test:sdk:readiness-pack -- --preflight && pnpm test:sdk:readiness-pack -- --run",
+    evidence:
+      "SDK preflight output plus package test output for protocol types/events/client/server/agent",
+    promotes: "SDK Protocol client, agent, server/events/types",
+    notes:
+      "Manual example execution remains intentional after dist and runtime prerequisites are ready.",
+  },
+];
+
 function getFlagValues(flag) {
   const values = [];
   const args = process.argv.slice(2);
@@ -96,6 +176,23 @@ function selectedLanes() {
   return LANES.filter((lane) => requestedSet.has(lane.id));
 }
 
+function printPromotionPlan() {
+  console.log("MVP 10/10 promotion plan:");
+  for (const check of PROMOTION_CHECKS) {
+    console.log(`- ${check.area} (${check.readiness})`);
+    console.log(`  command: ${check.command}`);
+    console.log(`  evidence: ${check.evidence}`);
+    console.log(`  promotes: ${check.promotes}`);
+    console.log(`  note: ${check.notes}`);
+  }
+  console.log(
+    "\nThis is list-only. Run the commands intentionally when credentials, mobile session state, and SDK build prerequisites are ready.",
+  );
+  console.log(
+    "Promotion rule: rows only move to 10/10 after the referenced automation passes in the same release window.",
+  );
+}
+
 function printLanes(lanes) {
   console.log("MVP readiness pack lanes:");
   for (const lane of lanes) {
@@ -109,6 +206,9 @@ function printLanes(lanes) {
   console.log("Run with --run when you intentionally want to execute lanes.");
   console.log(
     "Promotion rule: rows only move to 10/10 after the referenced automation passes in the same release window.",
+  );
+  console.log(
+    "Use --promotion-plan to print the exact 9/10-to-10/10 checklist.",
   );
 }
 
@@ -136,6 +236,11 @@ function run(command, args, options = {}) {
 async function main() {
   const lanes = selectedLanes();
   const shouldRun = process.argv.includes("--run");
+
+  if (process.argv.includes("--promotion-plan")) {
+    printPromotionPlan();
+    return;
+  }
 
   if (process.argv.includes("--list") || !shouldRun) {
     printLanes(lanes);
