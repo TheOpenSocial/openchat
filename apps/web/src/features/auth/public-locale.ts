@@ -349,34 +349,34 @@ export const publicCopy = {
         "OpenSocial is building a human-first social product where intent, consent, and coordination come before feeds, noise, and passive browsing.",
       emailLabel: "Email",
       emailPlaceholder: "you@example.com",
-      submit: "Join waitlist",
+      submit: "Request early access",
       submitting: "Joining...",
       emptyEmail: "Enter your email to join the waitlist.",
       success: "You are on the list. We will reach out when access opens.",
       retry: "Could not reach the server. Try again.",
       unknown: "Something went wrong.",
-      faqTitle: "Questions",
+      faqTitle: "Useful questions",
       manifestoLink: "Manifesto",
       faqs: [
         {
-          question: "What is OpenSocial?",
+          question: "What will I be able to do with OpenSocial?",
           answer:
-            "OpenSocial is an intent-first social coordination product. Instead of browsing feeds or directories, people can say what they want to do or talk about, and the system helps them reach the right people.",
+            "You will be able to say what you want to do or talk about, then OpenSocial helps you find people who are relevant, available, and interested in the same direction.",
         },
         {
-          question: "What does joining the waitlist do?",
+          question: "What happens after I request early access?",
           answer:
-            "Joining the waitlist lets us contact you as access opens. It also helps us understand demand from the people who most want this kind of product.",
+            "We will use your email to contact you when access opens. It also helps us understand who wants this first, so we can shape the early product around real use cases.",
         },
         {
           question: "Who is this for?",
           answer:
-            "It is for people with fragmented digital social lives who want faster ways to turn intent into real connection. That includes builders, creators, hobby groups, gamers, and people trying to meet around a clear shared purpose.",
+            "It is for people who want a faster way to turn an idea into a real connection: meeting someone nearby, finding collaborators, forming a small group, or starting a conversation with a clear reason.",
         },
         {
-          question: "Is this an AI companion app?",
+          question: "Where does AI fit?",
           answer:
-            "No. AI helps with understanding, ranking, safety, and coordination. It does not replace the people involved or speak as the user in real human conversations.",
+            "AI helps understand intent, organize options, reduce noise, and support safety. It does not replace people or pretend to be you in human conversations.",
         },
       ],
     },
@@ -462,35 +462,35 @@ export const publicCopy = {
         "OpenSocial está creando un producto social donde la intención, el consentimiento y la coordinación van primero. Menos contenido pasivo, menos ruido, más conexiones reales.",
       emailLabel: "Email",
       emailPlaceholder: "tu@email.com",
-      submit: "Unirme a la lista",
+      submit: "Pedir early access",
       submitting: "Enviando...",
       emptyEmail: "Escribe tu email para unirte a la lista.",
       success:
         "Listo, ya estás en la lista. Te vamos a escribir cuando abramos el acceso.",
       retry: "No pudimos conectar con el servidor. Intenta de nuevo.",
       unknown: "Algo salió mal.",
-      faqTitle: "Preguntas",
+      faqTitle: "Lo importante",
       manifestoLink: "Manifiesto",
       faqs: [
         {
-          question: "¿Qué es OpenSocial?",
+          question: "¿Qué voy a poder hacer con OpenSocial?",
           answer:
-            "OpenSocial es un producto de coordinación social basado en intención. En vez de recorrer feeds o directorios, dices qué quieres hacer o conversar, y el sistema te ayuda a llegar a las personas adecuadas.",
+            "Vas a poder decir qué quieres hacer o conversar, y OpenSocial te va a ayudar a encontrar personas relevantes, disponibles y con una intención compatible.",
         },
         {
-          question: "¿Qué pasa cuando me uno a la lista?",
+          question: "¿Qué pasa cuando pido early access?",
           answer:
-            "Te podremos contactar cuando abramos el acceso. También nos ayuda a entender qué tipo de personas están buscando este producto desde el inicio.",
+            "Usaremos tu email para avisarte cuando abramos acceso. También nos ayuda a entender quién quiere usar esto primero y qué casos reales deberíamos priorizar.",
         },
         {
           question: "¿Para quién es?",
           answer:
-            "Para personas que quieren convertir una intención en una conexión real más rápido: personas que construyen, creadores, grupos de hobbies, gamers y gente que quiere encontrarse alrededor de un propósito claro.",
+            "Para personas que quieren pasar más rápido de una idea a una conexión real: conocer a alguien cerca, encontrar colaboradores, armar un grupo chico o empezar una conversación con un motivo claro.",
         },
         {
-          question: "¿Es una app de compañía con IA?",
+          question: "¿Qué papel tiene la IA?",
           answer:
-            "No. La IA ayuda a entender, ordenar, cuidar y coordinar. No reemplaza a las personas ni habla como si fuera el usuario en conversaciones humanas reales.",
+            "La IA ayuda a entender la intención, ordenar opciones, bajar el ruido y cuidar la experiencia. No reemplaza a las personas ni habla por ti en conversaciones humanas.",
         },
       ],
     },
@@ -582,35 +582,35 @@ export const publicCopy = {
         "OpenSocial construit un produit social où l'intention, le consentement et la coordination passent avant les fils d'actualité, le bruit et la navigation passive.",
       emailLabel: "Email",
       emailPlaceholder: "vous@email.com",
-      submit: "Rejoindre la liste",
+      submit: "Demander un early access",
       submitting: "Envoi...",
       emptyEmail: "Entrez votre email pour rejoindre la liste.",
       success:
         "C'est fait, vous êtes sur la liste. Nous vous écrirons lorsque l'accès ouvrira.",
       retry: "Impossible de joindre le serveur. Réessayez.",
       unknown: "Une erreur est survenue.",
-      faqTitle: "Questions",
+      faqTitle: "Questions utiles",
       manifestoLink: "Manifeste",
       faqs: [
         {
-          question: "Qu'est-ce qu'OpenSocial ?",
+          question: "Que pourrai-je faire avec OpenSocial ?",
           answer:
-            "OpenSocial est un produit de coordination sociale fondé sur l'intention. Au lieu de parcourir des fils d'actualité ou des annuaires, vous dites ce que vous voulez faire ou discuter, et le système vous aide à atteindre les bonnes personnes.",
+            "Vous pourrez dire ce que vous voulez faire ou discuter, puis OpenSocial vous aidera à trouver des personnes pertinentes, disponibles et intéressées par la même direction.",
         },
         {
-          question: "Que se passe-t-il quand je rejoins la liste ?",
+          question: "Que se passe-t-il après la demande d'early access ?",
           answer:
-            "Nous pourrons vous contacter lorsque l'accès ouvrira. Cela nous aide aussi à comprendre quelles personnes cherchent ce produit dès le départ.",
+            "Nous utiliserons votre email pour vous prévenir lorsque l'accès ouvrira. Cela nous aide aussi à comprendre qui veut utiliser le produit en premier et quels cas réels prioriser.",
         },
         {
           question: "À qui cela s'adresse-t-il ?",
           answer:
-            "Aux personnes qui veulent transformer plus vite une intention en vraie connexion: personnes qui construisent, créateurs, groupes de loisirs, joueurs et personnes qui veulent se rencontrer autour d'un objectif clair.",
+            "Aux personnes qui veulent passer plus vite d'une idée à une vraie connexion: rencontrer quelqu'un près de soi, trouver des collaborateurs, créer un petit groupe ou lancer une conversation avec une raison claire.",
         },
         {
-          question: "Est-ce une app de compagnon IA ?",
+          question: "Quel rôle joue l'IA ?",
           answer:
-            "Non. L'IA aide à comprendre, classer, sécuriser et coordonner. Elle ne remplace pas les personnes et ne parle pas comme si elle était l'utilisateur dans de vraies conversations humaines.",
+            "L'IA aide à comprendre l'intention, organiser les options, réduire le bruit et protéger l'expérience. Elle ne remplace pas les personnes et ne parle pas à votre place dans les conversations humaines.",
         },
       ],
     },

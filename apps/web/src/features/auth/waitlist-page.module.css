@@ -6,18 +6,19 @@
   --waitlist-border: color-mix(in oklch, var(--waitlist-text) 16%, transparent);
   --waitlist-border-strong: color-mix(
     in oklch,
-    var(--waitlist-text) 28%,
+    var(--waitlist-text) 34%,
     transparent
   );
   --waitlist-surface: color-mix(
     in oklch,
-    var(--waitlist-bg) 92%,
-    var(--waitlist-text) 8%
+    var(--waitlist-bg) 97%,
+    var(--waitlist-text) 3%
   );
-  --waitlist-field: color-mix(
+  --waitlist-field: var(--waitlist-bg);
+  --waitlist-field-hover: color-mix(
     in oklch,
-    var(--waitlist-bg) 96%,
-    var(--waitlist-text) 4%
+    var(--waitlist-bg) 99%,
+    var(--waitlist-text) 1%
   );
   --waitlist-focus: color-mix(
     in oklch,
@@ -54,7 +55,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.5rem 0 1.5rem;
+  padding: 0.375rem 0 1.375rem;
   border-bottom: 1px solid var(--waitlist-border);
 }
 
@@ -89,13 +90,13 @@
 .navLink {
   min-width: 2.75rem;
   min-height: 2.75rem;
-  padding: 0.625rem 0.875rem;
-  border: 1px solid var(--waitlist-border);
+  padding: 0.625rem 0.75rem;
+  border: 1px solid transparent;
   border-radius: 999px;
-  color: var(--waitlist-muted);
+  color: var(--waitlist-subtle);
   background: transparent;
   font: inherit;
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
   line-height: 1;
   white-space: nowrap;
   transition:
@@ -118,9 +119,9 @@
 .themeToggle:hover,
 .navLink:hover,
 .themeToggle[aria-pressed="true"] {
-  border-color: var(--waitlist-border-strong);
+  border-color: var(--waitlist-border);
   background: var(--waitlist-surface);
-  color: var(--waitlist-text);
+  color: var(--waitlist-muted);
 }
 
 .themeToggle:active,
@@ -143,7 +144,7 @@
   grid-template-columns: minmax(0, 1.08fr) minmax(20rem, 27rem);
   gap: clamp(2.5rem, 7vw, 7rem);
   align-items: start;
-  padding: clamp(4rem, 9vw, 7rem) 0 clamp(3rem, 7vw, 5rem);
+  padding: clamp(4.5rem, 9vw, 7.5rem) 0 clamp(4rem, 7vw, 5.75rem);
 }
 
 .hero {
@@ -179,7 +180,8 @@
 }
 
 .panel {
-  padding-block: 0.375rem;
+  margin-top: 0.625rem;
+  padding-block: 0.625rem;
   border-top: 1px solid var(--waitlist-border);
   border-bottom: 1px solid var(--waitlist-border);
 }
@@ -187,8 +189,8 @@
 .form {
   display: flex;
   flex-direction: column;
-  gap: 0.875rem;
-  padding-block: 1.375rem;
+  gap: 0.75rem;
+  padding-block: 1.75rem;
 }
 
 .label {
@@ -198,15 +200,16 @@
 }
 
 .input {
-  min-height: 3.5rem;
+  min-height: 3.75rem;
   width: 100%;
-  padding: 0.975rem 1rem;
+  padding: 1rem 1.075rem;
   border: 1px solid var(--waitlist-border);
-  border-radius: 0.625rem;
+  border-radius: 0.875rem;
   background: var(--waitlist-field);
   color: var(--waitlist-text);
   font: inherit;
-  font-size: 1rem;
+  font-size: 1.0625rem;
+  line-height: 1.25;
   transition:
     border-color 160ms ease,
     background-color 160ms ease,
@@ -219,13 +222,14 @@
 
 .input:hover {
   border-color: var(--waitlist-border-strong);
+  background: var(--waitlist-field-hover);
 }
 
 .input:focus-visible {
   border-color: var(--waitlist-focus);
-  background: var(--waitlist-bg);
+  background: var(--waitlist-field);
   box-shadow: 0 0 0 4px
-    color-mix(in oklch, var(--waitlist-focus) 18%, transparent);
+    color-mix(in oklch, var(--waitlist-focus) 14%, transparent);
 }
 
 .input[aria-invalid="true"] {
@@ -233,14 +237,15 @@
 }
 
 .submit {
-  min-height: 3.5rem;
+  min-height: 3.75rem;
+  margin-top: 0.375rem;
   padding: 0 1.25rem;
   border: 1px solid var(--waitlist-text);
-  border-radius: 0.625rem;
+  border-radius: 999px;
   background: var(--waitlist-text);
   color: var(--waitlist-bg);
   font: inherit;
-  font-size: 1rem;
+  font-size: 1.0625rem;
   font-weight: 750;
   cursor: pointer;
   transition:
@@ -251,6 +256,7 @@
 }
 
 .submit:hover:not(:disabled) {
+  border-color: var(--waitlist-muted);
   background: var(--waitlist-muted);
 }
 
@@ -260,7 +266,7 @@
 }
 
 .message {
-  margin: 0.125rem 0 0;
+  margin: 0.25rem 0 0;
   font-size: 0.95rem;
   line-height: 1.5;
 }
@@ -275,6 +281,7 @@
 
 .faq {
   max-width: 52rem;
+  padding-top: clamp(0.5rem, 2vw, 1.5rem);
   padding-bottom: 5rem;
 }
 
@@ -344,6 +351,7 @@
 
   .panel {
     max-width: 32rem;
+    margin-top: 0;
   }
 }
 
