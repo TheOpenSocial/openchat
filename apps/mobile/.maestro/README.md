@@ -228,6 +228,10 @@ To inspect the exact lanes without running them:
 pnpm test:mobile:readiness-pack -- --list
 ```
 
+List mode is dry-only: it prints lane commands plus promotion group evidence,
+promoted rows, and score notes, but it does not start Expo, run Maestro, or
+change readiness scores.
+
 To rerun only one focused lane:
 
 ```bash

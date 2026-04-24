@@ -42,6 +42,12 @@ executing any lane:
 pnpm test:mvp:readiness-pack -- --promotion-plan
 ```
 
+For CI artifacts or dashboards, print the same dry plan as JSON:
+
+```bash
+pnpm test:mvp:readiness-pack -- --promotion-plan --json
+```
+
 Run intentionally when backend credentials, SDK build prerequisites, and mobile
 automation state are ready:
 
@@ -74,6 +80,10 @@ List the daily-loop scenarios and the exact read-model proof each one provides:
 pnpm test:purpose:scenario-pack -- --list
 ```
 
+This is a dry-only guidance view. It connects each scenario to the
+user-visible capability and backend evidence to inspect, but it does not run a
+lane or change readiness scores.
+
 Backend promotion evidence comes from a fresh same-window run:
 
 ```bash
@@ -87,12 +97,12 @@ for the release window being promoted.
 
 Scenario proof expected from list output:
 
-| Scenario | What it proves | Backend evidence to inspect |
+| Scenario | User-visible capability | Backend evidence to inspect |
 | --- | --- | --- |
-| `baseline` | Daily-loop Home can explain the normal sandbox state from backend read models | `validated=true` with Home tone `active` or `waiting` and a coordination or top-suggestion spotlight |
-| `waiting_replies` | Home can distinguish waiting-on-others from an action the user should take | `validated=true` with coordination title `Waiting on replies` and no `targetChatId` handoff |
-| `activity_burst` | Activity read models surface a meaningful change summary after a notification burst | `validated=true` with `activityCounts.unreadNotifications` greater than `0` |
-| `stalled_search` | Home can switch into explicit recovery guidance when matching stalls | `validated=true` with Home tone `recovery` and a recovery spotlight |
+| `baseline` | Home gives the user an immediate answer about what the system is doing and where to look next | `validated=true` with Home tone `active` or `waiting` and a coordination or top-suggestion spotlight |
+| `waiting_replies` | Home makes it clear the user is waiting on replies instead of pushing them into unnecessary action | `validated=true` with coordination title `Waiting on replies` and no `targetChatId` handoff |
+| `activity_burst` | Activity helps the user catch up on important changes after time away | `validated=true` with `activityCounts.unreadNotifications` greater than `0` |
+| `stalled_search` | Home gives the user a clear recovery next step when matching is not progressing | `validated=true` with Home tone `recovery` and a recovery spotlight |
 
 ## 10/10 Promotion Board
 

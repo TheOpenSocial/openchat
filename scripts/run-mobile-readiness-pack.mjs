@@ -86,6 +86,12 @@ const GROUPS = [
     name: "profile-promotion",
     description:
       "Same-window promotion group for Profile overview, bio, interests, preferences, avatar, and peer-profile traversal",
+    evidence:
+      "Runs the current Profile persistence, preferences, preferences reopen, avatar, peer-profile, and chat provenance lanes together.",
+    promotes:
+      "Profile overview, Profile bio persistence, Profile interests persistence, and Other user profile matrix rows after a same-window pass.",
+    notes:
+      "Dry listing only. Scores stay at 9/10 until the promotion group passes in the current release window.",
     lanes: [
       "profile-persistence-current",
       "profile-preferences-current",
@@ -99,6 +105,12 @@ const GROUPS = [
     name: "settings-protocol-promotion",
     description:
       "Same-window promotion group for Settings identity, reopen persistence, avatar, and protocol visibility summaries",
+    evidence:
+      "Runs the current Settings persistence, Settings reopen, and Settings avatar lanes together with protocol visibility assertions.",
+    promotes:
+      "Settings shell and Settings identity persistence rows after a same-window pass; Protocol integrations still also needs backend/SDK proof.",
+    notes:
+      "Dry listing only. Scores stay at 9/10 until the promotion group passes in the current release window.",
     lanes: [
       "settings-current",
       "settings-reopen-current",
@@ -178,6 +190,9 @@ function printLanes(lanes = LANES) {
     for (const group of GROUPS) {
       console.log(`- ${group.name}: ${group.description}`);
       console.log(`  expands to: ${group.lanes.join(", ")}`);
+      console.log(`  evidence: ${group.evidence}`);
+      console.log(`  promotes: ${group.promotes}`);
+      console.log(`  notes: ${group.notes}`);
     }
   }
 }

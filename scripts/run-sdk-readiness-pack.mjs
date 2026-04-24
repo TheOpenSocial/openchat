@@ -195,12 +195,22 @@ function selectedLanes() {
 }
 
 function printLanes(lanes) {
+  const selectedExamples = PARTNER_EXAMPLES.filter((example) =>
+    lanes.some((lane) => lane.id === example.lane),
+  );
+  const selectedClientExamples = selectedExamples.filter(
+    (example) => example.sdkLayer === "client",
+  );
+  const selectedAgentExamples = selectedExamples.filter(
+    (example) => example.sdkLayer === "agent",
+  );
+
   console.log("SDK readiness pack lanes:");
   for (const lane of lanes) {
     console.log(`- ${lane.id}: ${lane.packageName}`);
     console.log(`  proves: ${lane.proves}`);
     console.log(`  dist: ${lane.dist}`);
-    console.log(`  command: pnpm --filter ${lane.packageName} test`);
+    console.log(`  --run command: pnpm --filter ${lane.packageName} test`);
     if (lane.examples) {
       console.log("  partner examples:");
       for (const example of lane.examples) {
@@ -211,27 +221,98 @@ function printLanes(lanes) {
       }
     }
   }
+
   console.log(
-    "\nPartner example preflight (list-only; does not execute examples):",
+    "\nPartner example preflight (dry/list-only; does not execute examples):",
   );
-  for (const example of PARTNER_EXAMPLES.filter((example) =>
-    lanes.some((lane) => lane.id === example.lane),
-  )) {
-    console.log(`- ${example.id}: ${example.sdkLayer} example`);
-    console.log(`  command: ${example.command}`);
-    console.log(`  required dist: ${example.dist.join(", ")}`);
-    console.log(`  prerequisites: ${example.prerequisites.join("; ")}`);
+
+  printExampleGroup("Client examples", selectedClientExamples);
+  printExampleGroup("Agent examples", selectedAgentExamples);
+
+  console.log("\nDist prerequisites:");
+  if (selectedClientExamples.length > 0) {
+    console.log("- Client examples need:");
+    for (const dist of CLIENT_EXAMPLE_DIST) {
+      console.log(`  - ${dist}`);
+    }
   }
-  console.log("\nDefault behavior is list/preflight-only.");
+  if (selectedAgentExamples.length > 0) {
+    console.log("- Agent examples need:");
+    for (const dist of AGENT_EXAMPLE_DIST) {
+      console.log(`  - ${dist}`);
+    }
+  }
   console.log(
-    "Run with --run when you intentionally want to execute package tests.",
+    "- If a required dist file is missing, the example loader reports the exact missing entry.",
+  );
+
+  console.log("\nRuntime prerequisites:");
+  if (selectedExamples.length > 0) {
+    const clientRuntimePrerequisites =
+      selectedClientExamples.length > 0
+        ? [
+            ...new Set(
+              selectedClientExamples.flatMap(
+                (example) => example.prerequisites,
+              ),
+            ),
+          ]
+        : ACTOR_PREREQUISITES;
+
+    console.log("- Client/runtime base may need:");
+    for (const prerequisite of clientRuntimePrerequisites) {
+      console.log(`  - ${prerequisite}`);
+    }
+  }
+  if (selectedAgentExamples.length > 0) {
+    const agentOnlyPrerequisites = [
+      ...new Set(
+        selectedAgentExamples
+          .flatMap((example) => example.prerequisites)
+          .filter(
+            (prerequisite) => !ACTOR_PREREQUISITES.includes(prerequisite),
+          ),
+      ),
+    ];
+
+    console.log("- Agent examples also need:");
+    for (const prerequisite of agentOnlyPrerequisites) {
+      console.log(`  - ${prerequisite}`);
+    }
+  }
+
+  console.log("\nManual follow-up:");
+  console.log("- Keep this command dry by default; it does not run examples.");
+  console.log("- Confirm required dist files exist before running an example.");
+  console.log(
+    "- Set the runtime inputs shown above for the example you choose.",
   );
   console.log(
-    "Repository examples import package dist files through scripts/examples/protocol-example-loader.mjs.",
+    "- Run the exact example command manually only when you are ready.",
+  );
+  console.log(
+    "- Run with --run only when you intentionally want to execute package tests.",
+  );
+  console.log(
+    "\nRepository examples import package dist files through scripts/examples/protocol-example-loader.mjs.",
   );
   console.log(
     "Use this output to check client vs agent prerequisites before running an example manually.",
   );
+}
+
+function printExampleGroup(label, examples) {
+  if (examples.length === 0) {
+    return;
+  }
+
+  console.log(`\n${label}:`);
+  for (const example of examples) {
+    console.log(`- ${example.id}: ${example.sdkLayer} example`);
+    console.log(`  path: ${example.path}`);
+    console.log(`  proves: ${example.proves}`);
+    console.log(`  command: ${example.command}`);
+  }
 }
 
 function run(command, args, options = {}) {

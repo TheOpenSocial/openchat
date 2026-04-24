@@ -95,8 +95,12 @@ Guides:
 - local repository examples document whether they need client dist or agent dist before running
 - setup failures from missing dist output are separated from protocol runtime failures
 - `pnpm test:sdk:readiness-pack -- --preflight` has been reviewed before any manual partner example run
-- client examples have protocol-types and protocol-client dist available, plus base URL/app/actor inputs as needed
-- agent examples have the client prerequisites plus protocol-agent dist and grant/readiness state
+- preflight output has been checked by section: client examples, agent examples, dist prerequisites, runtime prerequisites, and manual follow-up
+- client examples have protocol-types and protocol-client dist available
+- client examples have base URL, app credentials, and actor inputs as needed
+- agent examples have the client dist prerequisites plus protocol-agent dist
+- agent examples have the client runtime prerequisites plus grant/readiness state
+- the exact example command is run manually only after its dist and runtime prerequisites are ready
 
 ## Minimum ready bar
 

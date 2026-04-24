@@ -6,6 +6,8 @@ const SCENARIOS = [
   {
     id: "baseline",
     purpose: "Open the app and understand the normal active/waiting state.",
+    userCapability:
+      "Home gives the user an immediate answer about what the system is doing and where to look next.",
     proves:
       "Daily-loop Home can explain the normal sandbox state from backend read models.",
     backendExpectation:
@@ -18,6 +20,8 @@ const SCENARIOS = [
   {
     id: "waiting_replies",
     purpose: "See that requests are waiting on other people, not on you.",
+    userCapability:
+      "Home makes it clear the user is waiting on replies instead of pushing them into unnecessary action.",
     proves:
       "Daily-loop Home can distinguish waiting-on-others from an action the user should take.",
     backendExpectation:
@@ -30,6 +34,8 @@ const SCENARIOS = [
   {
     id: "activity_burst",
     purpose: "Open Activity and understand what changed while away.",
+    userCapability:
+      "Activity helps the user catch up on important changes after time away.",
     proves:
       "Activity read models surface a meaningful change summary after a notification burst.",
     backendExpectation: "Activity summary contains unread notifications.",
@@ -42,6 +48,8 @@ const SCENARIOS = [
     id: "stalled_search",
     purpose:
       "Recover when matching stalls instead of getting vague agent noise.",
+    userCapability:
+      "Home gives the user a clear recovery next step when matching is not progressing.",
     proves:
       "Daily-loop Home can switch into explicit recovery guidance when matching stalls.",
     backendExpectation:
@@ -110,8 +118,12 @@ function selectedScenarios() {
 
 function printScenarios(scenarios) {
   console.log("Purpose scenario pack:");
+  console.log(
+    "Dry-only note: --list prints capability and evidence guidance only; it does not run backend or mobile validation.",
+  );
   for (const scenario of scenarios) {
     console.log(`- ${scenario.id}: ${scenario.purpose}`);
+    console.log(`  user-visible capability: ${scenario.userCapability}`);
     console.log(`  proves: ${scenario.proves}`);
     console.log(`  backend: ${scenario.backendExpectation}`);
     console.log(`  backend evidence: ${scenario.backendEvidence}`);

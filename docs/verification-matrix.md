@@ -49,8 +49,8 @@ Related references:
 | API endpoint contracts | `pnpm --filter @opensocial/api test -- test/onboarding-agent.contract.spec.ts` | Runs a focused contract slice for protected agent onboarding endpoints | High-signal endpoint contract did not drift | CI backend job logs | `green` |
 | Admin playground services | `pnpm --filter @opensocial/api test -- test/admin-playground.controller.spec.ts test/admin-playground.service.spec.ts` | Verifies operator playground controller/service behavior | Admin playground control plane is still contract-safe | CI backend job logs | `green` |
 | Contract layer suite | `pnpm test:agentic:suite -- --layer=contract` | Runs the contract subset of the larger agentic suite | Core contract/scenario expectations still hold without needing the full live suite | CI backend job logs + suite artifacts | `green` |
-| MVP readiness pack | `pnpm test:mvp:readiness-pack -- --list` / `--promotion-plan` / `--run` | Lists backend, SDK, mobile, and purpose-scenario readiness lanes, prints the 9/10-to-10/10 checklist, or runs the lanes intentionally | All user-visible and partner-visible MVP evidence can be gathered from one command surface | CLI output plus lane artifacts | `conditional` |
-| Purpose scenario pack | `pnpm test:purpose:scenario-pack -- --list` / `--backend` | Lists the daily-loop purpose scenarios, then optionally applies each sandbox scenario and validates backend Home/Activity read models | Backend Daily-loop read models have concrete evidence for baseline, waiting replies, activity burst, and stalled search before MVP promotion | CLI output with all four `backend:<scenario>` sections and final `Purpose scenario pack completed.` | `conditional` |
+| MVP readiness pack | `pnpm test:mvp:readiness-pack -- --list` / `--promotion-plan --json` / `--run` | Lists backend, SDK, mobile, and purpose-scenario readiness lanes, prints the 9/10-to-10/10 checklist in text or JSON, or runs the lanes intentionally | All user-visible and partner-visible MVP evidence can be gathered from one command surface | CLI output plus lane artifacts | `conditional` |
+| Purpose scenario pack | `pnpm test:purpose:scenario-pack -- --list` / `--backend` | Dry-lists each daily-loop scenario with user-visible capability and backend evidence, then optionally applies each sandbox scenario and validates backend Home/Activity read models | Backend Daily-loop read models have concrete evidence for baseline, waiting replies, activity burst, and stalled search before MVP promotion | CLI output with all four `backend:<scenario>` sections and final `Purpose scenario pack completed.` | `conditional` |
 
 ## Release and deploy matrix
 
@@ -105,6 +105,9 @@ List-only command:
 pnpm test:purpose:scenario-pack -- --list
 ```
 
+This command is dry-only. Use it to review capability and evidence guidance; do
+not treat it as passing backend evidence.
+
 Promotion command:
 
 ```bash
@@ -113,12 +116,12 @@ pnpm test:purpose:scenario-pack -- --backend
 
 Expected proof:
 
-| Scenario | Backend assertion covered |
-| --- | --- |
-| `baseline` | Home status tone is `active` or `waiting`, and Home has either a coordination spotlight or top suggestion |
-| `waiting_replies` | Home coordination title is `Waiting on replies`, and it does not include a direct chat handoff |
-| `activity_burst` | Activity unread notification count is greater than `0` |
-| `stalled_search` | Home status tone is `recovery`, and Home has a recovery spotlight |
+| Scenario | User-visible capability | Backend assertion covered |
+| --- | --- | --- |
+| `baseline` | Home gives the user an immediate answer about what the system is doing and where to look next | Home status tone is `active` or `waiting`, and Home has either a coordination spotlight or top suggestion |
+| `waiting_replies` | Home makes it clear the user is waiting on replies instead of pushing them into unnecessary action | Home coordination title is `Waiting on replies`, and it does not include a direct chat handoff |
+| `activity_burst` | Activity helps the user catch up on important changes after time away | Activity unread notification count is greater than `0` |
+| `stalled_search` | Home gives the user a clear recovery next step when matching is not progressing | Home status tone is `recovery`, and Home has a recovery spotlight |
 
 Do not mark this lane `green` or promote Backend Daily-loop read models to
 `10/10` from documentation alone. Promotion requires fresh output from the

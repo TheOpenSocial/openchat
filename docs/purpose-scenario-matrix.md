@@ -12,6 +12,10 @@ List the pack without running anything:
 pnpm test:purpose:scenario-pack -- --list
 ```
 
+`--list` is dry-only. It prints the user-visible capability, backend contract,
+and evidence checklist for each scenario, but it does not run validation or
+promote readiness by itself.
+
 Run backend contract checks for every purpose scenario:
 
 ```bash
@@ -38,12 +42,12 @@ pnpm test:purpose:scenario-pack -- --backend --mobile --base-url=https://api.ope
 
 ## Scenario Coverage
 
-| Scenario | User question it proves | Backend contract | Mobile contract | Current readiness |
+| Scenario | User-visible capability | Backend evidence | Mobile contract | Current readiness |
 | --- | --- | --- | --- | --- |
-| `baseline` | What is the system doing for me right now? | `playground:sandbox -- --action=validate --scenario=baseline` checks active/waiting Home tone plus coordination or top suggestion | `test:mobile:sandbox:maestro -- --scenario=baseline --flow=sandbox-surface --app-id=host.exp.Exponent` checks Home status and Activity from sandbox data | `9/10`: wired, needs fresh combined pack run |
-| `waiting_replies` | Am I waiting on others, or is something waiting on me? | Validates the `Waiting on replies` coordination card and no premature chat handoff | Same mobile sandbox flow proves the waiting state renders in Home and Activity remains reachable | `9/10`: wired, needs fresh combined pack run |
-| `activity_burst` | What changed while I was away? | Validates unread Activity counts | Same mobile sandbox flow proves Activity opens with the expected section and quick links | `9/10`: wired, needs fresh combined pack run |
-| `stalled_search` | What should I do when matching stalls? | Validates recovery tone and recovery spotlight | Same mobile sandbox flow proves recovery guidance is visible without relying on transcript noise | `9/10`: wired, needs fresh combined pack run |
+| `baseline` | Home gives the user an immediate answer about what the system is doing and where to look next | `validated=true` with Home tone `active` or `waiting`, plus a coordination or top-suggestion spotlight | `test:mobile:sandbox:maestro -- --scenario=baseline --flow=sandbox-surface --app-id=host.exp.Exponent` checks Home status and Activity from sandbox data | `9/10`: wired, needs fresh combined pack run |
+| `waiting_replies` | Home makes it clear the user is waiting on replies instead of pushing them into unnecessary action | `validated=true` with coordination title `Waiting on replies` and no `targetChatId` handoff | Same mobile sandbox flow proves the waiting state renders in Home and Activity remains reachable | `9/10`: wired, needs fresh combined pack run |
+| `activity_burst` | Activity helps the user catch up on important changes after time away | `validated=true` with `activityCounts.unreadNotifications` greater than `0` | Same mobile sandbox flow proves Activity opens with the expected section and quick links | `9/10`: wired, needs fresh combined pack run |
+| `stalled_search` | Home gives the user a clear recovery next step when matching is not progressing | `validated=true` with Home tone `recovery` and a recovery spotlight | Same mobile sandbox flow proves recovery guidance is visible without relying on transcript noise | `9/10`: wired, needs fresh combined pack run |
 
 ## Required Product Capabilities
 

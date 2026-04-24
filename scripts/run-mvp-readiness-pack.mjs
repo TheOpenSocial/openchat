@@ -135,6 +135,10 @@ const PROMOTION_CHECKS = [
   },
 ];
 
+function hasFlag(flag) {
+  return process.argv.includes(flag);
+}
+
 function getFlagValues(flag) {
   const values = [];
   const args = process.argv.slice(2);
@@ -177,6 +181,24 @@ function selectedLanes() {
 }
 
 function printPromotionPlan() {
+  if (hasFlag("--json")) {
+    console.log(
+      JSON.stringify(
+        {
+          kind: "mvp-promotion-plan",
+          generatedAt: new Date().toISOString(),
+          dryRunOnly: true,
+          promotionRule:
+            "Rows only move to 10/10 after the referenced automation passes in the same release window.",
+          checks: PROMOTION_CHECKS,
+        },
+        null,
+        2,
+      ),
+    );
+    return;
+  }
+
   console.log("MVP 10/10 promotion plan:");
   for (const check of PROMOTION_CHECKS) {
     console.log(`- ${check.area} (${check.readiness})`);
@@ -235,14 +257,14 @@ function run(command, args, options = {}) {
 
 async function main() {
   const lanes = selectedLanes();
-  const shouldRun = process.argv.includes("--run");
+  const shouldRun = hasFlag("--run");
 
-  if (process.argv.includes("--promotion-plan")) {
+  if (hasFlag("--promotion-plan")) {
     printPromotionPlan();
     return;
   }
 
-  if (process.argv.includes("--list") || !shouldRun) {
+  if (hasFlag("--list") || !shouldRun) {
     printLanes(lanes);
     return;
   }
