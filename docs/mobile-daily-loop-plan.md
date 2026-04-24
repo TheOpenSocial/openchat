@@ -113,15 +113,15 @@ These are product read models that remove stitched client-side aggregation from 
 
 ### Now
 
-1. Validate the four sandbox scenarios directly in mobile and tighten any remaining ambiguous copy or routing:
+1. Run the purpose scenario pack across backend and mobile, then promote only the passing rows:
    - `baseline`
    - `waiting_replies`
    - `activity_burst`
    - `stalled_search`
-   Frontend files:
-   - [HomeStatusHeader.tsx](/Users/cruciblelabs/Documents/openchat/apps/mobile/src/open-chat/HomeStatusHeader.tsx)
-   - [HomeSpotlightCards.tsx](/Users/cruciblelabs/Documents/openchat/apps/mobile/src/open-chat/HomeSpotlightCards.tsx)
-   - [ActivityScreen.tsx](/Users/cruciblelabs/Documents/openchat/apps/mobile/src/screens/ActivityScreen.tsx)
+   Automation/docs:
+   - [run-purpose-scenario-pack.mjs](/Users/cruciblelabs/Documents/openchat/scripts/run-purpose-scenario-pack.mjs)
+   - [purpose-scenario-matrix.md](/Users/cruciblelabs/Documents/openchat/docs/purpose-scenario-matrix.md)
+   - [mobile-readiness-matrix.md](/Users/cruciblelabs/Documents/openchat/docs/mobile-readiness-matrix.md)
 
 2. Decide whether unread badge/bootstrap hydration needs its own lightweight store beyond the current `experience/bootstrap` path.
    Frontend files:
@@ -361,6 +361,12 @@ These are product read models that remove stitched client-side aggregation from 
     Backend tests:
     - [experience.service.spec.ts](/Users/cruciblelabs/Documents/openchat/apps/api/test/experience.service.spec.ts)
     - [experience.controller.spec.ts](/Users/cruciblelabs/Documents/openchat/apps/api/test/experience.controller.spec.ts)
+
+38. Added a purpose scenario matrix and runner that ties the four daily-loop
+    sandbox scenarios to backend validation plus mobile sandbox proof commands.
+    Automation/docs:
+    - [run-purpose-scenario-pack.mjs](/Users/cruciblelabs/Documents/openchat/scripts/run-purpose-scenario-pack.mjs)
+    - [purpose-scenario-matrix.md](/Users/cruciblelabs/Documents/openchat/docs/purpose-scenario-matrix.md)
 
 ### Phase 1: Product Contract
 

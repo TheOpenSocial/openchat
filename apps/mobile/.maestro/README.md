@@ -232,6 +232,15 @@ scenario's `Home` and `Activity` state.
 pnpm test:mobile:sandbox:maestro -- --scenario=waiting_replies --flow=sandbox-surface
 ```
 
+For the full app-purpose scenario list, use:
+
+```bash
+pnpm test:purpose:scenario-pack -- --list
+```
+
+That pack maps `baseline`, `waiting_replies`, `activity_burst`, and
+`stalled_search` to backend sandbox validation plus mobile sandbox proof.
+
 ## Design mock flow (no API)
 
 Start Metro with static preview mode:
