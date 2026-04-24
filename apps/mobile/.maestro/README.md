@@ -188,6 +188,32 @@ pnpm --filter @opensocial/mobile test:e2e:maestro:settings-persistence
 pnpm --filter @opensocial/mobile test:e2e:maestro:chats-core
 ```
 
+## Run MVP readiness pack
+
+Use this pack when graduating the remaining mobile MVP rows in
+`docs/mobile-readiness-matrix.md`. It runs the focused lanes that currently gate
+onboarding, settings/protocol, chat thread, peer profile, and notifications
+confidence.
+
+The pack does not start Expo or create a session by itself. Boot the right
+Expo Go/dev-client session first, then run:
+
+```bash
+pnpm test:mobile:readiness-pack
+```
+
+To inspect the exact lanes without running them:
+
+```bash
+pnpm test:mobile:readiness-pack -- --list
+```
+
+To rerun only one focused lane:
+
+```bash
+pnpm test:mobile:readiness-pack -- --lane=chats-thread-current
+```
+
 ## Run sandbox-backed surface-smoke flow
 
 This is the strongest mobile data-audit lane right now. It uses sandbox-world
