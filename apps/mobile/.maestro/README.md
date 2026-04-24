@@ -212,8 +212,8 @@ pnpm --filter @opensocial/mobile test:e2e:maestro:chats-core
 
 Use this pack when graduating the remaining mobile MVP rows in
 `docs/mobile-readiness-matrix.md`. It runs the focused lanes that currently gate
-auth/onboarding/Home recovery, settings/protocol, chat thread, peer profile, and
-notifications confidence.
+auth/onboarding/Home recovery, Profile promotion, settings/protocol, chat
+thread, peer profile, and notifications confidence.
 
 The pack does not start Expo or create a session by itself. Boot the right
 Expo Go/dev-client session first, then run:
@@ -233,6 +233,19 @@ To rerun only one focused lane:
 ```bash
 pnpm test:mobile:readiness-pack -- --lane=chats-thread-current
 ```
+
+To prove Profile and Settings/protocol mobile readiness in the same release
+window, use the named promotion groups:
+
+```bash
+pnpm test:mobile:readiness-pack -- --lane=profile-promotion,settings-protocol-promotion
+```
+
+`profile-promotion` expands to the current Profile overview, bio/interests,
+preferences, reopen, avatar, peer-profile, and chat-provenance lanes.
+`settings-protocol-promotion` expands to the current Settings identity, reopen,
+avatar, and protocol visibility summary lanes. Passing this command is evidence
+for promotion review; it does not by itself change the documented scores.
 
 The optional auth landing lane intentionally protects the designed video
 backdrop and cycling title sequence. Run it from a signed-out app state without

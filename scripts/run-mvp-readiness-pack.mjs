@@ -8,6 +8,10 @@ const LANES = [
     command: ["pnpm", ["test:backend:ops-pack"]],
     description:
       "Operational backend launch pack: release gate, smoke, moderation, protocol recovery, and runbooks.",
+    evidence:
+      ".artifacts/backend-ops-pack/<run-id>.json plus nested drill artifacts",
+    promotes:
+      "Backend operational launch pack, protocol recovery, moderation operator loop",
     runsTests: true,
   },
   {
@@ -15,6 +19,9 @@ const LANES = [
     command: ["pnpm", ["test:sdk:readiness-pack", "--", "--run"]],
     description:
       "Protocol SDK package contracts for types, events, client, server, and agent.",
+    evidence: "SDK package test output for each protocol package lane",
+    promotes:
+      "Protocol client, protocol agent, protocol server/events/types partner surface",
     runsTests: true,
   },
   {
@@ -22,6 +29,9 @@ const LANES = [
     command: ["pnpm", ["test:mobile:readiness-pack"]],
     description:
       "Focused mobile MVP Maestro lanes for onboarding, settings/protocol, chat, peer profile, and notifications.",
+    evidence: "Maestro output for focused mobile promotion lanes",
+    promotes:
+      "Mobile onboarding, Home shell, Settings/protocol, Chats, Profile, notifications",
     runsTests: true,
   },
   {
@@ -29,6 +39,9 @@ const LANES = [
     command: ["pnpm", ["test:purpose:scenario-pack", "--", "--backend"]],
     description:
       "Backend sandbox validation for baseline, waiting replies, activity burst, and stalled search.",
+    evidence: "Sandbox validation output for each purpose scenario",
+    promotes:
+      "Backend daily-loop read models and scenario-specific Home/Activity contracts",
     runsTests: true,
   },
   {
@@ -36,6 +49,8 @@ const LANES = [
     command: ["pnpm", ["test:purpose:scenario-pack", "--", "--mobile"]],
     description:
       "Mobile sandbox proof for baseline, waiting replies, activity burst, and stalled search.",
+    evidence: "Mobile sandbox Maestro output for each purpose scenario",
+    promotes: "Mobile daily-loop Home and Activity scenario rendering",
     runsTests: true,
   },
 ];
@@ -87,9 +102,14 @@ function printLanes(lanes) {
     const [command, args] = lane.command;
     console.log(`- ${lane.id}: ${lane.description}`);
     console.log(`  command: ${command} ${args.join(" ")}`);
+    console.log(`  evidence: ${lane.evidence}`);
+    console.log(`  promotes: ${lane.promotes}`);
   }
   console.log("\nDefault behavior is list-only.");
   console.log("Run with --run when you intentionally want to execute lanes.");
+  console.log(
+    "Promotion rule: rows only move to 10/10 after the referenced automation passes in the same release window.",
+  );
 }
 
 function run(command, args, options = {}) {

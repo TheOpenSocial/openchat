@@ -50,6 +50,7 @@ Related references:
 | Admin playground services | `pnpm --filter @opensocial/api test -- test/admin-playground.controller.spec.ts test/admin-playground.service.spec.ts` | Verifies operator playground controller/service behavior | Admin playground control plane is still contract-safe | CI backend job logs | `green` |
 | Contract layer suite | `pnpm test:agentic:suite -- --layer=contract` | Runs the contract subset of the larger agentic suite | Core contract/scenario expectations still hold without needing the full live suite | CI backend job logs + suite artifacts | `green` |
 | MVP readiness pack | `pnpm test:mvp:readiness-pack -- --list` / `--run` | Lists or runs the backend, SDK, mobile, and purpose-scenario readiness lanes | All user-visible and partner-visible MVP evidence can be gathered from one command surface | CLI output plus lane artifacts | `conditional` |
+| Purpose scenario pack | `pnpm test:purpose:scenario-pack -- --list` / `--backend` | Lists the daily-loop purpose scenarios, then optionally applies each sandbox scenario and validates backend Home/Activity read models | Backend Daily-loop read models have concrete evidence for baseline, waiting replies, activity burst, and stalled search before MVP promotion | CLI output with all four `backend:<scenario>` sections and final `Purpose scenario pack completed.` | `conditional` |
 
 ## Release and deploy matrix
 
@@ -92,6 +93,36 @@ Related references:
 | Staging mobile E2E session | [`.github/workflows/staging-mobile-e2e-session.yml`](/Users/cruciblelabs/Documents/openchat/.github/workflows/staging-mobile-e2e-session.yml) | Boots a smoke session and emits a mobile E2E artifact | Mobile automation can obtain a valid staged session bundle | workflow [`24367635640`](https://github.com/TheOpenSocial/openchat/actions/runs/24367635640) + artifact | `green` |
 | Benchmark onboarding | [`.github/workflows/benchmark-onboarding.yml`](/Users/cruciblelabs/Documents/openchat/.github/workflows/benchmark-onboarding.yml) | Runs onboarding-probe latency/quality benchmarks | Onboarding probe path remains callable and benchmarkable | workflow [`23457925557`](https://github.com/TheOpenSocial/openchat/actions/runs/23457925557) | `green` |
 | Staging find user | [`.github/workflows/staging-find-user.yml`](/Users/cruciblelabs/Documents/openchat/.github/workflows/staging-find-user.yml) | Queries staging users by email/name/UUID fragment | Operator lookup path to staging DB works on the runner | workflow artifact | `conditional` |
+
+## Purpose Scenario Evidence
+
+Use this lane when the MVP matrix asks whether Backend Daily-loop read models can
+move from `9/10` to `10/10`.
+
+List-only command:
+
+```bash
+pnpm test:purpose:scenario-pack -- --list
+```
+
+Promotion command:
+
+```bash
+pnpm test:purpose:scenario-pack -- --backend
+```
+
+Expected proof:
+
+| Scenario | Backend assertion covered |
+| --- | --- |
+| `baseline` | Home status tone is `active` or `waiting`, and Home has either a coordination spotlight or top suggestion |
+| `waiting_replies` | Home coordination title is `Waiting on replies`, and it does not include a direct chat handoff |
+| `activity_burst` | Activity unread notification count is greater than `0` |
+| `stalled_search` | Home status tone is `recovery`, and Home has a recovery spotlight |
+
+Do not mark this lane `green` or promote Backend Daily-loop read models to
+`10/10` from documentation alone. Promotion requires fresh output from the
+backend command above in the release window being evaluated.
 
 ## What is actually working now
 

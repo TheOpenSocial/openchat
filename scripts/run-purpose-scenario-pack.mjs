@@ -6,34 +6,50 @@ const SCENARIOS = [
   {
     id: "baseline",
     purpose: "Open the app and understand the normal active/waiting state.",
+    proves:
+      "Daily-loop Home can explain the normal sandbox state from backend read models.",
     backendExpectation:
       "Home has an active or waiting tone plus coordination or a top suggestion.",
     mobileExpectation:
       "Home status and Activity sections render from the sandbox read model.",
+    backendEvidence:
+      "validated=true with home.tone active|waiting after playground scenario + inspect.",
   },
   {
     id: "waiting_replies",
     purpose: "See that requests are waiting on other people, not on you.",
+    proves:
+      "Daily-loop Home can distinguish waiting-on-others from an action the user should take.",
     backendExpectation:
       'Home coordination card says "Waiting on replies" and does not jump to chat.',
     mobileExpectation:
       "Home communicates waiting state and Activity remains reachable.",
+    backendEvidence:
+      'validated=true with coordination.title "Waiting on replies" and no targetChatId.',
   },
   {
     id: "activity_burst",
     purpose: "Open Activity and understand what changed while away.",
+    proves:
+      "Activity read models surface a meaningful change summary after a notification burst.",
     backendExpectation: "Activity summary contains unread notifications.",
     mobileExpectation:
       "Activity opens with the expected high-signal section and quick links.",
+    backendEvidence:
+      "validated=true with activityCounts.unreadNotifications greater than 0.",
   },
   {
     id: "stalled_search",
     purpose:
       "Recover when matching stalls instead of getting vague agent noise.",
+    proves:
+      "Daily-loop Home can switch into explicit recovery guidance when matching stalls.",
     backendExpectation:
       "Home has recovery tone and exposes a structured recovery spotlight.",
     mobileExpectation:
       "Home shows recovery guidance and Activity navigation still works.",
+    backendEvidence:
+      "validated=true with home.tone recovery and a recovery spotlight.",
   },
 ];
 
@@ -96,11 +112,17 @@ function printScenarios(scenarios) {
   console.log("Purpose scenario pack:");
   for (const scenario of scenarios) {
     console.log(`- ${scenario.id}: ${scenario.purpose}`);
+    console.log(`  proves: ${scenario.proves}`);
     console.log(`  backend: ${scenario.backendExpectation}`);
+    console.log(`  backend evidence: ${scenario.backendEvidence}`);
     console.log(`  mobile: ${scenario.mobileExpectation}`);
   }
   console.log("\nCommands:");
+  console.log("  pnpm test:purpose:scenario-pack -- --list");
   console.log("  pnpm test:purpose:scenario-pack -- --backend");
+  console.log(
+    "  pnpm test:purpose:scenario-pack -- --backend --scenario=baseline",
+  );
   console.log(
     "  pnpm test:purpose:scenario-pack -- --mobile --scenario=baseline",
   );

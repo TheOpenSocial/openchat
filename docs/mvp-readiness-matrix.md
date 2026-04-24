@@ -18,9 +18,9 @@ Scale:
 | Mobile | Daily-loop Home | `9/10` | Home explains state, next move, recovery, and coordination cards from backend read models | `test:purpose:scenario-pack` |
 | Mobile | Activity | `10/10` | Activity shows changes, quick links, notifications, and route recovery | `mobile-route-graph.yaml`, notification lanes |
 | Mobile | Chats | `9/10` | Seeded chat, reply banner, edits/reactions/deletes, thread modal, and peer profile traversal are covered | chat current-state Maestro lanes |
-| Mobile | Profile | `9/10` | Bio, interests, preferences, reopen persistence, and avatar updates are covered, but the mobile matrix still requires broader overview/bio/interests promotion evidence | profile current-state Maestro lanes |
-| Mobile | Settings/protocol visibility | `9/10` | Identity persistence plus linked apps, grants/consent counts, delivery queue summary | settings current-state lanes |
-| Backend | Daily-loop read models | `9/10` | Home and Activity summaries cover baseline, waiting replies, activity burst, and stalled search | `playground:sandbox -- --action=validate` |
+| Mobile | Profile | `9/10` | Bio, interests, preferences, reopen persistence, avatar updates, peer profile, and chat provenance are covered, but still need same-window promotion evidence | `pnpm test:mobile:readiness-pack -- --lane=profile-promotion` |
+| Mobile | Settings/protocol visibility | `9/10` | Identity persistence plus linked apps, grants/consent counts, delivery queue summary | `pnpm test:mobile:readiness-pack -- --lane=settings-protocol-promotion` |
+| Backend | Daily-loop read models | `9/10` | Home and Activity summaries have deterministic assertions for baseline, waiting replies, activity burst, and stalled search, but need a fresh purpose-pack pass before promotion | `test:purpose:scenario-pack -- --backend` |
 | Backend | Operational launch pack | `10/10` | Release gate, smoke lane, moderation drill, protocol recovery drill, and runbook checks are packed | `test:backend:ops-pack` |
 | Backend | Protocol recovery | `10/10` | Queue/auth health is inspectable, replay blockers are surfaced, recovery artifact is written | `protocol:recovery:drill` |
 | SDK | Protocol client | `9/10` | Partner client exposes discovery, registration, tokens, grants, webhooks, visibility, replay, and actions | `test:sdk:readiness-pack -- --run --lane=protocol-client` |
@@ -49,6 +49,44 @@ pnpm test:mvp:readiness-pack -- --run --lane=sdk
 pnpm test:mvp:readiness-pack -- --run --lane=purpose-backend
 ```
 
+For the focused mobile release-window proof that covers both Profile and
+Settings/protocol visibility, run:
+
+```bash
+pnpm test:mobile:readiness-pack -- --lane=profile-promotion,settings-protocol-promotion
+```
+
+For full Settings/protocol promotion beyond mobile visibility, keep the mobile
+group paired with the backend/SDK protocol evidence in the same release window.
+
+## Purpose Scenario Pack
+
+List the daily-loop scenarios and the exact read-model proof each one provides:
+
+```bash
+pnpm test:purpose:scenario-pack -- --list
+```
+
+Backend promotion evidence comes from a fresh same-window run:
+
+```bash
+pnpm test:purpose:scenario-pack -- --backend
+```
+
+The backend lane applies each sandbox scenario, inspects the backend experience
+read models, and must show all four scenarios completing with
+`Purpose scenario pack completed.` Keep the row at `9/10` until that run passes
+for the release window being promoted.
+
+Scenario proof expected from list output:
+
+| Scenario | What it proves | Backend evidence to inspect |
+| --- | --- | --- |
+| `baseline` | Daily-loop Home can explain the normal sandbox state from backend read models | `validated=true` with Home tone `active` or `waiting` and a coordination or top-suggestion spotlight |
+| `waiting_replies` | Home can distinguish waiting-on-others from an action the user should take | `validated=true` with coordination title `Waiting on replies` and no `targetChatId` handoff |
+| `activity_burst` | Activity read models surface a meaningful change summary after a notification burst | `validated=true` with `activityCounts.unreadNotifications` greater than `0` |
+| `stalled_search` | Home can switch into explicit recovery guidance when matching stalls | `validated=true` with Home tone `recovery` and a recovery spotlight |
+
 ## 10/10 Promotion Board
 
 | Area | Current blocker | Promotion evidence needed | Owner lane |
@@ -57,10 +95,10 @@ pnpm test:mvp:readiness-pack -- --run --lane=purpose-backend
 | Mobile onboarding | The first-run lane still uses the dev-only completion shortcut | Fresh `mobile-onboarding-completion.yaml` pass plus a follow-up non-dev auth/onboarding proof plan | mobile |
 | Mobile Home scenarios | Purpose pack exists, but backend+mobile scenario runs have not passed in the same release window | `pnpm test:purpose:scenario-pack -- --backend --mobile` | purpose |
 | Mobile Chats | Reply/thread lane and mutation lane are now both in the readiness pack, but need a fresh run together | `pnpm test:mobile:readiness-pack -- --lane=chats-thread-current,chats-mutations-current` | mobile |
-| Mobile Profile | Profile is broad but matrix evidence is split across overview, bio, interests, preferences, and media lanes | One profile promotion pack or documented same-window run across current profile lanes | mobile |
-| Settings/protocol | Current mobile proof is visibility-focused, not action/operation management | Settings/protocol lane rerun plus protocol backend/SDK packs for grants, webhooks, queue, and replay | mobile + sdk |
-| Backend daily-loop scenarios | Scenario validation is wired, but complete deterministic scenario contract proof is still pending | Backend purpose pack plus scenario-specific experience read-model assertions | backend |
-| SDK partner examples | Client/agent correctness improved, but examples still require explicit build/readiness instructions | SDK readiness pack plus partner example command docs | sdk |
+| Mobile Profile | Profile is broad but matrix evidence is split across overview, bio, interests, preferences, media, peer profile, and chat provenance lanes | `pnpm test:mobile:readiness-pack -- --lane=profile-promotion` passing in the current release window | mobile |
+| Settings/protocol | Current mobile proof is visibility-focused, not action/operation management | `pnpm test:mobile:readiness-pack -- --lane=settings-protocol-promotion` plus protocol backend/SDK packs for grants, webhooks, queue, and replay in the current release window | mobile + sdk |
+| Backend daily-loop scenarios | Scenario validation is wired, but no fresh all-scenario purpose-pack pass is recorded in this matrix | `pnpm test:purpose:scenario-pack -- --backend` output showing `baseline`, `waiting_replies`, `activity_burst`, and `stalled_search` all pass, with the scenario proof table above used as the evidence checklist | backend |
+| SDK partner examples | Preflight metadata now lists client vs agent prerequisites, but no fresh package/example evidence has passed in this release window | SDK readiness pack run plus intentional partner example evidence after dist prerequisites are prepared | sdk |
 
 ## User-Visible MVP
 

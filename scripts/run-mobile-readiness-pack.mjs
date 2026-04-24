@@ -25,6 +25,26 @@ const LANES = [
     flow: "apps/mobile/.maestro/mobile-auth-onboarding-home-recovery.yaml",
   },
   {
+    name: "profile-persistence-current",
+    description: "Profile overview, bio, location, and interests persistence",
+    script: "test:e2e:maestro:profile-persistence:current",
+  },
+  {
+    name: "profile-preferences-current",
+    description: "Profile match preferences save and shell return",
+    script: "test:e2e:maestro:profile-preferences:current",
+  },
+  {
+    name: "profile-preferences-reopen-current",
+    description: "Profile match preferences close and reopen persistence",
+    script: "test:e2e:maestro:profile-preferences-reopen:current",
+  },
+  {
+    name: "profile-photo-current",
+    description: "Profile avatar update path and visible update marker",
+    script: "test:e2e:maestro:profile-photo:current",
+  },
+  {
     name: "settings-current",
     description: "Settings save plus protocol visibility summaries",
     script: "test:e2e:maestro:settings-persistence:current",
@@ -33,6 +53,11 @@ const LANES = [
     name: "settings-reopen-current",
     description: "Settings save, close, reopen, and protocol reassertion",
     script: "test:e2e:maestro:settings-reopen:current",
+  },
+  {
+    name: "settings-photo-current",
+    description: "Settings avatar update path and visible update marker",
+    script: "test:e2e:maestro:settings-photo:current",
   },
   {
     name: "chats-thread-current",
@@ -53,6 +78,32 @@ const LANES = [
     name: "notifications-entry-current",
     description: "Notification bell entry into Activity",
     script: "test:e2e:maestro:notifications-entry:current",
+  },
+];
+
+const GROUPS = [
+  {
+    name: "profile-promotion",
+    description:
+      "Same-window promotion group for Profile overview, bio, interests, preferences, avatar, and peer-profile traversal",
+    lanes: [
+      "profile-persistence-current",
+      "profile-preferences-current",
+      "profile-preferences-reopen-current",
+      "profile-photo-current",
+      "other-profile-current",
+      "chats-thread-current",
+    ],
+  },
+  {
+    name: "settings-protocol-promotion",
+    description:
+      "Same-window promotion group for Settings identity, reopen persistence, avatar, and protocol visibility summaries",
+    lanes: [
+      "settings-current",
+      "settings-reopen-current",
+      "settings-photo-current",
+    ],
   },
 ];
 
@@ -86,15 +137,27 @@ function selectedLanes() {
   }
 
   const knownNames = new Set(LANES.map((lane) => lane.name));
-  const unknown = requested.filter((name) => !knownNames.has(name));
+  const knownGroups = new Map(GROUPS.map((group) => [group.name, group]));
+  const unknown = requested.filter(
+    (name) => !knownNames.has(name) && !knownGroups.has(name),
+  );
 
   if (unknown.length > 0) {
     throw new Error(
-      `Unknown mobile readiness lane: ${unknown.join(", ")}. Use --list to see available lanes.`,
+      `Unknown mobile readiness lane/group: ${unknown.join(", ")}. Use --list to see available lanes and groups.`,
     );
   }
 
-  const requestedSet = new Set(requested);
+  const requestedSet = new Set();
+  for (const name of requested) {
+    const group = knownGroups.get(name);
+    if (group) {
+      group.lanes.forEach((laneName) => requestedSet.add(laneName));
+      continue;
+    }
+    requestedSet.add(name);
+  }
+
   return LANES.filter((lane) => requestedSet.has(lane.name));
 }
 
@@ -108,6 +171,14 @@ function printLanes(lanes = LANES) {
       continue;
     }
     console.log(`  maestro test ${lane.flow}`);
+  }
+
+  if (lanes === LANES) {
+    console.log("\nMobile readiness promotion groups:");
+    for (const group of GROUPS) {
+      console.log(`- ${group.name}: ${group.description}`);
+      console.log(`  expands to: ${group.lanes.join(", ")}`);
+    }
   }
 }
 
@@ -136,7 +207,8 @@ async function main() {
   const lanes = selectedLanes();
 
   if (process.argv.includes("--list")) {
-    printLanes(lanes);
+    const hasLaneFilter = getFlagValues("--lane").length > 0;
+    printLanes(hasLaneFilter ? lanes : LANES);
     return;
   }
 

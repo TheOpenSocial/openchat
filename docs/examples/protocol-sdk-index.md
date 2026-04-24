@@ -57,8 +57,34 @@ Example scripts referenced throughout these docs live in:
 - `scripts/examples/protocol-webhook-consumer.mjs`
 - `scripts/examples/protocol-partner-operations.mjs`
 - `scripts/examples/protocol-partner-agent.mjs`
+- `scripts/examples/protocol-partner-agent-toolset.mjs`
+- `scripts/examples/protocol-partner-agent-toolkit.mjs`
 
 The public docs describe the contract. The repository examples show how to use it.
+
+## Partner example preflight
+
+Before running examples manually, list their SDK layer, command, dist
+requirements, and runtime prerequisites:
+
+```bash
+pnpm test:sdk:readiness-pack -- --preflight
+```
+
+This is a dry lane. It does not run package tests and does not execute examples.
+
+Client examples require:
+
+- `packages/protocol-types/dist/index.js`
+- `packages/protocol-client/dist/index.js`
+- a protocol API base URL
+- app credentials for examples that bind an existing app
+- an actor user for examples that invoke user-scoped actions
+
+Agent examples require everything in the client path plus:
+
+- `packages/protocol-agent/dist/index.js`
+- agent grant/readiness state before autonomous work
 
 Repository examples use `scripts/examples/protocol-example-loader.mjs` so local
 package imports behave like partner package imports while still pointing at the

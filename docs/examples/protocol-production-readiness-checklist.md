@@ -94,6 +94,9 @@ Guides:
 - environment-specific assumptions are documented separately from protocol contract assumptions
 - local repository examples document whether they need client dist or agent dist before running
 - setup failures from missing dist output are separated from protocol runtime failures
+- `pnpm test:sdk:readiness-pack -- --preflight` has been reviewed before any manual partner example run
+- client examples have protocol-types and protocol-client dist available, plus base URL/app/actor inputs as needed
+- agent examples have the client prerequisites plus protocol-agent dist and grant/readiness state
 
 ## Minimum ready bar
 

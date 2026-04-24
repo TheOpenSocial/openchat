@@ -2,44 +2,154 @@
 
 import { spawn } from "node:child_process";
 
+const DIST = {
+  types: "packages/protocol-types/dist/index.js",
+  events: "packages/protocol-events/dist/index.js",
+  client: "packages/protocol-client/dist/index.js",
+  server: "packages/protocol-server/dist/index.js",
+  agent: "packages/protocol-agent/dist/index.js",
+};
+
+const CLIENT_EXAMPLE_DIST = [DIST.types, DIST.client];
+const AGENT_EXAMPLE_DIST = [...CLIENT_EXAMPLE_DIST, DIST.agent];
+const LOADER_COMMAND =
+  "node --loader ./scripts/examples/protocol-example-loader.mjs";
+
+const CLIENT_RUNTIME_PREREQUISITES = [
+  "protocol API base URL (`--base-url` or PROTOCOL_BASE_URL)",
+];
+const BOUND_APP_PREREQUISITES = [
+  ...CLIENT_RUNTIME_PREREQUISITES,
+  "registered app credentials (`--app-id`/PROTOCOL_APP_ID and `--app-token`/PROTOCOL_APP_TOKEN)",
+];
+const ACTOR_PREREQUISITES = [
+  ...BOUND_APP_PREREQUISITES,
+  "actor user (`--actor-user-id` or PROTOCOL_ACTOR_USER_ID)",
+];
+const AGENT_PREREQUISITES = [
+  ...ACTOR_PREREQUISITES,
+  "agent grant/readiness state for autonomous work",
+];
+
+const PARTNER_EXAMPLES = [
+  {
+    id: "partner-onboarding",
+    lane: "protocol-client",
+    sdkLayer: "client",
+    path: "scripts/examples/protocol-partner-onboarding.mjs",
+    dist: CLIENT_EXAMPLE_DIST,
+    prerequisites: CLIENT_RUNTIME_PREREQUISITES,
+    proves:
+      "Discovery, registration, token issuance, and optional webhook setup flow.",
+  },
+  {
+    id: "partner-actions",
+    lane: "protocol-client",
+    sdkLayer: "client",
+    path: "scripts/examples/protocol-partner-actions.mjs",
+    dist: CLIENT_EXAMPLE_DIST,
+    prerequisites: ACTOR_PREREQUISITES,
+    proves:
+      "Bound app client can invoke documented intent, request, chat, connection, and circle actions.",
+  },
+  {
+    id: "webhook-consumer",
+    lane: "protocol-client",
+    sdkLayer: "client",
+    path: "scripts/examples/protocol-webhook-consumer.mjs",
+    dist: CLIENT_EXAMPLE_DIST,
+    prerequisites: [
+      ...CLIENT_RUNTIME_PREREQUISITES,
+      "local webhook port/path when serving or registering callbacks",
+      "registered app credentials for inspect/register actions",
+    ],
+    proves:
+      "Webhook registration, local consumer handling, delivery inspection, and replay ergonomics.",
+  },
+  {
+    id: "partner-operations",
+    lane: "protocol-client",
+    sdkLayer: "client",
+    path: "scripts/examples/protocol-partner-operations.mjs",
+    dist: CLIENT_EXAMPLE_DIST,
+    prerequisites: BOUND_APP_PREREQUISITES,
+    proves:
+      "Operational snapshot, webhook queue visibility, delivery replay, and dead-letter recovery commands.",
+  },
+  {
+    id: "partner-agent",
+    lane: "protocol-agent",
+    sdkLayer: "agent",
+    path: "scripts/examples/protocol-partner-agent.mjs",
+    dist: AGENT_EXAMPLE_DIST,
+    prerequisites: AGENT_PREREQUISITES,
+    proves:
+      "Agent client checks readiness before delegated intent/request work.",
+  },
+  {
+    id: "partner-agent-toolset",
+    lane: "protocol-agent",
+    sdkLayer: "agent",
+    path: "scripts/examples/protocol-partner-agent-toolset.mjs",
+    dist: AGENT_EXAMPLE_DIST,
+    prerequisites: AGENT_PREREQUISITES,
+    proves:
+      "Agent tool catalog exposes readiness and action tools through the SDK wrapper.",
+  },
+  {
+    id: "partner-agent-toolkit",
+    lane: "protocol-agent",
+    sdkLayer: "agent",
+    path: "scripts/examples/protocol-partner-agent-toolkit.mjs",
+    dist: AGENT_EXAMPLE_DIST,
+    prerequisites: AGENT_PREREQUISITES,
+    proves:
+      "Agent toolkit description and tool invocation helpers remain partner-usable.",
+  },
+].map((example) => ({
+  ...example,
+  command: `${LOADER_COMMAND} ${example.path}`,
+}));
+
 const LANES = [
   {
     id: "protocol-types",
     packageName: "@opensocial/protocol-types",
-    dist: "packages/protocol-types/dist/index.js",
+    dist: DIST.types,
     proves: "Shared schemas and protocol catalog remain parseable.",
   },
   {
     id: "protocol-events",
     packageName: "@opensocial/protocol-events",
-    dist: "packages/protocol-events/dist/index.js",
+    dist: DIST.events,
     proves: "Event catalog stays aligned to the shared protocol schemas.",
   },
   {
     id: "protocol-client",
     packageName: "@opensocial/protocol-client",
-    dist: "packages/protocol-client/dist/index.js",
+    dist: DIST.client,
     proves:
       "Partner transport client covers discovery, registration, grants, webhooks, visibility, replay, and coordination actions.",
+    examples: PARTNER_EXAMPLES.filter(
+      (example) => example.lane === "protocol-client",
+    ),
   },
   {
     id: "protocol-server",
     packageName: "@opensocial/protocol-server",
-    dist: "packages/protocol-server/dist/index.js",
+    dist: DIST.server,
     proves:
       "Server-side protocol helpers and webhook verification stay stable.",
   },
   {
     id: "protocol-agent",
     packageName: "@opensocial/protocol-agent",
-    dist: "packages/protocol-agent/dist/index.js",
+    dist: DIST.agent,
     proves:
       "Agent wrapper readiness, toolset, toolkit, grant checks, and token freshness semantics remain stable.",
-    examples: [
-      "node --loader ./scripts/examples/protocol-example-loader.mjs scripts/examples/protocol-partner-agent.mjs",
-      "node --loader ./scripts/examples/protocol-example-loader.mjs scripts/examples/protocol-partner-agent-toolset.mjs",
-      "node --loader ./scripts/examples/protocol-example-loader.mjs scripts/examples/protocol-partner-agent-toolkit.mjs",
-    ],
+    examples: PARTNER_EXAMPLES.filter(
+      (example) => example.lane === "protocol-agent",
+    ),
   },
 ];
 
@@ -92,16 +202,35 @@ function printLanes(lanes) {
     console.log(`  dist: ${lane.dist}`);
     console.log(`  command: pnpm --filter ${lane.packageName} test`);
     if (lane.examples) {
-      console.log("  runnable examples:");
+      console.log("  partner examples:");
       for (const example of lane.examples) {
-        console.log(`    ${example}`);
+        console.log(`    - ${example.id} (${example.sdkLayer})`);
+        console.log(`      path: ${example.path}`);
+        console.log(`      proves: ${example.proves}`);
+        console.log(`      command: ${example.command}`);
       }
     }
   }
-  console.log("\nDefault behavior is list-only.");
-  console.log("Run with --run when you intentionally want to execute tests.");
+  console.log(
+    "\nPartner example preflight (list-only; does not execute examples):",
+  );
+  for (const example of PARTNER_EXAMPLES.filter((example) =>
+    lanes.some((lane) => lane.id === example.lane),
+  )) {
+    console.log(`- ${example.id}: ${example.sdkLayer} example`);
+    console.log(`  command: ${example.command}`);
+    console.log(`  required dist: ${example.dist.join(", ")}`);
+    console.log(`  prerequisites: ${example.prerequisites.join("; ")}`);
+  }
+  console.log("\nDefault behavior is list/preflight-only.");
+  console.log(
+    "Run with --run when you intentionally want to execute package tests.",
+  );
   console.log(
     "Repository examples import package dist files through scripts/examples/protocol-example-loader.mjs.",
+  );
+  console.log(
+    "Use this output to check client vs agent prerequisites before running an example manually.",
   );
 }
 
@@ -130,7 +259,11 @@ async function main() {
   const lanes = selectedLanes();
   const shouldRun = process.argv.includes("--run");
 
-  if (process.argv.includes("--list") || !shouldRun) {
+  if (
+    process.argv.includes("--list") ||
+    process.argv.includes("--preflight") ||
+    !shouldRun
+  ) {
     printLanes(lanes);
     return;
   }
