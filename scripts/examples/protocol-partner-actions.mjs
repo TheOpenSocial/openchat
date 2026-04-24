@@ -141,6 +141,13 @@ async function main() {
       title: circleTitle,
       description:
         "A sample circle created through the shipped protocol-client action surface.",
+      cadence: {
+        kind: "weekly",
+        days: ["thu"],
+        hour: 18,
+        minute: 0,
+        timezone: "America/Argentina/Buenos_Aires",
+      },
       metadata: exampleMetadata,
     });
     logSection("protocol-example", "circle-created", circle);

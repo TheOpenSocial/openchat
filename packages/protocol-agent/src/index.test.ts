@@ -175,4 +175,39 @@ describe("evaluateProtocolAgentReadiness", () => {
       ]),
     );
   });
+
+  it("blocks when executable grants belong to a different actor", () => {
+    const snapshot = createSnapshot();
+
+    const report = evaluateProtocolAgentReadiness(snapshot, {
+      actorUserId: "00000000-0000-4000-8000-000000999999",
+    });
+
+    expect(report.ok).toBe(false);
+    expect(report.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "no_active_grants",
+          severity: "blocking",
+        }),
+      ]),
+    );
+  });
+
+  it("accepts executable grants for the requested actor", () => {
+    const snapshot = createSnapshot();
+
+    const report = evaluateProtocolAgentReadiness(snapshot, {
+      actorUserId: "00000000-0000-4000-8000-000000000123",
+    });
+
+    expect(report.ok).toBe(true);
+    expect(report.issues).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "no_active_grants",
+        }),
+      ]),
+    );
+  });
 });

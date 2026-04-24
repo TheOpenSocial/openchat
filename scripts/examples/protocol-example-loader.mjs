@@ -2,6 +2,7 @@ const PROTOCOL_PACKAGE_MAP = new Map(
   Object.entries({
     "@opensocial/protocol-client":
       "../../packages/protocol-client/dist/index.js",
+    "@opensocial/protocol-agent": "../../packages/protocol-agent/dist/index.js",
     "@opensocial/protocol-events":
       "../../packages/protocol-events/dist/index.js",
     "@opensocial/protocol-types": "../../packages/protocol-types/dist/index.js",

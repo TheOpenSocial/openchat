@@ -23,6 +23,7 @@ import {
   protocolAppScopeGrantCreateSchema,
   protocolAppScopeGrantRevokeSchema,
   protocolAppScopeGrantSchema,
+  protocolAppRecordSchema,
   protocolAppRegistrationResultSchema,
   protocolDiscoveryDocumentSchema,
   protocolVisibilitySummarySchema,
@@ -522,11 +523,14 @@ export function createProtocolClient(
     },
     async listApps() {
       const response = await transport.request("/protocol/apps");
-      return readProtocolResponseData<ProtocolAppRecord[]>(response);
+      return readProtocolResponseData(
+        response,
+        protocolAppRecordSchema.array(),
+      );
     },
     async getApp(appId) {
       const response = await transport.request(`/protocol/apps/${appId}`);
-      return readProtocolResponseData<ProtocolAppRecord>(response);
+      return readProtocolResponseData(response, protocolAppRecordSchema);
     },
     async registerApp(input) {
       const requestPayload = buildProtocolAppRegistrationRequest(input);

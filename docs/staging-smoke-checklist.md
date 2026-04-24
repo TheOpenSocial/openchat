@@ -47,6 +47,7 @@ Optional automation (incident/readiness verification):
 Optional automation (full backend launch pack):
 - Command: `pnpm test:backend:ops-pack`
 - Runs: release gate + Golden Suite verification lane + smoke lane + moderation drill.
+- Also runs the protocol recovery drill unless `BACKEND_OPS_INCLUDE_PROTOCOL_RECOVERY_DRILL=0`.
 - Writes machine-readable artifact at `.artifacts/backend-ops-pack/<run-id>.json`.
 - Validates required backend launch runbooks are present and records per-step env readiness plus final `shipVerdict`.
 - Useful for TP-11/TP-12 readiness and launch go/no-go evidence.

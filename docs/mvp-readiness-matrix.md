@@ -18,7 +18,7 @@ Scale:
 | Mobile | Daily-loop Home | `9/10` | Home explains state, next move, recovery, and coordination cards from backend read models | `test:purpose:scenario-pack` |
 | Mobile | Activity | `10/10` | Activity shows changes, quick links, notifications, and route recovery | `mobile-route-graph.yaml`, notification lanes |
 | Mobile | Chats | `9/10` | Seeded chat, reply banner, edits/reactions/deletes, thread modal, and peer profile traversal are covered | chat current-state Maestro lanes |
-| Mobile | Profile | `10/10` | Bio, interests, preferences, reopen persistence, and avatar updates are covered | profile current-state Maestro lanes |
+| Mobile | Profile | `9/10` | Bio, interests, preferences, reopen persistence, and avatar updates are covered, but the mobile matrix still requires broader overview/bio/interests promotion evidence | profile current-state Maestro lanes |
 | Mobile | Settings/protocol visibility | `9/10` | Identity persistence plus linked apps, grants/consent counts, delivery queue summary | settings current-state lanes |
 | Backend | Daily-loop read models | `9/10` | Home and Activity summaries cover baseline, waiting replies, activity burst, and stalled search | `playground:sandbox -- --action=validate` |
 | Backend | Operational launch pack | `10/10` | Release gate, smoke lane, moderation drill, protocol recovery drill, and runbook checks are packed | `test:backend:ops-pack` |
@@ -26,6 +26,28 @@ Scale:
 | SDK | Protocol client | `9/10` | Partner client exposes discovery, registration, tokens, grants, webhooks, visibility, replay, and actions | `test:sdk:readiness-pack -- --run --lane=protocol-client` |
 | SDK | Protocol agent | `9/10` | Agent binding, readiness checks, token freshness, toolset, and toolkit helpers are available | `test:sdk:readiness-pack -- --run --lane=protocol-agent` |
 | SDK | Protocol server/events/types | `9/10` | Shared schemas, event catalog, server helpers, and webhook verification are package-scoped | `test:sdk:readiness-pack -- --run` |
+
+## Pack Runner
+
+Use the all-up runner to see the launch evidence lanes without executing them:
+
+```bash
+pnpm test:mvp:readiness-pack -- --list
+```
+
+Run intentionally when backend credentials, SDK build prerequisites, and mobile
+automation state are ready:
+
+```bash
+pnpm test:mvp:readiness-pack -- --run
+```
+
+Run one lane at a time:
+
+```bash
+pnpm test:mvp:readiness-pack -- --run --lane=sdk
+pnpm test:mvp:readiness-pack -- --run --lane=purpose-backend
+```
 
 ## User-Visible MVP
 

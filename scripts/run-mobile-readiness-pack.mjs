@@ -34,6 +34,11 @@ const LANES = [
     script: "test:e2e:maestro:chats-thread:current",
   },
   {
+    name: "chats-mutations-current",
+    description: "Seeded chat edit, reaction, and delete mutation coverage",
+    script: "test:e2e:maestro:chats-mutations:current",
+  },
+  {
     name: "other-profile-current",
     description: "Peer profile open, provenance copy, actions, and close",
     script: "test:e2e:maestro:other-profile:current",

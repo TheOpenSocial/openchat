@@ -42,6 +42,7 @@
     "test:agentic:suite:verification": "node scripts/run-agent-test-suite-verification.mjs",
     "test:agentic:suite:verification:failed": "AGENT_TEST_SUITE_RERUN_FAILED_ONLY=1 node scripts/run-agent-test-suite-verification.mjs",
     "test:backend:ops-pack": "node scripts/run-backend-ops-pack.mjs",
+    "test:mvp:readiness-pack": "node scripts/run-mvp-readiness-pack.mjs",
     "test:sdk:readiness-pack": "node scripts/run-sdk-readiness-pack.mjs",
     "test:mobile:readiness-pack": "node scripts/run-mobile-readiness-pack.mjs",
     "test:mobile:sandbox:maestro": "node scripts/run-mobile-sandbox-maestro.mjs",

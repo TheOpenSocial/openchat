@@ -49,6 +49,7 @@ Related references:
 | API endpoint contracts | `pnpm --filter @opensocial/api test -- test/onboarding-agent.contract.spec.ts` | Runs a focused contract slice for protected agent onboarding endpoints | High-signal endpoint contract did not drift | CI backend job logs | `green` |
 | Admin playground services | `pnpm --filter @opensocial/api test -- test/admin-playground.controller.spec.ts test/admin-playground.service.spec.ts` | Verifies operator playground controller/service behavior | Admin playground control plane is still contract-safe | CI backend job logs | `green` |
 | Contract layer suite | `pnpm test:agentic:suite -- --layer=contract` | Runs the contract subset of the larger agentic suite | Core contract/scenario expectations still hold without needing the full live suite | CI backend job logs + suite artifacts | `green` |
+| MVP readiness pack | `pnpm test:mvp:readiness-pack -- --list` / `--run` | Lists or runs the backend, SDK, mobile, and purpose-scenario readiness lanes | All user-visible and partner-visible MVP evidence can be gathered from one command surface | CLI output plus lane artifacts | `conditional` |
 
 ## Release and deploy matrix
 

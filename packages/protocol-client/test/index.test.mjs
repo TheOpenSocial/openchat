@@ -162,6 +162,50 @@ test("getVisibilitySummary unwraps access counts from the visibility endpoint", 
   ]);
 });
 
+test("listApps parses app records instead of requiring caller-side parsing", async () => {
+  const appRecord = {
+    status: "active",
+    registration: normalizedRegistration(),
+    manifest: baseManifest(),
+    issuedScopes: ["protocol.read"],
+    issuedCapabilities: ["app.read"],
+  };
+  const { requests, transport } = buildTransport({ data: [appRecord] });
+  const client = createProtocolClient(transport);
+
+  const result = await client.listApps();
+
+  assert.deepStrictEqual(result, [appRecord]);
+  assert.deepStrictEqual(requests, [
+    {
+      path: "/protocol/apps",
+      init: undefined,
+    },
+  ]);
+});
+
+test("getApp parses a single app record", async () => {
+  const appRecord = {
+    status: "active",
+    registration: normalizedRegistration(),
+    manifest: baseManifest(),
+    issuedScopes: ["protocol.read"],
+    issuedCapabilities: ["app.read"],
+  };
+  const { requests, transport } = buildTransport({ data: appRecord });
+  const client = createProtocolClient(transport);
+
+  const result = await client.getApp("app-01");
+
+  assert.deepStrictEqual(result, appRecord);
+  assert.deepStrictEqual(requests, [
+    {
+      path: "/protocol/apps/app-01",
+      init: undefined,
+    },
+  ]);
+});
+
 test("registerApp posts the full registration request payload", async () => {
   const registration = baseRegistration();
   const manifest = baseManifest();

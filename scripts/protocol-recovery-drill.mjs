@@ -86,7 +86,7 @@ function buildHeaders({ admin = false, appToken = "" } = {}) {
   }
 
   if (appToken) {
-    headers["x-opensocial-app-token"] = appToken;
+    headers["x-protocol-app-token"] = appToken;
     headers["content-type"] = "application/json";
   }
 

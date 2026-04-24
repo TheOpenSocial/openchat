@@ -54,6 +54,7 @@ export type ProtocolAgentReadinessReport = {
 };
 
 export type ProtocolAgentReadinessOptions = {
+  actorUserId?: string;
   requireActiveGrant?: boolean;
   failOnDeadLetters?: boolean;
   failOnAuthFailures?: boolean;
@@ -220,10 +221,14 @@ function countAuthFailures(snapshot: ProtocolAppOperationalSnapshot): number {
 
 function countExecutableGrants(
   snapshot: ProtocolAppOperationalSnapshot,
+  actorUserId?: string,
 ): number {
   return snapshot.grants.filter(
     (grant) =>
-      grant.status === "active" && grant.executionMode === "executable",
+      grant.status === "active" &&
+      grant.executionMode === "executable" &&
+      grant.subjectType === "user" &&
+      (actorUserId ? grant.subjectId === actorUserId : true),
   ).length;
 }
 
@@ -300,7 +305,10 @@ export function evaluateProtocolAgentReadiness(
     });
   }
 
-  const executableGrantCount = countExecutableGrants(snapshot);
+  const executableGrantCount = countExecutableGrants(
+    snapshot,
+    options.actorUserId,
+  );
   const modeledOnlyGrantCount = countModeledOnlyGrants(snapshot);
 
   if (requireActiveGrant && executableGrantCount === 0) {
@@ -353,13 +361,13 @@ export function bindProtocolAgentClient(
     checkReadiness: async (options) =>
       evaluateProtocolAgentReadiness(
         await loadProtocolAppOperationalSnapshot(app),
-        options,
+        { ...options, actorUserId: session.actorUserId },
       ),
     assertReady: async (options) =>
       assertProtocolAgentReady(
         evaluateProtocolAgentReadiness(
           await loadProtocolAppOperationalSnapshot(app),
-          options,
+          { ...options, actorUserId: session.actorUserId },
         ),
       ),
     createIntent: (input) =>
