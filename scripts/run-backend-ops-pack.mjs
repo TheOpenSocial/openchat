@@ -32,12 +32,32 @@ const artifactPath = path.resolve(
 const commands = [];
 const ingestVerificationRuns =
   process.env.BACKEND_OPS_INGEST_VERIFICATION_RUN !== "0";
+export const protocolRecoveryDrillOpsPackContract = {
+  id: "protocol_recovery_drill",
+  summary: "protocol recovery drill",
+  cmd: "pnpm",
+  args: ["protocol:recovery:drill"],
+  ingestLane: "verification",
+  layer: "full",
+  requiredEnv: ["SMOKE_BASE_URL", "SMOKE_ADMIN_USER_ID"],
+  optionalEnv: [
+    "SMOKE_ADMIN_ROLE",
+    "SMOKE_ADMIN_API_KEY",
+    "SMOKE_ACCESS_TOKEN",
+    "PROTOCOL_RECOVERY_ALLOW_REPLAY",
+    "PROTOCOL_RECOVERY_APP_ID",
+    "PROTOCOL_RECOVERY_APP_TOKEN",
+    "PROTOCOL_RECOVERY_DELIVERY_ID",
+  ],
+  defaultIncludedUnlessEnv: "BACKEND_OPS_INCLUDE_PROTOCOL_RECOVERY_DRILL=0",
+};
 const verificationRunIngestLaneByStepId = {
   release_check_api: "suite",
   agentic_suite_verification: "verification",
   agentic_prod_smoke_lane: "prod-smoke",
   moderation_drill: "verification",
-  protocol_recovery_drill: "verification",
+  [protocolRecoveryDrillOpsPackContract.id]:
+    protocolRecoveryDrillOpsPackContract.ingestLane,
 };
 
 function verificationLayerForStep(stepId) {
@@ -89,7 +109,8 @@ const stepEnvRequirements = {
     "SMOKE_APPLICATION_KEY",
     "SMOKE_APPLICATION_TOKEN",
   ],
-  protocol_recovery_drill: ["SMOKE_BASE_URL", "SMOKE_ADMIN_USER_ID"],
+  [protocolRecoveryDrillOpsPackContract.id]:
+    protocolRecoveryDrillOpsPackContract.requiredEnv,
 };
 
 if (includeReleaseCheck) {
@@ -129,12 +150,7 @@ if (includeModerationDrill) {
 }
 
 if (includeProtocolRecoveryDrill) {
-  commands.push({
-    id: "protocol_recovery_drill",
-    summary: "protocol recovery drill",
-    cmd: "pnpm",
-    args: ["protocol:recovery:drill"],
-  });
+  commands.push(protocolRecoveryDrillOpsPackContract);
 }
 
 export function buildStepExecutionRecord(step, startedAt, timeoutMs, result) {

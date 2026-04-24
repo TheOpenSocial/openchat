@@ -92,6 +92,8 @@ Guides:
 - the partner team has a single entry doc linking to the relevant OpenSocial guides
 - runbooks reference the exact SDK layer in use
 - environment-specific assumptions are documented separately from protocol contract assumptions
+- local repository examples document whether they need client dist or agent dist before running
+- setup failures from missing dist output are separated from protocol runtime failures
 
 ## Minimum ready bar
 

@@ -10,6 +10,15 @@ The package supports three shapes:
 
 They all use the same protocol actions. The difference is how much orchestration glue you want the SDK to carry for you.
 
+All repository examples import the SDK packages through
+`scripts/examples/protocol-example-loader.mjs`. Run them from the repository
+root after the relevant package dist entries exist. For agent examples, that
+means:
+
+- `packages/protocol-types/dist/index.js`
+- `packages/protocol-client/dist/index.js`
+- `packages/protocol-agent/dist/index.js`
+
 ## 1. Client
 
 Use the raw agent client when you want direct method calls and already control the execution flow yourself.

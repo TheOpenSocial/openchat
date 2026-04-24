@@ -23,6 +23,7 @@ Artifact output:
 Artifact also records:
 - runbook file readiness
 - per-step env coverage
+- protocol recovery drill readiness through the same per-step env and result records
 - final `shipVerdict`
 - blocking reasons when the pack fails
 
@@ -52,6 +53,20 @@ Moderation drill add-ons (for full synthetic drill):
 - `MODERATION_DRILL_REPORTER_USER_ID`
 - `MODERATION_DRILL_ACCESS_TOKEN`
 - `MODERATION_DRILL_TARGET_USER_ID`
+
+Protocol recovery drill env:
+- Required in the backend ops pack:
+  - `SMOKE_BASE_URL`
+  - `SMOKE_ADMIN_USER_ID`
+- Optional diagnostic headers:
+  - `SMOKE_ADMIN_ROLE` (`support` by default)
+  - `SMOKE_ADMIN_API_KEY` when admin middleware requires it
+  - `SMOKE_ACCESS_TOKEN` when bearer auth is enforced
+- Optional active replay credentials:
+  - `PROTOCOL_RECOVERY_ALLOW_REPLAY=1`
+  - `PROTOCOL_RECOVERY_APP_ID`
+  - `PROTOCOL_RECOVERY_APP_TOKEN`
+  - `PROTOCOL_RECOVERY_DELIVERY_ID` for a targeted replay
 
 ## Staging = Prod mode
 
@@ -91,6 +106,7 @@ Default behavior:
 - writes an artifact under `.artifacts/protocol-recovery-drill/`
 - does not perform a replay
 - fails the drill if protocol-relevant queue/auth/request-pressure findings are already `critical`
+- is included in the backend ops pack by default; set `BACKEND_OPS_INCLUDE_PROTOCOL_RECOVERY_DRILL=0` only for an intentionally narrower run
 
 Active replay mode is opt-in:
 - set `PROTOCOL_RECOVERY_ALLOW_REPLAY=1`
@@ -101,6 +117,11 @@ Active replay mode is opt-in:
   - `PROTOCOL_RECOVERY_DELIVERY_ID`
 
 If no explicit delivery id is provided, the drill will use the newest dead-lettered delivery from the admin queue-health snapshot when available.
+
+Header behavior:
+- diagnostic admin snapshots send `Accept`, `x-admin-user-id`, `x-admin-role`, optional `x-admin-api-key`, and optional bearer `Authorization`
+- active replay calls send `Accept`, `content-type: application/json`, and `x-protocol-app-token`
+- active replay calls do not rely on admin headers; this keeps operator visibility and protocol app replay authorization separate in artifacts and coverage
 
 ## Rollback criteria
 

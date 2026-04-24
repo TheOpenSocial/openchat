@@ -19,6 +19,12 @@ const LANES = [
     script: "test:e2e:maestro:onboarding-completion",
   },
   {
+    name: "auth-onboarding-home-recovery",
+    description:
+      "Fresh incomplete-session onboarding, Home shell handoff, Activity hop, and Home recovery",
+    flow: "apps/mobile/.maestro/mobile-auth-onboarding-home-recovery.yaml",
+  },
+  {
     name: "settings-current",
     description: "Settings save plus protocol visibility summaries",
     script: "test:e2e:maestro:settings-persistence:current",
@@ -97,7 +103,11 @@ function printLanes(lanes = LANES) {
   for (const lane of lanes) {
     const optionalLabel = lane.optional ? " (optional)" : "";
     console.log(`- ${lane.name}${optionalLabel}: ${lane.description}`);
-    console.log(`  pnpm --filter @opensocial/mobile ${lane.script}`);
+    if (lane.script) {
+      console.log(`  pnpm --filter @opensocial/mobile ${lane.script}`);
+      continue;
+    }
+    console.log(`  maestro test ${lane.flow}`);
   }
 }
 
@@ -146,9 +156,13 @@ async function main() {
   for (const lane of lanes) {
     console.log(`\n==> ${lane.name}`);
     console.log(lane.description);
-    await run("pnpm", ["--filter", "@opensocial/mobile", lane.script], {
-      env,
-    });
+    if (lane.script) {
+      await run("pnpm", ["--filter", "@opensocial/mobile", lane.script], {
+        env,
+      });
+      continue;
+    }
+    await run("maestro", ["test", lane.flow], { env });
   }
 
   console.log("\nMobile readiness pack completed.");

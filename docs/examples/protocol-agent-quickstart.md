@@ -53,6 +53,17 @@ await agent.createIntent({
 
 ## Run the shipped example
 
+Repository examples use package imports, so they expect the package dist
+entrypoints to exist before execution:
+
+- `packages/protocol-types/dist/index.js`
+- `packages/protocol-client/dist/index.js`
+- `packages/protocol-agent/dist/index.js`
+
+The loader used below maps `@opensocial/protocol-agent` to the local dist
+entrypoint. If a dist file is missing, it prints the missing path instead of
+leaving you to debug a generic package-resolution error.
+
 ```bash
 PROTOCOL_BASE_URL=http://127.0.0.1:3000 \
 PROTOCOL_APP_ID=partner.onboarding.123 \

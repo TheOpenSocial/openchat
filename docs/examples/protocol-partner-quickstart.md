@@ -57,6 +57,12 @@ Repository example:
 
 Once you have an app id and token, exercise the shipped write surface.
 
+Repository examples resolve SDK package imports to local built `dist`
+entrypoints. For the core client examples, make sure these files exist first:
+
+- `packages/protocol-types/dist/index.js`
+- `packages/protocol-client/dist/index.js`
+
 That surface currently covers:
 
 - intents
@@ -91,6 +97,10 @@ Use:
 ## Step 5: add agents only if you need them
 
 If your integration includes an autonomous or semi-autonomous actor, use the agent layer on top of the same protocol boundary.
+
+Agent examples also expect:
+
+- `packages/protocol-agent/dist/index.js`
 
 Use:
 

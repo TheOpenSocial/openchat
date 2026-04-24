@@ -46,10 +46,11 @@ Optional automation (incident/readiness verification):
 
 Optional automation (full backend launch pack):
 - Command: `pnpm test:backend:ops-pack`
-- Runs: release gate + Golden Suite verification lane + smoke lane + moderation drill.
+- Runs: release gate + Golden Suite verification lane + smoke lane + moderation drill + protocol recovery drill.
 - Also runs the protocol recovery drill unless `BACKEND_OPS_INCLUDE_PROTOCOL_RECOVERY_DRILL=0`.
 - Writes machine-readable artifact at `.artifacts/backend-ops-pack/<run-id>.json`.
 - Validates required backend launch runbooks are present and records per-step env readiness plus final `shipVerdict`.
+- Requires `SMOKE_BASE_URL` and `SMOKE_ADMIN_USER_ID` before the protocol recovery drill is considered env-ready.
 - Useful for TP-11/TP-12 readiness and launch go/no-go evidence.
 - Cross-check operator expectations in `docs/backend-launch-smoke-matrix.md`.
 - For temporary staging=prod parity:
@@ -75,6 +76,13 @@ Optional automation (moderation drill):
   - `MODERATION_DRILL_ACTION` (`resolve` by default; `restrict_user` and `escalate_strike` verify enforcement paths)
   - `MODERATION_DRILL_TRIAGE_REASON`, `MODERATION_DRILL_ASSIGN_REASON`, `MODERATION_DRILL_STRIKE_REASON`
 - Safety default: the drill defaults to `MODERATION_DRILL_ACTION=resolve`, so it is non-destructive unless you explicitly opt into enforcement verification.
+
+Optional automation (protocol recovery drill):
+- Command: `pnpm protocol:recovery:drill`
+- Default diagnostic mode reads admin manual-verification and protocol queue-health snapshots, writes `.artifacts/protocol-recovery-drill/<run-id>.json`, and fails on protocol queue/auth/request-pressure criticals.
+- Diagnostic headers use `SMOKE_ADMIN_USER_ID`, `SMOKE_ADMIN_ROLE`, optional `SMOKE_ADMIN_API_KEY`, and optional `SMOKE_ACCESS_TOKEN`.
+- Active replay mode is explicit: set `PROTOCOL_RECOVERY_ALLOW_REPLAY=1`, `PROTOCOL_RECOVERY_APP_ID`, and `PROTOCOL_RECOVERY_APP_TOKEN`; optionally set `PROTOCOL_RECOVERY_DELIVERY_ID`.
+- Active replay calls use `x-protocol-app-token` instead of admin headers, so replay authorization is validated separately from operator snapshot visibility.
 
 Optional automation (SDK readiness pack):
 - Command: `pnpm test:sdk:readiness-pack -- --list`

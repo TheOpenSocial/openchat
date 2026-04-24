@@ -57,7 +57,8 @@ Status legend:
 | Replace brittle point taps where route ids exist | `in_progress` | Focused lanes already improved, legacy lane still stale |
 | Dismiss Expo Go tools overlay in current-state flows | `done` | Current-state flows now begin by closing the tools sheet |
 | Tighten onboarding completion coverage | `in_progress` | Real first-run lane now injects an incomplete E2E session, asserts onboarding, completes through the dev-only onboarding shortcut, and lands in Home; needs a local Maestro rerun before marking done |
-| Tighten Home recovery/empty states coverage | `next` | Existing UI stronger than automation proof |
+| Add auth/onboarding/Home recovery promotion lane | `done` | `mobile-auth-onboarding-home-recovery.yaml` now proves incomplete-session onboarding, Home shell handoff, Activity hop, and Home recovery without SDK/backend changes |
+| Tighten Home recovery/empty states coverage | `in_progress` | Recovery promotion lane exists; empty-state breadth still needs a local Maestro pass before this can be closed |
 | Stabilize current-state auth-to-home handoff in Expo Go | `done` | Mutation lane now passes on the injected-session Expo Go path instead of depending on the local bypass tap |
 | Stabilize Expo Go against stale localhost project fallback | `done` | Shared shell-boot subflow exists, Maestro defaults now point at `exp://localhost:8090`, and the local Expo server is dependable on that port |
 | Dismiss Expo tools sheet during long critical-path returns | `done` | Current critical path now passes locally on 2026-04-22 on the shared shell-boot + E2E rail path |

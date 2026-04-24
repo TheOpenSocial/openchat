@@ -118,6 +118,26 @@ Run Maestro:
 MAESTRO_APP_ID=host.exp.Exponent MAESTRO_EXPO_URL=exp://127.0.0.1:8090 maestro test apps/mobile/.maestro/mobile-onboarding-completion.yaml
 ```
 
+## Run auth/onboarding/Home recovery promotion flow
+
+Use this as the promotion lane for the previous auth/onboarding/Home recovery
+gap. It starts from the same incomplete E2E session as the onboarding completion
+flow, completes onboarding through the dev-only shortcut, asserts Home and shell
+controls, then opens Activity through the E2E rail and returns to Home.
+
+Boot Expo with the incomplete onboarding session from the previous section, then
+run:
+
+```bash
+MAESTRO_APP_ID=host.exp.Exponent MAESTRO_EXPO_URL=exp://127.0.0.1:8090 maestro test apps/mobile/.maestro/mobile-auth-onboarding-home-recovery.yaml
+```
+
+It is also included in the MVP readiness pack as:
+
+```bash
+pnpm test:mobile:readiness-pack -- --lane=auth-onboarding-home-recovery
+```
+
 ## Run route-graph flow
 
 This is the broader mobile shell audit flow. It validates that the main
@@ -192,8 +212,8 @@ pnpm --filter @opensocial/mobile test:e2e:maestro:chats-core
 
 Use this pack when graduating the remaining mobile MVP rows in
 `docs/mobile-readiness-matrix.md`. It runs the focused lanes that currently gate
-onboarding, settings/protocol, chat thread, peer profile, and notifications
-confidence.
+auth/onboarding/Home recovery, settings/protocol, chat thread, peer profile, and
+notifications confidence.
 
 The pack does not start Expo or create a session by itself. Boot the right
 Expo Go/dev-client session first, then run:

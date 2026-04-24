@@ -6,30 +6,40 @@ const LANES = [
   {
     id: "protocol-types",
     packageName: "@opensocial/protocol-types",
+    dist: "packages/protocol-types/dist/index.js",
     proves: "Shared schemas and protocol catalog remain parseable.",
   },
   {
     id: "protocol-events",
     packageName: "@opensocial/protocol-events",
+    dist: "packages/protocol-events/dist/index.js",
     proves: "Event catalog stays aligned to the shared protocol schemas.",
   },
   {
     id: "protocol-client",
     packageName: "@opensocial/protocol-client",
+    dist: "packages/protocol-client/dist/index.js",
     proves:
       "Partner transport client covers discovery, registration, grants, webhooks, visibility, replay, and coordination actions.",
   },
   {
     id: "protocol-server",
     packageName: "@opensocial/protocol-server",
+    dist: "packages/protocol-server/dist/index.js",
     proves:
       "Server-side protocol helpers and webhook verification stay stable.",
   },
   {
     id: "protocol-agent",
     packageName: "@opensocial/protocol-agent",
+    dist: "packages/protocol-agent/dist/index.js",
     proves:
       "Agent wrapper readiness, toolset, toolkit, grant checks, and token freshness semantics remain stable.",
+    examples: [
+      "node --loader ./scripts/examples/protocol-example-loader.mjs scripts/examples/protocol-partner-agent.mjs",
+      "node --loader ./scripts/examples/protocol-example-loader.mjs scripts/examples/protocol-partner-agent-toolset.mjs",
+      "node --loader ./scripts/examples/protocol-example-loader.mjs scripts/examples/protocol-partner-agent-toolkit.mjs",
+    ],
   },
 ];
 
@@ -79,10 +89,20 @@ function printLanes(lanes) {
   for (const lane of lanes) {
     console.log(`- ${lane.id}: ${lane.packageName}`);
     console.log(`  proves: ${lane.proves}`);
+    console.log(`  dist: ${lane.dist}`);
     console.log(`  command: pnpm --filter ${lane.packageName} test`);
+    if (lane.examples) {
+      console.log("  runnable examples:");
+      for (const example of lane.examples) {
+        console.log(`    ${example}`);
+      }
+    }
   }
   console.log("\nDefault behavior is list-only.");
   console.log("Run with --run when you intentionally want to execute tests.");
+  console.log(
+    "Repository examples import package dist files through scripts/examples/protocol-example-loader.mjs.",
+  );
 }
 
 function run(command, args, options = {}) {

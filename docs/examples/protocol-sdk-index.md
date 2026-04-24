@@ -59,3 +59,13 @@ Example scripts referenced throughout these docs live in:
 - `scripts/examples/protocol-partner-agent.mjs`
 
 The public docs describe the contract. The repository examples show how to use it.
+
+Repository examples use `scripts/examples/protocol-example-loader.mjs` so local
+package imports behave like partner package imports while still pointing at the
+workspace. That means the relevant `dist/index.js` files must exist before an
+example runs:
+
+- client path: `packages/protocol-types/dist/index.js` and `packages/protocol-client/dist/index.js`
+- agent path: client path plus `packages/protocol-agent/dist/index.js`
+
+If those files are missing, the loader reports the exact missing dist entry.

@@ -4,6 +4,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { randomUUID } from "node:crypto";
+import { pathToFileURL } from "node:url";
 
 const baseUrl = (process.env.SMOKE_BASE_URL || "http://localhost:3001").replace(
   /\/+$/,
@@ -68,7 +69,14 @@ function persistArtifact() {
   writeFileSync(artifactPath, JSON.stringify(artifact, null, 2));
 }
 
-function buildHeaders({ admin = false, appToken = "" } = {}) {
+export function buildProtocolRecoveryHeaders({
+  admin = false,
+  appToken = "",
+  adminUserId,
+  adminRole,
+  adminApiKey = "",
+  accessToken = "",
+} = {}) {
   const headers = {
     Accept: "application/json",
   };
@@ -91,6 +99,17 @@ function buildHeaders({ admin = false, appToken = "" } = {}) {
   }
 
   return headers;
+}
+
+function buildHeaders({ admin = false, appToken = "" } = {}) {
+  return buildProtocolRecoveryHeaders({
+    admin,
+    appToken,
+    adminUserId,
+    adminRole,
+    adminApiKey,
+    accessToken,
+  });
 }
 
 async function requestJson(method, route, options = {}) {
@@ -341,4 +360,6 @@ async function main() {
   }
 }
 
-await main();
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+  await main();
+}

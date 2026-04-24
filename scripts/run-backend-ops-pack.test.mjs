@@ -7,7 +7,9 @@ import {
   buildVerificationHistoryRecord,
   buildVerificationRunIngestBody,
   ingestVerificationRunArtifact,
+  protocolRecoveryDrillOpsPackContract,
 } from "./run-backend-ops-pack.mjs";
+import { buildProtocolRecoveryHeaders } from "./protocol-recovery-drill.mjs";
 
 test("buildStepExecutionRecord classifies timed out steps", () => {
   const record = buildStepExecutionRecord(
@@ -99,6 +101,58 @@ test("buildOpsPackExplainability summarizes blocking conditions", () => {
   assert.equal(explainability.blockingStepId, "moderation_drill");
   assert.match(explainability.summary, /blocked by moderation_drill/);
   assert.equal(explainability.nextActions.length, 3);
+});
+
+test("backend ops pack keeps protocol recovery drill in the verification lane", () => {
+  assert.equal(
+    protocolRecoveryDrillOpsPackContract.id,
+    "protocol_recovery_drill",
+  );
+  assert.deepEqual(protocolRecoveryDrillOpsPackContract.args, [
+    "protocol:recovery:drill",
+  ]);
+  assert.equal(protocolRecoveryDrillOpsPackContract.ingestLane, "verification");
+  assert.equal(protocolRecoveryDrillOpsPackContract.layer, "full");
+  assert.deepEqual(protocolRecoveryDrillOpsPackContract.requiredEnv, [
+    "SMOKE_BASE_URL",
+    "SMOKE_ADMIN_USER_ID",
+  ]);
+  assert.ok(
+    protocolRecoveryDrillOpsPackContract.optionalEnv.includes(
+      "PROTOCOL_RECOVERY_APP_TOKEN",
+    ),
+  );
+  assert.equal(
+    protocolRecoveryDrillOpsPackContract.defaultIncludedUnlessEnv,
+    "BACKEND_OPS_INCLUDE_PROTOCOL_RECOVERY_DRILL=0",
+  );
+});
+
+test("protocol recovery headers separate admin snapshots from active replay auth", () => {
+  const adminHeaders = buildProtocolRecoveryHeaders({
+    admin: true,
+    adminUserId: "admin-1",
+    adminRole: "support",
+    adminApiKey: "admin-key",
+    accessToken: "access-token",
+  });
+
+  assert.equal(adminHeaders.Accept, "application/json");
+  assert.equal(adminHeaders["x-admin-user-id"], "admin-1");
+  assert.equal(adminHeaders["x-admin-role"], "support");
+  assert.equal(adminHeaders["x-admin-api-key"], "admin-key");
+  assert.equal(adminHeaders.Authorization, "Bearer access-token");
+  assert.equal(adminHeaders["x-protocol-app-token"], undefined);
+
+  const replayHeaders = buildProtocolRecoveryHeaders({
+    appToken: "protocol-token",
+  });
+
+  assert.equal(replayHeaders.Accept, "application/json");
+  assert.equal(replayHeaders["x-protocol-app-token"], "protocol-token");
+  assert.equal(replayHeaders["content-type"], "application/json");
+  assert.equal(replayHeaders["x-admin-user-id"], undefined);
+  assert.equal(replayHeaders.Authorization, undefined);
 });
 
 test("ingestVerificationRunArtifact posts verification history when credentials are present", async (t) => {

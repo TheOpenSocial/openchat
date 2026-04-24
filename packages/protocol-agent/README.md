@@ -54,6 +54,35 @@ console.log(readiness.snapshot.queue.deadLetteredCount);
 console.log(readiness.snapshot.usage.tokenAudit.freshness);
 ```
 
+## Dist and runnable examples
+
+The package entrypoint is `dist/index.js`. Repository examples import
+`@opensocial/protocol-agent` through
+`scripts/examples/protocol-example-loader.mjs`, which maps workspace package
+names to their built `dist` files.
+
+Before running agent examples, make sure these dist entries exist:
+
+- `packages/protocol-types/dist/index.js`
+- `packages/protocol-client/dist/index.js`
+- `packages/protocol-agent/dist/index.js`
+
+The agent package build depends on the client package build, and the client
+package build depends on protocol types. If an example cannot find a package,
+the loader will report the missing dist entry and the expected dependency
+chain.
+
+Run an agent example from the repository root with:
+
+```bash
+PROTOCOL_BASE_URL=http://127.0.0.1:3000 \
+PROTOCOL_APP_ID=partner.onboarding.123 \
+PROTOCOL_APP_TOKEN=<app-token> \
+PROTOCOL_ACTOR_USER_ID=00000000-0000-4000-8000-000000000001 \
+node --loader ./scripts/examples/protocol-example-loader.mjs \
+  scripts/examples/protocol-partner-agent.mjs
+```
+
 Delegated execution rule:
 
 - `user` grants are executable today

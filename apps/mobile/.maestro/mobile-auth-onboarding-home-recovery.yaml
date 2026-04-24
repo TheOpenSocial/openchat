@@ -1,0 +1,75 @@
+appId: ${MAESTRO_APP_ID}
+---
+- launchApp:
+    clearState: true
+    permissions:
+      all: unset
+- openLink: ${MAESTRO_EXPO_URL}
+- runFlow:
+    when:
+      visible:
+        text: "Open"
+    commands:
+      - tapOn:
+          text: "Open"
+- runFlow:
+    when:
+      visible:
+        text: "Continue"
+    commands:
+      - tapOn:
+          text: "Continue"
+- runFlow:
+    when:
+      visible:
+        text: "Minimize"
+    commands:
+      - tapOn:
+          text: "Minimize"
+- runFlow:
+    when:
+      visible:
+        text: "Dismiss"
+    commands:
+      - tapOn:
+          text: "Dismiss"
+- extendedWaitUntil:
+    visible:
+      id: "onboarding-screen"
+    timeout: 45000
+- assertVisible:
+    id: "onboarding-screen"
+- assertVisible:
+    id: "onboarding-e2e-bypass-button"
+- tapOn:
+    id: "onboarding-e2e-bypass-button"
+- extendedWaitUntil:
+    visible:
+      id: "home-screen"
+    timeout: 45000
+- assertVisible:
+    id: "home-screen"
+- assertVisible:
+    id: "app-bottom-tab-home"
+- assertVisible:
+    id: "app-shell-settings"
+- assertVisible:
+    id: "e2e-nav-rail"
+- tapOn:
+    id: "e2e-nav-activity"
+- extendedWaitUntil:
+    visible:
+      id: "activity-screen"
+    timeout: 15000
+- assertVisible:
+    id: "activity-screen"
+- tapOn:
+    id: "e2e-nav-home"
+- extendedWaitUntil:
+    visible:
+      id: "home-screen"
+    timeout: 15000
+- assertVisible:
+    id: "home-screen"
+- assertVisible:
+    id: "app-bottom-tab-home"

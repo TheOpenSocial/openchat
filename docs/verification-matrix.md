@@ -65,11 +65,11 @@ Related references:
 | Lane | Command / workflow | What it does | What a pass proves | Primary evidence | Status |
 | --- | --- | --- | --- | --- | --- |
 | Backend Ops Drill | [`.github/workflows/backend-ops-drill.yml`](/Users/cruciblelabs/Documents/openchat/.github/workflows/backend-ops-drill.yml) | Boots smoke credentials, runs backend ops pack, uploads artifacts | Live backend control plane, moderation drill, protocol recovery drill, and verification subsets all work together against deployed infra | workflow [`24579213926`](https://github.com/TheOpenSocial/openchat/actions/runs/24579213926) + uploaded artifacts | `green` |
-| Backend ops pack | `pnpm test:backend:ops-pack` | Runs release gate, verification lane, smoke lane, moderation drill, and protocol recovery drill | The backend is operationally shippable according to current package rules | `.artifacts/backend-ops-pack/<run-id>.json` | `green` |
+| Backend ops pack | `pnpm test:backend:ops-pack` | Runs release gate, verification lane, smoke lane, moderation drill, and protocol recovery drill | The backend is operationally shippable according to current package rules, including protocol recovery env readiness | `.artifacts/backend-ops-pack/<run-id>.json` | `green` |
 | Staging smoke API | `pnpm staging:smoke:api` | Probes key backend health, admin ops, queue, and moderation endpoints | Core read-only backend/admin surfaces are alive and routable | CLI output + staging smoke artifacts | `green` as a component lane |
 | Verification smoke lane | `pnpm staging:smoke:verification-lane` | Exercises the reserved verification lane and checks its required gates | Verification credentials and reserved scenario path still behave correctly | agent suite verification artifacts | `green` inside ops pack |
 | Moderation drill | `pnpm moderation:drill` | Runs report -> flag -> assignment -> triage -> audit validation | Moderation operator loop works in deployed infrastructure | moderation artifact + ops pack evidence | `green` |
-| Protocol recovery drill | `pnpm protocol:recovery:drill` | Inspects manual-verification and queue health, optionally replays dead letters, writes an artifact | Queue/replay health is explainable and protocol-critical blockers are surfaced automatically | `.artifacts/protocol-recovery-drill/*.json` | `green` |
+| Protocol recovery drill | `pnpm protocol:recovery:drill` | Inspects manual-verification and queue health, optionally replays dead letters, writes an artifact | Queue/replay health is explainable, protocol-critical blockers are surfaced automatically, and active replay auth uses protocol app headers instead of admin headers | `.artifacts/protocol-recovery-drill/*.json` | `green` |
 | Incident verification | `pnpm staging:verify:incident` | Checks health, alerts, launch controls, queue visibility, and runbook presence | Incident-readiness surfaces and runbook paths are available | CLI output + staging readiness logs | `conditional` |
 
 ## Eval and golden matrix
@@ -127,7 +127,7 @@ That means the system is in a good backend/SDK operational state, with both CI a
 - For merge confidence, start with `CI`.
 - For deploy confidence, use `Build Images` + `Deploy Production`.
 - For backend operational confidence, use `Backend Ops Drill`.
-- For protocol recovery confidence, inspect the protocol recovery drill artifact inside the backend ops drill.
+- For protocol recovery confidence, inspect the protocol recovery drill artifact inside the backend ops drill and confirm diagnostic snapshots used admin headers while active replay, if enabled, used `x-protocol-app-token`.
 - For product-quality confidence beyond the backend surface, use the eval lanes, but treat `System Evaluation Matrix` as the current gap until it is green consistently.
 - For MVP layer confidence, use [`/Users/cruciblelabs/Documents/openchat/docs/mvp-readiness-matrix.md`](/Users/cruciblelabs/Documents/openchat/docs/mvp-readiness-matrix.md).
 

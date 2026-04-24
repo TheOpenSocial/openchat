@@ -69,6 +69,27 @@ const webhook = await app.createWebhook({
 });
 ```
 
+## Dist and repository examples
+
+The package entrypoint is `dist/index.js`, and the published import shape is
+the same shape used by the repository examples. Local examples resolve
+`@opensocial/protocol-client` through
+`scripts/examples/protocol-example-loader.mjs`, which expects built dist files.
+
+Before running client or agent examples from the repository root, make sure
+these entries exist:
+
+- `packages/protocol-types/dist/index.js`
+- `packages/protocol-client/dist/index.js`
+
+Agent examples also need:
+
+- `packages/protocol-agent/dist/index.js`
+
+If a dist entry is missing, the loader reports the exact file it expected so a
+partner can tell whether the problem is setup/build output rather than protocol
+behavior.
+
 ## Troubleshooting
 
 If a write action is denied, inspect the app usage summary first:

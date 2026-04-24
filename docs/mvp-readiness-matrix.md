@@ -49,6 +49,19 @@ pnpm test:mvp:readiness-pack -- --run --lane=sdk
 pnpm test:mvp:readiness-pack -- --run --lane=purpose-backend
 ```
 
+## 10/10 Promotion Board
+
+| Area | Current blocker | Promotion evidence needed | Owner lane |
+| --- | --- | --- | --- |
+| Mobile signed-out landing | Selectors and lane exist, but no fresh signed-out run evidence is recorded | `pnpm test:mobile:readiness-pack -- --lane=auth-landing-current` or equivalent signed-out Maestro proof | mobile |
+| Mobile onboarding | The first-run lane still uses the dev-only completion shortcut | Fresh `mobile-onboarding-completion.yaml` pass plus a follow-up non-dev auth/onboarding proof plan | mobile |
+| Mobile Home scenarios | Purpose pack exists, but backend+mobile scenario runs have not passed in the same release window | `pnpm test:purpose:scenario-pack -- --backend --mobile` | purpose |
+| Mobile Chats | Reply/thread lane and mutation lane are now both in the readiness pack, but need a fresh run together | `pnpm test:mobile:readiness-pack -- --lane=chats-thread-current,chats-mutations-current` | mobile |
+| Mobile Profile | Profile is broad but matrix evidence is split across overview, bio, interests, preferences, and media lanes | One profile promotion pack or documented same-window run across current profile lanes | mobile |
+| Settings/protocol | Current mobile proof is visibility-focused, not action/operation management | Settings/protocol lane rerun plus protocol backend/SDK packs for grants, webhooks, queue, and replay | mobile + sdk |
+| Backend daily-loop scenarios | Scenario validation is wired, but complete deterministic scenario contract proof is still pending | Backend purpose pack plus scenario-specific experience read-model assertions | backend |
+| SDK partner examples | Client/agent correctness improved, but examples still require explicit build/readiness instructions | SDK readiness pack plus partner example command docs | sdk |
+
 ## User-Visible MVP
 
 If all packs pass, the MVP can support:
