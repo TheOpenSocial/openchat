@@ -95,6 +95,7 @@ Acceptance criteria:
 - Wired the mobile Settings protocol panel to the summary through React Query.
 - Exposed linked protocol app details in mobile Settings with stable selectors.
 - Added grant, consent-request, and webhook counts to the visibility summary.
+- Added an SDK readiness pack that groups protocol types, events, client, server, and agent package contract lanes.
 
 ## Tests To Keep
 

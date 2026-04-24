@@ -75,6 +75,11 @@ Optional automation (moderation drill):
   - `MODERATION_DRILL_TRIAGE_REASON`, `MODERATION_DRILL_ASSIGN_REASON`, `MODERATION_DRILL_STRIKE_REASON`
 - Safety default: the drill defaults to `MODERATION_DRILL_ACTION=resolve`, so it is non-destructive unless you explicitly opt into enforcement verification.
 
+Optional automation (SDK readiness pack):
+- Command: `pnpm test:sdk:readiness-pack -- --list`
+- Execute intentionally with: `pnpm test:sdk:readiness-pack -- --run`
+- Covers protocol types, events, client, server, and agent package contract lanes.
+
 ## 1) Environment and Health
 - [ ] `GET /health` returns success.
 - [ ] `GET /api/admin/health` returns success with valid admin headers.

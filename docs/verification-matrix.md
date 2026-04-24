@@ -44,6 +44,7 @@ Related references:
 | Repo CI | [`.github/workflows/ci.yml`](/Users/cruciblelabs/Documents/openchat/.github/workflows/ci.yml) | Runs backend lint/typecheck/test, API contract slices, protocol-agent readiness tests, web/admin checks, and format validation | Mainline code compiles, core test suites pass, and protocol-agent readiness policy remains enforced in CI | GitHub Actions run + per-job logs | `green` |
 | API lane | `pnpm turbo run test --filter=@opensocial/api...` | Runs backend Vitest coverage including protocol, controller, matching, moderation, and runtime specs | Backend unit/integration-style specs pass in CI | CI backend job logs | `green` |
 | Protocol agent lane | `pnpm --filter @opensocial/protocol-agent test` | Runs protocol-agent readiness unit tests | SDK readiness semantics, including token freshness, are enforced in CI | CI backend job logs | `green` |
+| SDK readiness pack | `pnpm test:sdk:readiness-pack -- --run` | Runs the protocol package test lanes for types, events, client, server, and agent | Public SDK package contracts remain stable as a bundle | CLI output or CI logs | `conditional` |
 | OpenAI contracts | `pnpm --filter @opensocial/openai test` | Verifies the shared OpenAI package contract layer | Shared OpenAI-facing package behavior is stable enough for API consumers | CI backend job logs | `green` |
 | API endpoint contracts | `pnpm --filter @opensocial/api test -- test/onboarding-agent.contract.spec.ts` | Runs a focused contract slice for protected agent onboarding endpoints | High-signal endpoint contract did not drift | CI backend job logs | `green` |
 | Admin playground services | `pnpm --filter @opensocial/api test -- test/admin-playground.controller.spec.ts test/admin-playground.service.spec.ts` | Verifies operator playground controller/service behavior | Admin playground control plane is still contract-safe | CI backend job logs | `green` |
@@ -127,6 +128,7 @@ That means the system is in a good backend/SDK operational state, with both CI a
 - For backend operational confidence, use `Backend Ops Drill`.
 - For protocol recovery confidence, inspect the protocol recovery drill artifact inside the backend ops drill.
 - For product-quality confidence beyond the backend surface, use the eval lanes, but treat `System Evaluation Matrix` as the current gap until it is green consistently.
+- For MVP layer confidence, use [`/Users/cruciblelabs/Documents/openchat/docs/mvp-readiness-matrix.md`](/Users/cruciblelabs/Documents/openchat/docs/mvp-readiness-matrix.md).
 
 ## Maintenance rule
 
