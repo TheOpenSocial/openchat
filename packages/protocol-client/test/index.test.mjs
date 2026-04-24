@@ -91,6 +91,77 @@ test("getManifest requests the manifest endpoint and unwraps the envelope", asyn
   ]);
 });
 
+test("getVisibilitySummary unwraps access counts from the visibility endpoint", async () => {
+  const visibilitySummary = {
+    generatedAt: "2026-04-15T12:00:00.000Z",
+    linkedApps: 1,
+    apps: [
+      {
+        appId: "app-01",
+        name: "Protocol Bridge",
+        summary: "Bridge protocol traffic",
+        kind: "web",
+        status: "active",
+        issuedScopes: ["protocol.read"],
+        issuedCapabilities: ["app.read"],
+      },
+    ],
+    recentEvents: [
+      {
+        name: "app.registered",
+        resource: "app_registration",
+        summary: "App registered",
+      },
+    ],
+    queue: {
+      queuedCount: 2,
+      retryingCount: 1,
+      deliveredCount: 8,
+      failedCount: 0,
+      deadLetteredCount: 1,
+      replayableCount: 1,
+      workerQueue: {
+        waiting: 3,
+        active: 1,
+        delayed: 2,
+        completed: 5,
+        failed: 0,
+      },
+    },
+    access: {
+      grantCounts: {
+        active: 4,
+        revoked: 1,
+      },
+      consentRequestCounts: {
+        pending: 2,
+        approved: 3,
+        rejected: 1,
+        cancelled: 0,
+        expired: 1,
+      },
+      webhookCounts: {
+        active: 2,
+        paused: 1,
+        failed: 0,
+        revoked: 1,
+      },
+    },
+  };
+  const { requests, transport } = buildTransport({ data: visibilitySummary });
+  const client = createProtocolClient(transport);
+
+  const result = await client.getVisibilitySummary();
+
+  assert.deepStrictEqual(result.access, visibilitySummary.access);
+  assert.deepStrictEqual(requests, [
+    {
+      path: "/protocol/visibility-summary",
+      init: undefined,
+    },
+  ]);
+});
+
 test("registerApp posts the full registration request payload", async () => {
   const registration = baseRegistration();
   const manifest = baseManifest();

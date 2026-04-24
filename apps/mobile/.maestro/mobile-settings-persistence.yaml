@@ -38,3 +38,4 @@ appId: ${MAESTRO_APP_ID}
     id: "settings-last-name-input"
 - assertVisible:
     text: "Settings"
+- runFlow: subflows/assert-settings-protocol-panel.yaml

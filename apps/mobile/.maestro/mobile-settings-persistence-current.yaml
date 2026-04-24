@@ -29,5 +29,4 @@ appId: ${MAESTRO_APP_ID}
 - tapOn:
     id: "settings-save-button"
 - waitForAnimationToEnd
-- assertVisible:
-    id: "settings-protocol-panel"
+- runFlow: subflows/assert-settings-protocol-panel.yaml

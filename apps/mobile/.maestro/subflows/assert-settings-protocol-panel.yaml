@@ -1,0 +1,31 @@
+- extendedWaitUntil:
+    visible:
+      id: "settings-protocol-panel"
+    timeout: 15000
+- assertVisible:
+    id: "settings-protocol-panel"
+- scrollUntilVisible:
+    element:
+      id: "settings-protocol-linked-apps"
+    direction: DOWN
+    timeout: 15000
+- assertVisible:
+    id: "settings-protocol-linked-apps"
+- assertVisible:
+    text: "Linked protocol apps"
+- scrollUntilVisible:
+    element:
+      id: "settings-protocol-access-summary"
+    direction: DOWN
+    timeout: 15000
+- assertVisible:
+    id: "settings-protocol-access-summary"
+- assertVisible:
+    text: "Access and webhooks"
+- scrollUntilVisible:
+    element:
+      text: "Delivery queue summary"
+    direction: DOWN
+    timeout: 15000
+- assertVisible:
+    text: "Delivery queue summary"

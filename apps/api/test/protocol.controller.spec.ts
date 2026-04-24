@@ -131,6 +131,70 @@ describe("ProtocolController", () => {
     expect(response.data.appId).toBe("opensocial-api");
   });
 
+  it("returns the protocol visibility summary envelope with access counts", async () => {
+    const controller = new ProtocolController({
+      getVisibilitySummary: () => ({
+        generatedAt: "2026-04-13T00:00:00.000Z",
+        linkedApps: 1,
+        apps: [
+          {
+            appId: "alpha.app",
+            name: "Alpha",
+            kind: "server",
+            status: "active",
+            issuedScopes: ["protocol.read"],
+            issuedCapabilities: ["app.read"],
+          },
+        ],
+        recentEvents: [],
+        queue: {
+          queuedCount: 0,
+          retryingCount: 0,
+          deliveredCount: 0,
+          failedCount: 0,
+          deadLetteredCount: 0,
+          replayableCount: 0,
+          workerQueue: {
+            waiting: 0,
+            active: 0,
+            delayed: 0,
+            completed: 0,
+            failed: 0,
+          },
+        },
+        access: {
+          grantCounts: {
+            active: 2,
+            revoked: 1,
+          },
+          consentRequestCounts: {
+            pending: 1,
+            approved: 3,
+            rejected: 1,
+            cancelled: 0,
+            expired: 0,
+          },
+          webhookCounts: {
+            active: 1,
+            paused: 0,
+            failed: 0,
+            revoked: 0,
+          },
+        },
+      }),
+    } as any);
+
+    const response = (await controller.getVisibilitySummary()) as any;
+
+    expect(response.success).toBe(true);
+    expect(response.data.access.grantCounts).toEqual({
+      active: 2,
+      revoked: 1,
+    });
+    expect(response.data.access.consentRequestCounts.pending).toBe(1);
+    expect(response.data.access.webhookCounts.active).toBe(1);
+  });
+
   it("reads the protocol app token header for webhook creation", async () => {
     const controller = new ProtocolController({
       getManifest: () => ({}),

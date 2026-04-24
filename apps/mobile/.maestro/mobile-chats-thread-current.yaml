@@ -81,6 +81,37 @@ appId: ${MAESTRO_APP_ID}
     id: "chat-message-input"
 - assertVisible:
     id: "chat-send-button"
+- longPressOn:
+    id: "chat-bubble-e2e-msg-root"
+- extendedWaitUntil:
+    visible:
+      id: "chat-reply-banner"
+    timeout: 15000
+- tapOn:
+    text: "Clear"
+- extendedWaitUntil:
+    notVisible:
+      id: "chat-reply-banner"
+    timeout: 15000
+- longPressOn:
+    id: "chat-bubble-e2e-msg-root"
+- extendedWaitUntil:
+    visible:
+      id: "chat-reply-banner"
+    timeout: 15000
+- tapOn:
+    id: "chat-message-input"
+- inputText: "Maestro reply coverage"
+- tapOn:
+    id: "chat-send-button"
+- extendedWaitUntil:
+    visible:
+      text: "Maestro reply coverage"
+    timeout: 15000
+- extendedWaitUntil:
+    notVisible:
+      id: "chat-reply-banner"
+    timeout: 15000
 - tapOn:
     id: "chat-thread-open-e2e-msg-root"
 - runFlow:
@@ -96,6 +127,33 @@ appId: ${MAESTRO_APP_ID}
     timeout: 15000
 - assertVisible:
     id: "chat-thread-close"
+- assertVisible:
+    id: "thread-message-input"
+- assertVisible:
+    id: "thread-send-button"
+- tapOn:
+    id: "chat-thread-bubble-e2e-msg-root"
+- extendedWaitUntil:
+    visible:
+      id: "other-profile-screen"
+    timeout: 15000
+- assertVisible:
+    text: "Why you are seeing this"
+- tapOn:
+    id: "other-profile-close"
+- extendedWaitUntil:
+    visible:
+      id: "chat-thread-modal"
+    timeout: 15000
+- tapOn:
+    id: "thread-message-input"
+- inputText: "Thread reply from maestro"
+- tapOn:
+    id: "thread-send-button"
+- extendedWaitUntil:
+    visible:
+      text: "Thread reply from maestro"
+    timeout: 15000
 - tapOn:
     id: "chat-thread-close"
 - extendedWaitUntil:

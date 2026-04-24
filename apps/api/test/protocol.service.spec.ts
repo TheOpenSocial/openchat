@@ -29,7 +29,10 @@ function createPrismaStub() {
         query.includes("GROUP BY status")
       ) {
         const [appId] = params;
-        const rows = grants.get(appId) ?? [];
+        const rows =
+          appId == null
+            ? [...grants.values()].flat()
+            : (grants.get(appId) ?? []);
         const counts = rows.reduce(
           (acc, row) => {
             acc[row.status] = (acc[row.status] ?? 0n) + 1n;
@@ -65,7 +68,10 @@ function createPrismaStub() {
         query.includes("GROUP BY status")
       ) {
         const [appId] = params;
-        const rows = consentRequests.get(appId) ?? [];
+        const rows =
+          appId == null
+            ? [...consentRequests.values()].flat()
+            : (consentRequests.get(appId) ?? []);
         const counts = rows.reduce(
           (acc, row) => {
             acc[row.status] = (acc[row.status] ?? 0n) + 1n;
@@ -83,7 +89,10 @@ function createPrismaStub() {
         query.includes("GROUP BY status")
       ) {
         const [appId] = params;
-        const rows = deliveries.get(appId) ?? [];
+        const rows =
+          appId == null
+            ? [...deliveries.values()].flat()
+            : (deliveries.get(appId) ?? []);
         const counts = rows.reduce(
           (acc, row) => {
             acc[row.status] = (acc[row.status] ?? 0n) + 1n;
@@ -146,7 +155,24 @@ function createPrismaStub() {
       }
       if (query.includes("FROM protocol_webhook_subscriptions")) {
         const [appId] = params;
-        return (subscriptions.get(appId) ?? []) as T;
+        const rows =
+          appId == null
+            ? [...subscriptions.values()].flat()
+            : (subscriptions.get(appId) ?? []);
+        if (query.includes("GROUP BY status")) {
+          const counts = rows.reduce(
+            (acc, row) => {
+              acc[row.status] = (acc[row.status] ?? 0n) + 1n;
+              return acc;
+            },
+            {} as Record<string, bigint>,
+          );
+          return Object.entries(counts).map(([status, count]) => ({
+            status,
+            count,
+          })) as T;
+        }
+        return rows as T;
       }
       if (query.includes("FROM protocol_app_scope_grants")) {
         const [appId] = params;
@@ -1633,6 +1659,69 @@ describe("ProtocolService", () => {
     expect(summary.tokenAudit.freshness).toBe("current");
     expect(summary.grantAudit.lastGrantedAt).not.toBeNull();
     expect(summary.latestCursor).not.toBe("");
+  });
+
+  it("returns visibility summary access counts across protocol apps", async () => {
+    const service = createProtocolService();
+    const registration = await service.registerApp(createRegistrationPayload());
+    await service.createAppGrant(
+      "partner.alpha",
+      registration.credentials.appToken,
+      {
+        scope: "actions.invoke",
+        capabilities: ["chat.write"],
+        subjectType: "user",
+        subjectId: "00000000-0000-4000-8000-000000000001",
+      },
+    );
+    await service.createAppConsentRequest(
+      "partner.alpha",
+      registration.credentials.appToken,
+      {
+        scope: "webhooks.manage",
+        capabilities: ["webhook.write"],
+        subjectType: "app",
+        subjectId: "partner.alpha",
+        requestedByUserId: "00000000-0000-4000-8000-000000000009",
+      },
+    );
+    await service.createWebhook(
+      "partner.alpha",
+      registration.credentials.appToken,
+      {
+        targetUrl: "https://alpha.example.com/hooks/opensocial",
+        events: ["app.updated"],
+      },
+    );
+
+    const summary = await service.getVisibilitySummary();
+
+    expect(summary.linkedApps).toBe(1);
+    expect(summary.apps[0]?.appId).toBe("partner.alpha");
+    expect(summary.access.grantCounts).toEqual({
+      active: 1,
+      revoked: 0,
+    });
+    expect(summary.access.consentRequestCounts).toEqual({
+      pending: 1,
+      approved: 0,
+      rejected: 0,
+      cancelled: 0,
+      expired: 0,
+    });
+    expect(summary.access.webhookCounts).toEqual({
+      active: 1,
+      paused: 0,
+      failed: 0,
+      revoked: 0,
+    });
+    expect(summary.queue.workerQueue).toEqual({
+      waiting: 2,
+      active: 1,
+      delayed: 3,
+      completed: 4,
+      failed: 5,
+    });
   });
 
   it("marks protocol tokens as stale after the rotation window", async () => {

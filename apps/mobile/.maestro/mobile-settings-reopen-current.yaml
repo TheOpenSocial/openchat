@@ -85,5 +85,4 @@ appId: ${MAESTRO_APP_ID}
     text: "Maestro"
 - assertVisible:
     text: "Settings"
-- assertVisible:
-    id: "settings-protocol-panel"
+- runFlow: subflows/assert-settings-protocol-panel.yaml

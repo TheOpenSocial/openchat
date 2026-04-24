@@ -42,3 +42,7 @@ appId: ${MAESTRO_APP_ID}
     timeout: 45000
 - assertVisible:
     id: "home-screen"
+- assertVisible:
+    id: "app-bottom-tab-home"
+- assertVisible:
+    id: "app-shell-settings"
