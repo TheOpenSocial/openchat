@@ -24,6 +24,8 @@ const WELCOME_VIDEO_BUNDLED =
 type WelcomeBackdropProps = {
   /** Extra style on the root (e.g. absolute fill). */
   style?: StyleProp<ViewStyle>;
+  /** Stable selector for E2E coverage of the preserved video landing. */
+  testID?: string;
   /** Optional onboarding/auth-specific local or remote video source override. */
   videoSourceOverride?: VideoSource;
   /**
@@ -40,6 +42,7 @@ type WelcomeBackdropProps = {
 export function WelcomeBackdrop({
   children,
   style,
+  testID,
   videoSourceOverride,
 }: WelcomeBackdropProps) {
   const [videoFailed, setVideoFailed] = useState(false);
@@ -81,12 +84,13 @@ export function WelcomeBackdrop({
   const showVideo = !videoFailed;
 
   return (
-    <View pointerEvents="box-none" style={[styles.root, style]}>
+    <View pointerEvents="box-none" style={[styles.root, style]} testID={testID}>
       <View
         accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants"
         pointerEvents="none"
         style={StyleSheet.absoluteFill}
+        testID={testID ? `${testID}-fallback-image` : undefined}
       >
         <Image
           accessibilityIgnoresInvertColors
@@ -104,6 +108,7 @@ export function WelcomeBackdrop({
           player={player}
           pointerEvents="none"
           style={StyleSheet.absoluteFill}
+          testID={testID ? `${testID}-video` : undefined}
           {...(Platform.OS === "android"
             ? { surfaceType: "textureView" as const }
             : {})}

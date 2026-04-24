@@ -331,6 +331,7 @@ export function WelcomeTitleSequence({
       accessibilityRole="header"
       style={styles.wrap}
       accessibilityLabel={a11yLabel}
+      testID="auth-welcome-title-sequence"
     >
       <View style={styles.anchor}>
         {WELCOME_TITLE_SOLO_WORDS.map((word, index) => (
@@ -340,6 +341,7 @@ export function WelcomeTitleSequence({
             importantForAccessibility="no"
             pointerEvents="none"
             style={[styles.absoluteCenter, soloLineStyles[index]]}
+            testID={`auth-welcome-cycling-word-${index + 1}`}
           >
             <Text style={titleStyle} maxFontSizeMultiplier={1.35}>
               {word}
@@ -349,6 +351,7 @@ export function WelcomeTitleSequence({
         <Animated.View
           pointerEvents="none"
           style={[styles.openRow, styles.absoluteCenter, sOpenRow]}
+          testID="auth-welcome-final-title"
         >
           <Text style={titleStyle} maxFontSizeMultiplier={1.35}>
             Open
@@ -364,6 +367,7 @@ export function WelcomeTitleSequence({
       <Animated.Text
         style={[styles.subtitle, subtitleTypography, sSubtitle]}
         maxFontSizeMultiplier={1.35}
+        testID="auth-welcome-subtitle"
       >
         {subtitle}
       </Animated.Text>

@@ -214,6 +214,14 @@ To rerun only one focused lane:
 pnpm test:mobile:readiness-pack -- --lane=chats-thread-current
 ```
 
+The optional auth landing lane intentionally protects the designed video
+backdrop and cycling title sequence. Run it from a signed-out app state without
+an injected E2E session:
+
+```bash
+pnpm test:mobile:readiness-pack -- --lane=auth-landing-current
+```
+
 ## Run sandbox-backed surface-smoke flow
 
 This is the strongest mobile data-audit lane right now. It uses sandbox-world

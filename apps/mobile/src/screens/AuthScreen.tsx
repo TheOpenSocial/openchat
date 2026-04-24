@@ -128,7 +128,10 @@ export function AuthScreen({
 
   return (
     <View className="flex-1 bg-black" testID="auth-screen">
-      <WelcomeBackdrop style={StyleSheet.absoluteFillObject}>
+      <WelcomeBackdrop
+        style={StyleSheet.absoluteFillObject}
+        testID="auth-welcome-backdrop"
+      >
         <SignInGradientOverlay />
         <SafeAreaView
           edges={["top", "bottom", "left", "right"]}

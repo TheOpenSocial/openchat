@@ -7,6 +7,13 @@ const DEFAULT_EXPO_URL = "exp://localhost:8090";
 
 const LANES = [
   {
+    name: "auth-landing-current",
+    description:
+      "Designed landing video, cycling title sequence, and sign-in CTA",
+    optional: true,
+    script: "test:e2e:maestro:auth-landing:current",
+  },
+  {
     name: "onboarding-completion",
     description: "Fresh incomplete-session onboarding into Home and shell",
     script: "test:e2e:maestro:onboarding-completion",
@@ -64,7 +71,7 @@ function selectedLanes() {
     .filter(Boolean);
 
   if (requested.length === 0) {
-    return LANES;
+    return LANES.filter((lane) => !lane.optional);
   }
 
   const knownNames = new Set(LANES.map((lane) => lane.name));
@@ -83,7 +90,8 @@ function selectedLanes() {
 function printLanes(lanes = LANES) {
   console.log("Mobile readiness pack lanes:");
   for (const lane of lanes) {
-    console.log(`- ${lane.name}: ${lane.description}`);
+    const optionalLabel = lane.optional ? " (optional)" : "";
+    console.log(`- ${lane.name}${optionalLabel}: ${lane.description}`);
     console.log(`  pnpm --filter @opensocial/mobile ${lane.script}`);
   }
 }

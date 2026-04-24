@@ -1,0 +1,22 @@
+appId: ${MAESTRO_APP_ID}
+---
+- extendedWaitUntil:
+    visible:
+      id: "auth-screen"
+    timeout: 45000
+- assertVisible:
+    id: "auth-screen"
+- assertVisible:
+    id: "auth-welcome-backdrop"
+- assertVisible:
+    id: "auth-welcome-backdrop-fallback-image"
+- assertVisible:
+    id: "auth-welcome-backdrop-video"
+- assertVisible:
+    id: "auth-welcome-title-sequence"
+- assertVisible:
+    id: "auth-welcome-final-title"
+- assertVisible:
+    id: "auth-welcome-subtitle"
+- assertVisible:
+    id: "auth-google-button"

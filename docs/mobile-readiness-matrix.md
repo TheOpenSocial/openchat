@@ -11,7 +11,7 @@ Scale:
 | Surface | Readiness | Evidence | What still blocks `10/10` |
 | --- | --- | --- | --- |
 | Auth entry | `9/10` | Stable auth selectors plus a dev-only bypass and injected-session boot path are in place | Needs non-dev coverage for full release confidence |
-| Onboarding landing | `8/10` | User-designed motion and cycling phrases preserved | Needs full path proof after landing |
+| Onboarding landing | `9/10` | User-designed video backdrop and cycling phrases are preserved with stable selectors plus a dedicated current-state Maestro lane | Needs a local Maestro pass of `mobile-auth-landing-current.yaml` before it can be claimed as `10/10` |
 | Onboarding completion | `8/10` | Dedicated first-run onboarding completion lane now exists and exercises an incomplete E2E session into Home | Needs local Maestro rerun before it can be claimed as `10/10` |
 | Home shell | `9/10` | `home-screen`, shell top bar, bottom tabs, and transient-safe E2E rail are wired | Needs broader interaction regression coverage |
 | Home agent thread | `9/10` | `mobile-critical-path.yaml` passed locally on 2026-04-22 through shell, Activity, Profile, Chats, and seeded thread entry | Still needs a dedicated retry/error-state companion lane for full release confidence |
@@ -35,6 +35,7 @@ Scale:
 
 | Lane | Readiness | Evidence | What still blocks `10/10` |
 | --- | --- | --- | --- |
+| `mobile-auth-landing-current.yaml` | `9/10` | Dedicated lane now asserts the auth screen, preserved video backdrop, fallback image, cycling title sequence container, final title, subtitle, and Google sign-in CTA | Needs local Maestro rerun before it can be claimed as `10/10` |
 | `mobile-critical-path.yaml` | `10/10` | Passed locally on 2026-04-22 through shared shell boot, Home, Activity, Profile, Chats, and seeded thread entry | None on the current local MVP scope |
 | `mobile-design-mock.yaml` | `7/10` | Static mock lane exists | Not a real product confidence gate |
 | `mobile-profile-persistence.yaml` | `6/10` | Stable booted lane exists | Expo Go boot is still too noisy to make this our best proof lane |
@@ -56,7 +57,7 @@ Scale:
 | `mobile-settings-photo-current.yaml` | `10/10` | Passed locally on 2026-04-22 through the real settings avatar action, deterministic E2E asset shortcut, and visible update marker | None on the current local MVP scope |
 | `mobile-route-graph.yaml` | `10/10` | Passed locally on 2026-04-23 through shared shell boot, Home, Activity, Inbox, Connections, Discovery, Recurring circles, Saved searches, Scheduled tasks, Profile, and Settings | None on the current local MVP scope |
 | `mobile-other-profile-current.yaml` | `9/10` | Passed locally on 2026-04-20 through peer-profile open + close assertion, with non-rail chat provenance now covered by the expanded chat thread lane | Needs local Maestro rerun of the expanded chat traversal before it can be claimed as `10/10` |
-| `test:mobile:readiness-pack` | `9/10` | Root runner now groups the remaining MVP promotion lanes for onboarding, settings/protocol, chat thread, peer profile, and notifications into one reproducible command | Needs one successful local run before the gated rows can be promoted to `10/10` |
+| `test:mobile:readiness-pack` | `9/10` | Root runner now groups the remaining logged-in MVP promotion lanes for onboarding, settings/protocol, chat thread, peer profile, and notifications, with auth landing available as an optional signed-out lane | Needs one successful local run before the gated rows can be promoted to `10/10` |
 | Expo Go local boot | `8/10` | Shared shell-boot subflow exists, Maestro defaults now point at `exp://localhost:8090`, and the local Expo server is now running reliably on that port for cold starts | Still sensitive to the Expo tools overlay during longer multi-step runs |
 | Selector coverage | `9/10` | Major weak surfaces now have stable ids and current-state flows | Needs more breadth on thread-modal and media-update surfaces |
 | Surface scoring honesty | `9/10` | This doc now reflects real local Maestro reruns for Settings, Profile, and Chats | Needs continued refresh as more lanes land |
@@ -74,7 +75,7 @@ Scale:
 ## Current Headline
 
 - Strongest surfaces right now: Home shell, critical path, profile/settings media flow, Profile persistence/preferences, Settings shell/persistence, Chats thread shell
-- Most improved this pass: route graph proof, top-layer E2E navigation, mutually exclusive transient route state, profile/settings photo update proof, and the reproducible mobile readiness pack
+- Most improved this pass: route graph proof, top-layer E2E navigation, mutually exclusive transient route state, profile/settings photo update proof, the reproducible mobile readiness pack, and protected auth landing selectors for the designed video/cycling-title screen
 - Biggest blockers to `10/10` everywhere:
   - the Expo tools sheet can still hijack later return steps during longer current-state lanes
   - too much remaining dependence on Expo Go instead of a cleaner dedicated dev-build lane

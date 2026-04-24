@@ -16,6 +16,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:e2e:maestro": "MAESTRO_APP_ID=${MAESTRO_APP_ID:-host.exp.Exponent} MAESTRO_EXPO_URL=${MAESTRO_EXPO_URL:-exp://localhost:8090} maestro test .maestro/mobile-critical-path.yaml",
+    "test:e2e:maestro:auth-landing:current": "MAESTRO_APP_ID=${MAESTRO_APP_ID:-host.exp.Exponent} maestro test .maestro/mobile-auth-landing-current.yaml",
     "test:e2e:maestro:design": "MAESTRO_APP_ID=${MAESTRO_APP_ID:-host.exp.Exponent} MAESTRO_EXPO_URL=${MAESTRO_EXPO_URL:-exp://localhost:8090} maestro test .maestro/mobile-design-mock.yaml",
     "test:e2e:maestro:onboarding-completion": "MAESTRO_APP_ID=${MAESTRO_APP_ID:-host.exp.Exponent} MAESTRO_EXPO_URL=${MAESTRO_EXPO_URL:-exp://localhost:8090} maestro test .maestro/mobile-onboarding-completion.yaml",
     "test:e2e:maestro:profile-persistence": "MAESTRO_APP_ID=${MAESTRO_APP_ID:-host.exp.Exponent} MAESTRO_EXPO_URL=${MAESTRO_EXPO_URL:-exp://localhost:8090} maestro test .maestro/mobile-profile-persistence.yaml",
