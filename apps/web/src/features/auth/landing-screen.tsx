@@ -8,6 +8,8 @@ import { useRouter } from "next/navigation";
 import { AppLoadingScreen } from "@/src/components/layout/AppLoadingScreen";
 import { useAppSession } from "@/src/features/app-shell/app-session";
 import { api, isRetryableApiError } from "@/src/lib/api";
+import { PublicLocaleSwitcher } from "./public-locale-switcher";
+import { publicCopy, type PublicLocale } from "./public-locale";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type WaitlistStatus = "idle" | "submitting" | "success" | "error";
@@ -16,15 +18,13 @@ type LandingState = {
   activeSection: number;
 };
 
-// ─── Intro config (UNTOUCHED) ─────────────────────────────────────────────────
-const INTRO_WORDS = ["Alive.", "Connected.", "Yours."] as const;
+// ─── Intro config ────────────────────────────────────────────────────────────
 const WORD_ENTER_MS = 300;
 const WORD_HOLD_MS = 500;
 const WORD_EXIT_MS = 220;
 const SOCIAL_ENTER_MS = 320;
 const SOCIAL_PRE_TYPE_MS = 120;
 const TYPE_CHAR_MS = 80;
-const OPEN_TEXT = "Open";
 const OPENSOCIAL_HOLD_MS = 900;
 
 type WordPhase = "in" | "hold" | "out";
@@ -38,7 +38,13 @@ type IntroStage =
 
 const INTRO_SEEN_KEY = "os-intro-seen";
 
-function useIntroSequence() {
+function useIntroSequence({
+  introWords,
+  openText,
+}: {
+  introWords: readonly string[];
+  openText: string;
+}) {
   const [stage, setStage] = useState<IntroStage>("words");
   const [wordIdx, setWordIdx] = useState(0);
   const [wordPhase, setWordPhase] = useState<WordPhase>("in");
@@ -84,7 +90,7 @@ function useIntroSequence() {
         timer.current = setTimeout(() => setWordPhase("out"), WORD_HOLD_MS);
       else
         timer.current = setTimeout(() => {
-          if (wordIdx < INTRO_WORDS.length - 1) {
+          if (wordIdx < introWords.length - 1) {
             setWordIdx((i) => i + 1);
             setWordPhase("in");
           } else setStage("social-in");
@@ -100,7 +106,7 @@ function useIntroSequence() {
       interval.current = setInterval(() => {
         count++;
         setOpenChars(count);
-        if (count >= OPEN_TEXT.length) {
+        if (count >= openText.length) {
           clearInterval(interval.current!);
           timer.current = setTimeout(() => setStage("social-hold"), 60);
         }
@@ -111,37 +117,9 @@ function useIntroSequence() {
     if (stage === "exit")
       timer.current = setTimeout(() => setStage("done"), 900);
     return clear;
-  }, [stage, wordPhase, wordIdx, skipped]);
+  }, [stage, wordPhase, wordIdx, skipped, introWords.length, openText.length]);
 
   return { stage, wordIdx, wordPhase, openChars, skipped };
-}
-
-// ─── Cycle words (section 12) ─────────────────────────────────────────────────
-const CYCLE_WORDS = ["Alive", "Connected", "Yours"] as const;
-
-function useCycleWords() {
-  const [idx, setIdx] = useState(0);
-  const [phase, setPhase] = useState<"in" | "hold" | "out">("in");
-  const t = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (phase === "in") t.current = setTimeout(() => setPhase("hold"), 400);
-    if (phase === "hold") t.current = setTimeout(() => setPhase("out"), 1700);
-    if (phase === "out")
-      t.current = setTimeout(() => {
-        setIdx((i) => (i + 1) % CYCLE_WORDS.length);
-        setPhase("in");
-      }, 400);
-    return () => {
-      if (t.current) clearTimeout(t.current);
-    };
-  }, [phase, idx]);
-  const cls =
-    phase === "in"
-      ? "mf-cycle--in"
-      : phase === "out"
-        ? "mf-cycle--out"
-        : "mf-cycle--hold";
-  return { word: CYCLE_WORDS[idx], cls };
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -199,21 +177,25 @@ function AnimText({
 function Header({
   visible,
   onNav,
+  locale,
+  copy,
 }: {
   visible: boolean;
   onNav: (idx: number) => void;
+  locale: PublicLocale;
+  copy: (typeof publicCopy)[PublicLocale]["landing"];
 }) {
   return (
     <header
       className={`os-nav${visible ? " os-nav--visible" : ""}`}
-      aria-label="Site navigation"
+      aria-label={copy.siteNavigation}
     >
       <div className="os-nav-inner">
         {/* Logo */}
         <button
           className="os-nav-logo"
           onClick={() => onNav(0)}
-          aria-label="Go to top"
+          aria-label={copy.goToTop}
         >
           <svg
             viewBox="0 0 1024 1024"
@@ -254,10 +236,11 @@ function Header({
         {/* Links */}
         <nav className="os-nav-links">
           <Link className="os-nav-link" href="/manifesto">
-            Manifesto
+            {copy.manifestoLink}
           </Link>
+          <PublicLocaleSwitcher locale={locale} />
           <Link className="os-nav-cta" href="/waitlist">
-            Join waitlist
+            {copy.joinWaitlist}
           </Link>
         </nav>
       </div>
@@ -329,15 +312,17 @@ function ScrollHint({
   visible,
   up = false,
   onClick,
+  label,
 }: {
   visible: boolean;
   up?: boolean;
   onClick?: () => void;
+  label: string;
 }) {
   return (
     <div
       className={`mf-scroll-hint${visible ? " mf-scroll-hint--visible" : ""}${up ? " mf-scroll-hint--up" : ""}`}
-      aria-label={up ? "Back to top" : undefined}
+      aria-label={up ? label : undefined}
       role={up ? "button" : undefined}
       tabIndex={up ? 0 : undefined}
       onClick={onClick}
@@ -365,7 +350,13 @@ function ScrollHint({
   );
 }
 
-function FinalCTA({ active }: { active: boolean }) {
+function FinalCTA({
+  active,
+  copy,
+}: {
+  active: boolean;
+  copy: (typeof publicCopy)[PublicLocale]["landing"]["finalCta"];
+}) {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<WaitlistStatus>("idle");
   const [msg, setMsg] = useState<string | null>(null);
@@ -383,7 +374,7 @@ function FinalCTA({ active }: { active: boolean }) {
     const trimmed = email.trim();
     if (!trimmed) {
       setStatus("error");
-      setMsg("Enter your email to get early access.");
+      setMsg(copy.emptyEmail);
       return;
     }
     setStatus("submitting");
@@ -392,15 +383,15 @@ function FinalCTA({ active }: { active: boolean }) {
       await api.joinWaitlist(trimmed);
       setEmail("");
       setStatus("success");
-      setMsg("You're on the list. We'll reach out soon.");
+      setMsg(copy.success);
     } catch (err) {
       setStatus("error");
       setMsg(
         isRetryableApiError(err)
-          ? "Could not reach the server. Try again."
+          ? copy.retry
           : err instanceof Error
             ? err.message
-            : "Something went wrong.",
+            : copy.unknown,
       );
     }
   };
@@ -411,7 +402,7 @@ function FinalCTA({ active }: { active: boolean }) {
       id="waitlist"
     >
       <div className="mf-inner">
-        <AnimText as="h2" className="mf-h1" text="Start with what you want." />
+        <AnimText as="h2" className="mf-h1" text={copy.title} />
 
         <form className="mf-form mf-delay-1" onSubmit={onSubmit} noValidate>
           {status === "success" ? (
@@ -419,11 +410,11 @@ function FinalCTA({ active }: { active: boolean }) {
           ) : (
             <>
               <input
-                aria-label="Your email"
+                aria-label={copy.emailLabel}
                 autoComplete="email"
                 className="mf-cta-input"
                 onChange={onChange}
-                placeholder="Your email"
+                placeholder={copy.emailPlaceholder}
                 type="email"
                 value={email}
               />
@@ -432,7 +423,7 @@ function FinalCTA({ active }: { active: boolean }) {
                 disabled={status === "submitting"}
                 type="submit"
               >
-                {status === "submitting" ? "Joining…" : "Get early access"}
+                {status === "submitting" ? copy.submitting : copy.submit}
               </button>
             </>
           )}
@@ -443,20 +434,26 @@ function FinalCTA({ active }: { active: boolean }) {
           )}
         </form>
 
-        <p className="mf-footer-note mf-delay-2">© 2025 OpenSocial</p>
+        <p className="mf-footer-note mf-delay-2">{copy.footer}</p>
       </div>
     </section>
   );
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export function LandingScreen() {
+export function LandingScreen({
+  initialLocale = "en",
+}: {
+  initialLocale?: PublicLocale;
+}) {
   const router = useRouter();
   const { bootstrapping, profileComplete, session } = useAppSession();
+  const copy = publicCopy[initialLocale].landing;
 
-  const intro = useIntroSequence();
-  const cycle = useCycleWords();
-
+  const intro = useIntroSequence({
+    introWords: copy.introWords,
+    openText: copy.openText,
+  });
   const [landing, setLanding] = useState<LandingState>({ activeSection: 0 });
 
   const [shown, setShown] = useState<Set<number>>(new Set<number>());
@@ -511,7 +508,7 @@ export function LandingScreen() {
   }, [bootstrapping, profileComplete, router, session]);
 
   if (bootstrapping || session)
-    return <AppLoadingScreen label="Restoring session…" />;
+    return <AppLoadingScreen label={copy.loadingSession} />;
 
   const introWordClass = (p: WordPhase) =>
     p === "in" ? "os-word--in" : p === "out" ? "os-word--out" : "os-word--hold";
@@ -524,7 +521,12 @@ export function LandingScreen() {
   return (
     <div className="os-root os-root--black">
       {/* ── Persistent header ── */}
-      <Header visible={isDone} onNav={scrollToSection} />
+      <Header
+        copy={copy}
+        locale={initialLocale}
+        visible={isDone}
+        onNav={scrollToSection}
+      />
 
       {/* Intro, always in DOM, fades out via CSS */}
       <div
@@ -538,7 +540,7 @@ export function LandingScreen() {
                 key={intro.wordIdx}
                 className={`os-word ${introWordClass(intro.wordPhase)}`}
               >
-                {INTRO_WORDS[intro.wordIdx]}
+                {copy.introWords[intro.wordIdx]}
               </span>
             )}
             {(intro.stage === "social-in" ||
@@ -550,7 +552,7 @@ export function LandingScreen() {
               >
                 {intro.openChars > 0 && (
                   <span className="os-open-prefix">
-                    {OPEN_TEXT.slice(0, intro.openChars)}
+                    {copy.openText.slice(0, intro.openChars)}
                   </span>
                 )}
                 {intro.stage === "social-type" && (
@@ -571,40 +573,42 @@ export function LandingScreen() {
         {/* Down hint, all sections except last */}
         <ScrollHint
           key={`down-${landing.activeSection}`}
-          visible={vis(landing.activeSection) && landing.activeSection < 12}
+          visible={vis(landing.activeSection) && landing.activeSection < 11}
+          label={copy.scrollBackToTop}
         />
         {/* Up hint, last section only, scrolls back to top */}
         <ScrollHint
           key="up"
           up
-          visible={landing.activeSection === 12}
+          visible={landing.activeSection === 11}
+          label={copy.scrollBackToTop}
           onClick={() => scrollToSection(0)}
         />
-        <ScrollDots active={landing.activeSection} total={13} />
+        <ScrollDots active={landing.activeSection} total={12} />
 
         <div className="mf-page" ref={pageRef} onScroll={handleScroll}>
           {/* S1, Identity anchor · rise: gentle fade-up */}
           <Section idx={0} active={vis(0)} variant="rise">
-            <h1 className="mf-brand">OpenSocial</h1>
-            <p className="mf-tagline mf-delay-1">Start with what you want.</p>
+            <h1 className="mf-brand">{copy.brand}</h1>
+            <p className="mf-tagline mf-delay-1">{copy.tagline}</p>
           </Section>
 
           {/* S2, Sharp break · scale: springs in from small */}
           <Section idx={1} active={vis(1)} variant="scale">
-            <AnimText as="h2" className="mf-h1" text="Social became passive." />
+            <AnimText as="h2" className="mf-h1" text={copy.sections.passive} />
           </Section>
 
           {/* S3, Expanded critique · type: stamps in with no motion */}
           <Section idx={2} active={vis(2)} variant="type">
             <Lines className="mf-lines--fragments">
-              <p className="mf-line">People scroll.</p>
-              <p className="mf-line">Endlessly.</p>
+              <p className="mf-line">{copy.sections.fragments[0]}</p>
+              <p className="mf-line">{copy.sections.fragments[1]}</p>
               <p className="mf-spacer" aria-hidden="true" />
-              <p className="mf-line">Things appear.</p>
-              <p className="mf-line">Disappear.</p>
+              <p className="mf-line">{copy.sections.fragments[2]}</p>
+              <p className="mf-line">{copy.sections.fragments[3]}</p>
               <p className="mf-spacer" aria-hidden="true" />
-              <p className="mf-line">Nothing stays.</p>
-              <p className="mf-line">Nothing feels owned.</p>
+              <p className="mf-line">{copy.sections.fragments[4]}</p>
+              <p className="mf-line">{copy.sections.fragments[5]}</p>
             </Lines>
           </Section>
 
@@ -613,11 +617,11 @@ export function LandingScreen() {
             <AnimText
               as="h2"
               className="mf-h1"
-              text="It was meant to connect people."
+              text={copy.sections.connectTitle}
             />
             <Lines>
-              <p className="mf-support">Instead, it created distance.</p>
-              <p className="mf-support">You watch more than you connect.</p>
+              <p className="mf-support">{copy.sections.connectSupport[0]}</p>
+              <p className="mf-support">{copy.sections.connectSupport[1]}</p>
             </Lines>
           </Section>
 
@@ -626,23 +630,27 @@ export function LandingScreen() {
             <AnimText
               as="h2"
               className="mf-h1"
-              text={"It should start\nwith you."}
+              text={copy.sections.shiftTitle}
             />
           </Section>
 
           {/* S6, Clarification · strike: lines wipe in from left */}
           <Section idx={5} active={vis(5)} variant="strike">
             <Lines>
-              <p className="mf-line mf-line--dim">Not feeds.</p>
-              <p className="mf-line mf-line--dim">Not profiles.</p>
               <p className="mf-line mf-line--dim">
-                Not something deciding for you.
+                {copy.sections.notLines[0]}
+              </p>
+              <p className="mf-line mf-line--dim">
+                {copy.sections.notLines[1]}
+              </p>
+              <p className="mf-line mf-line--dim">
+                {copy.sections.notLines[2]}
               </p>
             </Lines>
             <AnimText
               as="h2"
               className="mf-h1 mf-h1--intent"
-              text="Intent."
+              text={copy.sections.intent}
               baseDelay={400}
             />
           </Section>
@@ -651,19 +659,19 @@ export function LandingScreen() {
           <Section idx={6} active={vis(6)} variant="type">
             <Lines className="mf-lines--loose">
               <p className="mf-line mf-line--dim">
-                &ldquo;Find a co-founder who ships.&rdquo;
+                &ldquo;{copy.sections.examples[0]}&rdquo;
               </p>
               <p className="mf-line mf-line--dim">
-                &ldquo;Meet designers who build.&rdquo;
+                &ldquo;{copy.sections.examples[1]}&rdquo;
               </p>
               <p className="mf-line mf-line--dim">
-                &ldquo;Talk to someone thinking long-term.&rdquo;
+                &ldquo;{copy.sections.examples[2]}&rdquo;
               </p>
             </Lines>
             <AnimText
               as="h2"
               className="mf-h1 mf-delay-3"
-              text={"That\u2019s intent."}
+              text={copy.sections.intentAgain}
               baseDelay={520}
             />
           </Section>
@@ -671,10 +679,12 @@ export function LandingScreen() {
           {/* S8, Reframing · tempo: lines snap down with spring */}
           <Section idx={7} active={vis(7)} variant="tempo">
             <Lines className="mf-lines--loose">
-              <p className="mf-line">You don&rsquo;t search.</p>
-              <p className="mf-line">You don&rsquo;t scroll.</p>
-              <p className="mf-line">You start.</p>
-              <p className="mf-line mf-line--bright">And it responds.</p>
+              <p className="mf-line">{copy.sections.startLines[0]}</p>
+              <p className="mf-line">{copy.sections.startLines[1]}</p>
+              <p className="mf-line">{copy.sections.startLines[2]}</p>
+              <p className="mf-line mf-line--bright">
+                {copy.sections.startLines[3]}
+              </p>
             </Lines>
           </Section>
 
@@ -683,39 +693,40 @@ export function LandingScreen() {
             <AnimText
               as="h2"
               className="mf-h1"
-              text="Describe what you need."
+              text={copy.sections.describeTitle}
             />
             <Lines>
-              <p className="mf-support">Instead of results,</p>
-              <p className="mf-support mf-support--bright">people.</p>
+              <p className="mf-support">{copy.sections.insteadOfResults}</p>
+              <p className="mf-support mf-support--bright">
+                {copy.sections.people}
+              </p>
             </Lines>
           </Section>
 
           {/* S10, Reassurance · focus: dissolves into clarity */}
           <Section idx={9} active={vis(9)} variant="focus">
-            <AnimText as="h2" className="mf-h1" text="Someone's ready." />
+            <AnimText
+              as="h2"
+              className="mf-h1"
+              text={copy.sections.readyTitle}
+            />
             <Lines>
-              <p className="mf-support">They want what you want.</p>
-              <p className="mf-support">They just don&rsquo;t know you yet.</p>
+              <p className="mf-support">{copy.sections.readySupport[0]}</p>
+              <p className="mf-support">{copy.sections.readySupport[1]}</p>
             </Lines>
           </Section>
 
           {/* S11, Ownership · impact: single hit, strong spring */}
           <Section idx={10} active={vis(10)} variant="impact">
-            <AnimText as="h2" className="mf-h1" text="Make it yours." />
+            <AnimText
+              as="h2"
+              className="mf-h1"
+              text={copy.sections.yoursTitle}
+            />
           </Section>
 
-          {/* S12, Word loop */}
-          <Section idx={11} active={vis(11)}>
-            <div className="mf-cycle-wrap" aria-live="polite">
-              <span key={cycle.word} className={`mf-cycle ${cycle.cls}`}>
-                {cycle.word}
-              </span>
-            </div>
-          </Section>
-
-          {/* S13, Final CTA */}
-          <FinalCTA active={vis(12)} />
+          {/* S12, Final CTA */}
+          <FinalCTA active={vis(11)} copy={copy.finalCta} />
         </div>
       </div>
     </div>

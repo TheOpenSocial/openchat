@@ -9,23 +9,14 @@ export const metadata: Metadata = {
   description: "Join the OpenSocial waitlist and hear when access opens.",
 };
 
-export default async function WaitlistRoute({
-  searchParams,
-}: {
-  searchParams?: Promise<Record<string, string | string[] | undefined>>;
-}) {
+export default async function WaitlistRoute() {
   const cookieStore = await cookies();
   const headerStore = await headers();
-  const params = searchParams ? await searchParams : undefined;
   const storedTheme = cookieStore.get("opensocial-public-theme")?.value;
   const storedLocale = cookieStore.get("opensocial-public-locale")?.value;
-  const searchLocale = Array.isArray(params?.lang)
-    ? params?.lang[0]
-    : params?.lang;
   const initialTheme = storedTheme === "light" ? "light" : "dark";
   const initialLocale = resolvePublicLocale({
     acceptLanguage: headerStore.get("accept-language"),
-    searchLocale,
     storedLocale,
   });
 

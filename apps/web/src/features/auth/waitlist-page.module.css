@@ -85,12 +85,6 @@
   min-width: 0;
 }
 
-.localeSwitcher {
-  display: inline-flex;
-  gap: 0.25rem;
-}
-
-.localeOption,
 .themeToggle,
 .navLink {
   min-width: 2.75rem;
@@ -111,7 +105,6 @@
     transform 160ms ease;
 }
 
-.localeOption,
 .themeToggle {
   cursor: pointer;
 }
@@ -122,23 +115,20 @@
   padding: 0;
 }
 
-.localeOption:hover,
 .themeToggle:hover,
 .navLink:hover,
-.localeOptionActive {
+.themeToggle[aria-pressed="true"] {
   border-color: var(--waitlist-border-strong);
   background: var(--waitlist-surface);
   color: var(--waitlist-text);
 }
 
-.localeOption:active,
 .themeToggle:active,
 .navLink:active,
 .submit:active {
   transform: translateY(1px);
 }
 
-.localeOption:focus-visible,
 .themeToggle:focus-visible,
 .navLink:focus-visible,
 .input:focus-visible,
@@ -367,8 +357,7 @@
     flex-direction: column;
   }
 
-  .navActions,
-  .localeSwitcher {
+  .navActions {
     flex-wrap: wrap;
   }
 

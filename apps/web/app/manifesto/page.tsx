@@ -10,23 +10,14 @@ export const metadata: Metadata = {
     "Why OpenSocial believes social software should begin with intent, consent, and real human connection.",
 };
 
-export default async function ManifestoRoute({
-  searchParams,
-}: {
-  searchParams?: Promise<Record<string, string | string[] | undefined>>;
-}) {
+export default async function ManifestoRoute() {
   const cookieStore = await cookies();
   const headerStore = await headers();
-  const params = searchParams ? await searchParams : undefined;
   const stored = cookieStore.get("opensocial-public-theme")?.value;
   const storedLocale = cookieStore.get("opensocial-public-locale")?.value;
   const initialTheme = stored === "light" ? "light" : "dark"; // default dark
-  const searchLocale = Array.isArray(params?.lang)
-    ? params?.lang[0]
-    : params?.lang;
   const initialLocale = resolvePublicLocale({
     acceptLanguage: headerStore.get("accept-language"),
-    searchLocale,
     storedLocale,
   });
   return (

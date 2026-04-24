@@ -3,16 +3,11 @@
 import Link from "next/link";
 import { Moon, Plus, SunMedium, X } from "lucide-react";
 import type { ChangeEvent, FormEvent } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { api, isRetryableApiError } from "@/src/lib/api";
-import {
-  publicCopy,
-  publicLocaleControlLabels,
-  publicLocaleLabels,
-  publicLocales,
-  type PublicLocale,
-} from "./public-locale";
+import { publicCopy, type PublicLocale } from "./public-locale";
+import { PublicLocaleSwitcher } from "./public-locale-switcher";
 import styles from "./waitlist-page.module.css";
 
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
@@ -55,6 +50,10 @@ export function WaitlistPage({
     document.cookie = `${name}=${value};path=/;max-age=${COOKIE_MAX_AGE};samesite=lax`;
   };
 
+  useEffect(() => {
+    setLocale(initialLocale);
+  }, [initialLocale]);
+
   const onChange = (event: ChangeEvent<HTMLInputElement>) => {
     setEmail(event.currentTarget.value);
     if (status !== "idle") {
@@ -91,12 +90,6 @@ export function WaitlistPage({
             : localeCopy.unknown,
       );
     }
-  };
-
-  const onLocaleChange = (nextLocale: PublicLocale) => {
-    setLocale(nextLocale);
-    setCookie("opensocial-public-locale", nextLocale);
-    window.localStorage.setItem("opensocial.web.locale", nextLocale);
   };
 
   const onThemeToggle = () => {
@@ -141,25 +134,7 @@ export function WaitlistPage({
           </Link>
 
           <div className={styles.navActions}>
-            <div
-              aria-label={publicLocaleControlLabels[locale]}
-              className={styles.localeSwitcher}
-              role="group"
-            >
-              {publicLocales.map((option) => (
-                <button
-                  aria-pressed={locale === option}
-                  className={`${styles.localeOption} ${
-                    locale === option ? styles.localeOptionActive : ""
-                  }`}
-                  key={option}
-                  onClick={() => onLocaleChange(option)}
-                  type="button"
-                >
-                  {publicLocaleLabels[option]}
-                </button>
-              ))}
-            </div>
+            <PublicLocaleSwitcher locale={locale} />
             <button
               aria-label={themeToggleLabel[locale][theme]}
               aria-pressed={theme === "dark"}

@@ -48,17 +48,11 @@ export function detectPublicLocale(
 
 export function resolvePublicLocale({
   acceptLanguage,
-  searchLocale,
   storedLocale,
 }: {
   acceptLanguage?: string | null;
-  searchLocale?: string;
   storedLocale?: string;
 }): PublicLocale {
-  if (isPublicLocale(searchLocale)) {
-    return searchLocale;
-  }
-
   if (isPublicLocale(storedLocale)) {
     return storedLocale;
   }
@@ -139,16 +133,16 @@ export const manifestoSections = {
       title: "Por qué existimos",
       paragraphs: [
         "El software social dejó de estar pensado para ayudar a las personas a encontrarse. Aprendió a mantenernos mirando, pero no necesariamente a ayudarnos a hablar, hacer planes o construir algo con otros.",
-        "OpenSocial existe para cambiar eso. Estamos creando un producto social que empieza por la intención: una persona dice qué quiere hacer, conversar, organizar o explorar, y el sistema la ayuda a convertir esa intención en una conexión humana real.",
-        "La meta es fácil de decir y difícil de hacer bien: acortar la distancia entre “quiero hacer esto” y “estoy haciendo esto con alguien”.",
+        "OpenSocial existe para cambiar eso. Estamos creando una forma más directa de encontrarse: una persona dice qué quiere hacer, conversar, organizar o explorar, y el sistema la ayuda a llegar a alguien real.",
+        "La meta es fácil de decir y difícil de hacer bien: acortar la distancia entre “quiero hacer esto” y “lo estoy haciendo con alguien”.",
       ],
     },
     {
       title: "Lo que creemos que debería ser lo social",
       paragraphs: [
-        "Creemos que un producto social debe empezar por la agencia de cada persona. Cada usuario debería poder decir lo que quiere con sus propias palabras, marcar sus límites y mantener el control sobre cómo se da una conexión.",
+        "Creemos que un producto social debe empezar por la persona. Cada usuario debería poder decir lo que quiere con sus propias palabras, marcar sus límites y mantener el control sobre cómo nace una conexión.",
         "No creemos que el futuro de lo social sea el scroll infinito, mirar sin participar o sistemas que nos mantienen cerca sin ayudarnos a encontrarnos de verdad.",
-        "Creemos en un modelo basado en intención, consentimiento y coordinación. Una persona expresa un objetivo. El sistema lo entiende, encuentra personas relevantes, explica lo que está pasando y abre una conexión solo cuando las personas involucradas lo eligen.",
+        "Creemos en un modelo basado en intención, consentimiento y coordinación. Una persona expresa un objetivo. El sistema lo entiende, encuentra personas relevantes, explica lo que está pasando y abre una conexión solo cuando ambas partes eligen avanzar.",
       ],
     },
     {
@@ -170,8 +164,8 @@ export const manifestoSections = {
     {
       title: "Lo que queremos lograr",
       paragraphs: [
-        "Queremos que sea normal que el software ayude a pasar de la intención a la acción. Hablar del partido ahora. Encontrar con quién jugar tenis después de las siete. Conocer personas que construyen en tu ciudad. Armar un grupo chico de póker esta noche. Reconectar con personas que realmente encajan.",
-        "Queremos apoyar conversaciones uno a uno, planes para el mismo día, formación de grupos, disponibilidad pasiva, círculos recurrentes y continuidad en las relaciones. El objetivo no es más contenido. El objetivo es más contacto con sentido.",
+        "Queremos que sea normal que el software ayude a pasar de la idea al encuentro. Ver el partido con alguien hoy. Encontrar con quién jugar tenis después de las siete. Conocer personas que están construyendo algo cerca. Armar un plan chico esta noche. Reconectar con gente que de verdad encaja.",
+        "Queremos apoyar conversaciones uno a uno, planes para el mismo día, grupos pequeños, disponibilidad sin presión, círculos recurrentes y continuidad en las relaciones. El objetivo no es más contenido. El objetivo es más contacto con sentido.",
         "También queremos construir el contrato público de este modelo: un protocolo estable y un SDK para que apps, servicios y agentes aliados puedan participar en una red social basada en intención sin tener que adivinar cómo funciona.",
       ],
     },
@@ -280,6 +274,74 @@ export const publicCopy = {
         "OpenSocial is an intent-first coordination system for real people. It helps someone express what they want, find the right people, and move toward genuine human connection with consent, clarity, safety, and speed.",
       joinWaitlist: "Join waitlist",
     },
+    landing: {
+      siteNavigation: "Site navigation",
+      goToTop: "Go to top",
+      manifestoLink: "Manifesto",
+      joinWaitlist: "Join waitlist",
+      introWords: ["Alive.", "Connected.", "Yours."],
+      openText: "Open",
+      loadingSession: "Restoring session...",
+      scrollBackToTop: "Back to top",
+      brand: "OpenSocial",
+      tagline: "Start with what you want.",
+      sections: {
+        passive: "Social became passive.",
+        fragments: [
+          "People scroll.",
+          "Endlessly.",
+          "Things appear.",
+          "Disappear.",
+          "Nothing stays.",
+          "Nothing feels owned.",
+        ],
+        connectTitle: "It was meant to connect people.",
+        connectSupport: [
+          "Instead, it created distance.",
+          "You watch more than you connect.",
+        ],
+        shiftTitle: "Say what you want.\nStart from there.",
+        notLines: [
+          "Not feeds.",
+          "Not profiles.",
+          "Not something deciding for you.",
+        ],
+        intent: "Intent.",
+        examples: [
+          "Find someone to play tennis tonight.",
+          "Meet people building something nearby.",
+          "Start a group around an idea you care about.",
+        ],
+        intentAgain: "That's intent.",
+        startLines: [
+          "You don't search.",
+          "You don't scroll.",
+          "You start.",
+          "And it responds.",
+        ],
+        describeTitle: "Describe what you need.",
+        insteadOfResults: "Instead of results,",
+        people: "people.",
+        readyTitle: "Someone's ready.",
+        readySupport: [
+          "They want what you want.",
+          "They just don't know you yet.",
+        ],
+        yoursTitle: "Make it yours.",
+      },
+      finalCta: {
+        title: "Be among the first to try OpenSocial.",
+        emailLabel: "Your email",
+        emailPlaceholder: "Your email",
+        submit: "Request early access",
+        submitting: "Joining...",
+        emptyEmail: "Enter your email to get early access.",
+        success: "You're on the list. We'll reach out soon.",
+        retry: "Could not reach the server. Try again.",
+        unknown: "Something went wrong.",
+        footer: "© 2026 OpenSocial",
+      },
+    },
     waitlist: {
       title: "Join waitlist",
       heroTitle: "Tell us you want a better way to meet the right people.",
@@ -323,11 +385,74 @@ export const publicCopy = {
     localeLabel: "Idioma",
     manifesto: {
       title: "Manifiesto",
-      heroTitle:
-        "Estamos construyendo software social que empieza por la intención.",
+      heroTitle: "Lo social debería empezar por lo que quieres hacer.",
       heroLede:
-        "OpenSocial es un sistema de coordinación basado en intención para personas reales. Ayuda a decir qué quieres, encontrar a las personas adecuadas y avanzar hacia una conexión humana con consentimiento, claridad, seguridad y velocidad.",
+        "OpenSocial ayuda a pasar de una idea a una conexión real. Dices qué quieres hacer, el sistema encuentra a las personas adecuadas y la conexión avanza con consentimiento, claridad y control.",
       joinWaitlist: "Unirme a la lista",
+    },
+    landing: {
+      siteNavigation: "Navegación del sitio",
+      goToTop: "Volver arriba",
+      manifestoLink: "Manifiesto",
+      joinWaitlist: "Unirme a la lista",
+      introWords: ["Vivo.", "Conectado.", "Tuyo."],
+      openText: "Open",
+      loadingSession: "Restaurando sesión...",
+      scrollBackToTop: "Volver arriba",
+      brand: "OpenSocial",
+      tagline: "Di qué quieres hacer.",
+      sections: {
+        passive: "Lo social se volvió pasivo.",
+        fragments: [
+          "La gente scrollea.",
+          "Sin parar.",
+          "Las cosas aparecen.",
+          "Desaparecen.",
+          "Nada permanece.",
+          "Nada se siente propio.",
+        ],
+        connectTitle: "Se suponía que debía conectar personas.",
+        connectSupport: [
+          "En cambio, creó distancia.",
+          "Miras más de lo que conectas.",
+        ],
+        shiftTitle: "Di lo que quieres.\nEmpieza desde ahí.",
+        notLines: ["Ni feeds.", "Ni perfiles.", "Ni algo decidiendo por ti."],
+        intent: "Intención.",
+        examples: [
+          "Encontrar a alguien para jugar tenis hoy.",
+          "Conocer gente que esté construyendo algo cerca.",
+          "Armar un grupo alrededor de una idea que te importa.",
+        ],
+        intentAgain: "Eso es intención.",
+        startLines: [
+          "No buscas.",
+          "No scrolleas.",
+          "Empiezas.",
+          "Y el sistema responde.",
+        ],
+        describeTitle: "Describe lo que necesitas.",
+        insteadOfResults: "En vez de resultados,",
+        people: "personas.",
+        readyTitle: "Hay alguien para eso.",
+        readySupport: [
+          "Busca algo parecido a lo que tú buscas.",
+          "Solo falta que se encuentren.",
+        ],
+        yoursTitle: "Hazlo tuyo.",
+      },
+      finalCta: {
+        title: "Sé de los primeros en probar OpenSocial.",
+        emailLabel: "Tu email",
+        emailPlaceholder: "Tu email",
+        submit: "Pedir early access",
+        submitting: "Enviando...",
+        emptyEmail: "Escribe tu email para pedir early access.",
+        success: "Listo, ya estás en la lista. Te vamos a escribir pronto.",
+        retry: "No pudimos conectar con el servidor. Intenta de nuevo.",
+        unknown: "Algo salió mal.",
+        footer: "© 2026 OpenSocial",
+      },
     },
     waitlist: {
       title: "Lista de espera",
@@ -379,6 +504,75 @@ export const publicCopy = {
       heroLede:
         "OpenSocial est un système de coordination fondé sur l'intention pour de vraies personnes. Il aide chacun à dire ce qu'il cherche, à trouver les bonnes personnes et à avancer vers une connexion humaine avec consentement, clarté, sécurité et rapidité.",
       joinWaitlist: "Rejoindre la liste",
+    },
+    landing: {
+      siteNavigation: "Navigation du site",
+      goToTop: "Retour en haut",
+      manifestoLink: "Manifeste",
+      joinWaitlist: "Rejoindre la liste",
+      introWords: ["Vivant.", "Connecté.", "À vous."],
+      openText: "Open",
+      loadingSession: "Restauration de la session...",
+      scrollBackToTop: "Retour en haut",
+      brand: "OpenSocial",
+      tagline: "Commencez par ce que vous voulez.",
+      sections: {
+        passive: "Le social est devenu passif.",
+        fragments: [
+          "Les gens font défiler.",
+          "Sans fin.",
+          "Les choses apparaissent.",
+          "Disparaissent.",
+          "Rien ne reste.",
+          "Rien ne semble vraiment à soi.",
+        ],
+        connectTitle: "Il devait connecter les personnes.",
+        connectSupport: [
+          "À la place, il a créé de la distance.",
+          "Vous regardez plus que vous ne connectez.",
+        ],
+        shiftTitle: "Dites ce que vous voulez.\nCommencez à partir de là.",
+        notLines: [
+          "Pas des fils d'actualité.",
+          "Pas des profils.",
+          "Pas quelque chose qui décide pour vous.",
+        ],
+        intent: "L'intention.",
+        examples: [
+          "Trouver quelqu'un pour jouer au tennis ce soir.",
+          "Rencontrer des personnes qui construisent quelque chose près de vous.",
+          "Créer un groupe autour d'une idée qui vous tient à coeur.",
+        ],
+        intentAgain: "C'est cela, l'intention.",
+        startLines: [
+          "Vous ne cherchez pas.",
+          "Vous ne faites pas défiler.",
+          "Vous commencez.",
+          "Et le système répond.",
+        ],
+        describeTitle: "Décrivez ce dont vous avez besoin.",
+        insteadOfResults: "Au lieu de résultats,",
+        people: "des personnes.",
+        readyTitle: "Quelqu'un est prêt.",
+        readySupport: [
+          "Cette personne veut ce que vous voulez.",
+          "Elle ne vous connaît simplement pas encore.",
+        ],
+        yoursTitle: "Faites-en quelque chose à vous.",
+      },
+      finalCta: {
+        title: "Soyez parmi les premiers à essayer OpenSocial.",
+        emailLabel: "Votre email",
+        emailPlaceholder: "Votre email",
+        submit: "Demander un early access",
+        submitting: "Envoi...",
+        emptyEmail: "Entrez votre email pour demander un early access.",
+        success:
+          "C'est fait, vous êtes sur la liste. Nous vous écrirons bientôt.",
+        retry: "Impossible de joindre le serveur. Réessayez.",
+        unknown: "Une erreur est survenue.",
+        footer: "© 2026 OpenSocial",
+      },
     },
     waitlist: {
       title: "Liste d'attente",
