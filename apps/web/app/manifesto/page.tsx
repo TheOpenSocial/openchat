@@ -3,12 +3,14 @@ import { cookies, headers } from "next/headers";
 
 import { ManifestoPage } from "@/src/features/auth/manifesto-page";
 import { resolvePublicLocale } from "@/src/features/auth/public-locale";
+import { createPublicMetadata } from "@/src/lib/seo";
 
-export const metadata: Metadata = {
-  title: "Manifesto | OpenSocial",
+export const metadata: Metadata = createPublicMetadata({
+  title: "Manifesto",
   description:
     "Why OpenSocial believes social software should begin with intent, consent, and real human connection.",
-};
+  path: "/manifesto",
+});
 
 export default async function ManifestoRoute() {
   const cookieStore = await cookies();

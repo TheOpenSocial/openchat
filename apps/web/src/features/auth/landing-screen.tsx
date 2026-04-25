@@ -262,9 +262,10 @@ function ScrollDots({ active, total }: { active: number; total: number }) {
   );
 }
 
-function AmbientBackground() {
+function AmbientBackground({ activeSection }: { activeSection: number }) {
   return (
     <div className="mf-bg" aria-hidden="true">
+      <WebGLAgenticField activeSection={activeSection} />
       <div className="mf-bg-purple" />
       <div className="mf-bg-blue" />
       <div className="mf-bg-cyan" />
@@ -272,6 +273,318 @@ function AmbientBackground() {
       <div className="mf-bg-noise" />
     </div>
   );
+}
+
+type AgenticMode =
+  | "radar"
+  | "threads"
+  | "graph"
+  | "decision"
+  | "pulse"
+  | "labels";
+
+const AGENTIC_MODES: AgenticMode[] = [
+  "radar",
+  "threads",
+  "graph",
+  "decision",
+  "pulse",
+  "labels",
+];
+
+const FIELD_LABELS = ["intent", "match", "context", "trust", "meet"];
+
+function WebGLAgenticField({ activeSection }: { activeSection: number }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const sectionRef = useRef(activeSection);
+
+  useEffect(() => {
+    sectionRef.current = activeSection;
+  }, [activeSection]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    let cancelled = false;
+    let cleanup = () => {};
+
+    const start = async () => {
+      const { Geometry, Mesh, Program, Renderer } = await import("ogl");
+      if (cancelled) return;
+
+      const renderer = new Renderer({
+        canvas,
+        alpha: true,
+        antialias: true,
+        depth: false,
+        dpr: Math.min(window.devicePixelRatio || 1, 2.5),
+        premultipliedAlpha: true,
+        powerPreference: "high-performance",
+      });
+      const gl = renderer.gl;
+      gl.clearColor(0, 0, 0, 0);
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+
+      let width = 1;
+      let height = 1;
+      let time = 0;
+      let animationId = 0;
+      const count = 96;
+      const positions = new Float32Array(count * 2);
+      const depths = new Float32Array(count);
+      const sizes = new Float32Array(count);
+      const seeds = new Float32Array(count);
+      const velocities = new Float32Array(count * 2);
+      const pointer = { x: -1, y: -1, tx: -1, ty: -1 };
+      const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+      for (let index = 0; index < count; index++) {
+        positions[index * 2] = 0;
+        positions[index * 2 + 1] = 0;
+        depths[index] = 0.42 + ((index * 19) % 58) / 100;
+        sizes[index] = 0.64 + (index % 7) * 0.09;
+        seeds[index] = index * 0.618;
+      }
+
+      const geometry = new Geometry(gl, {
+        position: { data: positions, size: 2 },
+        depth: { data: depths, size: 1 },
+        size: { data: sizes, size: 1 },
+        seed: { data: seeds, size: 1 },
+      });
+
+      const program = new Program(gl, {
+        vertex: `
+          attribute vec2 position;
+          attribute float depth;
+          attribute float size;
+          attribute float seed;
+
+          uniform vec2 uResolution;
+          uniform float uDpr;
+          uniform float uTime;
+
+          varying float vDepth;
+          varying float vSeed;
+
+          void main() {
+            vec2 clip = (position / uResolution) * 2.0 - 1.0;
+            gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
+            gl_PointSize = (size * (7.0 + depth * 8.0) + sin(uTime * 1.7 + seed) * 0.55) * uDpr;
+            vDepth = depth;
+            vSeed = seed;
+          }
+        `,
+        fragment: `
+          precision highp float;
+
+          varying float vDepth;
+          varying float vSeed;
+
+          void main() {
+            vec2 uv = gl_PointCoord - 0.5;
+            float dist = length(uv);
+            float halo = smoothstep(0.5, 0.03, dist);
+            float core = smoothstep(0.18, 0.0, dist);
+            float shimmer = 0.88 + sin(vSeed * 5.0) * 0.08;
+            float alpha = (halo * 0.08 + core * 0.34) * (0.52 + vDepth * 0.62) * shimmer;
+            vec3 color = mix(vec3(0.78, 0.80, 0.82), vec3(1.0), core);
+            gl_FragColor = vec4(color, alpha);
+          }
+        `,
+        depthTest: false,
+        depthWrite: false,
+        transparent: true,
+      });
+
+      const mesh = new Mesh(gl, {
+        geometry,
+        mode: gl.POINTS,
+        program,
+      });
+
+      const targetFor = (index: number, mode: AgenticMode) => {
+        const group = index % 5;
+        const seed = seeds[index];
+        const depth = depths[index];
+        const progress = index / Math.max(count - 1, 1);
+        const centerX = width * 0.5;
+        const centerY = height * 0.52;
+        const drift = Math.sin(seed + time * (0.28 + depth * 0.08));
+
+        if (mode === "radar") {
+          const lane = index % 7;
+          const x = width * (0.2 + progress * 0.52);
+          const funnel = 1 - progress;
+          return [
+            x + Math.sin(time * 0.5 + seed) * 12 * depth,
+            centerY +
+              (lane - 3) * 18 * funnel +
+              Math.sin(progress * Math.PI * 2 + time) * 20 * progress,
+          ];
+        }
+
+        if (mode === "threads") {
+          const t = (index % 32) / 31;
+          const bridge = Math.sin(t * Math.PI);
+          const lane = Math.floor(index / 32) % 3;
+          return [
+            width * (0.28 + t * 0.44) + drift * 10,
+            centerY +
+              Math.cos(t * Math.PI) * 82 +
+              bridge * (lane - 1) * 34 +
+              Math.sin(time * 0.36 + seed) * 8,
+          ];
+        }
+
+        if (mode === "graph") {
+          const cell = group / 5;
+          const local = (Math.floor(index / 5) % 18) / 18;
+          const orbit = cell * Math.PI * 2 + time * 0.12;
+          const cellX = centerX + Math.cos(orbit) * width * 0.16;
+          const cellY = centerY + Math.sin(orbit * 1.25) * height * 0.11;
+          const angle = local * Math.PI * 2 + time * (0.1 + depth * 0.08);
+          return [
+            cellX + Math.cos(angle) * (20 + depth * 24),
+            cellY + Math.sin(angle * 1.3) * (12 + depth * 18),
+          ];
+        }
+
+        if (mode === "decision") {
+          const t = progress;
+          const branch = group - 2;
+          const chosen = group === 2 ? 1 : 0;
+          const bend = Math.sin(t * Math.PI);
+          return [
+            width * (0.22 + t * 0.56) + drift * 8,
+            centerY +
+              branch * 34 * bend * (1 - chosen * 0.65) +
+              Math.sin(time * 0.32 + seed) * 7,
+          ];
+        }
+
+        if (mode === "pulse") {
+          const t = (progress + time * 0.06) % 1;
+          const wave = Math.sin(t * Math.PI);
+          const angle = seed * 8 + wave * 0.35;
+          return [
+            centerX +
+              Math.cos(angle) * (40 + t * Math.min(width, height) * 0.18),
+            centerY +
+              Math.sin(angle) * (24 + t * Math.min(width, height) * 0.09) +
+              wave * 18,
+          ];
+        }
+
+        const t = progress;
+        const row = group - 2;
+        const settle = Math.sin(t * Math.PI);
+        return [
+          width * (0.24 + t * 0.52),
+          centerY + row * 16 * (1 - settle) + Math.sin(seed + time * 0.2) * 5,
+        ];
+      };
+
+      const resize = () => {
+        width = window.innerWidth;
+        height = window.innerHeight;
+        renderer.setSize(width, height);
+        program.uniforms.uResolution.value = [width, height];
+        program.uniforms.uDpr.value = renderer.dpr;
+        for (let index = 0; index < count; index++) {
+          const [x, y] = targetFor(
+            index,
+            AGENTIC_MODES[sectionRef.current % AGENTIC_MODES.length],
+          );
+          positions[index * 2] = x;
+          positions[index * 2 + 1] = y;
+          velocities[index * 2] = 0;
+          velocities[index * 2 + 1] = 0;
+        }
+        geometry.attributes.position.needsUpdate = true;
+      };
+
+      program.uniforms = {
+        uResolution: { value: [width, height] },
+        uDpr: { value: renderer.dpr },
+        uTime: { value: 0 },
+      };
+
+      const onPointerMove = (event: PointerEvent) => {
+        pointer.tx = event.clientX / Math.max(width, 1);
+        pointer.ty = event.clientY / Math.max(height, 1);
+      };
+
+      const draw = () => {
+        const mode = AGENTIC_MODES[sectionRef.current % AGENTIC_MODES.length];
+        pointer.x += (pointer.tx - pointer.x) * 0.16;
+        pointer.y += (pointer.ty - pointer.y) * 0.16;
+        time += motionQuery.matches ? 0 : 0.008;
+        const hasPointer = pointer.x >= 0 && pointer.y >= 0;
+        const cursorX = pointer.x * width;
+        const cursorY = pointer.y * height;
+
+        for (let index = 0; index < count; index++) {
+          const offset = index * 2;
+          const [targetX, targetY] = targetFor(index, mode);
+          let forceX = (targetX - positions[offset]) * 0.026 * depths[index];
+          let forceY =
+            (targetY - positions[offset + 1]) * 0.026 * depths[index];
+
+          if (hasPointer) {
+            const dx = positions[offset] - cursorX;
+            const dy = positions[offset + 1] - cursorY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const spread = Math.max(0, 1 - distance / 150);
+            forceX += (dx / Math.max(distance, 1)) * spread * spread * 1.5;
+            forceY += (dy / Math.max(distance, 1)) * spread * spread * 1.5;
+          }
+
+          velocities[offset] = (velocities[offset] + forceX) * 0.64;
+          velocities[offset + 1] = (velocities[offset + 1] + forceY) * 0.64;
+          positions[offset] += velocities[offset];
+          positions[offset + 1] += velocities[offset + 1];
+        }
+
+        geometry.attributes.position.needsUpdate = true;
+        program.uniforms.uTime.value = time;
+        renderer.render({
+          scene: mesh,
+          clear: true,
+          sort: false,
+          frustumCull: false,
+        });
+
+        if (!motionQuery.matches) {
+          animationId = window.requestAnimationFrame(draw);
+        }
+      };
+
+      resize();
+      draw();
+      window.addEventListener("resize", resize);
+      window.addEventListener("pointermove", onPointerMove, { passive: true });
+
+      cleanup = () => {
+        window.removeEventListener("resize", resize);
+        window.removeEventListener("pointermove", onPointerMove);
+        window.cancelAnimationFrame(animationId);
+        geometry.remove();
+        program.remove();
+      };
+    };
+
+    void start();
+
+    return () => {
+      cancelled = true;
+      cleanup();
+    };
+  }, []);
+
+  return <canvas className="mf-agentic-field" ref={canvasRef} />;
 }
 
 function Section({
@@ -569,22 +882,22 @@ export function LandingScreen({
       <div
         className={`mf-layer${isExiting || isDone ? " mf-layer--visible" : ""}${intro.skipped ? " mf-layer--instant" : ""}`}
       >
-        <AmbientBackground />
+        <AmbientBackground activeSection={landing.activeSection} />
         {/* Down hint, all sections except last */}
         <ScrollHint
           key={`down-${landing.activeSection}`}
-          visible={vis(landing.activeSection) && landing.activeSection < 11}
+          visible={vis(landing.activeSection) && landing.activeSection < 12}
           label={copy.scrollBackToTop}
         />
         {/* Up hint, last section only, scrolls back to top */}
         <ScrollHint
           key="up"
           up
-          visible={landing.activeSection === 11}
+          visible={landing.activeSection === 12}
           label={copy.scrollBackToTop}
           onClick={() => scrollToSection(0)}
         />
-        <ScrollDots active={landing.activeSection} total={12} />
+        <ScrollDots active={landing.activeSection} total={13} />
 
         <div className="mf-page" ref={pageRef} onScroll={handleScroll}>
           {/* S1, Identity anchor · rise: gentle fade-up */}
@@ -725,8 +1038,25 @@ export function LandingScreen({
             />
           </Section>
 
-          {/* S12, Final CTA */}
-          <FinalCTA active={vis(11)} copy={copy.finalCta} />
+          {/* S12, Manifesto invitation */}
+          <Section idx={11} active={vis(11)} variant="focus">
+            <AnimText
+              as="h2"
+              className="mf-h1"
+              text={copy.sections.manifestoTitle}
+            />
+            <Lines>
+              <p className="mf-support mf-support--manifesto">
+                {copy.sections.manifestoSupport}
+              </p>
+              <Link className="mf-manifesto-link" href="/manifesto">
+                {copy.sections.manifestoCta}
+              </Link>
+            </Lines>
+          </Section>
+
+          {/* S13, Final CTA */}
+          <FinalCTA active={vis(12)} copy={copy.finalCta} />
         </div>
       </div>
     </div>

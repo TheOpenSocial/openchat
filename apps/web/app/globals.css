@@ -330,7 +330,7 @@ a {
   scroll-snap-type: y mandatory;
   scroll-behavior: smooth;
   scrollbar-width: none;
-  background: #040404;
+  background: transparent;
   animation: word-materialise 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 .mf-page::-webkit-scrollbar {
@@ -344,12 +344,21 @@ a {
   pointer-events: none;
   z-index: 0;
 }
+.mf-agentic-field {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.72;
+  filter: saturate(0.85);
+  transform: translateZ(0);
+}
 .mf-bg-purple {
   position: absolute;
   inset: 0;
   background: radial-gradient(
     700px 500px at 18% 20%,
-    rgba(109, 59, 255, 0.18),
+    rgba(245, 247, 250, 0.045),
     transparent 60%
   );
   transition: background 2s ease;
@@ -359,7 +368,7 @@ a {
   inset: 0;
   background: radial-gradient(
     800px 560px at 80% 82%,
-    rgba(33, 91, 255, 0.16),
+    rgba(245, 247, 250, 0.035),
     transparent 60%
   );
   transition: background 2s ease;
@@ -369,7 +378,7 @@ a {
   inset: 0;
   background: radial-gradient(
     500px 340px at 68% 42%,
-    rgba(11, 167, 194, 0.08),
+    rgba(245, 247, 250, 0.025),
     transparent 60%
   );
 }
@@ -404,6 +413,7 @@ a {
   /* Top padding compensates for the 60px fixed header */
   padding: clamp(32px, 6vw, 64px) clamp(24px, 6vw, 48px);
   padding-top: calc(60px + clamp(32px, 6vw, 64px));
+  overflow: hidden;
 }
 
 /* ── Inner content ── */
@@ -1048,6 +1058,34 @@ a {
   font-size: 13px;
   color: rgba(255, 100, 100, 0.85);
 }
+
+.mf-support--manifesto {
+  max-width: 760px;
+}
+
+.mf-manifesto-link {
+  width: fit-content;
+  margin-top: 18px;
+  color: rgba(245, 247, 250, 0.92);
+  font-family: var(--os-font-head);
+  font-size: clamp(17px, 2vw, 22px);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(245, 247, 250, 0.34);
+  transition:
+    border-color 180ms ease,
+    color 180ms ease,
+    transform 180ms ease;
+}
+
+.mf-manifesto-link:hover,
+.mf-manifesto-link:focus-visible {
+  color: #ffffff;
+  border-color: rgba(245, 247, 250, 0.88);
+  transform: translateY(-1px);
+  outline: none;
+}
 .mf-footer-note {
   font-family: var(--os-font-body);
   font-size: 13px;
@@ -1645,12 +1683,12 @@ a {
 }
 
 .public-locale-trigger {
-  min-width: 2.75rem;
+  min-width: 4.5rem;
   min-height: 2.75rem;
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
-  padding: 0.625rem 0.75rem;
+  padding: 0.625rem 0.8rem;
   border: 1px solid color-mix(in oklch, currentColor 10%, transparent);
   border-radius: 999px;
   color: inherit;
@@ -1666,6 +1704,14 @@ a {
     transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+.public-locale-current {
+  min-width: 1.35rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+
 .public-locale-trigger:hover,
 .public-locale-trigger:focus-visible {
   border-color: color-mix(in oklch, currentColor 18%, transparent);
@@ -1677,17 +1723,17 @@ a {
   position: absolute;
   top: calc(100% + 0.5rem);
   right: 0;
-  z-index: 20;
+  z-index: 500;
   min-width: 11rem;
-  padding: 0.375rem;
-  border: 1px solid color-mix(in oklch, currentColor 10%, transparent);
-  border-radius: 0.875rem;
+  padding: 0.35rem;
+  border: 1px solid color-mix(in oklch, currentColor 14%, transparent);
+  border-radius: 1rem;
   background: var(
     --waitlist-bg,
     var(--manifesto-page-bg, hsl(var(--background)))
   );
   color: inherit;
-  box-shadow: 0 18px 48px color-mix(in oklch, black 10%, transparent);
+  box-shadow: 0 18px 48px color-mix(in oklch, black 14%, transparent);
 }
 
 .public-locale-option {
@@ -1699,7 +1745,7 @@ a {
   gap: 1rem;
   padding: 0.625rem 0.75rem;
   border: 0;
-  border-radius: 0.625rem;
+  border-radius: 0.75rem;
   color: inherit;
   background: transparent;
   font: inherit;
@@ -1711,15 +1757,25 @@ a {
 
 .public-locale-option:hover,
 .public-locale-option:focus-visible {
-  background: color-mix(in oklch, currentColor 3%, transparent);
+  background: color-mix(in oklch, currentColor 5%, transparent);
+}
+
+.public-locale-option-code {
+  min-width: 1.25rem;
+  display: inline-grid;
+  place-items: center;
+  color: color-mix(in oklch, currentColor 62%, transparent);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
 }
 
 .public-locale-option--active {
   color: var(--waitlist-text, var(--manifesto-ink, currentColor));
   background: color-mix(
     in oklch,
-    var(--waitlist-bg, var(--manifesto-page-bg, hsl(var(--background)))) 98%,
-    var(--waitlist-text, var(--manifesto-ink, currentColor)) 2%
+    var(--waitlist-bg, var(--manifesto-page-bg, hsl(var(--background)))) 94%,
+    var(--waitlist-text, var(--manifesto-ink, currentColor)) 6%
   );
 }
 

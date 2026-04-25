@@ -1,6 +1,6 @@
 .page {
-  --waitlist-bg: hsl(var(--background));
-  --waitlist-text: hsl(var(--foreground));
+  --waitlist-bg: oklch(0.985 0.003 250);
+  --waitlist-text: oklch(0.18 0.006 250);
   --waitlist-muted: color-mix(in oklch, var(--waitlist-text) 68%, transparent);
   --waitlist-subtle: color-mix(in oklch, var(--waitlist-text) 48%, transparent);
   --waitlist-border: color-mix(in oklch, var(--waitlist-text) 16%, transparent);
@@ -36,8 +36,8 @@
 }
 
 .page[data-theme="dark"] {
-  --waitlist-bg: hsl(var(--background));
-  --waitlist-text: hsl(var(--foreground));
+  --waitlist-bg: oklch(0.135 0.004 250);
+  --waitlist-text: oklch(0.94 0.004 250);
   --waitlist-error: oklch(0.72 0.14 35);
   --waitlist-success: oklch(0.72 0.12 155);
 

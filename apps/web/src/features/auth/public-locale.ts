@@ -132,65 +132,65 @@ export const manifestoSections = {
     {
       title: "Por qué existimos",
       paragraphs: [
-        "El software social dejó de estar pensado para ayudar a las personas a encontrarse. Aprendió a mantenernos mirando, pero no necesariamente a ayudarnos a hablar, hacer planes o construir algo con otros.",
-        "OpenSocial existe para cambiar eso. Estamos creando una forma más directa de encontrarse: una persona dice qué quiere hacer, conversar, organizar o explorar, y el sistema la ayuda a llegar a alguien real.",
+        "Las redes dejaron de estar pensadas para ayudar a las personas a encontrarse. Se volvieron muy buenas manteniéndonos mirando, pero no tanto ayudándonos a hablar, hacer planes o construir algo con otros.",
+        "OpenSocial existe para cambiar eso. Estamos creando una forma más directa de encontrarse: dices qué quieres hacer, conversar, organizar o explorar, y el sistema te ayuda a llegar a alguien real.",
         "La meta es fácil de decir y difícil de hacer bien: acortar la distancia entre “quiero hacer esto” y “lo estoy haciendo con alguien”.",
       ],
     },
     {
-      title: "Lo que creemos que debería ser lo social",
+      title: "Lo que debería ser una red",
       paragraphs: [
-        "Creemos que un producto social debe empezar por la persona. Cada usuario debería poder decir lo que quiere con sus propias palabras, marcar sus límites y mantener el control sobre cómo nace una conexión.",
-        "No creemos que el futuro de lo social sea el scroll infinito, mirar sin participar o sistemas que nos mantienen cerca sin ayudarnos a encontrarnos de verdad.",
-        "Creemos en un modelo basado en intención, consentimiento y coordinación. Una persona expresa un objetivo. El sistema lo entiende, encuentra personas relevantes, explica lo que está pasando y abre una conexión solo cuando ambas partes eligen avanzar.",
+        "Creemos que una red debería empezar por la persona. Cada usuario debería poder decir qué quiere con sus propias palabras, marcar sus límites y mantener el control sobre cómo nace una conexión.",
+        "No creemos que el futuro sea seguir scrolleando, mirar sin participar o estar cerca de otros sin encontrarnos de verdad.",
+        "Creemos en un modelo basado en intención, consentimiento y coordinación. Una persona expresa un objetivo. El sistema lo entiende, encuentra personas relevantes, explica qué está pasando y abre una conexión solo cuando ambas partes eligen avanzar.",
       ],
     },
     {
       title: "El límite humano",
       paragraphs: [
-        "La IA es útil cuando su rol está claro. En OpenSocial puede ayudar a entender la intención, resumir avances, ordenar posibles conexiones, detectar riesgos y coordinar el flujo alrededor de una interacción social.",
-        "La IA no debe hacerse pasar por el usuario. No debe socializar en silencio en su nombre. No debe crear una cercanía falsa, debilitar el consentimiento ni reemplazar una conversación real por algo sintético.",
-        "Ese límite es parte del producto, no una frase de marketing. Cuando se abre una conexión, la conversación sigue siendo humana. El modelo puede ayudar alrededor, pero no reemplazar a las personas que el producto busca acercar.",
+        "La IA es útil cuando su rol está claro. En OpenSocial puede ayudar a entender lo que alguien busca, resumir avances, ordenar posibles conexiones, detectar riesgos y acompañar el flujo alrededor de una interacción.",
+        "La IA no debe hacerse pasar por una persona. No debe actuar en silencio por ti. No debe crear una cercanía falsa, debilitar el consentimiento ni reemplazar una conversación real por algo sintético.",
+        "Ese límite es parte del producto, no una frase de marketing. Cuando se abre una conexión, la conversación sigue siendo humana. El modelo puede ayudar alrededor, pero no reemplazar a las personas que queremos acercar.",
       ],
     },
     {
       title: "Cómo funciona el producto",
       paragraphs: [
-        "OpenSocial se apoya en pocas ideas claras: intención, solicitud, conexión, chat, círculo, notificación y flujos asistidos por agentes. Eso importa porque mantiene el producto enfocado en coordinar, no en generar ruido social.",
-        "Un usuario escribe lo que quiere. El sistema interpreta la solicitud, encuentra posibles coincidencias, ordena candidatos según confianza, relevancia, momento y contexto, y envía solicitudes con aceptación explícita. Solo después de aceptar se abre una conexión real.",
-        "Este producto no empieza por el feed, ni por el perfil, ni está diseñado para dejar al usuario navegando sin rumbo. Empieza por la coordinación. Tiene que sentirse rápido, concreto y fácil de entender.",
+        "OpenSocial se apoya en pocas ideas claras: intención, solicitud, conexión, chat, círculo, notificación y flujos asistidos por agentes. Eso importa porque mantiene el producto enfocado en coordinar, no en producir más ruido.",
+        "Una persona escribe lo que quiere. El sistema interpreta la solicitud, encuentra posibles coincidencias, ordena opciones según confianza, relevancia, momento y contexto, y envía solicitudes con aceptación explícita. Solo después de aceptar se abre una conexión real.",
+        "OpenSocial no empieza por el feed ni por el perfil. Tampoco está pensado para dejarte navegando sin rumbo. Empieza por la coordinación. Tiene que sentirse rápido, concreto y fácil de entender.",
       ],
     },
     {
       title: "Lo que queremos lograr",
       paragraphs: [
-        "Queremos que sea normal que el software ayude a pasar de la idea al encuentro. Ver el partido con alguien hoy. Encontrar con quién jugar tenis después de las siete. Conocer personas que están construyendo algo cerca. Armar un plan chico esta noche. Reconectar con gente que de verdad encaja.",
-        "Queremos apoyar conversaciones uno a uno, planes para el mismo día, grupos pequeños, disponibilidad sin presión, círculos recurrentes y continuidad en las relaciones. El objetivo no es más contenido. El objetivo es más contacto con sentido.",
-        "También queremos construir el contrato público de este modelo: un protocolo estable y un SDK para que apps, servicios y agentes aliados puedan participar en una red social basada en intención sin tener que adivinar cómo funciona.",
+        "Queremos que sea normal que la tecnología ayude a pasar de la idea al encuentro. Ver el partido con alguien hoy. Encontrar con quién jugar tenis después de las siete. Conocer personas que están construyendo algo cerca. Armar un plan chico esta noche. Reconectar con gente que de verdad encaja.",
+        "Queremos hacer más simples las conversaciones uno a uno, los planes para el mismo día, los grupos pequeños, la disponibilidad sin presión, los círculos recurrentes y la continuidad en las relaciones. El objetivo no es más contenido. El objetivo es más contacto con sentido.",
+        "También queremos construir el contrato público de este modelo: un protocolo estable y un SDK para que apps, servicios y agentes aliados puedan participar en una red basada en intención sin tener que adivinar cómo funciona.",
       ],
     },
     {
       title: "Por qué lo construimos así",
       paragraphs: [
-        "Estamos construyendo infraestructura confiable debajo del producto de manera deliberada. Eso significa transiciones de estado deterministas controladas por la aplicación, registros inmutables para cambios críticos, flujos guiados por eventos y límites operativos claros.",
-        "Nuestra filosofía es simple. Los agentes pueden sugerir, enriquecer y priorizar, pero la aplicación conserva las escrituras finales, las políticas y las garantías. Los sistemas confiables importan más que las demos impresionantes.",
-        "Por eso la arquitectura empieza como un monolito modular con flujos internos orientados a eventos, en vez de una colección de servicios desconectados. Nos da iteración más rápida, depuración más simple y mayor control transaccional mientras el producto evoluciona.",
+        "Estamos construyendo una base confiable debajo del producto, de manera deliberada. Eso significa transiciones de estado deterministas controladas por la aplicación, registros inmutables para cambios críticos, flujos guiados por eventos y límites operativos claros.",
+        "Nuestra filosofía es simple. Los agentes pueden sugerir, enriquecer y priorizar, pero la aplicación conserva las decisiones finales, las políticas y las garantías. Los sistemas confiables importan más que las demos impresionantes.",
+        "Por eso la arquitectura empieza como un monolito modular con flujos internos orientados a eventos, en vez de una colección de servicios desconectados. Nos da iteración más rápida, depuración más simple y más control transaccional mientras el producto evoluciona.",
       ],
     },
     {
       title: "La tecnología detrás",
       paragraphs: [
-        "OpenSocial está construido en TypeScript en toda la pila tecnológica. El backend usa NestJS, PostgreSQL como fuente de verdad, pgvector para recuperación semántica, Redis para colas, presencia, caché y límites de uso, y BullMQ para orquestar flujos de forma duradera.",
-        "El tiempo real corre sobre WebSockets. Los medios de perfil pasan por almacenamiento de objetos y CDN. La observabilidad está construida con OpenTelemetry para operar el producto como un sistema real, no solo mostrarlo como un prototipo pulido.",
+        "OpenSocial está construido con TypeScript en toda la pila. El backend usa NestJS, PostgreSQL como fuente de verdad, pgvector para recuperación semántica, Redis para colas, presencia, caché y límites de uso, y BullMQ para orquestar flujos duraderos.",
+        "El tiempo real funciona sobre WebSockets. Los medios de perfil pasan por almacenamiento de objetos y CDN. La observabilidad está hecha con OpenTelemetry para operar el producto como un sistema real, no solo mostrarlo como un prototipo pulido.",
         "En la capa de inteligencia usamos OpenAI Responses API y OpenAI Agents SDK cuando tiene sentido una orquestación acotada de varios pasos. La palabra clave es acotada. Los planners sugieren, las herramientas reúnen contexto, las políticas filtran, la aplicación decide, los workers ejecutan y la base de datos se mantiene determinista.",
       ],
     },
     {
       title: "Nuestro estándar",
       paragraphs: [
-        "Un manifiesto solo sirve si le da forma al producto. El nuestro lo hace. Nos comprometemos con el consentimiento explícito, la interacción humana primero, la claridad operativa y superficies que se entienden rápido sin pedirle a la gente que aprenda un nuevo ritual social.",
-        "No estamos construyendo un grafo social genérico. No estamos construyendo una app de compañía con IA. No estamos construyendo un feed con mejor branding. Estamos construyendo un sistema de coordinación basado en intención para personas reales, tiempos reales y relaciones reales.",
-        "Ese es el trabajo. Construir software social que ayude a empezar, no solo a mirar. Construir sistemas poderosos sin volverlos engañosos. Construir herramientas que creen presencia en vez de pose.",
+        "Un manifiesto solo sirve si le da forma al producto. El nuestro tiene que hacerlo. Nos comprometemos con el consentimiento explícito, la interacción humana primero, la claridad operativa y pantallas que se entienden rápido sin pedirle a la gente que aprenda un nuevo ritual social.",
+        "No estamos construyendo un grafo social genérico. No estamos construyendo un compañero de IA. No estamos construyendo un feed con mejor branding. Estamos construyendo un sistema de coordinación basado en intención para personas reales, tiempos reales y relaciones reales.",
+        "Ese es el trabajo. Construir una red que ayude a empezar, no solo a mirar. Construir sistemas poderosos sin volverlos engañosos. Construir herramientas que creen presencia en vez de pose.",
         "Esa es la dirección. Ese es el producto. Eso es OpenSocial.",
       ],
     },
@@ -328,6 +328,10 @@ export const publicCopy = {
           "They just don't know you yet.",
         ],
         yoursTitle: "Make it yours.",
+        manifestoTitle: "We are not just another social network.",
+        manifestoSupport:
+          "OpenSocial is a point of view about how social software should work: intent first, consent clear, and people over feeds.",
+        manifestoCta: "Read the manifesto",
       },
       finalCta: {
         title: "Be among the first to try OpenSocial.",
@@ -440,6 +444,10 @@ export const publicCopy = {
           "Solo falta que se encuentren.",
         ],
         yoursTitle: "Hazlo tuyo.",
+        manifestoTitle: "No estamos haciendo solo otra red social.",
+        manifestoSupport:
+          "OpenSocial es una postura sobre cómo debería funcionar lo social: primero la intención, consentimiento claro y personas por encima de feeds.",
+        manifestoCta: "Leer el manifiesto",
       },
       finalCta: {
         title: "Sé de los primeros en probar OpenSocial.",
@@ -559,6 +567,11 @@ export const publicCopy = {
           "Elle ne vous connaît simplement pas encore.",
         ],
         yoursTitle: "Faites-en quelque chose à vous.",
+        manifestoTitle:
+          "Nous ne construisons pas juste un autre réseau social.",
+        manifestoSupport:
+          "OpenSocial défend une façon différente de penser le social: l'intention d'abord, le consentement clair, et les personnes avant les fils d'actualité.",
+        manifestoCta: "Lire le manifeste",
       },
       finalCta: {
         title: "Soyez parmi les premiers à essayer OpenSocial.",
