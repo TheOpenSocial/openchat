@@ -306,6 +306,16 @@ function WebGLAgenticField({ activeSection }: { activeSection: number }) {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const isCompactViewport = window.innerWidth < 720;
+    const isLowerPowerDevice =
+      typeof navigator.hardwareConcurrency === "number" &&
+      navigator.hardwareConcurrency <= 4;
+
+    if (motionQuery.matches || isCompactViewport || isLowerPowerDevice) {
+      return;
+    }
+
     let cancelled = false;
     let cleanup = () => {};
 
@@ -318,7 +328,7 @@ function WebGLAgenticField({ activeSection }: { activeSection: number }) {
         alpha: true,
         antialias: true,
         depth: false,
-        dpr: Math.min(window.devicePixelRatio || 1, 2.5),
+        dpr: Math.min(window.devicePixelRatio || 1, 1.75),
         premultipliedAlpha: true,
         powerPreference: "high-performance",
       });
@@ -338,7 +348,7 @@ function WebGLAgenticField({ activeSection }: { activeSection: number }) {
       const seeds = new Float32Array(count);
       const velocities = new Float32Array(count * 2);
       const pointer = { x: -1, y: -1, tx: -1, ty: -1 };
-      const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+      let paused = document.visibilityState === "hidden";
 
       for (let index = 0; index < count; index++) {
         positions[index * 2] = 0;
@@ -517,11 +527,23 @@ function WebGLAgenticField({ activeSection }: { activeSection: number }) {
         pointer.ty = event.clientY / Math.max(height, 1);
       };
 
+      const onVisibilityChange = () => {
+        paused = document.visibilityState === "hidden";
+        if (!paused && animationId === 0) {
+          animationId = window.requestAnimationFrame(draw);
+        }
+      };
+
       const draw = () => {
+        animationId = 0;
+        if (paused) {
+          return;
+        }
+
         const mode = AGENTIC_MODES[sectionRef.current % AGENTIC_MODES.length];
         pointer.x += (pointer.tx - pointer.x) * 0.16;
         pointer.y += (pointer.ty - pointer.y) * 0.16;
-        time += motionQuery.matches ? 0 : 0.008;
+        time += 0.008;
         const hasPointer = pointer.x >= 0 && pointer.y >= 0;
         const cursorX = pointer.x * width;
         const cursorY = pointer.y * height;
@@ -557,26 +579,28 @@ function WebGLAgenticField({ activeSection }: { activeSection: number }) {
           frustumCull: false,
         });
 
-        if (!motionQuery.matches) {
-          animationId = window.requestAnimationFrame(draw);
-        }
+        animationId = window.requestAnimationFrame(draw);
       };
 
       resize();
-      draw();
+      animationId = window.requestAnimationFrame(draw);
       window.addEventListener("resize", resize);
       window.addEventListener("pointermove", onPointerMove, { passive: true });
+      document.addEventListener("visibilitychange", onVisibilityChange);
 
       cleanup = () => {
         window.removeEventListener("resize", resize);
         window.removeEventListener("pointermove", onPointerMove);
+        document.removeEventListener("visibilitychange", onVisibilityChange);
         window.cancelAnimationFrame(animationId);
         geometry.remove();
         program.remove();
       };
     };
 
-    void start();
+    void start().catch(() => {
+      cleanup();
+    });
 
     return () => {
       cancelled = true;
@@ -740,14 +764,31 @@ function FinalCTA({
               </button>
             </>
           )}
-          {status === "error" && msg && (
-            <p className="mf-error" role="alert">
-              {msg}
+          <p
+            aria-live="polite"
+            className={`mf-form-message${
+              status === "error" ? " mf-form-message--error" : ""
+            }`}
+            role={status === "error" ? "alert" : undefined}
+          >
+            {status === "error" && msg ? msg : "\u00A0"}
+          </p>
+          {status !== "success" ? (
+            <p className="mf-legal-note">
+              {copy.consentPrefix} <Link href="/terms">{copy.terms}</Link>{" "}
+              {copy.consentJoin} <Link href="/privacy">{copy.privacy}</Link>.
             </p>
-          )}
+          ) : null}
         </form>
 
-        <p className="mf-footer-note mf-delay-2">{copy.footer}</p>
+        <div className="mf-footer-note mf-delay-2">
+          <span>{copy.footer}</span>
+          <nav aria-label="Legal pages" className="mf-footer-links">
+            <Link href="/privacy">Privacy</Link>
+            <Link href="/terms">Terms</Link>
+            <Link href="/security">Security</Link>
+          </nav>
+        </div>
       </div>
     </section>
   );

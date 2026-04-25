@@ -3,6 +3,7 @@ import { Space_Grotesk, Source_Sans_3 } from "next/font/google";
 import { cookies, headers } from "next/headers";
 import type { ReactNode } from "react";
 
+import { SeoJsonLd } from "@/src/components/SeoJsonLd";
 import { AppSessionProvider } from "@/src/features/app-shell/app-session";
 import { resolvePublicLocale } from "@/src/features/auth/public-locale";
 import { createPublicMetadata, siteConfig, siteUrl } from "@/src/lib/seo";
@@ -30,9 +31,13 @@ export const metadata: Metadata = {
   category: "technology",
   ...createPublicMetadata(),
   icons: {
-    icon: [{ url: "/brand/logo.svg", type: "image/svg+xml" }],
-    shortcut: "/brand/logo.svg",
-    apple: [{ url: "/brand/logo.svg", type: "image/svg+xml" }],
+    icon: [
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon.png", sizes: "512x512", type: "image/png" },
+      { url: "/brand/logo.svg", type: "image/svg+xml" },
+    ],
+    shortcut: "/icon.png",
+    apple: [{ url: "/apple-icon.png", sizes: "180x180", type: "image/png" }],
   },
   manifest: "/manifest.webmanifest",
 };
@@ -56,6 +61,7 @@ export default async function RootLayout({
       lang={lang}
     >
       <body className="font-[var(--font-body)] text-ink antialiased">
+        <SeoJsonLd />
         <AppSessionProvider>{children}</AppSessionProvider>
       </body>
     </html>

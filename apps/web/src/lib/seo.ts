@@ -21,6 +21,62 @@ export const siteConfig = {
 
 export const siteUrl = new URL(siteConfig.url);
 
+export const publicRoutes = [
+  {
+    path: "/",
+    priority: 1,
+    changeFrequency: "weekly",
+    lastModified: "2026-04-25",
+  },
+  {
+    path: "/manifesto",
+    priority: 0.86,
+    changeFrequency: "monthly",
+    lastModified: "2026-04-25",
+  },
+  {
+    path: "/waitlist",
+    priority: 0.92,
+    changeFrequency: "monthly",
+    lastModified: "2026-04-25",
+  },
+  {
+    path: "/privacy",
+    priority: 0.42,
+    changeFrequency: "yearly",
+    lastModified: "2026-04-25",
+  },
+  {
+    path: "/terms",
+    priority: 0.42,
+    changeFrequency: "yearly",
+    lastModified: "2026-04-25",
+  },
+  {
+    path: "/security",
+    priority: 0.48,
+    changeFrequency: "yearly",
+    lastModified: "2026-04-25",
+  },
+] as const;
+
+export const privateRoutePrefixes = [
+  "/activity",
+  "/automations",
+  "/auth",
+  "/chats",
+  "/circles",
+  "/connections",
+  "/discover",
+  "/home",
+  "/onboarding",
+  "/profile",
+  "/requests",
+  "/saved-searches",
+  "/scheduled-tasks",
+  "/settings",
+] as const;
+
 type PublicMetadataOptions = {
   title?: string;
   description?: string;
@@ -61,6 +117,7 @@ export function createPublicMetadata({
       siteName: siteConfig.name,
       images,
       locale: "en_US",
+      alternateLocale: ["es_ES", "fr_FR"],
       type: "website",
     },
     twitter: {
@@ -84,6 +141,17 @@ export function createPublicMetadata({
   };
 }
 
+export const hiddenPublicMetadata: Metadata = {
+  robots: {
+    index: false,
+    follow: false,
+    googleBot: {
+      index: false,
+      follow: false,
+    },
+  },
+};
+
 export const privateMetadata: Metadata = {
   robots: {
     index: false,
@@ -94,3 +162,49 @@ export const privateMetadata: Metadata = {
     },
   },
 };
+
+export function createOrganizationJsonLd() {
+  return {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: siteConfig.name,
+    url: siteConfig.url,
+    logo: new URL("/icon.png", siteUrl).toString(),
+    description: siteConfig.description,
+  };
+}
+
+export function createWebsiteJsonLd() {
+  return {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: siteConfig.name,
+    url: siteConfig.url,
+    description: siteConfig.description,
+    inLanguage: ["en", "es", "fr"],
+    potentialAction: {
+      "@type": "RegisterAction",
+      target: new URL("/waitlist", siteUrl).toString(),
+      name: "Join the OpenSocial waitlist",
+    },
+  };
+}
+
+export function createSoftwareApplicationJsonLd() {
+  return {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    name: siteConfig.name,
+    applicationCategory: "SocialNetworkingApplication",
+    operatingSystem: "Web, iOS, Android",
+    url: siteConfig.url,
+    description: siteConfig.description,
+    offers: {
+      "@type": "Offer",
+      price: "0",
+      priceCurrency: "USD",
+      availability: "https://schema.org/PreOrder",
+      url: new URL("/waitlist", siteUrl).toString(),
+    },
+  };
+}

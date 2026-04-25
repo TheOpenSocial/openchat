@@ -172,7 +172,7 @@ export function WaitlistPage({
                 {localeCopy.emailLabel}
               </label>
               <input
-                aria-describedby={message ? messageId : undefined}
+                aria-describedby={messageId}
                 aria-invalid={status === "error"}
                 autoComplete="email"
                 className={styles.input}
@@ -194,19 +194,25 @@ export function WaitlistPage({
                   ? localeCopy.submitting
                   : localeCopy.submit}
               </button>
-              {message ? (
-                <p
-                  className={`${styles.message} ${
-                    status === "success"
+              <p
+                className={`${styles.message} ${
+                  message
+                    ? status === "success"
                       ? styles.messageSuccess
                       : styles.messageError
-                  }`}
-                  id={messageId}
-                  role={status === "error" ? "alert" : "status"}
-                >
-                  {message}
-                </p>
-              ) : null}
+                    : ""
+                }`}
+                id={messageId}
+                role={status === "error" ? "alert" : "status"}
+              >
+                {message ?? "\u00a0"}
+              </p>
+              <p className={styles.legalNote}>
+                {localeCopy.consentPrefix}{" "}
+                <Link href="/terms">{localeCopy.terms}</Link>{" "}
+                {localeCopy.consentJoin}{" "}
+                <Link href="/privacy">{localeCopy.privacy}</Link>.
+              </p>
             </form>
           </section>
         </div>
@@ -252,6 +258,14 @@ export function WaitlistPage({
             })}
           </div>
         </section>
+        <footer className={styles.footer}>
+          <span>© 2026 OpenSocial</span>
+          <nav aria-label="Legal pages" className={styles.footerLinks}>
+            <Link href="/privacy">{localeCopy.legalLinks.privacy}</Link>
+            <Link href="/terms">{localeCopy.legalLinks.terms}</Link>
+            <Link href="/security">{localeCopy.legalLinks.security}</Link>
+          </nav>
+        </footer>
       </div>
     </main>
   );

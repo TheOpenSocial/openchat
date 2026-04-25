@@ -7,6 +7,20 @@ import {
 } from "./public-locale";
 import { PublicLocaleSwitcher } from "./public-locale-switcher";
 import { ManifestoThemeToggle } from "./manifesto-theme-toggle";
+
+const legalLinkLabels: Record<
+  PublicLocale,
+  { privacy: string; terms: string; security: string }
+> = {
+  en: { privacy: "Privacy", terms: "Terms", security: "Security" },
+  es: { privacy: "Privacidad", terms: "Términos", security: "Seguridad" },
+  fr: {
+    privacy: "Confidentialité",
+    terms: "Conditions",
+    security: "Sécurité",
+  },
+};
+
 export function ManifestoPage({
   initialLocale = "en",
   initialTheme = "dark",
@@ -16,6 +30,7 @@ export function ManifestoPage({
 }) {
   const copy = publicCopy[initialLocale].manifesto;
   const sections = manifestoSections[initialLocale];
+  const legalLabels = legalLinkLabels[initialLocale];
   return (
     <main
       className="manifesto-page"
@@ -97,6 +112,14 @@ export function ManifestoPage({
               </section>
             ))}
           </section>
+          <footer className="manifesto-footer">
+            <span>© 2026 OpenSocial</span>
+            <nav aria-label="Legal pages" className="manifesto-footer-links">
+              <Link href="/privacy">{legalLabels.privacy}</Link>
+              <Link href="/terms">{legalLabels.terms}</Link>
+              <Link href="/security">{legalLabels.security}</Link>
+            </nav>
+          </footer>
         </div>
       </div>
     </main>

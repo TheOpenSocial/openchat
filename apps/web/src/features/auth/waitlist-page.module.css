@@ -266,7 +266,9 @@
 }
 
 .message {
+  min-height: 1.425rem;
   margin: 0.25rem 0 0;
+  color: transparent;
   font-size: 0.95rem;
   line-height: 1.5;
 }
@@ -277,6 +279,26 @@
 
 .messageError {
   color: var(--waitlist-error);
+}
+
+.legalNote {
+  margin: 0.25rem 0 0;
+  color: var(--waitlist-subtle);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.legalNote a,
+.footerLinks a {
+  color: var(--waitlist-muted);
+  text-decoration: none;
+}
+
+.legalNote a:hover,
+.legalNote a:focus-visible,
+.footerLinks a:hover,
+.footerLinks a:focus-visible {
+  color: var(--waitlist-text);
 }
 
 .faq {
@@ -340,6 +362,24 @@
   line-height: 1.76;
 }
 
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.5rem 0 0;
+  border-top: 1px solid var(--waitlist-border);
+  color: var(--waitlist-subtle);
+  font-size: 0.875rem;
+}
+
+.footerLinks {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.875rem;
+}
+
 @media (max-width: 900px) {
   .grid {
     grid-template-columns: 1fr;
@@ -371,6 +411,15 @@
 
   .navActions {
     width: 100%;
+  }
+
+  .footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .footerLinks {
+    justify-content: flex-start;
   }
 
   .title {
